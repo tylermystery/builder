@@ -41,9 +41,8 @@ Loading catalog...
         </div>
     </div>
     <div class="header-group-right">
-        <div id="total-cost-section">
-            <strong>Total:</strong>
-            <span id="total-cost">$0.00</span>
+        <div id="sessions-dropdown-container" style="display: none;">
+            <select id="sessions-dropdown"></select>
         </div>
         <div id="share-section">
             <div class="left-controls">
@@ -89,9 +88,6 @@ Loading catalog...
     <div id="selections-sidebar">
         <div class="sidebar-section">
             <h2 id="event-title-header">Your Event</h2>
-            <div id="sessions-dropdown-container" style="display: none;">
-                <select id="sessions-dropdown"></select>
-            </div>
         </div>
         <div class="sidebar-section">
             <h3>Idea List</h3>
@@ -129,10 +125,11 @@ Loading catalog...
 </div>
 </div>
 
+
 <style>
 body {
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-overflow: hidden; /* Prevent body scroll */
+overflow: hidden; 
 }
 
 #top-summary-bar {
@@ -161,7 +158,7 @@ overflow: hidden; /* Prevent body scroll */
 }
 #catalog-wrapper {
     flex-grow: 1;
-    overflow-y: auto; /* Enable vertical scroll */
+    overflow-y: auto; 
     padding: 20px;
 }
 #selections-sidebar {
@@ -184,15 +181,13 @@ overflow: hidden; /* Prevent body scroll */
 #event-title-header {
     text-align: center;
     font-size: 1.5em;
+    border-bottom: none;
 }
 .sidebar-list {
     display: flex;
     flex-direction: column;
     gap: 15px;
 }
-
-#total-cost-section { padding: 0; text-align: right; font-size: 1.2em; }
-#total-cost { font-weight: bold; color: #007aff; }
 .header-group-left, .header-group-right {
     display: flex;
     align-items: center;
@@ -314,7 +309,6 @@ flex-direction: column; justify-content: flex-end; }
 .quantity-selector button { width: 30px; height: 30px; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; font-size: 1.2em; color: #333; }
 .quantity-selector input { width: 40px; text-align: center; border: 1px solid #ccc; border-left: none; border-right: none; height: 30px; -moz-appearance: textfield; }
 .event-card-content .price { font-size: 1.3em; font-weight: bold; }
-#pagination-controls { display: none; }
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
 z-index: 1000; }
 .modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
@@ -878,7 +872,7 @@ async function updateTotalCost() {
         } 
     });
     const formattedTotal = `$${total.toFixed(2)}`;
-    totalCostEl.textContent = formattedTotal;
+    if (totalCostEl) totalCostEl.textContent = formattedTotal; // Check if element exists before updating
     summaryTotalCostEl.textContent = formattedTotal;
 }
 async function openDetailModal(compositeId) { const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); if (!record) return; const isLocked = state.cart.lockedItems.has(compositeId);
@@ -923,16 +917,14 @@ await updateRender();
 document.body.addEventListener('click', async (e) => { const reactionBtn = e.target.closest('.reaction-bar button'); if (reactionBtn) { e.stopPropagation(); await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji); }});
 editModal.addEventListener('click', function(e) { if (e.target === editModal || e.target === modalContent) { editModal.style.display = 'none'; } });
 modalCloseBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
-catalogWrapper.addEventListener('scroll', () => { // Changed from catalogContainer to wrapper
+catalogWrapper.addEventListener('scroll', () => {
     const { scrollTop, scrollHeight, clientHeight } = catalogWrapper;
     if (scrollTop + clientHeight >= scrollHeight - 500) { 
         loadMoreRecords();
     }
 });
-favoritesList.addEventListener('click', (e) => handleSelectionClick(e, 'favorites'));
-lockedList.addEventListener('click', (e) => handleSelectionClick(e, 'locked'));
-
-async function handleSelectionClick(e, type) {
+const selectionsSidebar = document.getElementById('selections-sidebar');
+selectionsSidebar.addEventListener('click', async (e) => {
     const promoteBtn = e.target.closest('.promote-btn'); 
     if (promoteBtn) { 
         e.stopPropagation(); 
@@ -979,8 +971,7 @@ async function handleSelectionClick(e, type) {
         const compositeId = favoriteItem.dataset.compositeId; 
         if(compositeId && !e.target.closest('.reaction-bar')) await openDetailModal(compositeId); 
     }
-}
-
+});
 addCollaboratorBtn.addEventListener('click', () => { const newName = prompt("Enter collaborator's name:"); if (newName && !state.session.collaborators.includes(newName)) { state.session.collaborators.push(newName); renderCollaborators(); } });
 sessionsDropdown.addEventListener('change', (e) => { const id = e.target.value; if (id) window.location.search = `?session=${id}`; });
 guestCountInput.addEventListener('input', async () => { document.querySelectorAll('.quantity-input').forEach(input => { input.value = Math.max(parseInt(guestCountInput.value), parseInt(input.min)); }); await updateSelectionsSidebar(); });
