@@ -127,7 +127,6 @@ Loading catalog...
 body {
 padding-bottom: 80px;
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-overflow-y: hidden;
 }
 #sticky-header {
 position: sticky;
@@ -234,7 +233,7 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     overflow-y: hidden;
     gap: 25px;
     padding: 20px;
-    height: 1100px; 
+    height: calc(100vh - 350px); /* Responsive height */
 }
 .event-card { 
     position: relative; 
@@ -513,7 +512,7 @@ function updateHeader() {
 }
 function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
-function populateSessionsDropdown() { const sessions = getStoredSessions(); const sessionIds = Object.keys(sessions); if (sessionIds.length === 0) { sessionsDropdownContainer.style.display = 'none'; return;
+function populateSessionsDropdown() { if (!sessionsDropdownContainer) return; const sessions = getStoredSessions(); const sessionIds = Object.keys(sessions); if (sessionIds.length === 0) { sessionsDropdownContainer.style.display = 'none'; return;
 } sessionsDropdownContainer.style.display = 'block'; sessionsDropdown.innerHTML = '<option value="">Load a saved list...</option>';
 sessionIds.forEach(id => { const option = document.createElement('option'); option.value = id; option.textContent = sessions[id]; if (id === state.session.id) { option.selected = true; } sessionsDropdown.appendChild(option); });
 }
@@ -911,6 +910,7 @@ function updateSummaryToolbar() {
 }
 
 async function updateRender() { 
+    updateHeader();
     await updateFavoritesCarousel(); 
     await applyFilters();
     updateSummaryToolbar();
@@ -954,6 +954,7 @@ const removeBtn = e.target.closest('.remove-btn'); if (removeBtn) { e.stopPropag
     if(record) {
         const newCard = await createEventCardElement(record);
         catalogContainer.appendChild(newCard);
+        applyFilters(); // Re-sort the catalog after adding a card back
     }
     updateTotalCost();
     updateHeader();
@@ -984,6 +985,7 @@ const compositeId = heart.dataset.compositeId; if (state.cart.items.has(composit
     if(favoritesSection.style.display === 'none') {
         favoritesSection.style.display = 'block';
     }
+    await updateFavoritesCarousel(); // Re-sort the carousel after adding
 
     const recordId = card.dataset.recordId; 
     const record = state.records.all.find(r => r.id === recordId);
