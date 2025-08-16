@@ -169,8 +169,23 @@ font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px
 #add-collaborator-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #6c757d; background: #f8f9fa; color: #6c757d; font-size: 1.2em; cursor: pointer;
 margin-left: -2px; }
 #favorites-carousel { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 5px; }
-.favorite-item { position: relative; flex: 0 0 200px; height: 323px; border-radius: 8px; overflow: hidden; background-size: cover; background-position: center; color: white;
-display: flex; flex-direction: column; justify-content: flex-end; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: border 0.3s; }
+.favorite-item { 
+    position: relative; 
+    flex: 0 0 200px; 
+    height: 323px; 
+    border-radius: 8px; 
+    overflow: hidden; 
+    background-size: cover; 
+    background-position: center; 
+    color: white;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-end; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
+    cursor: pointer; 
+    transition: all 0.3s;
+    border: 1px solid #ddd;
+}
 .favorite-item.locked-item { border: 3px solid #FFD700; }
 .favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
 .favorite-item-content { background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); padding: 10px; text-align: center; }
@@ -201,10 +216,29 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
 #share-section { display: flex; align-items: center; gap: 15px; }
 #filter-controls { display: flex; justify-content: center; gap: 15px; padding: 20px; max-width: 1200px; margin: 20px auto; flex-wrap: wrap; }
 #catalog-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; padding: 20px; max-width: 1200px; margin: auto; }
-.event-card, .details-card { position: relative; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.25); display: flex; flex-direction: column; transition: transform 0.2s ease-in-out;
-height: 520px; background-size: cover; background-position: center; color: white; overflow: hidden; cursor: pointer; }
-.details-card { cursor: default; }
-.event-card:hover { transform: translateY(-5px); }
+.event-card, .details-card { 
+    position: relative; 
+    border-radius: 10px; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15); 
+    display: flex; 
+    flex-direction: column; 
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    height: 520px; 
+    background-size: cover; 
+    background-position: center; 
+    color: white; 
+    overflow: hidden; 
+    cursor: pointer;
+    border: 1px solid #e0e0e0;
+}
+.details-card { 
+    cursor: default;
+    background-color: #f8f9fa;
+}
+.event-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
 .heart-icon, .explode-icon, .combine-icon, .edit-card-btn { position: absolute; top: 15px; width: 30px; height: 30px; cursor: pointer; z-index: 10; background: none;
 border: none; font-size: 1.5em; }
 .heart-icon { right: 15px; }
@@ -358,7 +392,6 @@ const undoBtn = document.getElementById('undo-btn');
 const redoBtn = document.getElementById('redo-btn');
 const imageCache = new Map();
 
-// New Toolbar DOM elements
 const summaryEventNameInput = document.getElementById('summary-event-name');
 const summaryDateInput = document.getElementById('summary-date');
 const summaryHeadcountInput = document.getElementById('summary-headcount');
@@ -488,7 +521,7 @@ async function saveSessionToAirtable() {
     document.getElementById('save-status').textContent = 'Saving...'; 
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`; 
-    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": new Date().toISOString().split('T')[0] } }; 
+    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } }; 
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); 
     const method = isUpdate ? 'PATCH' : 'POST';
@@ -642,8 +675,28 @@ dropdown.dispatchEvent(new Event('change')); } else { updatePrice(); } if (plusB
 } if (minusBtn) { minusBtn.addEventListener('click', () => { const currentValue = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (currentValue > min) { quantityInput.value = currentValue - 1; guestCountInput.value = quantityInput.value; } });
 } quantityInput.addEventListener('change', (e) => { const min = parseInt(e.target.min); if(parseInt(e.target.value) < min) e.target.value = min; guestCountInput.value = e.target.value; });
 } }
-async function updateTotalCost() { let total = 0; const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
-allItems.forEach((itemInfo, compositeId) => { const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); if (record) { let unitPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; const optionIndex = compositeId.split('-')[1]; if (optionIndex) { const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); const variation = options[optionIndex]; if (variation) unitPrice += variation.priceChange; } if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) { const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; const effectiveGuestCount = Math.max(itemInfo.quantity, headcountMin); total += unitPrice * effectiveGuestCount; } else { total += unitPrice; } } });
+async function updateTotalCost() { 
+    let total = 0; 
+    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+    allItems.forEach((itemInfo, compositeId) => { 
+        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); 
+        if (record) { 
+            let unitPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; 
+            const optionIndex = compositeId.split('-')[1]; 
+            if (optionIndex) { 
+                const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+                const variation = options[optionIndex]; 
+                if (variation) unitPrice += variation.priceChange; 
+            } 
+            if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) { 
+                const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; 
+                const effectiveGuestCount = Math.max(itemInfo.quantity, headcountMin); 
+                total += unitPrice * effectiveGuestCount; 
+            } else { 
+                total += unitPrice; 
+            } 
+        } 
+    });
     const formattedTotal = `$${total.toFixed(2)}`;
     totalCostEl.textContent = formattedTotal;
     summaryTotalCostEl.textContent = formattedTotal;
@@ -723,7 +776,6 @@ const card = e.target.closest('.event-card'); if(card && !e.target.closest('.rea
 });
 copyLinkBtn.addEventListener('click', () => { shareLinkInput.select(); document.execCommand('copy'); copyLinkBtn.textContent = 'Copied!'; setTimeout(() => { copyLinkBtn.textContent = 'Copy'; }, 2000); });
 
-// Add event listeners for the new toolbar
 const toolbarInputs = [summaryEventNameInput, summaryDateInput, summaryHeadcountInput, summaryLocationInput];
 toolbarInputs.forEach(input => {
     input.addEventListener('change', (e) => {
