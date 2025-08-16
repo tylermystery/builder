@@ -187,6 +187,10 @@ overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: 15px;
+    /* NEW: Adaptive height and scrolling */
+    max-height: 40vh;
+    overflow-y: auto;
+    padding-right: 10px; /* space for scrollbar */
 }
 .header-group-left, .header-group-right {
     display: flex;
@@ -205,49 +209,43 @@ font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px
 margin-left: -2px; }
 .favorite-item { 
     position: relative; 
-    height: 120px; 
     border-radius: 8px; 
     overflow: hidden; 
     background-size: cover; 
     background-position: center; 
     color: white;
     display: flex; 
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column; 
+    justify-content: flex-end; 
     box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
     cursor: pointer; 
     transition: all 0.3s;
     border: 1px solid #ddd;
+    width: 100%;
+    /* NEW: Consistent aspect ratio */
+    aspect-ratio: 320 / 400;
 }
 .favorite-item.locked-item { border: 3px solid #FFD700; }
-.favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
 .favorite-item-content { 
-    background: linear-gradient(to right, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
     padding: 10px; 
-    text-align: left;
-    height: 100%;
-    width: 100%;
+    text-align: center; /* Reverted to center for vertical layout */
+    height: auto;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-end;
 }
 .card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: none; }
 .event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);}
 .reactions-summary { display: flex; gap: 4px; font-size: 0.8em; }
 .reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none; }
 .action-btn-container { 
-    position: static;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px;
-    background: rgba(0,0,0,0.2);
-    height: 100%;
-    justify-content: center;
+    position: absolute; 
+    top: 8px; right: 8px; 
+    width: 30px; height: 30px; 
 }
-.secondary-action-btn { position: static; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s;}
-.primary-action-btn { font-size: 1.8em; cursor: pointer; width: auto; height: auto; }
+.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; }
+.primary-action-btn { font-size: 1.8em; cursor: pointer; width: 100%; height: 100%; }
 .primary-action-btn .icon-hover { display: none; }
 .primary-action-btn:hover .icon-default { display: none; }
 .primary-action-btn:hover .icon-hover { display: block; animation: pop 0.3s; }
@@ -277,14 +275,14 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     display: flex; 
     flex-direction: column; 
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    height: 520px; 
-    width: 100%;
     background-size: cover; 
     background-position: center; 
     color: white; 
     overflow: hidden; 
     cursor: pointer;
     border: 1px solid #e0e0e0;
+    /* NEW: Consistent aspect ratio */
+    aspect-ratio: 320 / 520;
 }
 .event-card:hover { 
     transform: translateY(-5px); 
@@ -309,6 +307,7 @@ flex-direction: column; justify-content: flex-end; }
 .quantity-selector button { width: 30px; height: 30px; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; font-size: 1.2em; color: #333; }
 .quantity-selector input { width: 40px; text-align: center; border: 1px solid #ccc; border-left: none; border-right: none; height: 30px; -moz-appearance: textfield; }
 .event-card-content .price { font-size: 1.3em; font-weight: bold; }
+#pagination-controls { display: none; }
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
 z-index: 1000; }
 .modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
@@ -354,6 +353,7 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 </style>
 
 <script>
+// SCRIPT REMAINS THE SAME
 document.addEventListener('DOMContentLoaded', function() {
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
@@ -872,7 +872,7 @@ async function updateTotalCost() {
         } 
     });
     const formattedTotal = `$${total.toFixed(2)}`;
-    if (totalCostEl) totalCostEl.textContent = formattedTotal; // Check if element exists before updating
+    if (totalCostEl) totalCostEl.textContent = formattedTotal;
     summaryTotalCostEl.textContent = formattedTotal;
 }
 async function openDetailModal(compositeId) { const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); if (!record) return; const isLocked = state.cart.lockedItems.has(compositeId);
@@ -898,7 +898,7 @@ function updateSummaryToolbar() {
 }
 
 async function updateRender() { 
-    await updateSelectionsSidebar(); 
+    updateSelectionsSidebar(); 
     await applyFilters();
     updateSummaryToolbar();
 }
