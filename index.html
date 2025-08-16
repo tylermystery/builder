@@ -16,43 +16,31 @@ Loading catalog...
 </div>
 
 <div id="top-summary-bar">
-    <div class="toolbar-item">
-        <label for="summary-event-name">Event Name</label>
-        <input type="text" id="summary-event-name" placeholder="Untitled Event">
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-date">Date</label>
-        <input type="date" id="summary-date">
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-headcount">Headcount</label>
-        <input type="number" id="summary-headcount" min="1" value="1">
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-location">Location</label>
-        <input type="text" id="summary-location" placeholder="TBD">
-    </div>
-    <div class="toolbar-item total-cost-summary">
-        <label>Total Cost</label>
-        <span id="summary-total-cost">$0.00</span>
-    </div>
-</div>
-
-
-<div id="sticky-header">
-<div id="header-summary"></div>
-<div id="header-full-content">
-<div id="favorites-section" style="display: none;">
-<div class="favorites-header">
-    <div id="collaborators-section" class="header-group-left" style="display: none;">
-        <div id="collaborator-avatars"></div>
-        <button id="add-collaborator-btn">+</button>
-    </div>
-    <h2 id="event-title-header">Your Event</h2>
-    <div class="header-group-right">
-        <div id="sessions-dropdown-container" style="display: none;">
-            <select id="sessions-dropdown"></select>
+    <div class="header-group-left">
+        <div id="collaborators-section" style="display: none;">
+            <div id="collaborator-avatars"></div>
+            <button id="add-collaborator-btn">+</button>
         </div>
+    </div>
+    <div class="toolbar-item-group">
+        <div class="toolbar-item">
+            <label for="summary-event-name">Event Name</label>
+            <input type="text" id="summary-event-name" placeholder="Untitled Event">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-date">Date</label>
+            <input type="date" id="summary-date">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-headcount">Headcount</label>
+            <input type="number" id="summary-headcount" min="1" value="1">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-location">Location</label>
+            <input type="text" id="summary-location" placeholder="TBD">
+        </div>
+    </div>
+    <div class="header-group-right">
         <div id="total-cost-section">
             <strong>Total:</strong>
             <span id="total-cost">$0.00</span>
@@ -63,11 +51,6 @@ Loading catalog...
                     <button id="undo-btn" disabled>↩️</button>
                     <button id="redo-btn" disabled>↪️</button>
                 </div>
-                <div class="autosave-control">
-                    <label for="autosave-toggle">Autosave</label>
-                    <input type="checkbox" id="autosave-toggle" checked>
-                </div>
-                <span id="save-status"></span>
             </div>
             <div class="right-controls">
                 <button id="save-share-btn">Save Now</button>
@@ -78,10 +61,6 @@ Loading catalog...
             </div>
         </div>
     </div>
-</div>
-<div id="favorites-carousel"></div>
-</div>
-</div>
 </div>
 
 <div id="main-content-area">
@@ -109,12 +88,22 @@ Loading catalog...
 
     <div id="selections-sidebar">
         <div class="sidebar-section">
+            <h2 id="event-title-header">Your Event</h2>
+            <div id="sessions-dropdown-container" style="display: none;">
+                <select id="sessions-dropdown"></select>
+            </div>
+        </div>
+        <div class="sidebar-section">
             <h3>Idea List</h3>
             <div id="favorites-list" class="sidebar-list"></div>
         </div>
         <div class="sidebar-section">
             <h3>Event Itinerary</h3>
             <div id="locked-list" class="sidebar-list"></div>
+        </div>
+        <div class="sidebar-section total-cost-summary">
+            <label>Total Cost</label>
+            <span id="summary-total-cost">$0.00</span>
         </div>
     </div>
 
@@ -140,10 +129,10 @@ Loading catalog...
 </div>
 </div>
 
-
 <style>
 body {
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+overflow: hidden; /* Prevent body scroll */
 }
 
 #top-summary-bar {
@@ -151,7 +140,7 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
     border-bottom: 1px solid #e0e0e0;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     padding: 10px 20px;
     gap: 20px;
@@ -160,17 +149,23 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
     top: 0;
     z-index: 1002;
 }
+.toolbar-item-group {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-grow: 1;
+}
 #main-content-area {
     display: flex;
     height: calc(100vh - 75px); 
 }
 #catalog-wrapper {
     flex-grow: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* Enable vertical scroll */
     padding: 20px;
 }
 #selections-sidebar {
-    width: 350px;
+    width: 380px;
     flex-shrink: 0;
     border-left: 1px solid #e0e0e0;
     background-color: #f8f9fa;
@@ -180,10 +175,15 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
     flex-direction: column;
     gap: 20px;
 }
-.sidebar-section h3 {
+.sidebar-section h3, #event-title-header {
     margin-top: 0;
+    margin-bottom: 10px;
     border-bottom: 1px solid #ddd;
     padding-bottom: 10px;
+}
+#event-title-header {
+    text-align: center;
+    font-size: 1.5em;
 }
 .sidebar-list {
     display: flex;
@@ -191,40 +191,8 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
     gap: 15px;
 }
 
-#sticky-header {
-position: sticky;
-top: 75px; 
-background-color: white;
-z-index: 999;
-box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-padding-top: 10px;
-transition: padding 0.3s ease-in-out;
-}
-#header-summary { display: none; justify-content: space-between; align-items: center; padding: 10px 20px; width: 100%; max-width: 1200px; margin: 0 auto; font-size: 1.1em;
-box-sizing: border-box; }
-#header-summary span { color: #6c757d; }
-#header-full-content { max-height: 500px; overflow: hidden; transition: max-height 0.4s ease-in-out; }
-#sticky-header.header-collapsed { padding-top: 0; padding-bottom: 0; }
-#sticky-header.header-collapsed #header-full-content { max-height: 0; }
-#sticky-header.header-collapsed #header-summary { display: flex; }
 #total-cost-section { padding: 0; text-align: right; font-size: 1.2em; }
 #total-cost { font-weight: bold; color: #007aff; }
-#favorites-section { max-width: 1200px; margin: 0 auto; padding: 0 20px 15px 20px; }
-.favorites-header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    gap: 20px; 
-    padding-bottom: 15px; 
-}
-#event-title-header {
-    margin: 0;
-    text-align: center;
-    flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
 .header-group-left, .header-group-right {
     display: flex;
     align-items: center;
@@ -240,49 +208,50 @@ font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px
 .avatar:hover { transform: translateY(-2px); z-index: 5; }
 #add-collaborator-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #6c757d; background: #f8f9fa; color: #6c757d; font-size: 1.2em; cursor: pointer;
 margin-left: -2px; }
-#favorites-carousel { display: none; } /* Old carousel is now hidden */
 .favorite-item { 
     position: relative; 
-    /* The sidebar will control the width, so we remove flex-basis */
-    height: 120px; /* Make sidebar items smaller */
+    height: 120px; 
     border-radius: 8px; 
     overflow: hidden; 
     background-size: cover; 
     background-position: center; 
     color: white;
     display: flex; 
-    flex-direction: row; /* Change to row for sidebar layout */
-    justify-content: space-between; /* Align content horizontally */
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
     cursor: pointer; 
     transition: all 0.3s;
     border: 1px solid #ddd;
 }
+.favorite-item.locked-item { border: 3px solid #FFD700; }
+.favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
 .favorite-item-content { 
     background: linear-gradient(to right, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
     padding: 10px; 
     text-align: left;
     height: 100%;
+    width: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
 }
-.favorite-item.locked-item { border: 3px solid #FFD700; }
-.favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
 .card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: none; }
 .event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);}
 .reactions-summary { display: flex; gap: 4px; font-size: 0.8em; }
 .reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none; }
 .action-btn-container { 
-    position: static; /* Unset position for flex layout */
+    position: static;
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding: 10px;
     background: rgba(0,0,0,0.2);
+    height: 100%;
+    justify-content: center;
 }
-.secondary-action-btn { position: static; }
+.secondary-action-btn { position: static; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s;}
 .primary-action-btn { font-size: 1.8em; cursor: pointer; width: auto; height: auto; }
 .primary-action-btn .icon-hover { display: none; }
 .primary-action-btn:hover .icon-default { display: none; }
@@ -428,9 +397,8 @@ const CONSTANTS = {
     }
 };
 
-const stickyHeader = document.getElementById('sticky-header');
-const headerSummary = document.getElementById('header-summary');
 const catalogContainer = document.getElementById('catalog-container');
+const catalogWrapper = document.getElementById('catalog-wrapper');
 const loadingMessage = document.getElementById('loading-message');
 const guestCountInput = document.getElementById('guest-count');
 const totalCostEl = document.getElementById('total-cost');
@@ -440,8 +408,6 @@ const priceFilter = document.getElementById('price-filter');
 const durationFilter = document.getElementById('duration-filter');
 const statusFilter = document.getElementById('status-filter');
 const resetFiltersBtn = document.getElementById('reset-filters');
-const favoritesSection = document.getElementById('favorites-section');
-const favoritesCarousel = document.getElementById('favorites-carousel');
 const favoritesList = document.getElementById('favorites-list');
 const lockedList = document.getElementById('locked-list');
 const editModal = document.getElementById('edit-modal');
@@ -555,17 +521,9 @@ if (state.session.user) { localStorage.setItem('userName', state.session.user); 
 async function handleReaction(recordId, emoji) { if (!state.session.reactions.has(recordId)) { state.session.reactions.set(recordId, {}); } const reactions = state.session.reactions.get(recordId);
 if (reactions[state.session.user] === emoji) { delete reactions[state.session.user]; } else { reactions[state.session.user] = emoji; } await updateRender(); }
 function updateHeader() { 
-    const itemCount = state.cart.items.size + state.cart.lockedItems.size; 
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
     eventTitleHeader.textContent = eventName;
     document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
-
-    const totalCostText = totalCostEl.textContent; 
-    if (itemCount > 0) { 
-        headerSummary.innerHTML = `<span>${eventName}</span> <span><strong>${itemCount}</strong> ${itemCount > 1 ? 'items' : 'item'} selected</span> <strong>${totalCostText}</strong>`; 
-    } else { 
-        headerSummary.innerHTML = `<span>${eventName}</span>`; 
-    } 
 }
 function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
@@ -666,12 +624,6 @@ Object.values(reactions).forEach(emoji => { reactionCounts[emoji] = (reactionCou
 return `<div class="reactions-summary">${reactionsSummaryHTML}</div>`; }
 function renderReactionbar(recordId) { return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`; }
 async function updateSelectionsSidebar() { 
-    if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) { 
-        favoritesSection.style.display = 'none';
-    } else {
-        favoritesSection.style.display = 'block'; 
-    }
-
     favoritesList.innerHTML = ''; 
     lockedList.innerHTML = '';
 
@@ -971,27 +923,64 @@ await updateRender();
 document.body.addEventListener('click', async (e) => { const reactionBtn = e.target.closest('.reaction-bar button'); if (reactionBtn) { e.stopPropagation(); await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji); }});
 editModal.addEventListener('click', function(e) { if (e.target === editModal || e.target === modalContent) { editModal.style.display = 'none'; } });
 modalCloseBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
-catalogContainer.addEventListener('wheel', (e) => {
-    if (e.deltaY !== 0) {
-        e.preventDefault();
-        catalogContainer.scrollLeft += e.deltaY;
-    }
-});
-catalogContainer.addEventListener('scroll', () => {
-    const { scrollLeft, scrollWidth, clientWidth } = catalogContainer;
-    if (scrollLeft + clientWidth >= scrollWidth - 500) { 
+catalogWrapper.addEventListener('scroll', () => { // Changed from catalogContainer to wrapper
+    const { scrollTop, scrollHeight, clientHeight } = catalogWrapper;
+    if (scrollTop + clientHeight >= scrollHeight - 500) { 
         loadMoreRecords();
     }
 });
-favoritesCarousel.addEventListener('click', async (e) => {
-const promoteBtn = e.target.closest('.promote-btn'); if (promoteBtn) { e.stopPropagation(); recordStateForUndo(); const compositeId = promoteBtn.dataset.compositeId; const itemData = state.cart.items.get(compositeId);
-if (itemData) { state.cart.lockedItems.set(compositeId, itemData); state.cart.items.delete(compositeId); await updateRender(); } return; }
-const demoteBtn = e.target.closest('.demote-btn'); if (demoteBtn) { e.stopPropagation(); recordStateForUndo(); const compositeId = demoteBtn.dataset.compositeId; const itemData = state.cart.lockedItems.get(compositeId);
-if (itemData) { state.cart.items.set(compositeId, itemData); state.cart.lockedItems.delete(compositeId); await updateRender(); } return; }
-const removeBtn = e.target.closest('.remove-btn'); if (removeBtn) { e.stopPropagation(); recordStateForUndo(); const compositeId = removeBtn.dataset.compositeId; state.cart.items.delete(compositeId); await updateRender(); return; }
-const editBtn = e.target.closest('.edit-card-btn'); if (editBtn) { e.stopPropagation(); await openDetailModal(editBtn.dataset.compositeId); return; }
-const favoriteItem = e.target.closest('.favorite-item'); if (favoriteItem) { const compositeId = favoriteItem.dataset.compositeId; if(compositeId && !e.target.closest('.reaction-bar')) await openDetailModal(compositeId); }
-});
+favoritesList.addEventListener('click', (e) => handleSelectionClick(e, 'favorites'));
+lockedList.addEventListener('click', (e) => handleSelectionClick(e, 'locked'));
+
+async function handleSelectionClick(e, type) {
+    const promoteBtn = e.target.closest('.promote-btn'); 
+    if (promoteBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = promoteBtn.dataset.compositeId; 
+        const itemData = state.cart.items.get(compositeId);
+        if (itemData) { 
+            state.cart.lockedItems.set(compositeId, itemData); 
+            state.cart.items.delete(compositeId); 
+            await updateRender(); 
+        } 
+        return; 
+    }
+    const demoteBtn = e.target.closest('.demote-btn'); 
+    if (demoteBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = demoteBtn.dataset.compositeId; 
+        const itemData = state.cart.lockedItems.get(compositeId);
+        if (itemData) { 
+            state.cart.items.set(compositeId, itemData); 
+            state.cart.lockedItems.delete(compositeId); 
+            await updateRender(); 
+        } 
+        return; 
+    }
+    const removeBtn = e.target.closest('.remove-btn'); 
+    if (removeBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = removeBtn.dataset.compositeId; 
+        state.cart.items.delete(compositeId); 
+        await updateRender(); 
+        return; 
+    }
+    const editBtn = e.target.closest('.edit-card-btn'); 
+    if (editBtn) { 
+        e.stopPropagation(); 
+        await openDetailModal(editBtn.dataset.compositeId); 
+        return; 
+    }
+    const favoriteItem = e.target.closest('.favorite-item'); 
+    if (favoriteItem) { 
+        const compositeId = favoriteItem.dataset.compositeId; 
+        if(compositeId && !e.target.closest('.reaction-bar')) await openDetailModal(compositeId); 
+    }
+}
+
 addCollaboratorBtn.addEventListener('click', () => { const newName = prompt("Enter collaborator's name:"); if (newName && !state.session.collaborators.includes(newName)) { state.session.collaborators.push(newName); renderCollaborators(); } });
 sessionsDropdown.addEventListener('change', (e) => { const id = e.target.value; if (id) window.location.search = `?session=${id}`; });
 guestCountInput.addEventListener('input', async () => { document.querySelectorAll('.quantity-input').forEach(input => { input.value = Math.max(parseInt(guestCountInput.value), parseInt(input.min)); }); await updateSelectionsSidebar(); });
