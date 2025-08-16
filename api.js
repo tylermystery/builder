@@ -57,11 +57,11 @@ export async function saveSessionToAirtable() {
         }
         storeSession(state.session.id, sessionName);
         window.history.replaceState({}, document.title, `?session=${state.session.id}`);
-        return true; // Indicate success
+        return true;
     } catch (error) {
         console.error("Failed to save session:", error);
         document.getElementById('save-status').textContent = 'Error saving.';
-        return false; // Indicate failure
+        return false;
     }
 }
 
@@ -86,16 +86,18 @@ export async function fetchAllRecords() {
 
 export async function fetchImageForRecord(record, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
+    const cacheKey = record.id; // <-- *** THE FIX IS HERE ***
+
+    if (imageCache.has(cacheKey)) {
+        return imageCache.get(cacheKey);
+    }
+
     const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
     const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default';
 
-    if (imageCache.has(primaryTag)) {
-        return imageCache.get(primaryTag);
-    }
-
     if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here') {
         const placeholderUrl = `https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`;
-        imageCache.set(primaryTag, placeholderUrl);
+        imageCache.set(cacheKey, placeholderUrl);
         return placeholderUrl;
     }
 
@@ -105,21 +107,21 @@ export async function fetchImageForRecord(record, imageCache) {
     try {
         const response = await fetch(cloudinaryUrl);
         if (!response.ok) {
-            imageCache.set(primaryTag, ultimateFallbackUrl);
+            imageCache.set(cacheKey, ultimateFallbackUrl);
             return ultimateFallbackUrl;
         }
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) {
-            imageCache.set(primaryTag, ultimateFallbackUrl);
+            imageCache.set(cacheKey, ultimateFallbackUrl);
             return ultimateFallbackUrl;
         }
         const randomImage = data.resources[Math.floor(Math.random() * data.resources.length)];
         const finalUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${randomImage.version}/${randomImage.public_id}.${randomImage.format}`;
-        imageCache.set(primaryTag, finalUrl);
+        imageCache.set(cacheKey, finalUrl);
         return finalUrl;
     } catch (error) {
         console.error('Failed to fetch image from Cloudinary:', error);
-        imageCache.set(primaryTag, ultimateFallbackUrl);
+        imageCache.set(cacheKey, ultimateFallbackUrl);
         return ultimateFallbackUrl;
     }
 }
