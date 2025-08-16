@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,16 +7,13 @@
 </head>
 <body>
 
-
 <div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
 Loading catalog...
 </div>
 
-
 <div id="event-details-storage" style="display: none;">
 <input type="number" id="guest-count" value="1" min="1">
 </div>
-
 
 <div id="sticky-header">
 <div id="header-summary"></div>
@@ -65,7 +62,6 @@ Loading catalog...
 </div>
 </div>
 
-
 <div id="filter-controls" style="display: none;">
 <input type="text" id="name-filter" placeholder="Search by name...">
 <select id="price-filter">
@@ -84,9 +80,7 @@ Loading catalog...
 <button id="reset-filters">Reset</button>
 </div>
 
-
 <div id="catalog-container"></div>
-
 
 <div id="pagination-controls">
 <button id="prev-button" disabled><span>&larr; Previous</span></button>
@@ -94,14 +88,12 @@ Loading catalog...
 <button id="next-button" disabled><span>Next &rarr;</span></button>
 </div>
 
-
 <div id="edit-modal" class="modal-overlay" style="display: none;">
 <div class="modal-content">
 <button class="modal-close">&times;</button>
 <div id="modal-body"></div>
 </div>
 </div>
-
 
 <div id="confirm-modal" class="modal-overlay" style="display: none;">
 <div class="modal-content detail-modal">
@@ -114,7 +106,6 @@ Loading catalog...
 </div>
 </div>
 </div>
-
 
 <style>
 body {
@@ -229,17 +220,12 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 #modal-body .price-quantity-wrapper { color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 </style>
 
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
-const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 const RECORDS_PER_PAGE = 8;
 const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
-
 
 const CONSTANTS = {
     FIELD_NAMES: {
@@ -263,7 +249,6 @@ const CONSTANTS = {
         SPECIAL_REQUESTS: 'specialRequests',
     }
 };
-
 
 const stickyHeader = document.getElementById('sticky-header');
 const headerSummary = document.getElementById('header-summary');
@@ -298,7 +283,6 @@ const undoBtn = document.getElementById('undo-btn');
 const redoBtn = document.getElementById('redo-btn');
 const imageCache = new Map();
 
-
 const state = {
     records: {
         all: [],
@@ -328,7 +312,6 @@ const state = {
     }
 };
 
-
 function recordStateForUndo() {
     if (state.history.isRestoring) return;
     const currentState = {
@@ -341,7 +324,6 @@ function recordStateForUndo() {
     updateHistoryButtons();
 }
 
-
 function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
@@ -350,7 +332,6 @@ function restoreState(newState) {
     state.history.isRestoring = false;
     updateRender();
 }
-
 
 function undo() {
     if (state.history.undoStack.length > 1) {
@@ -362,7 +343,6 @@ function undo() {
     }
 }
 
-
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
@@ -372,12 +352,10 @@ function redo() {
     }
 }
 
-
 function updateHistoryButtons() {
     undoBtn.disabled = state.history.undoStack.length <= 1;
     redoBtn.disabled = state.history.redoStack.length === 0;
 }
-
 
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
 function renderCollaborators() { const collaboratorAvatars = document.getElementById('collaborator-avatars'); collaboratorsSection.style.display = 'flex'; collaboratorAvatars.innerHTML = '';
@@ -396,29 +374,93 @@ function populateSessionsDropdown() { const sessions = getStoredSessions(); cons
 } sessionsDropdownContainer.style.display = 'block'; sessionsDropdown.innerHTML = '<option value="">Load a saved list...</option>';
 sessionIds.forEach(id => { const option = document.createElement('option'); option.value = id; option.textContent = sessions[id]; if (id === state.session.id) { option.selected = true; } sessionsDropdown.appendChild(option); });
 }
-async function loadSessionFromAirtable(sessionId) { state.session.id = sessionId; const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-try { const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-if (!response.ok) throw new Error('Could not fetch session data.'); const record = await response.json(); state.session.collaborators = record.fields.Collaborators ?
-record.fields.Collaborators.split(',').map(name => name.trim()) : []; const sessionDataString = record.fields['Items with Variations']; if (sessionDataString) { const savedState = JSON.parse(sessionDataString);
-if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems)); if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems)); if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
-if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails)); storeSession(sessionId, record.fields.Name); } } catch (error) { console.error("Failed to load session:", error);
-alert("Could not load the shared session."); window.history.replaceState({}, document.title, window.location.pathname); }
-state.history.undoStack = []; state.history.redoStack = []; recordStateForUndo(); updateHistoryButtons();
+async function loadSessionFromAirtable(sessionId) { 
+    state.session.id = sessionId; 
+    const url = `/.netlify/functions/airtable/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    try { 
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Could not fetch session data.'); 
+        const record = await response.json(); 
+        state.session.collaborators = record.fields.Collaborators ?
+        record.fields.Collaborators.split(',').map(name => name.trim()) : []; 
+        const sessionDataString = record.fields['Items with Variations']; 
+        if (sessionDataString) { 
+            const savedState = JSON.parse(sessionDataString);
+            if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems)); 
+            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems)); 
+            if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
+            if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails)); 
+            storeSession(sessionId, record.fields.Name); 
+        } 
+    } catch (error) { 
+        console.error("Failed to load session:", error);
+        alert("Could not load the shared session."); 
+        window.history.replaceState({}, document.title, window.location.pathname); 
+    }
+    state.history.undoStack = []; 
+    state.history.redoStack = []; 
+    recordStateForUndo(); 
+    updateHistoryButtons();
 }
-async function saveSessionToAirtable() { document.getElementById('save-status').textContent = 'Saving...'; const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
-const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`; const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
-null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": new Date().toISOString().split('T')[0] } }; const isUpdate = state.session.id !== null;
-const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); const method = isUpdate ? 'PATCH' : 'POST';
-try { const response = await fetch(url, { method: method, headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify(isUpdate ? payload : { records: [payload] }) });
-if (!response.ok) { const errorData = await response.json(); throw new Error(`Airtable API Error: ${errorData.error.message}`); } const result = await response.json();
-if (!isUpdate) { state.session.id = result.records[0].id; } storeSession(state.session.id, sessionName); window.history.replaceState({}, document.title, `?session=${state.session.id}`); populateSessionsDropdown(); document.getElementById('save-status').textContent = 'Saved!'; shareLinkContainer.style.display = 'inline-flex';
-shareLinkInput.value = window.location.href; } catch (error) { console.error("Failed to save session:", error); document.getElementById('save-status').textContent = 'Error saving.';
-} finally { setTimeout(() => { if (document.getElementById('save-status').textContent !== 'Saving...') { document.getElementById('save-status').textContent = ''; } }, 3000); } }
-async function fetchAllRecords() { let records = []; let offset = null; const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
-try { do { const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-if (!response.ok) throw new Error('Failed to fetch data from Airtable.'); const data = await response.json(); records = records.concat(data.records);
-offset = data.offset; } while (offset); return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.NAME]); } catch (error) { console.error(error);
-loadingMessage.innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later.</p>`; return []; } }
+async function saveSessionToAirtable() { 
+    document.getElementById('save-status').textContent = 'Saving...'; 
+    const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`; 
+    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": new Date().toISOString().split('T')[0] } }; 
+    const isUpdate = state.session.id !== null;
+    const url = `/.netlify/functions/airtable/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); 
+    const method = isUpdate ? 'PATCH' : 'POST';
+    try { 
+        const response = await fetch(url, { 
+            method: method, 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(isUpdate ? payload : { records: [payload] }) 
+        });
+        if (!response.ok) { 
+            const errorData = await response.json(); 
+            throw new Error(`Airtable API Error: ${errorData.error.message}`); 
+        } 
+        const result = await response.json();
+        if (!isUpdate) { 
+            state.session.id = result.records[0].id; 
+        } 
+        storeSession(state.session.id, sessionName); 
+        window.history.replaceState({}, document.title, `?session=${state.session.id}`); 
+        populateSessionsDropdown(); 
+        document.getElementById('save-status').textContent = 'Saved!'; 
+        shareLinkContainer.style.display = 'inline-flex';
+        shareLinkInput.value = window.location.href; 
+    } catch (error) { 
+        console.error("Failed to save session:", error); 
+        document.getElementById('save-status').textContent = 'Error saving.';
+    } finally { 
+        setTimeout(() => { 
+            if (document.getElementById('save-status').textContent !== 'Saving...') { 
+                document.getElementById('save-status').textContent = ''; 
+            } 
+        }, 3000); 
+    } 
+}
+async function fetchAllRecords() { 
+    let records = []; 
+    let offset = null; 
+    const tableId = 'tblUA4uuS8IYlhKpD';
+    const url = `/.netlify/functions/airtable/${tableId}?`;
+    try { 
+        do { 
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url);
+            if (!response.ok) throw new Error('Failed to fetch data from Airtable.'); 
+            const data = await response.json(); 
+            records = records.concat(data.records);
+            offset = data.offset; 
+        } while (offset); 
+        return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.NAME]); 
+    } catch (error) { 
+        console.error(error);
+        loadingMessage.innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later.</p>`; 
+        return []; 
+    } 
+}
 function parseOptions(optionsText) { if (!optionsText) return []; return optionsText.split('\n').map(line => { const parts = line.split(',').map(p => p.trim()); const option = { name: parts[0], priceChange: 0, durationChange: 0 }; parts.slice(1).forEach(part => { if (part.includes('$')) { option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } else if (part.toLowerCase().includes('duration change')) { option.durationChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } }); return option; });
 }
 function renderDetailsCards() { if (state.ui.detailsCardMode === 'combined') { const detailsCard = document.createElement('div'); detailsCard.className = 'details-card';
@@ -462,11 +504,9 @@ async function fetchImageForRecord(record) {
     const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
     const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default';
 
-
     if (imageCache.has(primaryTag)) {
         return imageCache.get(primaryTag);
     }
-
 
     if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here') {
         const placeholderUrl = `https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`;
@@ -474,10 +514,8 @@ async function fetchImageForRecord(record) {
         return placeholderUrl;
     }
 
-
     const encodedTag = encodeURIComponent(primaryTag);
     const cloudinaryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/list/${encodedTag}.json`;
-
 
     try {
         const response = await fetch(cloudinaryUrl);
@@ -589,7 +627,6 @@ const card = e.target.closest('.event-card'); if(card && !e.target.closest('.rea
 });
 copyLinkBtn.addEventListener('click', () => { shareLinkInput.select(); document.execCommand('copy'); copyLinkBtn.textContent = 'Copied!'; setTimeout(() => { copyLinkBtn.textContent = 'Copy'; }, 2000); });
 }
-
 
 initialize();
 });
