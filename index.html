@@ -334,6 +334,10 @@ const SESSIONS_TABLE_NAME = 'Sessions';
 const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 const RECORDS_PER_PAGE = 8;
 const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
+const REACTION_SCORES = {
+    '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
+    '🤔': -1, '👎': -2, '🤢': -3
+};
 
 const CONSTANTS = {
     FIELD_NAMES: {
@@ -470,6 +474,11 @@ function redo() {
 function updateHistoryButtons() {
     undoBtn.disabled = state.history.undoStack.length <= 1;
     redoBtn.disabled = state.history.redoStack.length === 0;
+}
+
+function calculateReactionScore(recordId) {
+    const reactions = state.session.reactions.get(recordId) || {};
+    return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
 
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
