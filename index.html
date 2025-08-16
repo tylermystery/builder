@@ -26,6 +26,9 @@ Loading catalog...
     </div>
     <h2 id="event-title-header">Your Event</h2>
     <div class="header-group-right">
+        <div id="sessions-dropdown-container" style="display: none;">
+            <select id="sessions-dropdown"></select>
+        </div>
         <div id="total-cost-section">
             <strong>Total:</strong>
             <span id="total-cost">$0.00</span>
@@ -51,7 +54,7 @@ Loading catalog...
             </div>
         </div>
     </div>
-    </div>
+</div>
 <div id="favorites-carousel"></div>
 </div>
 </div>
@@ -231,7 +234,7 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     overflow-y: hidden;
     gap: 25px;
     padding: 20px;
-    height: 1100px; /* 2 cards + gap */
+    height: 1100px; 
 }
 .event-card { 
     position: relative; 
@@ -340,7 +343,7 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 const CLOUDINARY_CLOUD_NAME = 'daedqizre';
-const RECORDS_PER_LOAD = 10; // New constant for infinite scroll
+const RECORDS_PER_LOAD = 10;
 const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
 const REACTION_SCORES = {
     '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
@@ -499,7 +502,7 @@ function updateHeader() {
     const itemCount = state.cart.items.size + state.cart.lockedItems.size; 
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
     eventTitleHeader.textContent = eventName;
-    document.title = eventName ? `TMT - ${eventName}` : 'Event Catalog';
+    document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
 
     const totalCostText = totalCostEl.textContent; 
     if (itemCount > 0) { 
@@ -750,6 +753,9 @@ async function fetchImageForRecord(record) {
     }
 }
 async function renderRecords(recordsToRender) { 
+    if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
+        catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
+    }
     for (const record of recordsToRender) { 
         const fields = record.fields; 
         const recordId = record.id;
@@ -910,8 +916,6 @@ populateFilter(durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
 populateFilter(statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
 populateSessionsDropdown();
 await updateRender();
-let lastScrollY = window.scrollY;
-window.addEventListener('scroll', () => { const threshold = 100; if (window.scrollY > lastScrollY && window.scrollY > threshold) { stickyHeader.classList.add('header-collapsed'); } else if (window.scrollY < lastScrollY) { stickyHeader.classList.remove('header-collapsed'); } lastScrollY = window.scrollY <= 0 ? 0 : window.scrollY; }, { passive: true });
 document.body.addEventListener('click', async (e) => { const reactionBtn = e.target.closest('.reaction-bar button'); if (reactionBtn) { e.stopPropagation(); await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji); }});
 editModal.addEventListener('click', function(e) { if (e.target === editModal || e.target === modalContent) { editModal.style.display = 'none'; } });
 modalCloseBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
@@ -923,7 +927,7 @@ catalogContainer.addEventListener('wheel', (e) => {
 });
 catalogContainer.addEventListener('scroll', () => {
     const { scrollLeft, scrollWidth, clientWidth } = catalogContainer;
-    if (scrollLeft + clientWidth >= scrollWidth - 500) { // 500px threshold
+    if (scrollLeft + clientWidth >= scrollWidth - 500) { 
         loadMoreRecords();
     }
 });
