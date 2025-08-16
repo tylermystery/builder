@@ -111,13 +111,7 @@ async function applyFilters() {
         })();
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
-        const options = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] ? record.fields[CONSTANTS.FIELD_NAMES.OPTIONS].split('\n') : [];
-        if (options.length > 0) {
-            const allOptionsFavorited = options.every((opt, index) => state.cart.items.has(`${record.id}-${index}`) || state.cart.lockedItems.has(`${record.id}-${index}`));
-            if (allOptionsFavorited) return false;
-        } else {
-            if (state.cart.items.has(record.id) || state.cart.lockedItems.has(record.id)) return false;
-        }
+        
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
@@ -140,6 +134,7 @@ async function loadMoreRecords() {
 }
 
 async function updateRender() {
+    ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
@@ -148,7 +143,14 @@ async function updateRender() {
 function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
-    
+    document.getElementById('add-collaborator-btn').addEventListener('click', () => {
+        const newName = prompt("Enter collaborator's name:");
+        if (newName && !state.session.collaborators.includes(newName)) {
+            state.session.collaborators.push(newName);
+            ui.renderCollaborators(getInitials);
+        }
+    });
+
     ui.catalogContainer.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
@@ -203,18 +205,22 @@ function setupEventListeners() {
             e.stopPropagation();
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
+            const recordId = compositeId.split('-')[0];
             state.cart.items.delete(compositeId);
-            const cardToRemove = ui.favoritesCarousel.querySelector(`.favorite-item[data-composite-id="${compositeId}"]`);
-            if (cardToRemove) cardToRemove.remove();
-            const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
-            if (record) {
-                const newCard = await ui.createEventCardElement(record, imageCache);
-                ui.catalogContainer.appendChild(newCard);
-                applyFilters(); // Re-sort the catalog after adding a card back
+            await ui.updateFavoritesCarousel();
+            
+            // Check if this card should be re-added to the catalog
+            const record = state.records.all.find(r => r.id === recordId);
+            if(record) {
+                // A simple re-filter is the easiest way to ensure it appears in the correct sorted order
+                await applyFilters();
             }
-            ui.updateTotalCost();
-            ui.updateHeader();
             return;
+        }
+        const editBtn = e.target.closest('.edit-card-btn, .favorite-item');
+        if(editBtn && !e.target.closest('.action-btn-container, .secondary-action-btn')) {
+            e.stopPropagation();
+            await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
     });
 
@@ -224,7 +230,6 @@ function setupEventListeners() {
             e.stopPropagation();
             recordStateForUndo();
             heart.classList.add('hearted');
-            setTimeout(() => heart.classList.remove('hearted'), 300);
             const card = heart.closest('.event-card');
             const compositeId = heart.dataset.compositeId;
             if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
@@ -233,22 +238,18 @@ function setupEventListeners() {
             const quantity = card.querySelector('.quantity-input').value;
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
             state.cart.items.set(compositeId, itemInfo);
-            card.remove();
-            const favCard = await ui.createFavoriteCardElement(compositeId, itemInfo, false, imageCache);
-            ui.favoritesCarousel.appendChild(favCard);
-            ui.updateTotalCost();
-            ui.updateHeader();
-            await ui.updateFavoritesCarousel(); // Re-sort the carousel after adding
+            card.remove(); // Surgical removal
+            await ui.updateFavoritesCarousel(); // Full update of carousel to ensure sorting
             return;
         }
 
         const card = e.target.closest('.event-card');
-        if(card && !e.target.closest('.reaction-bar')) { 
+        if(card && !e.target.closest('.reaction-bar, .quantity-selector, .options-selector')) { 
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId; 
-            // openDetailModal(compositeId); // This function needs to be defined or imported
+            await ui.openDetailModal(compositeId, imageCache);
         }
     });
-
+    
     const toolbarInputs = [ui.summaryEventNameInput, ui.summaryDateInput, ui.summaryHeadcountInput, ui.summaryLocationInput];
     toolbarInputs.forEach(input => {
         input.addEventListener('change', (e) => {
@@ -267,11 +268,10 @@ function setupEventListeners() {
             }
         });
     });
-
-    // ... other top-level listeners like filter changes, save button etc.
 }
 
 
+// --- INITIALIZATION ---
 async function initialize() {
     ui.toggleLoading(true);
     try {
