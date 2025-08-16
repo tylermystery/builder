@@ -110,11 +110,11 @@ Loading catalog...
     <div id="selections-sidebar">
         <div class="sidebar-section">
             <h3>Idea List</h3>
-            <div id="favorites-list"></div>
+            <div id="favorites-list" class="sidebar-list"></div>
         </div>
         <div class="sidebar-section">
             <h3>Event Itinerary</h3>
-            <div id="locked-list"></div>
+            <div id="locked-list" class="sidebar-list"></div>
         </div>
     </div>
 
@@ -144,10 +144,8 @@ Loading catalog...
 <style>
 body {
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-/* Remove padding and overflow from body */
 }
 
-/* NEW LAYOUT STYLES */
 #top-summary-bar {
     background-color: #ffffff;
     border-bottom: 1px solid #e0e0e0;
@@ -164,7 +162,7 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
 }
 #main-content-area {
     display: flex;
-    height: calc(100vh - 75px); /* Full viewport height minus top bar */
+    height: calc(100vh - 75px); 
 }
 #catalog-wrapper {
     flex-grow: 1;
@@ -187,10 +185,15 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
     border-bottom: 1px solid #ddd;
     padding-bottom: 10px;
 }
+.sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
 
 #sticky-header {
 position: sticky;
-top: 75px; /* Positioned below the new top bar */
+top: 75px; 
 background-color: white;
 z-index: 999;
 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -237,36 +240,50 @@ font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px
 .avatar:hover { transform: translateY(-2px); z-index: 5; }
 #add-collaborator-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #6c757d; background: #f8f9fa; color: #6c757d; font-size: 1.2em; cursor: pointer;
 margin-left: -2px; }
-#favorites-carousel { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 5px; }
+#favorites-carousel { display: none; } /* Old carousel is now hidden */
 .favorite-item { 
     position: relative; 
-    flex: 0 0 200px; 
-    height: 323px; 
+    /* The sidebar will control the width, so we remove flex-basis */
+    height: 120px; /* Make sidebar items smaller */
     border-radius: 8px; 
     overflow: hidden; 
     background-size: cover; 
     background-position: center; 
     color: white;
     display: flex; 
-    flex-direction: column; 
-    justify-content: flex-end; 
+    flex-direction: row; /* Change to row for sidebar layout */
+    justify-content: space-between; /* Align content horizontally */
+    align-items: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
     cursor: pointer; 
     transition: all 0.3s;
     border: 1px solid #ddd;
 }
+.favorite-item-content { 
+    background: linear-gradient(to right, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
+    padding: 10px; 
+    text-align: left;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 .favorite-item.locked-item { border: 3px solid #FFD700; }
 .favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
-.favorite-item-content { background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); padding: 10px; text-align: center; }
-.detail-favorite .favorite-item-content { background: none; display: flex; flex-direction: column; justify-content: center; height: 100%; }
-.card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent); }
-.event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: none; }
+.event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);}
 .reactions-summary { display: flex; gap: 4px; font-size: 0.8em; }
 .reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none; }
-.action-btn-container { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; }
-.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
-.secondary-action-btn:hover { opacity: 1; }
-.primary-action-btn { font-size: 1.8em; cursor: pointer; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+.action-btn-container { 
+    position: static; /* Unset position for flex layout */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+}
+.secondary-action-btn { position: static; }
+.primary-action-btn { font-size: 1.8em; cursor: pointer; width: auto; height: auto; }
 .primary-action-btn .icon-hover { display: none; }
 .primary-action-btn:hover .icon-default { display: none; }
 .primary-action-btn:hover .icon-hover { display: block; animation: pop 0.3s; }
@@ -286,13 +303,8 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
 #filter-controls { display: flex; justify-content: center; gap: 15px; padding-bottom: 20px; flex-wrap: wrap; }
 #catalog-container {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 320px;
-    grid-template-rows: repeat(2, auto);
-    overflow-x: auto;
-    overflow-y: hidden;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 25px;
-    height: 1100px; 
 }
 .event-card { 
     position: relative; 
@@ -302,7 +314,7 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     flex-direction: column; 
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     height: 520px; 
-    width: 320px;
+    width: 100%;
     background-size: cover; 
     background-position: center; 
     color: white; 
@@ -346,20 +358,6 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 #modal-body .description { margin: 15px 0; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 #modal-body .modal-footer { display: flex; gap: 15px; margin-top: 20px; align-items: center; justify-content: center; }
 #modal-body .price-quantity-wrapper { color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-#top-summary-bar {
-    position: sticky;
-    top: 0;
-    background-color: #ffffff;
-    border-bottom: 1px solid #e0e0e0;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 10px 20px;
-    gap: 20px;
-    z-index: 1001;
-    flex-wrap: wrap;
-}
 .toolbar-item {
     display: flex;
     flex-direction: column;
@@ -393,8 +391,6 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 </style>
 
 <script>
-// The script remains the same as the last step for now.
-// We will modify it in the next step to populate the new sidebar.
 document.addEventListener('DOMContentLoaded', function() {
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
@@ -446,6 +442,8 @@ const statusFilter = document.getElementById('status-filter');
 const resetFiltersBtn = document.getElementById('reset-filters');
 const favoritesSection = document.getElementById('favorites-section');
 const favoritesCarousel = document.getElementById('favorites-carousel');
+const favoritesList = document.getElementById('favorites-list');
+const lockedList = document.getElementById('locked-list');
 const editModal = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
@@ -667,13 +665,16 @@ function renderReactionsSummary(recordId) { const reactions = state.session.reac
 Object.values(reactions).forEach(emoji => { reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1; }); reactionsSummaryHTML = Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('');
 return `<div class="reactions-summary">${reactionsSummaryHTML}</div>`; }
 function renderReactionbar(recordId) { return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`; }
-async function updateFavoritesCarousel() { 
+async function updateSelectionsSidebar() { 
     if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) { 
         favoritesSection.style.display = 'none';
-        return; 
-    } 
-    favoritesSection.style.display = 'block'; 
-    favoritesCarousel.innerHTML = ''; 
+    } else {
+        favoritesSection.style.display = 'block'; 
+    }
+
+    favoritesList.innerHTML = ''; 
+    lockedList.innerHTML = '';
+
     const renderItemCard = async (compositeId, itemInfo, isLocked) => { 
         const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
         if (!record) return null; 
@@ -705,27 +706,20 @@ async function updateFavoritesCarousel() {
             primaryActionHTML = `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
             secondaryActionHTML = `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`; 
         } 
-        itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}`; 
+        itemCard.innerHTML = `<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="action-btn-container">${primaryActionHTML}${secondaryActionHTML}</div>${renderReactionbar(record.id)}`; 
         return itemCard; 
     }; 
     
-    state.eventDetails.combined.forEach((value, key) => { 
-        const favItem = document.createElement('div'); 
-        favItem.className = 'favorite-item detail-favorite'; 
-        favItem.innerHTML = `<div class="favorite-item-content"><p class="item-name">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</p><p class="variation-name">${value}</p></div>`; 
-        favoritesCarousel.appendChild(favItem); 
-    });
-
     const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
     for (const [compositeId, itemInfo] of sortedLockedItems) { 
         const card = await renderItemCard(compositeId, itemInfo, true); 
-        if (card) favoritesCarousel.appendChild(card);
+        if (card) lockedList.appendChild(card);
     } 
 
     const sortedItems = Array.from(state.cart.items.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
     for (const [compositeId, itemInfo] of sortedItems) { 
         const card = await renderItemCard(compositeId, itemInfo, false); 
-        if (card) favoritesCarousel.appendChild(card); 
+        if (card) favoritesList.appendChild(card); 
     } 
     
     updateTotalCost();
@@ -958,7 +952,7 @@ function updateSummaryToolbar() {
 }
 
 async function updateRender() { 
-    await updateFavoritesCarousel(); 
+    await updateSelectionsSidebar(); 
     await applyFilters();
     updateSummaryToolbar();
 }
@@ -1000,7 +994,7 @@ const favoriteItem = e.target.closest('.favorite-item'); if (favoriteItem) { con
 });
 addCollaboratorBtn.addEventListener('click', () => { const newName = prompt("Enter collaborator's name:"); if (newName && !state.session.collaborators.includes(newName)) { state.session.collaborators.push(newName); renderCollaborators(); } });
 sessionsDropdown.addEventListener('change', (e) => { const id = e.target.value; if (id) window.location.search = `?session=${id}`; });
-guestCountInput.addEventListener('input', async () => { document.querySelectorAll('.quantity-input').forEach(input => { input.value = Math.max(parseInt(guestCountInput.value), parseInt(input.min)); }); await updateFavoritesCarousel(); });
+guestCountInput.addEventListener('input', async () => { document.querySelectorAll('.quantity-input').forEach(input => { input.value = Math.max(parseInt(guestCountInput.value), parseInt(input.min)); }); await updateSelectionsSidebar(); });
 saveShareBtn.addEventListener('click', saveSessionToAirtable);
 const filterInputs = [nameFilter, priceFilter, durationFilter, statusFilter];
 filterInputs.forEach(el => el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', async () => await applyFilters()));
