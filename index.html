@@ -601,24 +601,105 @@ function renderReactionsSummary(recordId) { const reactions = state.session.reac
 Object.values(reactions).forEach(emoji => { reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1; }); reactionsSummaryHTML = Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('');
 return `<div class="reactions-summary">${reactionsSummaryHTML}</div>`; }
 function renderReactionbar(recordId) { return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`; }
-async function updateFavoritesCarousel() { if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) { favoritesSection.style.display = 'none';
-return; } favoritesSection.style.display = 'block'; favoritesCarousel.innerHTML = ''; const renderItemCard = async (compositeId, itemInfo, isLocked) => { const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
-if (!record) return null; const fields = record.fields; let variationNameHTML = ''; let itemPrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
-parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; const optionIndex = compositeId.split('-')[1]; if (optionIndex) { const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); const variation = options[optionIndex];
-if (variation) { variationNameHTML = `<p class="variation-name">${variation.name}</p>`; itemPrice += variation.priceChange; } } const itemCard = document.createElement('div');
-itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`; itemCard.dataset.compositeId = compositeId; itemCard.dataset.recordId = record.id; const imageUrl = await fetchImageForRecord(record);
-itemCard.style.backgroundImage = `url('${imageUrl}')`; let primaryActionHTML = ''; let secondaryActionHTML = ''; if (isLocked) { primaryActionHTML = `<button class="primary-action-btn" title="Locked In">⛓️</button>`;
-secondaryActionHTML = `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>`; } else { primaryActionHTML = `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
-secondaryActionHTML = `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`; } itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] ||
-''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}`; return itemCard; }; state.eventDetails.combined.forEach((value, key) => { const favItem = document.createElement('div'); favItem.className = 'favorite-item detail-favorite'; favItem.innerHTML = `<div class="favorite-item-content"><p class="item-name">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</p><p class="variation-name">${value}</p></div>`; favoritesCarousel.appendChild(favItem); });
-for (const [compositeId, itemInfo] of state.cart.lockedItems) { const card = await renderItemCard(compositeId, itemInfo, true); if (card) favoritesCarousel.appendChild(card);
-} for (const [compositeId, itemInfo] of state.cart.items) { const card = await renderItemCard(compositeId, itemInfo, false); if (card) favoritesCarousel.appendChild(card); } updateTotalCost();
-updateHeaderSummary(); }
-async function applyFilters() { const nameValue = nameFilter.value.toLowerCase(); const priceValue = priceFilter.value; const durationValue = durationFilter.value; const statusValue = statusFilter.value;
-state.records.filtered = state.records.all.filter(record => { const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue)); const priceMatch = (priceValue === 'all') ? true : (() => { const price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null; if (price === null) return false; switch (priceValue) { case '0-50': return price < 50; case '50-100': return price >= 50 && price <= 100; case '100-250': return price > 100 && price <= 250; case '250-plus': return price > 250; default: return true; } })(); const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue); const statusMatch = statusValue === 'all' 
-|| (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue); const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); if (options.length > 0) { const allOptionsFavorited = options.every((opt, index) => state.cart.items.has(`${record.id}-${index}`) ||
-state.cart.lockedItems.has(`${record.id}-${index}`)); if (allOptionsFavorited) return false; } else { if (state.cart.items.has(record.id) || state.cart.lockedItems.has(record.id)) return false;
-} return nameMatch && priceMatch && durationMatch && statusMatch; }); await renderPage(1); }
+async function updateFavoritesCarousel() { 
+    if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) { 
+        favoritesSection.style.display = 'none';
+        return; 
+    } 
+    favoritesSection.style.display = 'block'; 
+    favoritesCarousel.innerHTML = ''; 
+    const renderItemCard = async (compositeId, itemInfo, isLocked) => { 
+        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+        if (!record) return null; 
+        const fields = record.fields; 
+        let variationNameHTML = ''; 
+        let itemPrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
+        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; 
+        const optionIndex = compositeId.split('-')[1]; 
+        if (optionIndex) { 
+            const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+            const variation = options[optionIndex];
+            if (variation) { 
+                variationNameHTML = `<p class="variation-name">${variation.name}</p>`; 
+                itemPrice += variation.priceChange; 
+            } 
+        } 
+        const itemCard = document.createElement('div');
+        itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`; 
+        itemCard.dataset.compositeId = compositeId; 
+        itemCard.dataset.recordId = record.id; 
+        const imageUrl = await fetchImageForRecord(record);
+        itemCard.style.backgroundImage = `url('${imageUrl}')`; 
+        let primaryActionHTML = ''; 
+        let secondaryActionHTML = ''; 
+        if (isLocked) { 
+            primaryActionHTML = `<button class="primary-action-btn" title="Locked In">⛓️</button>`;
+            secondaryActionHTML = `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>`; 
+        } else { 
+            primaryActionHTML = `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
+            secondaryActionHTML = `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`; 
+        } 
+        itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}`; 
+        return itemCard; 
+    }; 
+    
+    state.eventDetails.combined.forEach((value, key) => { 
+        const favItem = document.createElement('div'); 
+        favItem.className = 'favorite-item detail-favorite'; 
+        favItem.innerHTML = `<div class="favorite-item-content"><p class="item-name">${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</p><p class="variation-name">${value}</p></div>`; 
+        favoritesCarousel.appendChild(favItem); 
+    });
+
+    const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+    for (const [compositeId, itemInfo] of sortedLockedItems) { 
+        const card = await renderItemCard(compositeId, itemInfo, true); 
+        if (card) favoritesCarousel.appendChild(card);
+    } 
+
+    const sortedItems = Array.from(state.cart.items.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+    for (const [compositeId, itemInfo] of sortedItems) { 
+        const card = await renderItemCard(compositeId, itemInfo, false); 
+        if (card) favoritesCarousel.appendChild(card); 
+    } 
+    
+    updateTotalCost();
+    updateHeaderSummary(); 
+}
+async function applyFilters() { 
+    const nameValue = nameFilter.value.toLowerCase(); 
+    const priceValue = priceFilter.value; 
+    const durationValue = durationFilter.value; 
+    const statusValue = statusFilter.value;
+    
+    state.records.filtered = state.records.all.filter(record => { 
+        const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue)); 
+        const priceMatch = (priceValue === 'all') ? true : (() => { 
+            const price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null; 
+            if (price === null) return false; 
+            switch (priceValue) { 
+                case '0-50': return price < 50; 
+                case '50-100': return price >= 50 && price <= 100; 
+                case '100-250': return price > 100 && price <= 250; 
+                case '250-plus': return price > 250; 
+                default: return true; 
+            } 
+        })(); 
+        const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue); 
+        const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue); 
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+        if (options.length > 0) { 
+            const allOptionsFavorited = options.every((opt, index) => state.cart.items.has(`${record.id}-${index}`) || state.cart.lockedItems.has(`${record.id}-${index}`)); 
+            if (allOptionsFavorited) return false; 
+        } else { 
+            if (state.cart.items.has(record.id) || state.cart.lockedItems.has(record.id)) return false;
+        } 
+        return nameMatch && priceMatch && durationMatch && statusMatch; 
+    }); 
+
+    state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
+
+    await renderPage(1); 
+}
 function populateFilter(filterElement, fieldName) { const values = new Set(); state.records.all.forEach(record => { const fieldValue = record.fields[fieldName]; if (fieldValue) { values.add(fieldValue); } });
 values.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = fieldName === CONSTANTS.FIELD_NAMES.DURATION ? `${value} hours` : value; filterElement.appendChild(option); });
 }
