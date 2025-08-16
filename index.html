@@ -187,10 +187,7 @@ overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: 15px;
-    /* NEW: Adaptive height and scrolling */
-    max-height: 40vh;
-    overflow-y: auto;
-    padding-right: 10px; /* space for scrollbar */
+    /* Removed max-height and overflow-y to allow natural growth */
 }
 .header-group-left, .header-group-right {
     display: flex;
@@ -222,14 +219,13 @@ margin-left: -2px; }
     transition: all 0.3s;
     border: 1px solid #ddd;
     width: 100%;
-    /* NEW: Consistent aspect ratio */
     aspect-ratio: 320 / 400;
 }
 .favorite-item.locked-item { border: 3px solid #FFD700; }
 .favorite-item-content { 
     background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
     padding: 10px; 
-    text-align: center; /* Reverted to center for vertical layout */
+    text-align: center;
     height: auto;
     display: flex;
     flex-direction: column;
@@ -244,7 +240,7 @@ margin-left: -2px; }
     top: 8px; right: 8px; 
     width: 30px; height: 30px; 
 }
-.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; }
+.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
 .primary-action-btn { font-size: 1.8em; cursor: pointer; width: 100%; height: 100%; }
 .primary-action-btn .icon-hover { display: none; }
 .primary-action-btn:hover .icon-default { display: none; }
@@ -281,7 +277,6 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     overflow: hidden; 
     cursor: pointer;
     border: 1px solid #e0e0e0;
-    /* NEW: Consistent aspect ratio */
     aspect-ratio: 320 / 520;
 }
 .event-card:hover { 
@@ -898,7 +893,7 @@ function updateSummaryToolbar() {
 }
 
 async function updateRender() { 
-    updateSelectionsSidebar(); 
+    await updateSelectionsSidebar(); 
     await applyFilters();
     updateSummaryToolbar();
 }
