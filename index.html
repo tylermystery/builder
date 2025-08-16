@@ -135,6 +135,8 @@ Loading catalog...
 body {
 padding-bottom: 80px;
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+/* Prevent vertical scrollbar when catalog is focused */
+overflow-y: hidden;
 }
 #sticky-header {
 position: sticky;
@@ -215,7 +217,17 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
 .reaction-bar button:hover { transform: scale(1.3); }
 #share-section { display: flex; align-items: center; gap: 15px; }
 #filter-controls { display: flex; justify-content: center; gap: 15px; padding: 20px; max-width: 1200px; margin: 20px auto; flex-wrap: wrap; }
-#catalog-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; padding: 20px; max-width: 1200px; margin: auto; }
+/* UPDATED CSS for horizontal catalog */
+#catalog-container {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 25px;
+    padding: 20px;
+    /* Set a height to contain the cards */
+    height: 550px; 
+}
 .event-card, .details-card { 
     position: relative; 
     border-radius: 10px; 
@@ -224,6 +236,9 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     flex-direction: column; 
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     height: 520px; 
+    /* Set a fixed width and prevent shrinking */
+    width: 320px;
+    flex-shrink: 0;
     background-size: cover; 
     background-position: center; 
     color: white; 
@@ -239,12 +254,10 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     transform: translateY(-5px); 
     box-shadow: 0 8px 16px rgba(0,0,0,0.2);
 }
-.heart-icon, .explode-icon, .combine-icon, .edit-card-btn { position: absolute; top: 15px; width: 30px; height: 30px; cursor: pointer; z-index: 10; background: none;
+.heart-icon, .edit-card-btn { position: absolute; top: 15px; width: 30px; height: 30px; cursor: pointer; z-index: 10; background: none;
 border: none; font-size: 1.5em; }
 .heart-icon { right: 15px; }
 .edit-card-btn { left: 15px; }
-.explode-icon { left: 15px; }
-.combine-icon { left: 15px; }
 .heart-icon svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: rgba(0,0,0,0.3); transition: fill 0.2s, stroke 0.2s;
 filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
 .details-card .heart-icon svg { stroke: #aaa; fill: rgba(0,0,0,0.1); }
@@ -422,7 +435,6 @@ const state = {
     },
     ui: {
         catalogPage: 1,
-        detailsCardMode: 'combined',
     },
     history: {
         undoStack: [],
@@ -586,17 +598,6 @@ async function fetchAllRecords() {
 }
 function parseOptions(optionsText) { if (!optionsText) return []; return optionsText.split('\n').map(line => { const parts = line.split(',').map(p => p.trim()); const option = { name: parts[0], priceChange: 0, durationChange: 0 }; parts.slice(1).forEach(part => { if (part.includes('$')) { option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } else if (part.toLowerCase().includes('duration change')) { option.durationChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } }); return option; });
 }
-function renderDetailsCards() { if (state.ui.detailsCardMode === 'combined') { const detailsCard = document.createElement('div'); detailsCard.className = 'details-card';
-detailsCard.innerHTML = ` <button class="explode-icon">💥</button> <div class="heart-icon" data-composite-id="detail-eventName"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <div class="details-card-content"> <h3>Event Details</h3> <select id="detail-type-selector" class="options-selector"> <option value="eventName">Event Name</option> <option value="guestCount">Guest Count</option> <option value="location">Location</option> <option value="specialRequests">Additional Details</option> </select> <input type="text" id="detail-input" placeholder="Enter Event Name..."> </div> `;
-catalogContainer.appendChild(detailsCard); const detailSelector = detailsCard.querySelector('#detail-type-selector'); const detailInput = detailsCard.querySelector('#detail-input'); const heartIcon = detailsCard.querySelector('.heart-icon');
-detailSelector.addEventListener('change', () => { const selected = detailSelector.value; heartIcon.dataset.compositeId = `detail-${selected}`; detailInput.value = state.eventDetails.combined.get(selected) || ''; detailInput.placeholder = `Enter ${detailSelector.options[detailSelector.selectedIndex].text}...`; detailInput.type = selected === CONSTANTS.DETAIL_TYPES.GUEST_COUNT ? 'number' : 'text'; heartIcon.classList.toggle('hearted', state.eventDetails.combined.has(selected)); });
-detailInput.addEventListener('change', () => { recordStateForUndo(); const selected = detailSelector.value; if (selected === CONSTANTS.DETAIL_TYPES.EVENT_NAME) document.title = detailInput.value ? `TMT - ${detailInput.value}` : 'Event Catalog'; if (selected === CONSTANTS.DETAIL_TYPES.GUEST_COUNT) { guestCountInput.value = detailInput.value; guestCountInput.dispatchEvent(new Event('input')); } });
-detailsCard.querySelector('.explode-icon').addEventListener('click', async () => { state.ui.detailsCardMode = 'exploded'; await applyFilters(); });
-} else { const detailTypes = [ { id: 'eventName', title: 'Event Name' }, { id: 'guestCount', title: 'Guest Count' }, { id: 'location', title: 'Location' }, { id: 'specialRequests', title: 'Additional Details' } ];
-detailTypes.forEach((type, index) => { const card = document.createElement('div'); card.className = 'details-card'; const isHearted = state.eventDetails.combined.has(type.id); card.innerHTML = ` ${index === 0 ? '<button class="combine-icon">✨</button>' : ''} <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="detail-${type.id}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <div class="details-card-content"> <h3>${type.title}</h3> <input type="${type.id === CONSTANTS.DETAIL_TYPES.GUEST_COUNT ? 'number' : 'text'}" class="detail-input" data-detail-type="${type.id}" placeholder="Enter value..." value="${state.eventDetails.combined.get(type.id) || ''}"> </div> `; catalogContainer.appendChild(card); const input = card.querySelector('.detail-input'); input.addEventListener('change', () => 
-{ recordStateForUndo(); if (type.id === CONSTANTS.DETAIL_TYPES.EVENT_NAME) document.title = input.value ? `TMT - ${input.value}` : 'Event Catalog';
-if (type.id === CONSTANTS.DETAIL_TYPES.GUEST_COUNT) { guestCountInput.value = input.value; guestCountInput.dispatchEvent(new Event('input')); } }); });
-document.querySelector('.combine-icon').addEventListener('click', async () => { state.ui.detailsCardMode = 'combined'; await applyFilters(); }); } }
 function renderReactionsSummary(recordId) { const reactions = state.session.reactions.get(recordId) || {}; let reactionsSummaryHTML = ''; const reactionCounts = {};
 Object.values(reactions).forEach(emoji => { reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1; }); reactionsSummaryHTML = Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('');
 return `<div class="reactions-summary">${reactionsSummaryHTML}</div>`; }
@@ -742,29 +743,101 @@ async function fetchImageForRecord(record) {
         return ultimateFallbackUrl;
     }
 }
-async function renderPage(pageNum) { catalogContainer.innerHTML = ''; state.ui.catalogPage = pageNum; const totalPages = Math.ceil(state.records.filtered.length / RECORDS_PER_PAGE);
-pageInfo.textContent = `Page ${state.ui.catalogPage} of ${totalPages || 1}`; const start = (state.ui.catalogPage - 1) * RECORDS_PER_PAGE;
-const end = start + RECORDS_PER_PAGE; const pageRecords = state.records.filtered.slice(start, end); if (state.ui.catalogPage === 1) { renderDetailsCards();
-} if (pageRecords.length === 0 && state.ui.catalogPage === 1 && state.ui.detailsCardMode !== 'exploded') { catalogContainer.innerHTML += "<p style='text-align: center; grid-column: 1 / -1;'>No events match the current filters.</p>";
-} for (const record of pageRecords) { const fields = record.fields; const recordId = record.id;
-const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); let basePrice = null;
-if (fields[CONSTANTS.FIELD_NAMES.PRICE]) { const cleanedPrice = String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, ""); if (cleanedPrice && !isNaN(parseFloat(cleanedPrice))) { basePrice = parseFloat(cleanedPrice);
-} } const eventCard = document.createElement('div'); eventCard.className = 'event-card'; eventCard.dataset.recordId = recordId; const imageUrl = await fetchImageForRecord(record); eventCard.style.backgroundImage = `url('${imageUrl}')`;
-let optionsDropdownHTML = ''; let nextUnfavoritedOptionIndex = 0; if (options.length > 0) { nextUnfavoritedOptionIndex = options.findIndex((opt, index) => !state.cart.items.has(`${recordId}-${index}`) && !state.cart.lockedItems.has(`${recordId}-${index}`));
-if (nextUnfavoritedOptionIndex === -1) nextUnfavoritedOptionIndex = 0; optionsDropdownHTML = ` <select class="options-selector"> ${options.map((opt, index) => `<option value="${index}" ${index === nextUnfavoritedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')} </select> `;
-} const compositeId = options.length > 0 ? `${recordId}-${nextUnfavoritedOptionIndex}` : recordId; const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin); eventCard.innerHTML = ` <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] ||
-'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ?
-'$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] ||
-''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
-catalogContainer.appendChild(eventCard); const dropdown = eventCard.querySelector('.options-selector'); const heartIcon = eventCard.querySelector('.heart-icon'); const quantityInput = eventCard.querySelector('.quantity-input'); const plusBtn = eventCard.querySelector('.quantity-btn.plus');
-const minusBtn = eventCard.querySelector('.quantity-btn.minus'); const priceEl = eventCard.querySelector('.price'); function updatePrice() { const unitPrice = parseFloat(priceEl.dataset.unitPrice); if (isNaN(unitPrice)) return;
-priceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-} if (dropdown) { dropdown.addEventListener('change', (e) => { const selectedIndex = e.target.value; const selectedOption = options[selectedIndex]; const newBasePrice = (basePrice || 0) + selectedOption.priceChange; const newDuration = (fields[CONSTANTS.FIELD_NAMES.DURATION] || 0) + selectedOption.durationChange; priceEl.dataset.unitPrice = newBasePrice; updatePrice(); eventCard.querySelector('.details').textContent = `Duration: ${newDuration} hours`; const newCompositeId = `${recordId}-${selectedIndex}`; heartIcon.dataset.compositeId = newCompositeId; heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId)); });
-dropdown.dispatchEvent(new Event('change')); } else { updatePrice(); } if (plusBtn) { plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
-} if (minusBtn) { minusBtn.addEventListener('click', () => { const currentValue = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (currentValue > min) { quantityInput.value = currentValue - 1; guestCountInput.value = quantityInput.value; } });
-} quantityInput.addEventListener('change', (e) => { const min = parseInt(e.target.min); if(parseInt(e.target.value) < min) e.target.value = min; guestCountInput.value = e.target.value; });
-} }
+async function renderPage(pageNum) { 
+    catalogContainer.innerHTML = ''; 
+    state.ui.catalogPage = pageNum; 
+    const totalPages = Math.ceil(state.records.filtered.length / RECORDS_PER_PAGE);
+    pageInfo.textContent = `Page ${state.ui.catalogPage} of ${totalPages || 1}`; 
+    const start = (state.ui.catalogPage - 1) * RECORDS_PER_PAGE;
+    const end = start + RECORDS_PER_PAGE; 
+    const pageRecords = state.records.filtered.slice(start, end); 
+    
+    // No longer need to render details cards
+    // if (state.ui.catalogPage === 1) { renderDetailsCards(); } 
+    
+    if (pageRecords.length === 0 && state.ui.catalogPage === 1) { 
+        catalogContainer.innerHTML += "<p style='text-align: center; grid-column: 1 / -1;'>No events match the current filters.</p>";
+    } 
+    for (const record of pageRecords) { 
+        const fields = record.fields; 
+        const recordId = record.id;
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; 
+        const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+        let basePrice = null;
+        if (fields[CONSTANTS.FIELD_NAMES.PRICE]) { 
+            const cleanedPrice = String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, ""); 
+            if (cleanedPrice && !isNaN(parseFloat(cleanedPrice))) { 
+                basePrice = parseFloat(cleanedPrice);
+            } 
+        } 
+        const eventCard = document.createElement('div'); 
+        eventCard.className = 'event-card'; 
+        eventCard.dataset.recordId = recordId; 
+        const imageUrl = await fetchImageForRecord(record); 
+        eventCard.style.backgroundImage = `url('${imageUrl}')`;
+        let optionsDropdownHTML = ''; 
+        let nextUnfavoritedOptionIndex = 0; 
+        if (options.length > 0) { 
+            nextUnfavoritedOptionIndex = options.findIndex((opt, index) => !state.cart.items.has(`${recordId}-${index}`) && !state.cart.lockedItems.has(`${recordId}-${index}`));
+            if (nextUnfavoritedOptionIndex === -1) nextUnfavoritedOptionIndex = 0; 
+            optionsDropdownHTML = ` <select class="options-selector"> ${options.map((opt, index) => `<option value="${index}" ${index === nextUnfavoritedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')} </select> `;
+        } 
+        const compositeId = options.length > 0 ? `${recordId}-${nextUnfavoritedOptionIndex}` : recordId; 
+        const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
+        const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin); 
+        eventCard.innerHTML = ` <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
+        catalogContainer.appendChild(eventCard); 
+        const dropdown = eventCard.querySelector('.options-selector'); 
+        const heartIcon = eventCard.querySelector('.heart-icon'); 
+        const quantityInput = eventCard.querySelector('.quantity-input'); 
+        const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+        const minusBtn = eventCard.querySelector('.quantity-btn.minus'); 
+        const priceEl = eventCard.querySelector('.price'); 
+        function updatePrice() { 
+            const unitPrice = parseFloat(priceEl.dataset.unitPrice); 
+            if (isNaN(unitPrice)) return;
+            priceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
+        } 
+        if (dropdown) { 
+            dropdown.addEventListener('change', (e) => { 
+                const selectedIndex = e.target.value; 
+                const selectedOption = options[selectedIndex]; 
+                const newBasePrice = (basePrice || 0) + selectedOption.priceChange; 
+                const newDuration = (fields[CONSTANTS.FIELD_NAMES.DURATION] || 0) + selectedOption.durationChange; 
+                priceEl.dataset.unitPrice = newBasePrice; 
+                updatePrice(); 
+                eventCard.querySelector('.details').textContent = `Duration: ${newDuration} hours`; 
+                const newCompositeId = `${recordId}-${selectedIndex}`; 
+                heartIcon.dataset.compositeId = newCompositeId; 
+                heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId)); 
+            });
+            dropdown.dispatchEvent(new Event('change')); 
+        } else { 
+            updatePrice(); 
+        } 
+        if (plusBtn) { 
+            plusBtn.addEventListener('click', () => { 
+                quantityInput.value = parseInt(quantityInput.value) + 1; 
+                guestCountInput.value = quantityInput.value; 
+            });
+        } 
+        if (minusBtn) { 
+            minusBtn.addEventListener('click', () => { 
+                const currentValue = parseInt(quantityInput.value); 
+                const min = parseInt(quantityInput.min); 
+                if (currentValue > min) { 
+                    quantityInput.value = currentValue - 1; 
+                    guestCountInput.value = quantityInput.value; 
+                } 
+            });
+        } 
+        quantityInput.addEventListener('change', (e) => { 
+            const min = parseInt(e.target.min); 
+            if(parseInt(e.target.value) < min) e.target.value = min; 
+            guestCountInput.value = e.target.value; 
+        });
+    } 
+}
 async function updateTotalCost() { 
     let total = 0; 
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
@@ -835,6 +908,12 @@ window.addEventListener('scroll', () => { const threshold = 100; if (window.scro
 document.body.addEventListener('click', async (e) => { const reactionBtn = e.target.closest('.reaction-bar button'); if (reactionBtn) { e.stopPropagation(); await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji); }});
 editModal.addEventListener('click', function(e) { if (e.target === editModal || e.target === modalContent) { editModal.style.display = 'none'; } });
 modalCloseBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
+catalogContainer.addEventListener('wheel', (e) => {
+    if (e.deltaY !== 0) {
+        e.preventDefault();
+        catalogContainer.scrollLeft += e.deltaY;
+    }
+});
 favoritesCarousel.addEventListener('click', async (e) => {
 const promoteBtn = e.target.closest('.promote-btn'); if (promoteBtn) { e.stopPropagation(); recordStateForUndo(); const compositeId = promoteBtn.dataset.compositeId; const itemData = state.cart.items.get(compositeId);
 if (itemData) { state.cart.lockedItems.set(compositeId, itemData); state.cart.items.delete(compositeId); await updateRender(); } return; }
