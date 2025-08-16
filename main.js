@@ -205,20 +205,14 @@ function setupEventListeners() {
             e.stopPropagation();
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
-            const recordId = compositeId.split('-')[0];
             state.cart.items.delete(compositeId);
             await ui.updateFavoritesCarousel();
-            
-            // Check if this card should be re-added to the catalog
-            const record = state.records.all.find(r => r.id === recordId);
-            if(record) {
-                // A simple re-filter is the easiest way to ensure it appears in the correct sorted order
-                await applyFilters();
-            }
+            await applyFilters();
             return;
         }
         const editBtn = e.target.closest('.edit-card-btn, .favorite-item');
-        if(editBtn && !e.target.closest('.action-btn-container, .secondary-action-btn')) {
+        // *** THE FIX IS HERE ***
+        if (editBtn && !e.target.closest('.action-btn-container, .secondary-action-btn, .reaction-bar')) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
@@ -238,14 +232,14 @@ function setupEventListeners() {
             const quantity = card.querySelector('.quantity-input').value;
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
             state.cart.items.set(compositeId, itemInfo);
-            card.remove(); // Surgical removal
-            await ui.updateFavoritesCarousel(); // Full update of carousel to ensure sorting
+            card.remove();
+            await ui.updateFavoritesCarousel();
             return;
         }
 
         const card = e.target.closest('.event-card');
-        if(card && !e.target.closest('.reaction-bar, .quantity-selector, .options-selector')) { 
-            const compositeId = card.querySelector('.heart-icon').dataset.compositeId; 
+        if (card && !e.target.closest('.reaction-bar, .quantity-selector, .options-selector')) {
+            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
     });
@@ -268,6 +262,8 @@ function setupEventListeners() {
             }
         });
     });
+    
+    // ... other top-level listeners
 }
 
 
