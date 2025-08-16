@@ -187,6 +187,1029 @@ overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: 15px;
+    /* Removed max-height and overflow-y to allow natural growth */
+}
+.header-group-left, .header-group-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+}
+#sessions-dropdown-container { margin-bottom: 0; }
+#sessions-dropdown { padding: 5px; border-radius: 6px; border: 1px solid #ccc; background-color: #f8f9fa; font-size: 0.9em; }
+#collaborators-section { display: flex; align-items: center; gap: 10px; }
+#collaborator-avatars { display: flex; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background-color: #6c757d; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;
+font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s; }
+.avatar:hover { transform: translateY(-2px); z-index: 5; }
+#add-collaborator-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #6c757d; background: #f8f9fa; color: #6c757d; font-size: 1.2em; cursor: pointer;
+margin-left: -2px; }
+.favorite-item { 
+    position: relative; 
+    border-radius: 8px; 
+    overflow: hidden; 
+    background-size: cover; 
+    background-position: center; 
+    color: white;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-end; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
+    cursor: pointer; 
+    transition: all 0.3s;
+    border: 1px solid #ddd;
+    width: 100%;
+    aspect-ratio: 320 / 400;
+}
+.favorite-item.locked-item { border: 3px solid #FFD700; }
+.favorite-item-content { 
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); 
+    padding: 10px; 
+    text-align: center;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+.card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: none; }
+.event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);}
+.reactions-summary { display: flex; gap: 4px; font-size: 0.8em; }
+.reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none; }
+.action-btn-container { 
+    position: absolute; 
+    top: 8px; right: 8px; 
+    width: 30px; height: 30px; 
+}
+.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
+.primary-action-btn { font-size: 1.8em; cursor: pointer; width: 100%; height: 100%; }
+.primary-action-btn .icon-hover { display: none; }
+.primary-action-btn:hover .icon-default { display: none; }
+.primary-action-btn:hover .icon-hover { display: block; animation: pop 0.3s; }
+.favorite-item p { margin: 2px 0; font-size: 0.9em; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+.favorite-item .item-name { font-weight: bold; font-size: 1em; }
+.favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
+.favorite-item .item-price { font-weight: bold; margin-top: 5px; }
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.heart-icon.hearted { animation: pop 0.3s ease-in-out; }
+.reaction-bar { position: absolute; top: 10px; bottom: 10px; left: 0; width: 45px; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+border-radius: 0 20px 20px 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; transform: translateX(-100%); opacity: 0;
+visibility: hidden; transition: all 0.3s ease; z-index: 15; }
+.event-card:hover .reaction-bar, .favorite-item:hover .reaction-bar, .modal-content:hover .reaction-bar { transform: translateX(0); opacity: 1; visibility: visible; }
+.reaction-bar button { background: none; border: none; font-size: 1.5em; cursor: pointer; transition: transform 0.1s; }
+.reaction-bar button:hover { transform: scale(1.3); }
+#share-section { display: flex; align-items: center; gap: 15px; }
+#filter-controls { display: flex; justify-content: center; gap: 15px; padding-bottom: 20px; flex-wrap: wrap; }
+#catalog-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+}
+.event-card { 
+    position: relative; 
+    border-radius: 10px; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15); 
+    display: flex; 
+    flex-direction: column; 
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    background-size: cover; 
+    background-position: center; 
+    color: white; 
+    overflow: hidden; 
+    cursor: pointer;
+    border: 1px solid #e0e0e0;
+    aspect-ratio: 320 / 520;
+}
+.event-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+.heart-icon, .edit-card-btn { position: absolute; top: 15px; width: 30px; height: 30px; cursor: pointer; z-index: 10; background: none;
+border: none; font-size: 1.5em; }
+.heart-icon { right: 15px; }
+.edit-card-btn { left: 15px; }
+.heart-icon svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: rgba(0,0,0,0.3); transition: fill 0.2s, stroke 0.2s;
+filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c; }
+.event-card-content { background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%); padding: 20px; margin-top: auto; flex-grow: 1; display: flex;
+flex-direction: column; justify-content: flex-end; }
+.event-card-content h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.6em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+.event-card-content p { margin-top: 0; margin-bottom: 15px; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.event-card-content .description { display: none; }
+.event-card-content .details { font-size: 0.9em; margin-bottom: 15px; }
+.event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; margin-bottom: 15px; background-color: rgba(255,255,255,0.9); color: #333; }
+.price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 10px; flex-shrink: 0; }
+.quantity-selector { display: flex; align-items: center; }
+.quantity-selector button { width: 30px; height: 30px; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; font-size: 1.2em; color: #333; }
+.quantity-selector input { width: 40px; text-align: center; border: 1px solid #ccc; border-left: none; border-right: none; height: 30px; -moz-appearance: textfield; }
+.event-card-content .price { font-size: 1.3em; font-weight: bold; }
+#pagination-controls { display: none; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
+z-index: 1000; }
+.modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
+color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow: hidden; }
+.modal-close { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); border: none; border-radius: 50%; width: 30px; height: 30px; color: white;
+font-size: 1.5em; cursor: pointer; z-index: 20; }
+#modal-body { padding: 30px; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); margin-top: auto; height: 100%; display: flex;
+flex-direction: column; justify-content: flex-end; overflow-y: auto; }
+#modal-body h3 { margin-top: 0; font-size: 2em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+#modal-body .description { margin: 15px 0; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+#modal-body .modal-footer { display: flex; gap: 15px; margin-top: 20px; align-items: center; justify-content: center; }
+#modal-body .price-quantity-wrapper { color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+.toolbar-item label {
+    font-size: 0.75em;
+    color: #666;
+    margin-bottom: 4px;
+}
+.toolbar-item input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.toolbar-item input[type="date"] {
+    min-width: 130px;
+}
+.toolbar-item input[type="number"] {
+    width: 80px;
+}
+.total-cost-summary {
+    align-items: flex-start;
+}
+#summary-total-cost {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #007aff;
+}
+
+</style>
+
+<script>
+// SCRIPT REMAINS THE SAME
+document.addEventListener('DOMContentLoaded', function() {
+const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+const BASE_ID = 'app5yTznb3R5YNUFw';
+const TABLE_ID = 'tblUA4uuS8IYlhKpD';
+const SESSIONS_TABLE_NAME = 'Sessions';
+const CLOUDINARY_CLOUD_NAME = 'daedqizre';
+const RECORDS_PER_LOAD = 10;
+const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
+const REACTION_SCORES = {
+    '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
+    '🤔': -1, '👎': -2, '🤢': -3
+};
+
+const CONSTANTS = {
+    FIELD_NAMES: {
+        NAME: 'Name',
+        PRICE: 'Price',
+        DESCRIPTION: 'Description',
+        OPTIONS: 'Options',
+        STATUS: 'Status',
+        DURATION: 'Duration (hours)',
+        PRICING_TYPE: 'Pricing Type',
+        HEADCOUNT_MIN: 'Headcount min',
+        MEDIA_TAGS: 'Media Tags',
+    },
+    PRICING_TYPES: {
+        PER_GUEST: 'per guest',
+    },
+    DETAIL_TYPES: {
+        EVENT_NAME: 'eventName',
+        DATE: 'date',
+        GUEST_COUNT: 'guestCount',
+        LOCATION: 'location',
+        SPECIAL_REQUESTS: 'specialRequests',
+    }
+};
+
+const catalogContainer = document.getElementById('catalog-container');
+const catalogWrapper = document.getElementById('catalog-wrapper');
+const loadingMessage = document.getElementById('loading-message');
+const guestCountInput = document.getElementById('guest-count');
+const totalCostEl = document.getElementById('total-cost');
+const filterControls = document.getElementById('filter-controls');
+const nameFilter = document.getElementById('name-filter');
+const priceFilter = document.getElementById('price-filter');
+const durationFilter = document.getElementById('duration-filter');
+const statusFilter = document.getElementById('status-filter');
+const resetFiltersBtn = document.getElementById('reset-filters');
+const favoritesList = document.getElementById('favorites-list');
+const lockedList = document.getElementById('locked-list');
+const editModal = document.getElementById('edit-modal');
+const modalContent = document.querySelector('#edit-modal .modal-content');
+const modalBody = document.getElementById('modal-body');
+const modalCloseBtn = document.querySelector('.modal-close');
+const saveShareBtn = document.getElementById('save-share-btn');
+const shareLinkContainer = document.getElementById('share-link-container');
+const shareLinkInput = document.getElementById('share-link');
+const copyLinkBtn = document.getElementById('copy-link-btn');
+const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
+const sessionsDropdown = document.getElementById('sessions-dropdown');
+const collaboratorsSection = document.getElementById('collaborators-section');
+const addCollaboratorBtn = document.getElementById('add-collaborator-btn');
+const undoBtn = document.getElementById('undo-btn');
+const redoBtn = document.getElementById('redo-btn');
+const imageCache = new Map();
+const eventTitleHeader = document.getElementById('event-title-header');
+
+const summaryEventNameInput = document.getElementById('summary-event-name');
+const summaryDateInput = document.getElementById('summary-date');
+const summaryHeadcountInput = document.getElementById('summary-headcount');
+const summaryLocationInput = document.getElementById('summary-location');
+const summaryTotalCostEl = document.getElementById('summary-total-cost');
+
+const state = {
+    records: {
+        all: [],
+        filtered: [],
+    },
+    cart: {
+        items: new Map(),
+        lockedItems: new Map(),
+    },
+    eventDetails: {
+        combined: new Map(),
+    },
+    session: {
+        id: null,
+        user: '',
+        collaborators: [],
+        reactions: new Map(),
+    },
+    ui: {
+        recordsCurrentlyDisplayed: 0,
+        isLoadingMore: false,
+    },
+    history: {
+        undoStack: [],
+        redoStack: [],
+        isRestoring: false,
+    }
+};
+
+function recordStateForUndo() {
+    if (state.history.isRestoring) return;
+    const currentState = {
+        items: new Map(state.cart.items),
+        lockedItems: new Map(state.cart.lockedItems),
+        combined: new Map(state.eventDetails.combined)
+    };
+    state.history.undoStack.push(currentState);
+    state.history.redoStack = []; 
+    updateHistoryButtons();
+}
+
+function restoreState(newState) {
+    state.history.isRestoring = true;
+    state.cart.items = newState.items;
+    state.cart.lockedItems = newState.lockedItems;
+    state.eventDetails.combined = newState.combined;
+    state.history.isRestoring = false;
+    updateRender();
+}
+
+function undo() {
+    if (state.history.undoStack.length > 1) {
+        const currentState = state.history.undoStack.pop();
+        state.history.redoStack.push(currentState);
+        const prevState = state.history.undoStack[state.history.undoStack.length - 1];
+        restoreState(prevState);
+        updateHistoryButtons();
+    }
+}
+
+function redo() {
+    if (state.history.redoStack.length > 0) {
+        const nextState = state.history.redoStack.pop();
+        state.history.undoStack.push(nextState);
+        restoreState(nextState);
+        updateHistoryButtons();
+    }
+}
+
+function updateHistoryButtons() {
+    undoBtn.disabled = state.history.undoStack.length <= 1;
+    redoBtn.disabled = state.history.redoStack.length === 0;
+}
+
+function calculateReactionScore(recordId) {
+    const reactions = state.session.reactions.get(recordId) || {};
+    return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
+}
+
+function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
+function renderCollaborators() { const collaboratorAvatars = document.getElementById('collaborator-avatars'); collaboratorsSection.style.display = 'flex'; collaboratorAvatars.innerHTML = '';
+state.session.collaborators.forEach(name => { const avatar = document.createElement('div'); avatar.className = 'avatar'; avatar.textContent = getInitials(name); avatar.title = name; collaboratorAvatars.appendChild(avatar); }); }
+function checkUserProfile() { state.session.user = localStorage.getItem('userName'); if (!state.session.user) { state.session.user = prompt("Welcome! Please enter your name to collaborate:", "");
+if (state.session.user) { localStorage.setItem('userName', state.session.user); if(!state.session.collaborators.includes(state.session.user)) state.session.collaborators.push(state.session.user); } else { state.session.user = 'Guest'; if(!state.session.collaborators.includes('Guest')) state.session.collaborators.push('Guest');
+} } else { if (!state.session.collaborators.includes(state.session.user)) { state.session.collaborators.push(state.session.user); } } renderCollaborators(); }
+async function handleReaction(recordId, emoji) { if (!state.session.reactions.has(recordId)) { state.session.reactions.set(recordId, {}); } const reactions = state.session.reactions.get(recordId);
+if (reactions[state.session.user] === emoji) { delete reactions[state.session.user]; } else { reactions[state.session.user] = emoji; } await updateRender(); }
+function updateHeader() { 
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
+    eventTitleHeader.textContent = eventName;
+    document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
+}
+function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
+function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
+function populateSessionsDropdown() { const sessions = getStoredSessions(); const sessionIds = Object.keys(sessions); if (sessionIds.length === 0) { sessionsDropdownContainer.style.display = 'none'; return;
+} sessionsDropdownContainer.style.display = 'block'; sessionsDropdown.innerHTML = '<option value="">Load a saved list...</option>';
+sessionIds.forEach(id => { const option = document.createElement('option'); option.value = id; option.textContent = sessions[id]; if (id === state.session.id) { option.selected = true; } sessionsDropdown.appendChild(option); });
+}
+async function loadSessionFromAirtable(sessionId) { 
+    state.session.id = sessionId; 
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    try { 
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) throw new Error('Could not fetch session data.'); 
+        const record = await response.json(); 
+        state.session.collaborators = record.fields.Collaborators ?
+        record.fields.Collaborators.split(',').map(name => name.trim()) : []; 
+        const sessionDataString = record.fields['Items with Variations']; 
+        if (sessionDataString) { 
+            const savedState = JSON.parse(sessionDataString);
+            if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems)); 
+            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems)); 
+            if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
+            if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails)); 
+            storeSession(sessionId, record.fields.Name); 
+        } 
+    } catch (error) { 
+        console.error("Failed to load session:", error);
+        alert("Could not load the shared session."); 
+        window.history.replaceState({}, document.title, window.location.pathname); 
+    }
+    state.history.undoStack = []; 
+    state.history.redoStack = []; 
+    recordStateForUndo(); 
+    updateHistoryButtons();
+}
+async function saveSessionToAirtable() { 
+    document.getElementById('save-status').textContent = 'Saving...'; 
+    const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`; 
+    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } }; 
+    const isUpdate = state.session.id !== null;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); 
+    const method = isUpdate ? 'PATCH' : 'POST';
+    try { 
+        const response = await fetch(url, { 
+            method: method, 
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(isUpdate ? payload : { records: [payload] }) 
+        });
+        if (!response.ok) { 
+            const errorData = await response.json(); 
+            throw new Error(`Airtable API Error: ${errorData.error.message}`); 
+        } 
+        const result = await response.json();
+        if (!isUpdate) { 
+            state.session.id = result.records[0].id; 
+        } 
+        storeSession(state.session.id, sessionName); 
+        window.history.replaceState({}, document.title, `?session=${state.session.id}`); 
+        populateSessionsDropdown(); 
+        document.getElementById('save-status').textContent = 'Saved!'; 
+        shareLinkContainer.style.display = 'inline-flex';
+        shareLinkInput.value = window.location.href; 
+    } catch (error) { 
+        console.error("Failed to save session:", error); 
+        document.getElementById('save-status').textContent = 'Error saving.';
+    } finally { 
+        setTimeout(() => { 
+            if (document.getElementById('save-status').textContent !== 'Saving...') { 
+                document.getElementById('save-status').textContent = ''; 
+            } 
+        }, 3000); 
+    } 
+}
+async function fetchAllRecords() { 
+    let records = []; 
+    let offset = null; 
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    try { 
+        do { 
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            if (!response.ok) throw new Error('Failed to fetch data from Airtable.'); 
+            const data = await response.json(); 
+            records = records.concat(data.records);
+            offset = data.offset; 
+        } while (offset); 
+        return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.NAME]); 
+    } catch (error) { 
+        console.error(error);
+        loadingMessage.innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later.</p>`; 
+        return []; 
+    } 
+}
+function parseOptions(optionsText) { if (!optionsText) return []; return optionsText.split('\n').map(line => { const parts = line.split(',').map(p => p.trim()); const option = { name: parts[0], priceChange: 0, durationChange: 0 }; parts.slice(1).forEach(part => { if (part.includes('$')) { option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } else if (part.toLowerCase().includes('duration change')) { option.durationChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0; } }); return option; });
+}
+function renderReactionsSummary(recordId) { const reactions = state.session.reactions.get(recordId) || {}; let reactionsSummaryHTML = ''; const reactionCounts = {};
+Object.values(reactions).forEach(emoji => { reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1; }); reactionsSummaryHTML = Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('');
+return `<div class="reactions-summary">${reactionsSummaryHTML}</div>`; }
+function renderReactionbar(recordId) { return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`; }
+async function updateSelectionsSidebar() { 
+    favoritesList.innerHTML = ''; 
+    lockedList.innerHTML = '';
+
+    const renderItemCard = async (compositeId, itemInfo, isLocked) => { 
+        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+        if (!record) return null; 
+        const fields = record.fields; 
+        let variationNameHTML = ''; 
+        let itemPrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
+        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; 
+        const optionIndex = compositeId.split('-')[1]; 
+        if (optionIndex) { 
+            const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+            const variation = options[optionIndex];
+            if (variation) { 
+                variationNameHTML = `<p class="variation-name">${variation.name}</p>`; 
+                itemPrice += variation.priceChange; 
+            } 
+        } 
+        const itemCard = document.createElement('div');
+        itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`; 
+        itemCard.dataset.compositeId = compositeId; 
+        itemCard.dataset.recordId = record.id; 
+        const imageUrl = await fetchImageForRecord(record);
+        itemCard.style.backgroundImage = `url('${imageUrl}')`; 
+        let primaryActionHTML = ''; 
+        let secondaryActionHTML = ''; 
+        if (isLocked) { 
+            primaryActionHTML = `<button class="primary-action-btn" title="Locked In">⛓️</button>`;
+            secondaryActionHTML = `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>`; 
+        } else { 
+            primaryActionHTML = `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
+            secondaryActionHTML = `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`; 
+        } 
+        itemCard.innerHTML = `<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="action-btn-container">${primaryActionHTML}${secondaryActionHTML}</div>${renderReactionbar(record.id)}`; 
+        return itemCard; 
+    }; 
+    
+    const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+    for (const [compositeId, itemInfo] of sortedLockedItems) { 
+        const card = await renderItemCard(compositeId, itemInfo, true); 
+        if (card) lockedList.appendChild(card);
+    } 
+
+    const sortedItems = Array.from(state.cart.items.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+    for (const [compositeId, itemInfo] of sortedItems) { 
+        const card = await renderItemCard(compositeId, itemInfo, false); 
+        if (card) favoritesList.appendChild(card); 
+    } 
+    
+    updateTotalCost();
+    updateHeader(); 
+}
+async function applyFilters() { 
+    state.ui.recordsCurrentlyDisplayed = 0;
+    catalogContainer.innerHTML = '';
+    const nameValue = nameFilter.value.toLowerCase(); 
+    const priceValue = priceFilter.value; 
+    const durationValue = durationFilter.value; 
+    const statusValue = statusFilter.value;
+    
+    state.records.filtered = state.records.all.filter(record => { 
+        const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue)); 
+        const priceMatch = (priceValue === 'all') ? true : (() => { 
+            const price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null; 
+            if (price === null) return false; 
+            switch (priceValue) { 
+                case '0-50': return price < 50; 
+                case '50-100': return price >= 50 && price <= 100; 
+                case '100-250': return price > 100 && price <= 250; 
+                case '250-plus': return price > 250; 
+                default: return true; 
+            } 
+        })(); 
+        const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue); 
+        const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue); 
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+        if (options.length > 0) { 
+            const allOptionsFavorited = options.every((opt, index) => state.cart.items.has(`${record.id}-${index}`) || state.cart.lockedItems.has(`${record.id}-${index}`)); 
+            if (allOptionsFavorited) return false; 
+        } else { 
+            if (state.cart.items.has(record.id) || state.cart.lockedItems.has(record.id)) return false;
+        } 
+        return nameMatch && priceMatch && durationMatch && statusMatch; 
+    }); 
+
+    state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
+
+    loadMoreRecords();
+}
+function populateFilter(filterElement, fieldName) { const values = new Set(); state.records.all.forEach(record => { const fieldValue = record.fields[fieldName]; if (fieldValue) { values.add(fieldValue); } });
+values.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = fieldName === CONSTANTS.FIELD_NAMES.DURATION ? `${value} hours` : value; filterElement.appendChild(option); });
+}
+async function fetchImageForRecord(record) {
+    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
+    const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+    const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default';
+
+    if (imageCache.has(primaryTag)) {
+        return imageCache.get(primaryTag);
+    }
+
+    if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here') {
+        const placeholderUrl = `https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`;
+        imageCache.set(primaryTag, placeholderUrl);
+        return placeholderUrl;
+    }
+
+    const encodedTag = encodeURIComponent(primaryTag);
+    const cloudinaryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/list/${encodedTag}.json`;
+
+    try {
+        const response = await fetch(cloudinaryUrl);
+        if (!response.ok) {
+            imageCache.set(primaryTag, ultimateFallbackUrl);
+            return ultimateFallbackUrl;
+        }
+        const data = await response.json();
+        if (!data.resources || data.resources.length === 0) {
+            imageCache.set(primaryTag, ultimateFallbackUrl);
+            return ultimateFallbackUrl;
+        }
+        const randomImage = data.resources[Math.floor(Math.random() * data.resources.length)];
+        const finalUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${randomImage.version}/${randomImage.public_id}.${randomImage.format}`;
+        imageCache.set(primaryTag, finalUrl);
+        return finalUrl;
+    } catch (error) {
+        console.error('Failed to fetch image from Cloudinary:', error);
+        imageCache.set(primaryTag, ultimateFallbackUrl);
+        return ultimateFallbackUrl;
+    }
+}
+async function renderRecords(recordsToRender) { 
+    if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
+        catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
+    }
+    for (const record of recordsToRender) { 
+        const fields = record.fields; 
+        const recordId = record.id;
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; 
+        const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+        let basePrice = null;
+        if (fields[CONSTANTS.FIELD_NAMES.PRICE]) { 
+            const cleanedPrice = String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, ""); 
+            if (cleanedPrice && !isNaN(parseFloat(cleanedPrice))) { 
+                basePrice = parseFloat(cleanedPrice);
+            } 
+        } 
+        const eventCard = document.createElement('div'); 
+        eventCard.className = 'event-card'; 
+        eventCard.dataset.recordId = recordId; 
+        const imageUrl = await fetchImageForRecord(record); 
+        eventCard.style.backgroundImage = `url('${imageUrl}')`;
+        let optionsDropdownHTML = ''; 
+        let nextUnfavoritedOptionIndex = 0; 
+        if (options.length > 0) { 
+            nextUnfavoritedOptionIndex = options.findIndex((opt, index) => !state.cart.items.has(`${recordId}-${index}`) && !state.cart.lockedItems.has(`${recordId}-${index}`));
+            if (nextUnfavoritedOptionIndex === -1) nextUnfavoritedOptionIndex = 0; 
+            optionsDropdownHTML = ` <select class="options-selector"> ${options.map((opt, index) => `<option value="${index}" ${index === nextUnfavoritedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')} </select> `;
+        } 
+        const compositeId = options.length > 0 ? `${recordId}-${nextUnfavoritedOptionIndex}` : recordId; 
+        const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
+        const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin); 
+        eventCard.innerHTML = ` <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
+        catalogContainer.appendChild(eventCard); 
+        const dropdown = eventCard.querySelector('.options-selector'); 
+        const heartIcon = eventCard.querySelector('.heart-icon'); 
+        const quantityInput = eventCard.querySelector('.quantity-input'); 
+        const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+        const minusBtn = eventCard.querySelector('.quantity-btn.minus'); 
+        const priceEl = eventCard.querySelector('.price'); 
+        function updatePrice() { 
+            const unitPrice = parseFloat(priceEl.dataset.unitPrice); 
+            if (isNaN(unitPrice)) return;
+            priceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
+        } 
+        if (dropdown) { 
+            dropdown.addEventListener('change', (e) => { 
+                const selectedIndex = e.target.value; 
+                const selectedOption = options[selectedIndex]; 
+                const newBasePrice = (basePrice || 0) + selectedOption.priceChange; 
+                const newDuration = (fields[CONSTANTS.FIELD_NAMES.DURATION] || 0) + selectedOption.durationChange; 
+                priceEl.dataset.unitPrice = newBasePrice; 
+                updatePrice(); 
+                eventCard.querySelector('.details').textContent = `Duration: ${newDuration} hours`; 
+                const newCompositeId = `${recordId}-${selectedIndex}`; 
+                heartIcon.dataset.compositeId = newCompositeId; 
+                heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId)); 
+            });
+            dropdown.dispatchEvent(new Event('change')); 
+        } else { 
+            updatePrice(); 
+        } 
+        if (plusBtn) { 
+            plusBtn.addEventListener('click', () => { 
+                quantityInput.value = parseInt(quantityInput.value) + 1; 
+                guestCountInput.value = quantityInput.value; 
+            });
+        } 
+        if (minusBtn) { 
+            minusBtn.addEventListener('click', () => { 
+                const currentValue = parseInt(quantityInput.value); 
+                const min = parseInt(quantityInput.min); 
+                if (currentValue > min) { 
+                    quantityInput.value = currentValue - 1; 
+                    guestCountInput.value = quantityInput.value; 
+                } 
+            });
+        } 
+        quantityInput.addEventListener('change', (e) => { 
+            const min = parseInt(e.target.min); 
+            if(parseInt(e.target.value) < min) e.target.value = min; 
+            guestCountInput.value = e.target.value; 
+        });
+    } 
+}
+async function loadMoreRecords() {
+    if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
+        return;
+    }
+    state.ui.isLoadingMore = true;
+    
+    const start = state.ui.recordsCurrentlyDisplayed;
+    const end = start + RECORDS_PER_LOAD;
+    const recordsToLoad = state.records.filtered.slice(start, end);
+    
+    await renderRecords(recordsToLoad);
+    
+    state.ui.recordsCurrentlyDisplayed = end;
+    state.ui.isLoadingMore = false;
+}
+async function updateTotalCost() { 
+    let total = 0; 
+    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+    allItems.forEach((itemInfo, compositeId) => { 
+        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); 
+        if (record) { 
+            let unitPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; 
+            const optionIndex = compositeId.split('-')[1]; 
+            if (optionIndex) { 
+                const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); 
+                const variation = options[optionIndex]; 
+                if (variation) unitPrice += variation.priceChange; 
+            } 
+            if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) { 
+                const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1; 
+                const effectiveGuestCount = Math.max(itemInfo.quantity, headcountMin); 
+                total += unitPrice * effectiveGuestCount; 
+            } else { 
+                total += unitPrice; 
+            } 
+        } 
+    });
+    const formattedTotal = `$${total.toFixed(2)}`;
+    if (totalCostEl) totalCostEl.textContent = formattedTotal;
+    summaryTotalCostEl.textContent = formattedTotal;
+}
+async function openDetailModal(compositeId) { const record = state.records.all.find(r => r.id === compositeId.split('-')[0]); if (!record) return; const isLocked = state.cart.lockedItems.has(compositeId);
+let itemInfo = state.cart.lockedItems.get(compositeId) || state.cart.items.get(compositeId); if (!itemInfo) { const card = document.querySelector(`.event-card[data-record-id="${record.id}"]`); itemInfo = { quantity: card ?
+card.querySelector('.quantity-input').value : 1, requests: ''}; } const fields = record.fields; const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); let basePrice = null;
+if (fields[CONSTANTS.FIELD_NAMES.PRICE]) { const cleanedPrice = String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, ""); if (cleanedPrice && !isNaN(parseFloat(cleanedPrice))) { basePrice = parseFloat(cleanedPrice);
+} } let optionsDropdownHTML = ''; if (options.length > 0) { const optionIndex = compositeId.split('-')[1] || 0;
+optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == optionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
+} const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId); modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
+'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ?
+'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ?
+'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div></div>`;
+const imageUrl = await fetchImageForRecord(record); modalContent.style.backgroundImage = `url('${imageUrl}')`; modalContent.classList.remove('detail-modal'); modalContent.appendChild(document.createRange().createContextualFragment(renderReactionbar(record.id))); editModal.style.display = 'flex'; const modalPriceEl = modalBody.querySelector('.price');
+function updateModalPrice() { const unitPrice = parseFloat(modalPriceEl.dataset.unitPrice); if (isNaN(unitPrice)) return; modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] ||
+''}</span>`; } modalPriceEl.dataset.unitPrice = basePrice; if (options.length > 0) { const optionIndex = compositeId.split('-')[1] || 0; const selectedOption = options[optionIndex];
+modalPriceEl.dataset.unitPrice = (basePrice || 0) + selectedOption.priceChange; } updateModalPrice(); modalBody.querySelectorAll('select, input, button, .heart-icon').forEach(el => el.addEventListener('click', e => e.stopPropagation())); }
+
+function updateSummaryToolbar() {
+    summaryEventNameInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    summaryDateInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || '';
+    summaryHeadcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
+    summaryLocationInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || '';
+}
+
+async function updateRender() { 
+    await updateSelectionsSidebar(); 
+    await applyFilters();
+    updateSummaryToolbar();
+}
+async function initialize() {
+const urlParams = new URLSearchParams(window.location.search);
+const sessionIdFromUrl = urlParams.get('session');
+state.records.all = await fetchAllRecords();
+if (sessionIdFromUrl) { await loadSessionFromAirtable(sessionIdFromUrl); } else { recordStateForUndo(); }
+checkUserProfile();
+loadingMessage.style.display = 'none';
+filterControls.style.display = 'flex';
+populateFilter(durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
+populateFilter(statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
+populateSessionsDropdown();
+await updateRender();
+document.body.addEventListener('click', async (e) => { const reactionBtn = e.target.closest('.reaction-bar button'); if (reactionBtn) { e.stopPropagation(); await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji); }});
+editModal.addEventListener('click', function(e) { if (e.target === editModal || e.target === modalContent) { editModal.style.display = 'none'; } });
+modalCloseBtn.addEventListener('click', () => { editModal.style.display = 'none'; });
+catalogWrapper.addEventListener('scroll', () => {
+    const { scrollTop, scrollHeight, clientHeight } = catalogWrapper;
+    if (scrollTop + clientHeight >= scrollHeight - 500) { 
+        loadMoreRecords();
+    }
+});
+const selectionsSidebar = document.getElementById('selections-sidebar');
+selectionsSidebar.addEventListener('click', async (e) => {
+    const promoteBtn = e.target.closest('.promote-btn'); 
+    if (promoteBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = promoteBtn.dataset.compositeId; 
+        const itemData = state.cart.items.get(compositeId);
+        if (itemData) { 
+            state.cart.lockedItems.set(compositeId, itemData); 
+            state.cart.items.delete(compositeId); 
+            await updateRender(); 
+        } 
+        return; 
+    }
+    const demoteBtn = e.target.closest('.demote-btn'); 
+    if (demoteBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = demoteBtn.dataset.compositeId; 
+        const itemData = state.cart.lockedItems.get(compositeId);
+        if (itemData) { 
+            state.cart.items.set(compositeId, itemData); 
+            state.cart.lockedItems.delete(compositeId); 
+            await updateRender(); 
+        } 
+        return; 
+    }
+    const removeBtn = e.target.closest('.remove-btn'); 
+    if (removeBtn) { 
+        e.stopPropagation(); 
+        recordStateForUndo(); 
+        const compositeId = removeBtn.dataset.compositeId; 
+        state.cart.items.delete(compositeId); 
+        await updateRender(); 
+        return; 
+    }
+    const editBtn = e.target.closest('.edit-card-btn'); 
+    if (editBtn) { 
+        e.stopPropagation(); 
+        await openDetailModal(editBtn.dataset.compositeId); 
+        return; 
+    }
+    const favoriteItem = e.target.closest('.favorite-item'); 
+    if (favoriteItem) { 
+        const compositeId = favoriteItem.dataset.compositeId; 
+        if(compositeId && !e.target.closest('.reaction-bar')) await openDetailModal(compositeId); 
+    }
+});
+addCollaboratorBtn.addEventListener('click', () => { const newName = prompt("Enter collaborator's name:"); if (newName && !state.session.collaborators.includes(newName)) { state.session.collaborators.push(newName); renderCollaborators(); } });
+sessionsDropdown.addEventListener('change', (e) => { const id = e.target.value; if (id) window.location.search = `?session=${id}`; });
+guestCountInput.addEventListener('input', async () => { document.querySelectorAll('.quantity-input').forEach(input => { input.value = Math.max(parseInt(guestCountInput.value), parseInt(input.min)); }); await updateSelectionsSidebar(); });
+saveShareBtn.addEventListener('click', saveSessionToAirtable);
+const filterInputs = [nameFilter, priceFilter, durationFilter, statusFilter];
+filterInputs.forEach(el => el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', async () => await applyFilters()));
+resetFiltersBtn.addEventListener('click', async () => { nameFilter.value = ''; priceFilter.value = 'all'; durationFilter.value = 'all'; statusFilter.value = 'all'; await applyFilters(); });
+undoBtn.addEventListener('click', undo);
+redoBtn.addEventListener('click', redo);
+catalogContainer.addEventListener('click', async function(e) {
+const heart = e.target.closest('.heart-icon'); if (heart) { e.stopPropagation(); recordStateForUndo(); heart.classList.add('hearted'); setTimeout(() => heart.classList.remove('hearted'), 300); const card = heart.closest('.event-card');
+const compositeId = heart.dataset.compositeId; if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) { return; } const quantity = card.querySelector('.quantity-input').value;
+state.cart.items.set(compositeId, { quantity: parseInt(quantity), requests: ''}); await updateRender(); const recordId = card.dataset.recordId; const record = state.records.all.find(r => r.id === recordId);
+const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); if (options.length > 0) { const nextUnfavoritedIndex = options.findIndex((opt, index) => !state.cart.items.has(`${recordId}-${index}`) && !state.cart.lockedItems.has(`${recordId}-${index}`));
+if (nextUnfavoritedIndex !== -1) { const dropdown = card.querySelector('.options-selector'); dropdown.value = nextUnfavoritedIndex; dropdown.dispatchEvent(new Event('change')); } else { await applyFilters();
+} } return; }
+const card = e.target.closest('.event-card'); if(card && !e.target.closest('.reaction-bar')) { const compositeId = card.querySelector('.heart-icon').dataset.compositeId; await openDetailModal(compositeId); }
+});
+copyLinkBtn.addEventListener('click', () => { shareLinkInput.select(); document.execCommand('copy'); copyLinkBtn.textContent = 'Copied!'; setTimeout(() => { copyLinkBtn.textContent = 'Copy'; }, 2000); });
+
+const toolbarInputs = [summaryEventNameInput, summaryDateInput, summaryHeadcountInput, summaryLocationInput];
+toolbarInputs.forEach(input => {
+    input.addEventListener('change', (e) => {
+        recordStateForUndo();
+        const value = e.target.value;
+        let detailType;
+        switch(e.target.id) {
+            case 'summary-event-name':
+                detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME;
+                break;
+            case 'summary-date':
+                detailType = CONSTANTS.DETAIL_TYPES.DATE;
+                break;
+            case 'summary-headcount':
+                detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT;
+                guestCountInput.value = value;
+                guestCountInput.dispatchEvent(new Event('input'));
+                break;
+            case 'summary-location':
+                detailType = CONSTANTS.DETAIL_TYPES.LOCATION;
+                break;
+        }
+        if (detailType) {
+            state.eventDetails.combined.set(detailType, value);
+            updateHeader();
+        }
+    });
+});
+}
+
+initialize();
+});
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Catalog</title>
+</head>
+<body>
+
+<div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
+Loading catalog...
+</div>
+
+<div id="event-details-storage" style="display: none;">
+<input type="number" id="guest-count" value="1" min="1">
+</div>
+
+<div id="top-summary-bar">
+    <div class="header-group-left">
+        <div id="collaborators-section" style="display: none;">
+            <div id="collaborator-avatars"></div>
+            <button id="add-collaborator-btn">+</button>
+        </div>
+    </div>
+    <div class="toolbar-item-group">
+        <div class="toolbar-item">
+            <label for="summary-event-name">Event Name</label>
+            <input type="text" id="summary-event-name" placeholder="Untitled Event">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-date">Date</label>
+            <input type="date" id="summary-date">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-headcount">Headcount</label>
+            <input type="number" id="summary-headcount" min="1" value="1">
+        </div>
+        <div class="toolbar-item">
+            <label for="summary-location">Location</label>
+            <input type="text" id="summary-location" placeholder="TBD">
+        </div>
+    </div>
+    <div class="header-group-right">
+        <div id="sessions-dropdown-container" style="display: none;">
+            <select id="sessions-dropdown"></select>
+        </div>
+        <div id="share-section">
+            <div class="left-controls">
+                <div class="history-controls">
+                    <button id="undo-btn" disabled>↩️</button>
+                    <button id="redo-btn" disabled>↪️</button>
+                </div>
+            </div>
+            <div class="right-controls">
+                <button id="save-share-btn">Save Now</button>
+                <div id="share-link-container" style="display: none;">
+                    <input type="text" id="share-link" readonly>
+                    <button id="copy-link-btn">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="main-content-area">
+
+    <div id="catalog-wrapper">
+        <div id="filter-controls" style="display: none;">
+            <input type="text" id="name-filter" placeholder="Search by name...">
+            <select id="price-filter">
+                <option value="all">All Prices</option>
+                <option value="0-50">Under $50</option>
+                <option value="50-100">$50 - $100</option>
+                <option value="100-250">$100 - $250</option>
+                <option value="250-plus">$250+</option>
+            </select>
+            <select id="duration-filter">
+                <option value="all">All Durations</option>
+            </select>
+            <select id="status-filter">
+                <option value="all">All Statuses</option>
+            </select>
+            <button id="reset-filters">Reset</button>
+        </div>
+        <div id="catalog-container"></div>
+    </div>
+
+    <div id="selections-sidebar">
+        <div class="sidebar-section">
+            <h2 id="event-title-header">Your Event</h2>
+        </div>
+        <div class="sidebar-section">
+            <h3>Idea List</h3>
+            <div id="favorites-list" class="sidebar-list"></div>
+        </div>
+        <div class="sidebar-section">
+            <h3>Event Itinerary</h3>
+            <div id="locked-list" class="sidebar-list"></div>
+        </div>
+        <div class="sidebar-section total-cost-summary">
+            <label>Total Cost</label>
+            <span id="summary-total-cost">$0.00</span>
+        </div>
+    </div>
+
+</div>
+
+
+<div id="edit-modal" class="modal-overlay" style="display: none;">
+<div class="modal-content">
+<button class="modal-close">&times;</button>
+<div id="modal-body"></div>
+</div>
+</div>
+
+<div id="confirm-modal" class="modal-overlay" style="display: none;">
+<div class="modal-content detail-modal">
+<div id="confirm-modal-body">
+<h3>Are you sure you want to break event details down into its components?!?</h3>
+<div class="modal-footer">
+<button id="confirm-yes-btn">Yes</button>
+<button id="confirm-no-btn">No</button>
+</div>
+</div>
+</div>
+</div>
+
+
+<style>
+body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+overflow: hidden; 
+}
+
+#top-summary-bar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 1002;
+}
+.toolbar-item-group {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-grow: 1;
+}
+#main-content-area {
+    display: flex;
+    height: calc(100vh - 75px); 
+}
+#catalog-wrapper {
+    flex-grow: 1;
+    overflow-y: auto; 
+    padding: 20px;
+}
+#selections-sidebar {
+    width: 380px;
+    flex-shrink: 0;
+    border-left: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.sidebar-section h3, #event-title-header {
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+#event-title-header {
+    text-align: center;
+    font-size: 1.5em;
+    border-bottom: none;
+}
+.sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
     /* NEW: Adaptive height and scrolling */
     max-height: 40vh;
     overflow-y: auto;
@@ -1027,3 +2050,4 @@ initialize();
 </script>
 </body>
 </html>
+
