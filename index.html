@@ -107,8 +107,34 @@ Loading catalog...
 </div>
 </div>
 
+<div id="summary-toolbar">
+    <div class="toolbar-item">
+        <label for="summary-event-name">Event Name</label>
+        <input type="text" id="summary-event-name" placeholder="Untitled Event">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-date">Date</label>
+        <input type="date" id="summary-date">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-headcount">Headcount</label>
+        <input type="number" id="summary-headcount" min="1" value="1">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-location">Location</label>
+        <input type="text" id="summary-location" placeholder="TBD">
+    </div>
+    <div class="toolbar-item total-cost-summary">
+        <label>Total Cost</label>
+        <span id="summary-total-cost">$0.00</span>
+    </div>
+</div>
+
+
 <style>
 body {
+/* Add padding to the bottom to prevent the toolbar from overlapping content */
+padding-bottom: 80px;
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 }
 #sticky-header {
@@ -218,6 +244,54 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 #modal-body .description { margin: 15px 0; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 #modal-body .modal-footer { display: flex; gap: 15px; margin-top: 20px; align-items: center; justify-content: center; }
 #modal-body .price-quantity-wrapper { color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+
+/* NEW CSS */
+#summary-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 20px;
+    z-index: 1001;
+    flex-wrap: wrap;
+}
+.toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+.toolbar-item label {
+    font-size: 0.75em;
+    color: #666;
+    margin-bottom: 4px;
+}
+.toolbar-item input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.toolbar-item input[type="date"] {
+    min-width: 130px;
+}
+.toolbar-item input[type="number"] {
+    width: 80px;
+}
+.total-cost-summary {
+    align-items: flex-start;
+}
+#summary-total-cost {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #007aff;
+}
+
 </style>
 
 <script>
