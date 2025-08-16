@@ -222,6 +222,9 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+const BASE_ID = 'app5yTznb3R5YNUFw';
+const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 const RECORDS_PER_PAGE = 8;
@@ -376,9 +379,9 @@ sessionIds.forEach(id => { const option = document.createElement('option'); opti
 }
 async function loadSessionFromAirtable(sessionId) { 
     state.session.id = sessionId; 
-    const url = `/.netlify/functions/airtable/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try { 
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
         if (!response.ok) throw new Error('Could not fetch session data.'); 
         const record = await response.json(); 
         state.session.collaborators = record.fields.Collaborators ?
@@ -408,12 +411,12 @@ async function saveSessionToAirtable() {
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`; 
     const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": new Date().toISOString().split('T')[0] } }; 
     const isUpdate = state.session.id !== null;
-    const url = `/.netlify/functions/airtable/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); 
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : ''); 
     const method = isUpdate ? 'PATCH' : 'POST';
     try { 
         const response = await fetch(url, { 
             method: method, 
-            headers: { 'Content-Type': 'application/json' }, 
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }, 
             body: JSON.stringify(isUpdate ? payload : { records: [payload] }) 
         });
         if (!response.ok) { 
@@ -444,11 +447,10 @@ async function saveSessionToAirtable() {
 async function fetchAllRecords() { 
     let records = []; 
     let offset = null; 
-    const tableId = 'tblUA4uuS8IYlhKpD';
-    const url = `/.netlify/functions/airtable/${tableId}?`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
     try { 
         do { 
-            const response = await fetch(offset ? `${url}&offset=${offset}` : url);
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.'); 
             const data = await response.json(); 
             records = records.concat(data.records);
