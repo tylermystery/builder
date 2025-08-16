@@ -210,9 +210,9 @@ function setupEventListeners() {
             await applyFilters();
             return;
         }
-        const editBtn = e.target.closest('.edit-card-btn, .favorite-item');
-        // *** THE FIX IS HERE ***
-        if (editBtn && !e.target.closest('.action-btn-container, .secondary-action-btn, .reaction-bar')) {
+        // *** THE FIX IS HERE: More specific listener ***
+        const editBtn = e.target.closest('.edit-card-btn');
+        if (editBtn) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
@@ -236,9 +236,11 @@ function setupEventListeners() {
             await ui.updateFavoritesCarousel();
             return;
         }
-
-        const card = e.target.closest('.event-card');
-        if (card && !e.target.closest('.reaction-bar, .quantity-selector, .options-selector')) {
+        
+        // *** THE FIX IS HERE: More specific listener ***
+        const editBtn = e.target.closest('.edit-card-btn');
+        if (editBtn) {
+            const card = editBtn.closest('.event-card');
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
@@ -263,7 +265,23 @@ function setupEventListeners() {
         });
     });
     
-    // ... other top-level listeners
+    document.getElementById('save-share-btn').addEventListener('click', async () => {
+        const success = await api.saveSessionToAirtable();
+        if (success) {
+            document.getElementById('save-status').textContent = 'Saved!';
+            const shareLinkContainer = document.getElementById('share-link-container');
+            shareLinkContainer.style.display = 'inline-flex';
+            document.getElementById('share-link').value = window.location.href;
+            ui.populateSessionsDropdown(getStoredSessions);
+        }
+        setTimeout(() => {
+            if (document.getElementById('save-status').textContent !== 'Saving...') {
+                document.getElementById('save-status').textContent = '';
+            }
+        }, 3000);
+    });
+    
+    // ... other listeners
 }
 
 
@@ -296,3 +314,4 @@ async function initialize() {
 }
 
 initialize();
+
