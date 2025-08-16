@@ -1,6 +1,6 @@
 // main.js
 import { state } from './state.js';
-import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
+import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 
@@ -34,7 +34,6 @@ function undo() {
         state.history.redoStack.push(currentState);
         const prevState = state.history.undoStack[state.history.undoStack.length - 1];
         restoreState(prevState);
-        ui.updateHistoryButtons();
     }
 }
 
@@ -43,7 +42,6 @@ function redo() {
         const nextState = state.history.redoStack.pop();
         state.history.undoStack.push(nextState);
         restoreState(nextState);
-        ui.updateHistoryButtons();
     }
 }
 
@@ -51,8 +49,8 @@ function redo() {
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
 
 export function calculateReactionScore(recordId) {
-     const reactions = state.session.reactions.get(recordId) || {};
-     return Object.values(reactions).reduce((score, emoji) => score + (config.REACTION_SCORES[emoji] || 0), 0);
+    const reactions = state.session.reactions.get(recordId) || {};
+    return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
 
 function checkUserProfile() {
@@ -75,54 +73,74 @@ function checkUserProfile() {
 }
 
 async function handleReaction(recordId, emoji) {
-     if (!state.session.reactions.has(recordId)) {
-         state.session.reactions.set(recordId, {});
-     }
-     const reactions = state.session.reactions.get(recordId);
-     if (reactions[state.session.user] === emoji) {
-         delete reactions[state.session.user];
-     } else {
-         reactions[state.session.user] = emoji;
-     }
-     await updateRender();
+    if (!state.session.reactions.has(recordId)) {
+        state.session.reactions.set(recordId, {});
+    }
+    const reactions = state.session.reactions.get(recordId);
+    if (reactions[state.session.user] === emoji) {
+        delete reactions[state.session.user];
+    } else {
+        reactions[state.session.user] = emoji;
+    }
+    await updateRender();
 }
 
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
 
 async function applyFilters() {
-     state.ui.recordsCurrentlyDisplayed = 0;
-     ui.catalogContainer.innerHTML = '';
-     const nameValue = ui.nameFilter.value.toLowerCase();
-     const priceValue = ui.priceFilter.value;
-     const durationValue = ui.durationFilter.value;
-     const statusValue = ui.statusFilter.value;
+    state.ui.recordsCurrentlyDisplayed = 0;
+    ui.catalogContainer.innerHTML = '';
+    const nameValue = ui.nameFilter.value.toLowerCase();
+    const priceValue = ui.priceFilter.value;
+    const durationValue = ui.durationFilter.value;
+    const statusValue = ui.statusFilter.value;
 
-     state.records.filtered = state.records.all.filter(record => {
-         // Filtering logic remains the same
-         return true; // Simplified for brevity
-     });
-     
-     state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
+    state.records.filtered = state.records.all.filter(record => {
+        const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
+        const priceMatch = (priceValue === 'all') ? true : (() => {
+            const price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+            if (price === null) return false;
+            switch (priceValue) {
+                case '0-50': return price < 50;
+                case '50-100': return price >= 50 && price <= 100;
+                case '100-250': return price > 100 && price <= 250;
+                case '250-plus': return price > 250;
+                default: return true;
+            }
+        })();
+        const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
+        const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
+        const options = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] ? record.fields[CONSTANTS.FIELD_NAMES.OPTIONS].split('\n') : [];
+        if (options.length > 0) {
+            const allOptionsFavorited = options.every((opt, index) => state.cart.items.has(`${record.id}-${index}`) || state.cart.lockedItems.has(`${record.id}-${index}`));
+            if (allOptionsFavorited) return false;
+        } else {
+            if (state.cart.items.has(record.id) || state.cart.lockedItems.has(record.id)) return false;
+        }
+        return nameMatch && priceMatch && durationMatch && statusMatch;
+    });
 
-     loadMoreRecords();
+    state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
+
+    loadMoreRecords();
 }
 
 async function loadMoreRecords() {
-     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
-         return;
-     }
-     state.ui.isLoadingMore = true;
-     const start = state.ui.recordsCurrentlyDisplayed;
-     const end = start + RECORDS_PER_LOAD;
-     const recordsToLoad = state.records.filtered.slice(start, end);
-     await ui.renderRecords(recordsToLoad, imageCache);
-     state.ui.recordsCurrentlyDisplayed = end;
-     state.ui.isLoadingMore = false;
+    if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
+        return;
+    }
+    state.ui.isLoadingMore = true;
+    const start = state.ui.recordsCurrentlyDisplayed;
+    const end = start + RECORDS_PER_LOAD;
+    const recordsToLoad = state.records.filtered.slice(start, end);
+    await ui.renderRecords(recordsToLoad, imageCache);
+    state.ui.recordsCurrentlyDisplayed = end;
+    state.ui.isLoadingMore = false;
 }
 
 async function updateRender() {
-    await ui.updateFavoritesCarousel(calculateReactionScore);
+    await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
 }
@@ -144,10 +162,116 @@ function setupEventListeners() {
             loadMoreRecords();
         }
     });
-    // ... other listeners
+
+    document.body.addEventListener('click', async (e) => {
+        const reactionBtn = e.target.closest('.reaction-bar button');
+        if (reactionBtn) {
+            e.stopPropagation();
+            await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
+        }
+    });
+
+    ui.favoritesCarousel.addEventListener('click', async (e) => {
+        const promoteBtn = e.target.closest('.promote-btn');
+        if (promoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = promoteBtn.dataset.compositeId;
+            const itemData = state.cart.items.get(compositeId);
+            if (itemData) {
+                state.cart.lockedItems.set(compositeId, itemData);
+                state.cart.items.delete(compositeId);
+                await ui.updateFavoritesCarousel();
+            }
+            return;
+        }
+        const demoteBtn = e.target.closest('.demote-btn');
+        if (demoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = demoteBtn.dataset.compositeId;
+            const itemData = state.cart.lockedItems.get(compositeId);
+            if (itemData) {
+                state.cart.items.set(compositeId, itemData);
+                state.cart.lockedItems.delete(compositeId);
+                await ui.updateFavoritesCarousel();
+            }
+            return;
+        }
+        const removeBtn = e.target.closest('.remove-btn');
+        if (removeBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = removeBtn.dataset.compositeId;
+            state.cart.items.delete(compositeId);
+            const cardToRemove = ui.favoritesCarousel.querySelector(`.favorite-item[data-composite-id="${compositeId}"]`);
+            if (cardToRemove) cardToRemove.remove();
+            const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+            if (record) {
+                const newCard = await ui.createEventCardElement(record, imageCache);
+                ui.catalogContainer.appendChild(newCard);
+                applyFilters(); // Re-sort the catalog after adding a card back
+            }
+            ui.updateTotalCost();
+            ui.updateHeader();
+            return;
+        }
+    });
+
+    ui.catalogContainer.addEventListener('click', async function(e) {
+        const heart = e.target.closest('.heart-icon');
+        if (heart) {
+            e.stopPropagation();
+            recordStateForUndo();
+            heart.classList.add('hearted');
+            setTimeout(() => heart.classList.remove('hearted'), 300);
+            const card = heart.closest('.event-card');
+            const compositeId = heart.dataset.compositeId;
+            if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
+                return;
+            }
+            const quantity = card.querySelector('.quantity-input').value;
+            const itemInfo = { quantity: parseInt(quantity), requests: '' };
+            state.cart.items.set(compositeId, itemInfo);
+            card.remove();
+            const favCard = await ui.createFavoriteCardElement(compositeId, itemInfo, false, imageCache);
+            ui.favoritesCarousel.appendChild(favCard);
+            ui.updateTotalCost();
+            ui.updateHeader();
+            await ui.updateFavoritesCarousel(); // Re-sort the carousel after adding
+            return;
+        }
+
+        const card = e.target.closest('.event-card');
+        if(card && !e.target.closest('.reaction-bar')) { 
+            const compositeId = card.querySelector('.heart-icon').dataset.compositeId; 
+            // openDetailModal(compositeId); // This function needs to be defined or imported
+        }
+    });
+
+    const toolbarInputs = [ui.summaryEventNameInput, ui.summaryDateInput, ui.summaryHeadcountInput, ui.summaryLocationInput];
+    toolbarInputs.forEach(input => {
+        input.addEventListener('change', (e) => {
+            recordStateForUndo();
+            const value = e.target.value;
+            let detailType;
+            switch (e.target.id) {
+                case 'summary-event-name': detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME; break;
+                case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
+                case 'summary-headcount': detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT; ui.guestCountInput.value = value; ui.guestCountInput.dispatchEvent(new Event('input')); break;
+                case 'summary-location': detailType = CONSTANTS.DETAIL_TYPES.LOCATION; break;
+            }
+            if (detailType) {
+                state.eventDetails.combined.set(detailType, value);
+                ui.updateHeader();
+            }
+        });
+    });
+
+    // ... other top-level listeners like filter changes, save button etc.
 }
 
-// --- INITIALIZATION ---
+
 async function initialize() {
     ui.toggleLoading(true);
     try {
@@ -168,6 +292,9 @@ async function initialize() {
     ui.populateSessionsDropdown(getStoredSessions);
     ui.toggleLoading(false);
     
+    ui.populateFilter(ui.durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
+    ui.populateFilter(ui.statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
+
     setupEventListeners();
     await updateRender();
 }
