@@ -16,6 +16,7 @@ export const summaryEventNameInput = document.getElementById('summary-event-name
 export const summaryDateInput = document.getElementById('summary-date');
 export const summaryHeadcountInput = document.getElementById('summary-headcount');
 export const summaryLocationInput = document.getElementById('summary-location');
+export const stickyHeader = document.getElementById('sticky-header');
 
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
@@ -24,12 +25,12 @@ const favoritesSection = document.getElementById('favorites-section');
 const eventTitleHeader = document.getElementById('event-title-header');
 const headerSummary = document.getElementById('header-summary');
 const collaboratorsSection = document.getElementById('collaborators-section');
-const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
-const sessionsDropdown = document.getElementById('sessions-dropdown');
+export const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
+export const sessionsDropdown = document.getElementById('sessions-dropdown');
 const filterControls = document.getElementById('filter-controls');
 const undoBtn = document.getElementById('undo-btn');
 const redoBtn = document.getElementById('redo-btn');
-const stickyHeader = document.getElementById('sticky-header');
+
 
 // --- HELPER FUNCTIONS ---
 function parseOptions(optionsText) {
@@ -41,7 +42,7 @@ function parseOptions(optionsText) {
             if (part.includes('$')) {
                 option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0;
             } else if (part.toLowerCase().includes('duration change')) {
-                option.durationChange = parseFloat(part.replace(/[^0-g.-]+/g, '')) || 0;
+                option.durationChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0;
             }
         });
         return option;
@@ -117,7 +118,6 @@ export async function createEventCardElement(record, imageCache) {
 
     eventCard.innerHTML = ` <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
     
-    // Attach event listeners
     const dropdown = eventCard.querySelector('.options-selector');
     const heartIcon = eventCard.querySelector('.heart-icon');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -172,7 +172,7 @@ export async function updateFavoritesCarousel() {
     }
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
-    const imageCache = new Map(); // Temp cache for this render pass
+    const imageCache = new Map();
 
     state.eventDetails.combined.forEach((value, key) => {
         const favItem = document.createElement('div');
@@ -249,10 +249,52 @@ export function toggleLoading(show) {
 }
 
 export function updateHeader() {
-    const itemCount = state.cart.items.size + state.cart.lockedItems.size;
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
     eventTitleHeader.textContent = eventName;
     document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
+}
+
+export function updateTotalCost() {
+    let total = 0;
+    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+    allItems.forEach((itemInfo, compositeId) => {
+        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+        if (record) {
+            let unitPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
+            const optionIndex = compositeId.split('-')[1];
+            if (optionIndex) {
+                const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+                const variation = options[optionIndex];
+                if (variation) unitPrice += variation.priceChange;
+            }
+            if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) {
+                const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+                const effectiveGuestCount = Math.max(itemInfo.quantity, headcountMin);
+                total += unitPrice * effectiveGuestCount;
+            } else {
+                total += unitPrice;
+            }
+        }
+    });
+    const formattedTotal = `$${total.toFixed(2)}`;
+    totalCostEl.textContent = formattedTotal;
+    summaryTotalCostEl.textContent = formattedTotal;
+}
+
+export function populateFilter(filterElement, fieldName) {
+    const values = new Set();
+    state.records.all.forEach(record => {
+        const fieldValue = record.fields[fieldName];
+        if (fieldValue) {
+            values.add(fieldValue);
+        }
+    });
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = fieldName === CONSTANTS.FIELD_NAMES.DURATION ? `${value} hours` : value;
+        filterElement.appendChild(option);
+    });
 }
 
 export function collapseHeaderOnScroll() {
