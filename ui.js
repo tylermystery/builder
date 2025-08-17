@@ -1,9 +1,20 @@
-// ui.js
+/*
+ * Version: 1.0.0
+ * Last Modified: 2025-08-17
+ *
+ * Changelog:
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
+ */
+
 import { state } from './state.js';
 import { CONSTANTS, EMOJI_REACTIONS, RECORDS_PER_LOAD } from './config.js';
 import { fetchImageForRecord } from './api.js';
 import { calculateReactionScore } from './main.js';
+
 // --- DOM ELEMENT EXPORTS ---
+
 export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
 export const nameFilter = document.getElementById('name-filter');
