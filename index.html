@@ -249,7 +249,7 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     background-position: center; 
     color: white; 
     overflow: hidden; 
-    cursor: default; /* Changed from pointer */
+    cursor: default;
     border: 1px solid #e0e0e0;
 }
 .event-card:hover { 
@@ -280,8 +280,20 @@ flex-direction: column; justify-content: flex-end; }
 z-index: 1000; }
 .modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
 color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow: hidden; }
-.modal-close { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); border: none; border-radius: 50%; width: 30px; height: 30px; color: white;
-font-size: 1.5em; cursor: pointer; z-index: 20; }
+.modal-close {
+    position: absolute;
+    top: 25px; /* Adjust to be inside the padding */
+    right: 25px; /* Adjust to be inside the padding */
+    background: rgba(0,0,0,0.5);
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+    z-index: 1020; /* Ensure it's above modal body content */
+}
 #modal-body { padding: 30px; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); margin-top: auto; height: 100%; display: flex;
 flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 #modal-body h3 { margin-top: 0; font-size: 2em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
