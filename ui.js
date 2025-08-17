@@ -1,6 +1,6 @@
 // ui.js
 import { state } from './state.js';
-import { CONSTANTS, EMOJI_REACTIONS, RECORDS_PER_LOAD } from './config.js';
+import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImageForRecord } from './api.js';
 import { calculateReactionScore, handleHeartClick, handleReaction } from './main.js';
 
@@ -23,7 +23,6 @@ const totalCostEl = document.getElementById('total-cost');
 const summaryTotalCostEl = document.getElementById('summary-total-cost');
 const favoritesSection = document.getElementById('favorites-section');
 const eventTitleHeader = document.getElementById('event-title-header');
-const headerSummary = document.getElementById('header-summary');
 const collaboratorsSection = document.getElementById('collaborators-section');
 export const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
 export const sessionsDropdown = document.getElementById('sessions-dropdown');
@@ -33,8 +32,6 @@ const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
-const modalCloseBtn = document.querySelector('#edit-modal .modal-close');
-
 
 // --- HELPER FUNCTIONS ---
 function parseOptions(optionsText) {
@@ -46,18 +43,13 @@ function parseOptions(optionsText) {
             durationChange: 0,
             descriptionChange: null
         };
-
-        let descriptionPart = '';
         if (line.includes('description:')) {
             const parts = line.split('description:');
             line = parts[0];
-            descriptionPart = parts[1].trim();
-            option.descriptionChange = descriptionPart;
+            option.descriptionChange = parts[1].trim();
         }
-
         const mainParts = line.split(',').map(p => p.trim());
         option.name = mainParts[0];
-
         mainParts.slice(1).forEach(part => {
             if (part.toLowerCase().startsWith('price:')) {
                 option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0;
@@ -70,13 +62,6 @@ function parseOptions(optionsText) {
 }
 
 // --- UI RENDERING FUNCTIONS ---
-// ... (rest of the ui.js file remains the same)
-// NOTE: The rest of the file is omitted for brevity but should be included from the previous step.
-// The only change is within the parseOptions function above.
-// For safety, the full file is provided below.
-
-export { parseOptions }; // Exporting for potential use elsewhere, good practice.
-
 function renderReactionsSummary(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     const reactionCounts = Object.values(reactions).reduce((acc, emoji) => {
@@ -143,7 +128,7 @@ export async function createEventCardElement(record, imageCache) {
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
 
-    eventCard.innerHTML = `<button class="edit-card-btn">🪄</button> <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
+    eventCard.innerHTML = `<button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button> <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
     
     const dropdown = eventCard.querySelector('.options-selector');
     const heartIcon = eventCard.querySelector('.heart-icon');
@@ -175,7 +160,6 @@ export async function createEventCardElement(record, imageCache) {
         dropdown.dispatchEvent(new Event('change'));
     } else {
         updatePrice();
-        editBtn.dataset.compositeId = compositeId;
     }
     
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
@@ -346,7 +330,7 @@ export async function openDetailModal(compositeId, imageCache) {
 
     const fields = record.fields;
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+    const basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
     
     const buildOptionText = (opt) => {
         let text = opt.name;
@@ -370,40 +354,42 @@ export async function openDetailModal(compositeId, imageCache) {
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
     
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div></div>`;
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div></div>`;
+    modalBody.insertAdjacentHTML('beforeend', renderReactionbar(record.id));
     
     const imageUrl = await fetchImageForRecord(record, imageCache);
     modalContent.style.backgroundImage = `url('${imageUrl}')`;
     modalOverlay.style.display = 'flex';
     
     const modalPriceEl = modalBody.querySelector('.price');
-    const updateModalPrice = () => {
-        const unitPrice = parseFloat(modalPriceEl.dataset.unitPrice);
-        if (!isNaN(unitPrice)) {
-            modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-        }
-    };
-
-    const initialOptionIndex = compositeId.split('-')[1] || 0;
-    const initialOption = options[initialOptionIndex] || {};
-    modalPriceEl.dataset.unitPrice = (basePrice || 0) + (initialOption.priceChange || 0);
-    updateModalPrice();
-    if (initialOption.descriptionChange) {
-        modalBody.querySelector('.description').textContent = initialOption.descriptionChange;
-    }
-    
+    const modalDescriptionEl = modalBody.querySelector('.description');
     const modalOptions = modalBody.querySelector('#modal-options');
     const modalQuantityInput = modalBody.querySelector('.quantity-input');
     const modalPlusBtn = modalBody.querySelector('.quantity-btn.plus');
     const modalMinusBtn = modalBody.querySelector('.quantity-btn.minus');
     const modalHeartIcon = modalBody.querySelector('.heart-icon');
 
+    const updateModalPrice = (price) => {
+        if (!isNaN(price)) {
+            modalPriceEl.innerHTML = `$${price.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
+        }
+    };
+    
+    const initialOptionIndex = compositeId.split('-')[1] || 0;
+    const initialOption = options[initialOptionIndex] || { priceChange: 0, descriptionChange: null };
+    updateModalPrice(basePrice + initialOption.priceChange);
+    if (initialOption.descriptionChange) {
+        modalDescriptionEl.textContent = initialOption.descriptionChange;
+    }
+    
     if (modalOptions) {
         modalOptions.addEventListener('change', () => {
             const selectedOption = options[modalOptions.value];
-            modalPriceEl.dataset.unitPrice = (basePrice || 0) + selectedOption.priceChange;
-            updateModalPrice();
-            modalBody.querySelector('.description').textContent = selectedOption.descriptionChange || fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.';
+            updateModalPrice(basePrice + selectedOption.priceChange);
+            modalDescriptionEl.textContent = selectedOption.descriptionChange || fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.';
+            const newCompositeId = `${record.id}-${modalOptions.value}`;
+            modalHeartIcon.dataset.compositeId = newCompositeId;
+            modalHeartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
         });
     }
 
@@ -413,6 +399,7 @@ export async function openDetailModal(compositeId, imageCache) {
     
     modalBody.querySelectorAll('.reaction-bar button').forEach(button => {
         button.addEventListener('click', (e) => {
+            e.stopPropagation();
             handleReaction(e.currentTarget.dataset.recordId, e.currentTarget.dataset.emoji);
         });
     });
