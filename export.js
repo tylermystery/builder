@@ -48,7 +48,7 @@ async function exportProjectFiles() {
         // The output file will be placed in the root of the deployed site
         await fs.promises.writeFile(outputFileName, combinedContent);
         console.log(`\n✅ Export successful! Created: ${outputFileName}`);
-    } catch (error)
+    } catch (error) { // *** THE FIX IS HERE ***
         console.error(`\n❌ Error writing to output file:`, error.message);
     }
 }
