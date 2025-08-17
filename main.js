@@ -1,9 +1,20 @@
-// main.js
+/*
+ * Version: 1.0.0
+ * Last Modified: 2025-08-17
+ *
+ * Changelog:
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
+ */
+
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
+
 const imageCache = new Map();
+
 // --- STATE & HISTORY ---
 function recordStateForUndo() {
     if (state.history.isRestoring) return;
