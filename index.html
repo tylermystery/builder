@@ -258,10 +258,6 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
                         </div>
                         <div class="right-controls">
                             <button id="save-share-btn">Save Now</button>
-                            
-                            <!-- THIS IS THE NEW DOWNLOAD BUTTON -->
-                            <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none; margin-left: 10px;"><button type="button">Download Source</button></a>
-                            
                             <div id="share-link-container" style="display: none;">
                                 <input type="text" id="share-link" readonly>
                                 <button id="copy-link-btn">Copy</button>
@@ -291,6 +287,8 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
         <option value="all">All Statuses</option>
     </select>
     <button id="reset-filters">Reset</button>
+    <!-- MOVED THE DOWNLOAD BUTTON HERE -->
+    <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;"><button type="button">Download Source</button></a>
 </div>
 
 <div id="catalog-container"></div>
