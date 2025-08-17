@@ -1,4 +1,56 @@
-# Project Builder Spec Sheet
+Feature Specification Sheet (Final Version)
+Summary of Improvements
+This document outlines the features of an interactive event catalog that has undergone significant architectural and functional improvements. Key upgrades include a secure serverless back-end, centralized state management, performance enhancements via caching and targeted DOM updates, and the implementation of advanced UI features like a summary toolbar, horizontal "infinite scroll," and reaction-based sorting.
+
+Core Functionality
+Airtable Integration: The application's data is powered by an Airtable database.
+Secure API Proxy: All communication with the Airtable API is handled securely by a serverless function. This prevents the secret API token from ever being exposed to the user's browser.
+Session Management: User selections and collaborations can be saved and loaded as unique sessions via a separate "Sessions" table in the database.
+Dynamic Catalog Display:
+Two-Row Horizontal Layout: Events are displayed in a two-row, horizontally scrolling layout that loads more items as the user scrolls to the end ("infinite scroll").
+Event Cards: Each event is presented on a "card" that shows its name, image, duration, price, and pricing model.
+Image Handling:
+Event images are fetched dynamically from a Cloudinary account based on "Media Tags" from Airtable.
+Performance Cache: Fetched image URLs are cached to prevent redundant network requests, speeding up rendering.
+
+Filtering and Sorting
+Multi-Faceted Filtering: Users can refine the catalog view using several filters, including search by name, price, duration, and status.
+Automatic Reaction-Based Sorting: The main catalog and the "Your Selections" carousel are now automatically sorted based on the collective emoji reactions from all collaborators. Items with higher positive scores bubble up to the top, creating a dynamically prioritized list.
+
+Event Customization and Selection
+Event Variations: Events can feature multiple options (e.g., different packages) that are selectable via a dropdown on the event card.
+Favoriting & Locking: Users can select an event by clicking a heart icon to add it to the "Your Selections" carousel. From there, items can be "locked in" to signify a final decision.
+Quantity Selection: Each event card has a quantity selector. This is linked to the global "Headcount" field in the new summary toolbar.
+Total Cost Calculation: A running total cost is calculated in real-time and displayed in both the top header and the bottom summary toolbar.
+
+Collaboration and Sharing
+User Profiles: The application prompts new users for their name, which is stored locally and used to identify their contributions, such as emoji reactions.
+Multi-User Collaboration: Multiple collaborators can be added to a session, with their avatars displayed in the header.
+Session Management: A user's complete selection can be saved, generating a unique, shareable URL that allows others to load the session and collaborate. A dropdown menu provides easy access to previously saved sessions.
+
+User Interface and Experience
+Dynamic Header: The sticky header now features a centered title that dynamically updates with the event name. It also cleanly organizes collaborator avatars to the left and session controls to the right.
+Summary Toolbar: A persistent toolbar at the bottom of the screen provides a dedicated GUI for managing core event details: Event Name, Date, Headcount, and Location. This replaces the previous in-catalog "details cards."
+Undo/Redo: Fully functional Undo and Redo buttons allow users to step through their entire history of changes.
+Emoji Reactions: Users can leave emoji reactions on any event. These reactions are now used to automatically sort the lists.
+
+Code Readiness Assessment
+The codebase has been significantly improved and has a strong, modern foundation.
+Completed Architectural Improvements:
+State Management: ✅ Completed
+Performance: ✅ Completed (Image Caching & Targeted DOM Updates)
+Code Readability: ✅ Completed (Constants)
+Incomplete Features: ✅ Completed (Undo/Redo)
+Security: ✅ Completed (Serverless Proxy)
+Remaining Area for Improvement:
+Code Modularity: While the logic has been refactored into a modular structure with separate files (api.js, ui.js, etc.), the initial index.html file still contains the core logic that should ideally be in main.js. This is a minor point but represents the final step in the modularization effort.
+
+Future Enhancements (Scope Definition)
+Bundle 1: Integrated Scheduling System: The application will incorporate a calendar and availability system. Users will be able to see the availability schedules for resources, services, or personnel associated with event items. The system will prevent booking conflicts and help in selecting valid dates and times for the overall event based on the availability of its components.
+Bundle 2: Real-Time Collaboration Suite: Collaboration will be enhanced with real-time features. This includes presence indicators to show which collaborators are currently active in the session. A full communication suite, including text, audio, and video chat, will be integrated to allow for seamless, in-app planning and discussion.
+Bundle 3: Advanced Itinerary Builder: A dynamic itinerary builder will be developed. After locking in event components, users will be able to assign specific start and end times to each item within the event's main schedule. This feature will include a visual timeline and support drag-and-drop functionality to easily reorder and adjust the event's flow. 
+
+# Project Builder Spec Sheet updates:
 
 *Last Updated: 2025-08-16*
 
