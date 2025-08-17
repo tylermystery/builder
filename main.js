@@ -72,7 +72,8 @@ function checkUserProfile() {
     ui.renderCollaborators(getInitials);
 }
 
-async function handleReaction(recordId, emoji) {
+export async function handleReaction(recordId, emoji) {
+    recordStateForUndo();
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
     }
@@ -85,6 +86,31 @@ async function handleReaction(recordId, emoji) {
     await updateRender();
 }
 
+export async function handleHeartClick(heartIcon, fromModal = false) {
+    recordStateForUndo();
+    heartIcon.classList.add('hearted');
+
+    const compositeId = heartIcon.dataset.compositeId;
+    let quantity;
+    
+    if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
+        return;
+    }
+
+    if (fromModal) {
+        quantity = document.querySelector('#edit-modal .quantity-input').value;
+    } else {
+        const card = heartIcon.closest('.event-card');
+        quantity = card.querySelector('.quantity-input').value;
+        card.remove();
+    }
+
+    const itemInfo = { quantity: parseInt(quantity), requests: '' };
+    state.cart.items.set(compositeId, itemInfo);
+    
+    await ui.updateFavoritesCarousel();
+}
+
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
 
@@ -95,6 +121,13 @@ async function applyFilters() {
     const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
+
+    const isFavoritedOrLocked = (recordId, options) => {
+        if (options.length === 0) {
+            return state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId);
+        }
+        return options.every((opt, index) => state.cart.items.has(`${recordId}-${index}`) || state.cart.lockedItems.has(`${recordId}-${index}`));
+    };
 
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
@@ -112,6 +145,11 @@ async function applyFilters() {
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
         
+        const options = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] ? record.fields[CONSTANTS.FIELD_NAMES.OPTIONS].split('\n') : [];
+        if (isFavoritedOrLocked(record.id, options)) {
+            return false;
+        }
+
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
@@ -210,7 +248,6 @@ function setupEventListeners() {
             await applyFilters();
             return;
         }
-        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
             e.stopPropagation();
@@ -222,27 +259,14 @@ function setupEventListeners() {
         const heart = e.target.closest('.heart-icon');
         if (heart) {
             e.stopPropagation();
-            recordStateForUndo();
-            heart.classList.add('hearted');
-            const card = heart.closest('.event-card');
-            const compositeId = heart.dataset.compositeId;
-            if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
-                return;
-            }
-            const quantity = card.querySelector('.quantity-input').value;
-            const itemInfo = { quantity: parseInt(quantity), requests: '' };
-            state.cart.items.set(compositeId, itemInfo);
-            card.remove();
-            await ui.updateFavoritesCarousel();
+            handleHeartClick(heart, false);
             return;
         }
         
-        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
-            const card = editBtn.closest('.event-card');
-            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
-            await ui.openDetailModal(compositeId, imageCache);
+            e.stopPropagation();
+            await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
     });
     
@@ -264,7 +288,7 @@ function setupEventListeners() {
             }
         });
     });
-    
+
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -280,12 +304,9 @@ function setupEventListeners() {
             }
         }, 3000);
     });
-    
-    // ... other listeners
 }
 
 
-// --- INITIALIZATION ---
 async function initialize() {
     ui.toggleLoading(true);
     try {
@@ -314,4 +335,3 @@ async function initialize() {
 }
 
 initialize();
-
