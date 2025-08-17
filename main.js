@@ -3,9 +3,7 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-
 const imageCache = new Map();
-
 // --- STATE & HISTORY ---
 function recordStateForUndo() {
     if (state.history.isRestoring) return;
@@ -18,7 +16,6 @@ function recordStateForUndo() {
     state.history.redoStack = [];
     ui.updateHistoryButtons();
 }
-
 async function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
@@ -27,7 +24,6 @@ async function restoreState(newState) {
     state.history.isRestoring = false;
     await updateRender();
 }
-
 function undo() {
     if (state.history.undoStack.length > 1) {
         const currentState = state.history.undoStack.pop();
@@ -36,7 +32,6 @@ function undo() {
         restoreState(prevState);
     }
 }
-
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
@@ -44,15 +39,12 @@ function redo() {
         restoreState(nextState);
     }
 }
-
 // --- CORE LOGIC ---
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
-
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
-
 function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
     if (!state.session.user) {
@@ -71,9 +63,7 @@ function checkUserProfile() {
     }
     ui.renderCollaborators(getInitials);
 }
-
-export async function handleReaction(recordId, emoji) {
-    recordStateForUndo();
+async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
     }
@@ -85,35 +75,8 @@ export async function handleReaction(recordId, emoji) {
     }
     await updateRender();
 }
-
-export async function handleHeartClick(heartIcon, fromModal = false) {
-    recordStateForUndo();
-    heartIcon.classList.add('hearted');
-
-    const compositeId = heartIcon.dataset.compositeId;
-    let quantity;
-    
-    if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
-        return;
-    }
-
-    if (fromModal) {
-        quantity = document.querySelector('#edit-modal .quantity-input').value;
-    } else {
-        const card = heartIcon.closest('.event-card');
-        quantity = card.querySelector('.quantity-input').value;
-        card.remove();
-    }
-
-    const itemInfo = { quantity: parseInt(quantity), requests: '' };
-    state.cart.items.set(compositeId, itemInfo);
-    
-    await ui.updateFavoritesCarousel();
-}
-
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
-
 async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
     ui.catalogContainer.innerHTML = '';
@@ -121,14 +84,6 @@ async function applyFilters() {
     const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
-
-    const isFavoritedOrLocked = (recordId, options) => {
-        if (options.length === 0) {
-            return state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId);
-        }
-        return options.every((opt, index) => state.cart.items.has(`${recordId}-${index}`) || state.cart.lockedItems.has(`${recordId}-${index}`));
-    };
-
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
@@ -145,19 +100,11 @@ async function applyFilters() {
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
         
-        const options = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] ? record.fields[CONSTANTS.FIELD_NAMES.OPTIONS].split('\n') : [];
-        if (isFavoritedOrLocked(record.id, options)) {
-            return false;
-        }
-
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
-
     state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
-
     loadMoreRecords();
 }
-
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
         return;
@@ -170,14 +117,12 @@ async function loadMoreRecords() {
     state.ui.recordsCurrentlyDisplayed = end;
     state.ui.isLoadingMore = false;
 }
-
 async function updateRender() {
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
 }
-
 function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
@@ -188,21 +133,18 @@ function setupEventListeners() {
             ui.renderCollaborators(getInitials);
         }
     });
-
     ui.catalogContainer.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
             ui.catalogContainer.scrollLeft += e.deltaY;
         }
     });
-
     ui.catalogContainer.addEventListener('scroll', () => {
         const { scrollLeft, scrollWidth, clientWidth } = ui.catalogContainer;
         if (scrollLeft + clientWidth >= scrollWidth - 500) {
             loadMoreRecords();
         }
     });
-
     document.body.addEventListener('click', async (e) => {
         const reactionBtn = e.target.closest('.reaction-bar button');
         if (reactionBtn) {
@@ -210,7 +152,6 @@ function setupEventListeners() {
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
-
     ui.favoritesCarousel.addEventListener('click', async (e) => {
         const promoteBtn = e.target.closest('.promote-btn');
         if (promoteBtn) {
@@ -248,25 +189,38 @@ function setupEventListeners() {
             await applyFilters();
             return;
         }
+        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
     });
-
     ui.catalogContainer.addEventListener('click', async function(e) {
         const heart = e.target.closest('.heart-icon');
         if (heart) {
             e.stopPropagation();
-            handleHeartClick(heart, false);
+            recordStateForUndo();
+            heart.classList.add('hearted');
+            const card = heart.closest('.event-card');
+            const compositeId = heart.dataset.compositeId;
+            if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
+                return;
+            }
+            const quantity = card.querySelector('.quantity-input').value;
+            const itemInfo = { quantity: parseInt(quantity), requests: '' };
+            state.cart.items.set(compositeId, itemInfo);
+            card.remove();
+            await ui.updateFavoritesCarousel();
             return;
         }
         
+        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
-            e.stopPropagation();
-            await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
+            const card = editBtn.closest('.event-card');
+            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
+            await ui.openDetailModal(compositeId, imageCache);
         }
     });
     
@@ -288,7 +242,7 @@ function setupEventListeners() {
             }
         });
     });
-
+    
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -304,9 +258,10 @@ function setupEventListeners() {
             }
         }, 3000);
     });
+    
+    // ... other listeners
 }
-
-
+// --- INITIALIZATION ---
 async function initialize() {
     ui.toggleLoading(true);
     try {
@@ -329,9 +284,7 @@ async function initialize() {
     
     ui.populateFilter(ui.durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
     ui.populateFilter(ui.statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
-
     setupEventListeners();
     await updateRender();
 }
-
 initialize();
