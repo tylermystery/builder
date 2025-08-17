@@ -6,15 +6,12 @@
 <title>Event Catalog</title>
 </head>
 <body>
-
 <div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
 Loading catalog...
 </div>
-
 <div id="event-details-storage" style="display: none;">
 <input type="number" id="guest-count" value="1" min="1">
 </div>
-
 <div id="sticky-header">
 <div id="header-summary"></div>
 <div id="header-full-content">
@@ -59,7 +56,6 @@ Loading catalog...
 </div>
 </div>
 </div>
-
 <div id="filter-controls" style="display: none;">
 <input type="text" id="name-filter" placeholder="Search by name...">
 <select id="price-filter">
@@ -77,16 +73,13 @@ Loading catalog...
 </select>
 <button id="reset-filters">Reset</button>
 </div>
-
 <div id="catalog-container"></div>
-
 <div id="edit-modal" class="modal-overlay" style="display: none;">
 <div class="modal-content">
 <button class="modal-close">&times;</button>
 <div id="modal-body"></div>
 </div>
 </div>
-
 <div id="confirm-modal" class="modal-overlay" style="display: none;">
 <div class="modal-content detail-modal">
 <div id="confirm-modal-body">
@@ -98,7 +91,6 @@ Loading catalog...
 </div>
 </div>
 </div>
-
 <div id="summary-toolbar">
     <div class="toolbar-item">
         <label for="summary-event-name">Event Name</label>
@@ -121,8 +113,6 @@ Loading catalog...
         <span id="summary-total-cost">$0.00</span>
     </div>
 </div>
-
-
 <style>
 body {
 padding-bottom: 80px;
@@ -249,7 +239,7 @@ visibility: hidden; transition: all 0.3s ease; z-index: 15; }
     background-position: center; 
     color: white; 
     overflow: hidden; 
-    cursor: default;
+    cursor: default; /* Changed from pointer */
     border: 1px solid #e0e0e0;
 }
 .event-card:hover { 
@@ -280,20 +270,8 @@ flex-direction: column; justify-content: flex-end; }
 z-index: 1000; }
 .modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
 color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow: hidden; }
-.modal-close {
-    position: absolute;
-    top: 25px; /* Adjust to be inside the padding */
-    right: 25px; /* Adjust to be inside the padding */
-    background: rgba(0,0,0,0.5);
-    border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    color: white;
-    font-size: 1.5em;
-    cursor: pointer;
-    z-index: 1020; /* Ensure it's above modal body content */
-}
+.modal-close { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); border: none; border-radius: 50%; width: 30px; height: 30px; color: white;
+font-size: 1.5em; cursor: pointer; z-index: 20; }
 #modal-body { padding: 30px; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); margin-top: auto; height: 100%; display: flex;
 flex-direction: column; justify-content: flex-end; overflow-y: auto; }
 #modal-body h3 { margin-top: 0; font-size: 2em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
@@ -346,7 +324,6 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
     color: #007aff;
 }
 </style>
-
 <script type="module" src="main.js"></script>
 </body>
 </html>
