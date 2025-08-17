@@ -7,7 +7,7 @@ const path = require('path');
 
 // --- Configuration ---
 const filesToExport = [
-    'spec sheet',
+    'spec_sheet.md', // Changed from 'spec sheet'
     'main.js',
     'api.js',
     'ui.js',
