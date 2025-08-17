@@ -1,113 +1,97 @@
-Of course! It's an excellent idea to update the documentation to reflect all the great work we've done.
-The application is now more secure, more efficient, and more robust than when we started. The specification sheet has been updated to reflect these significant improvements, including the new serverless architecture and the fully implemented Undo/Redo feature.
-Here is the revised and finalized specification sheet for your project.
+<!--
+ * Version: 1.1.0
+ * Last Modified: 2025-08-17
+ *
+ * Changelog:
+ *
+ * v1.1.0 - 2025-08-17
+ * - Added AI Collaboration Guidelines section.
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
+-->
 
-Feature Specification Sheet (Revised) v2
-Summary of Recent Improvements
-This document has been updated to reflect a series of major code polishing and feature implementation efforts. Key improvements include:
-A critical security overhaul to protect the Airtable API key by migrating all API requests to a secure serverless function.
-Significant performance enhancements through image caching.
-Improved code maintainability by centralizing state management and using constants instead of hardcoded strings.
-Implementation of a new Undo/Redo feature, completing a previously non-functional UI element.
+# Feature Specification Sheet (Final Version)
 
-Core Functionality
-Airtable Integration: The application is powered by an Airtable database1.
-Secure API Proxy: All requests to the Airtable API are now securely handled by a serverless function that acts as a proxy2. The front-end application no longer contains the secret API token, preventing it from being exposed to users333.
-It fetches all event records from a specified Airtable base and table upon loading4.
-It can save and load user sessions to a separate "Sessions" table within the same base5.
-Dynamic Catalog Display:
-Events are displayed in a responsive grid layout6.
-Each event is presented on a "card" that shows its name, image, duration, price, and pricing model7.
-Image Handling:
-Event images are dynamically fetched from a Cloudinary account8.
-The application uses "Media Tags" from Airtable to search for relevant images9.
-Performance Cache: Fetched image URLs are cached to prevent redundant network requests, significantly speeding up re-renders and filtering10.
-If no specific image is found, a default placeholder image is used11.
-Pagination:
-The main catalog is paginated, displaying a fixed number of events per page to ensure smooth performance12.
-Users can navigate between pages using "Previous" and "Next" buttons13.
+## Summary of Improvements
+This document outlines the features of an interactive event catalog that has undergone significant architectural and functional improvements. Key upgrades include a secure serverless back-end, centralized state management, performance enhancements via caching and targeted DOM updates, and the implementation of advanced UI features like a summary toolbar, horizontal "infinite scroll," and reaction-based sorting.
 
-Filtering and Sorting
-Multi-Faceted Filtering: Users can refine the catalog view using several filters14:
-Search by Name: A text input to find events by name15.
-Filter by Price: A dropdown to select events within specific price brackets16.
-Filter by Duration: A dropdown to filter by the event's duration in hours17. The options are dynamically generated from the available data.
-Filter by Status: A dropdown to filter by the event's status18. The options are also dynamically generated.
-Filter Reset: A "Reset" button is available to clear all active filters and restore the default view19.
+---
 
-Event Customization and Selection
-Event Variations: Events can have multiple options or variations that may alter the base price and duration20. These are selectable via a dropdown on the event card.
-Favoriting: Users can select an event or a specific variation by clicking a heart icon21. This adds the item to the "Your Selections" area22.
-Locking Items: In the "Your Selections" carousel, users can "lock in" a favorited item, signifying a final decision23. Locked items are visually distinct24.
-Quantity Selection: Each event card features a quantity selector, which is linked to a global "Guest Count"25.
-Total Cost Calculation: The application calculates and displays a running total cost in real-time based on the price and quantity of all selected items26.
+## AI Collaboration Guidelines
 
-Collaboration and Sharing
-User Profiles: The application prompts new users for their name, which is used to identify their actions and is stored locally27.
-Multi-User Collaboration:
-Multiple collaborators can be added to a session. Their avatars are displayed in the header28.
-Session Management:
-A user's complete selection can be saved as a session29.
-Saving a session generates a unique, shareable URL30.
-Anyone with the URL can load the saved session31.
-The application keeps a history of saved sessions in a dropdown for easy access32.
+### Core Principles
+This section outlines the rules and best practices for our collaborative development process to ensure efficiency, clarity, and consistency.
 
-User Interface and Experience
-Sticky Header: A header containing key information remains visible at the top of the page and collapses on scroll to save space33.
-Event Details Modal: Clicking on an event card opens a modal window with a larger view and a full description34.
-Emoji Reactions: Users can leave emoji reactions on any event, and a summary of reactions is visible on each card35.
-Event Details Management: Special cards allow users to input overarching event details like "Event Name" and "Guest Count"36.
-Undo/Redo: The application now features fully functional Undo and Redo buttons, allowing users to step backward and forward through their selection history37.
+#### For the AI (My Responsibilities)
+1.  **Maintain Functionality:** I will ensure that any code modifications do not break existing, working features.
+2.  **Standard Code Blocks:** I will provide all code in standard text blocks (no special UI) for easy copying and pasting.
+3.  **Versioning & Logs:** I will diligently update the version number and changelog at the top of every file I modify.
+4.  **Holistic Analysis:** I will always review the entire project source to understand the full context before making changes.
+5.  **Methodical Approach:** I will address one primary goal at a time to ensure focused and accurate results.
 
-Code Polishing Opportunities Status
-1. State Management:
-Status: ✅ Completed
-Summary: All application state has been consolidated into a single JavaScript object, making it more predictable and easier to manage38.
-2. Performance and Efficiency:
-Status: ✅ Completed
-Summary: Image requests are now cached after the first fetch to prevent redundant API calls, improving performance39. The issue of rebuilding the entire DOM on every change still exists but is less critical40.
-3. Code Structure and Readability:
-Status: ✅ Completed
-Summary: Hardcoded strings have been replaced with a central CONSTANTS object, improving maintainability and reducing the risk of typos41. The logic still resides in a single script block, but it is now much cleaner42.
-4. Incomplete Features:
-Status: ✅ Completed
-Summary: The Undo and Redo buttons are now fully functional43. The "Autosave" toggle remains as a potential future feature.
-5. Security:
-Status: ✅ Completed
-Summary: The hardcoded Airtable Personal Access Token has been removed from the client-side JavaScript44. All API access is now handled through a secure serverless function, which protects the secret token45.
-Code Robustness & Readiness Assessment post round 1 polishes:
-We have successfully addressed the most critical structural and security issues. The application now has a solid foundation, but before building major new features, it's wise to be aware of its current strengths and remaining areas for improvement.
-Strengths 💪
-Secure Foundation: Your API keys and secrets are no longer exposed on the front-end. The serverless proxy is a professional, secure, and scalable way to handle data.
-Centralized State: All application data is managed in a single state object. This is a huge advantage that will make adding complex features like calendars and itineraries much easier to manage.
-Modern Features: The app now includes performance caching, a full undo/redo history, and a much cleaner user interface with the summary toolbar.
-Areas for Future Improvement (Before Major Additions)
-These are the remaining "polishing opportunities" that will be critical to address before adding the complex features you've described.
-DOM Rendering Efficiency: The app still rebuilds the entire favorites carousel and catalog on most changes. For a real-time application with chat and live updates, this will cause performance bottlenecks. We should implement a more targeted strategy where we only add, remove, or update the specific cards that change.
-Code Modularity: All the JavaScript logic still resides in a single large <script> block. As we add major features like a calendar system or a chat module, this file will become extremely difficult to manage. The next logical step is to break the code into separate files (e.g.,
- api.js, ui.js, state.js).
-Recommendation: I strongly recommend we tackle these two architectural improvements before beginning the new feature bundles. It will make the process of building those features dramatically faster and more stable.
+#### For the Human (Your Responsibilities)
+1.  **Provide Complete Source:** Always provide the full, updated project source using the built-in export tool. This ensures I have the complete context.
+2.  **Clear, Singular Goal:** For each prompt, please define one primary objective (e.g., "Fix this bug," "Implement this feature," "Refactor this file"). This helps me provide a focused and effective response.
+3.  **Verify and Report:** After implementing my changes, please test the application. If there are any issues or if the build fails, provide the error messages or a description of the problem.
 
-Scoping Future Enhancements
-Your vision for the next steps is fantastic. Here are my thoughts on the technical scope and complexity of each bundle.
-Bundle 1: Calendars & Availability
-Goal: Integrate a scheduling system to check and book items based on their availability.
-Technical Requirements: This is a significant backend and logic challenge. It would involve storing availability data (likely in a new Airtable table or even a dedicated calendar service), creating functions to check for scheduling conflicts, and handling timezones.
-Complexity: High. This adds a whole new dimension of data and logic to the application.
-Bundle 2: Real-Time Collaboration
-Goal: Add live presence indicators ("who's online") and real-time chat (video, audio, text).
-Technical Requirements: This requires moving from our current request-response model to a real-time, persistent connection model using WebSockets. This would likely involve integrating a third-party service like Firebase, Pusher, or Ably to manage the real-time connections and data synchronization.
-Complexity: Very High. This is a major architectural shift and is the most complex of the three bundles.
-Bundle 3: Itinerary Builder
-Goal: Allow users to schedule locked-in items into a timeline for the event, likely with drag-and-drop functionality.
-Technical Requirements: This is a heavy front-end feature. It would require a dedicated UI component for the timeline, a drag-and-drop library to handle the interactions, and sophisticated state management to track the order and timing of itinerary items.
-Complexity: High.
+---
 
-Future Enhancements (Scope Definition)
-Bundle 1: Integrated Scheduling System:
-The application will incorporate a calendar and availability system. Users will be able to see the availability schedules for resources, services, or personnel associated with event items. The system will prevent booking conflicts and help in selecting valid dates and times for the overall event based on the availability of its components.
-Bundle 2: Real-Time Collaboration Suite:
-Collaboration will be enhanced with real-time features. This includes presence indicators to show which collaborators are currently active in the session. A full communication suite, including text, audio, and video chat, will be integrated to allow for seamless, in-app planning and discussion.
-Bundle 3: Advanced Itinerary Builder:
-A dynamic itinerary builder will be developed. After locking in event components, users will be able to assign specific start and end times to each item within the event's main schedule. This feature will include a visual timeline and support drag-and-drop functionality to easily reorder and adjust the event's flow.
+## Core Functionality
+**Airtable Integration:** The application's data is powered by an Airtable database.
+**Secure API Proxy:** All communication with the Airtable API is handled securely by a serverless function. This prevents the secret API token from ever being exposed to the user's browser.
+**Session Management:** User selections and collaborations can be saved and loaded as unique sessions via a separate "Sessions" table in the database.
+**Dynamic Catalog Display:**
+* **Two-Row Horizontal Layout:** Events are displayed in a two-row, horizontally scrolling layout that loads more items as the user scrolls to the end ("infinite scroll").
+* **Event Cards:** Each event is presented on a "card" that shows its name, image, duration, price, and pricing model.
+**Image Handling:**
+* **Dynamic Images:** Event images are fetched dynamically from a Cloudinary account based on "Media Tags" from Airtable.
+* **Performance Cache:** Fetched image URLs are cached to prevent redundant network requests, speeding up rendering.
 
+---
+
+## Filtering and Sorting
+**Multi-Faceted Filtering:** Users can refine the catalog view using several filters, including search by name, price, duration, and status.
+**Automatic Reaction-Based Sorting:** The main catalog and the "Your Selections" carousel are now automatically sorted based on the collective emoji reactions from all collaborators. Items with higher positive scores bubble up to the top, creating a dynamically prioritized list.
+
+---
+
+## Event Customization and Selection
+**Event Variations:** Events can feature multiple options (e.g., different packages) that are selectable via a dropdown on the event card.
+**Favoriting & Locking:** Users can select an event by clicking a heart icon to add it to the "Your Selections" carousel. From there, items can be "locked in" to signify a final decision.
+**Quantity Selection:** Each event card has a quantity selector. This is linked to the global "Headcount" field in the new summary toolbar.
+**Total Cost Calculation:** A running total cost is calculated in real-time and displayed in both the top header and the bottom summary toolbar.
+
+---
+
+## Collaboration and Sharing
+**User Profiles:** The application prompts new users for their name, which is stored locally and used to identify their contributions, such as emoji reactions.
+**Multi-User Collaboration:** Multiple collaborators can be added to a session, with their avatars displayed in the header.
+**Session Management:** A user's complete selection can be saved, generating a unique, shareable URL that allows others to load the session and collaborate. A dropdown menu provides easy access to previously saved sessions.
+
+---
+
+## User Interface and Experience
+**Dynamic Header:** The sticky header now features a centered title that dynamically updates with the event name. It also cleanly organizes collaborator avatars to the left and session controls to the right.
+**Summary Toolbar:** A persistent toolbar at the bottom of the screen provides a dedicated GUI for managing core event details: Event Name, Date, Headcount, and Location. This replaces the previous in-catalog "details cards."
+**Undo/Redo:** Fully functional Undo and Redo buttons allow users to step through their entire history of changes.
+**Emoji Reactions:** Users can leave emoji reactions on any event. These reactions are now used to automatically sort the lists.
+
+---
+
+## Code Readiness Assessment
+The codebase has been significantly improved and has a strong, modern foundation.
+* **State Management:** ✅ Completed
+* **Performance:** ✅ Completed (Image Caching & Targeted DOM Updates)
+* **Code Readability:** ✅ Completed (Constants)
+* **Incomplete Features:** ✅ Completed (Undo/Redo)
+* **Security:** ✅ Completed (Serverless Proxy)
+* **Remaining Area for Improvement:**
+    * **Code Modularity:** While the logic has been refactored into a modular structure with separate files (api.js, ui.js, etc.), the initial index.html file still contains the core logic that should ideally be in main.js. This is a minor point but represents the final step in the modularization effort.
+
+---
+
+## Future Enhancements (Scope Definition)
+**Bundle 1: Integrated Scheduling System:** The application will incorporate a calendar and availability system. Users will be able to see the availability schedules for resources, services, or personnel associated with event items. The system will prevent booking conflicts and help in selecting valid dates and times for the overall event based on the availability of its components.
+**Bundle 2: Real-Time Collaboration Suite:** Collaboration will be enhanced with real-time features. This includes presence indicators to show which collaborators are currently active in the session. A full communication suite, including text, audio, and video chat, will be integrated to allow for seamless, in-app planning and discussion.
+**Bundle 3: Advanced Itinerary Builder:** A dynamic itinerary builder will be developed. After locking in event components, users will be able to assign specific start and end times to each item within the event's main schedule. This feature will include a visual timeline and support drag-and-drop functionality to easily reorder and adjust the event's flow.
