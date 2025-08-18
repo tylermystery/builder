@@ -1,8 +1,11 @@
 /*
- * Version: 1.2.0
- * Last Modified: 2025-08-17
+ * Version: 1.5.0
+ * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.5.0 - 2025-08-18
+ * - Added `cardImageIndexes` map to UI state to track image gallery positions.
  *
  * v1.2.0 - 2025-08-17
  * - Added `currentSort` property to the UI state for unified sorting.
@@ -32,7 +35,8 @@ export const state = {
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
-        currentSort: 'reactions-desc', // Default sort method
+        currentSort: 'reactions-desc',
+        cardImageIndexes: new Map(), // Tracks current image index for each card
     },
     history: {
         undoStack: [],
