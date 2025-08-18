@@ -1,32 +1,38 @@
 /*
- * Version: 1.0.0
+ * Version: 1.2.0
  * Last Modified: 2025-08-17
  *
  * Changelog:
+ *
+ * v1.2.0 - 2025-08-17
+ * - Updated `updateFavoritesCarousel` to use the new unified sorting logic.
+ * - Exported `parseOptions` for use in `main.js`.
+ * - Exported the new `sortBy` dropdown element.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
  */
 
 import { state } from './state.js';
-import { CONSTANTS, EMOJI_REACTIONS, RECORDS_PER_LOAD } from './config.js';
+import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImageForRecord } from './api.js';
-import { calculateReactionScore } from './main.js';
+import { calculateReactionScore, getRecordPrice } from './main.js';
 
 // --- DOM ELEMENT EXPORTS ---
-
 export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
 export const nameFilter = document.getElementById('name-filter');
 export const priceFilter = document.getElementById('price-filter');
 export const durationFilter = document.getElementById('duration-filter');
 export const statusFilter = document.getElementById('status-filter');
+export const sortBy = document.getElementById('sort-by'); // Export new element
 export const guestCountInput = document.getElementById('guest-count');
 export const summaryEventNameInput = document.getElementById('summary-event-name');
 export const summaryDateInput = document.getElementById('summary-date');
 export const summaryHeadcountInput = document.getElementById('summary-headcount');
 export const summaryLocationInput = document.getElementById('summary-location');
 export const stickyHeader = document.getElementById('sticky-header');
+
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const summaryTotalCostEl = document.getElementById('summary-total-cost');
@@ -42,8 +48,11 @@ const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
+
+
 // --- HELPER FUNCTIONS ---
-function parseOptions(optionsText) {
+// Exported for use in main.js
+export function parseOptions(optionsText) {
     if (!optionsText) return [];
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
@@ -58,6 +67,7 @@ function parseOptions(optionsText) {
         return option;
     });
 }
+
 // --- UI RENDERING FUNCTIONS ---
 function renderReactionsSummary(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
@@ -67,9 +77,11 @@ function renderReactionsSummary(recordId) {
     }, {});
     return `<div class="reactions-summary">${Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('')}</div>`;
 }
+
 function renderReactionbar(recordId) {
     return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
 }
+
 export async function createFavoriteCardElement(compositeId, itemInfo, isLocked, imageCache) {
     const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
     if (!record) return null;
@@ -97,17 +109,20 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}`;
     return itemCard;
 }
+
 export async function createEventCardElement(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
     const imageUrl = await fetchImageForRecord(record, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrl}')`;
+
     let optionsDropdownHTML = '';
     let nextUnfavoritedOptionIndex = 0;
     if (options.length > 0) {
@@ -115,10 +130,11 @@ export async function createEventCardElement(record, imageCache) {
         if (nextUnfavoritedOptionIndex === -1) nextUnfavoritedOptionIndex = 0;
         optionsDropdownHTML = ` <select class="options-selector"> ${options.map((opt, index) => `<option value="${index}" ${index === nextUnfavoritedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')} </select> `;
     }
+
     const compositeId = options.length > 0 ? `${recordId}-${nextUnfavoritedOptionIndex}` : recordId;
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
-    // *** THE FIX IS HERE: Added edit-card-btn ***
+
     eventCard.innerHTML = `<button class="edit-card-btn">🪄</button> <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
     
     const dropdown = eventCard.querySelector('.options-selector');
@@ -127,6 +143,7 @@ export async function createEventCardElement(record, imageCache) {
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const priceEl = eventCard.querySelector('.price');
+
     const updatePrice = () => {
         const unitPrice = parseFloat(priceEl.dataset.unitPrice);
         if (!isNaN(unitPrice)) {
@@ -154,9 +171,11 @@ export async function createEventCardElement(record, imageCache) {
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
     if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
     quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
+
     eventCard.querySelector('.edit-card-btn').dataset.compositeId = heartIcon.dataset.compositeId;
     return eventCard;
 }
+
 export async function renderRecords(recordsToRender, imageCache) {
     if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
@@ -166,6 +185,7 @@ export async function renderRecords(recordsToRender, imageCache) {
         catalogContainer.appendChild(eventCard);
     }
 }
+
 export async function updateFavoritesCarousel() {
     if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) {
         favoritesSection.style.display = 'none';
@@ -174,24 +194,47 @@ export async function updateFavoritesCarousel() {
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
-    // REMOVED eventDetails.combined.forEach loop
-    const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+
+    // Sorter function to be used for both lists
+    const sorter = ([idA], [idB]) => {
+        const recordA = state.records.all.find(r => r.id === idA.split('-')[0]);
+        const recordB = state.records.all.find(r => r.id === idB.split('-')[0]);
+        if (!recordA || !recordB) return 0;
+
+        switch (state.ui.currentSort) {
+            case 'price-asc':
+                return getRecordPrice(recordA, idA.split('-')[1]) - getRecordPrice(recordB, idB.split('-')[1]);
+            case 'price-desc':
+                return getRecordPrice(recordB, idB.split('-')[1]) - getRecordPrice(recordA, idA.split('-')[1]);
+            case 'name-asc':
+                return (recordA.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(recordB.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
+            case 'reactions-desc':
+            default:
+                return calculateReactionScore(recordB.id) - calculateReactionScore(recordA.id);
+        }
+    };
+
+    const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(sorter);
     for (const [compositeId, itemInfo] of sortedLockedItems) {
         const card = await createFavoriteCardElement(compositeId, itemInfo, true, imageCache);
         if (card) favoritesCarousel.appendChild(card);
     }
-    const sortedItems = Array.from(state.cart.items.entries()).sort(([idA], [idB]) => calculateReactionScore(idB.split('-')[0]) - calculateReactionScore(idA.split('-')[0]));
+
+    const sortedItems = Array.from(state.cart.items.entries()).sort(sorter);
     for (const [compositeId, itemInfo] of sortedItems) {
         const card = await createFavoriteCardElement(compositeId, itemInfo, false, imageCache);
         if (card) favoritesCarousel.appendChild(card);
     }
+
     updateTotalCost();
     updateHeader();
 }
+
 export function updateHistoryButtons() {
     undoBtn.disabled = state.history.undoStack.length <= 1;
     redoBtn.disabled = state.history.redoStack.length === 0;
 }
+
 export function renderCollaborators(getInitials) {
     collaboratorsSection.style.display = 'flex';
     const collaboratorAvatars = document.getElementById('collaborator-avatars');
@@ -204,6 +247,7 @@ export function renderCollaborators(getInitials) {
         collaboratorAvatars.appendChild(avatar);
     });
 }
+
 export function populateSessionsDropdown(getStoredSessions) {
     if (!sessionsDropdownContainer) return;
     const sessions = getStoredSessions();
@@ -224,21 +268,25 @@ export function populateSessionsDropdown(getStoredSessions) {
         sessionsDropdown.appendChild(option);
     });
 }
+
 export function updateSummaryToolbar() {
     summaryEventNameInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     summaryDateInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || '';
     summaryHeadcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
     summaryLocationInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || '';
 }
+
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
     filterControls.style.display = show ? 'none' : 'flex';
 }
+
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
     eventTitleHeader.textContent = eventName;
     document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
 }
+
 export function updateTotalCost() {
     let total = 0;
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
@@ -265,6 +313,7 @@ export function updateTotalCost() {
     totalCostEl.textContent = formattedTotal;
     summaryTotalCostEl.textContent = formattedTotal;
 }
+
 export function populateFilter(filterElement, fieldName) {
     const values = new Set();
     state.records.all.forEach(record => {
@@ -280,6 +329,7 @@ export function populateFilter(filterElement, fieldName) {
         filterElement.appendChild(option);
     });
 }
+
 export function collapseHeaderOnScroll() {
     let lastScrollY = window.scrollY;
     window.addEventListener('scroll', () => {
@@ -291,6 +341,7 @@ export function collapseHeaderOnScroll() {
         lastScrollY = window.scrollY <= 0 ? 0 : window.scrollY;
     }, { passive: true });
 }
+
 export async function openDetailModal(compositeId, imageCache) {
     const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
     if (!record) return;
