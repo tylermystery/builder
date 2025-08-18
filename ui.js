@@ -1,15 +1,11 @@
 /*
- * Version: 1.8.0
+ * Version: 1.7.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
  *
- * v1.8.0 - 2025-08-18
- * - Enhanced `openDetailModal` to save option and quantity changes to cart state.
- * - Added Save button to modal for explicit confirmation of changes.
- *
  * v1.7.0 - 2025-08-18
- * - Fixed total cost calculation to correctly multiply variation price by quantity (hours for per-hour, guests for per-guest).
+ * - Fixed total cost calculation to multiply variation price by quantity (hours for hourly, guests for per-guest).
  * - Added disclaimer tooltip to autosave-toggle and sessions-dropdown.
  *
  * v1.6.0 - 2025-08-18
@@ -290,25 +286,9 @@ export async function createEventCardElement(record, imageCache) {
     }
     updateCardDetails(); // Initial call
     
-    if (plusBtn) plusBtn.addEventListener('click', () => { 
-        quantityInput.value = parseInt(quantityInput.value) + 1; 
-        guestCountInput.value = quantityInput.value; 
-    });
-    if (minusBtn) minusBtn.addEventListener('click', () => { 
-        const current = parseInt(quantityInput.value); 
-        const min = parseInt(quantityInput.min); 
-        if (current > min) { 
-            quantityInput.value = current - 1; 
-            guestCountInput.value = quantityInput.value; 
-        } 
-    });
-    quantityInput.addEventListener('change', () => { 
-        const min = parseInt(quantityInput.min); 
-        if (parseInt(quantityInput.value) < min) { 
-            quantityInput.value = min; 
-        } 
-        guestCountInput.value = quantityInput.value; 
-    });
+    if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
+    if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
+    quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
 
     const leftArrow = eventCard.querySelector('.gallery-arrow.left');
     const rightArrow = eventCard.querySelector('.gallery-arrow.right');
@@ -541,12 +521,12 @@ export async function openDetailModal(compositeId, imageCache) {
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
     let optionsDropdownHTML = '';
-    let currentOptionIndex = compositeId.split('-')[1] || 0;
     if (options.length > 0) {
-        optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == currentOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
+        const optionIndex = compositeId.split('-')[1] || 0;
+        optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == optionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div><button class="modal-save-btn">Save</button></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(record.id)) {
@@ -557,69 +537,14 @@ export async function openDetailModal(compositeId, imageCache) {
     modalOverlay.style.display = 'flex';
     
     const modalPriceEl = modalBody.querySelector('.price');
-    const modalOptions = modalBody.querySelector('#modal-options');
-    const modalQuantityInput = modalBody.querySelector('.quantity-input');
-    const modalHeartIcon = modalBody.querySelector('.heart-icon');
-    const modalSaveBtn = modalBody.querySelector('.modal-save-btn');
-
     function updateModalPrice() {
-        const unitPrice = getRecordPrice(record, currentOptionIndex || null);
+        const unitPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
         if (!isNaN(unitPrice)) {
             modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
         }
     }
-
+    
     updateModalPrice();
-
-    if (modalOptions) {
-        modalOptions.addEventListener('change', (e) => {
-            currentOptionIndex = e.target.value;
-            updateModalPrice();
-            const newCompositeId = options.length > 0 ? `${record.id}-${currentOptionIndex}` : record.id;
-            modalHeartIcon.dataset.compositeId = newCompositeId;
-            modalHeartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
-        });
-    }
-
-    if (!isLocked) {
-        modalQuantityInput.addEventListener('change', () => {
-            const min = parseInt(modalQuantityInput.min);
-            if (parseInt(modalQuantityInput.value) < min) {
-                modalQuantityInput.value = min;
-            }
-        });
-        modalBody.querySelector('.quantity-btn.plus').addEventListener('click', () => {
-            modalQuantityInput.value = parseInt(modalQuantityInput.value) + 1;
-        });
-        modalBody.querySelector('.quantity-btn.minus').addEventListener('click', () => {
-            const current = parseInt(modalQuantityInput.value);
-            const min = parseInt(modalQuantityInput.min);
-            if (current > min) {
-                modalQuantityInput.value = current - 1;
-            }
-        });
-    }
-
-    modalSaveBtn.addEventListener('click', async () => {
-        if (!isLocked && (state.cart.items.has(compositeId) || state.cart.items.has(`${record.id}-${currentOptionIndex}`))) {
-            const newCompositeId = options.length > 0 ? `${record.id}-${currentOptionIndex}` : record.id;
-            const quantity = parseInt(modalQuantityInput.value);
-            const itemInfo = { quantity, requests: '' };
-            if (newCompositeId !== compositeId) {
-                state.cart.items.delete(compositeId);
-                state.cart.items.set(newCompositeId, itemInfo);
-            } else {
-                state.cart.items.set(compositeId, itemInfo);
-            }
-            await updateFavoritesCarousel();
-        }
-        modalOverlay.style.display = 'none';
-    });
-
-    modalBody.querySelector('.modal-close').addEventListener('click', () => {
-        modalOverlay.style.display = 'none';
-    });
-
     modalBody.querySelectorAll('select, input, button, .heart-icon').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
 
     const leftArrow = modalBody.querySelector('.gallery-arrow.left');
