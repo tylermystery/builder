@@ -1,8 +1,12 @@
 <!--
- * Version: 1.7.0
+ * Version: 1.8.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.8.0 - 2025-08-18
+ * - Updated modal CSS for larger size (majority of screen) and same aspect ratio as event tiles (320:520).
+ * - Added CSS for modal save button.
  *
  * v1.7.0 - 2025-08-18
  * - Removed fixed footer disclaimer; added tooltip to autosave-toggle and sessions-dropdown.
@@ -270,7 +274,7 @@ transition: padding 0.3s ease-in-out;
     background-position: center; 
     color: white; 
     overflow: hidden; 
-    cursor: default;
+    cursor: pointer;
     border: 1px solid #e0e0e0;
 }
 .event-card:hover { 
@@ -386,9 +390,10 @@ transition: padding 0.3s ease-in-out;
     background-size: cover; 
     background-position: center; 
     border-radius: 12px; 
-    width: 90%; 
+    width: 80vw; 
     max-width: 600px; 
-    max-height: 90vh; 
+    height: calc(80vw * 1.625); /* Aspect ratio 320:520 = width * (520/320) ≈ 1.625 */
+    max-height: 80vh; 
     display: flex; 
     flex-direction: column;
     color: white; 
@@ -428,6 +433,7 @@ transition: padding 0.3s ease-in-out;
     margin: 15px 0; 
     color: #f0f0f0; 
     text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
+    display: block; 
 }
 #modal-body .modal-footer { 
     display: flex; 
@@ -439,6 +445,19 @@ transition: padding 0.3s ease-in-out;
 #modal-body .price-quantity-wrapper { 
     color: white; 
     text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
+}
+.modal-save-btn {
+    padding: 8px 16px;
+    background-color: #007aff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s;
+}
+.modal-save-btn:hover {
+    background-color: #005bbb;
 }
 #summary-toolbar {
     position: fixed;
