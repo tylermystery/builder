@@ -1,8 +1,12 @@
 /*
- * Version: 1.0.0
- * Last Modified: 2025-08-17
+ * Version: 1.5.0
+ * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.5.0 - 2025-08-18
+ * - Upgraded `fetchImageForRecord` to `fetchImagesForRecord` to retrieve all associated images from Cloudinary instead of a single random one.
+ * - Updated caching logic to store the entire array of image URLs.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
@@ -93,9 +97,9 @@ export async function fetchAllRecords() {
     }
 }
 
-export async function fetchImageForRecord(record, imageCache) {
+export async function fetchImagesForRecord(record, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
-    const cacheKey = record.id; // <-- *** THE FIX IS HERE ***
+    const cacheKey = record.id;
 
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
@@ -105,9 +109,9 @@ export async function fetchImageForRecord(record, imageCache) {
     const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default';
 
     if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here') {
-        const placeholderUrl = `https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`;
-        imageCache.set(cacheKey, placeholderUrl);
-        return placeholderUrl;
+        const placeholderUrls = [`https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`];
+        imageCache.set(cacheKey, placeholderUrls);
+        return placeholderUrls;
     }
 
     const encodedTag = encodeURIComponent(primaryTag);
@@ -116,21 +120,24 @@ export async function fetchImageForRecord(record, imageCache) {
     try {
         const response = await fetch(cloudinaryUrl);
         if (!response.ok) {
-            imageCache.set(cacheKey, ultimateFallbackUrl);
-            return ultimateFallbackUrl;
+            imageCache.set(cacheKey, [ultimateFallbackUrl]);
+            return [ultimateFallbackUrl];
         }
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) {
-            imageCache.set(cacheKey, ultimateFallbackUrl);
-            return ultimateFallbackUrl;
+            imageCache.set(cacheKey, [ultimateFallbackUrl]);
+            return [ultimateFallbackUrl];
         }
-        const randomImage = data.resources[Math.floor(Math.random() * data.resources.length)];
-        const finalUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${randomImage.version}/${randomImage.public_id}.${randomImage.format}`;
-        imageCache.set(cacheKey, finalUrl);
-        return finalUrl;
+        
+        const imageUrls = data.resources.map(image => 
+            `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${image.version}/${image.public_id}.${image.format}`
+        );
+
+        imageCache.set(cacheKey, imageUrls);
+        return imageUrls;
     } catch (error) {
-        console.error('Failed to fetch image from Cloudinary:', error);
-        imageCache.set(cacheKey, ultimateFallbackUrl);
-        return ultimateFallbackUrl;
+        console.error('Failed to fetch images from Cloudinary:', error);
+        imageCache.set(cacheKey, [ultimateFallbackUrl]);
+        return [ultimateFallbackUrl];
     }
 }
