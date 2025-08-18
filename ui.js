@@ -1,12 +1,16 @@
 /*
- * Version: 1.3.0
+ * Version: 1.4.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
  *
+ * v1.4.0 - 2025-08-18
+ * - Refactored `parseOptions` to handle a robust key-value pair format.
+ * - Can now parse absolute `price`, `price change`, `duration change`, and `description`.
+ *
  * v1.3.0 - 2025-08-18
- * - Modified `createEventCardElement` to filter out already-favorited options from the dropdown.
- * - `applyFilters` now hides items from the catalog if all their options are favorited.
+ * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
+ * - Event cards now auto-select the next available variation after one is favorited.
  *
  * v1.2.1 - 2025-08-17
  * - Fixed a critical HTML structure error in index.html.
@@ -60,14 +64,34 @@ const modalBody = document.getElementById('modal-body');
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
     if (!optionsText) return [];
+    
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
-        const option = { name: parts[0], priceChange: 0, durationChange: 0 };
+        const option = { 
+            name: parts[0], 
+            priceChange: null,
+            absolutePrice: null,
+            durationChange: null, 
+            description: null 
+        };
+
         parts.slice(1).forEach(part => {
-            if (part.includes('$')) {
-                option.priceChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0;
-            } else if (part.toLowerCase().includes('duration change')) {
-                option.durationChange = parseFloat(part.replace(/[^0-9.-]+/g, '')) || 0;
+            const [key, ...valueParts] = part.split(':').map(p => p.trim());
+            const value = valueParts.join(':');
+
+            switch (key.toLowerCase()) {
+                case 'price change':
+                    option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
+                    break;
+                case 'price':
+                    option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
+                    break;
+                case 'duration change':
+                    option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
+                    break;
+                case 'description':
+                    option.description = value.replace(/"/g, ''); // Remove quotes
+                    break;
             }
         });
         return option;
@@ -100,7 +124,11 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
         const variation = options[optionIndex];
         if (variation) {
             variationNameHTML = `<p class="variation-name">${variation.name}</p>`;
-            itemPrice += variation.priceChange;
+            if (variation.absolutePrice !== null) {
+                itemPrice = variation.absolutePrice;
+            } else if (variation.priceChange !== null) {
+                itemPrice += variation.priceChange;
+            }
         }
     }
     const itemCard = document.createElement('div');
@@ -137,8 +165,6 @@ export async function createEventCardElement(record, imageCache) {
 
     if (options.length > 0) {
         if (availableOptions.length === 0) {
-            // If no options are available, don't render the card at all.
-            // This is handled in renderRecords.
             return null;
         }
         optionsDropdownHTML = `<select class="options-selector"> ${availableOptions.map(opt => {
@@ -165,9 +191,15 @@ export async function createEventCardElement(record, imageCache) {
         const selectedIndex = dropdown ? dropdown.value : null;
         const selectedOption = selectedIndex ? options[selectedIndex] : null;
         
-        const newBasePrice = basePrice || 0;
-        const priceChange = selectedOption ? selectedOption.priceChange : 0;
-        priceEl.dataset.unitPrice = newBasePrice + priceChange;
+        let newPrice = basePrice || 0;
+        if (selectedOption) {
+            if (selectedOption.absolutePrice !== null) {
+                newPrice = selectedOption.absolutePrice;
+            } else if (selectedOption.priceChange !== null) {
+                newPrice += selectedOption.priceChange;
+            }
+        }
+        priceEl.dataset.unitPrice = newPrice;
         
         const unitPrice = parseFloat(priceEl.dataset.unitPrice);
         if (!isNaN(unitPrice)) {
@@ -202,13 +234,11 @@ export async function renderRecords(recordsToRender, imageCache) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const recordId = record.id;
 
-        // Determine if all options for this record have been favorited
         const allOptionsFavorited = options.length > 0 && options.every((opt, index) => {
             const compositeId = `${recordId}-${index}`;
             return state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
         });
 
-        // If all options are favorited, or if it's a single item that's favorited, skip rendering it.
         if (allOptionsFavorited || (options.length === 0 && (state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId)))) {
             continue;
         }
@@ -331,7 +361,13 @@ export function updateTotalCost() {
             if (optionIndex) {
                 const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const variation = options[optionIndex];
-                if (variation) unitPrice += variation.priceChange;
+                if (variation) {
+                    if (variation.absolutePrice !== null) {
+                        unitPrice = variation.absolutePrice;
+                    } else if (variation.priceChange !== null) {
+                        unitPrice += variation.priceChange;
+                    }
+                }
             }
             if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) {
                 const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
@@ -406,12 +442,19 @@ export async function openDetailModal(compositeId, imageCache) {
             modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
         }
     }
-    modalPriceEl.dataset.unitPrice = basePrice;
-    if (options.length > 0) {
-        const optionIndex = compositeId.split('-')[1] || 0;
-        const selectedOption = options[optionIndex];
-        modalPriceEl.dataset.unitPrice = (basePrice || 0) + selectedOption.priceChange;
+    
+    const optionIndex = compositeId.split('-')[1] || 0;
+    const selectedOption = options[optionIndex];
+    let newPrice = basePrice || 0;
+    if (selectedOption) {
+        if (selectedOption.absolutePrice !== null) {
+            newPrice = selectedOption.absolutePrice;
+        } else if (selectedOption.priceChange !== null) {
+            newPrice += selectedOption.priceChange;
+        }
     }
+    modalPriceEl.dataset.unitPrice = newPrice;
+    
     updateModalPrice();
     modalBody.querySelectorAll('select, input, button, .heart-icon').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
 }
