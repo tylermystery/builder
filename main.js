@@ -1,8 +1,15 @@
 /*
- * Version: 1.2.0
- * Last Modified: 2025-08-17
+ * Version: 1.3.0
+ * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.3.0 - 2025-08-18
+ * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
+ * - Event cards now auto-select the next available variation after one is favorited.
+ *
+ * v1.2.1 - 2025-08-17
+ * - Fixed a critical HTML structure error in index.html.
  *
  * v1.2.0 - 2025-08-17
  * - Fixed broken filters by adding event listeners.
@@ -67,7 +74,6 @@ export function calculateReactionScore(recordId) {
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
 
-// Helper to get the price of a record, including variations
 export function getRecordPrice(record, optionIndex = null) {
     let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
     if (optionIndex !== null) {
@@ -120,14 +126,12 @@ async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
     ui.catalogContainer.innerHTML = '';
 
-    // Get filter and sort values
     const nameValue = ui.nameFilter.value.toLowerCase();
     const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
-    state.ui.currentSort = ui.sortBy.value; // Update state with current sort
+    state.ui.currentSort = ui.sortBy.value;
 
-    // 1. Filter records
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
@@ -147,7 +151,6 @@ async function applyFilters() {
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
-    // 2. Sort the filtered records
     state.records.filtered.sort((a, b) => {
         switch (state.ui.currentSort) {
             case 'price-asc':
@@ -189,7 +192,6 @@ function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
 
-    // --- FIX: ADDED EVENT LISTENERS FOR FILTERS AND SORTING ---
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
@@ -200,7 +202,7 @@ function setupEventListeners() {
         ui.priceFilter.value = 'all';
         ui.durationFilter.value = 'all';
         ui.statusFilter.value = 'all';
-        ui.sortBy.value = 'reactions-desc'; // Reset sort to default
+        ui.sortBy.value = 'reactions-desc';
         applyFilters();
     });
 
@@ -244,7 +246,7 @@ function setupEventListeners() {
             if (itemData) {
                 state.cart.lockedItems.set(compositeId, itemData);
                 state.cart.items.delete(compositeId);
-                await ui.updateFavoritesCarousel();
+                await updateRender();
             }
             return;
         }
@@ -257,7 +259,7 @@ function setupEventListeners() {
             if (itemData) {
                 state.cart.items.set(compositeId, itemData);
                 state.cart.lockedItems.delete(compositeId);
-                await ui.updateFavoritesCarousel();
+                await updateRender();
             }
             return;
         }
@@ -267,8 +269,7 @@ function setupEventListeners() {
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
-            await ui.updateFavoritesCarousel();
-            await applyFilters();
+            await updateRender();
             return;
         }
         const editBtn = e.target.closest('.edit-card-btn');
@@ -283,16 +284,37 @@ function setupEventListeners() {
         if (heart) {
             e.stopPropagation();
             recordStateForUndo();
-            heart.classList.add('hearted');
+            
             const card = heart.closest('.event-card');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            
             const compositeId = heart.dataset.compositeId;
             if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
                 return;
             }
+
             const quantity = card.querySelector('.quantity-input').value;
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
             state.cart.items.set(compositeId, itemInfo);
-            card.remove();
+
+            // Check if all options for this item are now favorited
+            const allOptionsFavorited = options.every((opt, index) => {
+                const id = `${recordId}-${index}`;
+                return state.cart.items.has(id) || state.cart.lockedItems.has(id);
+            });
+
+            if (options.length > 0 && allOptionsFavorited) {
+                card.remove();
+            } else if (options.length === 0) {
+                card.remove();
+            } else {
+                // Re-render the specific card to update its dropdown and heart icon
+                const newCard = await ui.createEventCardElement(record, imageCache);
+                card.replaceWith(newCard);
+            }
+            
             await ui.updateFavoritesCarousel();
             return;
         }
