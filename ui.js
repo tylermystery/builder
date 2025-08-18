@@ -1,8 +1,15 @@
 /*
- * Version: 1.2.0
- * Last Modified: 2025-08-17
+ * Version: 1.3.0
+ * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.3.0 - 2025-08-18
+ * - Modified `createEventCardElement` to filter out already-favorited options from the dropdown.
+ * - `applyFilters` now hides items from the catalog if all their options are favorited.
+ *
+ * v1.2.1 - 2025-08-17
+ * - Fixed a critical HTML structure error in index.html.
  *
  * v1.2.0 - 2025-08-17
  * - Updated `updateFavoritesCarousel` to use the new unified sorting logic.
@@ -25,7 +32,7 @@ export const nameFilter = document.getElementById('name-filter');
 export const priceFilter = document.getElementById('price-filter');
 export const durationFilter = document.getElementById('duration-filter');
 export const statusFilter = document.getElementById('status-filter');
-export const sortBy = document.getElementById('sort-by'); // Export new element
+export const sortBy = document.getElementById('sort-by');
 export const guestCountInput = document.getElementById('guest-count');
 export const summaryEventNameInput = document.getElementById('summary-event-name');
 export const summaryDateInput = document.getElementById('summary-date');
@@ -51,7 +58,6 @@ const modalBody = document.getElementById('modal-body');
 
 
 // --- HELPER FUNCTIONS ---
-// Exported for use in main.js
 export function parseOptions(optionsText) {
     if (!optionsText) return [];
     return optionsText.split('\n').map(line => {
@@ -124,14 +130,25 @@ export async function createEventCardElement(record, imageCache) {
     eventCard.style.backgroundImage = `url('${imageUrl}')`;
 
     let optionsDropdownHTML = '';
-    let nextUnfavoritedOptionIndex = 0;
+    const availableOptions = options.filter((opt, index) => {
+        const compositeId = `${recordId}-${index}`;
+        return !state.cart.items.has(compositeId) && !state.cart.lockedItems.has(compositeId);
+    });
+
     if (options.length > 0) {
-        nextUnfavoritedOptionIndex = options.findIndex((opt, index) => !state.cart.items.has(`${recordId}-${index}`) && !state.cart.lockedItems.has(`${recordId}-${index}`));
-        if (nextUnfavoritedOptionIndex === -1) nextUnfavoritedOptionIndex = 0;
-        optionsDropdownHTML = ` <select class="options-selector"> ${options.map((opt, index) => `<option value="${index}" ${index === nextUnfavoritedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')} </select> `;
+        if (availableOptions.length === 0) {
+            // If no options are available, don't render the card at all.
+            // This is handled in renderRecords.
+            return null;
+        }
+        optionsDropdownHTML = `<select class="options-selector"> ${availableOptions.map(opt => {
+            const originalIndex = options.findIndex(o => o.name === opt.name);
+            return `<option value="${originalIndex}">${opt.name}</option>`;
+        }).join('')} </select>`;
     }
 
-    const compositeId = options.length > 0 ? `${recordId}-${nextUnfavoritedOptionIndex}` : recordId;
+    const firstAvailableOptionIndex = options.findIndex(opt => opt.name === availableOptions[0]?.name);
+    const compositeId = options.length > 0 ? `${recordId}-${firstAvailableOptionIndex}` : recordId;
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
 
@@ -144,45 +161,62 @@ export async function createEventCardElement(record, imageCache) {
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const priceEl = eventCard.querySelector('.price');
 
-    const updatePrice = () => {
+    const updatePriceAndHeart = () => {
+        const selectedIndex = dropdown ? dropdown.value : null;
+        const selectedOption = selectedIndex ? options[selectedIndex] : null;
+        
+        const newBasePrice = basePrice || 0;
+        const priceChange = selectedOption ? selectedOption.priceChange : 0;
+        priceEl.dataset.unitPrice = newBasePrice + priceChange;
+        
         const unitPrice = parseFloat(priceEl.dataset.unitPrice);
         if (!isNaN(unitPrice)) {
             priceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
         }
+
+        const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
+        heartIcon.dataset.compositeId = newCompositeId;
+        eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId;
+        heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
     };
     
     if (dropdown) {
-        dropdown.addEventListener('change', () => {
-            const selectedIndex = dropdown.value;
-            const selectedOption = options[selectedIndex];
-            const newBasePrice = (basePrice || 0) + selectedOption.priceChange;
-            priceEl.dataset.unitPrice = newBasePrice;
-            updatePrice();
-            const newCompositeId = `${recordId}-${selectedIndex}`;
-            heartIcon.dataset.compositeId = newCompositeId;
-            eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId; // Keep edit button in sync
-            heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
-        });
-        dropdown.dispatchEvent(new Event('change'));
-    } else {
-        updatePrice();
+        dropdown.addEventListener('change', updatePriceAndHeart);
     }
+    updatePriceAndHeart();
     
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
     if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
     quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
 
-    eventCard.querySelector('.edit-card-btn').dataset.compositeId = heartIcon.dataset.compositeId;
     return eventCard;
 }
 
 export async function renderRecords(recordsToRender, imageCache) {
     if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
+        return;
     }
+
     for (const record of recordsToRender) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const recordId = record.id;
+
+        // Determine if all options for this record have been favorited
+        const allOptionsFavorited = options.length > 0 && options.every((opt, index) => {
+            const compositeId = `${recordId}-${index}`;
+            return state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
+        });
+
+        // If all options are favorited, or if it's a single item that's favorited, skip rendering it.
+        if (allOptionsFavorited || (options.length === 0 && (state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId)))) {
+            continue;
+        }
+
         const eventCard = await createEventCardElement(record, imageCache);
-        catalogContainer.appendChild(eventCard);
+        if (eventCard) {
+            catalogContainer.appendChild(eventCard);
+        }
     }
 }
 
@@ -195,7 +229,6 @@ export async function updateFavoritesCarousel() {
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
 
-    // Sorter function to be used for both lists
     const sorter = ([idA], [idB]) => {
         const recordA = state.records.all.find(r => r.id === idA.split('-')[0]);
         const recordB = state.records.all.find(r => r.id === idB.split('-')[0]);
