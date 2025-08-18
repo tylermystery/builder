@@ -6,7 +6,6 @@
  *
  * v1.4.0 - 2025-08-18
  * - Refactored `parseOptions` to handle a robust key-value pair format.
- * - Can now parse absolute `price`, `price change`, `duration change`, and `description`.
  * - Updated `createEventCardElement` to display and dynamically update option-specific descriptions, prices, and durations.
  * - Updated `updateTotalCost` and `createFavoriteCardElement` to use the new price calculation logic.
  *
