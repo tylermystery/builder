@@ -1,8 +1,11 @@
 <!--
- * Version: 1.4.0
+ * Version: 1.5.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.5.0 - 2025-08-18
+ * - Added CSS styles for gallery arrows in event cards, favorite items, and modals.
  *
  * v1.4.0 - 2025-08-18
  * - Added CSS for the new `.option-description` element on event cards.
@@ -246,6 +249,23 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
     font-weight: bold;
     color: #007aff;
 }
+.gallery-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    font-size: 1.5em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+.gallery-arrow.left { left: 10px; }
+.gallery-arrow.right { right: 10px; }
+.event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1; }
 </style>
 </head>
 <body>
