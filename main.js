@@ -1,8 +1,11 @@
 /*
- * Version: 1.3.0
+ * Version: 1.4.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.4.0 - 2025-08-18
+ * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations.
  *
  * v1.3.0 - 2025-08-18
  * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
@@ -80,7 +83,12 @@ export function getRecordPrice(record, optionIndex = null) {
         const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
         if (variation) {
-            price += variation.priceChange;
+            if (variation.absolutePrice !== null) {
+                return variation.absolutePrice; // Return absolute price directly
+            }
+            if (variation.priceChange !== null) {
+                price += variation.priceChange;
+            }
         }
     }
     return price;
@@ -299,7 +307,6 @@ function setupEventListeners() {
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
             state.cart.items.set(compositeId, itemInfo);
 
-            // Check if all options for this item are now favorited
             const allOptionsFavorited = options.every((opt, index) => {
                 const id = `${recordId}-${index}`;
                 return state.cart.items.has(id) || state.cart.lockedItems.has(id);
@@ -310,7 +317,6 @@ function setupEventListeners() {
             } else if (options.length === 0) {
                 card.remove();
             } else {
-                // Re-render the specific card to update its dropdown and heart icon
                 const newCard = await ui.createEventCardElement(record, imageCache);
                 card.replaceWith(newCard);
             }
