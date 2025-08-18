@@ -1,9 +1,19 @@
 /*
 
-Version: 1.6.0
+Version: 1.7.0
 Last Modified: 2025-08-18
 
 Changelog:
+
+v1.7.0 - 2025-08-18
+
+Fixed total cost calculation to correctly multiply variation price by quantity (hours for per-hour, guests for per-guest).
+
+
+
+Moved pre-MVP beta disclaimer to tooltips on autosave-toggle and sessions-dropdown.
+
+
 
 v1.6.0 - 2025-08-18
 
@@ -71,7 +81,7 @@ Initial versioning and changelog added. */
 
 Feature Specification Sheet (Final Version)
 Summary of Improvements
-This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation now accurately reflects variation pricing and quantities. A pre-MVP beta disclaimer informs users of incomplete features (autosave, session loading). However, the secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
+This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing). A pre-MVP beta disclaimer as tooltips on autosave and session dropdown informs users of incomplete features. The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
 
 AI Collaboration Guidelines
 Core Principles
@@ -94,7 +104,7 @@ Verify and Report: After implementing my changes, please test the application. I
 
 
 Core Functionality
-Airtable Integration: The application's data is powered by an Airtable database.Secure API Proxy: Intended to handle all Airtable API communication securely via a serverless function to prevent exposing the API token. Currently, this is incomplete, as client-side code uses a hardcoded token, posing a security risk.Session Management: User selections and collaborations can be saved and loaded as unique sessions via a separate "Sessions" table. A dropdown menu displays saved sessions, but loading functionality is incomplete due to a missing event listener. Autosave is also not implemented, despite a UI toggle.Dynamic Catalog Display:
+Airtable Integration: The application's data is powered by an Airtable database.Secure API Proxy: Intended to handle all Airtable API communication securely via a serverless function to prevent exposing the API token. Currently, this is incomplete, as client-side code uses a hardcoded token, posing a security risk.Session Management: User selections and collaborations can be saved and loaded as unique sessions via a separate "Sessions" table. A dropdown menu displays saved sessions, but loading functionality is incomplete due to a missing event listener. Autosave is also not implemented, despite a UI toggle with a disclaimer tooltip.Dynamic Catalog Display:
 
 Two-Row Horizontal Layout: Events are displayed in a two-row, horizontally scrolling layout that loads more items as the user scrolls to the end ("infinite scroll").
 Event Cards: Each event is presented on a "card" that shows its name, image, duration, price, and pricing model.Image Handling:
@@ -120,14 +130,14 @@ Image Galleries: Each card features an interactive image gallery, with left and 
 Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel.
 The event card in the main catalog will then auto-select the next available variation.
 Once all variations of an item have been favorited, the event card is removed from the main catalog.
-From the carousel, items can be "locked in" to signify a final decision.Quantity Selection: Each event card has a quantity selector linked to the global "Headcount" field in the summary toolbar.Total Cost Calculation: A running total cost is calculated in real-time, accurately reflecting variation-specific pricing and quantities (with minimum headcount enforcement for per-guest pricing), displayed in both the top header and bottom summary toolbar with a breakdown tooltip.
+From the carousel, items can be "locked in" to signify a final decision.Quantity Selection: Each event card has a quantity selector linked to the global "Headcount" field in the summary toolbar. Quantity represents hours for per-hour pricing or guests for per-guest pricing.Total Cost Calculation: A running total cost is calculated in real-time, accurately reflecting variation-specific pricing multiplied by quantity (hours for per-hour, guests for per-guest, with minimum headcount enforcement), displayed in both the top header and bottom summary toolbar with a breakdown tooltip.
 
 
 Collaboration and Sharing
-User Profiles: The application prompts new users for their name, which is stored locally and used to identify their contributions, such as emoji reactions.Multi-User Collaboration: Multiple collaborators can be added to a session, with their avatars displayed in the header.Session Management: A user's complete selection can be saved, generating a unique, shareable URL for collaboration. A dropdown menu displays previously saved sessions, but loading sessions from the dropdown is not yet functional.
+User Profiles: The application prompts new users for their name, which is stored locally and used to identify their contributions, such as emoji reactions.Multi-User Collaboration: Multiple collaborators can be added to a session, with their avatars displayed in the header.Session Management: A user's complete selection can be saved, generating a unique, shareable URL for collaboration. A dropdown menu displays previously saved sessions, but loading sessions from the dropdown is not yet functional, with a disclaimer tooltip indicating its beta status.
 
 User Interface and Experience
-Dynamic Header: The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.Summary Toolbar: A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, replacing in-catalog "details cards."Undo/Redo: Fully functional Undo and Redo buttons allow users to step through their history of changes.Emoji Reactions: Users can leave emoji reactions on any event, used to automatically sort lists.Pre-MVP Disclaimer: A footer notes that autosave and session loading features are incomplete, setting expectations for the beta release.
+Dynamic Header: The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.Summary Toolbar: A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, replacing in-catalog "details cards."Undo/Redo: Fully functional Undo and Redo buttons allow users to step through their history of changes.Emoji Reactions: Users can leave emoji reactions on any event, used to automatically sort lists.Pre-MVP Disclaimer: Tooltips on the autosave toggle and sessions dropdown note that these features are incomplete, setting expectations for the beta release.
 
 Code Readiness Assessment
 The codebase has a strong, modern foundation but requires improvements in security and completion of features.
@@ -137,7 +147,7 @@ Performance: ✅ Completed (Image Caching & Targeted DOM Updates)
 Code Readability: ✅ Completed (Constants)
 Incomplete Features: 
 ❌ Session dropdown lacks an event listener to load selected sessions.
-❌ Autosave functionality is not implemented, despite an autosave toggle in the UI.
+❌ Autosave functionality is not implemented, despite an autosave toggle with a disclaimer tooltip.
 
 
 Security: ❌ Incomplete (Hardcoded Airtable token in client-side code, bypassing serverless proxy)
