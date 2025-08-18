@@ -1,8 +1,12 @@
 /*
- * Version: 1.5.0
+ * Version: 1.6.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.6.0 - 2025-08-18
+ * - Made event cards clickable to open detailed editable modal view.
+ * - Added save button in modal to apply edits to state/cart.
  *
  * v1.5.0 - 2025-08-18
  * - Added event listener to sessions-dropdown for loading selected sessions.
@@ -146,7 +150,7 @@ async function handleReaction(recordId, emoji) {
     }
     const reactions = state.session.reactions.get(recordId);
     if (reactions[state.session.user] === emoji) {
-        delete reactions[state.session.user];
+        delete reactions[state.session.user);
     } else {
         reactions[state.session.user] = emoji;
     }
@@ -363,7 +367,16 @@ function setupEventListeners() {
         
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
+            e.stopPropagation();
             const card = editBtn.closest('.event-card');
+            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
+            await ui.openDetailModal(compositeId, imageCache);
+            return;
+        }
+
+        // New: Click on card (not on buttons) to open modal
+        const card = e.target.closest('.event-card');
+        if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
