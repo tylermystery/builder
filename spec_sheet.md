@@ -1,8 +1,12 @@
 <!--
- * Version: 1.3.0
+ * Version: 1.4.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.4.0 - 2025-08-18
+ * - Fully defined dynamic card details and image gallery functionality in the core spec.
+ * - Added a detailed schema for the Airtable 'Options' field.
  *
  * v1.3.0 - 2025-08-18
  * - Updated spec sheet to reflect new variation-based favoriting logic.
@@ -68,7 +72,16 @@ This section outlines the rules and best practices for our collaborative develop
 ---
 
 ## Event Customization and Selection
-**Event Variations:** Events can feature multiple options (e.g., different packages) that are selectable via a dropdown on the event card.
+**Event Variations & Dynamic Cards:**
+* **Airtable Schema:** Event variations are defined in the `Options` field in Airtable. Each line represents one option and uses a comma-separated key:value format.
+    * **Syntax:** `Option Name, key: "value", key: value`
+    * **Supported Keys:** `price` (absolute), `price change` (relative), `duration change`, `description`.
+    * **Example:** `3-piece band, price: 1200, description: "A versatile trio for any occasion."`
+* **Dynamic Updates:** Event cards in the main catalog dynamically update to reflect the attributes of the selected option. The card's price, duration, and description will change instantly when a new option is selected from the dropdown.
+* **Image Galleries:** Each card will feature an interactive image gallery.
+    * The system will fetch all images from Cloudinary that are tagged with the item's primary `Media Tag`.
+    * Left and right arrows will appear on the card on hover, allowing users to cycle through all available images.
+
 **Favoriting & Locking:**
 * Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel.
 * The event card in the main catalog will then auto-select the next available variation.
