@@ -1,13 +1,8 @@
 <!--
- * Version: 1.8.0
+ * Version: 1.7.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
- *
- * v1.8.0 - 2025-08-18
- * - Updated modal-content CSS to use 90vw width with 8:13 aspect ratio.
- * - Added CSS for modal-save-btn.
- * - Set event-card cursor to pointer for clickable detailed view.
  *
  * v1.7.0 - 2025-08-18
  * - Removed fixed footer disclaimer; added tooltip to autosave-toggle and sessions-dropdown.
@@ -275,7 +270,7 @@ transition: padding 0.3s ease-in-out;
     background-position: center; 
     color: white; 
     overflow: hidden; 
-    cursor: pointer;
+    cursor: default;
     border: 1px solid #e0e0e0;
 }
 .event-card:hover { 
@@ -391,8 +386,8 @@ transition: padding 0.3s ease-in-out;
     background-size: cover; 
     background-position: center; 
     border-radius: 12px; 
-    width: 90vw; 
-    height: calc(90vw * 13 / 8); /* 8:13 aspect ratio */
+    width: 90%; 
+    max-width: 600px; 
     max-height: 90vh; 
     display: flex; 
     flex-direction: column;
@@ -414,19 +409,6 @@ transition: padding 0.3s ease-in-out;
     cursor: pointer; 
     z-index: 20; 
 }
-.modal-save-btn {
-    background-color: #007aff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 1em;
-    transition: background-color 0.2s;
-}
-.modal-save-btn:hover {
-    background-color: #005bb5;
-}
 #modal-body { 
     padding: 30px; 
     background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); 
@@ -440,4 +422,218 @@ transition: padding 0.3s ease-in-out;
 #modal-body h3 { 
     margin-top: 0; 
     font-size: 2em; 
-    text-shadow: 0 2px 4px rgba(0,0,0
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5); 
+}
+#modal-body .description { 
+    margin: 15px 0; 
+    color: #f0f0f0; 
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
+}
+#modal-body .modal-footer { 
+    display: flex; 
+    gap: 15px; 
+    margin-top: 20px; 
+    align-items: center; 
+    justify-content: center; 
+}
+#modal-body .price-quantity-wrapper { 
+    color: white; 
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
+}
+#summary-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 20px;
+    z-index: 1001;
+    flex-wrap: wrap;
+}
+.toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+.toolbar-item label {
+    font-size: 0.75em;
+    color: #666;
+    margin-bottom: 4px;
+}
+.toolbar-item input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.toolbar-item input[type="date"] {
+    min-width: 130px;
+}
+.toolbar-item input[type="number"] {
+    width: 80px;
+}
+.total-cost-summary {
+    align-items: flex-start;
+}
+#summary-total-cost {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #007aff;
+}
+#autosave-toggle {
+    cursor: pointer;
+}
+.gallery-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    font-size: 1.5em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+.gallery-arrow.left { left: 10px; }
+.gallery-arrow.right { right: 10px; }
+.event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
+    Loading catalog...
+</div>
+
+<div id="event-details-storage" style="display: none;">
+    <input type="number" id="guest-count" value="1" min="1">
+</div>
+
+<div id="sticky-header">
+    <div id="header-summary"></div>
+    <div id="header-full-content">
+        <div id="favorites-section" style="display: none;">
+            <div class="favorites-header">
+                <div id="collaborators-section" class="header-group-left" style="display: none;">
+                    <div id="collaborator-avatars"></div>
+                    <button id="add-collaborator-btn">+</button>
+                </div>
+                <h2 id="event-title-header">Your Event</h2>
+                <div class="header-group-right">
+                    <div id="sessions-dropdown-container" style="display: none;">
+                        <select id="sessions-dropdown"></select>
+                    </div>
+                    <div id="total-cost-section">
+                        <strong>Total:</strong>
+                        <span id="total-cost" title="No items selected">$0.00</span>
+                    </div>
+                    <div id="share-section">
+                        <div class="left-controls">
+                            <div class="history-controls">
+                                <button id="undo-btn" disabled>↩️</button>
+                                <button id="redo-btn" disabled>↪️</button>
+                            </div>
+                            <div class="autosave-control">
+                                <label for="autosave-toggle">Autosave</label>
+                                <input type="checkbox" id="autosave-toggle" checked>
+                            </div>
+                            <span id="save-status"></span>
+                        </div>
+                        <div class="right-controls">
+                            <button id="save-share-btn">Save Now</button>
+                            <div id="share-link-container" style="display: none;">
+                                <input type="text" id="share-link" readonly>
+                                <button id="copy-link-btn">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="favorites-carousel"></div>
+        </div>
+    </div>
+</div>
+
+<div id="filter-controls" style="display: none;">
+    <input type="text" id="name-filter" placeholder="Search by name...">
+    <select id="price-filter">
+        <option value="all">All Prices</option>
+        <option value="0-50">Under $50</option>
+        <option value="50-100">$50 - $100</option>
+        <option value="100-250">$100 - $250</option>
+        <option value="250-plus">$250+</option>
+    </select>
+    <select id="duration-filter">
+        <option value="all">All Durations</option>
+    </select>
+    <select id="status-filter">
+        <option value="all">All Statuses</option>
+    </select>
+    
+    <select id="sort-by">
+        <option value="reactions-desc">Sort by: Reactions</option>
+        <option value="price-asc">Price (Low to High)</option>
+        <option value="price-desc">Price (High to Low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+    </select>
+
+    <button id="reset-filters">Reset</button>
+    <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;"><button type="button">Download Source</button></a>
+</div>
+
+<div id="catalog-container"></div>
+
+<div id="edit-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <button class="modal-close">&times;</button>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<div id="confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content detail-modal">
+        <div id="confirm-modal-body">
+            <h3>Are you sure you want to break event details down into its components?!?</h3>
+            <div class="modal-footer">
+                <button id="confirm-yes-btn">Yes</button>
+                <button id="confirm-no-btn">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="summary-toolbar">
+    <div class="toolbar-item">
+        <label for="summary-event-name">Event Name</label>
+        <input type="text" id="summary-event-name" placeholder="Untitled Event">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-date">Date</label>
+        <input type="date" id="summary-date">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-headcount">Headcount</label>
+        <input type="number" id="summary-headcount" min="1" value="1">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-location">Location</label>
+        <input type="text" id="summary-location" placeholder="TBD">
+    </div>
+    <div class="toolbar-item total-cost-summary">
+        <label>Total Cost</label>
+        <span id="summary-total-cost" title="No items selected">$0.00</span>
+    </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
