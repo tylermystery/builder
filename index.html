@@ -1,3 +1,18 @@
+<!--
+ * Version: 1.2.0
+ * Last Modified: 2025-08-17
+ *
+ * Changelog:
+ *
+ * v1.2.0 - 2025-08-17
+ * - Added a unified sorting dropdown to the filter controls.
+ *
+ * v1.1.0 - 2025-08-17
+ * - Added AI Collaboration Guidelines section to spec sheet.
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +20,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
 <style>
-body {
+/* ... CSS is unchanged ... */
+</style>
+</head>
+<body>
 padding-bottom: 80px;
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 overflow-y: hidden;
@@ -286,8 +304,16 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
     <select id="status-filter">
         <option value="all">All Statuses</option>
     </select>
+    
+    <!-- NEW SORTING DROPDOWN -->
+    <select id="sort-by">
+        <option value="reactions-desc">Sort by: Reactions</option>
+        <option value="price-asc">Price (Low to High)</option>
+        <option value="price-desc">Price (High to Low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+    </select>
+
     <button id="reset-filters">Reset</button>
-    <!-- MOVED THE DOWNLOAD BUTTON HERE -->
     <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;"><button type="button">Download Source</button></a>
 </div>
 
