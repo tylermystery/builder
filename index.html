@@ -1,8 +1,11 @@
 <!--
- * Version: 1.2.0
+ * Version: 1.2.1
  * Last Modified: 2025-08-17
  *
  * Changelog:
+ *
+ * v1.2.1 - 2025-08-17
+ * - Fixed a critical HTML structure error by removing a duplicated <style> block from the <body>.
  *
  * v1.2.0 - 2025-08-17
  * - Added a unified sorting dropdown to the filter controls.
@@ -20,10 +23,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
 <style>
-/* ... CSS is unchanged ... */
-</style>
-</head>
-<body>
+body {
 padding-bottom: 80px;
 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
 overflow-y: hidden;
@@ -305,7 +305,6 @@ flex-direction: column; justify-content: flex-end; overflow-y: auto; }
         <option value="all">All Statuses</option>
     </select>
     
-    <!-- NEW SORTING DROPDOWN -->
     <select id="sort-by">
         <option value="reactions-desc">Sort by: Reactions</option>
         <option value="price-asc">Price (Low to High)</option>
