@@ -1,8 +1,11 @@
 <!--
- * Version: 1.1.0
+ * Version: 1.2.0
  * Last Modified: 2025-08-17
  *
  * Changelog:
+ *
+ * v1.2.0 - 2025-08-17
+ * - Added guideline for the AI to always provide complete files.
  *
  * v1.1.0 - 2025-08-17
  * - Added AI Collaboration Guidelines section.
@@ -26,9 +29,10 @@ This section outlines the rules and best practices for our collaborative develop
 #### For the AI (My Responsibilities)
 1.  **Maintain Functionality:** I will ensure that any code modifications do not break existing, working features.
 2.  **Standard Code Blocks:** I will provide all code in standard text blocks (no special UI) for easy copying and pasting.
-3.  **Versioning & Logs:** I will diligently update the version number and changelog at the top of every file I modify.
-4.  **Holistic Analysis:** I will always review the entire project source to understand the full context before making changes.
-5.  **Methodical Approach:** I will address one primary goal at a time to ensure focused and accurate results.
+3.  **Provide Complete Files:** I will always provide the entire content of any modified file to ensure simple and accurate updates.
+4.  **Versioning & Logs:** I will diligently update the version number and changelog at the top of every file I modify.
+5.  **Holistic Analysis:** I will always review the entire project source to understand the full context before making changes.
+6.  **Methodical Approach:** I will address one primary goal at a time to ensure focused and accurate results.
 
 #### For the Human (Your Responsibilities)
 1.  **Provide Complete Source:** Always provide the full, updated project source using the built-in export tool. This ensures I have the complete context.
@@ -36,6 +40,8 @@ This section outlines the rules and best practices for our collaborative develop
 3.  **Verify and Report:** After implementing my changes, please test the application. If there are any issues or if the build fails, provide the error messages or a description of the problem.
 
 ---
+
+## Core Functionality
 
 ## Core Functionality
 **Airtable Integration:** The application's data is powered by an Airtable database.
