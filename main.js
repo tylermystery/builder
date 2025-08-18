@@ -5,7 +5,7 @@
  * Changelog:
  *
  * v1.4.0 - 2025-08-18
- * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations.
+ * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations, fixing the loading bug.
  *
  * v1.3.0 - 2025-08-18
  * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
