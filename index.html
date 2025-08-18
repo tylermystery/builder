@@ -1,11 +1,17 @@
 <!--
- * Version: 1.2.1
- * Last Modified: 2025-08-17
+ * Version: 1.4.0
+ * Last Modified: 2025-08-18
  *
  * Changelog:
  *
+ * v1.4.0 - 2025-08-18
+ * - Added CSS for the new `.option-description` element on event cards.
+ *
+ * v1.3.0 - 2025-08-18
+ * - Updated spec sheet to reflect new variation-based favoriting logic.
+ *
  * v1.2.1 - 2025-08-17
- * - Fixed a critical HTML structure error by removing a duplicated <style> block from the <body>.
+ * - Fixed a critical HTML structure error in index.html.
  *
  * v1.2.0 - 2025-08-17
  * - Added a unified sorting dropdown to the filter controls.
@@ -174,6 +180,14 @@ flex-direction: column; justify-content: flex-end; }
 .quantity-selector button { width: 30px; height: 30px; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; font-size: 1.2em; color: #333; }
 .quantity-selector input { width: 40px; text-align: center; border: 1px solid #ccc; border-left: none; border-right: none; height: 30px; -moz-appearance: textfield; }
 .event-card-content .price { font-size: 1.3em; font-weight: bold; }
+.option-description {
+    font-size: 0.85em;
+    padding: 5px 0;
+    margin: 5px 0;
+    color: #f0f0f0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    min-height: 2.5em; /* Reserve space to prevent layout shift */
+}
 #pagination-controls { display: none; }
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
 z-index: 1000; }
