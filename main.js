@@ -1,8 +1,12 @@
 /*
- * Version: 1.6.0
- * Last Modified: 2025-08-18
+ * Version: 1.6.1
+ * Last Modified: 2025-08-18 04:51 PM PDT
  *
  * Changelog:
+ *
+ * v1.6.1 - 2025-08-18 04:51 PM PDT
+ * - Added enhanced error handling and logging in initialize() to diagnose loading issue.
+ * - Ensured proper syntax in click listeners to fix potential parsing errors.
  *
  * v1.6.0 - 2025-08-18
  * - Made event cards clickable to open detailed editable modal view.
@@ -384,7 +388,7 @@ function setupEventListeners() {
 
         // New: Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
-        if (card) {
+        if (card && !e.target.closest('.heart-icon') && !e.target.closest('.edit-card-btn') && !e.target.closest('.quantity-btn') && !e.target.closest('.options-selector')) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
@@ -444,8 +448,10 @@ async function initialize() {
     ui.toggleLoading(true);
     try {
         state.records.all = await api.fetchAllRecords();
+        console.log('Records fetched:', state.records.all); // Debug: Log fetched data
     } catch (error) {
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later.</p>`;
+        console.error('Fetch error:', error); // Debug: Log error details
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog. Details: ${error.message}. Please try again later or check console.</p>`;
         return;
     }
     
