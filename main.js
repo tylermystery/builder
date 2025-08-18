@@ -6,6 +6,7 @@
  *
  * v1.5.0 - 2025-08-18
  * - Added event listener to sessions-dropdown for loading selected sessions.
+ * - Made event cards clickable to open detailed editable modal view.
  *
  * v1.4.0 - 2025-08-18
  * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations, fixing the loading bug.
@@ -26,18 +27,12 @@
  * - Initial versioning and changelog added.
  */
 
-
-
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 
-
-
 const imageCache = new Map();
-
-
 
 // --- STATE & HISTORY ---
 function recordStateForUndo() {
@@ -52,8 +47,6 @@ function recordStateForUndo() {
     ui.updateHistoryButtons();
 }
 
-
-
 async function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
@@ -62,8 +55,6 @@ async function restoreState(newState) {
     state.history.isRestoring = false;
     await updateRender();
 }
-
-
 
 function undo() {
     if (state.history.undoStack.length > 1) {
@@ -74,8 +65,6 @@ function undo() {
     }
 }
 
-
-
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
@@ -84,19 +73,13 @@ function redo() {
     }
 }
 
-
-
 // --- CORE LOGIC ---
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
-
-
 
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
-
-
 
 export function getRecordPrice(record, optionIndex = null) {
     let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
@@ -114,10 +97,6 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return price;
 }
-
-
-
-
 
 function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
@@ -138,8 +117,6 @@ function checkUserProfile() {
     ui.renderCollaborators(getInitials);
 }
 
-
-
 async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
@@ -153,12 +130,8 @@ async function handleReaction(recordId, emoji) {
     await updateRender();
 }
 
-
-
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
-
-
 
 async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
@@ -206,8 +179,6 @@ async function applyFilters() {
     loadMoreRecords();
 }
 
-
-
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
         return;
@@ -221,16 +192,12 @@ async function loadMoreRecords() {
     state.ui.isLoadingMore = false;
 }
 
-
-
 async function updateRender() {
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
 }
-
-
 
 function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
@@ -320,6 +287,13 @@ function setupEventListeners() {
         if (editBtn) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
+            return;
+        }
+        const favoriteItem = e.target.closest('.favorite-item');
+        if (favoriteItem) {
+            e.stopPropagation();
+            const compositeId = favoriteItem.dataset.compositeId;
+            await ui.openDetailModal(compositeId, imageCache);
         }
     });
 
@@ -363,8 +337,17 @@ function setupEventListeners() {
         
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
+            e.stopPropagation();
             const card = editBtn.closest('.event-card');
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
+            await ui.openDetailModal(compositeId, imageCache);
+            return;
+        }
+
+        const eventCard = e.target.closest('.event-card');
+        if (eventCard && !e.target.closest('.quantity-btn, .quantity-input, .options-selector, .reaction-bar')) {
+            e.stopPropagation();
+            const compositeId = eventCard.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
     });
@@ -404,19 +387,15 @@ function setupEventListeners() {
         }, 3000);
     });
 
-    // Add listener for sessions dropdown to load selected session
     ui.sessionsDropdown.addEventListener('change', async (e) => {
         const selectedId = e.target.value;
         if (selectedId) {
             await api.loadSessionFromAirtable(selectedId);
             await updateRender();
-            // Reset dropdown to default after load (optional edge case handling)
-            e.target.value = '';
+            e.target.value = ''; // Reset dropdown to default
         }
     });
 }
-
-
 
 // --- INITIALIZATION ---
 async function initialize() {
@@ -445,7 +424,5 @@ async function initialize() {
     setupEventListeners();
     await updateRender();
 }
-
-
 
 initialize();
