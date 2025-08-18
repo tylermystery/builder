@@ -1,8 +1,13 @@
 /*
- * Version: 1.0.0
+ * Version: 1.2.0
  * Last Modified: 2025-08-17
  *
  * Changelog:
+ *
+ * v1.2.0 - 2025-08-17
+ * - Fixed broken filters by adding event listeners.
+ * - Implemented a unified sorting system controlled by a new dropdown.
+ * - Refactored `applyFilters` to handle both filtering and sorting.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
@@ -27,6 +32,7 @@ function recordStateForUndo() {
     state.history.redoStack = [];
     ui.updateHistoryButtons();
 }
+
 async function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
@@ -35,6 +41,7 @@ async function restoreState(newState) {
     state.history.isRestoring = false;
     await updateRender();
 }
+
 function undo() {
     if (state.history.undoStack.length > 1) {
         const currentState = state.history.undoStack.pop();
@@ -43,6 +50,7 @@ function undo() {
         restoreState(prevState);
     }
 }
+
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
@@ -50,12 +58,29 @@ function redo() {
         restoreState(nextState);
     }
 }
+
 // --- CORE LOGIC ---
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
+
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
+
+// Helper to get the price of a record, including variations
+export function getRecordPrice(record, optionIndex = null) {
+    let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
+    if (optionIndex !== null) {
+        const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            price += variation.priceChange;
+        }
+    }
+    return price;
+}
+
+
 function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
     if (!state.session.user) {
@@ -74,6 +99,7 @@ function checkUserProfile() {
     }
     ui.renderCollaborators(getInitials);
 }
+
 async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
@@ -86,19 +112,26 @@ async function handleReaction(recordId, emoji) {
     }
     await updateRender();
 }
+
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
+
 async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
     ui.catalogContainer.innerHTML = '';
+
+    // Get filter and sort values
     const nameValue = ui.nameFilter.value.toLowerCase();
     const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
+    state.ui.currentSort = ui.sortBy.value; // Update state with current sort
+
+    // 1. Filter records
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
-            const price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+            const price = getRecordPrice(record);
             if (price === null) return false;
             switch (priceValue) {
                 case '0-50': return price < 50;
@@ -113,9 +146,25 @@ async function applyFilters() {
         
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
-    state.records.filtered.sort((a, b) => calculateReactionScore(b.id) - calculateReactionScore(a.id));
+
+    // 2. Sort the filtered records
+    state.records.filtered.sort((a, b) => {
+        switch (state.ui.currentSort) {
+            case 'price-asc':
+                return getRecordPrice(a) - getRecordPrice(b);
+            case 'price-desc':
+                return getRecordPrice(b) - getRecordPrice(a);
+            case 'name-asc':
+                return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
+            case 'reactions-desc':
+            default:
+                return calculateReactionScore(b.id) - calculateReactionScore(a.id);
+        }
+    });
+
     loadMoreRecords();
 }
+
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
         return;
@@ -128,15 +177,33 @@ async function loadMoreRecords() {
     state.ui.recordsCurrentlyDisplayed = end;
     state.ui.isLoadingMore = false;
 }
+
 async function updateRender() {
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
 }
+
 function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
+
+    // --- FIX: ADDED EVENT LISTENERS FOR FILTERS AND SORTING ---
+    const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
+    filterInputs.forEach(input => {
+        input.addEventListener('change', applyFilters);
+    });
+
+    document.getElementById('reset-filters').addEventListener('click', () => {
+        ui.nameFilter.value = '';
+        ui.priceFilter.value = 'all';
+        ui.durationFilter.value = 'all';
+        ui.statusFilter.value = 'all';
+        ui.sortBy.value = 'reactions-desc'; // Reset sort to default
+        applyFilters();
+    });
+
     document.getElementById('add-collaborator-btn').addEventListener('click', () => {
         const newName = prompt("Enter collaborator's name:");
         if (newName && !state.session.collaborators.includes(newName)) {
@@ -144,18 +211,21 @@ function setupEventListeners() {
             ui.renderCollaborators(getInitials);
         }
     });
+
     ui.catalogContainer.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
             ui.catalogContainer.scrollLeft += e.deltaY;
         }
     });
+
     ui.catalogContainer.addEventListener('scroll', () => {
         const { scrollLeft, scrollWidth, clientWidth } = ui.catalogContainer;
         if (scrollLeft + clientWidth >= scrollWidth - 500) {
             loadMoreRecords();
         }
     });
+
     document.body.addEventListener('click', async (e) => {
         const reactionBtn = e.target.closest('.reaction-bar button');
         if (reactionBtn) {
@@ -163,6 +233,7 @@ function setupEventListeners() {
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
+
     ui.favoritesCarousel.addEventListener('click', async (e) => {
         const promoteBtn = e.target.closest('.promote-btn');
         if (promoteBtn) {
@@ -200,13 +271,13 @@ function setupEventListeners() {
             await applyFilters();
             return;
         }
-        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
     });
+
     ui.catalogContainer.addEventListener('click', async function(e) {
         const heart = e.target.closest('.heart-icon');
         if (heart) {
@@ -226,7 +297,6 @@ function setupEventListeners() {
             return;
         }
         
-        // *** THE FIX IS HERE: More specific listener ***
         const editBtn = e.target.closest('.edit-card-btn');
         if (editBtn) {
             const card = editBtn.closest('.event-card');
@@ -269,9 +339,8 @@ function setupEventListeners() {
             }
         }, 3000);
     });
-    
-    // ... other listeners
 }
+
 // --- INITIALIZATION ---
 async function initialize() {
     ui.toggleLoading(true);
@@ -295,7 +364,9 @@ async function initialize() {
     
     ui.populateFilter(ui.durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
     ui.populateFilter(ui.statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
+    
     setupEventListeners();
     await updateRender();
 }
+
 initialize();
