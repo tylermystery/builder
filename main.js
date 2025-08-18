@@ -1,8 +1,12 @@
 /*
- * Version: 1.6.0
- * Last Modified: 2025-08-18
+ * Version: 1.6.1
+ * Last Modified: 2025-08-18 04:32 PM PDT
  *
  * Changelog:
+ *
+ * v1.6.1 - 2025-08-18 04:32 PM PDT
+ * - Fixed potential syntax error in event card click handler.
+ * - Added safeguard to prevent modal issues during initial load.
  *
  * v1.6.0 - 2025-08-18
  * - Made event cards clickable to open detailed editable modal view.
@@ -30,18 +34,12 @@
  * - Initial versioning and changelog added.
  */
 
-
-
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 
-
-
 const imageCache = new Map();
-
-
 
 // --- STATE & HISTORY ---
 function recordStateForUndo() {
@@ -56,8 +54,6 @@ function recordStateForUndo() {
     ui.updateHistoryButtons();
 }
 
-
-
 async function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
@@ -66,8 +62,6 @@ async function restoreState(newState) {
     state.history.isRestoring = false;
     await updateRender();
 }
-
-
 
 function undo() {
     if (state.history.undoStack.length > 1) {
@@ -78,8 +72,6 @@ function undo() {
     }
 }
 
-
-
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
@@ -88,19 +80,13 @@ function redo() {
     }
 }
 
-
-
 // --- CORE LOGIC ---
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
-
-
 
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
-
-
 
 export function getRecordPrice(record, optionIndex = null) {
     let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
@@ -118,10 +104,6 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return price;
 }
-
-
-
-
 
 function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
@@ -142,27 +124,21 @@ function checkUserProfile() {
     ui.renderCollaborators(getInitials);
 }
 
-
-
 async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
     }
     const reactions = state.session.reactions.get(recordId);
     if (reactions[state.session.user] === emoji) {
-        delete reactions[state.session.user);
+        delete reactions[state.session.user];
     } else {
         reactions[state.session.user] = emoji;
     }
     await updateRender();
 }
 
-
-
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
-
-
 
 async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
@@ -210,8 +186,6 @@ async function applyFilters() {
     loadMoreRecords();
 }
 
-
-
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
         return;
@@ -225,16 +199,12 @@ async function loadMoreRecords() {
     state.ui.isLoadingMore = false;
 }
 
-
-
 async function updateRender() {
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
     ui.updateSummaryToolbar();
 }
-
-
 
 function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
@@ -325,6 +295,13 @@ function setupEventListeners() {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
         }
+
+        // Handle click on favorite item for detailed view
+        const favoriteItem = e.target.closest('.favorite-item');
+        if (favoriteItem && !e.target.closest('.action-btn-container, .edit-card-btn, .secondary-action-btn')) {
+            e.stopPropagation();
+            await ui.openDetailModal(favoriteItem.dataset.compositeId, imageCache);
+        }
     });
 
     ui.catalogContainer.addEventListener('click', async function(e) {
@@ -376,9 +353,12 @@ function setupEventListeners() {
 
         // New: Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
-        if (card) {
+        if (card && !e.target.closest('.heart-icon, .edit-card-btn, .quantity-selector button, .quantity-input')) {
+            e.stopPropagation();
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
-            await ui.openDetailModal(compositeId, imageCache);
+            if (state.records.all.length > 0) { // Safeguard to ensure records are loaded
+                await ui.openDetailModal(compositeId, imageCache);
+            }
         }
     });
     
@@ -429,15 +409,14 @@ function setupEventListeners() {
     });
 }
 
-
-
 // --- INITIALIZATION ---
 async function initialize() {
     ui.toggleLoading(true);
     try {
         state.records.all = await api.fetchAllRecords();
     } catch (error) {
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later.</p>`;
+        console.error('Error loading catalog:', error);
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog. Please try again later. Check console for details.</p>`;
         return;
     }
     
@@ -458,7 +437,5 @@ async function initialize() {
     setupEventListeners();
     await updateRender();
 }
-
-
 
 initialize();
