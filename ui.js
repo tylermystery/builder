@@ -6,8 +6,7 @@
  *
  * v1.4.0 - 2025-08-18
  * - Refactored `parseOptions` to handle a robust key-value pair format.
- * - Updated `createEventCardElement` to display and dynamically update option-specific descriptions, prices, and durations.
- * - Updated `updateTotalCost` and `createFavoriteCardElement` to use the new price calculation logic.
+ * - Updated `createFavoriteCardElement`, `updateTotalCost`, and `openDetailModal` to use the new price calculation logic.
  *
  * v1.3.0 - 2025-08-18
  * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
@@ -174,29 +173,10 @@ export async function createEventCardElement(record, imageCache) {
 
     const firstAvailableOptionIndex = options.findIndex(opt => opt.name === availableOptions[0]?.name);
     const compositeId = options.length > 0 ? `${recordId}-${firstAvailableOptionIndex}` : recordId;
+    const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
 
-    eventCard.innerHTML = `
-        <button class="edit-card-btn">🪄</button>
-        <div class="event-card-content">
-            <div class="heart-icon" data-composite-id="${compositeId}">
-                <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-            </div>
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            ${optionsDropdownHTML}
-            <p class="option-description"></p>
-            <p class="details"></p>
-            <div class="price-quantity-wrapper">
-                <div class="price"></div>
-                <div class="quantity-selector">
-                    <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                    <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}">
-                    <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
-                </div>
-            </div>
-        </div>
-        <div class="card-footer">${renderReactionsSummary(recordId)}</div>
-        ${renderReactionbar(recordId)}`;
+    eventCard.innerHTML = `<button class="edit-card-btn">🪄</button> <div class="event-card-content"> <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg> </div> <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3> ${optionsDropdownHTML} <p class="details">${fields[CONSTANTS.FIELD_NAMES.DURATION] ? `Duration: ${fields[CONSTANTS.FIELD_NAMES.DURATION]} hours` : ''}</p> <div class="price-quantity-wrapper"> <div class="price" data-unit-price="${basePrice}"> ${basePrice !== null ? '$' + basePrice.toFixed(2) : 'N/A'} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span> </div> <div class="quantity-selector"> <button class="quantity-btn minus" aria-label="Decrease quantity">-</button> <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"> <button class="quantity-btn plus" aria-label="Increase quantity">+</button> </div> </div> </div> <div class="card-footer">${renderReactionsSummary(recordId)}</div> ${renderReactionbar(recordId)} `;
     
     const dropdown = eventCard.querySelector('.options-selector');
     const heartIcon = eventCard.querySelector('.heart-icon');
@@ -204,36 +184,26 @@ export async function createEventCardElement(record, imageCache) {
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const priceEl = eventCard.querySelector('.price');
-    const descriptionEl = eventCard.querySelector('.option-description');
-    const detailsEl = eventCard.querySelector('.details');
 
-    const updateCardDetails = () => {
+    const updatePriceAndHeart = () => {
         const selectedIndex = dropdown ? dropdown.value : null;
         const selectedOption = selectedIndex ? options[selectedIndex] : null;
         
-        // Update Price
-        let currentPrice = basePrice;
+        let newPrice = basePrice || 0;
         if (selectedOption) {
             if (selectedOption.absolutePrice !== null) {
-                currentPrice = selectedOption.absolutePrice;
+                newPrice = selectedOption.absolutePrice;
             } else if (selectedOption.priceChange !== null) {
-                currentPrice += selectedOption.priceChange;
+                newPrice += selectedOption.priceChange;
             }
         }
-        priceEl.innerHTML = `$${currentPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-
-        // Update Description
-        descriptionEl.textContent = selectedOption?.description || '';
-        descriptionEl.style.display = selectedOption?.description ? 'block' : 'none';
-
-        // Update Duration
-        let currentDuration = baseDuration;
-        if (selectedOption && selectedOption.durationChange !== null) {
-            currentDuration += selectedOption.durationChange;
+        priceEl.dataset.unitPrice = newPrice;
+        
+        const unitPrice = parseFloat(priceEl.dataset.unitPrice);
+        if (!isNaN(unitPrice)) {
+            priceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
         }
-        detailsEl.textContent = currentDuration > 0 ? `Duration: ${currentDuration} hours` : '';
 
-        // Update Heart Icon and Edit Button
         const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
         heartIcon.dataset.compositeId = newCompositeId;
         eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId;
@@ -241,9 +211,9 @@ export async function createEventCardElement(record, imageCache) {
     };
     
     if (dropdown) {
-        dropdown.addEventListener('change', updateCardDetails);
+        dropdown.addEventListener('change', updatePriceAndHeart);
     }
-    updateCardDetails(); // Initial call
+    updatePriceAndHeart();
     
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
     if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
