@@ -32,7 +32,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
 <style>
-/* ... other styles are unchanged ... */
+body {
+padding-bottom: 80px;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+overflow-y: hidden;
+}
+#sticky-header {
+position: sticky;
+top: 0;
+background-color: white;
+z-index: 999;
+box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+padding-top: 10px;
+transition: padding 0.3s ease-in-out;
+}
+#header-summary { display: none; justify-content: space-between; align-items: center; padding: 10px 20px; width: 100%; max-width: 1200px; margin: 0 auto; font-size: 1.1em;
+box-sizing: border-box; }
+#header-summary span { color: #6c757d; }
+#header-full-content { max-height: 500px; overflow: hidden; transition: max-height 0.4s ease-in-out; }
+#sticky-header.header-collapsed { padding-top: 0; padding-bottom: 0; }
+#sticky-header.header-collapsed #header-full-content { max-height: 0; }
+#sticky-header.header-collapsed #header-summary { display: flex; }
+#total-cost-section { padding: 0; text-align: right; font-size: 1.2em; }
+#total-cost { font-weight: bold; color: #007aff; }
+#favorites-section { max-width: 1200px; margin: 0 auto; padding: 0 20px 15px 20px; }
+.favorites-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    gap: 20px; 
+    padding-bottom: 15px; 
+}
+#event-title-header {
+    margin: 0;
+    text-align: center;
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.header-group-left, .header-group-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+}
+#sessions-dropdown-container { margin-bottom: 0; }
+#sessions-dropdown { padding: 5px; border-radius: 6px; border: 1px solid #ccc; background-color: #f8f9fa; font-size: 0.9em; }
+#collaborators-section { display: flex; align-items: center; gap: 10px; }
+#collaborator-avatars { display: flex; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background-color: #6c757d; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;
+font-size: 0.9em; border: 2px solid white; margin-left: -10px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s; }
+.avatar:hover { transform: translateY(-2px); z-index: 5; }
+#add-collaborator-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #6c757d; background: #f8f9fa; color: #6c757d; font-size: 1.2em; cursor: pointer;
+margin-left: -2px; }
+#favorites-carousel { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 5px; }
+.favorite-item { 
+    position: relative; 
+    flex: 0 0 200px; 
+    height: 323px; 
+    border-radius: 8px; 
+    overflow: hidden; 
+    background-size: cover; 
+    background-position: center; 
+    color: white;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-end; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); 
+    cursor: pointer; 
+    transition: all 0.3s;
+    border: 1px solid #ddd;
+}
+.favorite-item.locked-item { border: 3px solid #FFD700; }
+.favorite-item.detail-favorite { background: #f0f0f0; color: #333; }
+.favorite-item-content { background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); padding: 10px; text-align: center; }
+.detail-favorite .favorite-item-content { background: none; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent); }
+.event-card .card-footer { position: absolute; bottom: 0; left: 0; right: 0; }
+.reactions-summary { display: flex; gap: 4px; font-size: 0.8em; }
+.reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none; }
+.action-btn-container { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; }
+.secondary-action-btn { position: absolute; bottom: 8px; right: 8px; font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
+.secondary-action-btn:hover { opacity: 1; }
+.primary-action-btn { font-size: 1.8em; cursor: pointer; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+.primary-action-btn .icon-hover { display: none; }
+.primary-action-btn:hover .icon-default { display: none; }
+.primary-action-btn:hover .icon-hover { display: block; animation: pop 0.3s; }
+.favorite-item p { margin: 2px 0; font-size: 0.9em; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+.favorite-item .item-name { font-weight: bold; font-size: 1em; }
+.favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
+.favorite-item .item-price { font-weight: bold; margin-top: 5px; }
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.heart-icon.hearted { animation: pop 0.3s ease-in-out; }
+.reaction-bar { position: absolute; top: 10px; bottom: 10px; left: 0; width: 45px; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+border-radius: 0 20px 20px 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; transform: translateX(-100%); opacity: 0;
+visibility: hidden; transition: all 0.3s ease; z-index: 15; }
+.event-card:hover .reaction-bar, .favorite-item:hover .reaction-bar, .modal-content:hover .reaction-bar { transform: translateX(0); opacity: 1; visibility: visible; }
+.reaction-bar button { background: none; border: none; font-size: 1.5em; cursor: pointer; transition: transform 0.1s; }
+.reaction-bar button:hover { transform: scale(1.3); }
+#share-section { display: flex; align-items: center; gap: 15px; }
+#filter-controls { display: flex; justify-content: center; gap: 15px; padding: 20px; max-width: 1200px; margin: 20px auto; flex-wrap: wrap; }
+#catalog-container {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 320px;
+    grid-template-rows: repeat(2, auto);
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 25px;
+    padding: 20px;
+    height: calc(100vh - 350px);
+}
 .event-card { 
     position: relative; 
     border-radius: 10px; 
@@ -42,8 +153,7 @@
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     height: 520px; 
     width: 320px;
-    /* background-size is removed from here */
-    background-color: #eee; /* Added a fallback color */
+    background-color: #eee;
     color: white; 
     overflow: hidden; 
     cursor: default;
@@ -84,10 +194,224 @@
 .card-arrow.right {
     right: 10px;
 }
-/* ... rest of the styles are unchanged ... */
+.event-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+.heart-icon, .edit-card-btn { position: absolute; top: 15px; width: 30px; height: 30px; cursor: pointer; z-index: 10; background: none;
+border: none; font-size: 1.5em; }
+.heart-icon { right: 15px; }
+.edit-card-btn { left: 15px; }
+.heart-icon svg { width: 100%; height: 100%; stroke: white; stroke-width: 2; fill: rgba(0,0,0,0.3); transition: fill 0.2s, stroke 0.2s;
+filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c; }
+.event-card-content { background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%); padding: 20px; margin-top: auto; flex-grow: 1; display: flex;
+flex-direction: column; justify-content: flex-end; position: relative; z-index: 2; }
+.event-card-content h3 { margin-top: 0; margin-bottom: 10px; font-size: 1.6em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+.event-card-content p { margin-top: 0; margin-bottom: 15px; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.event-card-content .description { display: none; }
+.event-card-content .details { font-size: 0.9em; margin-bottom: 15px; }
+.event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; margin-bottom: 15px; background-color: rgba(255,255,255,0.9); color: #333; }
+.price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 10px; flex-shrink: 0; }
+.quantity-selector { display: flex; align-items: center; }
+.quantity-selector button { width: 30px; height: 30px; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; font-size: 1.2em; color: #333; }
+.quantity-selector input { width: 40px; text-align: center; border: 1px solid #ccc; border-left: none; border-right: none; height: 30px; -moz-appearance: textfield; }
+.event-card-content .price { font-size: 1.3em; font-weight: bold; }
+.option-description {
+    font-size: 0.85em;
+    padding: 5px 0;
+    margin: 5px 0;
+    color: #f0f0f0;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    min-height: 2.5em;
+}
+#pagination-controls { display: none; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center;
+z-index: 1000; }
+.modal-content { position: relative; background-size: cover; background-position: center; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;
+color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow: hidden; }
+.modal-close { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); border: none; border-radius: 50%; width: 30px; height: 30px; color: white;
+font-size: 1.5em; cursor: pointer; z-index: 20; }
+#modal-body { padding: 30px; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); margin-top: auto; height: 100%; display: flex;
+flex-direction: column; justify-content: flex-end; overflow-y: auto; }
+#modal-body h3 { margin-top: 0; font-size: 2em; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+#modal-body .description { margin: 15px 0; color: #f0f0f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+#modal-body .modal-footer { display: flex; gap: 15px; margin-top: 20px; align-items: center; justify-content: center; }
+#modal-body .price-quantity-wrapper { color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+#summary-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #ffffff;
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 20px;
+    gap: 20px;
+    z-index: 1001;
+    flex-wrap: wrap;
+}
+.toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+.toolbar-item label {
+    font-size: 0.75em;
+    color: #666;
+    margin-bottom: 4px;
+}
+.toolbar-item input {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.toolbar-item input[type="date"] {
+    min-width: 130px;
+}
+.toolbar-item input[type="number"] {
+    width: 80px;
+}
+.total-cost-summary {
+    align-items: flex-start;
+}
+#summary-total-cost {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #007aff;
+}
 </style>
 </head>
 <body>
-<!-- ... HTML structure is unchanged ... -->
+
+<div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
+    Loading catalog...
+</div>
+
+<div id="event-details-storage" style="display: none;">
+    <input type="number" id="guest-count" value="1" min="1">
+</div>
+
+<div id="sticky-header">
+    <div id="header-summary"></div>
+    <div id="header-full-content">
+        <div id="favorites-section" style="display: none;">
+            <div class="favorites-header">
+                <div id="collaborators-section" class="header-group-left" style="display: none;">
+                    <div id="collaborator-avatars"></div>
+                    <button id="add-collaborator-btn">+</button>
+                </div>
+                <h2 id="event-title-header">Your Event</h2>
+                <div class="header-group-right">
+                    <div id="sessions-dropdown-container" style="display: none;">
+                        <select id="sessions-dropdown"></select>
+                    </div>
+                    <div id="total-cost-section">
+                        <strong>Total:</strong>
+                        <span id="total-cost">$0.00</span>
+                    </div>
+                    <div id="share-section">
+                        <div class="left-controls">
+                            <div class="history-controls">
+                                <button id="undo-btn" disabled>↩️</button>
+                                <button id="redo-btn" disabled>↪️</button>
+                            </div>
+                            <div class="autosave-control">
+                                <label for="autosave-toggle">Autosave</label>
+                                <input type="checkbox" id="autosave-toggle" checked>
+                            </div>
+                            <span id="save-status"></span>
+                        </div>
+                        <div class="right-controls">
+                            <button id="save-share-btn">Save Now</button>
+                            <div id="share-link-container" style="display: none;">
+                                <input type="text" id="share-link" readonly>
+                                <button id="copy-link-btn">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="favorites-carousel"></div>
+        </div>
+    </div>
+</div>
+
+<div id="filter-controls" style="display: none;">
+    <input type="text" id="name-filter" placeholder="Search by name...">
+    <select id="price-filter">
+        <option value="all">All Prices</option>
+        <option value="0-50">Under $50</option>
+        <option value="50-100">$50 - $100</option>
+        <option value="100-250">$100 - $250</option>
+        <option value="250-plus">$250+</option>
+    </select>
+    <select id="duration-filter">
+        <option value="all">All Durations</option>
+    </select>
+    <select id="status-filter">
+        <option value="all">All Statuses</option>
+    </select>
+    
+    <select id="sort-by">
+        <option value="reactions-desc">Sort by: Reactions</option>
+        <option value="price-asc">Price (Low to High)</option>
+        <option value="price-desc">Price (High to Low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+    </select>
+
+    <button id="reset-filters">Reset</button>
+    <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;"><button type="button">Download Source</button></a>
+</div>
+
+<div id="catalog-container"></div>
+
+<div id="edit-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <button class="modal-close">&times;</button>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<div id="confirm-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content detail-modal">
+        <div id="confirm-modal-body">
+            <h3>Are you sure you want to break event details down into its components?!?</h3>
+            <div class="modal-footer">
+                <button id="confirm-yes-btn">Yes</button>
+                <button id="confirm-no-btn">No</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="summary-toolbar">
+    <div class="toolbar-item">
+        <label for="summary-event-name">Event Name</label>
+        <input type="text" id="summary-event-name" placeholder="Untitled Event">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-date">Date</label>
+        <input type="date" id="summary-date">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-headcount">Headcount</label>
+        <input type="number" id="summary-headcount" min="1" value="1">
+    </div>
+    <div class="toolbar-item">
+        <label for="summary-location">Location</label>
+        <input type="text" id="summary-location" placeholder="TBD">
+    </div>
+    <div class="toolbar-item total-cost-summary">
+        <label>Total Cost</label>
+        <span id="summary-total-cost">$0.00</span>
+    </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
 </body>
 </html>
