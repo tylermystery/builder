@@ -1,8 +1,12 @@
 /*
- * Version: 1.5.0
+ * Version: 1.6.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.6.0 - 2025-08-18
+ * - Enhanced `updateTotalCost` to ensure accurate pricing with variations and quantity, including min headcount enforcement.
+ * - Added breakdown tooltip to total cost display.
  *
  * v1.5.0 - 2025-08-18
  * - Implemented image gallery functionality for event cards, favorite items, and modals.
@@ -30,14 +34,10 @@
  * - Initial versioning and changelog added.
  */
 
-
-
 import { state } from './state.js';
 import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
 import { calculateReactionScore, getRecordPrice } from './main.js';
-
-
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -54,8 +54,6 @@ export const summaryHeadcountInput = document.getElementById('summary-headcount'
 export const summaryLocationInput = document.getElementById('summary-location');
 export const stickyHeader = document.getElementById('sticky-header');
 
-
-
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const summaryTotalCostEl = document.getElementById('summary-total-cost');
@@ -71,10 +69,6 @@ const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
-
-
-
-
 
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
@@ -441,23 +435,34 @@ export function updateHeader() {
 
 export function updateTotalCost() {
     let total = 0;
+    const breakdown = [];
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+
     allItems.forEach((itemInfo, compositeId) => {
         const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
-        if (record) {
-            const unitPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
-            if (record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE].toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-                const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-                const effectiveGuestCount = Math.max(itemInfo.quantity, headcountMin);
-                total += unitPrice * effectiveGuestCount;
-            } else {
-                total += unitPrice;
-            }
-        }
+        if (!record) return;
+
+        const unitPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
+        if (isNaN(unitPrice)) return;
+
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const isPerGuest = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST;
+        const itemCost = isPerGuest ? unitPrice * effectiveQuantity : unitPrice;
+
+        total += itemCost;
+
+        const variationIndex = compositeId.split('-')[1];
+        const variationName = variationIndex ? parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[variationIndex]?.name : '';
+        breakdown.push(`${record.fields[CONSTANTS.FIELD_NAMES.NAME]}${variationName ? ` (${variationName})` : ''}: $${unitPrice.toFixed(2)} x ${effectiveQuantity} = $${itemCost.toFixed(2)}`);
     });
+
     const formattedTotal = `$${total.toFixed(2)}`;
+    const breakdownText = breakdown.length > 0 ? breakdown.join('\n') : 'No items selected';
     totalCostEl.textContent = formattedTotal;
+    totalCostEl.title = breakdownText; // Tooltip for breakdown
     summaryTotalCostEl.textContent = formattedTotal;
+    summaryTotalCostEl.title = breakdownText; // Tooltip for breakdown
 }
 
 export function populateFilter(filterElement, fieldName) {
