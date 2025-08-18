@@ -1,8 +1,12 @@
 /*
- * Version: 1.6.0
+ * Version: 1.7.0
  * Last Modified: 2025-08-18
  *
  * Changelog:
+ *
+ * v1.7.0 - 2025-08-18
+ * - Fixed total cost calculation to multiply variation price by quantity (hours for hourly, guests for per-guest).
+ * - Added disclaimer tooltip to autosave-toggle and sessions-dropdown.
  *
  * v1.6.0 - 2025-08-18
  * - Enhanced `updateTotalCost` to ensure accurate pricing with variations and quantity, including min headcount enforcement.
@@ -413,6 +417,8 @@ export function populateSessionsDropdown(getStoredSessions) {
         }
         sessionsDropdown.appendChild(option);
     });
+    sessionsDropdown.title = 'Pre-MVP Beta: This feature is incomplete and may not function as expected.';
+    document.getElementById('autosave-toggle').title = 'Pre-MVP Beta: This feature is incomplete and may not function as expected.';
 }
 
 export function updateSummaryToolbar() {
@@ -447,14 +453,23 @@ export function updateTotalCost() {
 
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const isPerGuest = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() === CONSTANTS.PRICING_TYPES.PER_GUEST;
-        const itemCost = isPerGuest ? unitPrice * effectiveQuantity : unitPrice;
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
+        let itemCost;
+
+        if (pricingType === 'per hour') {
+            itemCost = unitPrice * effectiveQuantity; // Multiply by hours
+        } else if (pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
+            itemCost = unitPrice * effectiveQuantity; // Multiply by guests
+        } else {
+            itemCost = unitPrice; // Flat price
+        }
 
         total += itemCost;
 
         const variationIndex = compositeId.split('-')[1];
         const variationName = variationIndex ? parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[variationIndex]?.name : '';
-        breakdown.push(`${record.fields[CONSTANTS.FIELD_NAMES.NAME]}${variationName ? ` (${variationName})` : ''}: $${unitPrice.toFixed(2)} x ${effectiveQuantity} = $${itemCost.toFixed(2)}`);
+        const quantityLabel = pricingType === 'per hour' ? 'hours' : 'qty';
+        breakdown.push(`${record.fields[CONSTANTS.FIELD_NAMES.NAME]}${variationName ? ` (${variationName})` : ''}: $${unitPrice.toFixed(2)} x ${effectiveQuantity} ${quantityLabel} = $${itemCost.toFixed(2)}`);
     });
 
     const formattedTotal = `$${total.toFixed(2)}`;
