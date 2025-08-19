@@ -1,8 +1,11 @@
 /*
- * Version: 1.7.1
+ * Version: 1.7.2
  * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.7.2 - 2025-08-19
+ * - Fixed syntax error in favorites carousel removeBtn handler (corrected compositeId assignment).
  *
  * v1.7.1 - 2025-08-19
  * - Added null checks for undo-btn and redo-btn to prevent TypeError.
@@ -212,8 +215,8 @@ async function applyFilters() {
                 default: return true;
             }
         })();
-        const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
-        const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
+        const durationMatch = (durationValue === 'all') || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
+        const statusMatch = (statusValue === 'all') || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
         
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
@@ -227,8 +230,8 @@ async function applyFilters() {
             case 'name-asc':
                 return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
             case 'reactions-desc':
-                default:
-                    return calculateReactionScore(b.id) - calculateReactionScore(a.id);
+            default:
+                return calculateReactionScore(b.id) - calculateReactionScore(a.id);
         }
     });
 
@@ -335,7 +338,7 @@ function setupEventListeners() {
         if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
-            const compositeId = compositeId;
+            const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
             await updateRender();
             return;
@@ -347,7 +350,7 @@ function setupEventListeners() {
             return;
         }
 
-        // New: Click on favorite item (not on buttons) to open modal
+        // Click on favorite item (not on buttons) to open modal
         const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
@@ -402,7 +405,7 @@ function setupEventListeners() {
             return;
         }
 
-        // New: Click on card (not on buttons) to open modal
+        // Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
