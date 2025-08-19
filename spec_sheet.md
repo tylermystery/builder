@@ -1,8 +1,11 @@
 /*
- * Version: 1.8.1
- * Last Modified: 2025-08-18 05:40 PM PDT
+ * Version: 1.8.2
+ * Last Modified: 2025-08-18 06:00 PM PDT
  *
  * Changelog:
+ *
+ * v1.8.2 - 2025-08-18 06:00 PM PDT
+ * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener for dynamic file download.
  *
  * v1.8.1 - 2025-08-18 05:40 PM PDT
  * - Fixed "Download Source" button to be clickable in the summary toolbar by using an <a> tag with download attribute.
@@ -47,7 +50,7 @@
 # Feature Specification Sheet (Final Version)
 
 ## Summary of Improvements
-This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing). Event cards are clickable to open a larger detailed editable view (majority of screen, same aspect ratio as tiles) with options to modify details and save changes. A "Download Source" button is now functional on the left of the summary toolbar for easy access. A pre-MVP beta disclaimer as tooltips on autosave and session dropdown informs users of incomplete features. The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
+This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing). Event cards are clickable to open a larger detailed editable view (majority of screen, same aspect ratio as tiles) with options to modify details and save changes. A "Download Source" button is now functional on the bottom right of the summary toolbar for easy access. A pre-MVP beta disclaimer as tooltips on autosave and session dropdown informs users of incomplete features. The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
 
 ---
 
@@ -120,7 +123,7 @@ This section outlines the rules and best practices for our collaborative develop
 
 ## User Interface and Experience
 **Dynamic Header:** The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.
-**Summary Toolbar:** A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, with a functional "Download Source" button on the left, replacing in-catalog "details cards."
+**Summary Toolbar:** A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, with a "Download Source" button on the right for easy access, replacing in-catalog "details cards."
 **Undo/Redo:** Fully functional Undo and Redo buttons allow users to step through their history of changes.
 **Emoji Reactions:** Users can leave emoji reactions on any event, used to automatically sort lists.
 **Pre-MVP Disclaimer:** Tooltips on the autosave toggle and sessions dropdown note that these features are incomplete, setting expectations for the beta release.
