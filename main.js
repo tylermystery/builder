@@ -335,7 +335,7 @@ function setupEventListeners() {
         if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
-            const compositeId = EPASTE YOUR CODE HERE ompositeId);
+            const compositeId = compositeId);
             state.cart.items.delete(compositeId);
             await updateRender();
             return;
