@@ -1,8 +1,11 @@
 /*
- * Version: 1.6.2
- * Last Modified: 2025-08-18 06:15 PM PDT
+ * Version: 1.6.3
+ * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.6.3 - 2025-08-19
+ * - Exported updateRender for use in ui.js modal changes.
  *
  * v1.6.2 - 2025-08-18 06:15 PM PDT
  * - Updated "Download Source" button logic to use pre-built project_source.txt from export.js.
@@ -150,7 +153,7 @@ function checkUserProfile() {
 
 
 
-async function handleReaction(recordId, emoji) {
+export async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
     }
@@ -233,7 +236,7 @@ async function loadMoreRecords() {
 
 
 
-async function updateRender() {
+export async function updateRender() {  // Exported for ui.js
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
