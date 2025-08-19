@@ -1,8 +1,11 @@
 <!--
- * Version: 1.8.0
- * Last Modified: 2025-08-18
+ * Version: 1.8.1
+ * Last Modified: 2025-08-18 05:10 PM PDT
  *
  * Changelog:
+ *
+ * v1.8.1 - 2025-08-18 05:10 PM PDT
+ * - Moved "Download Source" button to the left of the summary toolbar as a small button.
  *
  * v1.8.0 - 2025-08-18
  * - Updated modal CSS for larger size (majority of screen) and same aspect ratio as event tiles (320:520).
@@ -470,7 +473,7 @@ transition: padding 0.3s ease-in-out;
     border-top: 1px solid #e0e0e0;
     box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
     display: flex;
-    justify-content: center;
+    justify-content: space-between; /* Changed to space-between for left-aligned download */
     align-items: center;
     padding: 10px 20px;
     gap: 20px;
@@ -480,6 +483,22 @@ transition: padding 0.3s ease-in-out;
 .toolbar-item {
     display: flex;
     flex-direction: column;
+}
+.download-item {
+    display: flex;
+    align-items: center;
+}
+.download-item button {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    background-color: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.download-item button:hover {
+    background-color: #e9ecef;
 }
 .toolbar-item label {
     font-size: 0.75em;
@@ -607,7 +626,6 @@ transition: padding 0.3s ease-in-out;
     </select>
 
     <button id="reset-filters">Reset</button>
-    <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;"><button type="button">Download Source</button></a>
 </div>
 
 <div id="catalog-container"></div>
@@ -632,6 +650,9 @@ transition: padding 0.3s ease-in-out;
 </div>
 
 <div id="summary-toolbar">
+    <div class="download-item">
+        <button type="button">Download Source</button>
+    </div>
     <div class="toolbar-item">
         <label for="summary-event-name">Event Name</label>
         <input type="text" id="summary-event-name" placeholder="Untitled Event">
