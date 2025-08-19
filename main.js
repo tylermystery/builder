@@ -1,8 +1,11 @@
 /*
- * Version: 1.6.0
- * Last Modified: 2025-08-18
+ * Version: 1.6.1
+ * Last Modified: 2025-08-18 06:00 PM PDT
  *
  * Changelog:
+ *
+ * v1.6.1 - 2025-08-18 06:00 PM PDT
+ * - Added event listener for "Download Source" button to dynamically generate and download project_source.txt.
  *
  * v1.6.0 - 2025-08-18
  * - Made event cards clickable to open detailed editable modal view.
@@ -434,6 +437,30 @@ function setupEventListeners() {
             // Reset dropdown to default after load (optional edge case handling)
             e.target.value = '';
         }
+    });
+
+    // Add listener for Download Source button
+    document.getElementById('download-source-btn').addEventListener('click', () => {
+        // Generate project source content
+        const files = {
+            'spec_sheet.md': document.querySelector('/*[id="spec_sheet.md"]')?.textContent || '/* No spec sheet found */',
+            'index.html': document.documentElement.outerHTML,
+            'main.js': document.querySelector('script[src="main.js"]')?.textContent || '/* No main.js found */',
+            'ui.js': document.querySelector('script[src="ui.js"]')?.textContent || '/* No ui.js found */',
+            'netlify.toml': document.querySelector('/*[id="netlify.toml"]')?.textContent || '/* No netlify.toml found */',
+            'package.json': document.querySelector('/*[id="package.json"]')?.textContent || '/* No package.json found */',
+            'netlify/functions/airtable.js': document.querySelector('/*[id="netlify/functions/airtable.js"]')?.textContent || '/* No airtable.js found */'
+        };
+        const content = `Project Export - ${new Date().toISOString()}\n\n${Object.entries(files).map(([filename, content]) => `============================================================\n// FILE: ${filename}\n============================================================\n${content}`).join('\n')}`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'project_source.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
 }
 
