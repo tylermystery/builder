@@ -12,7 +12,6 @@
 
 const fetch = require('node-fetch');
 
-
 exports.handler = async function (event, context) {
     // Get Airtable API configuration from environment variables
     const { AIRTABLE_PAT, AIRTABLE_BASE_ID, AIRTABLE_TABLE_ID } = process.env;
