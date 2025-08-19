@@ -7,7 +7,6 @@
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
  */
-
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
 export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
@@ -15,7 +14,6 @@ export const REACTION_SCORES = {
     '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
     '🤔': -1, '👎': -2, '🤢': -3
 };
-
 export const CONSTANTS = {
     FIELD_NAMES: {
         NAME: 'Name',
