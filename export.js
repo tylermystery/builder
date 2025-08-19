@@ -1,56 +1,36 @@
-// export.js
-// This script runs during the Netlify build process.
-// It reads all project files and creates a single text file.
-
+/*
+ * Version: 1.1.0
+ * Last Modified: 2025-08-18 06:15 PM PDT
+ *
+ * Changelog:
+ *
+ * v1.1.0 - 2025-08-18 06:15 PM PDT
+ * - Added logic to read and combine all project files into project_source.txt during build.
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
+ */
 const fs = require('fs');
 const path = require('path');
 
-// --- Configuration ---
-const filesToExport = [
-    'spec_sheet.md', // Changed from 'spec sheet'
-    'main.js',
-    'api.js',
-    'ui.js',
-    'state.js',
-    'config.js',
+const files = [
+    'spec_sheet.md',
     'index.html',
+    'main.js',
+    'ui.js',
+    'api.js',
+    'config.js',
+    'state.js',
     'netlify.toml',
     'package.json',
     'netlify/functions/airtable.js'
 ];
 
-const outputFileName = 'project_source.txt';
+const output = `Project Export - ${new Date().toISOString()}\n\n${files.map(filename => {
+    const filePath = path.join(__dirname, filename);
+    const content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : `/* File ${filename} not found */`;
+    return `============================================================\n// FILE: ${filename}\n============================================================\n${content}`;
+}).join('\n')}`;
 
-// --- Script Logic ---
-async function exportProjectFiles() {
-    let combinedContent = `Project Export - ${new Date().toISOString()}\n\n`;
-    console.log('Starting project export for Netlify build...');
-
-    for (const filePath of filesToExport) {
-        try {
-            // In the Netlify build environment, the path is relative to the repository root
-            const fullPath = path.join(__dirname, filePath);
-            const content = await fs.promises.readFile(fullPath, 'utf8');
-            
-            combinedContent += `\n\n============================================================\n`;
-            combinedContent += `// FILE: ${filePath}\n`;
-            combinedContent += `============================================================\n\n`;
-            combinedContent += content;
-            
-            console.log(`Successfully added: ${filePath}`);
-        } catch (error) {
-            combinedContent += `\n\n// ERROR: Could not read file: ${filePath}\n\n`;
-            console.error(`Error reading file ${filePath}:`, error.message);
-        }
-    }
-
-    try {
-        // The output file will be placed in the root of the deployed site
-        await fs.promises.writeFile(outputFileName, combinedContent);
-        console.log(`\n✅ Export successful! Created: ${outputFileName}`);
-    } catch (error) { // *** THE FIX IS HERE ***
-        console.error(`\n❌ Error writing to output file:`, error.message);
-    }
-}
-
-exportProjectFiles();
+fs.writeFileSync(path.join(__dirname, 'project_source.txt'), output);
+console.log('Project source exported to project_source.txt');
