@@ -1,8 +1,14 @@
 /*
- * Version: 1.8.0
- * Last Modified: 2025-08-18
+ * Version: 1.8.2
+ * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.8.2 - 2025-08-19
+ * - Made modal changes (option, quantity) auto-apply to state on change, removed save button, call updateRender to reflect in catalog/favorites.
+ *
+ * v1.8.1 - 2025-08-19
+ * - Added reactions bar and hearting functionality to detailed modal view, mirroring catalog.
  *
  * v1.8.0 - 2025-08-18
  * - Enhanced `openDetailModal` to include full description, editable options/quantity, and save button to apply changes to state/cart.
@@ -46,7 +52,7 @@
 import { state } from './state.js';
 import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { calculateReactionScore, getRecordPrice } from './main.js';
+import { calculateReactionScore, getRecordPrice, updateRender, recordStateForUndo, handleReaction } from './main.js';
 
 
 
@@ -539,7 +545,7 @@ export async function openDetailModal(compositeId, imageCache) {
         optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == selectedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div><button id="modal-save" class="modal-save-btn">Save</button></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}</div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;  // Removed save button
     
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(record.id)) {
@@ -578,46 +584,78 @@ export async function openDetailModal(compositeId, imageCache) {
         rightArrow.style.display = 'none';
     }
 
-    // Make options and quantity editable, save changes
+    // Add reaction listeners in modal
+    modalBody.querySelectorAll('.reaction-bar button').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await handleReaction(btn.dataset.recordId, btn.dataset.emoji);
+            // Update reactions summary in modal
+            modalBody.querySelector('.reactions-summary').innerHTML = renderReactionsSummary(record.id);
+            // Reflect in catalog/favorites
+            await updateRender();
+        });
+    });
+
+    // Hearting in modal
+    const modalHeart = modalBody.querySelector('.heart-icon');
+    modalHeart.addEventListener('click', (e) => {
+        e.stopPropagation();
+        recordStateForUndo();
+        const currentCompositeId = modalHeart.dataset.compositeId;
+        if (state.cart.items.has(currentCompositeId)) {
+            state.cart.items.delete(currentCompositeId);
+            modalHeart.classList.remove('hearted');
+        } else {
+            state.cart.items.set(currentCompositeId, itemInfo);
+            modalHeart.classList.add('hearted');
+        }
+        // Reflect changes immediately
+        updateRender();
+    });
+
+    // Auto-apply option change
     const modalOptions = modalBody.querySelector('#modal-options');
     if (modalOptions) {
         modalOptions.addEventListener('change', (e) => {
+            recordStateForUndo();
             selectedOptionIndex = e.target.value;
             updateModalPrice();
-        });
-    }
-    const modalQuantity = modalBody.querySelector('#modal-quantity');
-    const modalPlus = modalBody.querySelector('.quantity-btn.plus');
-    const modalMinus = modalBody.querySelector('.quantity-btn.minus');
-    if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; });
-    if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) modalQuantity.value = current - 1; });
-    modalQuantity.addEventListener('change', () => { const min = parseInt(modalQuantity.min); if (parseInt(modalQuantity.value) < min) modalQuantity.value = min; });
-
-    // Save button to apply changes
-    const saveBtn = modalBody.querySelector('#modal-save');
-    if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
             const newCompositeId = options.length > 0 ? `${record.id}-${selectedOptionIndex}` : record.id;
-            const newItemInfo = { quantity: parseInt(modalQuantity.value), requests: '' };
-
-            // If already in cart/locked, update it
+            const newItemInfo = { quantity: parseInt(modalBody.querySelector('#modal-quantity').value), requests: '' };
+            // Update state
             if (state.cart.items.has(compositeId)) {
-                if (compositeId !== newCompositeId) {
-                    state.cart.items.delete(compositeId);
-                }
+                state.cart.items.delete(compositeId);
                 state.cart.items.set(newCompositeId, newItemInfo);
             } else if (state.cart.lockedItems.has(compositeId)) {
-                if (compositeId !== newCompositeId) {
-                    state.cart.lockedItems.delete(compositeId);
-                }
+                state.cart.lockedItems.delete(compositeId);
                 state.cart.lockedItems.set(newCompositeId, newItemInfo);
-            } else {
-                // If not favorited, just close without saving to cart
             }
-
-            modalOverlay.style.display = 'none';
+            modalHeart.dataset.compositeId = newCompositeId; // Update heart dataset
+            // Reflect
+            updateRender();
         });
     }
+
+    // Auto-apply quantity change
+    const modalQuantity = modalBody.querySelector('#modal-quantity');
+    modalQuantity.addEventListener('change', () => {
+        recordStateForUndo();
+        const min = parseInt(modalQuantity.min);
+        if (parseInt(modalQuantity.value) < min) modalQuantity.value = min;
+        itemInfo.quantity = parseInt(modalQuantity.value);
+        // Update state if in cart
+        if (state.cart.items.has(compositeId)) {
+            state.cart.items.set(compositeId, itemInfo);
+        } else if (state.cart.lockedItems.has(compositeId)) {
+            state.cart.lockedItems.set(compositeId, itemInfo);
+        }
+        // Reflect
+        updateRender();
+    });
+    const modalPlus = modalBody.querySelector('.quantity-btn.plus');
+    const modalMinus = modalBody.querySelector('.quantity-btn.minus');
+    if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; modalQuantity.dispatchEvent(new Event('change')); });
+    if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) { modalQuantity.value = current - 1; modalQuantity.dispatchEvent(new Event('change')); } });
 
     // Close modal on overlay click or close button
     modalOverlay.addEventListener('click', (e) => {
