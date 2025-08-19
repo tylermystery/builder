@@ -276,8 +276,8 @@ function setupEventListeners() {
     });
 
     ui.catalogContainer.addEventListener('scroll', () => {
-        const { scrollLeft, scrollWidth, clientWidth } = ui.catalogContainer;
-        if (scrollLeft + clientWidth >= scrollWidth - 500) {
+        const { scrollTop, scrollHeight, clientHeight } = ui.catalogContainer;
+        if (scrollTop + clientHeight >= scrollHeight - 500) {
             loadMoreRecords();
         }
     });
@@ -444,25 +444,12 @@ function setupEventListeners() {
 
     // Add listener for Download Source button
     document.getElementById('download-source-btn').addEventListener('click', () => {
-        fetch('/project_source.txt')
-            .then(response => {
-                if (!response.ok) throw new Error('File not found');
-                return response.blob();
-            })
-            .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'project_source.txt';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            })
-            .catch(error => {
-                console.error('Download failed:', error);
-                alert('Failed to download project source. Check console for details.');
-            });
+        const link = document.createElement('a');
+        link.href = '/project_source.txt';
+        link.download = 'project_source.txt';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     });
 }
 
