@@ -1,8 +1,11 @@
 <!--
- * Version: 1.8.1
- * Last Modified: 2025-08-18 05:40 PM PDT
+ * Version: 1.8.2
+ * Last Modified: 2025-08-18 06:00 PM PDT
  *
  * Changelog:
+ *
+ * v1.8.2 - 2025-08-18 06:00 PM PDT
+ * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener for dynamic file download.
  *
  * v1.8.1 - 2025-08-18 05:40 PM PDT
  * - Fixed "Download Source" button to be clickable in the summary toolbar by using an <a> tag with download attribute.
@@ -473,7 +476,7 @@ transition: padding 0.3s ease-in-out;
     border-top: 1px solid #e0e0e0;
     box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start; /* Align items to start, right item will use flex-end */
     align-items: center;
     padding: 10px 20px;
     gap: 20px;
@@ -483,6 +486,23 @@ transition: padding 0.3s ease-in-out;
 .toolbar-item {
     display: flex;
     flex-direction: column;
+}
+.download-item {
+    margin-left: auto; /* Push to the right */
+    display: flex;
+    align-items: center;
+}
+.download-item button {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    background-color: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.download-item button:hover {
+    background-color: #e9ecef;
 }
 .toolbar-item label {
     font-size: 0.75em;
@@ -634,11 +654,6 @@ transition: padding 0.3s ease-in-out;
 </div>
 
 <div id="summary-toolbar">
-    <a href="/project_source.txt" download="project_source.txt" style="text-decoration: none;">
-        <div class="toolbar-item">
-            <button type="button">Download Source</button>
-        </div>
-    </a>
     <div class="toolbar-item">
         <label for="summary-event-name">Event Name</label>
         <input type="text" id="summary-event-name" placeholder="Untitled Event">
@@ -654,6 +669,9 @@ transition: padding 0.3s ease-in-out;
     <div class="toolbar-item">
         <label for="summary-location">Location</label>
         <input type="text" id="summary-location" placeholder="TBD">
+    </div>
+    <div class="download-item">
+        <button id="download-source-btn" type="button">Download Source</button>
     </div>
     <div class="toolbar-item total-cost-summary">
         <label>Total Cost</label>
