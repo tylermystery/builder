@@ -1,8 +1,11 @@
 /*
- * Version: 1.8.0
- * Last Modified: 2025-08-18
+ * Version: 1.8.1
+ * Last Modified: 2025-08-18 05:10 PM PDT
  *
  * Changelog:
+ *
+ * v1.8.1 - 2025-08-18 05:10 PM PDT
+ * - Moved "Download Source" button to the left of the summary toolbar as a small button.
  *
  * v1.8.0 - 2025-08-18
  * - Made event cards clickable to open a larger detailed editable modal view (majority of screen, same aspect ratio as tiles).
@@ -44,7 +47,7 @@
 # Feature Specification Sheet (Final Version)
 
 ## Summary of Improvements
-This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing). Event cards are clickable to open a larger detailed editable view (majority of screen, same aspect ratio as tiles) with options to modify details and save changes. A pre-MVP beta disclaimer as tooltips on autosave and session dropdown informs users of incomplete features. The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
+This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery. The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing). Event cards are clickable to open a larger detailed editable view (majority of screen, same aspect ratio as tiles) with options to modify details and save changes. A "Download Source" button is now located on the left of the summary toolbar for easy access. A pre-MVP beta disclaimer as tooltips on autosave and session dropdown informs users of incomplete features. The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
 
 ---
 
@@ -111,35 +114,4 @@ This section outlines the rules and best practices for our collaborative develop
 ## Collaboration and Sharing
 **User Profiles:** The application prompts new users for their name, which is stored locally and used to identify their contributions, such as emoji reactions.
 **Multi-User Collaboration:** Multiple collaborators can be added to a session, with their avatars displayed in the header.
-**Session Management:** A user's complete selection can be saved, generating a unique, shareable URL for collaboration. A dropdown menu displays previously saved sessions, and selecting one loads the session with UI updates. Autosave is not implemented, despite a UI toggle with a disclaimer tooltip.
-
----
-
-## User Interface and Experience
-**Dynamic Header:** The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.
-**Summary Toolbar:** A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, replacing in-catalog "details cards."
-**Undo/Redo:** Fully functional Undo and Redo buttons allow users to step through their history of changes.
-**Emoji Reactions:** Users can leave emoji reactions on any event, used to automatically sort lists.
-**Pre-MVP Disclaimer:** Tooltips on the autosave toggle and sessions dropdown note that these features are incomplete, setting expectations for the beta release.
-
----
-
-## Code Readiness Assessment
-The codebase has a strong, modern foundation but requires improvements in security and completion of features.
-* **State Management:** ✅ Completed
-* **Performance:** ✅ Completed (Image Caching & Targeted DOM Updates)
-* **Code Readability:** ✅ Completed (Constants)
-* **Incomplete Features:** 
-  - ❌ Autosave functionality is not implemented, despite an autosave toggle with a disclaimer tooltip.
-* **Security:** ❌ Incomplete (Hardcoded Airtable token in client-side code, bypassing serverless proxy)
-* **Remaining Area for Improvement:**
-    * **Code Modularity:** The `index.html` file contains core logic (CSS and static HTML) that should ideally be moved to `main.js` or `ui.js` for better modularity.
-    * **Security:** Implement the serverless proxy to secure Airtable API requests.
-    * **Feature Completion:** Add autosave functionality.
-
----
-
-## Future Enhancements (Scope Definition)
-**Bundle 1: Integrated Scheduling System:** Incorporate a calendar and availability system to prevent booking conflicts and assist in selecting valid dates and times based on component availability.
-**Bundle 2: Real-Time Collaboration Suite:** Enhance collaboration with presence indicators and a communication suite (text, audio, video chat) for seamless in-app planning.
-**Bundle 3: Advanced Itinerary Builder:** Develop a dynamic itinerary builder with a visual timeline and drag-and-drop functionality to assign and adjust event component timings.
+**Session Management:** A user's complete selection can be saved, generating a unique, shareable URL for collaboration. A dropdown menu displays previously saved sessions, and
