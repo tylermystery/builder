@@ -1,8 +1,11 @@
 /*
- * Version: 1.6.5
+ * Version: 1.6.6
  * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.6.6 - 2025-08-19
+ * - Exported recordStateForUndo to fix import error in ui.js.
  *
  * v1.6.5 - 2025-08-19
  * - Fixed syntax error in catalog click handler (missing template literal for composite ID).
@@ -60,7 +63,7 @@ const imageCache = new Map();
 
 
 // --- STATE & HISTORY ---
-function recordStateForUndo() {
+export function recordStateForUndo() {  // Added export
     if (state.history.isRestoring) return;
     const currentState = {
         items: new Map(state.cart.items),
