@@ -1,9 +1,12 @@
 <!--
- * Version: 1.9.0
- * Last Modified: 2025-08-18
+ * Version: 1.10.0
+ * Last Modified: 2025-08-19
  *
  * Changelog:
  *
+ * v1.10.0 - 2025-08-19
+ * - Removed modal close button; rely on overlay click for closing.
+ 
  * v1.9.0 - 2025-08-18
  * - Changed catalog to vertical scroll on desktop and mobile, with infinite load on scroll end.
  * - Updated scroll listener in main.js for vertical scrolling.
@@ -339,7 +342,7 @@ transition: padding 0.3s ease-in-out;
 .event-card-content .description { display: none; }
 .event-card-content .details { font-size: 0.9em; margin-bottom: 15px; }
 .event-card-content .options-selector { 
-    width: 100%; 
+    width: 100; 
     padding: 8px; 
     border-radius: 6px; 
     border: 1px solid #ccc; 
@@ -410,20 +413,6 @@ transition: padding 0.3s ease-in-out;
     color: white; 
     box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
     overflow: hidden; 
-}
-.modal-close { 
-    position: absolute; 
-    top: 10px; 
-    right: 10px; 
-    background: rgba(0,0,0,0.5); 
-    border: none; 
-    border-radius: 50%; 
-    width: 30px; 
-    height: 30px; 
-    color: white;
-    font-size: 1.5em; 
-    cursor: pointer; 
-    z-index: 20; 
 }
 #modal-body { 
     padding: 30px; 
@@ -639,7 +628,6 @@ transition: padding 0.3s ease-in-out;
 
 <div id="edit-modal" class="modal-overlay" style="display: none;">
     <div class="modal-content">
-        <button class="modal-close">&times;</button>
         <div id="modal-body"></div>
     </div>
 </div>
