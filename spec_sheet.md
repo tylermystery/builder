@@ -1,11 +1,11 @@
 /*
  * Version: 1.8.2
- * Last Modified: 2025-08-18 06:00 PM PDT
+ * Last Modified: 2025-08-18 06:15 PM PDT
  *
  * Changelog:
  *
- * v1.8.2 - 2025-08-18 06:00 PM PDT
- * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener for dynamic file download.
+ * v1.8.2 - 2025-08-18 06:15 PM PDT
+ * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener to fetch pre-built project_source.txt.
  *
  * v1.8.1 - 2025-08-18 05:40 PM PDT
  * - Fixed "Download Source" button to be clickable in the summary toolbar by using an <a> tag with download attribute.
