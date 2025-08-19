@@ -5,7 +5,7 @@
  * Changelog:
  *
  * v1.8.2 - 2025-08-18 06:15 PM PDT
- * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener to fetch pre-built project_source.txt.
+ * - Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener to trigger download.
  *
  * v1.8.1 - 2025-08-18 05:40 PM PDT
  * - Fixed "Download Source" button to be clickable in the summary toolbar by using an <a> tag with download attribute.
@@ -123,7 +123,7 @@ This section outlines the rules and best practices for our collaborative develop
 
 ## User Interface and Experience
 **Dynamic Header:** The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.
-**Summary Toolbar:** A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, with a "Download Source" button on the right for easy access, replacing in-catalog "details cards."
+**Summary Toolbar:** A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, with a "Download Source" button on the bottom right for easy access, replacing in-catalog "details cards."
 **Undo/Redo:** Fully functional Undo and Redo buttons allow users to step through their history of changes.
 **Emoji Reactions:** Users can leave emoji reactions on any event, used to automatically sort lists.
 **Pre-MVP Disclaimer:** Tooltips on the autosave toggle and sessions dropdown note that these features are incomplete, setting expectations for the beta release.
