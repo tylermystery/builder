@@ -1,8 +1,11 @@
 /*
- * Version: 1.5.0
- * Last Modified: 2025-08-18
+ * Version: 1.5.1
+ * Last Modified: 2025-08-19 08:02 PM PDT
  *
  * Changelog:
+ *
+ * v1.5.1 - 2025-08-19 08:02 PM PDT
+ * - Updated fetchImagesForRecord to skip Cloudinary fetch for 'default' tag and use placeholder.co for fallback images to avoid 404 errors.
  *
  * v1.5.0 - 2025-08-18
  * - Upgraded `fetchImageForRecord` to `fetchImagesForRecord` to retrieve all associated images from Cloudinary instead of a single random one.
@@ -14,10 +17,12 @@
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './main.js';
+
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -26,7 +31,7 @@ export async function loadSessionFromAirtable(sessionId) {
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         state.session.collaborators = record.fields.Collaborators ?
-        record.fields.Collaborators.split(',').map(name => name.trim()) : [];
+            record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
             const savedState = JSON.parse(sessionDataString);
@@ -42,6 +47,7 @@ export async function loadSessionFromAirtable(sessionId) {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
+
 export async function saveSessionToAirtable() {
     document.getElementById('save-status').textContent = 'Saving...';
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
@@ -73,6 +79,7 @@ export async function saveSessionToAirtable() {
         return false;
     }
 }
+
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
@@ -91,18 +98,18 @@ export async function fetchAllRecords() {
         throw error;
     }
 }
+
 export async function fetchImagesForRecord(record, imageCache) {
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
+    const ultimateFallbackUrl = `https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Event')}`;
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
     }
     const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-    const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default';
-    if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here') {
-        const placeholderUrls = [`https://placehold.co/600x400/007aff/FFFFFF?text=${encodeURIComponent(record.fields[CONSTANTS.FIELD_NAMES.NAME])}`];
-        imageCache.set(cacheKey, placeholderUrls);
-        return placeholderUrls;
+    const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : null;
+    if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === 'Your_Cloud_Name_Here' || !primaryTag) {
+        imageCache.set(cacheKey, [ultimateFallbackUrl]);
+        return [ultimateFallbackUrl];
     }
     const encodedTag = encodeURIComponent(primaryTag);
     const cloudinaryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/list/${encodedTag}.json`;
