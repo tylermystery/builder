@@ -1,8 +1,13 @@
 /*
- * Version: 1.5.0
- * Last Modified: 2025-08-18
+ * Version: 1.6.0
+ * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.6.0 - 2025-08-19
+ * - Implemented serverless proxy for all Airtable API calls to secure the API token.
+ * - Removed hardcoded PERSONAL_ACCESS_TOKEN.
+ * - Updated all fetch URLs to point to the /.netlify/functions/airtable endpoint.
  *
  * v1.5.0 - 2025-08-18
  * - Upgraded `fetchImageForRecord` to `fetchImagesForRecord` to retrieve all associated images from Cloudinary instead of a single random one.
@@ -14,19 +19,20 @@
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './main.js';
-const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
+
+const PROXY_PATH = '/.netlify/functions/airtable';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `${PROXY_PATH}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         state.session.collaborators = record.fields.Collaborators ?
-        record.fields.Collaborators.split(',').map(name => name.trim()) : [];
+ record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
             const savedState = JSON.parse(sessionDataString);
@@ -42,18 +48,21 @@ export async function loadSessionFromAirtable(sessionId) {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
+
 export async function saveSessionToAirtable() {
     document.getElementById('save-status').textContent = 'Saving...';
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
-    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } };
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) ||
+ `Session from ${new Date().toLocaleString()}`;
+    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
+ null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } };
     const isUpdate = state.session.id !== null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const url = `${PROXY_PATH}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         if (!response.ok) {
@@ -73,13 +82,14 @@ export async function saveSessionToAirtable() {
         return false;
     }
 }
+
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    const base_url = `${PROXY_PATH}/${TABLE_ID}?`;
     try {
         do {
-            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            const response = await fetch(offset ? `${base_url}&offset=${offset}` : base_url);
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
             const data = await response.json();
             records = records.concat(data.records);
@@ -91,6 +101,7 @@ export async function fetchAllRecords() {
         throw error;
     }
 }
+
 export async function fetchImagesForRecord(record, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
     const cacheKey = record.id;
