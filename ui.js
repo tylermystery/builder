@@ -1,8 +1,11 @@
 /*
- * Version: 1.8.2
+ * Version: 1.8.3
  * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.8.3 - 2025-08-19
+ * - Removed disclaimer tooltips from autosave-toggle and sessions-dropdown as features are now complete.
  *
  * v1.8.2 - 2025-08-19
  * - Made modal changes (option, quantity) auto-apply to state on change, removed save button, call updateRender to reflect in catalog/favorites.
@@ -436,8 +439,6 @@ export function populateSessionsDropdown(getStoredSessions) {
         }
         sessionsDropdown.appendChild(option);
     });
-    sessionsDropdown.title = 'Pre-MVP Beta: This feature is incomplete and may not function as expected.';
-    document.getElementById('autosave-toggle').title = 'Pre-MVP Beta: This feature is incomplete and may not function as expected.';
 }
 
 export function updateSummaryToolbar() {
