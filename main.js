@@ -1,8 +1,11 @@
 /*
- * Version: 1.7.0
+ * Version: 1.7.1
  * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.7.1 - 2025-08-19
+ * - Added user feedback to copy link button (changes to "Copied!" temporarily).
  *
  * v1.7.0 - 2025-08-19
  * - Implemented autosave functionality with 30-second interval when toggle is enabled.
@@ -58,9 +61,6 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-
-
-
 const imageCache = new Map();
 
 
@@ -113,7 +113,8 @@ function redo() {
 
 
 // --- CORE LOGIC ---
-function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
+function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase();
+}
 
 
 
@@ -131,7 +132,8 @@ export function getRecordPrice(record, optionIndex = null) {
         const variation = options[optionIndex];
         if (variation) {
             if (variation.absolutePrice !== null) {
-                return variation.absolutePrice; // Return absolute price directly
+                return variation.absolutePrice;
+ // Return absolute price directly
             }
             if (variation.priceChange !== null) {
                 price += variation.priceChange;
@@ -182,7 +184,8 @@ export async function handleReaction(recordId, emoji) {
 
 
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
-export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
+export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name;
+localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
 
 
 
@@ -195,23 +198,23 @@ async function applyFilters() {
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
     state.ui.currentSort = ui.sortBy.value;
-
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
             const price = getRecordPrice(record);
             if (price === null) return false;
             switch (priceValue) {
+                
                 case '0-50': return price < 50;
                 case '50-100': return price >= 50 && price <= 100;
                 case '100-250': return price > 100 && price <= 250;
                 case '250-plus': return price > 250;
                 default: return true;
-            }
+      
+           }
         })();
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
-        
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
@@ -222,13 +225,13 @@ async function applyFilters() {
             case 'price-desc':
                 return getRecordPrice(b) - getRecordPrice(a);
             case 'name-asc':
+ 
                 return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
             case 'reactions-desc':
                 default:
                     return calculateReactionScore(b.id) - calculateReactionScore(a.id);
         }
     });
-
     loadMoreRecords();
 }
 
@@ -266,7 +269,6 @@ function setupEventListeners() {
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
     });
-
     document.getElementById('reset-filters').addEventListener('click', () => {
         ui.nameFilter.value = '';
         ui.priceFilter.value = 'all';
@@ -275,7 +277,6 @@ function setupEventListeners() {
         ui.sortBy.value = 'reactions-desc';
         applyFilters();
     });
-
     document.getElementById('add-collaborator-btn').addEventListener('click', () => {
         const newName = prompt("Enter collaborator's name:");
         if (newName && !state.session.collaborators.includes(newName)) {
@@ -283,21 +284,18 @@ function setupEventListeners() {
             ui.renderCollaborators(getInitials);
         }
     });
-
     ui.catalogContainer.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
             ui.catalogContainer.scrollLeft += e.deltaY;
         }
     });
-
     ui.catalogContainer.addEventListener('scroll', () => {
         const { scrollTop, scrollHeight, clientHeight } = ui.catalogContainer;
         if (scrollTop + clientHeight >= scrollHeight - 500) {
             loadMoreRecords();
         }
     });
-
     document.body.addEventListener('click', async (e) => {
         const reactionBtn = e.target.closest('.reaction-bar button');
         if (reactionBtn) {
@@ -305,7 +303,6 @@ function setupEventListeners() {
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
-
     ui.favoritesCarousel.addEventListener('click', async (e) => {
         const promoteBtn = e.target.closest('.promote-btn');
         if (promoteBtn) {
@@ -314,7 +311,8 @@ function setupEventListeners() {
             const compositeId = promoteBtn.dataset.compositeId;
             const itemData = state.cart.items.get(compositeId);
             if (itemData) {
-                state.cart.lockedItems.set(compositeId, itemData);
+       
+                 state.cart.lockedItems.set(compositeId, itemData);
                 state.cart.items.delete(compositeId);
                 await updateRender();
             }
@@ -322,7 +320,8 @@ function setupEventListeners() {
         }
         const demoteBtn = e.target.closest('.demote-btn');
         if (demoteBtn) {
-            e.stopPropagation();
+    
+             e.stopPropagation();
             recordStateForUndo();
             const compositeId = demoteBtn.dataset.compositeId;
             const itemData = state.cart.lockedItems.get(compositeId);
@@ -365,13 +364,15 @@ function setupEventListeners() {
             
             const card = heart.closest('.event-card');
             const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
+  
+               const record = state.records.all.find(r => r.id === recordId);
             const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             
             const compositeId = heart.dataset.compositeId;
             if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
                 return;
-            }
+         
+           }
 
             const quantity = card.querySelector('.quantity-input').value;
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
@@ -420,17 +421,18 @@ function setupEventListeners() {
             let detailType;
             switch (e.target.id) {
                 case 'summary-event-name': detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME; break;
-                case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
+            
+                 case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
                 case 'summary-headcount': detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT; ui.guestCountInput.value = value; ui.guestCountInput.dispatchEvent(new Event('input')); break;
                 case 'summary-location': detailType = CONSTANTS.DETAIL_TYPES.LOCATION; break;
             }
             if (detailType) {
                 state.eventDetails.combined.set(detailType, value);
-                ui.updateHeader();
+ 
+                               ui.updateHeader();
             }
         });
     });
-    
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -439,12 +441,24 @@ function setupEventListeners() {
             shareLinkContainer.style.display = 'inline-flex';
             document.getElementById('share-link').value = window.location.href;
             ui.populateSessionsDropdown(getStoredSessions);
-        }
+     
+           }
         setTimeout(() => {
             if (document.getElementById('save-status').textContent !== 'Saving...') {
                 document.getElementById('save-status').textContent = '';
             }
         }, 3000);
+    });
+
+    document.getElementById('copy-link-btn').addEventListener('click', (e) => {
+        const copyBtn = e.target;
+        const shareLinkInput = document.getElementById('share-link');
+        shareLinkInput.select();
+        document.execCommand('copy');
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => {
+            copyBtn.textContent = 'Copy';
+        }, 2000);
     });
 
     // Add listener for sessions dropdown to load selected session
@@ -454,19 +468,23 @@ function setupEventListeners() {
             await api.loadSessionFromAirtable(selectedId);
             await updateRender();
             // Reset dropdown to default after load (optional edge case handling)
-            e.target.value = '';
+            e.target.value = 
+'';
         }
     });
-
     // Add listener for Download Source button
-    document.getElementById('download-source-btn').addEventListener('click', () => {
-        const link = document.createElement('a');
-        link.href = '/project_source.txt';
-        link.download = 'project_source.txt';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    });
+    // This assumes a button with id="download-source-btn" exists in the HTML
+    const downloadBtn = document.getElementById('download-source-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = '/project_source.txt';
+            link.download = 'project_source.txt';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    }
 
     // Autosave setup
     const autosaveToggle = document.getElementById('autosave-toggle');
@@ -477,9 +495,11 @@ function setupEventListeners() {
                 const success = await api.saveSessionToAirtable();
                 if (success) {
                     document.getElementById('save-status').textContent = 'Autosaved!';
-                    setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000);
+           
+                     setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000);
                 }
-            }, 30000); // 30 seconds
+            }, 30000);
+// 30 seconds
         }
     }
     autosaveToggle.addEventListener('change', () => {
@@ -500,13 +520,14 @@ async function initialize() {
     ui.toggleLoading(true);
     console.log('Loading toggled on');
     try {
-        console.log('Fetching records from Airtable...');
+        console.log('Fetching records via proxy...');
         state.records.all = await api.fetchAllRecords();
         console.log('Records fetched:', state.records.all.length);
     } catch (error) {
         console.error("Failed to load records:", error);
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
-        ui.toggleLoading(false); // Ensure loading is toggled off
+        ui.toggleLoading(false);
+        // Ensure loading is toggled off
         return;
     }
     
