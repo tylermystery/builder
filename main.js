@@ -1,8 +1,11 @@
 /*
- * Version: 1.6.6
+ * Version: 1.7.0
  * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.7.0 - 2025-08-19
+ * - Implemented autosave functionality with 30-second interval when toggle is enabled.
  *
  * v1.6.6 - 2025-08-19
  * - Exported recordStateForUndo to fix import error in ui.js.
@@ -464,6 +467,29 @@ function setupEventListeners() {
         link.click();
         document.body.removeChild(link);
     });
+
+    // Autosave setup
+    const autosaveToggle = document.getElementById('autosave-toggle');
+    let autosaveInterval;
+    function setupAutosave() {
+        if (autosaveToggle.checked) {
+            autosaveInterval = setInterval(async () => {
+                const success = await api.saveSessionToAirtable();
+                if (success) {
+                    document.getElementById('save-status').textContent = 'Autosaved!';
+                    setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000);
+                }
+            }, 30000); // 30 seconds
+        }
+    }
+    autosaveToggle.addEventListener('change', () => {
+        if (autosaveToggle.checked) {
+            setupAutosave();
+        } else {
+            clearInterval(autosaveInterval);
+        }
+    });
+    setupAutosave(); // Initial setup if checked by default
 }
 
 
