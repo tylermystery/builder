@@ -5,6 +5,6 @@
 #
 # v1.0.0 - 2025-08-17
 #   - Initial versioning and changelog added.
-[cite_start][build] [cite: 413]
+[build]
   functions = "netlify/functions"
   command = "npm run build"
