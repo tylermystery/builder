@@ -1,19 +1,8 @@
 /*
- * Version: 1.7.2
- * Last Modified: 2025-08-19 08:02 PM PDT
+ * Version: 1.6.6
+ * Last Modified: 2025-08-19
  *
  * Changelog:
- *
- * v1.7.2 - 2025-08-19 08:02 PM PDT
- * - Fixed syntax error in favorites carousel removeBtn handler (corrected compositeId assignment).
- *
- * v1.7.1 - 2025-08-19
- * - Added null checks for undo-btn and redo-btn to prevent TypeError.
- * - Kept removal of wheel event listener to allow native vertical scrolling.
- *
- * v1.7.0 - 2025-08-19
- * - Implemented dynamic initial load for catalog to fill visible screen + one extra row.
- * - Removed wheel event listener to fix mouse scrolling in vertical catalog layout.
  *
  * v1.6.6 - 2025-08-19
  * - Exported recordStateForUndo to fix import error in ui.js.
@@ -74,7 +63,7 @@ const imageCache = new Map();
 
 
 // --- STATE & HISTORY ---
-export function recordStateForUndo() {
+export function recordStateForUndo() {  // Added export
     if (state.history.isRestoring) return;
     const currentState = {
         items: new Map(state.cart.items),
@@ -148,6 +137,8 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return price;
 }
+
+
 
 
 
@@ -230,8 +221,8 @@ async function applyFilters() {
             case 'name-asc':
                 return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
             case 'reactions-desc':
-            default:
-                return calculateReactionScore(b.id) - calculateReactionScore(a.id);
+                default:
+                    return calculateReactionScore(b.id) - calculateReactionScore(a.id);
         }
     });
 
@@ -265,10 +256,8 @@ export async function updateRender() { // Exported for ui.js
 
 
 function setupEventListeners() {
-    const undoBtn = document.getElementById('undo-btn');
-    const redoBtn = document.getElementById('redo-btn');
-    if (undoBtn) undoBtn.addEventListener('click', undo);
-    if (redoBtn) redoBtn.addEventListener('click', redo);
+    document.getElementById('undo-btn').addEventListener('click', undo);
+    document.getElementById('redo-btn').addEventListener('click', redo);
 
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
@@ -289,6 +278,13 @@ function setupEventListeners() {
         if (newName && !state.session.collaborators.includes(newName)) {
             state.session.collaborators.push(newName);
             ui.renderCollaborators(getInitials);
+        }
+    });
+
+    ui.catalogContainer.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+            e.preventDefault();
+            ui.catalogContainer.scrollLeft += e.deltaY;
         }
     });
 
@@ -338,7 +334,7 @@ function setupEventListeners() {
         if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
-            const compositeId = removeBtn.dataset.compositeId; // Fixed from compositeId = compositeId
+            const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
             await updateRender();
             return;
@@ -350,7 +346,7 @@ function setupEventListeners() {
             return;
         }
 
-        // Click on favorite item (not on buttons) to open modal
+        // New: Click on favorite item (not on buttons) to open modal
         const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
@@ -405,7 +401,7 @@ function setupEventListeners() {
             return;
         }
 
-        // Click on card (not on buttons) to open modal
+        // New: Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
@@ -514,19 +510,6 @@ async function initialize() {
     setupEventListeners();
     console.log('Updating render...');
     await updateRender();
-    
-    // Calculate initial load to fill screen + extra row
-    const cardHeightWithGap = 520 + 25; // Card height + grid gap
-    const visibleHeight = ui.catalogContainer.clientHeight;
-    const numColumnsApprox = Math.floor(ui.catalogContainer.clientWidth / 320); // Approx cards per row
-    const visibleRows = Math.ceil(visibleHeight / cardHeightWithGap);
-    const initialNeeded = numColumnsApprox * (visibleRows + 1); // Visible + extra row
-
-    // Load more until initial needed is met
-    while (state.ui.recordsCurrentlyDisplayed < initialNeeded && state.ui.recordsCurrentlyDisplayed < state.records.filtered.length) {
-        await loadMoreRecords();
-    }
-
     console.log('Initialize complete');
 }
 
