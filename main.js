@@ -1,10 +1,10 @@
 /*
  * Version: 1.7.2
- * Last Modified: 2025-08-19
+ * Last Modified: 2025-08-19 08:02 PM PDT
  *
  * Changelog:
  *
- * v1.7.2 - 2025-08-19
+ * v1.7.2 - 2025-08-19 08:02 PM PDT
  * - Fixed syntax error in favorites carousel removeBtn handler (corrected compositeId assignment).
  *
  * v1.7.1 - 2025-08-19
@@ -215,8 +215,8 @@ async function applyFilters() {
                 default: return true;
             }
         })();
-        const durationMatch = (durationValue === 'all') || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
-        const statusMatch = (statusValue === 'all') || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
+        const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
+        const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
         
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
@@ -338,7 +338,7 @@ function setupEventListeners() {
         if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
-            const compositeId = removeBtn.dataset.compositeId;
+            const compositeId = removeBtn.dataset.compositeId; // Fixed from compositeId = compositeId
             state.cart.items.delete(compositeId);
             await updateRender();
             return;
