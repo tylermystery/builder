@@ -1,8 +1,11 @@
 /*
- * Version: 1.9.0
+ * Version: 1.9.1
  * Last Modified: 2025-08-20
  *
  * Changelog:
+ *
+ * v1.9.1 - 2025-08-20
+ * - Fixed syntax error in updateTotalCost function.
  *
  * v1.9.0 - 2025-08-20
  * - Added `updateHeaderSummary` function to display selection count and total cost in the new collapsed header state.
@@ -498,8 +501,7 @@ export function updateTotalCost() {
         } else if (pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity; // Multiply by guests
         } else {
-            itemCost = unitPrice; // 
-            Flat price
+            itemCost = unitPrice; // Flat price
         }
 
         total += itemCost;
