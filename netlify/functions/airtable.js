@@ -1,8 +1,11 @@
 /*
- * Version: 1.0.0
- * Last Modified: 2025-08-17
+ * Version: 1.0.1
+ * Last Modified: 2025-08-19
  *
  * Changelog:
+ *
+ * v1.0.1 - 2025-08-19
+ * - Fixed a critical syntax error (extra closing brace) that caused a 500 internal server error.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
@@ -15,7 +18,6 @@ const fetch = require('node-fetch');
 exports.handler = async function (event, context) {
     // Get Airtable API configuration from environment variables
     const { AIRTABLE_PAT, AIRTABLE_BASE_ID, AIRTABLE_TABLE_ID } = process.env;
-    
     // Determine the Airtable API endpoint from the request path
     const path = event.path.replace('/.netlify/functions/airtable', '');
     const apiURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}${path}`;
@@ -31,7 +33,6 @@ exports.handler = async function (event, context) {
         });
 
         const data = await response.json();
-
         return {
             statusCode: response.status,
             body: JSON.stringify(data),
