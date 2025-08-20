@@ -8,48 +8,48 @@
  * - Activated scroll listener to enable dynamic header collapsing for improved UI.
  *
  * v1.7.0 - 2025-08-19
- * - [cite_start]Implemented autosave functionality with 30-second interval when toggle is enabled. [cite: 95]
+ * - Implemented autosave functionality with 30-second interval when toggle is enabled.
  *
  * v1.6.6 - 2025-08-19
- * - [cite_start]Exported recordStateForUndo to fix import error in ui.js. [cite: 96]
+ * - Exported recordStateForUndo to fix import error in ui.js.
  *
  * v1.6.5 - 2025-08-19
- * - [cite_start]Fixed syntax error in catalog click handler (missing template literal for composite ID). [cite: 97]
+ * - Fixed syntax error in catalog click handler (missing template literal for composite ID).
  *
  * v1.6.4 - 2025-08-19
- * - [cite_start]Added debug logs to initialize function to diagnose "Catalog loading" issue. [cite: 98]
- * - [cite_start]Improved error handling to ensure loading message updates on failure. [cite: 99]
+ * - Added debug logs to initialize function to diagnose "Catalog loading" issue.
+ * - Improved error handling to ensure loading message updates on failure.
  *
  * v1.6.3 - 2025-08-19
- * - [cite_start]Exported updateRender for use in ui.js modal changes. [cite: 100]
+ * - Exported updateRender for use in ui.js modal changes.
  *
  * v1.6.2 - 2025-08-18 06:15 PM PDT
- * - [cite_start]Updated "Download Source" button logic to use pre-built project_source.txt from export.js. [cite: 101]
+ * - Updated "Download Source" button logic to use pre-built project_source.txt from export.js.
  *
  * v1.6.1 - 2025-08-18 06:00 PM PDT
- * - [cite_start]Added event listener for "Download Source" button to dynamically generate and download project_source.txt. [cite: 102]
+ * - Added event listener for "Download Source" button to dynamically generate and download project_source.txt.
  *
  * v1.6.0 - 2025-08-18
- * - [cite_start]Made event cards clickable to open detailed editable modal view. [cite: 103]
- * - [cite_start]Added save button in modal to apply edits to state/cart. [cite: 104]
+ * - Made event cards clickable to open detailed editable modal view.
+ * - Added save button in modal to apply edits to state/cart.
  *
  * v1.5.0 - 2025-08-18
- * - [cite_start]Added event listener to sessions-dropdown for loading selected sessions. [cite: 105]
+ * - Added event listener to sessions-dropdown for loading selected sessions.
  *
  * v1.4.0 - 2025-08-18
- * - [cite_start]Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations. [cite: 106]
+ * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations.
  *
  * v1.3.0 - 2025-08-18
- * - [cite_start]Implemented logic to remove event cards from the catalog only after all their variations have been favorited. [cite: 107]
- * - [cite_start]Event cards now auto-select the next available variation after one is favorited. [cite: 108]
+ * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
+ * - Event cards now auto-select the next available variation after one is favorited.
  *
  * v1.2.1 - 2025-08-17
- * - [cite_start]Fixed a critical HTML structure error in index.html. [cite: 109]
+ * - Fixed a critical HTML structure error in index.html.
  *
  * v1.2.0 - 2025-08-17
- * - [cite_start]Fixed broken filters by adding event listeners. [cite: 110]
- * - [cite_start]Implemented a unified sorting system controlled by a new dropdown. [cite: 111]
- * - [cite_start]Refactored `applyFilters` to handle both filtering and sorting. [cite: 112]
+ * - Fixed broken filters by adding event listeners.
+ * - Implemented a unified sorting system controlled by a new dropdown.
+ * - Refactored `applyFilters` to handle both filtering and sorting.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
@@ -58,10 +58,10 @@
 
 
 import { state } from './state.js';
-[cite_start]import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js'; [cite: 113]
+import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-[cite_start]const imageCache = new Map(); [cite: 114]
+const imageCache = new Map();
 
 
 
@@ -72,8 +72,8 @@ export function recordStateForUndo() {  // Added export
         items: new Map(state.cart.items),
         lockedItems: new Map(state.cart.lockedItems),
         combined: new Map(state.eventDetails.combined)
-    [cite_start]}; [cite: 115]
-    [cite_start]state.history.undoStack.push(currentState); [cite: 116]
+    };
+    state.history.undoStack.push(currentState);
     state.history.redoStack = [];
     ui.updateHistoryButtons();
 }
@@ -83,10 +83,10 @@ export function recordStateForUndo() {  // Added export
 async function restoreState(newState) {
     state.history.isRestoring = true;
     state.cart.items = newState.items;
-    [cite_start]state.cart.lockedItems = newState.lockedItems; [cite: 117]
+    state.cart.lockedItems = newState.lockedItems;
     state.eventDetails.combined = newState.combined;
     state.history.isRestoring = false;
-    [cite_start]await updateRender(); [cite: 118]
+    await updateRender();
 }
 
 
@@ -94,7 +94,7 @@ async function restoreState(newState) {
 function undo() {
     if (state.history.undoStack.length > 1) {
         const currentState = state.history.undoStack.pop();
-        [cite_start]state.history.redoStack.push(currentState); [cite: 119]
+        state.history.redoStack.push(currentState);
         const prevState = state.history.undoStack[state.history.undoStack.length - 1];
         restoreState(prevState);
     }
@@ -105,7 +105,7 @@ function undo() {
 function redo() {
     if (state.history.redoStack.length > 0) {
         const nextState = state.history.redoStack.pop();
-        [cite_start]state.history.undoStack.push(nextState); [cite: 120]
+        state.history.undoStack.push(nextState);
         restoreState(nextState);
     }
 }
@@ -114,33 +114,33 @@ function redo() {
 
 // --- CORE LOGIC ---
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase();
-[cite_start]} [cite: 121]
+}
 
 
 
 export function calculateReactionScore(recordId) {
-    const reactions = state.session.reactions.get(recordId) || [cite_start]{}; [cite: 122]
-    [cite_start]return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0); [cite: 123]
+    const reactions = state.session.reactions.get(recordId) || {};
+    return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
 
 
 
 export function getRecordPrice(record, optionIndex = null) {
-    [cite_start]let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0; [cite: 124]
+    let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
     if (optionIndex !== null) {
         const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
-        [cite_start]if (variation) { [cite: 125]
+        if (variation) {
             if (variation.absolutePrice !== null) {
-                [cite_start]return variation.absolutePrice; [cite: 126]
+                return variation.absolutePrice;
 // Return absolute price directly
             }
             if (variation.priceChange !== null) {
-                [cite_start]price += variation.priceChange; [cite: 127]
+                price += variation.priceChange;
             }
         }
     }
-    [cite_start]return price; [cite: 128]
+    return price;
 }
 
 
@@ -151,16 +151,16 @@ function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
     if (!state.session.user) {
         state.session.user = prompt("Welcome! Please enter your name to collaborate:", "");
-        [cite_start]if (state.session.user) { [cite: 129]
+        if (state.session.user) {
             localStorage.setItem('userName', state.session.user);
-            [cite_start]if (!state.session.collaborators.includes(state.session.user)) state.session.collaborators.push(state.session.user); [cite: 130]
+            if (!state.session.collaborators.includes(state.session.user)) state.session.collaborators.push(state.session.user);
         } else {
             state.session.user = 'Guest';
-            [cite_start]if (!state.session.collaborators.includes('Guest')) state.session.collaborators.push('Guest'); [cite: 131]
+            if (!state.session.collaborators.includes('Guest')) state.session.collaborators.push('Guest');
         }
     } else {
         if (!state.session.collaborators.includes(state.session.user)) {
-            [cite_start]state.session.collaborators.push(state.session.user); [cite: 132]
+            state.session.collaborators.push(state.session.user);
         }
     }
     ui.renderCollaborators(getInitials);
@@ -170,22 +170,22 @@ function checkUserProfile() {
 
 export async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
-        [cite_start]state.session.reactions.set(recordId, {}); [cite: 133]
+        state.session.reactions.set(recordId, {});
     }
     const reactions = state.session.reactions.get(recordId);
     if (reactions[state.session.user] === emoji) {
-        [cite_start]delete reactions[state.session.user]; [cite: 134]
+        delete reactions[state.session.user];
     } else {
         reactions[state.session.user] = emoji;
     }
-    [cite_start]await updateRender(); [cite: 135]
+    await updateRender();
 }
 
 
 
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name;
-localStorage.setItem('savedSessions', JSON.stringify(sessions)); [cite_start]} [cite: 136]
+localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
 
 
 
@@ -194,28 +194,28 @@ async function applyFilters() {
     ui.catalogContainer.innerHTML = '';
 
     const nameValue = ui.nameFilter.value.toLowerCase();
-    [cite_start]const priceValue = ui.priceFilter.value; [cite: 137]
+    const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
     state.ui.currentSort = ui.sortBy.value;
-    [cite_start]state.records.filtered = state.records.all.filter(record => { [cite: 138]
+    state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
             const price = getRecordPrice(record);
             if (price === null) return false;
             switch (priceValue) {
                 
-                [cite_start]case '0-50': return price < 50; [cite: 139]
+                case '0-50': return price < 50;
                 case '50-100': return price >= 50 && price <= 100;
                 case '100-250': return price > 100 && price <= 250;
                 case '250-plus': return price > 250;
                 default: return true;
       
-            [cite_start]} [cite: 140]
+            }
         })();
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
-        [cite_start]return nameMatch && priceMatch && durationMatch && statusMatch; [cite: 141]
+        return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
     state.records.filtered.sort((a, b) => {
@@ -226,28 +226,28 @@ async function applyFilters() {
                 return getRecordPrice(b) - getRecordPrice(a);
             case 'name-asc':
  
-                [cite_start]return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || ''); [cite: 142]
+                return (a.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(b.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
             case 'reactions-desc':
                 default:
                     return calculateReactionScore(b.id) - calculateReactionScore(a.id);
         }
     });
-    [cite_start]loadMoreRecords(); [cite: 143]
+    loadMoreRecords();
 }
 
 
 
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
-        [cite_start]return; [cite: 144]
+        return;
     }
     state.ui.isLoadingMore = true;
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
-    [cite_start]const recordsToLoad = state.records.filtered.slice(start, end); [cite: 145]
+    const recordsToLoad = state.records.filtered.slice(start, end);
     await ui.renderRecords(recordsToLoad, imageCache);
     state.ui.recordsCurrentlyDisplayed = end;
-    [cite_start]state.ui.isLoadingMore = false; [cite: 146]
+    state.ui.isLoadingMore = false;
 }
 
 
@@ -256,7 +256,7 @@ export async function updateRender() { // Exported for ui.js
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
-    [cite_start]ui.updateSummaryToolbar(); [cite: 147]
+    ui.updateSummaryToolbar();
 }
 
 
@@ -266,10 +266,10 @@ function setupEventListeners() {
     document.getElementById('redo-btn').addEventListener('click', redo);
 
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
-    [cite_start]filterInputs.forEach(input => { [cite: 148]
+    filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
     });
-    [cite_start]document.getElementById('reset-filters').addEventListener('click', () => { [cite: 149]
+    document.getElementById('reset-filters').addEventListener('click', () => {
         ui.nameFilter.value = '';
         ui.priceFilter.value = 'all';
         ui.durationFilter.value = 'all';
@@ -277,33 +277,33 @@ function setupEventListeners() {
         ui.sortBy.value = 'reactions-desc';
         applyFilters();
     });
-    [cite_start]document.getElementById('add-collaborator-btn').addEventListener('click', () => { [cite: 150]
+    document.getElementById('add-collaborator-btn').addEventListener('click', () => {
         const newName = prompt("Enter collaborator's name:");
         if (newName && !state.session.collaborators.includes(newName)) {
             state.session.collaborators.push(newName);
             ui.renderCollaborators(getInitials);
         }
     });
-    [cite_start]ui.catalogContainer.addEventListener('wheel', (e) => { [cite: 151]
+    ui.catalogContainer.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
             ui.catalogContainer.scrollLeft += e.deltaY;
         }
     });
-    [cite_start]ui.catalogContainer.addEventListener('scroll', () => { [cite: 152]
+    ui.catalogContainer.addEventListener('scroll', () => {
         const { scrollTop, scrollHeight, clientHeight } = ui.catalogContainer;
         if (scrollTop + clientHeight >= scrollHeight - 500) {
             loadMoreRecords();
         }
     });
-    [cite_start]document.body.addEventListener('click', async (e) => { [cite: 153]
+    document.body.addEventListener('click', async (e) => {
         const reactionBtn = e.target.closest('.reaction-bar button');
         if (reactionBtn) {
             e.stopPropagation();
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
-    [cite_start]ui.favoritesCarousel.addEventListener('click', async (e) => { [cite: 154]
+    ui.favoritesCarousel.addEventListener('click', async (e) => {
         const promoteBtn = e.target.closest('.promote-btn');
         if (promoteBtn) {
             e.stopPropagation();
@@ -312,7 +312,7 @@ function setupEventListeners() {
             const itemData = state.cart.items.get(compositeId);
             if (itemData) {
        
-                [cite_start]state.cart.lockedItems.set(compositeId, itemData); [cite: 155]
+                state.cart.lockedItems.set(compositeId, itemData);
                 state.cart.items.delete(compositeId);
                 await updateRender();
             }
@@ -321,38 +321,38 @@ function setupEventListeners() {
         const demoteBtn = e.target.closest('.demote-btn');
         if (demoteBtn) {
     
-            [cite_start]e.stopPropagation(); [cite: 156]
+            e.stopPropagation();
             recordStateForUndo();
             const compositeId = demoteBtn.dataset.compositeId;
             const itemData = state.cart.lockedItems.get(compositeId);
             if (itemData) {
                 state.cart.items.set(compositeId, itemData);
                 state.cart.lockedItems.delete(compositeId);
-                [cite_start]await updateRender(); [cite: 157]
+                await updateRender();
             }
             return;
-        [cite_start]} [cite: 158]
+        }
         const removeBtn = e.target.closest('.remove-btn');
-        [cite_start]if (removeBtn) { [cite: 159]
+        if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
-            [cite_start]state.cart.items.delete(compositeId); [cite: 160]
+            state.cart.items.delete(compositeId);
             await updateRender();
             return;
         }
         const editBtn = e.target.closest('.edit-card-btn');
-        [cite_start]if (editBtn) { [cite: 161]
+        if (editBtn) {
             e.stopPropagation();
             await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
-            [cite_start]return; [cite: 162]
+            return;
         }
 
         // New: Click on favorite item (not on buttons) to open modal
         const favoriteItem = e.target.closest('.favorite-item');
-        [cite_start]if (favoriteItem) { [cite: 163]
+        if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
-            [cite_start]await ui.openDetailModal(compositeId, imageCache); [cite: 164]
+            await ui.openDetailModal(compositeId, imageCache);
         }
     });
 
@@ -365,14 +365,14 @@ function setupEventListeners() {
             const card = heart.closest('.event-card');
             const recordId = card.dataset.recordId;
   
-            [cite_start]const record = state.records.all.find(r => r.id === recordId); [cite: 165]
+            const record = state.records.all.find(r => r.id === recordId);
             const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             
             const compositeId = heart.dataset.compositeId;
             if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
                 return;
          
-            [cite_start]} [cite: 166]
+            }
 
             const quantity = card.querySelector('.quantity-input').value;
             const itemInfo = { quantity: parseInt(quantity), requests: '' };
@@ -380,41 +380,41 @@ function setupEventListeners() {
 
             const allOptionsFavorited = options.every((opt, index) => {
                 const id = `${recordId}-${index}`;
-                [cite_start]return state.cart.items.has(id) || state.cart.lockedItems.has(id); [cite: 167]
+                return state.cart.items.has(id) || state.cart.lockedItems.has(id);
             });
 
             if (options.length > 0 && allOptionsFavorited) {
-                [cite_start]card.remove(); [cite: 168]
+                card.remove();
             } else if (options.length === 0) {
-                [cite_start]card.remove(); [cite: 169]
+                card.remove();
             } else {
                 const newCard = await ui.createEventCardElement(record, imageCache);
-                [cite_start]card.replaceWith(newCard); [cite: 170]
+                card.replaceWith(newCard);
             }
             
             await ui.updateFavoritesCarousel();
-            [cite_start]return; [cite: 171]
+            return;
         }
         
         const editBtn = e.target.closest('.edit-card-btn');
-        [cite_start]if (editBtn) { [cite: 172]
+        if (editBtn) {
             e.stopPropagation();
             const card = editBtn.closest('.event-card');
-            [cite_start]const compositeId = card.querySelector('.heart-icon').dataset.compositeId; [cite: 173]
+            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
             return;
         }
 
         // New: Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
-        [cite_start]if (card) { [cite: 174]
+        if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
-            [cite_start]await ui.openDetailModal(compositeId, imageCache); [cite: 175]
+            await ui.openDetailModal(compositeId, imageCache);
         }
     });
     
     const toolbarInputs = [ui.summaryEventNameInput, ui.summaryDateInput, ui.summaryHeadcountInput, ui.summaryLocationInput];
-    [cite_start]toolbarInputs.forEach(input => { [cite: 176]
+    toolbarInputs.forEach(input => {
         input.addEventListener('change', (e) => {
             recordStateForUndo();
             const value = e.target.value;
@@ -422,18 +422,18 @@ function setupEventListeners() {
             switch (e.target.id) {
                 case 'summary-event-name': detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME; break;
             
-                [cite_start]case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break; [cite: 177]
+                case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
                 case 'summary-headcount': detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT; ui.guestCountInput.value = value; ui.guestCountInput.dispatchEvent(new Event('input')); break;
                 case 'summary-location': detailType = CONSTANTS.DETAIL_TYPES.LOCATION; break;
             }
             if (detailType) {
                 state.eventDetails.combined.set(detailType, value);
  
-                [cite_start]ui.updateHeader(); [cite: 178]
+                ui.updateHeader();
             }
         });
     });
-    [cite_start]document.getElementById('save-share-btn').addEventListener('click', async () => { [cite: 179]
+    document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
             document.getElementById('save-status').textContent = 'Saved!';
@@ -442,7 +442,7 @@ function setupEventListeners() {
             document.getElementById('share-link').value = window.location.href;
             ui.populateSessionsDropdown(getStoredSessions);
      
-        [cite_start]} [cite: 180]
+        }
         setTimeout(() => {
             if (document.getElementById('save-status').textContent !== 'Saving...') {
                 document.getElementById('save-status').textContent = '';
@@ -450,18 +450,18 @@ function setupEventListeners() {
         }, 3000);
     });
     // Add listener for sessions dropdown to load selected session
-    [cite_start]ui.sessionsDropdown.addEventListener('change', async (e) => { [cite: 181]
+    ui.sessionsDropdown.addEventListener('change', async (e) => {
         const selectedId = e.target.value;
         if (selectedId) {
             await api.loadSessionFromAirtable(selectedId);
             await updateRender();
             // Reset dropdown to default after load (optional edge case handling)
             e.target.value = 
-            [cite_start]''; [cite: 182]
+            '';
         }
     });
     // Add listener for Download Source button
-    [cite_start]document.getElementById('download-source-btn').addEventListener('click', () => { [cite: 183]
+    document.getElementById('download-source-btn').addEventListener('click', () => {
         const link = document.createElement('a');
         link.href = '/project_source.txt';
         link.download = 'project_source.txt';
@@ -470,18 +470,18 @@ function setupEventListeners() {
         document.body.removeChild(link);
     });
     // Autosave setup
-    [cite_start]const autosaveToggle = document.getElementById('autosave-toggle'); [cite: 184]
+    const autosaveToggle = document.getElementById('autosave-toggle');
     let autosaveInterval;
-    [cite_start]function setupAutosave() { [cite: 185]
+    function setupAutosave() {
         if (autosaveToggle.checked) {
             autosaveInterval = setInterval(async () => {
                 const success = await api.saveSessionToAirtable();
                 if (success) {
                     document.getElementById('save-status').textContent = 'Autosaved!';
            
-                    [cite_start]setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000); [cite: 186]
+                    setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000);
                 }
-            [cite_start]}, 30000); [cite: 187]
+            }, 30000);
 // 30 seconds
         }
     }
@@ -492,7 +492,7 @@ function setupEventListeners() {
             clearInterval(autosaveInterval);
         }
     });
-    setupAutosave(); [cite_start]// Initial setup if checked by default [cite: 188]
+    setupAutosave(); // Initial setup if checked by default
 }
 
 
@@ -501,33 +501,33 @@ function setupEventListeners() {
 async function initialize() {
     console.log('Starting initialize...');
     ui.toggleLoading(true);
-    [cite_start]console.log('Loading toggled on'); [cite: 189]
+    console.log('Loading toggled on');
     try {
         console.log('Fetching records from Airtable...');
         state.records.all = await api.fetchAllRecords();
-        [cite_start]console.log('Records fetched:', state.records.all.length); [cite: 190]
+        console.log('Records fetched:', state.records.all.length);
     } catch (error) {
         console.error("Failed to load records:", error);
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. [cite_start]Please try again later.</p>`; [cite: 191]
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
         ui.toggleLoading(false);
-        [cite_start]// Ensure loading is toggled off [cite: 192]
-        [cite_start]return; [cite: 193]
+        // Ensure loading is toggled off
+        return;
     }
     
     console.log('Checking for session ID in URL...');
     const urlParams = new URLSearchParams(window.location.search);
-    [cite_start]const sessionIdFromUrl = urlParams.get('session'); [cite: 194]
+    const sessionIdFromUrl = urlParams.get('session');
     if (sessionIdFromUrl) {
         console.log('Loading session:', sessionIdFromUrl);
         await api.loadSessionFromAirtable(sessionIdFromUrl);
-        [cite_start]console.log('Session loaded'); [cite: 195]
+        console.log('Session loaded');
     }
     
     console.log('Recording initial state for undo...');
     recordStateForUndo();
     console.log('Checking user profile...');
     checkUserProfile();
-    [cite_start]console.log('Populating sessions dropdown...'); [cite: 196]
+    console.log('Populating sessions dropdown...');
     ui.populateSessionsDropdown(getStoredSessions);
     console.log('Toggling loading off...');
     ui.toggleLoading(false);
@@ -540,7 +540,7 @@ async function initialize() {
     setupEventListeners();
     ui.collapseHeaderOnScroll(); // Activate the header collapse feature
     console.log('Updating render...');
-    [cite_start]await updateRender(); [cite: 197]
+    await updateRender();
     console.log('Initialize complete');
 }
 
