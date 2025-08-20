@@ -6,15 +6,15 @@
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
- [cite_start]*/ [cite: 401]
+ */
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
-[cite_start]export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢']; [cite: 402]
-[cite_start]export const REACTION_SCORES = { [cite: 403]
+export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
+export const REACTION_SCORES = {
     '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
     '🤔': -1, '👎': -2, '🤢': -3
 };
-[cite_start]export const CONSTANTS = { [cite: 404]
+export const CONSTANTS = {
     FIELD_NAMES: {
         NAME: 'Name',
         PRICE: 'Price',
@@ -26,8 +26,7 @@ export const RECORDS_PER_LOAD = 10;
         HEADCOUNT_MIN: 'Headcount min',
         MEDIA_TAGS: 'Media Tags',
     },
-  
-    [cite_start]PRICING_TYPES: { [cite: 405]
+    PRICING_TYPES: {
         PER_GUEST: 'per guest',
     },
     DETAIL_TYPES: {
