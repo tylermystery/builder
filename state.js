@@ -5,14 +5,14 @@
  * Changelog:
  *
  * v1.5.0 - 2025-08-18
- * - Added `cardImageIndexes` map to UI state to track image gallery positions.
+ * - [cite_start]Added `cardImageIndexes` map to UI state to track image gallery positions. [cite: 407]
  *
  * v1.2.0 - 2025-08-17
- * - Added `currentSort` property to the UI state for unified sorting.
+ * - [cite_start]Added `currentSort` property to the UI state for unified sorting. [cite: 408]
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
- */
+ [cite_start]*/ [cite: 409]
 
 export const state = {
     records: {
@@ -28,7 +28,8 @@ export const state = {
     },
     session: {
         id: null,
-        user: '',
+       
+        [cite_start]user: '', [cite: 410]
         collaborators: [],
         reactions: new Map(),
     },
@@ -40,7 +41,8 @@ export const state = {
     },
     history: {
         undoStack: [],
-        redoStack: [],
+       
+        [cite_start]redoStack: [], [cite: 411]
         isRestoring: false,
     }
 };
