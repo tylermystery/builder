@@ -1,157 +1,177 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Catalog</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
-</head>
-<body>
+/*
+ * Version: 1.0.1
+ * Last Modified: 2025-08-20
+ *
+ * Changelog:
+ *
+ * v1.0.1 - 2025-08-20
+ * - Fixed visual rendering bug by simplifying card and image styles.
+ *
+ * v1.0.0 - 2025-08-20
+ * - Initial styles for layout, sticky header, and collapsing carousel effect.
+ */
 
-<div id="loading-message" style="text-align: center; padding: 40px; font-family: sans-serif; font-size: 1.2em;">
-    Loading catalog...
-</div>
+:root {
+    --header-transition-speed: 0.3s;
+}
 
-<div id="event-details-storage" style="display: none;">
-    <input type="number" id="guest-count" value="1" min="1">
-</div>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding-bottom: 80px; /* Space for the bottom summary toolbar */
+    background-color: #f4f7f6;
+}
 
-<div id="sticky-header">
-    <div id="header-full-content">
-        <div id="favorites-section" style="display: none;">
-            <div class="favorites-header">
-      
-                <div id="collaborators-section" class="header-group-left" style="display: none;">
-                    <div id="collaborator-avatars"></div>
-                    <button id="add-collaborator-btn">+</button>
-                </div>
-                <h2 id="event-title-header">Your Event</h2>
-          
-                <div class="header-group-right">
-                    <div id="sessions-dropdown-container" style="display: none;">
-                        <select id="sessions-dropdown"></select>
-                    </div>
-                    <div id="total-cost-section">
-    
-                        <strong>Total:</strong>
-                        <span id="total-cost" title="No items selected">$0.00</span>
-                    </div>
-                    <div id="share-section">
-           
-                        <div class="left-controls">
-                            <div class="history-controls">
-                                <button id="undo-btn" disabled>↩️</button>
-                       
-                                <button id="redo-btn" disabled>↪️</button>
-                             </div>
-                            <div class="autosave-control">
-                               
-                                <label for="autosave-toggle">Autosave</label>
-                                <input type="checkbox" id="autosave-toggle" checked>
-                            </div>
-                            <span id="save-status"></span>
-      
-                        </div>
-                         <div class="right-controls">
-                            <button id="save-share-btn">Save Now</button>
-                          
-                            <div id="share-link-container" style="display: none;">
-                                 <input type="text" id="share-link" readonly>
-                                <button id="copy-link-btn">Copy</button>
-                          
-                            </div>
-                        </div>
-                     </div>
-                </div>
-            </div>
-            <div id="favorites-carousel"></div>
-        </div>
-    
-    </div>
-    <div id="header-summary"></div>
-</div>
+/* --- Main Layout & Scroll Behavior --- */
 
-<div id="filter-controls" style="display: none;">
-    <input type="text" id="name-filter" placeholder="Search by name...">
-    <select id="price-filter">
-        <option value="all">All Prices</option>
-        <option value="0-50">Under $50</option>
-        <option value="50-100">$50 - $100</option>
-        <option value="100-250">$100 - $250</option>
-        <option value="250-plus">$250+</option>
-    </select>
-    <select id="duration-filter">
-        <option value="all">All Durations</option>
-    </select>
-    <select id="status-filter">
-    
-        <option value="all">All Statuses</option>
-    </select>
-    
-    <select id="sort-by">
-        <option value="reactions-desc">Sort by: Reactions</option>
-        <option value="price-asc">Price (Low to High)</option>
-        <option value="price-desc">Price (High to Low)</option>
-        <option value="name-asc">Name (A-Z)</option>
-    </select>
+#sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: padding var(--header-transition-speed) ease-in-out;
+}
 
-    <button id="reset-filters">Reset</button>
-</div>
+#favorites-section, #filter-controls {
+    transition: all var(--header-transition-speed) ease-in-out;
+}
 
-<div id="catalog-container"></div>
+#favorites-carousel {
+    display: flex;
+    overflow-x: auto;
+    padding: 15px 10px;
+    gap: 15px;
+    transition: all var(--header-transition-speed) ease-in-out, opacity 0.2s linear;
+    max-height: 250px; /* Animatable property */
+    opacity: 1;
+}
 
-<div id="edit-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
-        <div id="modal-body"></div>
-    </div>
-</div>
+#header-summary {
+    display: none; /* Hidden by default */
+    padding: 12px;
+    text-align: center;
+    font-weight: 500;
+    color: #333;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+}
 
-<div id="confirm-modal" class="modal-overlay" style="display: 
-none;">
-    <div class="modal-content detail-modal">
-        <div id="confirm-modal-body">
-            <h3>Are you sure you want to break event details down into 
- its components?!?</h3>
-            <div class="modal-footer">
-                <button id="confirm-yes-btn">Yes</button>
-                <button id="confirm-no-btn">No</button>
-            </div>
- 
-        </div>
-    </div>
-</div>
+#catalog-container {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 20px;
+    gap: 20px;
+    justify-content: flex-start;
+}
 
-<div id="summary-toolbar">
-    <div class="toolbar-item">
-        <label for="summary-event-name">Event Name</label>
-        <input type="text" id="summary-event-name" placeholder="Untitled 
- Event">
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-date">Date</label>
-        <input type="date" id="summary-date">
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-headcount">Headcount</label>
-        <input type="number" id="summary-headcount" min="1" value="1">
-  
-    </div>
-    <div class="toolbar-item">
-        <label for="summary-location">Location</label>
-        <input type="text" id="summary-location" placeholder="TBD">
-    </div>
-    <div class="toolbar-item total-cost-summary">
-         <label>Total Cost</label>
-        <span id="summary-total-cost" title="No items selected">$0.00</span>
-    </div>
-    <a id="download-source-btn" class="toolbar-item" title="Download Project Source">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24px" height="24px"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-        <span>Download</span>
-    </a>
-</div>
+/* --- Collapsed Header State --- */
 
-<script type="module" src="main.js"></script>
+#sticky-header.header-collapsed #favorites-carousel {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    overflow: hidden; /* Hide content during transition */
+    pointer-events: none; /* Disable interaction when hidden */
+}
 
-</body>
-</html>
+#sticky-header.header-collapsed #header-summary {
+    display: block; /* Show the summary line */
+}
+
+
+/* --- General UI Elements --- */
+.favorites-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.header-group-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+#summary-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px;
+    background-color: #333;
+    color: white;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
+    z-index: 1001;
+    gap: 15px;
+}
+
+.toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.toolbar-item label {
+    font-size: 0.75em;
+    margin-bottom: 4px;
+    color: #ccc;
+}
+
+.toolbar-item input, .toolbar-item span {
+    background: #555;
+    border: 1px solid #666;
+    color: white;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.toolbar-item input::placeholder {
+    color: #aaa;
+}
+
+#download-source-btn {
+    color: white;
+    text-decoration: none;
+    cursor: pointer;
+    text-align: center;
+    padding: 5px;
+    border-radius: 4px;
+    background: #555;
+    border: 1px solid #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+#download-source-btn:hover {
+    background: #666;
+}
+
+/* --- Card Styling (Simplified to fix bug) --- */
+
+.event-card, .favorite-item {
+    width: 300px;
+    height: 260px;
+    border-radius: 8px; /* Simple, safe border-radius */
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.event-card-content, .favorite-item-content {
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+    padding: 15px;
+    z-index: 2;
+}
