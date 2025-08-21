@@ -1,8 +1,11 @@
 /*
- * Version: 1.0.1
- * Last Modified: 2025-08-20
+ * Version: 1.0.2
+ * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.0.2 - 2025-08-21
+ * - Converted catalog from horizontal grid to responsive vertical grid layout.
  *
  * v1.0.1 - 2025-08-20
  * - Polished main catalog card styles for improved legibility and layout.
@@ -231,13 +234,12 @@ body {
 }
 #catalog-container {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 320px;
-    grid-template-rows: repeat(2, auto);
-    overflow-x: auto;
-    overflow-y: hidden;
+    /* Use CSS Grid to create a responsive, wrapping layout */
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 25px;
     padding: 20px;
+    max-width: 1400px; /* Optional: Constrain max width */
+    margin: 0 auto; /* Center the container */
 }
 .event-card {
     position: relative;
@@ -247,7 +249,7 @@ body {
     flex-direction: column;
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     height: 520px;
-    width: 320px;
+    width: 100%; /* Let the grid control the width */
     background-size: cover;
     background-position: center;
     color: white;
