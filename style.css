@@ -1,8 +1,11 @@
 /*
- * Version: 1.0.1
+ * Version: 1.0.2
  * Last Modified: 2025-08-20
  *
  * Changelog:
+ *
+ * v1.0.2 - 2025-08-20
+ * - Corrected header alignment and applied specific styles for favorites carousel items.
  *
  * v1.0.1 - 2025-08-20
  * - Fixed visual rendering bug by simplifying card and image styles.
@@ -13,6 +16,8 @@
 
 :root {
     --header-transition-speed: 0.3s;
+    --card-border-radius: 12px;
+    --card-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 body {
@@ -20,9 +25,10 @@ body {
     margin: 0;
     padding-bottom: 80px; /* Space for the bottom summary toolbar */
     background-color: #f4f7f6;
+    color: #333;
 }
 
-/* --- Main Layout & Scroll Behavior --- */
+/* --- Header & Favorites --- */
 
 #sticky-header {
     position: sticky;
@@ -33,36 +39,33 @@ body {
     transition: padding var(--header-transition-speed) ease-in-out;
 }
 
-#favorites-section, #filter-controls {
-    transition: all var(--header-transition-speed) ease-in-out;
+.favorites-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#event-title-header {
+    margin: 0;
+    font-size: 1.25em;
+}
+
+.header-group-right, .header-group-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
 #favorites-carousel {
     display: flex;
     overflow-x: auto;
-    padding: 15px 10px;
+    padding: 15px;
     gap: 15px;
     transition: all var(--header-transition-speed) ease-in-out, opacity 0.2s linear;
-    max-height: 250px; /* Animatable property */
+    max-height: 250px;
     opacity: 1;
-}
-
-#header-summary {
-    display: none; /* Hidden by default */
-    padding: 12px;
-    text-align: center;
-    font-weight: 500;
-    color: #333;
-    background-color: #f9f9f9;
-    border-top: 1px solid #e0e0e0;
-}
-
-#catalog-container {
-    display: flex;
-    flex-wrap: wrap;
-    padding: 20px;
-    gap: 20px;
-    justify-content: flex-start;
 }
 
 /* --- Collapsed Header State --- */
@@ -72,30 +75,101 @@ body {
     padding-top: 0;
     padding-bottom: 0;
     opacity: 0;
-    overflow: hidden; /* Hide content during transition */
-    pointer-events: none; /* Disable interaction when hidden */
+    overflow: hidden;
+    pointer-events: none;
+}
+
+#header-summary {
+    display: none;
+    padding: 12px;
+    text-align: center;
+    font-weight: 500;
+    background-color: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
 }
 
 #sticky-header.header-collapsed #header-summary {
-    display: block; /* Show the summary line */
+    display: block;
 }
 
 
-/* --- General UI Elements --- */
-.favorites-header {
+/* --- Filter Controls --- */
+#filter-controls {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
     padding: 10px 20px;
+    gap: 10px;
+    background-color: #f9f9f9;
     border-bottom: 1px solid #e0e0e0;
+    align-items: center;
 }
 
-.header-group-right {
+/* --- Catalog & Event Cards --- */
+
+#catalog-container {
     display: flex;
-    align-items: center;
+    flex-wrap: wrap;
+    padding: 20px;
     gap: 20px;
 }
 
+.event-card {
+    width: 320px;
+    height: 280px;
+    border-radius: var(--card-border-radius);
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    border: 1px solid #ddd;
+    background-color: #555; /* Fallback for missing images */
+}
+
+.event-card-content {
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 20%, rgba(0,0,0,0) 100%);
+    padding: 15px;
+    z-index: 2;
+}
+
+
+/* --- Favorite Item Cards (Specific Styling) --- */
+
+.favorite-item {
+    flex-shrink: 0; /* Prevent items from shrinking */
+    width: 220px;
+    height: 180px;
+    border-radius: var(--card-border-radius);
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    font-size: 0.9em;
+}
+
+.favorite-item-content {
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 20%, rgba(0,0,0,0) 100%);
+    padding: 10px;
+}
+
+.favorite-item .item-name {
+    font-weight: bold;
+    margin: 0 0 5px 0;
+}
+
+.favorite-item p {
+    margin: 2px 0;
+}
+
+/* --- Summary Toolbar --- */
 #summary-toolbar {
     position: fixed;
     bottom: 0;
@@ -129,49 +203,4 @@ body {
     color: white;
     padding: 5px;
     border-radius: 4px;
-}
-
-.toolbar-item input::placeholder {
-    color: #aaa;
-}
-
-#download-source-btn {
-    color: white;
-    text-decoration: none;
-    cursor: pointer;
-    text-align: center;
-    padding: 5px;
-    border-radius: 4px;
-    background: #555;
-    border: 1px solid #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-}
-#download-source-btn:hover {
-    background: #666;
-}
-
-/* --- Card Styling (Simplified to fix bug) --- */
-
-.event-card, .favorite-item {
-    width: 300px;
-    height: 260px;
-    border-radius: 8px; /* Simple, safe border-radius */
-    background-size: cover;
-    background-position: center;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-
-.event-card-content, .favorite-item-content {
-    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
-    padding: 15px;
-    z-index: 2;
 }
