@@ -1,8 +1,12 @@
 /*
- * Version: 1.9.1
+ * Version: 2.0.0
  * Last Modified: 2025-08-20
  *
  * Changelog:
+ *
+ * v2.0.0 - 2025-08-20
+ * - Merged functionality from last working version to restore modal pop-ups and detailed styling.
+ * - Kept new collapsing header and summary bar functionality.
  *
  * v1.9.1 - 2025-08-20
  * - Fixed syntax error in updateTotalCost function.
@@ -104,13 +108,13 @@ export function parseOptions(optionsText) {
     if (!optionsText) return [];
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
-        const option = { 
-            name: parts[0], 
+        const option = {
+            name: parts[0],
             priceChange: null,
             absolutePrice: null,
-            durationChange: null, 
-            description: null 
-    
+            durationChange: null,
+            description: null
+
         };
 
         parts.slice(1).forEach(part => {
@@ -119,13 +123,13 @@ export function parseOptions(optionsText) {
 
             switch (key.toLowerCase()) {
                 case 'price change':
-                    option.priceChange 
+                    option.priceChange
                     = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'price':
                     option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
-              
+
                 case 'duration change':
                     option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
@@ -186,12 +190,14 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     const leftArrow = itemCard.querySelector('.gallery-arrow.left');
     const rightArrow = itemCard.querySelector('.gallery-arrow.right');
     if (imageUrls.length > 1) {
-        leftArrow.addEventListener('click', () => {
+        leftArrow.addEventListener('click', (e) => {
+            e.stopPropagation();
             currentIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
             state.ui.cardImageIndexes.set(record.id, currentIndex);
             itemCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
         });
-        rightArrow.addEventListener('click', () => {
+        rightArrow.addEventListener('click', (e) => {
+            e.stopPropagation();
             currentIndex = (currentIndex + 1) % imageUrls.length;
             state.ui.cardImageIndexes.set(record.id, currentIndex);
             itemCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
@@ -248,24 +254,20 @@ export async function createEventCardElement(record, imageCache) {
         <div class="event-card-content">
             <div class="heart-icon" data-composite-id="${compositeId}">
                 <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-      
             </div>
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] ||
-                'Untitled Event'}</h3>
+            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             ${optionsDropdownHTML}
             <p class="option-description"></p>
             <p class="details"></p>
             <div class="price-quantity-wrapper">
                 <div class="price"></div>
                 <div class="quantity-selector">
-              
                     <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
                     <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}">
                     <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
                 </div>
             </div>
         </div>
-      
         <div class="card-footer">${renderReactionsSummary(recordId)}</div>
         ${renderReactionbar(recordId)}
         <button class="gallery-arrow left">←</button>
@@ -291,13 +293,11 @@ export async function createEventCardElement(record, imageCache) {
                 currentPrice += selectedOption.priceChange;
             }
         }
-        priceEl.innerHTML = `$${currentPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] ||
-            ''}</span>`;
+        priceEl.innerHTML = `$${currentPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
 
         // Update Description
         descriptionEl.textContent = selectedOption?.description || '';
-        descriptionEl.style.display = selectedOption?.description ?
-            'block' : 'none';
+        descriptionEl.style.display = selectedOption?.description ? 'block' : 'none';
 
         // Update Duration
         let currentDuration = baseDuration;
@@ -306,8 +306,7 @@ export async function createEventCardElement(record, imageCache) {
         }
         detailsEl.textContent = currentDuration > 0 ? `Duration: ${currentDuration} hours` : '';
         // Update Heart Icon and Edit Button
-        const newCompositeId = selectedIndex ?
-            `${recordId}-${selectedIndex}` : recordId;
+        const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
         heartIcon.dataset.compositeId = newCompositeId;
         eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId;
         heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
@@ -324,12 +323,14 @@ export async function createEventCardElement(record, imageCache) {
     const leftArrow = eventCard.querySelector('.gallery-arrow.left');
     const rightArrow = eventCard.querySelector('.gallery-arrow.right');
     if (imageUrls.length > 1) {
-        leftArrow.addEventListener('click', () => {
+        leftArrow.addEventListener('click', (e) => {
+            e.stopPropagation();
             currentIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
             state.ui.cardImageIndexes.set(recordId, currentIndex);
             eventCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
         });
-        rightArrow.addEventListener('click', () => {
+        rightArrow.addEventListener('click', (e) => {
+            e.stopPropagation();
             currentIndex = (currentIndex + 1) % imageUrls.length;
             state.ui.cardImageIndexes.set(recordId, currentIndex);
             eventCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
@@ -456,8 +457,7 @@ export function updateSummaryToolbar() {
 
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
-    filterControls.style.display = show ?
-        'none' : 'flex';
+    filterControls.style.display = show ? 'none' : 'flex';
 }
 
 export function updateHeader() {
@@ -493,7 +493,7 @@ export function updateTotalCost() {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-  
+
         let itemCost;
 
         if (pricingType === 'per hour') {
@@ -507,8 +507,7 @@ export function updateTotalCost() {
         total += itemCost;
         const variationIndex = compositeId.split('-')[1];
         const variationName = variationIndex ? parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[variationIndex]?.name : '';
-        const quantityLabel = pricingType === 'per hour' ?
-            'hours' : 'qty';
+        const quantityLabel = pricingType === 'per hour' ? 'hours' : 'qty';
         breakdown.push(`${record.fields[CONSTANTS.FIELD_NAMES.NAME]}${variationName ? ` (${variationName})` : ''}: $${unitPrice.toFixed(2)} x ${effectiveQuantity} ${quantityLabel} = $${itemCost.toFixed(2)}`);
     });
 
@@ -557,26 +556,20 @@ export async function openDetailModal(compositeId, imageCache) {
     const isLocked = state.cart.lockedItems.has(compositeId);
     let itemInfo = state.cart.lockedItems.get(compositeId) || state.cart.items.get(compositeId);
     if (!itemInfo) {
-        const card = document.querySelector(`.event-card[data-record-id="${record.id}"]`) || document.querySelector(`.favorite-item[data-composite-id="${compositeId}"]`);
-        itemInfo = { quantity: card ? parseInt(card.querySelector('.quantity-input')?.value || card.querySelector('.item-quantity')?.textContent.replace('Qty: ', '') || 1) : 1, requests: '' };
+        const card = document.querySelector(`.event-card[data-record-id="${record.id}"]`);
+        itemInfo = { quantity: card ? card.querySelector('.quantity-input').value : 1, requests: '' };
     }
     const fields = record.fields;
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
-        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
     let optionsDropdownHTML = '';
-    let selectedOptionIndex = compositeId.split('-')[1] || 0;
     if (options.length > 0) {
-        optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ?
-            'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == selectedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
+        const optionIndex = compositeId.split('-')[1] || 0;
+        optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == optionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
-        'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ?
-        'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ?
-        'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}</div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
-    // Removed save button
-    
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(record.id)) {
         state.ui.cardImageIndexes.set(record.id, 0);
@@ -587,10 +580,9 @@ export async function openDetailModal(compositeId, imageCache) {
     
     const modalPriceEl = modalBody.querySelector('.price');
     function updateModalPrice() {
-        const unitPrice = getRecordPrice(record, selectedOptionIndex);
+        const unitPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
         if (!isNaN(unitPrice)) {
-            modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] ||
-                ''}</span>`;
+            modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
         }
     }
     
@@ -615,82 +607,6 @@ export async function openDetailModal(compositeId, imageCache) {
         rightArrow.style.display = 'none';
     }
 
-    // Add reaction listeners in modal
-    modalBody.querySelectorAll('.reaction-bar button').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await handleReaction(btn.dataset.recordId, btn.dataset.emoji);
-            // Update reactions summary in modal
-            modalBody.querySelector('.reactions-summary').innerHTML = renderReactionsSummary(record.id);
-            // Reflect in 
-            catalog/favorites
-            await updateRender();
-        });
-    });
-    // Hearting in modal
-    const modalHeart = modalBody.querySelector('.heart-icon');
-    modalHeart.addEventListener('click', (e) => {
-        e.stopPropagation();
-        recordStateForUndo();
-        const currentCompositeId = modalHeart.dataset.compositeId;
-        if (state.cart.items.has(currentCompositeId)) {
-            state.cart.items.delete(currentCompositeId);
-            modalHeart.classList.remove('hearted');
-        } else {
-            state.cart.items.set(currentCompositeId, itemInfo);
-            modalHeart.classList.add('hearted');
- 
-        }
-        // Reflect changes immediately
-        updateRender();
-    });
-    // Auto-apply option change
-    const modalOptions = modalBody.querySelector('#modal-options');
-    if (modalOptions) {
-        modalOptions.addEventListener('change', (e) => {
-            recordStateForUndo();
-            selectedOptionIndex = e.target.value;
-            updateModalPrice();
-            const newCompositeId = options.length > 0 ? `${record.id}-${selectedOptionIndex}` : record.id;
-            const newItemInfo = { quantity: parseInt(modalBody.querySelector('#modal-quantity').value), requests: '' };
-        
-            // Update state
-            if (state.cart.items.has(compositeId)) {
-                state.cart.items.delete(compositeId);
-                state.cart.items.set(newCompositeId, newItemInfo);
-            } else if (state.cart.lockedItems.has(compositeId)) {
-                state.cart.lockedItems.delete(compositeId);
-               
-                state.cart.lockedItems.set(newCompositeId, newItemInfo);
-            }
-            modalHeart.dataset.compositeId = newCompositeId; // Update heart dataset
-            // Reflect
-            updateRender();
-        });
-    }
-
-    // Auto-apply quantity change
-    const modalQuantity = modalBody.querySelector('#modal-quantity');
-    modalQuantity.addEventListener('change', () => {
-        recordStateForUndo();
-        const min = parseInt(modalQuantity.min);
-        if (parseInt(modalQuantity.value) < min) modalQuantity.value = min;
-        itemInfo.quantity = parseInt(modalQuantity.value);
-        // Update state if in cart
-        if (state.cart.items.has(compositeId)) {
-            state.cart.items.set(compositeId, itemInfo);
-        } else if (state.cart.lockedItems.has(compositeId)) {
-      
-            state.cart.lockedItems.set(compositeId, itemInfo);
-        }
-        // Reflect
-        updateRender();
-    });
-    const modalPlus = modalBody.querySelector('.quantity-btn.plus');
-    const modalMinus = modalBody.querySelector('.quantity-btn.minus');
-    if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; modalQuantity.dispatchEvent(new Event('change')); });
-    if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) { modalQuantity.value = current - 1; modalQuantity.dispatchEvent(new Event('change')); } });
-    // Close modal on overlay click or close button
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay || e.target.classList.contains('modal-close')) {
             modalOverlay.style.display = 'none';
