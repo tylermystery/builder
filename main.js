@@ -1,8 +1,11 @@
 /*
- * Version: 1.8.1
+ * Version: 1.8.2
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.8.2 - 2025-08-21
+ * - Fixed bug where action buttons (promote, demote, remove) on favorites carousel were not working.
  *
  * v1.8.1 - 2025-08-21
  * - Refined card interactions: Emoji clicks no longer open the modal.
@@ -226,17 +229,51 @@ function setupEventListeners() {
     });
 
     ui.favoritesCarousel.addEventListener('click', async (e) => {
-        // If the click was on any button within the card, its specific listener should handle it.
-        // We find the parent card element to open the modal.
-        const favoriteItem = e.target.closest('.favorite-item');
-
-        // Check if the click was on a specific interactive element within the card.
-        // If so, their own event listeners should fire (and stop propagation), so we do nothing here.
-        if (e.target.closest('button') || e.target.closest('.action-btn-container')) {
+        const promoteBtn = e.target.closest('.promote-btn');
+        if (promoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = promoteBtn.dataset.compositeId;
+            const itemData = state.cart.items.get(compositeId);
+            if (itemData) {
+                state.cart.lockedItems.set(compositeId, itemData);
+                state.cart.items.delete(compositeId);
+                await updateRender();
+            }
             return;
         }
 
-        // If we found a favorite item and the click was not on a button, open the modal.
+        const demoteBtn = e.target.closest('.demote-btn');
+        if (demoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = demoteBtn.dataset.compositeId;
+            const itemData = state.cart.lockedItems.get(compositeId);
+            if (itemData) {
+                state.cart.items.set(compositeId, itemData);
+                state.cart.lockedItems.delete(compositeId);
+                await updateRender();
+            }
+            return;
+        }
+
+        const removeBtn = e.target.closest('.remove-btn');
+        if (removeBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = removeBtn.dataset.compositeId;
+            state.cart.items.delete(compositeId);
+            await updateRender();
+            return;
+        }
+        
+        // If the click was on any other button (like edit or reactions), do nothing more.
+        if (e.target.closest('button')) {
+            return;
+        }
+
+        // If the click was on the card body itself, open the modal.
+        const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
@@ -367,7 +404,7 @@ async function initialize() {
         console.log('Session loaded');
     }
     
-    console.log('Recording initial state for undo...');
+    // We are not using Undo/Redo in the MVP, but recording the initial state is harmless.
     recordStateForUndo();
     console.log('Checking user profile...');
     checkUserProfile();
