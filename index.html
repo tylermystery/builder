@@ -22,36 +22,32 @@
     <div id="header-full-content">
         <div id="favorites-section" style="display: none;">
             <div class="favorites-header">
+      
                 <div id="collaborators-section" class="header-group-left" style="display: none;">
                     <div id="collaborator-avatars"></div>
                     <button id="add-collaborator-btn">+</button>
                 </div>
                 <h2 id="event-title-header">Your Event</h2>
+          
                 <div class="header-group-right">
                     <div id="sessions-dropdown-container" style="display: none;">
                         <select id="sessions-dropdown"></select>
                     </div>
                     <div id="total-cost-section">
+    
                         <strong>Total:</strong>
                         <span id="total-cost" title="No items selected">$0.00</span>
                     </div>
                     <div id="share-section">
+           
                         <div class="left-controls">
-                            <div class="history-controls">
-                                <button id="undo-btn" disabled>↩️</button>
-                                <button id="redo-btn" disabled>↪️</button>
-                             </div>
-                            <div class="autosave-control">
-                                <label for="autosave-toggle">Autosave</label>
-                                <input type="checkbox" id="autosave-toggle" checked>
-                            </div>
                             <span id="save-status"></span>
                         </div>
                          <div class="right-controls">
-                            <button id="save-share-btn">Save Now</button>
+                            <button id="save-share-btn">Save & Share</button>
+                          
                             <div id="share-link-container" style="display: none;">
                                  <input type="text" id="share-link" readonly>
-                                <button id="copy-link-btn">Copy</button>
                             </div>
                         </div>
                      </div>
@@ -59,6 +55,7 @@
             </div>
             <div id="favorites-carousel"></div>
         </div>
+    
     </div>
 </div>
 
@@ -75,6 +72,7 @@
         <option value="all">All Durations</option>
     </select>
     <select id="status-filter">
+    
         <option value="all">All Statuses</option>
     </select>
     
@@ -105,6 +103,7 @@
                 <button id="confirm-yes-btn">Yes</button>
                 <button id="confirm-no-btn">No</button>
             </div>
+ 
         </div>
     </div>
 </div>
@@ -112,8 +111,7 @@
 <div id="summary-toolbar">
     <div class="toolbar-item">
         <label for="summary-event-name">Event Name</label>
-        <input type="text" id="summary-event-name" placeholder="Untitled 
- Event">
+        <input type="text" id="summary-event-name" placeholder="Untitled Event">
     </div>
     <div class="toolbar-item">
         <label for="summary-date">Date</label>
@@ -122,6 +120,7 @@
     <div class="toolbar-item">
         <label for="summary-headcount">Headcount</label>
         <input type="number" id="summary-headcount" min="1" value="1">
+  
     </div>
     <div class="toolbar-item">
         <label for="summary-location">Location</label>
@@ -131,7 +130,7 @@
          <label>Total Cost</label>
         <span id="summary-total-cost" title="No items selected">$0.00</span>
     </div>
-    </div>
+</div>
 
 <script type="module" src="main.js"></script>
 
