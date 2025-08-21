@@ -1,8 +1,11 @@
 /*
- * Version: 2.0.0
+ * Version: 2.0.1
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v2.0.1 - 2025-08-21
+ * - Fixed critical bug where a CSS rule was preventing the main catalog from rendering.
  *
  * v2.0.0 - 2025-08-21
  * - Completed UI polish: Styled favorites carousel, restored all hover effects, and polished modal view.
