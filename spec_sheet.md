@@ -1,94 +1,33 @@
 /*
 
-Version: 1.9.0
-Last Modified: 2025-08-19
+Version: 1.9.3
+Last Modified: 2025-08-21
 
 Changelog:
 
+v1.9.3 - 2025-08-21
+- Added "Card Interaction Model" to spec sheet to define user interactions.
+
+v1.9.2 - 2025-08-21
+- Simplified UI for MVP: Removed Undo/Redo and Autosave features.
+- Documented removed features as potential future enhancements.
+
+v1.9.1 - 2025-08-21
+- Updated core layout: Main catalog now scrolls vertically in a responsive grid, while the favorites carousel remains horizontal.
+
 v1.9.0 - 2025-08-19
-
-
-Implemented autosave functionality with interval-based saving and debounced saves on state changes.
-Removed pre-MVP beta disclaimer for autosave as the feature is now complete.
-v1.8.2 - 2025-08-18 06:15 PM PDT
-
-
-Moved "Download Source" button to the bottom right of the summary toolbar with a JavaScript listener to trigger download.
-v1.8.1 - 2025-08-18 05:40 PM PDT
-
-
-Fixed "Download Source" button to be clickable in the summary toolbar by using an  tag with download attribute.
-v1.8.0 - 2025-08-18
-
-
-Made event cards clickable to open a larger detailed editable modal view (majority of screen, same aspect ratio as tiles).
-Added save button in modal to apply edits to state/cart.
-v1.7.0 - 2025-08-18
-
-
-Fixed total cost calculation to correctly multiply variation price by quantity (hours for per-hour, guests for per-guest).
-Moved pre-MVP beta disclaimer to tooltips on autosave-toggle and sessions-dropdown.
-v1.6.0 - 2025-08-18
-
-
-Enhanced total cost calculation to accurately handle variation pricing and quantity.
-Added pre-MVP beta disclaimer to UI noting incomplete autosave and session loading.
-
-
-
-v1.5.0 - 2025-08-18
-
-
-Confirmed completion of image gallery functionality.
-Clarified status of secure API proxy (incomplete due to hardcoded token).
-
-
-
-
-Noted incomplete session dropdown and autosave functionality.
-v1.4.0 - 2025-08-18
-
-
-Fully defined dynamic card details and image gallery functionality in the core spec.
-Added a detailed schema for the Airtable 'Options' field.
-
-
-
-v1.3.0 - 2025-08-18
-
-
-Updated spec sheet to reflect new variation-based favoriting logic.
-v1.2.1 - 2025-08-17
-
-
-Added guideline for the Human to always provide the last complete project source.
-v1.2.0 - 2025-08-17
-
-
-Added guideline for the AI to always provide complete files.
-
-
-
-v1.1.0 - 2025-08-17
-
-
-Added AI Collaboration Guidelines section.
-v1.0.0 - 2025-08-17
-
-
-Initial versioning and changelog added.
+- Implemented autosave functionality with interval-based saving and debounced saves on state changes.
+- Removed pre-MVP beta disclaimer for autosave as the feature is now complete.
 */
 
 
 
 Feature Specification Sheet (Final Version)
 Summary of Improvements
-This document outlines the features of an interactive event catalog with significant architectural and functional improvements.
-Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, horizontal "infinite scroll," reaction-based sorting, and a fully implemented interactive image gallery.
+This document outlines the features of an interactive event catalog with significant architectural and functional improvements. Key upgrades include centralized state management, performance enhancements via image caching and targeted DOM updates, and advanced UI features like a summary toolbar, a vertically scrolling catalog, reaction-based sorting, and a fully implemented interactive image gallery.
 The total cost calculation accurately reflects variation-specific pricing multiplied by quantity (hours for per-hour pricing, guests for per-guest pricing).
 Event cards are clickable to open a larger detailed editable view (majority of screen, same aspect ratio as tiles) with options to modify details and save changes.
 A "Download Source" button is now functional on the bottom right of the summary toolbar for easy access.
-A pre-MVP beta disclaimer as tooltips on the sessions dropdown informs users of incomplete features.
 The secure serverless back-end is incomplete, as Airtable API requests use a hardcoded token, posing a security risk.
 AI Collaboration Guidelines
 Core Principles
@@ -119,9 +58,8 @@ Session Management: User selections and collaborations can be saved and loaded a
 A dropdown menu displays saved sessions, and selecting one loads the session with UI updates.
 Dynamic Catalog Display:
 
-Two-Row Horizontal Layout: Events are displayed in a two-row, horizontally scrolling layout that loads more items as the user scrolls to the end ("infinite scroll").
-Event Cards: Each event is presented on a "card" that shows its name, image, duration, price, and pricing model.
-Cards are clickable to open a detailed editable view.
+Standard Vertical Layout: Events are displayed in a responsive grid that scrolls vertically with the main page. More items are loaded as the user scrolls toward the bottom ("infinite scroll").
+Event Cards: Each event is presented on a "card" that shows its name, image, duration, price, and pricing model. Cards are clickable to open a detailed editable view.
 Image Handling:
 Dynamic Images: Event images are fetched dynamically from a Cloudinary account based on "Media Tags" from Airtable.
 Performance Cache: Fetched image URLs are cached to prevent redundant network requests, speeding up rendering.
@@ -144,6 +82,12 @@ Dynamic Updates: Event cards in the main catalog dynamically update to reflect t
 The card's price, duration, and description change instantly when a new option is selected from the dropdown.
 Image Galleries: Each card features an interactive image gallery, with left and right arrows appearing on hover to cycle through all available images fetched from Cloudinary.
 Detailed View: Clicking an event card opens a larger modal (majority of screen, same aspect ratio as cards) showing the full description, editable options and quantity, with a save button to apply changes to the cart/state.
+Card Interaction Model:
+
+- **Main Card Body Click:** Clicking on the main body of a card (image or text area) that is not another interactive element will open the detailed modal view.
+- **Icon/Button Clicks:** Clicking specific icon buttons (`heart`, `edit`, `promote/demote`, emoji reactions, etc.) will perform only their specific actions and will **not** open the modal.
+- **Favorites Carousel Scrolling:** Using the mouse wheel while the cursor is over the "Your Selections" carousel will scroll it horizontally.
+
 Favoriting & Locking:
 Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel.
 The event card in the main catalog will then auto-select the next available variation.
@@ -158,13 +102,10 @@ User Profiles: The application prompts new users for their name, which is stored
 Multi-User Collaboration: Multiple collaborators can be added to a session, with their avatars displayed in the header.
 Session Management: A user's complete selection can be saved, generating a unique, shareable URL for collaboration.
 A dropdown menu displays previously saved sessions, and selecting one loads the session with UI updates.
-Autosave is implemented with a UI toggle that enables automatic saving every 30 seconds and debounced saves on state changes.
 User Interface and Experience
-Dynamic Header: The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right.
-Summary Toolbar: A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, with a "Download Source" button on the bottom right for easy access, replacing in-catalog "details cards."
-Undo/Redo: Fully functional Undo and Redo buttons allow users to step through their history of changes.
+Dynamic Header: The sticky header features a centered title that dynamically updates with the event name, with collaborator avatars on the left and session controls on the right. When a user scrolls down, the header collapses to a compact summary view to maximize catalog visibility, and expands when the user scrolls up.
+Summary Toolbar: A persistent toolbar at the bottom manages core event details: Event Name, Date, Headcount, and Location, replacing in-catalog "details cards."
 Emoji Reactions: Users can leave emoji reactions on any event, used to automatically sort lists.
-Pre-MVP Disclaimer: Tooltips on the sessions dropdown note that these features are incomplete, setting expectations for the beta release.
 Code Readiness Assessment
 The codebase has a strong, modern foundation but requires improvements in security and completion of features.
 State Management: ✅ Completed
@@ -178,14 +119,12 @@ None
 Security: ❌ Incomplete (Hardcoded Airtable token in client-side code, bypassing serverless proxy)
 Remaining Area for Improvement:
 
-Code Modularity: The index.html file contains core logic (CSS and static HTML) that should ideally be moved to main.js or ui.js for better modularity.
 Security: Implement the serverless proxy to secure Airtable API requests.
 Feature Completion: None
-
-
 
 
 Future Enhancements (Scope Definition)
 Bundle 1: Integrated Scheduling System: Incorporate a calendar and availability system to prevent booking conflicts and assist in selecting valid dates and times based on component availability.
 Bundle 2: Real-Time Collaboration Suite: Enhance collaboration with presence indicators and a communication suite (text, audio, video chat) for seamless in-app planning.
 Bundle 3: Advanced Itinerary Builder: Develop a dynamic itinerary builder with a visual timeline and drag-and-drop functionality to assign and adjust event component timings.
+Bundle 4: Advanced Session Controls: Re-implement Undo/Redo functionality and a robust autosave system.
