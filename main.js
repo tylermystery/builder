@@ -1,55 +1,17 @@
 /*
- * Version: 1.7.0
- * Last Modified: 2025-08-19
+ * Version: 1.7.2
+ * Last Modified: 2025-08-21
  *
  * Changelog:
  *
- * v1.7.0 - 2025-08-19
- * - Implemented autosave functionality with 30-second interval when toggle is enabled.
+ * v1.7.2 - 2025-08-21
+ * - Updated scroll listeners to support a vertical catalog layout.
+ * - Removed horizontal mouse wheel scroll functionality.
  *
- * v1.6.6 - 2025-08-19
- * - Exported recordStateForUndo to fix import error in ui.js.
+ * v1.7.1 - 2025-08-20
+ * - Activated scroll listener to enable dynamic header collapsing.
  *
- * v1.6.5 - 2025-08-19
- * - Fixed syntax error in catalog click handler (missing template literal for composite ID).
- *
- * v1.6.4 - 2025-08-19
- * - Added debug logs to initialize function to diagnose "Catalog loading" issue.
- * - Improved error handling to ensure loading message updates on failure.
- *
- * v1.6.3 - 2025-08-19
- * - Exported updateRender for use in ui.js modal changes.
- *
- * v1.6.2 - 2025-08-18 06:15 PM PDT
- * - Updated "Download Source" button logic to use pre-built project_source.txt from export.js.
- *
- * v1.6.1 - 2025-08-18 06:00 PM PDT
- * - Added event listener for "Download Source" button to dynamically generate and download project_source.txt.
- *
- * v1.6.0 - 2025-08-18
- * - Made event cards clickable to open detailed editable modal view.
- * - Added save button in modal to apply edits to state/cart.
- *
- * v1.5.0 - 2025-08-18
- * - Added event listener to sessions-dropdown for loading selected sessions.
- *
- * v1.4.0 - 2025-08-18
- * - Updated `getRecordPrice` to correctly handle absolute vs. relative price changes for variations.
- *
- * v1.3.0 - 2025-08-18
- * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
- * - Event cards now auto-select the next available variation after one is favorited.
- *
- * v1.2.1 - 2025-08-17
- * - Fixed a critical HTML structure error in index.html.
- *
- * v1.2.0 - 2025-08-17
- * - Fixed broken filters by adding event listeners.
- * - Implemented a unified sorting system controlled by a new dropdown.
- * - Refactored `applyFilters` to handle both filtering and sorting.
- *
- * v1.0.0 - 2025-08-17
- * - Initial versioning and changelog added.
+...
  */
 
 
@@ -58,9 +20,6 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-
-
-
 const imageCache = new Map();
 
 
@@ -113,7 +72,8 @@ function redo() {
 
 
 // --- CORE LOGIC ---
-function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
+function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase();
+}
 
 
 
@@ -131,7 +91,8 @@ export function getRecordPrice(record, optionIndex = null) {
         const variation = options[optionIndex];
         if (variation) {
             if (variation.absolutePrice !== null) {
-                return variation.absolutePrice; // Return absolute price directly
+                return variation.absolutePrice;
+// Return absolute price directly
             }
             if (variation.priceChange !== null) {
                 price += variation.priceChange;
@@ -182,7 +143,8 @@ export async function handleReaction(recordId, emoji) {
 
 
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
-export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name; localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
+export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name;
+localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
 
 
 
@@ -195,7 +157,6 @@ async function applyFilters() {
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
     state.ui.currentSort = ui.sortBy.value;
-
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
@@ -211,7 +172,6 @@ async function applyFilters() {
         })();
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
-        
         return nameMatch && priceMatch && durationMatch && statusMatch;
     });
 
@@ -228,7 +188,6 @@ async function applyFilters() {
                     return calculateReactionScore(b.id) - calculateReactionScore(a.id);
         }
     });
-
     loadMoreRecords();
 }
 
@@ -266,7 +225,6 @@ function setupEventListeners() {
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
     });
-
     document.getElementById('reset-filters').addEventListener('click', () => {
         ui.nameFilter.value = '';
         ui.priceFilter.value = 'all';
@@ -275,7 +233,6 @@ function setupEventListeners() {
         ui.sortBy.value = 'reactions-desc';
         applyFilters();
     });
-
     document.getElementById('add-collaborator-btn').addEventListener('click', () => {
         const newName = prompt("Enter collaborator's name:");
         if (newName && !state.session.collaborators.includes(newName)) {
@@ -283,17 +240,11 @@ function setupEventListeners() {
             ui.renderCollaborators(getInitials);
         }
     });
-
-    ui.catalogContainer.addEventListener('wheel', (e) => {
-        if (e.deltaY !== 0) {
-            e.preventDefault();
-            ui.catalogContainer.scrollLeft += e.deltaY;
-        }
-    });
-
-    ui.catalogContainer.addEventListener('scroll', () => {
-        const { scrollTop, scrollHeight, clientHeight } = ui.catalogContainer;
-        if (scrollTop + clientHeight >= scrollHeight - 500) {
+    
+    // Infinite scroll listener for the whole page
+    window.addEventListener('scroll', () => {
+        // Load more when user is 500px from the bottom
+        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
             loadMoreRecords();
         }
     });
@@ -305,7 +256,6 @@ function setupEventListeners() {
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
-
     ui.favoritesCarousel.addEventListener('click', async (e) => {
         const promoteBtn = e.target.closest('.promote-btn');
         if (promoteBtn) {
@@ -349,7 +299,7 @@ function setupEventListeners() {
             return;
         }
 
-        // New: Click on favorite item (not on buttons) to open modal
+        // Click on favorite item (not on buttons) to open modal
         const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
@@ -404,7 +354,7 @@ function setupEventListeners() {
             return;
         }
 
-        // New: Click on card (not on buttons) to open modal
+        // Click on card (not on buttons) to open modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
@@ -430,7 +380,6 @@ function setupEventListeners() {
             }
         });
     });
-    
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -446,7 +395,6 @@ function setupEventListeners() {
             }
         }, 3000);
     });
-
     // Add listener for sessions dropdown to load selected session
     ui.sessionsDropdown.addEventListener('change', async (e) => {
         const selectedId = e.target.value;
@@ -456,16 +404,6 @@ function setupEventListeners() {
             // Reset dropdown to default after load (optional edge case handling)
             e.target.value = '';
         }
-    });
-
-    // Add listener for Download Source button
-    document.getElementById('download-source-btn').addEventListener('click', () => {
-        const link = document.createElement('a');
-        link.href = '/project_source.txt';
-        link.download = 'project_source.txt';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     });
 
     // Autosave setup
@@ -506,7 +444,7 @@ async function initialize() {
     } catch (error) {
         console.error("Failed to load records:", error);
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
-        ui.toggleLoading(false); // Ensure loading is toggled off
+        ui.toggleLoading(false);
         return;
     }
     
@@ -534,6 +472,7 @@ async function initialize() {
     
     console.log('Setting up event listeners...');
     setupEventListeners();
+    ui.collapseHeaderOnScroll(); // Activate the header collapse feature
     console.log('Updating render...');
     await updateRender();
     console.log('Initialize complete');
