@@ -1,16 +1,15 @@
 /*
- * Version: 1.7.2
+ * Version: 1.8.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
+ * v1.8.0 - 2025-08-21
+ * - Removed Undo/Redo and Autosave functionality for MVP simplification.
+ *
  * v1.7.2 - 2025-08-21
  * - Updated scroll listeners to support a vertical catalog layout.
  * - Removed horizontal mouse wheel scroll functionality.
- *
- * v1.7.1 - 2025-08-20
- * - Activated scroll listener to enable dynamic header collapsing.
- *
 ...
  */
 
@@ -25,48 +24,9 @@ const imageCache = new Map();
 
 
 // --- STATE & HISTORY ---
-export function recordStateForUndo() {  // Added export
-    if (state.history.isRestoring) return;
-    const currentState = {
-        items: new Map(state.cart.items),
-        lockedItems: new Map(state.cart.lockedItems),
-        combined: new Map(state.eventDetails.combined)
-    };
-    state.history.undoStack.push(currentState);
-    state.history.redoStack = [];
-    ui.updateHistoryButtons();
-}
-
-
-
-async function restoreState(newState) {
-    state.history.isRestoring = true;
-    state.cart.items = newState.items;
-    state.cart.lockedItems = newState.lockedItems;
-    state.eventDetails.combined = newState.combined;
-    state.history.isRestoring = false;
-    await updateRender();
-}
-
-
-
-function undo() {
-    if (state.history.undoStack.length > 1) {
-        const currentState = state.history.undoStack.pop();
-        state.history.redoStack.push(currentState);
-        const prevState = state.history.undoStack[state.history.undoStack.length - 1];
-        restoreState(prevState);
-    }
-}
-
-
-
-function redo() {
-    if (state.history.redoStack.length > 0) {
-        const nextState = state.history.redoStack.pop();
-        state.history.undoStack.push(nextState);
-        restoreState(nextState);
-    }
+export function recordStateForUndo() {
+    // This function is kept for potential future re-implementation of undo/redo
+    // but its call to updateHistoryButtons is removed as the buttons no longer exist.
 }
 
 
@@ -218,9 +178,6 @@ export async function updateRender() { // Exported for ui.js
 
 
 function setupEventListeners() {
-    document.getElementById('undo-btn').addEventListener('click', undo);
-    document.getElementById('redo-btn').addEventListener('click', redo);
-
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
@@ -406,28 +363,6 @@ function setupEventListeners() {
         }
     });
 
-    // Autosave setup
-    const autosaveToggle = document.getElementById('autosave-toggle');
-    let autosaveInterval;
-    function setupAutosave() {
-        if (autosaveToggle.checked) {
-            autosaveInterval = setInterval(async () => {
-                const success = await api.saveSessionToAirtable();
-                if (success) {
-                    document.getElementById('save-status').textContent = 'Autosaved!';
-                    setTimeout(() => { document.getElementById('save-status').textContent = ''; }, 2000);
-                }
-            }, 30000); // 30 seconds
-        }
-    }
-    autosaveToggle.addEventListener('change', () => {
-        if (autosaveToggle.checked) {
-            setupAutosave();
-        } else {
-            clearInterval(autosaveInterval);
-        }
-    });
-    setupAutosave(); // Initial setup if checked by default
 }
 
 
