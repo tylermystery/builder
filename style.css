@@ -1,8 +1,12 @@
 /*
- * Version: 2.0.1
+ * Version: 2.1.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v2.1.0 - 2025-08-21
+ * - Final UI Polish: Styled favorites carousel for compact view.
+ * - Restored and polished all card hover effects and modal styles.
  *
  * v2.0.1 - 2025-08-21
  * - Fixed critical bug where a CSS rule was preventing the main catalog from rendering.
@@ -134,8 +138,8 @@ body {
     gap: 15px; overflow-x: auto; padding-bottom: 5px; }
 .favorite-item {
     position: relative;
-    flex: 0 0 200px;
-    height: 323px;
+    flex: 0 0 220px; /* Compact width */
+    height: 180px;  /* Compact height */
     border-radius: 8px;
     overflow: hidden;
     background-size: cover;
@@ -154,7 +158,7 @@ body {
 .favorite-item-content {
     background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
     padding: 10px;
-    text-align: center;
+    text-align: left; /* Align text left for better readability */
 }
 .card-footer {
     display: flex;
@@ -379,6 +383,7 @@ body {
     border-radius: 12px;
     width: 90%;
     max-width: 600px;
+    height: 520px; /* Give modal a fixed aspect ratio like cards */
     max-height: 90vh;
     display: flex;
     flex-direction: column;
