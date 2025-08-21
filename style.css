@@ -1,8 +1,11 @@
 /*
- * Version: 1.0.2
+ * Version: 2.0.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v2.0.0 - 2025-08-21
+ * - Completed UI polish: Styled favorites carousel, restored all hover effects, and polished modal view.
  *
  * v1.0.2 - 2025-08-21
  * - Converted catalog from horizontal grid to responsive vertical grid layout.
@@ -234,12 +237,11 @@ body {
 }
 #catalog-container {
     display: grid;
-    /* Use CSS Grid to create a responsive, wrapping layout */
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 25px;
     padding: 20px;
-    max-width: 1400px; /* Optional: Constrain max width */
-    margin: 0 auto; /* Center the container */
+    max-width: 1400px;
+    margin: 0 auto;
 }
 .event-card {
     position: relative;
@@ -249,7 +251,7 @@ body {
     flex-direction: column;
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     height: 520px;
-    width: 100%; /* Let the grid control the width */
+    width: 100%;
     background-size: cover;
     background-position: center;
     color: white;
@@ -465,9 +467,6 @@ body {
 }
 .total-cost-summary {
     align-items: flex-start;
-}
-#autosave-toggle {
-    cursor: pointer;
 }
 .gallery-arrow {
     position: absolute;
