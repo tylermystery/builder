@@ -1,19 +1,16 @@
 /*
 
-Version: 1.9.0
-Last Modified: 2025-08-19
+Version: 1.9.1
+Last Modified: 2025-08-21
 
 Changelog:
 
+v1.9.1 - 2025-08-21
+- Updated core layout: Main catalog now scrolls vertically in a responsive grid, while the favorites carousel remains horizontal.
+
 v1.9.0 - 2025-08-19
-
-
-Implemented autosave functionality with interval-based saving and debounced saves on state changes.
-
-
-
-
-Removed pre-MVP beta disclaimer for autosave as the feature is now complete.
+- Implemented autosave functionality with interval-based saving and debounced saves on state changes.
+- Removed pre-MVP beta disclaimer for autosave as the feature is now complete.
 
 
 
@@ -162,8 +159,11 @@ Secure API Proxy: Intended to handle all Airtable API communication securely via
 Session Management: User selections and collaborations can be saved and loaded as unique sessions via a separate "Sessions" table. A dropdown menu displays saved sessions, and selecting one loads the session with UI updates.
 Dynamic Catalog Display:
 
-Two-Row Horizontal Layout: Events are displayed in a two-row, horizontally scrolling layout that loads more items as the user scrolls to the end ("infinite scroll").
+Dynamic Catalog Display:
+
+Standard Vertical Layout: Events are displayed in a responsive grid that scrolls vertically with the main page. More items are loaded as the user scrolls toward the bottom ("infinite scroll").
 Event Cards: Each event is presented on a "card" that shows its name, image, duration, price, and pricing model. Cards are clickable to open a detailed editable view.
+
 Image Handling:
 Dynamic Images: Event images are fetched dynamically from a Cloudinary account based on "Media Tags" from Airtable.
 Performance Cache: Fetched image URLs are cached to prevent redundant network requests, speeding up rendering.
