@@ -1,15 +1,15 @@
 /*
- * Version: 1.8.0
+ * Version: 1.8.1
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
+ * v1.8.1 - 2025-08-21
+ * - Refined card interactions: Emoji clicks no longer open the modal.
+ * - Added mouse wheel scrolling to the horizontal favorites carousel.
+ *
  * v1.8.0 - 2025-08-21
  * - Removed Undo/Redo and Autosave functionality for MVP simplification.
- *
- * v1.7.2 - 2025-08-21
- * - Updated scroll listeners to support a vertical catalog layout.
- * - Removed horizontal mouse wheel scroll functionality.
 ...
  */
 
@@ -200,7 +200,6 @@ function setupEventListeners() {
     
     // Infinite scroll listener for the whole page
     window.addEventListener('scroll', () => {
-        // Load more when user is 500px from the bottom
         if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
             loadMoreRecords();
         }
@@ -213,46 +212,18 @@ function setupEventListeners() {
             await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
+
+    // Add mouse wheel scrolling to the favorites carousel
+    ui.favoritesCarousel.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+            e.preventDefault();
+            ui.favoritesCarousel.scrollLeft += e.deltaY;
+        }
+    });
+
     ui.favoritesCarousel.addEventListener('click', async (e) => {
-        const promoteBtn = e.target.closest('.promote-btn');
-        if (promoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = promoteBtn.dataset.compositeId;
-            const itemData = state.cart.items.get(compositeId);
-            if (itemData) {
-                state.cart.lockedItems.set(compositeId, itemData);
-                state.cart.items.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-        const demoteBtn = e.target.closest('.demote-btn');
-        if (demoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = demoteBtn.dataset.compositeId;
-            const itemData = state.cart.lockedItems.get(compositeId);
-            if (itemData) {
-                state.cart.items.set(compositeId, itemData);
-                state.cart.lockedItems.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-        const removeBtn = e.target.closest('.remove-btn');
-        if (removeBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = removeBtn.dataset.compositeId;
-            state.cart.items.delete(compositeId);
-            await updateRender();
-            return;
-        }
-        const editBtn = e.target.closest('.edit-card-btn');
-        if (editBtn) {
-            e.stopPropagation();
-            await ui.openDetailModal(editBtn.dataset.compositeId, imageCache);
+        // If the click was on any button within the card, stop execution to prevent modal opening
+        if (e.target.closest('button')) {
             return;
         }
 
@@ -302,16 +273,12 @@ function setupEventListeners() {
             return;
         }
         
-        const editBtn = e.target.closest('.edit-card-btn');
-        if (editBtn) {
-            e.stopPropagation();
-            const card = editBtn.closest('.event-card');
-            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
-            await ui.openDetailModal(compositeId, imageCache);
+        // If the click was on any button, including edit or reaction, stop to prevent modal
+        if (e.target.closest('button')) {
             return;
         }
 
-        // Click on card (not on buttons) to open modal
+        // Click on card body to open modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
