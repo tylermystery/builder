@@ -10,6 +10,10 @@
  *
  * v1.8.0 - 2025-08-21
  * - Removed Undo/Redo and Autosave functionality for MVP simplification.
+ *
+ * v1.7.2 - 2025-08-21
+ * - Updated scroll listeners to support a vertical catalog layout.
+ * - Removed horizontal mouse wheel scroll functionality.
 ...
  */
 
@@ -222,13 +226,17 @@ function setupEventListeners() {
     });
 
     ui.favoritesCarousel.addEventListener('click', async (e) => {
-        // If the click was on any button within the card, stop execution to prevent modal opening
-        if (e.target.closest('button')) {
+        // If the click was on any button within the card, its specific listener should handle it.
+        // We find the parent card element to open the modal.
+        const favoriteItem = e.target.closest('.favorite-item');
+
+        // Check if the click was on a specific interactive element within the card.
+        // If so, their own event listeners should fire (and stop propagation), so we do nothing here.
+        if (e.target.closest('button') || e.target.closest('.action-btn-container')) {
             return;
         }
 
-        // Click on favorite item (not on buttons) to open modal
-        const favoriteItem = e.target.closest('.favorite-item');
+        // If we found a favorite item and the click was not on a button, open the modal.
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
@@ -273,12 +281,12 @@ function setupEventListeners() {
             return;
         }
         
-        // If the click was on any button, including edit or reaction, stop to prevent modal
+        // If the click was on any button (like edit or a reaction), do nothing further.
         if (e.target.closest('button')) {
             return;
         }
 
-        // Click on card body to open modal
+        // Click on the main card body to open the modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
