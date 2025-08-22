@@ -1,60 +1,16 @@
 /*
- * Version: 1.8.5
+ * Version: 1.8.6
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
+ * v1.8.6 - 2025-08-21
+ * - Enhanced collapsing header summary to include date, headcount, and total cost.
+ *
  * v1.8.5 - 2025-08-21
  * - Removed obsolete updateSummaryToolbar function.
  * - Exported new header input elements.
- *
- * v1.8.4 - 2025-08-21
- * - Removed updateHistoryButtons function as part of MVP cleanup.
- *
- * v1.8.3 - 2025-08-19
- * - Removed disclaimer tooltips from autosave-toggle and sessions-dropdown as features are now complete.
- *
- * v1.8.2 - 2025-08-19
- * - Made modal changes (option, quantity) auto-apply to state on change, removed save button, call updateRender to reflect in catalog/favorites.
- *
- * v1.8.1 - 2025-08-19
- * - Added reactions bar and hearting functionality to detailed modal view, mirroring catalog.
- *
- * v1.8.0 - 2025-08-18
- * - Enhanced `openDetailModal` to include full description, editable options/quantity, and save button to apply changes to state/cart.
- *
- * v1.7.0 - 2025-08-18
- * - Fixed total cost calculation to multiply variation price by quantity (hours for per-hour, guests for per-guest).
- * - Added disclaimer tooltip to autosave-toggle and sessions-dropdown.
- *
- * v1.6.0 - 2025-08-18
- * - Enhanced `updateTotalCost` to ensure accurate pricing with variations and quantity, including min headcount enforcement.
- * - Added breakdown tooltip to total cost display.
- *
- * v1.5.0 - 2025-08-18
- * - Implemented image gallery functionality for event cards, favorite items, and modals.
- * - Updated to use `fetchImagesForRecord` for retrieving multiple images.
- * - Added gallery arrow buttons and cycling logic using `state.ui.cardImageIndexes`.
- *
- * v1.4.0 - 2025-08-18
- * - Refactored `parseOptions` to handle a robust key-value pair format.
- * - Updated `createEventCardElement` to display and dynamically update option-specific descriptions, prices, and durations.
- * - Updated `updateTotalCost` and `createFavoriteCardElement` to use the new price calculation logic.
- *
- * v1.3.0 - 2025-08-18
- * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
- * - Event cards now auto-select the next available variation after one is favorited.
- *
- * v1.2.1 - 2025-08-17
- * - Fixed a critical HTML structure error in index.html.
- *
- * v1.2.0 - 2025-08-17
- * - Updated `updateFavoritesCarousel` to use the new unified sorting logic.
- * - Exported `parseOptions` for use in `main.js`.
- * - Exported the new `sortBy` dropdown element.
- *
- * v1.0.0 - 2025-08-17
- * - Initial versioning and changelog added.
+...
  */
 
 
@@ -215,7 +171,7 @@ export async function createEventCardElement(record, imageCache) {
     eventCard.dataset.recordId = recordId;
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(recordId)) {
-        state.ui.cardImageIndexes.set(recordId, 0);
+        state.ui.cardImageIndexes.set(record.id, 0);
     }
     let currentIndex = state.ui.cardImageIndexes.get(recordId);
     eventCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
@@ -438,22 +394,28 @@ export function toggleLoading(show) {
 }
 
 export function updateHeader() {
-    // Now, the header event name input IS the header title source.
-    // We just need to make sure the document title is updated.
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Catalog';
     document.title = eventName;
 }
 
 export function updateHeaderSummary() {
     const headerSummary = document.getElementById('header-summary');
-    const itemCount = state.cart.items.size + state.cart.lockedItems.size;
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
+    const date = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const headcount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 0;
     const totalCost = document.getElementById('total-cost').textContent;
 
-    if (itemCount > 0) {
-        headerSummary.textContent = `Selections: ${itemCount} | Total: ${totalCost}`;
-    } else {
-        headerSummary.textContent = `Event: ${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event'}`;
+    const summaryParts = [];
+    summaryParts.push(`<strong>${eventName}</strong>`);
+    if (date) {
+        summaryParts.push(`📅 ${date}`);
     }
+    if (headcount > 0) {
+        summaryParts.push(`👤 ${headcount}`);
+    }
+    summaryParts.push(`- ${totalCost}`);
+
+    headerSummary.innerHTML = summaryParts.join(' | ');
 }
 
 export function updateTotalCost() {
