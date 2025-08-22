@@ -72,10 +72,6 @@
             padding: 6px 8px;
             font-size: 0.9em;
         }
-        .toolbar-group .toolbar-item {
-            display: flex;
-            flex-direction: column;
-        }
         .event-name-group {
             flex-grow: 1;
         }
@@ -128,8 +124,8 @@
             gap: 15px; overflow-x: auto; padding-bottom: 5px; }
         .favorite-item {
             position: relative;
-            flex: 0 0 220px;
-            height: 180px;
+            flex: 0 0 200px; /* Width of favorite card */
+            height: 325px;  /* Adjusted height to match aspect ratio of main cards */
             border-radius: 8px;
             overflow: hidden;
             background-size: cover;
