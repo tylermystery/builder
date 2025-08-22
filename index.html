@@ -6,6 +6,19 @@
     <title>Event Catalog</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
     <style>
+        /*
+         * Version: 2.1.1
+         * Last Modified: 2025-08-21
+         *
+         * Changelog:
+         *
+         * v2.1.1 - 2025-08-21
+         * - Added ID to sort-by-reactions option for JS targeting.
+         *
+         * v2.1.0 - 2025-08-21
+         * - Stripped UI down to MVP foundation.
+         */
+
         body {
             padding-bottom: 80px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
@@ -171,19 +184,10 @@
             margin: 0 auto;
         }
 
-        /* ALL CARD SHARED STYLES */
-        .card-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 10px;
-        }
-        
         /* HIDE REACTION BAR FOR MVP */
         .reaction-bar, .reactions-summary {
             display: none !important;
         }
-        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
         
         /* SIMPLIFIED FAVORITE CARD BUTTONS */
         .card-actions {
@@ -235,27 +239,18 @@
             transform: translateY(-5px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }
-        .event-card .card-footer {
-             position: absolute;
-             bottom: 0;
-             left: 0;
-             right: 0;
-             background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
-        }
-        .heart-icon, .edit-card-btn {
+        .heart-icon {
             position: absolute;
             top: 15px;
+            right: 15px;
             width: 30px;
             height: 30px;
             cursor: pointer;
             z-index: 10;
             background: none;
             border: none;
-            font-size: 1.5em;
             padding: 0;
         }
-        .heart-icon { right: 15px; }
-        .edit-card-btn { left: 15px; }
         .heart-icon svg {
             width: 100%;
             height: 100%;
@@ -464,12 +459,14 @@
     <select id="status-filter">
         <option value="all">All Statuses</option>
     </select>
+    
     <select id="sort-by">
-        <option value="reactions-desc">Sort by: Reactions</option>
         <option value="price-asc">Price (Low to High)</option>
         <option value="price-desc">Price (High to Low)</option>
         <option value="name-asc">Name (A-Z)</option>
+        <option value="reactions-desc" id="sort-by-reactions">Sort by: Reactions</option>
     </select>
+
     <button id="reset-filters">Reset</button>
 </div>
 
