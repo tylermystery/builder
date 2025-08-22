@@ -189,7 +189,6 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     // CONDITIONAL BUTTON RENDERING
     let cardActionsHTML = '';
     const isPlannerMode = document.body.classList.contains('planner-mode-enabled');
-
     if (isPlannerMode) {
         const primaryActionHTML = isLocked 
             ? `<button class="action-btn-primary locked-btn" title="Locked In">⛓️</button>` 
