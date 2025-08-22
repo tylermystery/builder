@@ -1,8 +1,11 @@
 /*
- * Version: 2.0.0
- * Last Modified: 2025-08-21
+ * Version: 2.0.1
+ * Last Modified: 2025-08-22
  *
  * Changelog:
+ *
+ * v2.0.1 - 2025-08-22
+ * - Added logic to populate Category and Subcategory filters.
  *
  * v2.0.0 - 2025-08-21
  * - Implemented conditional rendering logic for Beta Toolkit features.
@@ -85,6 +88,8 @@ export const nameFilter = document.getElementById('name-filter');
 export const priceFilter = document.getElementById('price-filter');
 export const durationFilter = document.getElementById('duration-filter');
 export const statusFilter = document.getElementById('status-filter');
+export const categoryFilter = document.getElementById('category-filter');
+export const subcategoryFilter = document.getElementById('subcategory-filter');
 export const sortBy = document.getElementById('sort-by');
 export const guestCountInput = document.getElementById('guest-count');
 export const headerEventNameInput = document.getElementById('header-event-name');
@@ -100,6 +105,8 @@ const collaboratorsSection = document.getElementById('collaborators-section');
 export const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
 export const sessionsDropdown = document.getElementById('sessions-dropdown');
 const filterControls = document.getElementById('filter-controls');
+const undoBtn = document.getElementById('undo-btn');
+const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
@@ -242,9 +249,9 @@ export async function createEventCardElement(record, imageCache) {
     eventCard.dataset.recordId = recordId;
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(recordId)) {
-        state.ui.cardImageIndexes.set(record.id, 0);
+        state.ui.cardImageIndexes.set(recordId, 0);
     }
-    let currentIndex = state.ui.cardImageIndexes.get(record.id);
+    let currentIndex = state.ui.cardImageIndexes.get(recordId);
     eventCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
 
     let optionsDropdownHTML = '';
@@ -417,6 +424,13 @@ export async function updateFavoritesCarousel() {
     updateHeader();
 }
 
+export function updateHistoryButtons() {
+    if (undoBtn && redoBtn) {
+        undoBtn.disabled = state.history.undoStack.length <= 1;
+        redoBtn.disabled = state.history.redoStack.length === 0;
+    }
+}
+
 export function renderCollaborators(getInitials) {
     collaboratorsSection.style.display = 'flex';
     const collaboratorAvatars = document.getElementById('collaborator-avatars');
@@ -526,10 +540,18 @@ export function populateFilter(filterElement, fieldName) {
     const values = new Set();
     state.records.all.forEach(record => {
         const fieldValue = record.fields[fieldName];
-        if (fieldValue) {
+        if (Array.isArray(fieldValue)) {
+            fieldValue.forEach(val => values.add(val));
+        } else if (fieldValue) {
             values.add(fieldValue);
         }
     });
+    
+    // Clear existing options except the first "All" option
+    while (filterElement.options.length > 1) {
+        filterElement.remove(1);
+    }
+
     values.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
