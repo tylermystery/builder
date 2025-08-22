@@ -1,8 +1,12 @@
 /*
- * Version: 1.9.0
+ * Version: 2.0.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v2.0.0 - 2025-08-21
+ * - Implemented conditional rendering logic for Beta Toolkit features.
+ * - Cards now render different buttons/UI based on active modes.
  *
  * v1.9.0 - 2025-08-21
  * - Stripped down to MVP: Removed reaction bars and complex favorite card buttons.
@@ -143,6 +147,19 @@ export function parseOptions(optionsText) {
 }
 
 // --- UI RENDERING FUNCTIONS ---
+function renderReactionsSummary(recordId) {
+    const reactions = state.session.reactions.get(recordId) || {};
+    const reactionCounts = Object.values(reactions).reduce((acc, emoji) => {
+        acc[emoji] = (acc[emoji] || 0) + 1;
+        return acc;
+    }, {});
+    return `<div class="reactions-summary">${Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('')}</div>`;
+}
+
+function renderReactionbar(recordId) {
+    return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
+}
+
 export async function createFavoriteCardElement(compositeId, itemInfo, isLocked, imageCache) {
     const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
     if (!record) return null;
@@ -169,10 +186,27 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     let currentIndex = state.ui.cardImageIndexes.get(record.id);
     itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
     
-    // MVP: Simple Remove Button
-    const removeButtonHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">×</button>`;
+    // CONDITIONAL BUTTON RENDERING
+    let cardActionsHTML = '';
+    const isPlannerMode = document.body.classList.contains('planner-mode-enabled');
 
-    itemCard.innerHTML = `<div class="card-actions">${removeButtonHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    if (isPlannerMode) {
+        const primaryActionHTML = isLocked 
+            ? `<button class="action-btn-primary locked-btn" title="Locked In">⛓️</button>` 
+            : `<button class="action-btn-primary promote-btn" title="Lock it in" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
+        const secondaryActionHTML = isLocked 
+            ? `<button class="action-btn-secondary demote-btn" title="Unlock" data-composite-id="${compositeId}">🔨</button>` 
+            : `<button class="action-btn-secondary remove-btn" title="Remove" data-composite-id="${compositeId}">💔</button>`;
+        cardActionsHTML = `${primaryActionHTML}${secondaryActionHTML}`;
+    } else {
+        cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">×</button>`;
+    }
+    
+    // CONDITIONAL REACTION BAR RENDERING
+    const isCollabMode = document.body.classList.contains('collab-mode-enabled');
+    const reactionUI = isCollabMode ? `${renderReactionbar(record.id)}<div class="card-footer">${renderReactionsSummary(record.id)}</div>` : '';
+
+    itemCard.innerHTML = `<div class="card-actions">${cardActionsHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div>${reactionUI}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
     const leftArrow = itemCard.querySelector('.gallery-arrow.left');
     const rightArrow = itemCard.querySelector('.gallery-arrow.right');
@@ -233,6 +267,9 @@ export async function createEventCardElement(record, imageCache) {
     const compositeId = options.length > 0 ?
         `${recordId}-${firstAvailableOptionIndex}` : recordId;
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
+    
+    const isCollabMode = document.body.classList.contains('collab-mode-enabled');
+    const reactionUI = isCollabMode ? `${renderReactionbar(record.id)}<div class="card-footer">${renderReactionsSummary(record.id)}</div>` : '';
 
     eventCard.innerHTML = `
         <div class="heart-icon" data-composite-id="${compositeId}">
@@ -252,6 +289,7 @@ export async function createEventCardElement(record, imageCache) {
                 </div>
             </div>
         </div>
+        ${reactionUI}
         <button class="gallery-arrow left">←</button>
         <button class="gallery-arrow right">→</button>`;
     const dropdown = eventCard.querySelector('.options-selector');
