@@ -1,15 +1,28 @@
 /*
- * Version: 1.8.5
+ * Version: 1.8.4
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
- * v1.8.5 - 2025-08-21
- * - Implemented event listeners for Beta Toolkit toggles to show/hide features.
- *
  * v1.8.4 - 2025-08-21
  * - Added logic to hide "Sort by Reactions" option by default for MVP.
-...
+ *
+ * v1.8.3 - 2025-08-21
+ * - Stripped down to MVP: Removed reaction bar and complex button listeners.
+ *
+ * v1.8.2 - 2025-08-21
+ * - Fixed bug where action buttons (promote, demote, remove) on favorites carousel were not working.
+ *
+ * v1.8.1 - 2025-08-21
+ * - Refined card interactions: Emoji clicks no longer open the modal.
+ * - Added mouse wheel scrolling to the horizontal favorites carousel.
+ *
+ * v1.8.0 - 2025-08-21
+ * - Removed Undo/Redo and Autosave functionality for MVP simplification.
+ *
+ * v1.7.2 - 2025-08-21
+ * - Updated scroll listeners to support a vertical catalog layout.
+ * - Removed horizontal mouse wheel scroll functionality.
  */
 
 
@@ -24,13 +37,12 @@ const imageCache = new Map();
 
 // --- STATE & HISTORY ---
 export function recordStateForUndo() {
-    // Kept for potential future re-implementation
+    // This function is kept for potential future re-implementation of undo/redo
 }
 
 
 
 // --- CORE LOGIC ---
-// ... (core logic functions are unchanged) ...
 function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
@@ -146,28 +158,6 @@ export async function updateRender() { // Exported for ui.js
 }
 
 function setupEventListeners() {
-    // BETA TOOLKIT LISTENERS
-    document.getElementById('beta-trigger').addEventListener('click', () => {
-        document.getElementById('beta-toolkit').classList.toggle('visible');
-    });
-
-    document.getElementById('collab-mode-toggle').addEventListener('change', (e) => {
-        document.body.classList.toggle('collab-mode-enabled', e.target.checked);
-        const reactionsSortOption = document.getElementById('sort-by-reactions');
-        reactionsSortOption.style.display = e.target.checked ? 'block' : 'none';
-        if (!e.target.checked && ui.sortBy.value === 'reactions-desc') {
-            ui.sortBy.value = 'price-asc'; // Reset to default sort
-        }
-        updateRender();
-    });
-
-    document.getElementById('planner-mode-toggle').addEventListener('change', (e) => {
-        document.body.classList.toggle('planner-mode-enabled', e.target.checked);
-        updateRender();
-    });
-
-
-    // REGULAR EVENT LISTENERS
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
@@ -177,7 +167,7 @@ function setupEventListeners() {
         ui.priceFilter.value = 'all';
         ui.durationFilter.value = 'all';
         ui.statusFilter.value = 'all';
-        ui.sortBy.value = document.body.classList.contains('collab-mode-enabled') ? 'reactions-desc' : 'price-asc';
+        ui.sortBy.value = 'price-asc'; // Default sort to price now
         applyFilters();
     });
     document.getElementById('add-collaborator-btn').addEventListener('click', () => {
@@ -191,14 +181,6 @@ function setupEventListeners() {
     window.addEventListener('scroll', () => {
         if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
             loadMoreRecords();
-        }
-    });
-
-    document.body.addEventListener('click', async (e) => {
-        const reactionBtn = e.target.closest('.reaction-bar button');
-        if (reactionBtn) {
-            e.stopPropagation();
-            await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
 
@@ -216,41 +198,13 @@ function setupEventListeners() {
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
-            state.cart.lockedItems.delete(compositeId);
+            state.cart.lockedItems.delete(compositeId); // Also remove from locked
             await updateRender();
             return;
         }
 
-        const promoteBtn = e.target.closest('.promote-btn');
-        if (promoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = promoteBtn.dataset.compositeId;
-            const itemData = state.cart.items.get(compositeId);
-            if (itemData) {
-                state.cart.lockedItems.set(compositeId, itemData);
-                state.cart.items.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-
-        const demoteBtn = e.target.closest('.demote-btn');
-        if (demoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = demoteBtn.dataset.compositeId;
-            const itemData = state.cart.lockedItems.get(compositeId);
-            if (itemData) {
-                state.cart.items.set(compositeId, itemData);
-                state.cart.lockedItems.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-
         const favoriteItem = e.target.closest('.favorite-item');
-        if (favoriteItem && !e.target.closest('button')) {
+        if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
@@ -392,8 +346,9 @@ async function initialize() {
     setupEventListeners();
     ui.collapseHeaderOnScroll();
     
+    // Hide collab features by default for MVP
     document.getElementById('sort-by-reactions').style.display = 'none';
-    ui.sortBy.value = 'price-asc'; 
+    ui.sortBy.value = 'price-asc'; // Set a non-reaction default sort
 
     console.log('Updating render...');
     await updateRender();
