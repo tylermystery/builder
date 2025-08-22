@@ -1,33 +1,22 @@
 /*
- * Version: 2.1.0
+ * Version: 2.2.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
+ * v2.2.0 - 2025-08-21
+ * - Removed bottom summary toolbar styles.
+ * - Added styles for new all-in-one header toolbar.
+ *
  * v2.1.0 - 2025-08-21
  * - Final UI Polish: Styled favorites carousel for compact view.
  * - Restored and polished all card hover effects and modal styles.
- *
- * v2.0.1 - 2025-08-21
- * - Fixed critical bug where a CSS rule was preventing the main catalog from rendering.
- *
- * v2.0.0 - 2025-08-21
- * - Completed UI polish: Styled favorites carousel, restored all hover effects, and polished modal view.
- *
- * v1.0.2 - 2025-08-21
- * - Converted catalog from horizontal grid to responsive vertical grid layout.
- *
- * v1.0.1 - 2025-08-20
- * - Polished main catalog card styles for improved legibility and layout.
- *
- * v1.0.0 - 2025-08-20
- * - Initial complete stylesheet created from last working version.
- * - Added styles for collapsing header functionality.
+...
  */
 
 body {
-    padding-bottom: 80px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: #f4f7f6;
 }
 #sticky-header {
     position: sticky;
@@ -35,12 +24,10 @@ body {
     background-color: white;
     z-index: 999;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    padding-top: 10px;
     transition: padding 0.3s ease-in-out;
 }
 #header-summary {
     display: none;
-    justify-content: space-between;
     align-items: center;
     padding: 10px 20px;
     width: 100%;
@@ -49,13 +36,74 @@ body {
     font-size: 1.1em;
     box-sizing: border-box;
 }
-#header-summary span { color: #6c757d; }
 #header-full-content { max-height: 500px; overflow: hidden;
     transition: max-height 0.4s ease-in-out; }
 #sticky-header.header-collapsed { padding-top: 0; padding-bottom: 0; }
 #sticky-header.header-collapsed #header-full-content { max-height: 0; }
 #sticky-header.header-collapsed #header-summary { display: flex;
 }
+
+/* New Header Toolbar Styles */
+#header-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 15px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    border-bottom: 1px solid #e9ecef;
+}
+.toolbar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.toolbar-group label {
+    font-size: 0.75em;
+    color: #666;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+.toolbar-group input, .toolbar-group textarea {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.9em;
+}
+.toolbar-group .toolbar-item {
+    display: flex;
+    flex-direction: column;
+}
+.event-name-group input {
+    font-size: 1.8em;
+    font-weight: bold;
+    border: none;
+    padding: 0;
+}
+.event-name-group input:focus {
+    outline: none;
+}
+.details-group {
+    flex-direction: row;
+    gap: 15px;
+}
+.goals-group {
+    flex-grow: 1; /* Allow goals to take up remaining space */
+}
+.goals-group textarea {
+    min-height: 32px;
+    resize: vertical;
+}
+.people-group {
+    flex-direction: row;
+    align-items: center;
+    gap: 15px;
+    border-left: 1px solid #e9ecef;
+    padding-left: 20px;
+}
+
 #total-cost-section {
     padding: 0;
     text-align: right;
@@ -66,42 +114,8 @@ body {
     color: #007aff;
     cursor: pointer;
 }
-#summary-total-cost {
-    font-size: 1.4em;
-    font-weight: bold;
-    color: #007aff;
-    cursor: pointer;
-}
 #favorites-section { max-width: 1200px; margin: 0 auto; padding: 0 20px 15px 20px; }
-.favorites-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    padding-bottom: 15px;
-}
-#event-title-header {
-    margin: 0;
-    text-align: center;
-    flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.header-group-left, .header-group-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-shrink: 0;
-}
-#sessions-dropdown-container { margin-bottom: 0; }
-#sessions-dropdown {
-    padding: 5px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    background-color: #f8f9fa;
-    font-size: 0.9em;
-}
+
 #collaborators-section { display: flex; align-items: center; gap: 10px; }
 #collaborator-avatars { display: flex;
 }
@@ -135,7 +149,7 @@ body {
     margin-left: -2px;
 }
 #favorites-carousel { display: flex;
-    gap: 15px; overflow-x: auto; padding-bottom: 5px; }
+    gap: 15px; overflow-x: auto; padding-top: 15px; }
 .favorite-item {
     position: relative;
     flex: 0 0 220px; /* Compact width */
@@ -436,46 +450,7 @@ body {
     color: white;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
-#summary-toolbar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #ffffff;
-    border-top: 1px solid #e0e0e0;
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 10px 20px;
-    gap: 20px;
-    z-index: 1001;
-    flex-wrap: wrap;
-}
-.toolbar-item {
-    display: flex;
-    flex-direction: column;
-}
-.toolbar-item label {
-    font-size: 0.75em;
-    color: #666;
-    margin-bottom: 4px;
-}
-.toolbar-item input {
-    padding: 6px 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-.toolbar-item input[type="date"] {
-    min-width: 130px;
-}
-.toolbar-item input[type="number"] {
-    width: 80px;
-}
-.total-cost-summary {
-    align-items: flex-start;
-}
+
 .gallery-arrow {
     position: absolute;
     top: 50%;
