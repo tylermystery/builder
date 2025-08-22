@@ -1,8 +1,11 @@
 /*
- * Version: 1.5.0
- * Last Modified: 2025-08-18
+ * Version: 1.6.0
+ * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.6.0 - 2025-08-21
+ * - Removed obsolete history object for MVP cleanup.
  *
  * v1.5.0 - 2025-08-18
  * - Added `cardImageIndexes` map to UI state to track image gallery positions.
@@ -37,10 +40,5 @@ export const state = {
         isLoadingMore: false,
         currentSort: 'reactions-desc',
         cardImageIndexes: new Map(), // Tracks current image index for each card
-    },
-    history: {
-        undoStack: [],
-        redoStack: [],
-        isRestoring: false,
     }
 };
