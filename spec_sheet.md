@@ -1,9 +1,12 @@
 /*
-
-Version: 1.9.3
+Version: 1.9.4
 Last Modified: 2025-08-21
 
 Changelog:
+
+v1.9.4 - 2025-08-21
+- Updated spec for favorites carousel: Cards are now officially smaller versions of the main catalog cards, maintaining the same aspect ratio for consistency.
+- Added note for future animation enhancements.
 
 v1.9.3 - 2025-08-21
 - Added "Card Interaction Model" to spec sheet to define user interactions.
@@ -89,7 +92,7 @@ Card Interaction Model:
 - **Favorites Carousel Scrolling:** Using the mouse wheel while the cursor is over the "Your Selections" carousel will scroll it horizontally.
 
 Favoriting & Locking:
-Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel.
+Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel. Items in the carousel appear as smaller versions of the main catalog cards, maintaining the same aspect ratio for visual consistency.
 The event card in the main catalog will then auto-select the next available variation.
 Once all variations of an item have been favorited, the event card is removed from the main catalog.
 From the carousel, items can be "locked in" to signify a final decision.
@@ -128,3 +131,4 @@ Bundle 1: Integrated Scheduling System: Incorporate a calendar and availability 
 Bundle 2: Real-Time Collaboration Suite: Enhance collaboration with presence indicators and a communication suite (text, audio, video chat) for seamless in-app planning.
 Bundle 3: Advanced Itinerary Builder: Develop a dynamic itinerary builder with a visual timeline and drag-and-drop functionality to assign and adjust event component timings.
 Bundle 4: Advanced Session Controls: Re-implement Undo/Redo functionality and a robust autosave system.
+Bundle 5: Enhanced UI/UX Animations: Incorporate smooth animations for card transitions between the catalog and favorites carousel to provide better user feedback.
