@@ -150,31 +150,6 @@
         .favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
         .favorite-item .item-price { font-weight: bold; margin-top: 5px; }
 
-        /* --- FAVORITE CARD BUTTON STYLES --- */
-        .card-actions {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            z-index: 5;
-        }
-        .action-btn-primary, .action-btn-secondary {
-            background: none;
-            border: none;
-            font-size: 1.8em;
-            cursor: pointer;
-            padding: 0;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-        }
-        .action-btn-secondary {
-            font-size: 1.5em;
-            position: absolute;
-            bottom: -150px; /* Positioned relative to card actions */
-            right: 0;
-        }
-        .action-btn-primary .icon-hover { display: none; }
-        .action-btn-primary:hover .icon-default { display: none; }
-        .action-btn-primary:hover .icon-hover { display: block; animation: pop 0.3s; }
-
         /* Filter Controls */
         #filter-controls {
             display: flex;
@@ -203,39 +178,42 @@
             align-items: center;
             padding: 5px 10px;
         }
-        .reactions-summary { display: flex;
-            gap: 4px; font-size: 0.8em; }
-        .reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none;
+        
+        /* HIDE REACTION BAR FOR MVP */
+        .reaction-bar, .reactions-summary {
+            display: none !important;
         }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
-        .reaction-bar {
+        
+        /* SIMPLIFIED FAVORITE CARD BUTTONS */
+        .card-actions {
             position: absolute;
-            top: 10px;
-            bottom: 10px;
-            left: 0;
-            width: 45px;
+            top: 8px;
+            right: 8px;
+            z-index: 5;
+        }
+        .action-btn.remove-btn {
             background-color: rgba(0,0,0,0.5);
-            backdrop-filter: blur(4px);
-            border-radius: 0 20px 20px 0;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
             display: flex;
-            flex-direction: column;
-            justify-content: center;
             align-items: center;
-            gap: 5px;
-            transform: translateX(-100%);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 15;
+            justify-content: center;
+            transition: background-color 0.2s, transform 0.2s;
+            color: white;
+            font-size: 20px;
+            line-height: 28px;
+            padding: 0;
+            font-weight: bold;
         }
-        .event-card:hover .reaction-bar, .favorite-item:hover .reaction-bar, .modal-content:hover .reaction-bar {
-            transform: translateX(0);
-            opacity: 1;
-            visibility: visible;
+        .action-btn.remove-btn:hover {
+            background-color: rgba(255, 0, 0, 0.7);
+            transform: scale(1.1);
         }
-        .reaction-bar button { background: none; border: none; font-size: 1.5em; cursor: pointer; transition: transform 0.1s; }
-        .reaction-bar button:hover { transform: scale(1.3); }
-
+        
         /* MAIN CATALOG CARD STYLES */
         .event-card {
             position: relative;
@@ -264,18 +242,20 @@
              right: 0;
              background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
         }
-        .heart-icon {
+        .heart-icon, .edit-card-btn {
             position: absolute;
             top: 15px;
-            right: 15px;
             width: 30px;
             height: 30px;
             cursor: pointer;
             z-index: 10;
             background: none;
             border: none;
+            font-size: 1.5em;
             padding: 0;
         }
+        .heart-icon { right: 15px; }
+        .edit-card-btn { left: 15px; }
         .heart-icon svg {
             width: 100%;
             height: 100%;
