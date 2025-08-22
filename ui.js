@@ -5,12 +5,59 @@
  * Changelog:
  *
  * v1.8.6 - 2025-08-21
- * - Enhanced collapsing header summary to include date, headcount, and total cost.
+ * - Replaced emoji buttons on favorite cards with clearer SVG icons for lock and remove actions.
  *
  * v1.8.5 - 2025-08-21
  * - Removed obsolete updateSummaryToolbar function.
  * - Exported new header input elements.
-...
+ *
+ * v1.8.4 - 2025-08-21
+ * - Removed updateHistoryButtons function as part of MVP cleanup.
+ *
+ * v1.8.3 - 2025-08-19
+ * - Removed disclaimer tooltips from autosave-toggle and sessions-dropdown as features are now complete.
+ *
+ * v1.8.2 - 2025-08-19
+ * - Made modal changes (option, quantity) auto-apply to state on change, removed save button, call updateRender to reflect in catalog/favorites.
+ *
+ * v1.8.1 - 2025-08-19
+ * - Added reactions bar and hearting functionality to detailed modal view, mirroring catalog.
+ *
+ * v1.8.0 - 2025-08-18
+ * - Enhanced `openDetailModal` to include full description, editable options/quantity, and save button to apply changes to state/cart.
+ *
+ * v1.7.0 - 2025-08-18
+ * - Fixed total cost calculation to multiply variation price by quantity (hours for per-hour, guests for per-guest).
+ * - Added disclaimer tooltip to autosave-toggle and sessions-dropdown.
+ *
+ * v1.6.0 - 2025-08-18
+ * - Enhanced `updateTotalCost` to ensure accurate pricing with variations and quantity, including min headcount enforcement.
+ * - Added breakdown tooltip to total cost display.
+ *
+ * v1.5.0 - 2025-08-18
+ * - Implemented image gallery functionality for event cards, favorite items, and modals.
+ * - Updated to use `fetchImagesForRecord` for retrieving multiple images.
+ * - Added gallery arrow buttons and cycling logic using `state.ui.cardImageIndexes`.
+ *
+ * v1.4.0 - 2025-08-18
+ * - Refactored `parseOptions` to handle a robust key-value pair format.
+ * - Updated `createEventCardElement` to display and dynamically update option-specific descriptions, prices, and durations.
+ * - Updated `updateTotalCost` and `createFavoriteCardElement` to use the new price calculation logic.
+ *
+ * v1.3.0 - 2025-08-18
+ * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
+ * - Event cards now auto-select the next available variation after one is favorited.
+ *
+ * v1.2.1 - 2025-08-17
+ * - Fixed a critical HTML structure error in index.html.
+ *
+ * v1.2.0 - 2025-08-17
+ * - Updated `updateFavoritesCarousel` to use the new unified sorting logic.
+ * - Exported `parseOptions` for use in `main.js`.
+ * - Exported the new `sortBy` dropdown element.
+ *
+ * v1.0.0 - 2025-08-17
+ * - Initial versioning and changelog added.
  */
 
 
@@ -20,6 +67,11 @@ import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
 import { calculateReactionScore, getRecordPrice, updateRender, recordStateForUndo, handleReaction } from './main.js';
 
+// SVG Icons for buttons
+const ICON_LOCK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/></svg>`;
+const ICON_UNLOCK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6H5v2h2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H9V10h9v10z"/></svg>`;
+const ICON_REMOVE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+const ICON_LOCKED_IN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>`;
 
 
 // --- DOM ELEMENT EXPORTS ---
@@ -131,11 +183,16 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     }
     let currentIndex = state.ui.cardImageIndexes.get(record.id);
     itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
-    const primaryActionHTML = isLocked ?
-        `<button class="primary-action-btn" title="Locked In">⛓️</button>` : `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
-    const secondaryActionHTML = isLocked ?
-        `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>` : `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`;
-    itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    
+    const primaryActionHTML = isLocked 
+        ? `<button class="action-btn locked-btn" title="Locked In">${ICON_LOCKED_IN}</button>` 
+        : `<button class="action-btn promote-btn" title="Lock it in" data-composite-id="${compositeId}">${ICON_LOCK}</button>`;
+    const secondaryActionHTML = isLocked 
+        ? `<button class="action-btn demote-btn" title="Unlock" data-composite-id="${compositeId}">${ICON_UNLOCK}</button>` 
+        : `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">${ICON_REMOVE}</button>`;
+
+    itemCard.innerHTML = `<div class="card-actions">${primaryActionHTML}${secondaryActionHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    
     const leftArrow = itemCard.querySelector('.gallery-arrow.left');
     const rightArrow = itemCard.querySelector('.gallery-arrow.right');
     if (imageUrls.length > 1) {
@@ -171,7 +228,7 @@ export async function createEventCardElement(record, imageCache) {
     eventCard.dataset.recordId = recordId;
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(recordId)) {
-        state.ui.cardImageIndexes.set(record.id, 0);
+        state.ui.cardImageIndexes.set(recordId, 0);
     }
     let currentIndex = state.ui.cardImageIndexes.get(recordId);
     eventCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
@@ -197,11 +254,10 @@ export async function createEventCardElement(record, imageCache) {
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
 
     eventCard.innerHTML = `
-        <button class="edit-card-btn">🪄</button>
+        <div class="heart-icon" data-composite-id="${compositeId}">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+        </div>
         <div class="event-card-content">
-            <div class="heart-icon" data-composite-id="${compositeId}">
-                <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-            </div>
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             ${optionsDropdownHTML}
             <p class="option-description"></p>
@@ -255,7 +311,6 @@ export async function createEventCardElement(record, imageCache) {
         // Update Heart Icon and Edit Button
         const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
         heartIcon.dataset.compositeId = newCompositeId;
-        eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId;
         heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
     };
     if (dropdown) {
