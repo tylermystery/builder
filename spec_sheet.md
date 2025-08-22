@@ -1,8 +1,11 @@
 /*
-Version: 2.1.0
+Version: 2.2.0
 Last Modified: 2025-08-22
 
 Changelog:
+
+v2.2.0 - 2025-08-22
+- Added Category and Subcategory filtering to the specification.
 
 v2.1.0 - 2025-08-22
 - Re-integrated Undo/Redo as a toggleable feature in the new "Beta Toolkit".
@@ -52,12 +55,15 @@ Session Management: User selections can be saved, generating a unique, shareable
 Dynamic Catalog Display:
 
 - **Standard Vertical Layout**: Events are displayed in a responsive grid that scrolls vertically with the main page. More items are loaded as the user scrolls.
-- **Event Cards**: Each event is presented on a card showing its name, image, and price.
+- **Event Cards**: Each event is presented on a "card" that shows its name, image, and price.
 - **Simple Favoriting**: Users can select an event by clicking a heart icon, which adds it to the "Your Selections" carousel. Selected items have a simple "Remove" button.
 
 Dynamic Header: A sticky header contains all primary event details and controls: Event Name, Date, Headcount, Event Goals, Collaborators, Total Cost, and the Save & Share button. The header collapses to a single summary line on scroll.
 
-Filtering and Sorting: Users can refine the catalog using filters for search, price, and duration. Sorting is available by price and name.
+Filtering and Sorting
+Multi-Faceted Filtering: Users can refine the catalog view using filters for search, price, duration, status, **category, and subcategory**.
+Unified Sorting: A "Sort by" dropdown controls the order of the main catalog, favorites, and locked-in items simultaneously.
+Options include sorting by price and name.
 
 Beta Toolkit
 A subtle "beta" subscript next to the main title can be clicked to reveal a toolkit with advanced, toggleable features.
