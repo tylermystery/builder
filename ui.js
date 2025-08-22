@@ -1,8 +1,12 @@
 /*
- * Version: 1.8.7
+ * Version: 1.9.0
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.9.0 - 2025-08-21
+ * - Stripped down to MVP: Removed reaction bars and complex favorite card buttons.
+ * - Favorites now have a simple "Remove" button.
  *
  * v1.8.7 - 2025-08-21
  * - Implemented the Heart -> Ring -> Ball & Chain emoji sequence for favorite card buttons.
@@ -139,19 +143,6 @@ export function parseOptions(optionsText) {
 }
 
 // --- UI RENDERING FUNCTIONS ---
-function renderReactionsSummary(recordId) {
-    const reactions = state.session.reactions.get(recordId) || {};
-    const reactionCounts = Object.values(reactions).reduce((acc, emoji) => {
-        acc[emoji] = (acc[emoji] || 0) + 1;
-        return acc;
-    }, {});
-    return `<div class="reactions-summary">${Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('')}</div>`;
-}
-
-function renderReactionbar(recordId) {
-    return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
-}
-
 export async function createFavoriteCardElement(compositeId, itemInfo, isLocked, imageCache) {
     const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
     if (!record) return null;
@@ -178,15 +169,10 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     let currentIndex = state.ui.cardImageIndexes.get(record.id);
     itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
     
-    // Updated button logic with new emoji sequence
-    const primaryActionHTML = isLocked 
-        ? `<button class="action-btn-primary locked-btn" title="Locked In">⛓️</button>` 
-        : `<button class="action-btn-primary promote-btn" title="Lock it in" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
-    const secondaryActionHTML = isLocked 
-        ? `<button class="action-btn-secondary demote-btn" title="Unlock" data-composite-id="${compositeId}">🔨</button>` 
-        : `<button class="action-btn-secondary remove-btn" title="Remove" data-composite-id="${compositeId}">💔</button>`;
+    // MVP: Simple Remove Button
+    const removeButtonHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">×</button>`;
 
-    itemCard.innerHTML = `<div class="card-actions">${primaryActionHTML}${secondaryActionHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    itemCard.innerHTML = `<div class="card-actions">${removeButtonHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
     const leftArrow = itemCard.querySelector('.gallery-arrow.left');
     const rightArrow = itemCard.querySelector('.gallery-arrow.right');
@@ -266,8 +252,6 @@ export async function createEventCardElement(record, imageCache) {
                 </div>
             </div>
         </div>
-        <div class="card-footer">${renderReactionsSummary(recordId)}</div>
-        ${renderReactionbar(recordId)}
         <button class="gallery-arrow left">←</button>
         <button class="gallery-arrow right">→</button>`;
     const dropdown = eventCard.querySelector('.options-selector');
@@ -282,7 +266,6 @@ export async function createEventCardElement(record, imageCache) {
         const selectedIndex = dropdown ?
             dropdown.value : null;
         const selectedOption = selectedIndex ? options[selectedIndex] : null;
-        // Update Price
         let currentPrice = basePrice;
         if (selectedOption) {
             if (selectedOption.absolutePrice !== null) {
@@ -292,18 +275,13 @@ export async function createEventCardElement(record, imageCache) {
             }
         }
         priceEl.innerHTML = `$${currentPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-
-        // Update Description
         descriptionEl.textContent = selectedOption?.description || '';
         descriptionEl.style.display = selectedOption?.description ? 'block' : 'none';
-
-        // Update Duration
         let currentDuration = baseDuration;
         if (selectedOption && selectedOption.durationChange !== null) {
             currentDuration += selectedOption.durationChange;
         }
         detailsEl.textContent = currentDuration > 0 ? `Duration: ${currentDuration} hours` : '';
-        // Update Heart Icon and Edit Button
         const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
         heartIcon.dataset.compositeId = newCompositeId;
         heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
@@ -312,8 +290,6 @@ export async function createEventCardElement(record, imageCache) {
         dropdown.addEventListener('change', updateCardDetails);
     }
     updateCardDetails();
-// Initial call
-    
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
     if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
     quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
@@ -556,7 +532,7 @@ export async function openDetailModal(compositeId, imageCache) {
         optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == selectedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}</div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(record.id)) {
@@ -595,18 +571,6 @@ export async function openDetailModal(compositeId, imageCache) {
         rightArrow.style.display = 'none';
     }
 
-    // Add reaction listeners in modal
-    modalBody.querySelectorAll('.reaction-bar button').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            await handleReaction(btn.dataset.recordId, btn.dataset.emoji);
-            // Update reactions summary in modal
-            modalBody.querySelector('.reactions-summary').innerHTML = renderReactionsSummary(record.id);
-            // Reflect in catalog/favorites
-            await updateRender();
-        });
-    });
-    // Hearting in modal
     const modalHeart = modalBody.querySelector('.heart-icon');
     modalHeart.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -619,10 +583,8 @@ export async function openDetailModal(compositeId, imageCache) {
             state.cart.items.set(currentCompositeId, itemInfo);
             modalHeart.classList.add('hearted');
         }
-        // Reflect changes immediately
         updateRender();
     });
-    // Auto-apply option change
     const modalOptions = modalBody.querySelector('#modal-options');
     if (modalOptions) {
         modalOptions.addEventListener('change', (e) => {
@@ -632,7 +594,6 @@ export async function openDetailModal(compositeId, imageCache) {
             const newCompositeId = options.length > 0 ? `${record.id}-${selectedOptionIndex}` : record.id;
             const newItemInfo = { quantity: parseInt(modalBody.querySelector('#modal-quantity').value), requests: '' };
         
-            // Update state
             if (state.cart.items.has(compositeId)) {
                 state.cart.items.delete(compositeId);
                 state.cart.items.set(newCompositeId, newItemInfo);
@@ -640,33 +601,28 @@ export async function openDetailModal(compositeId, imageCache) {
                 state.cart.lockedItems.delete(compositeId);
                 state.cart.lockedItems.set(newCompositeId, newItemInfo);
             }
-            modalHeart.dataset.compositeId = newCompositeId; // Update heart dataset
-            // Reflect
+            modalHeart.dataset.compositeId = newCompositeId;
             updateRender();
         });
     }
 
-    // Auto-apply quantity change
     const modalQuantity = modalBody.querySelector('#modal-quantity');
     modalQuantity.addEventListener('change', () => {
         recordStateForUndo();
         const min = parseInt(modalQuantity.min);
         if (parseInt(modalQuantity.value) < min) modalQuantity.value = min;
         itemInfo.quantity = parseInt(modalQuantity.value);
-        // Update state if in cart
         if (state.cart.items.has(compositeId)) {
             state.cart.items.set(compositeId, itemInfo);
         } else if (state.cart.lockedItems.has(compositeId)) {
             state.cart.lockedItems.set(compositeId, itemInfo);
         }
-        // Reflect
         updateRender();
     });
     const modalPlus = modalBody.querySelector('.quantity-btn.plus');
     const modalMinus = modalBody.querySelector('.quantity-btn.minus');
     if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; modalQuantity.dispatchEvent(new Event('change')); });
     if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) { modalQuantity.value = current - 1; modalQuantity.dispatchEvent(new Event('change')); } });
-    // Close modal on overlay click or close button
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay || e.target.classList.contains('modal-close')) {
             modalOverlay.style.display = 'none';
