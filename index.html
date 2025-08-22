@@ -7,17 +7,19 @@
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
     <style>
         /*
-         * Version: 2.1.0
+         * Version: 2.2.0
          * Last Modified: 2025-08-21
          *
          * Changelog:
          *
+         * v2.2.0 - 2025-08-21
+         * - Added subtle beta toolkit trigger and panel.
+         *
+         * v2.1.1 - 2025-08-21
+         * - Fixed bug where sort-by-reactions option was visible in MVP.
+         *
          * v2.1.0 - 2025-08-21
          * - Stripped UI down to MVP foundation.
-         * - Hid reaction bars and complex button styles.
-         *
-         * v2.0.0 - 2025-08-21
-         * - Restored complete, polished CSS to fix layout and card issues.
          */
 
         body {
@@ -57,6 +59,83 @@
             display: flex;
         }
 
+        /* --- Beta Toolkit --- */
+        .header-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        #beta-trigger {
+            font-style: italic;
+            font-size: 0.7em;
+            color: #007aff;
+            cursor: pointer;
+            user-select: none;
+        }
+        #beta-toolkit {
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: none; /* Hidden by default */
+            z-index: 1000;
+        }
+        #beta-toolkit.visible {
+            display: block;
+        }
+        .beta-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .beta-toggle:not(:last-child) {
+            margin-bottom: 10px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #007aff;
+        }
+        input:checked + .slider:before {
+            transform: translateX(14px);
+        }
+
         /* Header Toolbar */
         #header-toolbar {
             display: flex;
@@ -89,15 +168,10 @@
         .event-name-group {
             flex-grow: 1;
         }
-        .event-name-group input {
+        .event-name-group .header-title-container h1 {
             font-size: 1.8em;
             font-weight: bold;
-            border: none;
-            padding: 0;
-            width: 100%;
-        }
-        .event-name-group input:focus {
-            outline: none;
+            margin: 0;
         }
         .details-group {
             display: flex;
@@ -184,20 +258,34 @@
             max-width: 1400px;
             margin: 0 auto;
         }
-        
-        /* HIDE REACTION BAR FOR MVP */
-        .reaction-bar, .reactions-summary, .card-footer {
-            display: none !important;
+
+        /* CONDITIONAL VISIBILITY FOR BETA FEATURES */
+        .reaction-bar, .reactions-summary, .card-footer, .action-btn-primary, .action-btn-secondary {
+            display: none;
+        }
+        body.collab-mode-enabled .reaction-bar,
+        body.collab-mode-enabled .reactions-summary,
+        body.collab-mode-enabled .card-footer {
+            display: flex;
+        }
+        body.planner-mode-enabled .action-btn-primary,
+        body.planner-mode-enabled .action-btn-secondary {
+            display: flex;
+        }
+        body.planner-mode-enabled .remove-btn {
+            display: none;
         }
         
-        /* SIMPLIFIED FAVORITE CARD BUTTONS */
+        /* FAVORITE CARD BUTTONS */
         .card-actions {
             position: absolute;
             top: 8px;
             right: 8px;
             z-index: 5;
+            display: flex;
+            gap: 5px;
         }
-        .action-btn.remove-btn {
+        .action-btn, .action-btn-primary, .action-btn-secondary {
             background-color: rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.2);
             border-radius: 50%;
@@ -214,11 +302,15 @@
             padding: 0;
             font-weight: bold;
         }
-        .action-btn.remove-btn:hover {
-            background-color: rgba(255, 0, 0, 0.7);
+        .action-btn:hover, .action-btn-primary:hover, .action-btn-secondary:hover {
+            background-color: rgba(0,0,0,0.7);
             transform: scale(1.1);
         }
-        
+        .action-btn-primary .icon-hover { display: none; }
+        .action-btn-primary:hover .icon-default { display: none; }
+        .action-btn-primary:hover .icon-hover { display: block; animation: pop 0.3s; }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+
         /* MAIN CATALOG CARD STYLES */
         .event-card {
             position: relative;
@@ -403,7 +495,26 @@
         
         <div id="header-toolbar">
             <div class="toolbar-group event-name-group">
-                <input type="text" id="header-event-name" placeholder="Untitled Event">
+                <div class="header-title-container">
+                    <h1>Mystery Tour Event Builder</h1>
+                    <sup id="beta-trigger">beta</sup>
+                </div>
+                <div id="beta-toolkit">
+                    <div class="beta-toggle">
+                        <span>Collab Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="collab-mode-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="beta-toggle">
+                        <span>Event Planner Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="planner-mode-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="toolbar-group details-group">
                 <div class="toolbar-item">
