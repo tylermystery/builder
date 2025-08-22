@@ -7,10 +7,13 @@
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
     <style>
         /*
-         * Version: 2.2.1
+         * Version: 2.2.2
          * Last Modified: 2025-08-22
          *
          * Changelog:
+         *
+         * v2.2.2 - 2025-08-22
+         * - Added Category and Subcategory dropdowns to the filter UI.
          *
          * v2.2.1 - 2025-08-22
          * - Added history-controls and CSS for new History Mode toggle.
@@ -600,7 +603,12 @@
     <select id="status-filter">
         <option value="all">All Statuses</option>
     </select>
-    
+    <select id="category-filter">
+        <option value="all">All Categories</option>
+    </select>
+    <select id="subcategory-filter">
+        <option value="all">All Subcategories</option>
+    </select>
     <select id="sort-by">
         <option value="price-asc">Price (Low to High)</option>
         <option value="price-desc">Price (High to Low)</option>
