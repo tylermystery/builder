@@ -1,25 +1,14 @@
 /*
- * Version: 1.8.3
+ * Version: 1.8.5
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
- * v1.8.3 - 2025-08-21
- * - Stripped down to MVP: Removed reaction bar and complex button listeners.
+ * v1.8.5 - 2025-08-21
+ * - Implemented event listeners for Beta Toolkit toggles to show/hide features.
  *
- * v1.8.2 - 2025-08-21
- * - Fixed bug where action buttons (promote, demote, remove) on favorites carousel were not working.
- *
- * v1.8.1 - 2025-08-21
- * - Refined card interactions: Emoji clicks no longer open the modal.
- * - Added mouse wheel scrolling to the horizontal favorites carousel.
- *
- * v1.8.0 - 2025-08-21
- * - Removed Undo/Redo and Autosave functionality for MVP simplification.
- *
- * v1.7.2 - 2025-08-21
- * - Updated scroll listeners to support a vertical catalog layout.
- * - Removed horizontal mouse wheel scroll functionality.
+ * v1.8.4 - 2025-08-21
+ * - Added logic to hide "Sort by Reactions" option by default for MVP.
 ...
  */
 
@@ -35,25 +24,18 @@ const imageCache = new Map();
 
 // --- STATE & HISTORY ---
 export function recordStateForUndo() {
-    // This function is kept for potential future re-implementation of undo/redo
-    // but its call to updateHistoryButtons is removed as the buttons no longer exist.
+    // Kept for potential future re-implementation
 }
 
 
 
 // --- CORE LOGIC ---
-function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase();
-}
-
-
-
+// ... (core logic functions are unchanged) ...
+function getInitials(name = '') { return name.split(' ').map(n => n[0]).join('').toUpperCase(); }
 export function calculateReactionScore(recordId) {
     const reactions = state.session.reactions.get(recordId) || {};
     return Object.values(reactions).reduce((score, emoji) => score + (REACTION_SCORES[emoji] || 0), 0);
 }
-
-
-
 export function getRecordPrice(record, optionIndex = null) {
     let price = record.fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
     if (optionIndex !== null) {
@@ -62,7 +44,6 @@ export function getRecordPrice(record, optionIndex = null) {
         if (variation) {
             if (variation.absolutePrice !== null) {
                 return variation.absolutePrice;
-// Return absolute price directly
             }
             if (variation.priceChange !== null) {
                 price += variation.priceChange;
@@ -71,11 +52,6 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return price;
 }
-
-
-
-
-
 function checkUserProfile() {
     state.session.user = localStorage.getItem('userName');
     if (!state.session.user) {
@@ -94,9 +70,6 @@ function checkUserProfile() {
     }
     ui.renderCollaborators(getInitials);
 }
-
-
-
 export async function handleReaction(recordId, emoji) {
     if (!state.session.reactions.has(recordId)) {
         state.session.reactions.set(recordId, {});
@@ -109,15 +82,9 @@ export async function handleReaction(recordId, emoji) {
     }
     await updateRender();
 }
-
-
-
 export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
 export function storeSession(id, name) { const sessions = getStoredSessions(); sessions[id] = name;
 localStorage.setItem('savedSessions', JSON.stringify(sessions)); }
-
-
-
 async function applyFilters() {
     state.ui.recordsCurrentlyDisplayed = 0;
     ui.catalogContainer.innerHTML = '';
@@ -160,9 +127,6 @@ async function applyFilters() {
     });
     loadMoreRecords();
 }
-
-
-
 async function loadMoreRecords() {
     if (state.ui.isLoadingMore || state.ui.recordsCurrentlyDisplayed >= state.records.filtered.length) {
         return;
@@ -175,18 +139,35 @@ async function loadMoreRecords() {
     state.ui.recordsCurrentlyDisplayed = end;
     state.ui.isLoadingMore = false;
 }
-
-
-
 export async function updateRender() { // Exported for ui.js
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
 }
 
-
-
 function setupEventListeners() {
+    // BETA TOOLKIT LISTENERS
+    document.getElementById('beta-trigger').addEventListener('click', () => {
+        document.getElementById('beta-toolkit').classList.toggle('visible');
+    });
+
+    document.getElementById('collab-mode-toggle').addEventListener('change', (e) => {
+        document.body.classList.toggle('collab-mode-enabled', e.target.checked);
+        const reactionsSortOption = document.getElementById('sort-by-reactions');
+        reactionsSortOption.style.display = e.target.checked ? 'block' : 'none';
+        if (!e.target.checked && ui.sortBy.value === 'reactions-desc') {
+            ui.sortBy.value = 'price-asc'; // Reset to default sort
+        }
+        updateRender();
+    });
+
+    document.getElementById('planner-mode-toggle').addEventListener('change', (e) => {
+        document.body.classList.toggle('planner-mode-enabled', e.target.checked);
+        updateRender();
+    });
+
+
+    // REGULAR EVENT LISTENERS
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
@@ -196,7 +177,7 @@ function setupEventListeners() {
         ui.priceFilter.value = 'all';
         ui.durationFilter.value = 'all';
         ui.statusFilter.value = 'all';
-        ui.sortBy.value = 'reactions-desc';
+        ui.sortBy.value = document.body.classList.contains('collab-mode-enabled') ? 'reactions-desc' : 'price-asc';
         applyFilters();
     });
     document.getElementById('add-collaborator-btn').addEventListener('click', () => {
@@ -213,7 +194,14 @@ function setupEventListeners() {
         }
     });
 
-    // Add mouse wheel scrolling to the favorites carousel
+    document.body.addEventListener('click', async (e) => {
+        const reactionBtn = e.target.closest('.reaction-bar button');
+        if (reactionBtn) {
+            e.stopPropagation();
+            await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
+        }
+    });
+
     ui.favoritesCarousel.addEventListener('wheel', (e) => {
         if (e.deltaY !== 0) {
             e.preventDefault();
@@ -221,7 +209,6 @@ function setupEventListeners() {
         }
     });
 
-    // Simplified listener for the favorites carousel
     ui.favoritesCarousel.addEventListener('click', async (e) => {
         const removeBtn = e.target.closest('.remove-btn');
         if (removeBtn) {
@@ -229,13 +216,41 @@ function setupEventListeners() {
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
-            state.cart.lockedItems.delete(compositeId); // Also remove from locked
+            state.cart.lockedItems.delete(compositeId);
             await updateRender();
             return;
         }
 
+        const promoteBtn = e.target.closest('.promote-btn');
+        if (promoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = promoteBtn.dataset.compositeId;
+            const itemData = state.cart.items.get(compositeId);
+            if (itemData) {
+                state.cart.lockedItems.set(compositeId, itemData);
+                state.cart.items.delete(compositeId);
+                await updateRender();
+            }
+            return;
+        }
+
+        const demoteBtn = e.target.closest('.demote-btn');
+        if (demoteBtn) {
+            e.stopPropagation();
+            recordStateForUndo();
+            const compositeId = demoteBtn.dataset.compositeId;
+            const itemData = state.cart.lockedItems.get(compositeId);
+            if (itemData) {
+                state.cart.items.set(compositeId, itemData);
+                state.cart.lockedItems.delete(compositeId);
+                await updateRender();
+            }
+            return;
+        }
+
         const favoriteItem = e.target.closest('.favorite-item');
-        if (favoriteItem) {
+        if (favoriteItem && !e.target.closest('button')) {
             const compositeId = favoriteItem.dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
@@ -340,7 +355,7 @@ function setupEventListeners() {
 async function initialize() {
     console.log('Starting initialize...');
     ui.toggleLoading(true);
-    console.log('Loading toggled on');
+    
     try {
         console.log('Fetching records from Airtable...');
         state.records.all = await api.fetchAllRecords();
@@ -375,7 +390,11 @@ async function initialize() {
     
     console.log('Setting up event listeners...');
     setupEventListeners();
-    ui.collapseHeaderOnScroll(); // Activate the header collapse feature
+    ui.collapseHeaderOnScroll();
+    
+    document.getElementById('sort-by-reactions').style.display = 'none';
+    ui.sortBy.value = 'price-asc'; 
+
     console.log('Updating render...');
     await updateRender();
     console.log('Initialize complete');
