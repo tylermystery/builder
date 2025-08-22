@@ -5,12 +5,21 @@
  * Changelog:
  *
  * v1.8.3 - 2025-08-21
- * - Re-wired event listeners to the new consolidated header toolbar.
- * - Added logic for the new "Goals" field.
- * - Removed logic for the obsolete bottom summary toolbar.
+ * - Stripped down to MVP: Removed reaction bar and complex button listeners.
  *
  * v1.8.2 - 2025-08-21
  * - Fixed bug where action buttons (promote, demote, remove) on favorites carousel were not working.
+ *
+ * v1.8.1 - 2025-08-21
+ * - Refined card interactions: Emoji clicks no longer open the modal.
+ * - Added mouse wheel scrolling to the horizontal favorites carousel.
+ *
+ * v1.8.0 - 2025-08-21
+ * - Removed Undo/Redo and Autosave functionality for MVP simplification.
+ *
+ * v1.7.2 - 2025-08-21
+ * - Updated scroll listeners to support a vertical catalog layout.
+ * - Removed horizontal mouse wheel scroll functionality.
 ...
  */
 
@@ -198,18 +207,9 @@ function setupEventListeners() {
         }
     });
     
-    // Infinite scroll listener for the whole page
     window.addEventListener('scroll', () => {
         if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
             loadMoreRecords();
-        }
-    });
-
-    document.body.addEventListener('click', async (e) => {
-        const reactionBtn = e.target.closest('.reaction-bar button');
-        if (reactionBtn) {
-            e.stopPropagation();
-            await handleReaction(reactionBtn.dataset.recordId, reactionBtn.dataset.emoji);
         }
     });
 
@@ -221,46 +221,16 @@ function setupEventListeners() {
         }
     });
 
+    // Simplified listener for the favorites carousel
     ui.favoritesCarousel.addEventListener('click', async (e) => {
-        const promoteBtn = e.target.closest('.promote-btn');
-        if (promoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = promoteBtn.dataset.compositeId;
-            const itemData = state.cart.items.get(compositeId);
-            if (itemData) {
-                state.cart.lockedItems.set(compositeId, itemData);
-                state.cart.items.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-
-        const demoteBtn = e.target.closest('.demote-btn');
-        if (demoteBtn) {
-            e.stopPropagation();
-            recordStateForUndo();
-            const compositeId = demoteBtn.dataset.compositeId;
-            const itemData = state.cart.lockedItems.get(compositeId);
-            if (itemData) {
-                state.cart.items.set(compositeId, itemData);
-                state.cart.lockedItems.delete(compositeId);
-                await updateRender();
-            }
-            return;
-        }
-
         const removeBtn = e.target.closest('.remove-btn');
         if (removeBtn) {
             e.stopPropagation();
             recordStateForUndo();
             const compositeId = removeBtn.dataset.compositeId;
             state.cart.items.delete(compositeId);
+            state.cart.lockedItems.delete(compositeId); // Also remove from locked
             await updateRender();
-            return;
-        }
-        
-        if (e.target.closest('button')) {
             return;
         }
 
@@ -320,7 +290,6 @@ function setupEventListeners() {
         }
     });
     
-    // Event listeners for the new header toolbar
     const headerInputs = [ui.headerEventNameInput, ui.headerDateInput, ui.headerHeadcountInput, ui.headerGoalsInput];
     headerInputs.forEach(input => {
         input.addEventListener('change', (e) => {
@@ -339,7 +308,6 @@ function setupEventListeners() {
             }
         });
     });
-
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -364,7 +332,6 @@ function setupEventListeners() {
             e.target.value = '';
         }
     });
-
 }
 
 
