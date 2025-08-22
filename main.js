@@ -1,11 +1,8 @@
 /*
- * Version: 1.8.6
- * Last Modified: 2025-08-22
+ * Version: 1.8.5
+ * Last Modified: 2025-08-21
  *
  * Changelog:
- *
- * v1.8.6 - 2025-08-22
- * - Restored Undo/Redo functionality and connected to new "History Mode" toggle.
  *
  * v1.8.5 - 2025-08-21
  * - Implemented event listeners for Beta Toolkit toggles to show/hide features.
@@ -43,42 +40,9 @@ const imageCache = new Map();
 
 // --- STATE & HISTORY ---
 export function recordStateForUndo() {
-    if (state.history.isRestoring) return;
-    const currentState = {
-        items: new Map(state.cart.items),
-        lockedItems: new Map(state.cart.lockedItems),
-        combined: new Map(state.eventDetails.combined)
-    };
-    state.history.undoStack.push(currentState);
-    state.history.redoStack = [];
-    ui.updateHistoryButtons();
+    // Kept for potential future re-implementation
 }
 
-async function restoreState(newState) {
-    state.history.isRestoring = true;
-    state.cart.items = newState.items;
-    state.cart.lockedItems = newState.lockedItems;
-    state.eventDetails.combined = newState.combined;
-    state.history.isRestoring = false;
-    await updateRender();
-}
-
-function undo() {
-    if (state.history.undoStack.length > 1) {
-        const currentState = state.history.undoStack.pop();
-        state.history.redoStack.push(currentState);
-        const prevState = state.history.undoStack[state.history.undoStack.length - 1];
-        restoreState(prevState);
-    }
-}
-
-function redo() {
-    if (state.history.redoStack.length > 0) {
-        const nextState = state.history.redoStack.pop();
-        state.history.undoStack.push(nextState);
-        restoreState(nextState);
-    }
-}
 
 
 // --- CORE LOGIC ---
@@ -217,14 +181,8 @@ function setupEventListeners() {
         updateRender();
     });
 
-    document.getElementById('history-mode-toggle').addEventListener('change', (e) => {
-        document.body.classList.toggle('history-mode-enabled', e.target.checked);
-    });
 
     // REGULAR EVENT LISTENERS
-    document.getElementById('undo-btn').addEventListener('click', undo);
-    document.getElementById('redo-btn').addEventListener('click', redo);
-    
     const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
