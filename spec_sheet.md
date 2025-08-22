@@ -1,8 +1,11 @@
 /*
-Version: 1.9.4
+Version: 1.9.5
 Last Modified: 2025-08-21
 
 Changelog:
+
+v1.9.5 - 2025-08-21
+- Defined the quirky MVP favoriting sequence (Heart -> Ring -> Ball & Chain).
 
 v1.9.4 - 2025-08-21
 - Updated spec for favorites carousel: Cards are now officially smaller versions of the main catalog cards, maintaining the same aspect ratio for consistency.
@@ -90,6 +93,11 @@ Card Interaction Model:
 - **Main Card Body Click:** Clicking on the main body of a card (image or text area) that is not another interactive element will open the detailed modal view.
 - **Icon/Button Clicks:** Clicking specific icon buttons (`heart`, `edit`, `promote/demote`, emoji reactions, etc.) will perform only their specific actions and will **not** open the modal.
 - **Favorites Carousel Scrolling:** Using the mouse wheel while the cursor is over the "Your Selections" carousel will scroll it horizontally.
+- **Favoriting & Locking Sequence (MVP):** The buttons on the "Your Selections" cards follow a humorous, relationship-themed sequence:
+    - **Promote:** An unlocked item shows a heart (`💘`) that changes to an engagement ring (`💍`) on hover. Clicking it "locks" the item.
+    - **Locked State:** A locked item is represented by a ball and chain (`⛓️`).
+    - **Demote:** A locked item shows a hammer (`🔨`) to "break" the lock, returning it to an unlocked state.
+    - **Remove:** An unlocked item shows a broken heart (`💔`) to remove it from the selections.
 
 Favoriting & Locking:
 Users can select an event's specific variation by clicking a heart icon, which adds it to the "Your Selections" carousel. Items in the carousel appear as smaller versions of the main catalog cards, maintaining the same aspect ratio for visual consistency.
