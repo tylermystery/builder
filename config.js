@@ -1,8 +1,12 @@
 /*
- * Version: 1.0.0
- * Last Modified: 2025-08-17
+ * Version: 1.1.0
+ * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.1.0 - 2025-08-21
+ * - Added GOALS constant for the new header field.
+ * - Removed obsolete LOCATION constant.
  *
  * v1.0.0 - 2025-08-17
  * - Initial versioning and changelog added.
@@ -26,6 +30,7 @@ export const CONSTANTS = {
         HEADCOUNT_MIN: 'Headcount min',
         MEDIA_TAGS: 'Media Tags',
     },
+  
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
     },
@@ -33,7 +38,7 @@ export const CONSTANTS = {
         EVENT_NAME: 'eventName',
         DATE: 'date',
         GUEST_COUNT: 'guestCount',
-        LOCATION: 'location',
+        GOALS: 'goals',
         SPECIAL_REQUESTS: 'specialRequests',
     }
 };
