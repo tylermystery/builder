@@ -1,8 +1,12 @@
 /*
- * Version: 1.8.6
+ * Version: 1.8.7
  * Last Modified: 2025-08-22
  *
  * Changelog:
+ *
+ * v1.8.7 - 2025-08-22
+ * - Implemented filtering logic for Categories and Subcategories.
+ * - Added event listeners for new filter dropdowns.
  *
  * v1.8.6 - 2025-08-22
  * - Restored Undo/Redo functionality and connected to new "History Mode" toggle.
@@ -144,7 +148,10 @@ async function applyFilters() {
     const priceValue = ui.priceFilter.value;
     const durationValue = ui.durationFilter.value;
     const statusValue = ui.statusFilter.value;
+    const categoryValue = ui.categoryFilter.value;
+    const subcategoryValue = ui.subcategoryFilter.value;
     state.ui.currentSort = ui.sortBy.value;
+
     state.records.filtered = state.records.all.filter(record => {
         const nameMatch = !nameValue || (record.fields[CONSTANTS.FIELD_NAMES.NAME] && record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().includes(nameValue));
         const priceMatch = (priceValue === 'all') ? true : (() => {
@@ -160,7 +167,10 @@ async function applyFilters() {
         })();
         const durationMatch = durationValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.DURATION] && String(record.fields[CONSTANTS.FIELD_NAMES.DURATION]) === durationValue);
         const statusMatch = statusValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.STATUS] && record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusValue);
-        return nameMatch && priceMatch && durationMatch && statusMatch;
+        const categoryMatch = categoryValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] && record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES].includes(categoryValue));
+        const subcategoryMatch = subcategoryValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] && record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES].includes(subcategoryValue));
+        
+        return nameMatch && priceMatch && durationMatch && statusMatch && categoryMatch && subcategoryMatch;
     });
 
     state.records.filtered.sort((a, b) => {
@@ -225,7 +235,7 @@ function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
     
-    const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.sortBy];
+    const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.categoryFilter, ui.subcategoryFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
     });
@@ -234,6 +244,8 @@ function setupEventListeners() {
         ui.priceFilter.value = 'all';
         ui.durationFilter.value = 'all';
         ui.statusFilter.value = 'all';
+        ui.categoryFilter.value = 'all';
+        ui.subcategoryFilter.value = 'all';
         ui.sortBy.value = document.body.classList.contains('collab-mode-enabled') ? 'reactions-desc' : 'price-asc';
         applyFilters();
     });
@@ -444,6 +456,8 @@ async function initialize() {
     console.log('Populating filters...');
     ui.populateFilter(ui.durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
     ui.populateFilter(ui.statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
+    ui.populateFilter(ui.categoryFilter, CONSTANTS.FIELD_NAMES.CATEGORIES);
+    ui.populateFilter(ui.subcategoryFilter, CONSTANTS.FIELD_NAMES.SUBCATEGORIES);
     
     console.log('Setting up event listeners...');
     setupEventListeners();
