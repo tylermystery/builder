@@ -1,8 +1,11 @@
 /*
- * Version: 1.1.0
- * Last Modified: 2025-08-21
+ * Version: 1.1.1
+ * Last Modified: 2025-08-22
  *
  * Changelog:
+ *
+ * v1.1.1 - 2025-08-22
+ * - Added CATEGORIES and SUBCATEGORIES constants.
  *
  * v1.1.0 - 2025-08-21
  * - Added GOALS constant for the new header field.
@@ -29,6 +32,8 @@ export const CONSTANTS = {
         PRICING_TYPE: 'Pricing Type',
         HEADCOUNT_MIN: 'Headcount min',
         MEDIA_TAGS: 'Media Tags',
+        CATEGORIES: 'Categories',
+        SUBCATEGORIES: 'Subcategories',
     },
   
     PRICING_TYPES: {
