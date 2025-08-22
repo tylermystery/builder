@@ -1,22 +1,16 @@
 /*
- * Version: 1.8.2
+ * Version: 1.8.3
  * Last Modified: 2025-08-21
  *
  * Changelog:
  *
+ * v1.8.3 - 2025-08-21
+ * - Re-wired event listeners to the new consolidated header toolbar.
+ * - Added logic for the new "Goals" field.
+ * - Removed logic for the obsolete bottom summary toolbar.
+ *
  * v1.8.2 - 2025-08-21
  * - Fixed bug where action buttons (promote, demote, remove) on favorites carousel were not working.
- *
- * v1.8.1 - 2025-08-21
- * - Refined card interactions: Emoji clicks no longer open the modal.
- * - Added mouse wheel scrolling to the horizontal favorites carousel.
- *
- * v1.8.0 - 2025-08-21
- * - Removed Undo/Redo and Autosave functionality for MVP simplification.
- *
- * v1.7.2 - 2025-08-21
- * - Updated scroll listeners to support a vertical catalog layout.
- * - Removed horizontal mouse wheel scroll functionality.
 ...
  */
 
@@ -179,7 +173,6 @@ export async function updateRender() { // Exported for ui.js
     ui.updateHeader();
     await ui.updateFavoritesCarousel();
     await applyFilters();
-    ui.updateSummaryToolbar();
 }
 
 
@@ -267,12 +260,10 @@ function setupEventListeners() {
             return;
         }
         
-        // If the click was on any other button (like edit or reactions), do nothing more.
         if (e.target.closest('button')) {
             return;
         }
 
-        // If the click was on the card body itself, open the modal.
         const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem) {
             const compositeId = favoriteItem.dataset.compositeId;
@@ -318,12 +309,10 @@ function setupEventListeners() {
             return;
         }
         
-        // If the click was on any button (like edit or a reaction), do nothing further.
         if (e.target.closest('button')) {
             return;
         }
 
-        // Click on the main card body to open the modal
         const card = e.target.closest('.event-card');
         if (card) {
             const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
@@ -331,17 +320,18 @@ function setupEventListeners() {
         }
     });
     
-    const toolbarInputs = [ui.summaryEventNameInput, ui.summaryDateInput, ui.summaryHeadcountInput, ui.summaryLocationInput];
-    toolbarInputs.forEach(input => {
+    // Event listeners for the new header toolbar
+    const headerInputs = [ui.headerEventNameInput, ui.headerDateInput, ui.headerHeadcountInput, ui.headerGoalsInput];
+    headerInputs.forEach(input => {
         input.addEventListener('change', (e) => {
             recordStateForUndo();
             const value = e.target.value;
             let detailType;
             switch (e.target.id) {
-                case 'summary-event-name': detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME; break;
-                case 'summary-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
-                case 'summary-headcount': detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT; ui.guestCountInput.value = value; ui.guestCountInput.dispatchEvent(new Event('input')); break;
-                case 'summary-location': detailType = CONSTANTS.DETAIL_TYPES.LOCATION; break;
+                case 'header-event-name': detailType = CONSTANTS.DETAIL_TYPES.EVENT_NAME; break;
+                case 'header-date': detailType = CONSTANTS.DETAIL_TYPES.DATE; break;
+                case 'header-headcount': detailType = CONSTANTS.DETAIL_TYPES.GUEST_COUNT; break;
+                case 'header-goals': detailType = CONSTANTS.DETAIL_TYPES.GOALS; break;
             }
             if (detailType) {
                 state.eventDetails.combined.set(detailType, value);
@@ -349,6 +339,7 @@ function setupEventListeners() {
             }
         });
     });
+
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         const success = await api.saveSessionToAirtable();
         if (success) {
@@ -364,13 +355,12 @@ function setupEventListeners() {
             }
         }, 3000);
     });
-    // Add listener for sessions dropdown to load selected session
+    
     ui.sessionsDropdown.addEventListener('change', async (e) => {
         const selectedId = e.target.value;
         if (selectedId) {
             await api.loadSessionFromAirtable(selectedId);
             await updateRender();
-            // Reset dropdown to default after load (optional edge case handling)
             e.target.value = '';
         }
     });
@@ -404,7 +394,6 @@ async function initialize() {
         console.log('Session loaded');
     }
     
-    // We are not using Undo/Redo in the MVP, but recording the initial state is harmless.
     recordStateForUndo();
     console.log('Checking user profile...');
     checkUserProfile();
