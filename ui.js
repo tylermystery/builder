@@ -1,8 +1,11 @@
 /*
- * Version: 1.8.6
+ * Version: 1.8.7
  * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.8.7 - 2025-08-21
+ * - Implemented the Heart -> Ring -> Ball & Chain emoji sequence for favorite card buttons.
  *
  * v1.8.6 - 2025-08-21
  * - Replaced emoji buttons on favorite cards with clearer SVG icons for lock and remove actions.
@@ -67,13 +70,6 @@ import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
 import { calculateReactionScore, getRecordPrice, updateRender, recordStateForUndo, handleReaction } from './main.js';
 
-// SVG Icons for buttons
-const ICON_LOCK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/></svg>`;
-const ICON_UNLOCK = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6H5v2h2v10c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H9V10h9v10z"/></svg>`;
-const ICON_REMOVE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
-const ICON_LOCKED_IN = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>`;
-
-
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
@@ -83,12 +79,10 @@ export const durationFilter = document.getElementById('duration-filter');
 export const statusFilter = document.getElementById('status-filter');
 export const sortBy = document.getElementById('sort-by');
 export const guestCountInput = document.getElementById('guest-count');
-// New Header Inputs
 export const headerEventNameInput = document.getElementById('header-event-name');
 export const headerDateInput = document.getElementById('header-date');
 export const headerHeadcountInput = document.getElementById('header-headcount');
 export const headerGoalsInput = document.getElementById('header-goals');
-
 export const stickyHeader = document.getElementById('sticky-header');
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
@@ -184,12 +178,13 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     let currentIndex = state.ui.cardImageIndexes.get(record.id);
     itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
     
+    // Updated button logic with new emoji sequence
     const primaryActionHTML = isLocked 
-        ? `<button class="action-btn locked-btn" title="Locked In">${ICON_LOCKED_IN}</button>` 
-        : `<button class="action-btn promote-btn" title="Lock it in" data-composite-id="${compositeId}">${ICON_LOCK}</button>`;
+        ? `<button class="action-btn-primary locked-btn" title="Locked In">⛓️</button>` 
+        : `<button class="action-btn-primary promote-btn" title="Lock it in" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
     const secondaryActionHTML = isLocked 
-        ? `<button class="action-btn demote-btn" title="Unlock" data-composite-id="${compositeId}">${ICON_UNLOCK}</button>` 
-        : `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">${ICON_REMOVE}</button>`;
+        ? `<button class="action-btn-secondary demote-btn" title="Unlock" data-composite-id="${compositeId}">🔨</button>` 
+        : `<button class="action-btn-secondary remove-btn" title="Remove" data-composite-id="${compositeId}">💔</button>`;
 
     itemCard.innerHTML = `<div class="card-actions">${primaryActionHTML}${secondaryActionHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
@@ -228,9 +223,9 @@ export async function createEventCardElement(record, imageCache) {
     eventCard.dataset.recordId = recordId;
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(recordId)) {
-        state.ui.cardImageIndexes.set(recordId, 0);
+        state.ui.cardImageIndexes.set(record.id, 0);
     }
-    let currentIndex = state.ui.cardImageIndexes.get(recordId);
+    let currentIndex = state.ui.cardImageIndexes.get(record.id);
     eventCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
 
     let optionsDropdownHTML = '';
