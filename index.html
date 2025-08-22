@@ -4,8 +4,225 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+    <style>
+        body {
+            padding-bottom: 80px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: #f8f9fa;
+        }
+        #sticky-header {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 999;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: padding 0.3s ease-in-out;
+        }
+        #header-summary {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            font-size: 1.1em;
+            box-sizing: border-box;
+        }
+        #header-full-content { 
+            max-height: 500px; 
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out; 
+        }
+        #sticky-header.header-collapsed #header-full-content { 
+            max-height: 0; 
+            padding: 0;
+        }
+        #sticky-header.header-collapsed #header-summary { 
+            display: flex;
+        }
+
+        /* Header Toolbar */
+        #header-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 15px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .toolbar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .toolbar-group label {
+            font-size: 0.75em;
+            color: #666;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .toolbar-group input, .toolbar-group textarea {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 0.9em;
+        }
+        .toolbar-group .toolbar-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .event-name-group {
+            flex-grow: 1;
+        }
+        .event-name-group input {
+            font-size: 1.8em;
+            font-weight: bold;
+            border: none;
+            padding: 0;
+            width: 100%;
+        }
+        .event-name-group input:focus {
+            outline: none;
+        }
+        .details-group {
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+        }
+        .goals-group {
+            flex-grow: 2; /* Allow goals to take up more space */
+            min-width: 200px;
+        }
+        .goals-group textarea {
+            min-height: 32px;
+            resize: vertical;
+            width: 100%;
+        }
+        .people-group {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 15px;
+            border-left: 1px solid #e9ecef;
+            padding-left: 20px;
+        }
+        #total-cost-section {
+            padding: 0;
+            text-align: right;
+            font-size: 1.2em;
+        }
+        #total-cost {
+            font-weight: bold;
+            color: #007aff;
+            cursor: pointer;
+        }
+
+        /* Favorites Section */
+        #favorites-section { max-width: 1400px; margin: 0 auto; padding: 15px 20px; }
+        #favorites-carousel { display: flex;
+            gap: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .favorite-item {
+            position: relative;
+            flex: 0 0 220px;
+            height: 180px;
+            border-radius: 8px;
+            overflow: hidden;
+            background-size: cover;
+            background-position: center;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid #ddd;
+        }
+        .favorite-item.locked-item { border: 3px solid #FFD700; }
+
+        /* Card Styles */
+        #filter-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            flex-wrap: wrap;
+        }
+        #catalog-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 25px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .event-card {
+            position: relative;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            height: 520px;
+            width: 100%;
+            background-size: cover;
+            background-position: center;
+            color: white;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #e0e0e0;
+        }
+        .event-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            height: 520px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        #modal-body {
+            padding: 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%);
+            margin-top: auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
 
