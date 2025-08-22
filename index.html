@@ -7,13 +7,16 @@
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
     <style>
         /*
-         * Version: 2.1.1
+         * Version: 2.2.0
          * Last Modified: 2025-08-21
          *
          * Changelog:
          *
+         * v2.2.0 - 2025-08-21
+         * - Added subtle beta toolkit trigger and panel.
+         *
          * v2.1.1 - 2025-08-21
-         * - Added ID to sort-by-reactions option for JS targeting.
+         * - Fixed bug where sort-by-reactions option was visible in MVP.
          *
          * v2.1.0 - 2025-08-21
          * - Stripped UI down to MVP foundation.
@@ -54,6 +57,83 @@
         }
         #sticky-header.header-collapsed #header-summary { 
             display: flex;
+        }
+
+        /* --- Beta Toolkit --- */
+        .header-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        #beta-trigger {
+            font-style: italic;
+            font-size: 0.7em;
+            color: #007aff;
+            cursor: pointer;
+            user-select: none;
+        }
+        #beta-toolkit {
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: none; /* Hidden by default */
+            z-index: 1000;
+        }
+        #beta-toolkit.visible {
+            display: block;
+        }
+        .beta-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .beta-toggle:not(:last-child) {
+            margin-bottom: 10px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #007aff;
+        }
+        input:checked + .slider:before {
+            transform: translateX(14px);
         }
 
         /* Header Toolbar */
@@ -182,11 +262,6 @@
             padding: 20px;
             max-width: 1400px;
             margin: 0 auto;
-        }
-
-        /* HIDE REACTION BAR FOR MVP */
-        .reaction-bar, .reactions-summary {
-            display: none !important;
         }
         
         /* SIMPLIFIED FAVORITE CARD BUTTONS */
@@ -402,7 +477,26 @@
         
         <div id="header-toolbar">
             <div class="toolbar-group event-name-group">
-                <input type="text" id="header-event-name" placeholder="Untitled Event">
+                <div class="header-title-container">
+                    <h1>Mystery Tour Event Builder</h1>
+                    <sup id="beta-trigger">beta</sup>
+                </div>
+                <div id="beta-toolkit">
+                    <div class="beta-toggle">
+                        <span>Collab Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="collab-mode-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="beta-toggle">
+                        <span>Event Planner Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="planner-mode-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="toolbar-group details-group">
                 <div class="toolbar-item">
