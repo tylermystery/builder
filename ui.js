@@ -1,8 +1,15 @@
 /*
- * Version: 1.8.3
- * Last Modified: 2025-08-19
+ * Version: 1.8.5
+ * Last Modified: 2025-08-21
  *
  * Changelog:
+ *
+ * v1.8.5 - 2025-08-21
+ * - Removed obsolete updateSummaryToolbar function.
+ * - Exported new header input elements.
+ *
+ * v1.8.4 - 2025-08-21
+ * - Removed updateHistoryButtons function as part of MVP cleanup.
  *
  * v1.8.3 - 2025-08-19
  * - Removed disclaimer tooltips from autosave-toggle and sessions-dropdown as features are now complete.
@@ -68,26 +75,21 @@ export const durationFilter = document.getElementById('duration-filter');
 export const statusFilter = document.getElementById('status-filter');
 export const sortBy = document.getElementById('sort-by');
 export const guestCountInput = document.getElementById('guest-count');
-export const summaryEventNameInput = document.getElementById('summary-event-name');
-export const summaryDateInput = document.getElementById('summary-date');
-export const summaryHeadcountInput = document.getElementById('summary-headcount');
-export const summaryLocationInput = document.getElementById('summary-location');
+// New Header Inputs
+export const headerEventNameInput = document.getElementById('header-event-name');
+export const headerDateInput = document.getElementById('header-date');
+export const headerHeadcountInput = document.getElementById('header-headcount');
+export const headerGoalsInput = document.getElementById('header-goals');
+
 export const stickyHeader = document.getElementById('sticky-header');
-
-
-
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
-const summaryTotalCostEl = document.getElementById('summary-total-cost');
 const favoritesSection = document.getElementById('favorites-section');
-const eventTitleHeader = document.getElementById('event-title-header');
 const headerSummary = document.getElementById('header-summary');
 const collaboratorsSection = document.getElementById('collaborators-section');
 export const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
 export const sessionsDropdown = document.getElementById('sessions-dropdown');
 const filterControls = document.getElementById('filter-controls');
-const undoBtn = document.getElementById('undo-btn');
-const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
@@ -99,15 +101,14 @@ const modalBody = document.getElementById('modal-body');
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
     if (!optionsText) return [];
-    
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
-        const option = { 
-            name: parts[0], 
+        const option = {
+            name: parts[0],
             priceChange: null,
             absolutePrice: null,
-            durationChange: null, 
-            description: null 
+            durationChange: null,
+            description: null
         };
 
         parts.slice(1).forEach(part => {
@@ -116,7 +117,8 @@ export function parseOptions(optionsText) {
 
             switch (key.toLowerCase()) {
                 case 'price change':
-                    option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
+                    option.priceChange
+                    = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'price':
                     option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
@@ -125,7 +127,8 @@ export function parseOptions(optionsText) {
                     option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'description':
-                    option.description = value.replace(/"/g, ''); // Remove quotes
+                    option.description = value.replace(/"/g, '');
+// Remove quotes
                     break;
             }
         });
@@ -153,7 +156,6 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     const fields = record.fields;
     let variationNameHTML = '';
     let itemPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
-    
     const optionIndex = compositeId.split('-')[1];
     if (optionIndex) {
         const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -173,11 +175,11 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     }
     let currentIndex = state.ui.cardImageIndexes.get(record.id);
     itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
-    const primaryActionHTML = isLocked ? `<button class="primary-action-btn" title="Locked In">⛓️</button>` : `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
-    const secondaryActionHTML = isLocked ? `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>` : `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`;
-    
+    const primaryActionHTML = isLocked ?
+        `<button class="primary-action-btn" title="Locked In">⛓️</button>` : `<button class="primary-action-btn promote-btn" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
+    const secondaryActionHTML = isLocked ?
+        `<button class="secondary-action-btn demote-btn" data-composite-id="${compositeId}" title="Unlock">🔨</button>` : `<button class="secondary-action-btn remove-btn" data-composite-id="${compositeId}" title="Remove">💔</button>`;
     itemCard.innerHTML = `<div class="action-btn-container">${primaryActionHTML}</div><button class="edit-card-btn" data-composite-id="${compositeId}">🪄</button>${secondaryActionHTML}<div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div><div class="card-footer">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
-
     const leftArrow = itemCard.querySelector('.gallery-arrow.left');
     const rightArrow = itemCard.querySelector('.gallery-arrow.right');
     if (imageUrls.length > 1) {
@@ -204,7 +206,8 @@ export async function createEventCardElement(record, imageCache) {
     const recordId = record.id;
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
+    const basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
+        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
     const baseDuration = fields[CONSTANTS.FIELD_NAMES.DURATION] || 0;
 
     const eventCard = document.createElement('div');
@@ -222,7 +225,6 @@ export async function createEventCardElement(record, imageCache) {
         const compositeId = `${recordId}-${index}`;
         return !state.cart.items.has(compositeId) && !state.cart.lockedItems.has(compositeId);
     });
-
     if (options.length > 0) {
         if (availableOptions.length === 0) {
             return null;
@@ -234,7 +236,8 @@ export async function createEventCardElement(record, imageCache) {
     }
 
     const firstAvailableOptionIndex = options.findIndex(opt => opt.name === availableOptions[0]?.name);
-    const compositeId = options.length > 0 ? `${recordId}-${firstAvailableOptionIndex}` : recordId;
+    const compositeId = options.length > 0 ?
+        `${recordId}-${firstAvailableOptionIndex}` : recordId;
     const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
 
     eventCard.innerHTML = `
@@ -260,7 +263,6 @@ export async function createEventCardElement(record, imageCache) {
         ${renderReactionbar(recordId)}
         <button class="gallery-arrow left">←</button>
         <button class="gallery-arrow right">→</button>`;
-
     const dropdown = eventCard.querySelector('.options-selector');
     const heartIcon = eventCard.querySelector('.heart-icon');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -269,11 +271,10 @@ export async function createEventCardElement(record, imageCache) {
     const priceEl = eventCard.querySelector('.price');
     const descriptionEl = eventCard.querySelector('.option-description');
     const detailsEl = eventCard.querySelector('.details');
-
     const updateCardDetails = () => {
-        const selectedIndex = dropdown ? dropdown.value : null;
+        const selectedIndex = dropdown ?
+            dropdown.value : null;
         const selectedOption = selectedIndex ? options[selectedIndex] : null;
-        
         // Update Price
         let currentPrice = basePrice;
         if (selectedOption) {
@@ -295,23 +296,21 @@ export async function createEventCardElement(record, imageCache) {
             currentDuration += selectedOption.durationChange;
         }
         detailsEl.textContent = currentDuration > 0 ? `Duration: ${currentDuration} hours` : '';
-
         // Update Heart Icon and Edit Button
         const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
         heartIcon.dataset.compositeId = newCompositeId;
         eventCard.querySelector('.edit-card-btn').dataset.compositeId = newCompositeId;
         heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
     };
-    
     if (dropdown) {
         dropdown.addEventListener('change', updateCardDetails);
     }
-    updateCardDetails(); // Initial call
+    updateCardDetails();
+// Initial call
     
     if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
     if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
     quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
-
     const leftArrow = eventCard.querySelector('.gallery-arrow.left');
     const rightArrow = eventCard.querySelector('.gallery-arrow.right');
     if (imageUrls.length > 1) {
@@ -347,7 +346,6 @@ export async function renderRecords(recordsToRender, imageCache) {
             const compositeId = `${recordId}-${index}`;
             return state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
         });
-
         if (allOptionsFavorited || (options.length === 0 && (state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId)))) {
             continue;
         }
@@ -367,12 +365,10 @@ export async function updateFavoritesCarousel() {
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
-
     const sorter = ([idA], [idB]) => {
         const recordA = state.records.all.find(r => r.id === idA.split('-')[0]);
         const recordB = state.records.all.find(r => r.id === idB.split('-')[0]);
         if (!recordA || !recordB) return 0;
-
         switch (state.ui.currentSort) {
             case 'price-asc':
                 return getRecordPrice(recordA, idA.split('-')[1]) - getRecordPrice(recordB, idB.split('-')[1]);
@@ -400,11 +396,6 @@ export async function updateFavoritesCarousel() {
 
     updateTotalCost();
     updateHeader();
-}
-
-export function updateHistoryButtons() {
-    undoBtn.disabled = state.history.undoStack.length <= 1;
-    redoBtn.disabled = state.history.redoStack.length === 0;
 }
 
 export function renderCollaborators(getInitials) {
@@ -441,22 +432,28 @@ export function populateSessionsDropdown(getStoredSessions) {
     });
 }
 
-export function updateSummaryToolbar() {
-    summaryEventNameInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
-    summaryDateInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || '';
-    summaryHeadcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
-    summaryLocationInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || '';
-}
-
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
     filterControls.style.display = show ? 'none' : 'flex';
 }
 
 export function updateHeader() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event';
-    eventTitleHeader.textContent = eventName;
-    document.title = eventName === 'Your Event' ? 'Event Catalog' : `TMT - ${eventName}`;
+    // Now, the header event name input IS the header title source.
+    // We just need to make sure the document title is updated.
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Catalog';
+    document.title = eventName;
+}
+
+export function updateHeaderSummary() {
+    const headerSummary = document.getElementById('header-summary');
+    const itemCount = state.cart.items.size + state.cart.lockedItems.size;
+    const totalCost = document.getElementById('total-cost').textContent;
+
+    if (itemCount > 0) {
+        headerSummary.textContent = `Selections: ${itemCount} | Total: ${totalCost}`;
+    } else {
+        headerSummary.textContent = `Event: ${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your Event'}`;
+    }
 }
 
 export function updateTotalCost() {
@@ -474,6 +471,7 @@ export function updateTotalCost() {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
+  
         let itemCost;
 
         if (pricingType === 'per hour') {
@@ -485,7 +483,6 @@ export function updateTotalCost() {
         }
 
         total += itemCost;
-
         const variationIndex = compositeId.split('-')[1];
         const variationName = variationIndex ? parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[variationIndex]?.name : '';
         const quantityLabel = pricingType === 'per hour' ? 'hours' : 'qty';
@@ -495,9 +492,9 @@ export function updateTotalCost() {
     const formattedTotal = `$${total.toFixed(2)}`;
     const breakdownText = breakdown.length > 0 ? breakdown.join('\n') : 'No items selected';
     totalCostEl.textContent = formattedTotal;
-    totalCostEl.title = breakdownText; // Tooltip for breakdown
-    summaryTotalCostEl.textContent = formattedTotal;
-    summaryTotalCostEl.title = breakdownText; // Tooltip for breakdown
+    totalCostEl.title = breakdownText;
+    
+    updateHeaderSummary(); // Update the collapsed header summary
 }
 
 export function populateFilter(filterElement, fieldName) {
@@ -539,14 +536,15 @@ export async function openDetailModal(compositeId, imageCache) {
     }
     const fields = record.fields;
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ? parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
+    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
+        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
     let optionsDropdownHTML = '';
     let selectedOptionIndex = compositeId.split('-')[1] || 0;
     if (options.length > 0) {
         optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == selectedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
     }
     const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}</div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;  // Removed save button
+    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div><div class="reactions-summary">${renderReactionsSummary(record.id)}</div>${renderReactionbar(record.id)}</div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
     
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     if (!state.ui.cardImageIndexes.has(record.id)) {
@@ -596,7 +594,6 @@ export async function openDetailModal(compositeId, imageCache) {
             await updateRender();
         });
     });
-
     // Hearting in modal
     const modalHeart = modalBody.querySelector('.heart-icon');
     modalHeart.addEventListener('click', (e) => {
@@ -613,7 +610,6 @@ export async function openDetailModal(compositeId, imageCache) {
         // Reflect changes immediately
         updateRender();
     });
-
     // Auto-apply option change
     const modalOptions = modalBody.querySelector('#modal-options');
     if (modalOptions) {
@@ -623,6 +619,7 @@ export async function openDetailModal(compositeId, imageCache) {
             updateModalPrice();
             const newCompositeId = options.length > 0 ? `${record.id}-${selectedOptionIndex}` : record.id;
             const newItemInfo = { quantity: parseInt(modalBody.querySelector('#modal-quantity').value), requests: '' };
+        
             // Update state
             if (state.cart.items.has(compositeId)) {
                 state.cart.items.delete(compositeId);
@@ -657,7 +654,6 @@ export async function openDetailModal(compositeId, imageCache) {
     const modalMinus = modalBody.querySelector('.quantity-btn.minus');
     if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; modalQuantity.dispatchEvent(new Event('change')); });
     if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) { modalQuantity.value = current - 1; modalQuantity.dispatchEvent(new Event('change')); } });
-
     // Close modal on overlay click or close button
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay || e.target.classList.contains('modal-close')) {
