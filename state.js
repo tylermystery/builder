@@ -1,8 +1,11 @@
 /*
- * Version: 1.6.0
- * Last Modified: 2025-08-21
+ * Version: 1.6.1
+ * Last Modified: 2025-08-22
  *
  * Changelog:
+ *
+ * v1.6.1 - 2025-08-22
+ * - Restored history object to state for Beta Toolkit.
  *
  * v1.6.0 - 2025-08-21
  * - Removed obsolete history object for MVP cleanup.
@@ -40,5 +43,10 @@ export const state = {
         isLoadingMore: false,
         currentSort: 'reactions-desc',
         cardImageIndexes: new Map(), // Tracks current image index for each card
+    },
+    history: {
+        undoStack: [],
+        redoStack: [],
+        isRestoring: false,
     }
 };
