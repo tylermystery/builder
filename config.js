@@ -27,6 +27,7 @@ export const CONSTANTS = {
         PRICE: 'Price',
         DESCRIPTION: 'Description',
         OPTIONS: 'Options',
+        PARENT_ITEM: 'Parent Item',
         STATUS: 'Status',
         DURATION: 'Duration (hours)',
         PRICING_TYPE: 'Pricing Type',
