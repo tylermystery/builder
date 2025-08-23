@@ -6,6 +6,28 @@
     <title>Event Catalog</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
     <style>
+        /*
+         * Version: 2.2.2
+         * Last Modified: 2025-08-22
+         *
+         * Changelog:
+         *
+         * v2.2.2 - 2025-08-22
+         * - Added Category and Subcategory dropdowns to the filter UI.
+         *
+         * v2.2.1 - 2025-08-22
+         * - Added history-controls and CSS for new History Mode toggle.
+         *
+         * v2.2.0 - 2025-08-21
+         * - Added subtle beta toolkit trigger and panel.
+         *
+         * v2.1.1 - 2025-08-21
+         * - Fixed bug where sort-by-reactions option was visible in MVP.
+         *
+         * v2.1.0 - 2025-08-21
+         * - Stripped UI down to MVP foundation.
+         */
+
         body {
             padding-bottom: 80px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
@@ -31,16 +53,93 @@
             box-sizing: border-box;
         }
         #header-full-content { 
-            max-height: 500px; 
+            max-height: 500px;
             overflow: hidden;
-            transition: max-height 0.4s ease-in-out; 
+            transition: max-height 0.4s ease-in-out;
         }
         #sticky-header.header-collapsed #header-full-content { 
-            max-height: 0; 
+            max-height: 0;
             padding: 0;
         }
         #sticky-header.header-collapsed #header-summary { 
             display: flex;
+        }
+
+        /* --- Beta Toolkit --- */
+        .header-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        #beta-trigger {
+            font-style: italic;
+            font-size: 0.7em;
+            color: #007aff;
+            cursor: pointer;
+            user-select: none;
+        }
+        #beta-toolkit {
+            position: absolute;
+            top: 40px;
+            left: 20px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: none; /* Hidden by default */
+            z-index: 1000;
+        }
+        #beta-toolkit.visible {
+            display: block;
+        }
+        .beta-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .beta-toggle:not(:last-child) {
+            margin-bottom: 10px;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #007aff;
+        }
+        input:checked + .slider:before {
+            transform: translateX(14px);
         }
 
         /* Header Toolbar */
@@ -72,18 +171,23 @@
             padding: 6px 8px;
             font-size: 0.9em;
         }
+        .tool-brand-group h4 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin: 0;
+            padding: 0;
+            line-height: 1.2;
+        }
         .event-name-group {
             flex-grow: 1;
         }
-        .event-name-group input {
+        #header-event-name {
             font-size: 1.8em;
             font-weight: bold;
-            border: none;
-            padding: 0;
-            width: 100%;
-        }
-        .event-name-group input:focus {
-            outline: none;
+            padding: 4px 8px;
+            border: 1px solid #ced4da;
+            line-height: 1.2;
+            flex-grow: 1;
         }
         .details-group {
             display: flex;
@@ -117,11 +221,33 @@
             color: #007aff;
             cursor: pointer;
         }
+        .history-controls {
+            align-items: center;
+            gap: 5px;
+        }
+        .history-controls button {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+        }
+        .history-controls button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
 
         /* Favorites Section */
-        #favorites-section { max-width: 1400px; margin: 0 auto; padding: 15px 20px; }
-        #favorites-carousel { display: flex;
-            gap: 15px; overflow-x: auto; padding-bottom: 5px; }
+        #favorites-section { 
+            max-width: 1400px;
+            margin: 0 auto; 
+            padding: 15px 20px; 
+        }
+        #favorites-carousel { 
+            display: flex;
+            gap: 15px;
+            overflow-x: auto; 
+            padding-bottom: 5px; 
+        }
         .favorite-item {
             position: relative;
             flex: 0 0 220px;
@@ -139,41 +265,31 @@
             transition: all 0.3s;
             border: 1px solid #ddd;
         }
-        .favorite-item.locked-item { border: 3px solid #FFD700; }
+        .favorite-item.locked-item { 
+            border: 3px solid #FFD700;
+        }
         .favorite-item-content {
             background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
             padding: 10px;
             text-align: left;
         }
-        .favorite-item p { margin: 2px 0; font-size: 0.9em; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
-        .favorite-item .item-name { font-weight: bold; font-size: 1em; }
-        .favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
-        .favorite-item .item-price { font-weight: bold; margin-top: 5px; }
-
-        /* --- FAVORITE CARD BUTTON STYLES --- */
-        .card-actions {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            z-index: 5;
+        .favorite-item p { 
+            margin: 2px 0; 
+            font-size: 0.9em;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7); 
         }
-        .action-btn-primary, .action-btn-secondary {
-            background: none;
-            border: none;
-            font-size: 1.8em;
-            cursor: pointer;
-            padding: 0;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        .favorite-item .item-name { 
+            font-weight: bold; 
+            font-size: 1em;
         }
-        .action-btn-secondary {
-            font-size: 1.5em;
-            position: absolute;
-            bottom: -150px; /* Positioned relative to card actions */
-            right: 0;
+        .favorite-item .variation-name { 
+            font-size: 0.8em; 
+            font-style: italic;
         }
-        .action-btn-primary .icon-hover { display: none; }
-        .action-btn-primary:hover .icon-default { display: none; }
-        .action-btn-primary:hover .icon-hover { display: block; animation: pop 0.3s; }
+        .favorite-item .item-price { 
+            font-weight: bold; 
+            margin-top: 5px;
+        }
 
         /* Filter Controls */
         #filter-controls {
@@ -196,46 +312,67 @@
             margin: 0 auto;
         }
 
-        /* ALL CARD SHARED STYLES */
-        .card-footer {
+        /* CONDITIONAL VISIBILITY FOR BETA FEATURES */
+        .reaction-bar, .reactions-summary, .card-footer, .action-btn-primary, .action-btn-secondary, .history-controls {
+            display: none;
+        }
+        body.collab-mode-enabled .reaction-bar,
+        body.collab-mode-enabled .reactions-summary,
+        body.collab-mode-enabled .card-footer {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 5px 10px;
         }
-        .reactions-summary { display: flex;
-            gap: 4px; font-size: 0.8em; }
-        .reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none;
+        body.planner-mode-enabled .action-btn-primary,
+        body.planner-mode-enabled .action-btn-secondary {
+            display: flex;
         }
-        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
-        .reaction-bar {
+        body.planner-mode-enabled .remove-btn {
+            display: none;
+        }
+        body.history-mode-enabled .history-controls {
+            display: flex;
+        }
+        
+        /* FAVORITE CARD BUTTONS */
+        .card-actions {
             position: absolute;
-            top: 10px;
-            bottom: 10px;
-            left: 0;
-            width: 45px;
-            background-color: rgba(0,0,0,0.5);
-            backdrop-filter: blur(4px);
-            border-radius: 0 20px 20px 0;
+            top: 8px;
+            right: 8px;
+            z-index: 5;
             display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
             gap: 5px;
-            transform: translateX(-100%);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            z-index: 15;
         }
-        .event-card:hover .reaction-bar, .favorite-item:hover .reaction-bar, .modal-content:hover .reaction-bar {
-            transform: translateX(0);
-            opacity: 1;
-            visibility: visible;
+        .action-btn, .action-btn-primary, .action-btn-secondary {
+            background: none;
+            border: none;
+            font-size: 1.8em;
+            cursor: pointer;
+            padding: 0;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .reaction-bar button { background: none; border: none; font-size: 1.5em; cursor: pointer; transition: transform 0.1s; }
-        .reaction-bar button:hover { transform: scale(1.3); }
-
+        .action-btn-secondary {
+            font-size: 1.5em;
+        }
+        .action-btn-primary .icon-hover { 
+            display: none;
+        }
+        .action-btn-primary:hover .icon-default { 
+            display: none;
+        }
+        .action-btn-primary:hover .icon-hover { 
+            display: block; 
+            animation: pop 0.3s;
+        }
+        @keyframes pop { 
+            0% { transform: scale(1); } 
+            50% { transform: scale(1.4); } 
+            100% { transform: scale(1); } 
+        }
+        
         /* MAIN CATALOG CARD STYLES */
         .event-card {
             position: relative;
@@ -256,13 +393,6 @@
         .event-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-        }
-        .event-card .card-footer {
-             position: absolute;
-             bottom: 0;
-             left: 0;
-             right: 0;
-             background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
         }
         .heart-icon {
             position: absolute;
@@ -285,7 +415,10 @@
             transition: fill 0.2s, stroke 0.2s;
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
         }
-        .heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c; }
+        .heart-icon.hearted svg { 
+            fill: #ff4f6c; 
+            stroke: #ff4f6c;
+        }
         .event-card-content {
             background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%);
             padding: 20px;
@@ -307,7 +440,10 @@
             color: #f0f0f0;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         }
-        .event-card-content .details { font-size: 0.9em; margin-bottom: 15px; }
+        .event-card-content .details { 
+            font-size: 0.9em;
+            margin-bottom: 15px; 
+        }
         .event-card-content .options-selector {
             width: 100%;
             padding: 8px;
@@ -325,7 +461,10 @@
             padding-top: 10px;
             flex-shrink: 0;
         }
-        .quantity-selector { display: flex; align-items: center; }
+        .quantity-selector { 
+            display: flex; 
+            align-items: center;
+        }
         .quantity-selector button {
             width: 30px;
             height: 30px;
@@ -344,7 +483,10 @@
             height: 30px;
             -moz-appearance: textfield;
         }
-        .event-card-content .price { font-size: 1.3em; font-weight: bold; }
+        .event-card-content .price { 
+            font-size: 1.3em; 
+            font-weight: bold; 
+        }
         .option-description {
             font-size: 0.85em;
             padding: 5px 0;
@@ -406,9 +548,15 @@
             transition: opacity 0.2s;
             z-index: 10;
         }
-        .gallery-arrow.left { left: 10px; }
-        .gallery-arrow.right { right: 10px; }
-        .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1; }
+        .gallery-arrow.left { 
+            left: 10px;
+        }
+        .gallery-arrow.right { 
+            right: 10px;
+        }
+        .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { 
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -425,9 +573,41 @@
     <div id="header-summary"></div>
     <div id="header-full-content">
         
+        <div id="beta-toolkit">
+            <div class="beta-toggle">
+                <span>Collab Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="collab-mode-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="beta-toggle">
+                <span>Event Planner Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="planner-mode-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="beta-toggle">
+                <span>History Mode</span>
+                <label class="switch">
+                    <input type="checkbox" id="history-mode-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
         <div id="header-toolbar">
+            <div class="toolbar-group tool-brand-group">
+                <label>Tool</label>
+                <div class="header-title-container">
+                    <h4>Event Builder</h4>
+                    <sup id="beta-trigger">beta</sup>
+                </div>
+            </div>
             <div class="toolbar-group event-name-group">
-                <input type="text" id="header-event-name" placeholder="Untitled Event">
+                <label for="header-event-name">Event Name</label>
+                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
             </div>
             <div class="toolbar-group details-group">
                 <div class="toolbar-item">
@@ -444,6 +624,10 @@
                 <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
             </div>
             <div class="toolbar-group people-group">
+                <div class="history-controls">
+                    <button id="undo-btn" disabled>↩️</button>
+                    <button id="redo-btn" disabled>↪️</button>
+                </div>
                 <div id="collaborators-section" style="display: none;">
                     <div id="collaborator-avatars"></div>
                     <button id="add-collaborator-btn">+</button>
@@ -484,12 +668,19 @@
     <select id="status-filter">
         <option value="all">All Statuses</option>
     </select>
+    <select id="category-filter">
+        <option value="all">All Categories</option>
+    </select>
+    <select id="subcategory-filter">
+        <option value="all">All Subcategories</option>
+    </select>
     <select id="sort-by">
-        <option value="reactions-desc">Sort by: Reactions</option>
         <option value="price-asc">Price (Low to High)</option>
         <option value="price-desc">Price (High to Low)</option>
         <option value="name-asc">Name (A-Z)</option>
+        <option value="reactions-desc" id="sort-by-reactions">Sort by: Reactions</option>
     </select>
+
     <button id="reset-filters">Reset</button>
 </div>
 
@@ -504,8 +695,9 @@
 <div id="confirm-modal" class="modal-overlay" style="display: none;">
     <div class="modal-content detail-modal">
         <div id="confirm-modal-body">
-            <h3>Are you sure you want to break event details down into 
- its components?!?</h3>
+            <h3>Are you sure you want to break event 
+details down into 
+its components?!?</h3>
             <div class="modal-footer">
                 <button id="confirm-yes-btn">Yes</button>
                 <button id="confirm-no-btn">No</button>
