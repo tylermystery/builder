@@ -394,10 +394,25 @@ const filterInputs = [ui.nameFilter, ui.priceFilter, ui.sortBy];
             return;
         }
     
-        // 4. Handle general CARD click (Drill-Down)
-        // For now, we'll just log this. We will add the logic to open the modal for bookable items later.
-        console.log("Card body clicked:", record.fields.Name);
-    });
+        // 4. Handle general CARD click
+        const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        
+        if (isGrouping) {
+            // For Groupings, a click navigates to the first child (same as explode)
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+            ui.catalogContainer.innerHTML = ''; // Clear the container
+            for (const child of children) {
+                const childCard = await ui.createInteractiveCard(child, imageCache);
+                ui.catalogContainer.appendChild(childCard);
+            }
+        } else {
+            // For Bookable Items, open the detailed modal
+            await ui.openDetailModal(recordId, imageCache);
+        }
+
+     });
     
     // Add a new listener to the document body for the dynamically created IMPLODE button
     document.body.addEventListener('click', async function(e) {
