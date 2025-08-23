@@ -1,12 +1,13 @@
 /*
- * Version: 2.1.0
+ * Version: 2.2.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.1.0 - 2025-08-23
- * - Refactored createFavoriteCardElement to support new interactive item structure.
- * - Updated updateFavoritesCarousel to correctly render new favorited items.
+ * v2.2.0 - 2025-08-23
+ * - Added real-time price/description updates to configurable cards.
+ * - Added a notes field to Bookable Item cards.
+ * - Updated favorite cards to display saved notes and configurations.
  */
 
 import { state } from './state.js';
@@ -19,27 +20,14 @@ export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
 export const nameFilter = document.getElementById('name-filter');
 export const priceFilter = document.getElementById('price-filter');
-export const durationFilter = document.getElementById('duration-filter');
-export const statusFilter = document.getElementById('status-filter');
-export const categoryFilter = document.getElementById('category-filter');
-export const subcategoryFilter = document.getElementById('subcategory-filter');
 export const sortBy = document.getElementById('sort-by');
-export const guestCountInput = document.getElementById('guest-count');
 export const headerEventNameInput = document.getElementById('header-event-name');
 export const headerDateInput = document.getElementById('header-date');
 export const headerHeadcountInput = document.getElementById('header-headcount');
 export const headerGoalsInput = document.getElementById('header-goals');
-export const stickyHeader = document.getElementById('sticky-header');
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
-const headerSummary = document.getElementById('header-summary');
-const collaboratorsSection = document.getElementById('collaborators-section');
-export const sessionsDropdownContainer = document.getElementById('sessions-dropdown-container');
-export const sessionsDropdown = document.getElementById('sessions-dropdown');
-const filterControls = document.getElementById('filter-controls');
-const undoBtn = document.getElementById('undo-btn');
-const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
@@ -85,6 +73,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const fields = record.fields;
     let variationNameHTML = '';
     let itemPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
 
     if (itemInfo.selectedOptionIndex != null) {
         const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -102,12 +91,11 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
 
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
-    itemCard.dataset.recordId = record.id; // Use recordId for consistency
+    itemCard.dataset.recordId = record.id;
 
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
 
-    // Favorites get a simple remove button, not the complex interactive controls
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
 
     itemCard.innerHTML = `
@@ -115,6 +103,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
         <div class="favorite-item-content">
             <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
             ${variationNameHTML}
+            ${noteHTML}
             <p class="item-price">$${itemPrice.toFixed(2)}</p>
         </div>`;
     return itemCard;
@@ -125,8 +114,6 @@ export async function createInteractiveCard(record, imageCache) {
     const recordId = record.id;
     const allRecords = state.records.all;
 
-    // --- Determine Card Type ---
-    // An item is a "Grouping" if its options match the names of other records.
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -135,25 +122,25 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    // --- Card Anatomy & Controls ---
     const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
     const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
 
     let optionsControlHTML = '';
+    let notesHTML = '';
     if (isGrouping) {
-        // RENDER NAVIGATIONAL OPTIONS for Groupings
         optionsControlHTML = `<select class="options-selector navigate-options">
             <option value="">Select an option...</option>
             ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
         </select>`;
     } else {
-        // RENDER CONFIGURATION OPTIONS for Bookable Items
         optionsControlHTML = `<select class="options-selector configure-options">
              ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
         </select>`;
-        // We can add the notes field here later
+        notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
     }
+
+    const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
 
     eventCard.innerHTML = `
         <div class="card-header-actions">
@@ -167,21 +154,44 @@ export async function createInteractiveCard(record, imageCache) {
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
+            ${notesHTML}
             <div class="price-quantity-wrapper">
-                <div class="price">$${parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")).toFixed(2)}</div>
+                <div class="price">$${initialPrice.toFixed(2)}</div>
             </div>
         </div>`;
-    // Fetch and set background image
+
+    // Add event listener for real-time updates on configurable cards
+    if (!isGrouping) {
+        const optionsSelector = eventCard.querySelector('.configure-options');
+        if (optionsSelector) {
+            optionsSelector.addEventListener('change', () => {
+                const selectedIndex = parseInt(optionsSelector.value, 10);
+                const selectedOption = rawOptions[selectedIndex];
+                let newPrice = initialPrice;
+                if (selectedOption) {
+                    if (selectedOption.absolutePrice != null) {
+                        newPrice = selectedOption.absolutePrice;
+                    } else if (selectedOption.priceChange != null) {
+                        newPrice += selectedOption.priceChange;
+                    }
+                }
+                eventCard.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
+                eventCard.querySelector('.description').textContent = selectedOption.description || fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
+            });
+        }
+    }
+    
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
+
 export async function renderRecords(recordsToRender, imageCache) {
-    if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
-        catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
+    catalogContainer.innerHTML = ''; // Clear existing cards before rendering new ones
+    if (recordsToRender.length === 0) {
+        catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No items match the current filters.</p>";
         return;
     }
-
     for (const record of recordsToRender) {
         const eventCard = await createInteractiveCard(record, imageCache);
         if (eventCard) {
@@ -203,7 +213,6 @@ export async function updateFavoritesCarousel() {
         const recordA = state.records.all.find(r => r.id === idA);
         const recordB = state.records.all.find(r => r.id === idB);
         if (!recordA || !recordB) return 0;
-        
         return (recordA.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(recordB.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
     };
 
@@ -218,85 +227,16 @@ export async function updateFavoritesCarousel() {
     }
 
     updateTotalCost();
-    updateHeader();
-}
-
-export function updateHistoryButtons() {
-    if (undoBtn && redoBtn) {
-        undoBtn.disabled = state.history.undoStack.length <= 1;
-        redoBtn.disabled = state.history.redoStack.length === 0;
-    }
-}
-
-export function renderCollaborators(getInitials) {
-    collaboratorsSection.style.display = 'flex';
-    const collaboratorAvatars = document.getElementById('collaborator-avatars');
-    collaboratorAvatars.innerHTML = '';
-    state.session.collaborators.forEach(name => {
-        const avatar = document.createElement('div');
-        avatar.className = 'avatar';
-        avatar.textContent = getInitials(name);
-        avatar.title = name;
-        collaboratorAvatars.appendChild(avatar);
-    });
-}
-
-export function populateSessionsDropdown(getStoredSessions) {
-    if (!sessionsDropdownContainer) return;
-    const sessions = getStoredSessions();
-    const sessionIds = Object.keys(sessions);
-    if (sessionIds.length === 0) {
-        sessionsDropdownContainer.style.display = 'none';
-        return;
-    }
-    sessionsDropdownContainer.style.display = 'block';
-    sessionsDropdown.innerHTML = '<option value="">Load a saved list...</option>';
-    sessionIds.forEach(id => {
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = sessions[id];
-        if (id === state.session.id) {
-            option.selected = true;
-        }
-        sessionsDropdown.appendChild(option);
-    });
-}
-
-export function toggleLoading(show) {
-    loadingMessage.style.display = show ? 'block' : 'none';
-    filterControls.style.display = show ? 'none' : 'flex';
 }
 
 export function updateHeader() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Mystery Tour Event Builder';
-    const titleEl = document.querySelector('.header-title-container h1');
-    if(titleEl) titleEl.textContent = eventName;
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Builder';
     document.title = eventName;
-}
-
-export function updateHeaderSummary() {
-    const headerSummary = document.getElementById('header-summary');
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
-    const date = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    const headcount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 0;
-    const totalCost = document.getElementById('total-cost').textContent;
-
-    const summaryParts = [];
-    summaryParts.push(`<strong>${eventName}</strong>`);
-    if (date) {
-        summaryParts.push(`📅 ${date}`);
-    }
-    if (headcount > 0) {
-        summaryParts.push(`👤 ${headcount}`);
-    }
-    summaryParts.push(`- ${totalCost}`);
-
-    headerSummary.innerHTML = summaryParts.join(' | ');
+    headerEventNameInput.value = eventName;
 }
 
 export function updateTotalCost() {
     let total = 0;
-    const breakdown = [];
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
 
     allItems.forEach((itemInfo, recordId) => {
@@ -311,38 +251,19 @@ export function updateTotalCost() {
 
     const formattedTotal = `$${total.toFixed(2)}`;
     totalCostEl.textContent = formattedTotal;
-    
-    updateHeaderSummary();
-}
-
-export function collapseHeaderOnScroll() {
-    let lastScrollY = window.scrollY;
-    window.addEventListener('scroll', () => {
-        if (window.scrollY > lastScrollY && window.scrollY > 100) {
-            stickyHeader.classList.add('header-collapsed');
-        } else if (window.scrollY < lastScrollY) {
-            stickyHeader.classList.remove('header-collapsed');
-        }
-        lastScrollY = window.scrollY <= 0 ? 0 : window.scrollY;
-    }, { passive: true });
 }
 
 export async function openDetailModal(recordId, imageCache) {
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) return;
 
-    // Build a new interactive card for the modal
     const modalCard = await createInteractiveCard(record, imageCache);
-
-    // Clear the modal body and append the new card
     modalBody.innerHTML = '';
     modalBody.appendChild(modalCard);
 
-    // Style the modal and card for the detailed view
     modalContent.style.backgroundImage = modalCard.style.backgroundImage;
     modalOverlay.style.display = 'flex';
 
-    // Add a close listener to the overlay
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
             modalOverlay.style.display = 'none';
