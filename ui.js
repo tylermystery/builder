@@ -111,6 +111,7 @@ const redoBtn = document.getElementById('redo-btn');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
+export const headerEventNameInput = document.getElementById('header-event-name');
 
 
 
