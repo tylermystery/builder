@@ -324,6 +324,12 @@ const filterInputs = [ui.nameFilter, ui.priceFilter, ui.sortBy];
             const compositeId = favoriteItem.dataset.compositeId;
             await ui.openDetailModal(compositeId, imageCache);
         }
+
+        const favoriteItem = e.target.closest('.favorite-item');
+        if (favoriteItem && !e.target.closest('button')) {
+            const recordId = favoriteItem.dataset.recordId;
+            await ui.openDetailModal(recordId, imageCache);
+        }
     });
 
     ui.catalogContainer.addEventListener('click', async function(e) {
@@ -338,8 +344,21 @@ const filterInputs = [ui.nameFilter, ui.priceFilter, ui.sortBy];
         // 1. Handle HEART click
         if (e.target.closest('.heart-icon')) {
             e.stopPropagation();
-            // This logic remains the same for now.
-            console.log("Heart clicked on:", record.fields.Name);
+            recordStateForUndo(); // For Undo/Redo
+        
+            const compositeId = record.id; // Using the recordId as the unique key for now
+            const itemInfo = { quantity: 1, requests: '' }; // Default item info
+        
+            // Toggle the item in the cart
+            if (state.cart.items.has(compositeId)) {
+                state.cart.items.delete(compositeId);
+                e.target.closest('.heart-icon').classList.remove('hearted');
+            } else {
+                state.cart.items.set(compositeId, itemInfo);
+                e.target.closest('.heart-icon').classList.add('hearted');
+            }
+        
+            await ui.updateFavoritesCarousel();
             return;
         }
     
