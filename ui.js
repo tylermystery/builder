@@ -13,7 +13,7 @@
 import { state } from './state.js';
 import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { calculateReactionScore, getRecordPrice, updateRender, recordStateForUndo, handleReaction } from './main.js';
+import { getRecordPrice } from './main.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
