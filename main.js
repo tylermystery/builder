@@ -1,12 +1,13 @@
 /*
- * Version: 2.2.0
+ * Version: 2.2.1
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.2.0 - 2025-08-23
- * - Made the single event listener context-aware.
- * - Interactions (explode, navigate, etc.) now work correctly inside the detail modal.
+ * v2.2.1 - 2025-08-23
+ * - Fixed hearting on favorite/modal cards.
+ * - Fixed bug in configure-options change listener.
+ * - Cleaned up and consolidated event listener logic.
  */
 
 import { state } from './state.js';
@@ -67,13 +68,13 @@ async function initialize() {
 function setupEventListeners() {
     ui.headerEventNameInput.addEventListener('change', () => { ui.updateHeader(); });
     
+    // The single, unified click listener for all card interactions.
     document.body.addEventListener('click', async (e) => {
-        const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-        const cardBody = e.target.closest('.event-card:not(.modal-card)'); // Clicks on catalog cards
+        const cardBody = e.target.closest('.event-card');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = e.target.closest('.remove-btn');
 
@@ -89,7 +90,7 @@ function setupEventListeners() {
 
         if (heartIcon) {
             e.stopPropagation();
-            const currentCard = heartIcon.closest('.event-card');
+            const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -101,10 +102,10 @@ function setupEventListeners() {
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
 
             if (!isGrouping && rawOptions.length > 0) {
+                const noteEl = currentCard.querySelector('.item-note');
                 const selectedIndex = currentCard.querySelector('.configure-options').value;
-                const note = currentCard.querySelector('.item-note').value;
                 itemInfo.selectedOptionIndex = parseInt(selectedIndex, 10);
-                itemInfo.note = note;
+                if (noteEl) itemInfo.note = noteEl.value;
             }
 
             if (state.cart.items.has(recordId)) {
@@ -118,31 +119,31 @@ function setupEventListeners() {
             return;
         }
 
-        if (parentBtn && card) {
+        if (parentBtn && cardBody) {
             e.stopPropagation();
-            const recordId = card.dataset.recordId;
+            const recordId = cardBody.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const parentId = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0];
             const parentRecord = state.records.all.find(r => r.id === parentId);
             
             if (parentRecord) {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
-                card.replaceWith(newCard);
+                cardBody.replaceWith(newCard);
             }
             return;
         }
         
-        if (explodeBtn && card) {
+        if (explodeBtn && cardBody) {
             e.stopPropagation();
-            const recordId = card.dataset.recordId;
+            const recordId = cardBody.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const container = card.closest('#modal-body') || ui.catalogContainer;
+            const container = cardBody.closest('#modal-body') || ui.catalogContainer;
             
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
-            container.innerHTML = ''; // Clear the correct container
+            container.innerHTML = ''; 
             for (const child of children) {
                 const childCard = await ui.createInteractiveCard(child, imageCache);
                 container.appendChild(childCard);
@@ -152,7 +153,7 @@ function setupEventListeners() {
                 const implodeButton = document.createElement('div');
                 implodeButton.id = 'implode-container';
                 implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
-                container.insertAdjacentElement('beforebegin', implodeButton);
+                document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
             }
             return;
         }
@@ -178,8 +179,8 @@ function setupEventListeners() {
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const rawOptions = ui.parseOptions(record.fields.Options);
-            const initialPrice = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
@@ -193,7 +194,7 @@ function setupEventListeners() {
                 }
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
-            card.querySelector('.description').textContent = selectedOption.description || record.fields.Description || '';
+            card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
         }
 
         if (e.target.classList.contains('navigate-options')) {
