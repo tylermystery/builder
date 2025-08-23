@@ -55,7 +55,7 @@
         #header-full-content { 
             max-height: 500px;
             overflow: hidden;
-            transition: max-height 0.4s ease-in-out;
+            transition: max-height 0.4s ease-in-out; 
         }
         #sticky-header.header-collapsed #header-full-content { 
             max-height: 0;
@@ -237,17 +237,11 @@
         }
 
         /* Favorites Section */
-        #favorites-section { 
-            max-width: 1400px;
-            margin: 0 auto; 
-            padding: 15px 20px; 
-        }
-        #favorites-carousel { 
-            display: flex;
+        #favorites-section { max-width: 1400px;
+            margin: 0 auto; padding: 15px 20px; }
+        #favorites-carousel { display: flex;
             gap: 15px;
-            overflow-x: auto; 
-            padding-bottom: 5px; 
-        }
+            overflow-x: auto; padding-bottom: 5px; }
         .favorite-item {
             position: relative;
             flex: 0 0 220px;
@@ -265,30 +259,20 @@
             transition: all 0.3s;
             border: 1px solid #ddd;
         }
-        .favorite-item.locked-item { 
-            border: 3px solid #FFD700;
+        .favorite-item.locked-item { border: 3px solid #FFD700;
         }
         .favorite-item-content {
             background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
             padding: 10px;
             text-align: left;
         }
-        .favorite-item p { 
-            margin: 2px 0; 
-            font-size: 0.9em;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.7); 
+        .favorite-item p { margin: 2px 0; font-size: 0.9em;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
+        .favorite-item .item-name { font-weight: bold; font-size: 1em;
         }
-        .favorite-item .item-name { 
-            font-weight: bold; 
-            font-size: 1em;
+        .favorite-item .variation-name { font-size: 0.8em; font-style: italic;
         }
-        .favorite-item .variation-name { 
-            font-size: 0.8em; 
-            font-style: italic;
-        }
-        .favorite-item .item-price { 
-            font-weight: bold; 
-            margin-top: 5px;
+        .favorite-item .item-price { font-weight: bold; margin-top: 5px;
         }
 
         /* Filter Controls */
@@ -357,21 +341,14 @@
         .action-btn-secondary {
             font-size: 1.5em;
         }
-        .action-btn-primary .icon-hover { 
-            display: none;
+        .action-btn-primary .icon-hover { display: none;
         }
-        .action-btn-primary:hover .icon-default { 
-            display: none;
+        .action-btn-primary:hover .icon-default { display: none;
         }
-        .action-btn-primary:hover .icon-hover { 
-            display: block; 
-            animation: pop 0.3s;
+        .action-btn-primary:hover .icon-hover { display: block; animation: pop 0.3s;
         }
-        @keyframes pop { 
-            0% { transform: scale(1); } 
-            50% { transform: scale(1.4); } 
-            100% { transform: scale(1); } 
-        }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4);
+        } 100% { transform: scale(1); } }
         
         /* MAIN CATALOG CARD STYLES */
         .event-card {
@@ -415,9 +392,7 @@
             transition: fill 0.2s, stroke 0.2s;
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
         }
-        .heart-icon.hearted svg { 
-            fill: #ff4f6c; 
-            stroke: #ff4f6c;
+        .heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c;
         }
         .event-card-content {
             background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%);
@@ -440,10 +415,8 @@
             color: #f0f0f0;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         }
-        .event-card-content .details { 
-            font-size: 0.9em;
-            margin-bottom: 15px; 
-        }
+        .event-card-content .details { font-size: 0.9em;
+            margin-bottom: 15px; }
         .event-card-content .options-selector {
             width: 100%;
             padding: 8px;
@@ -461,9 +434,7 @@
             padding-top: 10px;
             flex-shrink: 0;
         }
-        .quantity-selector { 
-            display: flex; 
-            align-items: center;
+        .quantity-selector { display: flex; align-items: center;
         }
         .quantity-selector button {
             width: 30px;
@@ -483,9 +454,7 @@
             height: 30px;
             -moz-appearance: textfield;
         }
-        .event-card-content .price { 
-            font-size: 1.3em; 
-            font-weight: bold; 
+        .event-card-content .price { font-size: 1.3em; font-weight: bold;
         }
         .option-description {
             font-size: 0.85em;
@@ -548,14 +517,11 @@
             transition: opacity 0.2s;
             z-index: 10;
         }
-        .gallery-arrow.left { 
-            left: 10px;
+        .gallery-arrow.left { left: 10px;
         }
-        .gallery-arrow.right { 
-            right: 10px;
+        .gallery-arrow.right { right: 10px;
         }
-        .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { 
-            opacity: 1;
+        .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1;
         }
     </style>
 </head>
@@ -697,7 +663,7 @@
         <div id="confirm-modal-body">
             <h3>Are you sure you want to break event 
 details down into 
-its components?!?</h3>
+ its components?!?</h3>
             <div class="modal-footer">
                 <button id="confirm-yes-btn">Yes</button>
                 <button id="confirm-no-btn">No</button>
