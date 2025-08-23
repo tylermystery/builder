@@ -22,6 +22,14 @@ function undo() { /* ...logic... */ }
 function redo() { /* ...logic... */ }
 
 // --- CORE LOGIC ---
+export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
+
+export function storeSession(id, name) { 
+    const sessions = getStoredSessions(); 
+    sessions[id] = name;
+    localStorage.setItem('savedSessions', JSON.stringify(sessions)); 
+}
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
