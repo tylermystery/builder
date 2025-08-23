@@ -523,6 +523,37 @@
         }
         .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1;
         }
+        .card-header-actions {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 10;
+            display: flex;
+            gap: 8px;
+        }
+        .card-btn {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.5);
+            color: white;
+            font-size: 1.2em;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card-btn:hover {
+            background: rgba(0,0,0,0.7);
+        }
+#implode-container {
+    width: 100%;
+    max-width: 1400px;
+    margin: -10px auto 15px;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
     </style>
 </head>
 <body>
