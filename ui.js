@@ -1,81 +1,13 @@
 /*
- * Version: 2.0.1
- * Last Modified: 2025-08-22
+ * Version: 2.1.0
+ * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.0.1 - 2025-08-22
- * - Added logic to populate Category and Subcategory filters.
- * - Exported new filter dropdown elements.
- *
- * v2.0.0 - 2025-08-21
- * - Implemented conditional rendering logic for Beta Toolkit features.
- * - Cards now render different buttons/UI based on active modes.
- *
- * v1.9.0 - 2025-08-21
- * - Stripped down to MVP: Removed reaction bars and complex favorite card buttons.
- * - Favorites now have a simple "Remove" button.
- *
- * v1.8.7 - 2025-08-21
- * - Implemented the Heart -> Ring -> Ball & Chain emoji sequence for favorite card buttons.
- *
- * v1.8.6 - 2025-08-21
- * - Replaced emoji buttons on favorite cards with clearer SVG icons for lock and remove actions.
- *
- * v1.8.5 - 2025-08-21
- * - Removed obsolete updateSummaryToolbar function.
- * - Exported new header input elements.
- *
- * v1.8.4 - 2025-08-21
- * - Removed updateHistoryButtons function as part of MVP cleanup.
- *
- * v1.8.3 - 2025-08-19
- * - Removed disclaimer tooltips from autosave-toggle and sessions-dropdown as features are now complete.
- *
- * v1.8.2 - 2025-08-19
- * - Made modal changes (option, quantity) auto-apply to state on change, removed save button, call updateRender to reflect in catalog/favorites.
- *
- * v1.8.1 - 2025-08-19
- * - Added reactions bar and hearting functionality to detailed modal view, mirroring catalog.
- *
- * v1.8.0 - 2025-08-18
- * - Enhanced `openDetailModal` to include full description, editable options/quantity, and save button to apply changes to state/cart.
- *
- * v1.7.0 - 2025-08-18
- * - Fixed total cost calculation to multiply variation price by quantity (hours for per-hour, guests for per-guest).
- * - Added disclaimer tooltip to autosave-toggle and sessions-dropdown.
- *
- * v1.6.0 - 2025-08-18
- * - Enhanced `updateTotalCost` to ensure accurate pricing with variations and quantity, including min headcount enforcement.
- * - Added breakdown tooltip to total cost display.
- *
- * v1.5.0 - 2025-08-18
- * - Implemented image gallery functionality for event cards, favorite items, and modals.
- * - Updated to use `fetchImagesForRecord` for retrieving multiple images.
- * - Added gallery arrow buttons and cycling logic using `state.ui.cardImageIndexes`.
- *
- * v1.4.0 - 2025-08-18
- * - Refactored `parseOptions` to handle a robust key-value pair format.
- * - Updated `createEventCardElement` to display and dynamically update option-specific descriptions, prices, and durations.
- * - Updated `updateTotalCost` and `createFavoriteCardElement` to use the new price calculation logic.
- *
- * v1.3.0 - 2025-08-18
- * - Implemented logic to remove event cards from the catalog only after all their variations have been favorited.
- * - Event cards now auto-select the next available variation after one is favorited.
- *
- * v1.2.1 - 2025-08-17
- * - Fixed a critical HTML structure error in index.html.
- *
- * v1.2.0 - 2025-08-17
- * - Updated `updateFavoritesCarousel` to use the new unified sorting logic.
- * - Exported `parseOptions` for use in `main.js`.
- * - Exported the new `sortBy` dropdown element.
- *
- * v1.0.0 - 2025-08-17
- * - Initial versioning and changelog added.
+ * v2.1.0 - 2025-08-23
+ * - Refactored createFavoriteCardElement to support new interactive item structure.
+ * - Updated updateFavoritesCarousel to correctly render new favorited items.
  */
-
-
 
 import { state } from './state.js';
 import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
@@ -112,9 +44,6 @@ const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
 
-
-
-
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
     if (!optionsText) return [];
@@ -134,8 +63,7 @@ export function parseOptions(optionsText) {
 
             switch (key.toLowerCase()) {
                 case 'price change':
-                    option.priceChange
-                    = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
+                    option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'price':
                     option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
@@ -144,8 +72,7 @@ export function parseOptions(optionsText) {
                     option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'description':
-                    option.description = value.replace(/"/g, '');
-// Remove quotes
+                    option.description = value.replace(/"/g, '');// Remove quotes
                     break;
             }
         });
@@ -154,88 +81,44 @@ export function parseOptions(optionsText) {
 }
 
 // --- UI RENDERING FUNCTIONS ---
-function renderReactionsSummary(recordId) {
-    const reactions = state.session.reactions.get(recordId) || {};
-    const reactionCounts = Object.values(reactions).reduce((acc, emoji) => {
-        acc[emoji] = (acc[emoji] || 0) + 1;
-        return acc;
-    }, {});
-    return `<div class="reactions-summary">${Object.entries(reactionCounts).map(([emoji, count]) => `<div class="reaction-pill" title="${emoji}">${emoji} ${count}</div>`).join('')}</div>`;
-}
-
-function renderReactionbar(recordId) {
-    return `<div class="reaction-bar">${EMOJI_REACTIONS.map(emoji => `<button data-record-id="${recordId}" data-emoji="${emoji}">${emoji}</button>`).join('')}</div>`;
-}
-
-export async function createFavoriteCardElement(compositeId, itemInfo, isLocked, imageCache) {
-    const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
-    if (!record) return null;
+export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
     const fields = record.fields;
     let variationNameHTML = '';
-    let itemPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
-    const optionIndex = compositeId.split('-')[1];
-    if (optionIndex) {
+    let itemPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+
+    if (itemInfo.selectedOptionIndex != null) {
         const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const variation = options[optionIndex];
+        const variation = options[itemInfo.selectedOptionIndex];
         if (variation) {
             variationNameHTML = `<p class="variation-name">${variation.name}</p>`;
+            // Adjust price based on the selected variation
+            if (variation.absolutePrice != null) {
+                itemPrice = variation.absolutePrice;
+            } else if (variation.priceChange != null) {
+                itemPrice += variation.priceChange;
+            }
         }
     }
 
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
-    itemCard.dataset.compositeId = compositeId;
-    itemCard.dataset.recordId = record.id;
+    itemCard.dataset.recordId = record.id; // Use recordId for consistency
+
     const imageUrls = await fetchImagesForRecord(record, imageCache);
-    if (!state.ui.cardImageIndexes.has(record.id)) {
-        state.ui.cardImageIndexes.set(record.id, 0);
-    }
-    let currentIndex = state.ui.cardImageIndexes.get(record.id);
-    itemCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
-    
-    // CONDITIONAL BUTTON RENDERING
-    let cardActionsHTML = '';
-    const isPlannerMode = document.body.classList.contains('planner-mode-enabled');
-    if (isPlannerMode) {
-        const primaryActionHTML = isLocked 
-            ? `<button class="action-btn-primary locked-btn" title="Locked In">⛓️</button>` 
-            : `<button class="action-btn-primary promote-btn" title="Lock it in" data-composite-id="${compositeId}"><span class="icon-default">💘</span><span class="icon-hover">💍</span></button>`;
-        const secondaryActionHTML = isLocked 
-            ? `<button class="action-btn-secondary demote-btn" title="Unlock" data-composite-id="${compositeId}">🔨</button>` 
-            : `<button class="action-btn-secondary remove-btn" title="Remove" data-composite-id="${compositeId}">💔</button>`;
-        cardActionsHTML = `${primaryActionHTML}${secondaryActionHTML}`;
-    } else {
-        cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${compositeId}">×</button>`;
-    }
-    
-    // CONDITIONAL REACTION BAR RENDERING
-    const isCollabMode = document.body.classList.contains('collab-mode-enabled');
-    const reactionUI = isCollabMode ? `${renderReactionbar(record.id)}<div class="card-footer">${renderReactionsSummary(record.id)}</div>` : '';
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
 
-    itemCard.innerHTML = `<div class="card-actions">${cardActionsHTML}</div><div class="favorite-item-content"><p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>${variationNameHTML}<p class="item-quantity">Qty: ${itemInfo.quantity}</p><p class="item-price">$${itemPrice.toFixed(2)} ${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</p></div>${reactionUI}<button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
-    
-    const leftArrow = itemCard.querySelector('.gallery-arrow.left');
-    const rightArrow = itemCard.querySelector('.gallery-arrow.right');
-    if (imageUrls.length > 1) {
-        leftArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
-            state.ui.cardImageIndexes.set(record.id, currentIndex);
-            itemCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-        rightArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % imageUrls.length;
-            state.ui.cardImageIndexes.set(record.id, currentIndex);
-            itemCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-    } else {
-        leftArrow.style.display = 'none';
-        rightArrow.style.display = 'none';
-    }
+    // Favorites get a simple remove button, not the complex interactive controls
+    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
 
+    itemCard.innerHTML = `
+        <div class="card-actions">${cardActionsHTML}</div>
+        <div class="favorite-item-content">
+            <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
+            ${variationNameHTML}
+            <p class="item-price">$${itemPrice.toFixed(2)}</p>
+        </div>`;
     return itemCard;
 }
-
-// REPLACE the old createEventCardElement function in ui.js with this new one.
 
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
@@ -288,11 +171,9 @@ export async function createInteractiveCard(record, imageCache) {
                 <div class="price">$${parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")).toFixed(2)}</div>
             </div>
         </div>`;
-
     // Fetch and set background image
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-
     return eventCard;
 }
 export async function renderRecords(recordsToRender, imageCache) {
@@ -302,17 +183,6 @@ export async function renderRecords(recordsToRender, imageCache) {
     }
 
     for (const record of recordsToRender) {
-        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const recordId = record.id;
-
-        const allOptionsFavorited = options.length > 0 && options.every((opt, index) => {
-            const compositeId = `${recordId}-${index}`;
-            return state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-        });
-        if (allOptionsFavorited || (options.length === 0 && (state.cart.items.has(recordId) || state.cart.lockedItems.has(recordId)))) {
-            continue;
-        }
-
         const eventCard = await createInteractiveCard(record, imageCache);
         if (eventCard) {
             catalogContainer.appendChild(eventCard);
@@ -321,40 +191,30 @@ export async function renderRecords(recordsToRender, imageCache) {
 }
 
 export async function updateFavoritesCarousel() {
-    if (state.cart.lockedItems.size === 0 && state.cart.items.size === 0 && state.eventDetails.combined.size === 0) {
+    if (state.cart.items.size === 0) {
         favoritesSection.style.display = 'none';
         return;
     }
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
+    
     const sorter = ([idA], [idB]) => {
-        const recordA = state.records.all.find(r => r.id === idA.split('-')[0]);
-        const recordB = state.records.all.find(r => r.id === idB.split('-')[0]);
+        const recordA = state.records.all.find(r => r.id === idA);
+        const recordB = state.records.all.find(r => r.id === idB);
         if (!recordA || !recordB) return 0;
-        switch (state.ui.currentSort) {
-            case 'price-asc':
-                return getRecordPrice(recordA, idA.split('-')[1]) - getRecordPrice(recordB, idB.split('-')[1]);
-            case 'price-desc':
-                return getRecordPrice(recordB, idB.split('-')[1]) - getRecordPrice(recordA, idA.split('-')[1]);
-            case 'name-asc':
-                return (recordA.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(recordB.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
-            case 'reactions-desc':
-            default:
-                return calculateReactionScore(recordB.id) - calculateReactionScore(recordA.id);
-        }
+        
+        return (recordA.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(recordB.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
     };
 
-    const sortedLockedItems = Array.from(state.cart.lockedItems.entries()).sort(sorter);
-    for (const [compositeId, itemInfo] of sortedLockedItems) {
-        const card = await createFavoriteCardElement(compositeId, itemInfo, true, imageCache);
-        if (card) favoritesCarousel.appendChild(card);
-    }
-
     const sortedItems = Array.from(state.cart.items.entries()).sort(sorter);
-    for (const [compositeId, itemInfo] of sortedItems) {
-        const card = await createFavoriteCardElement(compositeId, itemInfo, false, imageCache);
-        if (card) favoritesCarousel.appendChild(card);
+
+    for (const [recordId, itemInfo] of sortedItems) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const card = await createFavoriteCardElement(record, itemInfo, false, imageCache);
+            if (card) favoritesCarousel.appendChild(card);
+        }
     }
 
     updateTotalCost();
@@ -409,7 +269,6 @@ export function toggleLoading(show) {
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Mystery Tour Event Builder';
-    // No longer setting an input, but the h1 inside the title container
     const titleEl = document.querySelector('.header-title-container h1');
     if(titleEl) titleEl.textContent = eventName;
     document.title = eventName;
@@ -440,63 +299,20 @@ export function updateTotalCost() {
     const breakdown = [];
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
 
-    allItems.forEach((itemInfo, compositeId) => {
-        const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+    allItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
 
-        const unitPrice = getRecordPrice(record, compositeId.split('-')[1] || null);
+        let unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
 
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-  
-        let itemCost;
-
-        if (pricingType === 'per hour') {
-            itemCost = unitPrice * effectiveQuantity; // Multiply by hours
-        } else if (pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            itemCost = unitPrice * effectiveQuantity; // Multiply by guests
-        } else {
-            itemCost = unitPrice; // Flat price
-        }
-
-        total += itemCost;
-        const variationIndex = compositeId.split('-')[1];
-        const variationName = variationIndex ? parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[variationIndex]?.name : '';
-        const quantityLabel = pricingType === 'per hour' ? 'hours' : 'qty';
-        breakdown.push(`${record.fields[CONSTANTS.FIELD_NAMES.NAME]}${variationName ? ` (${variationName})` : ''}: $${unitPrice.toFixed(2)} x ${effectiveQuantity} ${quantityLabel} = $${itemCost.toFixed(2)}`);
+        total += unitPrice;
     });
 
     const formattedTotal = `$${total.toFixed(2)}`;
-    const breakdownText = breakdown.length > 0 ? breakdown.join('\n') : 'No items selected';
     totalCostEl.textContent = formattedTotal;
-    totalCostEl.title = breakdownText;
     
-    updateHeaderSummary(); // Update the collapsed header summary
-}
-
-export function populateFilter(filterElement, fieldName) {
-    const values = new Set();
-    state.records.all.forEach(record => {
-        const fieldValue = record.fields[fieldName];
-        if (Array.isArray(fieldValue)) {
-            fieldValue.forEach(val => values.add(val));
-        } else if (fieldValue) {
-            values.add(fieldValue);
-        }
-    });
-    
-    while (filterElement.options.length > 1) {
-        filterElement.remove(1);
-    }
-
-    Array.from(values).sort().forEach(value => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = fieldName === CONSTANTS.FIELD_NAMES.DURATION ? `${value} hours` : value;
-        filterElement.appendChild(option);
-    });
+    updateHeaderSummary();
 }
 
 export function collapseHeaderOnScroll() {
