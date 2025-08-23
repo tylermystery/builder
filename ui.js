@@ -285,7 +285,7 @@ export async function createInteractiveCard(record, imageCache) {
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
             <div class="price-quantity-wrapper">
-                <div class="price">$${(fields[CONSTANTS.FIELD_NAMES.PRICE] || 0).toFixed(2)}</div>
+                <div class="price">$${parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")).toFixed(2)}</div>
             </div>
         </div>`;
 
