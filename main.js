@@ -1,35 +1,22 @@
 /*
- * Version: 2.0.0
+ * Version: 2.1.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.0.0 - 2025-08-23
- * - Implemented configuration-aware hearting/favoriting to save selected options and notes.
- * - Removed obsolete/simplified functions for new hierarchical model.
+ * v2.1.0 - 2025-08-23
+ * - Refactored all click handlers into a single, unified event listener on the document body.
+ * - This fixes multiple interaction bugs (explode, modal view, remove favorite).
  */
 
 import { state } from './state.js';
-import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
+import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
+
 const imageCache = new Map();
 
-// --- STATE & HISTORY ---
-export function recordStateForUndo() { /* ...logic... */ }
-async function restoreState(newState) { /* ...logic... */ }
-function undo() { /* ...logic... */ }
-function redo() { /* ...logic... */ }
-
 // --- CORE LOGIC ---
-export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
-
-export function storeSession(id, name) { 
-    const sessions = getStoredSessions(); 
-    sessions[id] = name;
-    localStorage.setItem('savedSessions', JSON.stringify(sessions)); 
-}
-
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -63,27 +50,40 @@ async function initialize() {
         return;
     }
     
-    // Logic for loading session from URL...
-    
     ui.toggleLoading(false);
     setupEventListeners();
-    renderTopLevel(); // Initial render
+    renderTopLevel();
+    ui.updateFavoritesCarousel(); // Initial render of favorites
 }
 
 function setupEventListeners() {
-    // Header Inputs, Beta Toggles, etc.
-    ui.headerEventNameInput.addEventListener('change', () => { ui.updateHeader(); });
+    // A single, unified click listener to handle all interactive elements.
+    document.body.addEventListener('click', async (e) => {
+        const heartIcon = e.target.closest('.heart-icon');
+        const parentBtn = e.target.closest('.parent-btn');
+        const explodeBtn = e.target.closest('.explode-btn');
+        const implodeBtn = e.target.closest('.implode-btn');
+        const cardBody = e.target.closest('.event-card');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const removeBtn = e.target.closest('.remove-btn');
 
-    // Main Catalog Container Listener
-    ui.catalogContainer.addEventListener('click', async function(e) {
-        const card = e.target.closest('.event-card');
-        if (!card) return;
-        const recordId = card.dataset.recordId;
-        const record = state.records.all.find(r => r.id === recordId);
+        // --- Interaction Router ---
 
-        // 1. Handle HEART click
-        if (e.target.closest('.heart-icon')) {
+        // 1. Handle REMOVE from favorites
+        if (removeBtn) {
             e.stopPropagation();
+            const recordId = removeBtn.dataset.compositeId;
+            state.cart.items.delete(recordId);
+            await ui.updateFavoritesCarousel();
+            return;
+        }
+
+        // 2. Handle HEART click (in catalog or modal)
+        if (heartIcon) {
+            e.stopPropagation();
+            const card = heartIcon.closest('.event-card, .favorite-item');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
             
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
@@ -100,19 +100,101 @@ function setupEventListeners() {
 
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
-                e.target.closest('.heart-icon').classList.remove('hearted');
+                heartIcon.classList.remove('hearted');
             } else {
                 state.cart.items.set(recordId, itemInfo);
-                e.target.closest('.heart-icon').classList.add('hearted');
+                heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
             return;
         }
 
-        // Other click handlers (parent, explode, card body) go here...
+        // 3. Handle PARENT button click (Go Up)
+        if (parentBtn) {
+            e.stopPropagation();
+            const card = parentBtn.closest('.event-card');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const parentId = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0];
+            const parentRecord = state.records.all.find(r => r.id === parentId);
+            
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                card.replaceWith(newCard);
+            }
+            return;
+        }
+        
+        // 4. Handle EXPLODE button click
+        if (explodeBtn) {
+            e.stopPropagation();
+            const card = explodeBtn.closest('.event-card');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+
+            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+
+            ui.catalogContainer.innerHTML = '';
+            for (const child of children) {
+                const childCard = await ui.createInteractiveCard(child, imageCache);
+                ui.catalogContainer.appendChild(childCard);
+            }
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
+            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
+            return;
+        }
+
+        // 5. Handle IMPLODE button click
+        if (implodeBtn) {
+            e.stopPropagation();
+            implodeBtn.closest('#implode-container').remove();
+            renderTopLevel();
+            return;
+        }
+
+        // 6. Handle CARD BODY click (in catalog)
+        if (cardBody) {
+            const recordId = cardBody.dataset.recordId;
+            await ui.openDetailModal(recordId, imageCache);
+            return;
+        }
+
+        // 7. Handle FAVORITE ITEM click (in carousel)
+        if (favoriteItem) {
+            const recordId = favoriteItem.dataset.recordId;
+            await ui.openDetailModal(recordId, imageCache);
+            return;
+        }
     });
-    
-    // Other listeners (favorites carousel, body for implode, dropdowns)
+
+    // Listener for configuration dropdowns (this is separate as it's a 'change' event)
+    document.body.addEventListener('change', (e) => {
+        if (e.target.classList.contains('configure-options')) {
+            const card = e.target.closest('.event-card');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const rawOptions = ui.parseOptions(record.fields.Options);
+            const initialPrice = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+            
+            const selectedIndex = parseInt(e.target.value, 10);
+            const selectedOption = rawOptions[selectedIndex];
+            
+            let newPrice = initialPrice;
+            if (selectedOption) {
+                if (selectedOption.absolutePrice != null) {
+                    newPrice = selectedOption.absolutePrice;
+                } else if (selectedOption.priceChange != null) {
+                    newPrice += selectedOption.priceChange;
+                }
+            }
+            card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
+            card.querySelector('.description').textContent = selectedOption.description || record.fields.Description || '';
+        }
+    });
 }
 
 initialize();
