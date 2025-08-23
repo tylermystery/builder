@@ -170,7 +170,8 @@ async function applyFilters() {
         const categoryMatch = categoryValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] && record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES].includes(categoryValue));
         const subcategoryMatch = subcategoryValue === 'all' || (record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] && record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES].includes(subcategoryValue));
         
-        return nameMatch && priceMatch && durationMatch && statusMatch && categoryMatch && subcategoryMatch;
+        const isTopLevel = !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+        return isTopLevel && nameMatch && priceMatch && durationMatch && statusMatch && categoryMatch && subcategoryMatch;
     });
 
     state.records.filtered.sort((a, b) => {
@@ -235,7 +236,7 @@ function setupEventListeners() {
     document.getElementById('undo-btn').addEventListener('click', undo);
     document.getElementById('redo-btn').addEventListener('click', redo);
     
-    const filterInputs = [ui.nameFilter, ui.priceFilter, ui.durationFilter, ui.statusFilter, ui.categoryFilter, ui.subcategoryFilter, ui.sortBy];
+const filterInputs = [ui.nameFilter, ui.priceFilter, ui.sortBy];
     filterInputs.forEach(input => {
         input.addEventListener('change', applyFilters);
     });
@@ -326,54 +327,81 @@ function setupEventListeners() {
     });
 
     ui.catalogContainer.addEventListener('click', async function(e) {
-        const heart = e.target.closest('.heart-icon');
-        if (heart) {
+        const card = e.target.closest('.event-card');
+        if (!card) return;
+    
+        const recordId = card.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
+    
+        // --- Interaction Logic ---
+    
+        // 1. Handle HEART click
+        if (e.target.closest('.heart-icon')) {
             e.stopPropagation();
-            recordStateForUndo();
-            
-            const card = heart.closest('.event-card');
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            const options = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            
-            const compositeId = heart.dataset.compositeId;
-            if (state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId)) {
-                return;
-            }
-
-            const quantity = card.querySelector('.quantity-input').value;
-            const itemInfo = { quantity: parseInt(quantity), requests: '' };
-            state.cart.items.set(compositeId, itemInfo);
-
-            const allOptionsFavorited = options.every((opt, index) => {
-                const id = `${recordId}-${index}`;
-                return state.cart.items.has(id) || state.cart.lockedItems.has(id);
-            });
-
-            if (options.length > 0 && allOptionsFavorited) {
-                card.remove();
-            } else if (options.length === 0) {
-                card.remove();
-            } else {
-                const newCard = await ui.createInteractiveCard(record, imageCache);
+            // This logic remains the same for now.
+            console.log("Heart clicked on:", record.fields.Name);
+            return;
+        }
+    
+        // 2. Handle PARENT button click (Go Up)
+        if (e.target.closest('.parent-btn')) {
+            e.stopPropagation();
+            const parentId = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0];
+            const parentRecord = state.records.all.find(r => r.id === parentId);
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
             }
-            
-            await ui.updateFavoritesCarousel();
             return;
         }
-        
-        if (e.target.closest('button')) {
+    
+        // 3. Handle EXPLODE button click
+        if (e.target.closest('.explode-btn')) {
+            e.stopPropagation();
+            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+    
+            ui.catalogContainer.innerHTML = ''; // Clear the container
+            for (const child of children) {
+                const childCard = await ui.createInteractiveCard(child, imageCache);
+                ui.catalogContainer.appendChild(childCard);
+            }
+            // Add an implode button to go back
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
+            ui.catalogContainer.insertAdjacentElement('beforebegin', implodeButton);
             return;
         }
-
-        const card = e.target.closest('.event-card');
-        if (card) {
-            const compositeId = card.querySelector('.heart-icon').dataset.compositeId;
-            await ui.openDetailModal(compositeId, imageCache);
+    
+        // 4. Handle general CARD click (Drill-Down)
+        // For now, we'll just log this. We will add the logic to open the modal for bookable items later.
+        console.log("Card body clicked:", record.fields.Name);
+    });
+    
+    // Add a new listener to the document body for the dynamically created IMPLODE button
+    document.body.addEventListener('click', async function(e) {
+        if (e.target.closest('.implode-btn')) {
+            e.target.closest('#implode-container').remove(); // Remove the button itself
+            await updateRender(); // Re-render the top-level view
         }
     });
     
+    // Add a new listener for the NAVIGATE options dropdown
+    ui.catalogContainer.addEventListener('change', async function(e) {
+        if (e.target.classList.contains('navigate-options')) {
+            const card = e.target.closest('.event-card');
+            const childName = e.target.value;
+            if (!childName) return;
+    
+            const childRecord = state.records.all.find(r => r.fields.Name === childName);
+            if (childRecord) {
+                const newCard = await ui.createInteractiveCard(childRecord, imageCache);
+                card.replaceWith(newCard);
+            }
+        }
+    });    
     const headerInputs = [ui.headerEventNameInput, ui.headerDateInput, ui.headerHeadcountInput, ui.headerGoalsInput];
     headerInputs.forEach(input => {
         input.addEventListener('change', (e) => {
@@ -454,10 +482,6 @@ async function initialize() {
     ui.toggleLoading(false);
     
     console.log('Populating filters...');
-    ui.populateFilter(ui.durationFilter, CONSTANTS.FIELD_NAMES.DURATION);
-    ui.populateFilter(ui.statusFilter, CONSTANTS.FIELD_NAMES.STATUS);
-    ui.populateFilter(ui.categoryFilter, CONSTANTS.FIELD_NAMES.CATEGORIES);
-    ui.populateFilter(ui.subcategoryFilter, CONSTANTS.FIELD_NAMES.SUBCATEGORIES);
     
     console.log('Setting up event listeners...');
     setupEventListeners();
