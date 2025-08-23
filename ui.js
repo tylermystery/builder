@@ -235,129 +235,66 @@ export async function createFavoriteCardElement(compositeId, itemInfo, isLocked,
     return itemCard;
 }
 
-export async function createEventCardElement(record, imageCache) {
+// REPLACE the old createEventCardElement function in ui.js with this new one.
+
+export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
-    const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
-        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : 0;
-    const baseDuration = fields[CONSTANTS.FIELD_NAMES.DURATION] || 0;
+    const allRecords = state.records.all;
+
+    // --- Determine Card Type ---
+    // An item is a "Grouping" if its options match the names of other records.
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    const imageUrls = await fetchImagesForRecord(record, imageCache);
-    if (!state.ui.cardImageIndexes.has(recordId)) {
-        state.ui.cardImageIndexes.set(record.id, 0);
-    }
-    let currentIndex = state.ui.cardImageIndexes.get(recordId);
-    eventCard.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
 
-    let optionsDropdownHTML = '';
-    const availableOptions = options.filter((opt, index) => {
-        const compositeId = `${recordId}-${index}`;
-        return !state.cart.items.has(compositeId) && !state.cart.lockedItems.has(compositeId);
-    });
-    if (options.length > 0) {
-        if (availableOptions.length === 0) {
-            return null;
-        }
-        optionsDropdownHTML = `<select class="options-selector"> ${availableOptions.map(opt => {
-            const originalIndex = options.findIndex(o => o.name === opt.name);
-            return `<option value="${originalIndex}">${opt.name}</option>`;
-        }).join('')} </select>`;
-    }
+    // --- Card Anatomy & Controls ---
+    const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
+    const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
+    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
 
-    const firstAvailableOptionIndex = options.findIndex(opt => opt.name === availableOptions[0]?.name);
-    const compositeId = options.length > 0 ?
-        `${recordId}-${firstAvailableOptionIndex}` : recordId;
-    const initialQuantity = Math.max(parseInt(guestCountInput.value), headcountMin);
-    
-    const isCollabMode = document.body.classList.contains('collab-mode-enabled');
-    const reactionUI = isCollabMode ? `${renderReactionbar(record.id)}<div class="card-footer">${renderReactionsSummary(record.id)}</div>` : '';
+    let optionsControlHTML = '';
+    if (isGrouping) {
+        // RENDER NAVIGATIONAL OPTIONS for Groupings
+        optionsControlHTML = `<select class="options-selector navigate-options">
+            <option value="">Select an option...</option>
+            ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
+        </select>`;
+    } else {
+        // RENDER CONFIGURATION OPTIONS for Bookable Items
+        optionsControlHTML = `<select class="options-selector configure-options">
+             ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
+        </select>`;
+        // We can add the notes field here later
+    }
 
     eventCard.innerHTML = `
-        <div class="heart-icon" data-composite-id="${compositeId}">
+        <div class="card-header-actions">
+            ${parentButtonHTML}
+            ${explodeButtonHTML}
+        </div>
+        <div class="heart-icon" data-composite-id="${recordId}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
         <div class="event-card-content">
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            ${optionsDropdownHTML}
-            <p class="option-description"></p>
-            <p class="details"></p>
+            <p class="description">${fields.Description || ''}</p>
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
             <div class="price-quantity-wrapper">
-                <div class="price"></div>
-                <div class="quantity-selector">
-                    <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                    <input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}">
-                    <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
-                </div>
+                <div class="price">$${(fields[CONSTANTS.FIELD_NAMES.PRICE] || 0).toFixed(2)}</div>
             </div>
-        </div>
-        ${reactionUI}
-        <button class="gallery-arrow left">←</button>
-        <button class="gallery-arrow right">→</button>`;
-    const dropdown = eventCard.querySelector('.options-selector');
-    const heartIcon = eventCard.querySelector('.heart-icon');
-    const quantityInput = eventCard.querySelector('.quantity-input');
-    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
-    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
-    const priceEl = eventCard.querySelector('.price');
-    const descriptionEl = eventCard.querySelector('.option-description');
-    const detailsEl = eventCard.querySelector('.details');
-    const updateCardDetails = () => {
-        const selectedIndex = dropdown ?
-            dropdown.value : null;
-        const selectedOption = selectedIndex ? options[selectedIndex] : null;
-        let currentPrice = basePrice;
-        if (selectedOption) {
-            if (selectedOption.absolutePrice !== null) {
-                currentPrice = selectedOption.absolutePrice;
-            } else if (selectedOption.priceChange !== null) {
-                currentPrice += selectedOption.priceChange;
-            }
-        }
-        priceEl.innerHTML = `$${currentPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-        descriptionEl.textContent = selectedOption?.description || '';
-        descriptionEl.style.display = selectedOption?.description ? 'block' : 'none';
-        let currentDuration = baseDuration;
-        if (selectedOption && selectedOption.durationChange !== null) {
-            currentDuration += selectedOption.durationChange;
-        }
-        detailsEl.textContent = currentDuration > 0 ? `Duration: ${currentDuration} hours` : '';
-        const newCompositeId = selectedIndex ? `${recordId}-${selectedIndex}` : recordId;
-        heartIcon.dataset.compositeId = newCompositeId;
-        heartIcon.classList.toggle('hearted', state.cart.items.has(newCompositeId) || state.cart.lockedItems.has(newCompositeId));
-    };
-    if (dropdown) {
-        dropdown.addEventListener('change', updateCardDetails);
-    }
-    updateCardDetails();
-    if (plusBtn) plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; guestCountInput.value = quantityInput.value; });
-    if (minusBtn) minusBtn.addEventListener('click', () => { const current = parseInt(quantityInput.value); const min = parseInt(quantityInput.min); if (current > min) { quantityInput.value = current - 1; guestCountInput.value = quantityInput.value; } });
-    quantityInput.addEventListener('change', () => { const min = parseInt(quantityInput.min); if (parseInt(quantityInput.value) < min) { quantityInput.value = min; } guestCountInput.value = quantityInput.value; });
-    const leftArrow = eventCard.querySelector('.gallery-arrow.left');
-    const rightArrow = eventCard.querySelector('.gallery-arrow.right');
-    if (imageUrls.length > 1) {
-        leftArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
-            state.ui.cardImageIndexes.set(recordId, currentIndex);
-            eventCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-        rightArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % imageUrls.length;
-            state.ui.cardImageIndexes.set(recordId, currentIndex);
-            eventCard.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-    } else {
-        leftArrow.style.display = 'none';
-        rightArrow.style.display = 'none';
-    }
+        </div>`;
+
+    // Fetch and set background image
+    const imageUrls = await fetchImagesForRecord(record, imageCache);
+    eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
 
     return eventCard;
 }
-
 export async function renderRecords(recordsToRender, imageCache) {
     if (recordsToRender.length === 0 && state.ui.recordsCurrentlyDisplayed === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No events match the current filters.</p>";
