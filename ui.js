@@ -60,7 +60,7 @@ export function parseOptions(optionsText) {
                     option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
                     break;
                 case 'description':
-                    option.description = value.replace(/"/g, '');// Remove quotes
+                    option.description = value.replace(/"/g, '');
                     break;
             }
         });
@@ -80,7 +80,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
         const variation = options[itemInfo.selectedOptionIndex];
         if (variation) {
             variationNameHTML = `<p class="variation-name">${variation.name}</p>`;
-            // Adjust price based on the selected variation
             if (variation.absolutePrice != null) {
                 itemPrice = variation.absolutePrice;
             } else if (variation.priceChange != null) {
@@ -160,7 +159,6 @@ export async function createInteractiveCard(record, imageCache) {
             </div>
         </div>`;
 
-    // Add event listener for real-time updates on configurable cards
     if (!isGrouping) {
         const optionsSelector = eventCard.querySelector('.configure-options');
         if (optionsSelector) {
@@ -187,7 +185,7 @@ export async function createInteractiveCard(record, imageCache) {
 }
 
 export async function renderRecords(recordsToRender, imageCache) {
-    catalogContainer.innerHTML = ''; // Clear existing cards before rendering new ones
+    catalogContainer.innerHTML = '';
     if (recordsToRender.length === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No items match the current filters.</p>";
         return;
@@ -253,6 +251,10 @@ export function updateTotalCost() {
     totalCostEl.textContent = formattedTotal;
 }
 
+export function populateFilter() { /* ...logic... */ }
+
+export function collapseHeaderOnScroll() { /* ...logic... */ }
+
 export async function openDetailModal(recordId, imageCache) {
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) return;
@@ -269,4 +271,28 @@ export async function openDetailModal(recordId, imageCache) {
             modalOverlay.style.display = 'none';
         }
     });
+}
+
+export function toggleLoading(show) {
+    loadingMessage.style.display = show ? 'block' : 'none';
+    filterControls.style.display = show ? 'none' : 'flex';
+}
+
+export function updateHeaderSummary() {
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
+    const date = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const headcount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 0;
+    const totalCost = document.getElementById('total-cost').textContent;
+
+    const summaryParts = [];
+    summaryParts.push(`<strong>${eventName}</strong>`);
+    if (date) {
+        summaryParts.push(`📅 ${date}`);
+    }
+    if (headcount > 0) {
+        summaryParts.push(`👤 ${headcount}`);
+    }
+    summaryParts.push(`- ${totalCost}`);
+
+    headerSummary.innerHTML = summaryParts.join(' | ');
 }
