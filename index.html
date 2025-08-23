@@ -13,161 +13,161 @@
          * Changelog:
          *
          * v2.2.2 - 2025-08-22
-         * - [cite_start]Added Category and Subcategory dropdowns to the filter UI. [cite: 39]
+         * - Added Category and Subcategory dropdowns to the filter UI.
          *
          * v2.2.1 - 2025-08-22
-         * - [cite_start]Added history-controls and CSS for new History Mode toggle. [cite: 40]
+         * - Added history-controls and CSS for new History Mode toggle.
          *
          * v2.2.0 - 2025-08-21
-         * - [cite_start]Added subtle beta toolkit trigger and panel. [cite: 41]
+         * - Added subtle beta toolkit trigger and panel.
          *
          * v2.1.1 - 2025-08-21
-         * - [cite_start]Fixed bug where sort-by-reactions option was visible in MVP. [cite: 42]
+         * - Fixed bug where sort-by-reactions option was visible in MVP.
          *
          * v2.1.0 - 2025-08-21
-         * - [cite_start]Stripped UI down to MVP foundation. [cite: 43]
+         * - Stripped UI down to MVP foundation.
          */
 
         body {
-            [cite_start]padding-bottom: 80px; [cite: 44]
-            [cite_start]font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; [cite: 45]
-            [cite_start]background-color: #f8f9fa; [cite: 46]
+            padding-bottom: 80px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: #f8f9fa;
         }
         #sticky-header {
-            [cite_start]position: sticky; [cite: 46]
-            [cite_start]top: 0; [cite: 47]
+            position: sticky;
+            top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            [cite_start]transition: padding 0.3s ease-in-out; [cite: 47]
+            transition: padding 0.3s ease-in-out;
         }
         #header-summary {
-            [cite_start]display: none; [cite: 48]
-            [cite_start]align-items: center; [cite: 49]
+            display: none;
+            align-items: center;
             justify-content: space-between;
             padding: 10px 20px;
             width: 100%;
             max-width: 1400px;
             margin: 0 auto;
             font-size: 1.1em;
-            [cite_start]box-sizing: border-box; [cite: 49]
+            box-sizing: border-box;
         }
         #header-full-content { 
-            [cite_start]max-height: 500px; [cite: 50]
-            [cite_start]overflow: hidden; [cite: 51]
-            [cite_start]transition: max-height 0.4s ease-in-out; [cite: 51]
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out;
         }
         #sticky-header.header-collapsed #header-full-content { 
-            [cite_start]max-height: 0; [cite: 52]
-            [cite_start]padding: 0; [cite: 52]
+            max-height: 0;
+            padding: 0;
         }
         #sticky-header.header-collapsed #header-summary { 
-            [cite_start]display: flex; [cite: 53]
+            display: flex;
         }
 
         /* --- Beta Toolkit --- */
         .header-title-container {
-            [cite_start]display: flex; [cite: 54]
-            [cite_start]align-items: baseline; [cite: 54]
+            display: flex;
+            align-items: baseline;
             gap: 5px;
         }
         #beta-trigger {
-            [cite_start]font-style: italic; [cite: 55]
-            [cite_start]font-size: 0.7em; [cite: 55]
+            font-style: italic;
+            font-size: 0.7em;
             color: #007aff;
             cursor: pointer;
             user-select: none;
         }
         #beta-toolkit {
-            [cite_start]position: absolute; [cite: 56]
-            [cite_start]top: 40px; [cite: 56]
+            position: absolute;
+            top: 40px;
             left: 20px;
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 6px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            [cite_start]padding: 15px; [cite: 57]
-            display: none; [cite_start]/* Hidden by default */ [cite: 57]
-            [cite_start]z-index: 1000; [cite: 58]
+            padding: 15px;
+            display: none; /* Hidden by default */
+            z-index: 1000;
         }
         #beta-toolkit.visible {
-            [cite_start]display: block; [cite: 59]
+            display: block;
         }
         .beta-toggle {
-            [cite_start]display: flex; [cite: 60]
-            [cite_start]align-items: center; [cite: 60]
+            display: flex;
+            align-items: center;
             gap: 8px;
             font-size: 0.9em;
         }
         .beta-toggle:not(:last-child) {
-            [cite_start]margin-bottom: 10px; [cite: 61]
+            margin-bottom: 10px;
         }
         .switch {
-            [cite_start]position: relative; [cite: 62]
-            [cite_start]display: inline-block; [cite: 62]
+            position: relative;
+            display: inline-block;
             width: 34px;
             height: 20px;
         }
         .switch input { 
-            [cite_start]opacity: 0; [cite: 63]
-            [cite_start]width: 0; [cite: 63]
+            opacity: 0;
+            width: 0;
             height: 0;
         }
         .slider {
-            [cite_start]position: absolute; [cite: 64]
-            [cite_start]cursor: pointer; [cite: 64]
+            position: absolute;
+            cursor: pointer;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
             background-color: #ccc;
             transition: .4s;
-            [cite_start]border-radius: 20px; [cite: 65]
+            border-radius: 20px;
         }
         .slider:before {
-            [cite_start]position: absolute; [cite: 66]
-            [cite_start]content: ""; [cite: 66]
+            position: absolute;
+            content: "";
             height: 14px;
             width: 14px;
             left: 3px;
             bottom: 3px;
             background-color: white;
             transition: .4s;
-            [cite_start]border-radius: 50%; [cite: 67]
+            border-radius: 50%;
         }
         input:checked + .slider {
-            [cite_start]background-color: #007aff; [cite: 68]
+            background-color: #007aff;
         }
         input:checked + .slider:before {
-            [cite_start]transform: translateX(14px); [cite: 69]
+            transform: translateX(14px);
         }
 
         /* Header Toolbar */
         #header-toolbar {
-            [cite_start]display: flex; [cite: 70]
-            [cite_start]flex-wrap: wrap; [cite: 70]
+            display: flex;
+            flex-wrap: wrap;
             align-items: flex-end;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1400px;
             margin: 0 auto;
-            [cite_start]border-bottom: 1px solid #e9ecef; [cite: 71]
+            border-bottom: 1px solid #e9ecef;
         }
         .toolbar-group {
-            [cite_start]display: flex; [cite: 72]
-            [cite_start]flex-direction: column; [cite: 72]
+            display: flex;
+            flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
-            [cite_start]font-size: 0.75em; [cite: 73]
-            [cite_start]color: #666; [cite: 73]
+            font-size: 0.75em;
+            color: #666;
             margin-bottom: 2px;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea {
-            [cite_start]border: 1px solid #ced4da; [cite: 74]
-            [cite_start]border-radius: 4px; [cite: 74]
+            border: 1px solid #ced4da;
+            border-radius: 4px;
             padding: 6px 8px;
             font-size: 0.9em;
         }
@@ -179,7 +179,7 @@
             line-height: 1.2;
         }
         .event-name-group {
-            [cite_start]flex-grow: 1; [cite: 75]
+            flex-grow: 1;
         }
         #header-event-name {
             font-size: 1.8em;
@@ -190,61 +190,67 @@
             flex-grow: 1;
         }
         .details-group {
-            [cite_start]display: flex; [cite: 77]
-            [cite_start]flex-direction: row; [cite: 77]
+            display: flex;
+            flex-direction: row;
             gap: 15px;
         }
         .goals-group {
-            [cite_start]flex-grow: 2; [cite: 78]
-            [cite_start]min-width: 200px; [cite: 78]
+            flex-grow: 2;
+            min-width: 200px;
         }
         .goals-group textarea {
-            [cite_start]min-height: 32px; [cite: 79]
-            [cite_start]resize: vertical; [cite: 79]
+            min-height: 32px;
+            resize: vertical;
             width: 100%;
         }
         .people-group {
-            [cite_start]display: flex; [cite: 80]
-            [cite_start]flex-direction: row; [cite: 80]
+            display: flex;
+            flex-direction: row;
             align-items: center;
             gap: 15px;
-            [cite_start]border-left: 1px solid #e9ecef; [cite: 81]
-            [cite_start]padding-left: 20px; [cite: 81]
+            border-left: 1px solid #e9ecef;
+            padding-left: 20px;
         }
         #total-cost-section {
-            [cite_start]padding: 0; [cite: 82]
-            [cite_start]text-align: right; [cite: 82]
+            padding: 0;
+            text-align: right;
             font-size: 1.2em;
         }
         #total-cost {
-            [cite_start]font-weight: bold; [cite: 83]
-            [cite_start]color: #007aff; [cite: 83]
+            font-weight: bold;
+            color: #007aff;
             cursor: pointer;
         }
         .history-controls {
-            [cite_start]align-items: center; [cite: 84]
+            align-items: center;
             gap: 5px;
         }
         .history-controls button {
-            [cite_start]background: none; [cite: 85]
-            [cite_start]border: none; [cite: 85]
+            background: none;
+            border: none;
             font-size: 1.5em;
             cursor: pointer;
         }
         .history-controls button:disabled {
-            [cite_start]opacity: 0.3; [cite: 86]
-            [cite_start]cursor: not-allowed; [cite: 86]
+            opacity: 0.3;
+            cursor: not-allowed;
         }
 
         /* Favorites Section */
-        [cite_start]#favorites-section { max-width: 1400px; [cite: 87]
-            margin: 0 auto; padding: 15px 20px; }
-        #favorites-carousel { display: flex;
-            [cite_start]gap: 15px; [cite: 88]
-            overflow-x: auto; padding-bottom: 5px; }
+        #favorites-section { 
+            max-width: 1400px;
+            margin: 0 auto; 
+            padding: 15px 20px; 
+        }
+        #favorites-carousel { 
+            display: flex;
+            gap: 15px;
+            overflow-x: auto; 
+            padding-bottom: 5px; 
+        }
         .favorite-item {
-            [cite_start]position: relative; [cite: 89]
-            [cite_start]flex: 0 0 220px; [cite: 89]
+            position: relative;
+            flex: 0 0 220px;
             height: 325px;
             border-radius: 8px;
             overflow: hidden;
@@ -252,128 +258,145 @@
             background-position: center;
             color: white;
             display: flex;
-            [cite_start]flex-direction: column; [cite: 90]
-            [cite_start]justify-content: flex-end; [cite: 90]
+            flex-direction: column;
+            justify-content: flex-end;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             cursor: pointer;
             transition: all 0.3s;
-            [cite_start]border: 1px solid #ddd; [cite: 91]
+            border: 1px solid #ddd;
         }
-        [cite_start].favorite-item.locked-item { border: 3px solid #FFD700; [cite: 92]
+        .favorite-item.locked-item { 
+            border: 3px solid #FFD700;
         }
         .favorite-item-content {
-            [cite_start]background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%); [cite: 93]
-            [cite_start]padding: 10px; [cite: 93]
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+            padding: 10px;
             text-align: left;
         }
-        [cite_start].favorite-item p { margin: 2px 0; font-size: 0.9em; [cite: 94]
-            text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
-        [cite_start].favorite-item .item-name { font-weight: bold; font-size: 1em; [cite: 95]
+        .favorite-item p { 
+            margin: 2px 0; 
+            font-size: 0.9em;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.7); 
         }
-        [cite_start].favorite-item .variation-name { font-size: 0.8em; font-style: italic; [cite: 96]
+        .favorite-item .item-name { 
+            font-weight: bold; 
+            font-size: 1em;
         }
-        [cite_start].favorite-item .item-price { font-weight: bold; margin-top: 5px; [cite: 97]
+        .favorite-item .variation-name { 
+            font-size: 0.8em; 
+            font-style: italic;
+        }
+        .favorite-item .item-price { 
+            font-weight: bold; 
+            margin-top: 5px;
         }
 
         /* Filter Controls */
         #filter-controls {
-            [cite_start]display: flex; [cite: 98]
-            [cite_start]justify-content: center; [cite: 98]
+            display: flex;
+            justify-content: center;
             gap: 15px;
             padding: 20px;
             max-width: 1200px;
             margin: 0 auto;
-            [cite_start]flex-wrap: wrap; [cite: 99]
+            flex-wrap: wrap;
         }
 
         /* Catalog Container */
         #catalog-container {
-            [cite_start]display: grid; [cite: 100]
-            [cite_start]grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); [cite: 100]
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
             padding: 20px;
             max-width: 1400px;
-            [cite_start]margin: 0 auto; [cite: 101]
+            margin: 0 auto;
         }
 
         /* CONDITIONAL VISIBILITY FOR BETA FEATURES */
         .reaction-bar, .reactions-summary, .card-footer, .action-btn-primary, .action-btn-secondary, .history-controls {
-            [cite_start]display: none; [cite: 102]
+            display: none;
         }
         body.collab-mode-enabled .reaction-bar,
         body.collab-mode-enabled .reactions-summary,
         body.collab-mode-enabled .card-footer {
-            [cite_start]display: flex; [cite: 103]
+            display: flex;
         }
         body.planner-mode-enabled .action-btn-primary,
         body.planner-mode-enabled .action-btn-secondary {
-            [cite_start]display: flex; [cite: 104]
+            display: flex;
         }
         body.planner-mode-enabled .remove-btn {
-            [cite_start]display: none; [cite: 105]
+            display: none;
         }
         body.history-mode-enabled .history-controls {
-            [cite_start]display: flex; [cite: 106]
+            display: flex;
         }
         
         /* FAVORITE CARD BUTTONS */
         .card-actions {
-            [cite_start]position: absolute; [cite: 107]
-            [cite_start]top: 8px; [cite: 107]
+            position: absolute;
+            top: 8px;
             right: 8px;
             z-index: 5;
             display: flex;
-            [cite_start]gap: 5px; [cite: 108]
+            gap: 5px;
         }
         .action-btn, .action-btn-primary, .action-btn-secondary {
-            [cite_start]background: none; [cite: 109]
-            [cite_start]border: none; [cite: 109]
+            background: none;
+            border: none;
             font-size: 1.8em;
             cursor: pointer;
             padding: 0;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
             width: 32px;
             height: 32px;
-            [cite_start]display: flex; [cite: 110]
-            [cite_start]align-items: center; [cite: 110]
+            display: flex;
+            align-items: center;
             justify-content: center;
         }
         .action-btn-secondary {
-            [cite_start]font-size: 1.5em; [cite: 111]
+            font-size: 1.5em;
         }
-        [cite_start].action-btn-primary .icon-hover { display: none; [cite: 112]
+        .action-btn-primary .icon-hover { 
+            display: none;
         }
-        [cite_start].action-btn-primary:hover .icon-default { display: none; [cite: 113]
+        .action-btn-primary:hover .icon-default { 
+            display: none;
         }
-        [cite_start].action-btn-primary:hover .icon-hover { display: block; animation: pop 0.3s; [cite: 114]
+        .action-btn-primary:hover .icon-hover { 
+            display: block; 
+            animation: pop 0.3s;
         }
-        @keyframes pop { 0% { transform: scale(1); [cite_start]} 50% { transform: scale(1.4); [cite: 115]
-        } 100% { transform: scale(1); } }
+        @keyframes pop { 
+            0% { transform: scale(1); } 
+            50% { transform: scale(1.4); } 
+            100% { transform: scale(1); } 
+        }
         
         /* MAIN CATALOG CARD STYLES */
         .event-card {
-            [cite_start]position: relative; [cite: 116]
-            [cite_start]border-radius: 10px; [cite: 116]
+            position: relative;
+            border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            [cite_start]height: 520px; [cite: 117]
-            [cite_start]width: 100%; [cite: 117]
+            height: 520px;
+            width: 100%;
             background-size: cover;
             background-position: center;
             color: white;
             overflow: hidden;
             cursor: pointer;
-            [cite_start]border: 1px solid #e0e0e0; [cite: 118]
+            border: 1px solid #e0e0e0;
         }
         .event-card:hover {
-            [cite_start]transform: translateY(-5px); [cite: 119]
+            transform: translateY(-5px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }
         .heart-icon {
-            [cite_start]position: absolute; [cite: 120]
-            [cite_start]top: 15px; [cite: 120]
+            position: absolute;
+            top: 15px;
             right: 15px;
             width: 30px;
             height: 30px;
@@ -381,94 +404,102 @@
             z-index: 10;
             background: none;
             border: none;
-            [cite_start]padding: 0; [cite: 121]
+            padding: 0;
         }
         .heart-icon svg {
-            [cite_start]width: 100%; [cite: 122]
-            [cite_start]height: 100%; [cite: 122]
+            width: 100%;
+            height: 100%;
             stroke: white;
             stroke-width: 2;
             fill: rgba(0,0,0,0.3);
             transition: fill 0.2s, stroke 0.2s;
-            [cite_start]filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); [cite: 123]
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
         }
-        [cite_start].heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c; [cite: 124]
+        .heart-icon.hearted svg { 
+            fill: #ff4f6c; 
+            stroke: #ff4f6c;
         }
         .event-card-content {
-            [cite_start]background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%); [cite: 125]
-            [cite_start]padding: 20px; [cite: 125]
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%);
+            padding: 20px;
             margin-top: auto;
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            [cite_start]justify-content: flex-end; [cite: 126]
+            justify-content: flex-end;
         }
         .event-card-content h3 {
-            [cite_start]margin-top: 0; [cite: 127]
-            [cite_start]margin-bottom: 10px; [cite: 127]
+            margin-top: 0;
+            margin-bottom: 10px;
             font-size: 1.6em;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
         .event-card-content p {
-            [cite_start]margin-top: 0; [cite: 128]
-            [cite_start]margin-bottom: 15px; [cite: 128]
+            margin-top: 0;
+            margin-bottom: 15px;
             color: #f0f0f0;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         }
-        [cite_start].event-card-content .details { font-size: 0.9em; [cite: 129]
-            margin-bottom: 15px; }
+        .event-card-content .details { 
+            font-size: 0.9em;
+            margin-bottom: 15px; 
+        }
         .event-card-content .options-selector {
-            [cite_start]width: 100%; [cite: 130]
-            [cite_start]padding: 8px; [cite: 130]
+            width: 100%;
+            padding: 8px;
             border-radius: 6px;
             border: 1px solid #ccc;
             margin-bottom: 15px;
             background-color: rgba(255,255,255,0.9);
-            [cite_start]color: #333; [cite: 131]
+            color: #333;
         }
         .price-quantity-wrapper {
-            [cite_start]display: flex; [cite: 132]
-            [cite_start]justify-content: space-between; [cite: 132]
+            display: flex;
+            justify-content: space-between;
             align-items: center;
             margin-top: auto;
             padding-top: 10px;
-            [cite_start]flex-shrink: 0; [cite: 133]
+            flex-shrink: 0;
         }
-        [cite_start].quantity-selector { display: flex; align-items: center; [cite: 134]
+        .quantity-selector { 
+            display: flex; 
+            align-items: center;
         }
         .quantity-selector button {
-            [cite_start]width: 30px; [cite: 135]
-            [cite_start]height: 30px; [cite: 135]
+            width: 30px;
+            height: 30px;
             border: 1px solid #ccc;
             background-color: #f0f0f0;
             cursor: pointer;
             font-size: 1.2em;
-            [cite_start]color: #333; [cite: 136]
+            color: #333;
         }
         .quantity-selector input {
-            [cite_start]width: 40px; [cite: 137]
-            [cite_start]text-align: center; [cite: 137]
+            width: 40px;
+            text-align: center;
             border: 1px solid #ccc;
             border-left: none;
             border-right: none;
             height: 30px;
-            [cite_start]-moz-appearance: textfield; [cite: 138]
+            -moz-appearance: textfield;
         }
-        [cite_start].event-card-content .price { font-size: 1.3em; font-weight: bold; [cite: 139]
+        .event-card-content .price { 
+            font-size: 1.3em; 
+            font-weight: bold; 
         }
         .option-description {
-            [cite_start]font-size: 0.85em; [cite: 140]
-            [cite_start]padding: 5px 0; [cite: 140]
+            font-size: 0.85em;
+            padding: 5px 0;
             margin: 5px 0;
             color: #f0f0f0;
             text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-            [cite_start]min-height: 2.5em; [cite: 141]
+            min-height: 2.5em;
         }
         
         /* Modal Styles */
         .modal-overlay {
-            [cite_start]position: fixed; [cite: 142]
-            [cite_start]top: 0; [cite: 142]
+            position: fixed;
+            top: 0;
             left: 0;
             width: 100%;
             height: 100%;
@@ -476,11 +507,11 @@
             display: none;
             align-items: center;
             justify-content: center;
-            [cite_start]z-index: 1000; [cite: 143]
+            z-index: 1000;
         }
         .modal-content {
-            [cite_start]position: relative; [cite: 144]
-            [cite_start]background-size: cover; [cite: 144]
+            position: relative;
+            background-size: cover;
             background-position: center;
             border-radius: 12px;
             width: 90%;
@@ -489,23 +520,23 @@
             max-height: 90vh;
             display: flex;
             flex-direction: column;
-            [cite_start]color: white; [cite: 145]
+            color: white;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             overflow: hidden;
         }
         #modal-body {
-            [cite_start]padding: 30px; [cite: 146]
-            [cite_start]background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%); [cite: 146]
+            padding: 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%);
             margin-top: auto;
             height: 100%;
             display: flex;
             flex-direction: column;
-            [cite_start]justify-content: flex-end; [cite: 147]
-            [cite_start]overflow-y: auto; [cite: 147]
+            justify-content: flex-end;
+            overflow-y: auto;
         }
         .gallery-arrow {
-            [cite_start]position: absolute; [cite: 148]
-            [cite_start]top: 50%; [cite: 148]
+            position: absolute;
+            top: 50%;
             transform: translateY(-50%);
             background: rgba(0,0,0,0.5);
             color: white;
@@ -513,15 +544,18 @@
             cursor: pointer;
             padding: 10px;
             font-size: 1.5em;
-            [cite_start]opacity: 0; [cite: 149]
-            [cite_start]transition: opacity 0.2s; [cite: 149]
+            opacity: 0;
+            transition: opacity 0.2s;
             z-index: 10;
         }
-        [cite_start].gallery-arrow.left { left: 10px; [cite: 150]
+        .gallery-arrow.left { 
+            left: 10px;
         }
-        [cite_start].gallery-arrow.right { right: 10px; [cite: 151]
+        .gallery-arrow.right { 
+            right: 10px;
         }
-        [cite_start].event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1; [cite: 152]
+        .event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { 
+            opacity: 1;
         }
     </style>
 </head>
@@ -542,24 +576,24 @@
         <div id="beta-toolkit">
             <div class="beta-toggle">
                 <span>Collab Mode</span>
-                [cite_start]<label class="switch"> [cite: 153]
+                <label class="switch">
                     <input type="checkbox" id="collab-mode-toggle">
                     <span class="slider"></span>
                 </label>
             </div>
             <div class="beta-toggle">
-                [cite_start]<span>Event Planner Mode</span> [cite: 154]
+                <span>Event Planner Mode</span>
                 <label class="switch">
                     <input type="checkbox" id="planner-mode-toggle">
                     <span class="slider"></span>
                 </label>
             </div>
-            [cite_start]<div class="beta-toggle"> [cite: 155]
+            <div class="beta-toggle">
                 <span>History Mode</span>
                 <label class="switch">
                     <input type="checkbox" id="history-mode-toggle">
                     <span class="slider"></span>
-                [cite_start]</label> [cite: 156]
+                </label>
             </div>
         </div>
 
@@ -568,7 +602,7 @@
                 <label>Tool</label>
                 <div class="header-title-container">
                     <h4>Event Builder</h4>
-                    [cite_start]<sup id="beta-trigger">beta</sup> [cite: 157]
+                    <sup id="beta-trigger">beta</sup>
                 </div>
             </div>
             <div class="toolbar-group event-name-group">
@@ -578,41 +612,41 @@
             <div class="toolbar-group details-group">
                 <div class="toolbar-item">
                     <label for="header-date">Date</label>
-                    [cite_start]<input type="date" id="header-date"> [cite: 158]
+                    <input type="date" id="header-date">
                 </div>
                 <div class="toolbar-item">
                     <label for="header-headcount">Headcount</label>
                     <input type="number" id="header-headcount" min="1" value="1">
-                [cite_start]</div> [cite: 159]
+                </div>
             </div>
             <div class="toolbar-group goals-group">
                 <label for="header-goals">Event Goals</label>
                 <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
             </div>
             <div class="toolbar-group people-group">
-                [cite_start]<div class="history-controls"> [cite: 160]
+                <div class="history-controls">
                     <button id="undo-btn" disabled>↩️</button>
                     <button id="redo-btn" disabled>↪️</button>
                 </div>
                 <div id="collaborators-section" style="display: none;">
-                    [cite_start]<div id="collaborator-avatars"></div> [cite: 161]
+                    <div id="collaborator-avatars"></div>
                     <button id="add-collaborator-btn">+</button>
                 </div>
                 <div id="total-cost-section">
                     <strong>Total:</strong>
-                    [cite_start]<span id="total-cost" title="No items selected">$0.00</span> [cite: 162]
+                    <span id="total-cost" title="No items selected">$0.00</span>
                 </div>
                 <div id="share-section">
                     <button id="save-share-btn">Save & Share</button>
                     <div id="share-link-container" style="display: none;">
-                        [cite_start]<input type="text" id="share-link" readonly> [cite: 163]
+                        <input type="text" id="share-link" readonly>
                     </div>
                     <span id="save-status"></span>
                 </div>
             </div>
         </div>
 
-        [cite_start]<div id="favorites-section" style="display: none;"> [cite: 164]
+        <div id="favorites-section" style="display: none;">
             <div id="favorites-carousel"></div>
         </div>
     
@@ -627,7 +661,7 @@
         <option value="50-100">$50 - $100</option>
         <option value="100-250">$100 - $250</option>
         <option value="250-plus">$250+</option>
-    [cite_start]</select> [cite: 165]
+    </select>
     <select id="duration-filter">
         <option value="all">All Durations</option>
     </select>
@@ -642,7 +676,7 @@
     </select>
     <select id="sort-by">
         <option value="price-asc">Price (Low to High)</option>
-        [cite_start]<option value="price-desc">Price (High to Low)</option> [cite: 166]
+        <option value="price-desc">Price (High to Low)</option>
         <option value="name-asc">Name (A-Z)</option>
         <option value="reactions-desc" id="sort-by-reactions">Sort by: Reactions</option>
     </select>
@@ -663,7 +697,7 @@
         <div id="confirm-modal-body">
             <h3>Are you sure you want to break event 
 details down into 
- [cite_start]its components?!?</h3> [cite: 167]
+its components?!?</h3>
             <div class="modal-footer">
                 <button id="confirm-yes-btn">Yes</button>
                 <button id="confirm-no-btn">No</button>
