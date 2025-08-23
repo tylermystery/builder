@@ -355,7 +355,7 @@ function setupEventListeners() {
             } else if (options.length === 0) {
                 card.remove();
             } else {
-                const newCard = await ui.createEventCardElement(record, imageCache);
+                const newCard = await ui.createInteractiveCard(record, imageCache);
                 card.replaceWith(newCard);
             }
             
