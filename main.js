@@ -321,12 +321,6 @@ const filterInputs = [ui.nameFilter, ui.priceFilter, ui.sortBy];
 
         const favoriteItem = e.target.closest('.favorite-item');
         if (favoriteItem && !e.target.closest('button')) {
-            const compositeId = favoriteItem.dataset.compositeId;
-            await ui.openDetailModal(compositeId, imageCache);
-        }
-
-        const favoriteItem = e.target.closest('.favorite-item');
-        if (favoriteItem && !e.target.closest('button')) {
             const recordId = favoriteItem.dataset.recordId;
             await ui.openDetailModal(recordId, imageCache);
         }
