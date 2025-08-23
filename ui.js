@@ -282,7 +282,7 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         <div class="event-card-content">
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields.Description || ''}</p>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
             <div class="price-quantity-wrapper">
                 <div class="price">$${(fields[CONSTANTS.FIELD_NAMES.PRICE] || 0).toFixed(2)}</div>
