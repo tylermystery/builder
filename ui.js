@@ -1,35 +1,30 @@
 /*
- * Version: 2.2.1
+ * Version: 2.3.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.2.1 - 2025-08-23
- * - Restored filterControls constant to fix ReferenceError in toggleLoading.
+ * v2.3.0 - 2025-08-23
+ * - Removed all event listener logic from createInteractiveCard.
+ * - All interaction logic is now handled by a unified listener in main.js.
  */
 
 import { state } from './state.js';
-import { CONSTANTS, EMOJI_REACTIONS } from './config.js';
+import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
 import { getRecordPrice } from './main.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
-export const nameFilter = document.getElementById('name-filter');
-export const priceFilter = document.getElementById('price-filter');
-export const sortBy = document.getElementById('sort-by');
 export const headerEventNameInput = document.getElementById('header-event-name');
-export const headerDateInput = document.getElementById('header-date');
-export const headerHeadcountInput = document.getElementById('header-headcount');
-export const headerGoalsInput = document.getElementById('header-goals');
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
-const filterControls = document.getElementById('filter-controls'); // This line was restored
+const filterControls = document.getElementById('filter-controls');
 
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
@@ -37,30 +32,17 @@ export function parseOptions(optionsText) {
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
         const option = {
-            name: parts[0],
-            priceChange: null,
-            absolutePrice: null,
-            durationChange: null,
-            description: null
+            name: parts[0], priceChange: null, absolutePrice: null,
+            durationChange: null, description: null
         };
-
         parts.slice(1).forEach(part => {
             const [key, ...valueParts] = part.split(':').map(p => p.trim());
             const value = valueParts.join(':');
-
             switch (key.toLowerCase()) {
-                case 'price change':
-                    option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
-                    break;
-                case 'price':
-                    option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
-                    break;
-                case 'duration change':
-                    option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0;
-                    break;
-                case 'description':
-                    option.description = value.replace(/"/g, '');
-                    break;
+                case 'price change': option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
+                case 'price': option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
+                case 'duration change': option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
+                case 'description': option.description = value.replace(/"/g, ''); break;
             }
         });
         return option;
@@ -71,20 +53,12 @@ export function parseOptions(optionsText) {
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
     const fields = record.fields;
     let variationNameHTML = '';
-    let itemPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
     let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
+    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
-    if (itemInfo.selectedOptionIndex != null) {
-        const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const variation = options[itemInfo.selectedOptionIndex];
-        if (variation) {
-            variationNameHTML = `<p class="variation-name">${variation.name}</p>`;
-            if (variation.absolutePrice != null) {
-                itemPrice = variation.absolutePrice;
-            } else if (variation.priceChange != null) {
-                itemPrice += variation.priceChange;
-            }
-        }
+    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
+        variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
     }
 
     const itemCard = document.createElement('div');
@@ -93,7 +67,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
 
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
 
     itemCard.innerHTML = `
@@ -111,7 +84,6 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -139,13 +111,11 @@ export async function createInteractiveCard(record, imageCache) {
     }
 
     const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    const isHearted = state.cart.items.has(recordId);
 
     eventCard.innerHTML = `
-        <div class="card-header-actions">
-            ${parentButtonHTML}
-            ${explodeButtonHTML}
-        </div>
-        <div class="heart-icon" data-composite-id="${recordId}">
+        <div class="card-header-actions">${parentButtonHTML}${explodeButtonHTML}</div>
+        <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${recordId}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
         <div class="event-card-content">
@@ -157,26 +127,6 @@ export async function createInteractiveCard(record, imageCache) {
                 <div class="price">$${initialPrice.toFixed(2)}</div>
             </div>
         </div>`;
-
-    if (!isGrouping) {
-        const optionsSelector = eventCard.querySelector('.configure-options');
-        if (optionsSelector) {
-            optionsSelector.addEventListener('change', () => {
-                const selectedIndex = parseInt(optionsSelector.value, 10);
-                const selectedOption = rawOptions[selectedIndex];
-                let newPrice = initialPrice;
-                if (selectedOption) {
-                    if (selectedOption.absolutePrice != null) {
-                        newPrice = selectedOption.absolutePrice;
-                    } else if (selectedOption.priceChange != null) {
-                        newPrice += selectedOption.priceChange;
-                    }
-                }
-                eventCard.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
-                eventCard.querySelector('.description').textContent = selectedOption.description || fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
-            });
-        }
-    }
     
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
@@ -185,8 +135,11 @@ export async function createInteractiveCard(record, imageCache) {
 
 export async function renderRecords(recordsToRender, imageCache) {
     catalogContainer.innerHTML = '';
+    const implodeContainer = document.getElementById('implode-container');
+    if (implodeContainer) implodeContainer.remove();
+
     if (recordsToRender.length === 0) {
-        catalogContainer.innerHTML = "<p style='text-align: center; width: 100%;'>No items match the current filters.</p>";
+        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
     for (const record of recordsToRender) {
@@ -206,14 +159,7 @@ export async function updateFavoritesCarousel() {
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
     
-    const sorter = ([idA], [idB]) => {
-        const recordA = state.records.all.find(r => r.id === idA);
-        const recordB = state.records.all.find(r => r.id === idB);
-        if (!recordA || !recordB) return 0;
-        return (recordA.fields[CONSTANTS.FIELD_NAMES.NAME] || '').localeCompare(recordB.fields[CONSTANTS.FIELD_NAMES.NAME] || '');
-    };
-
-    const sortedItems = Array.from(state.cart.items.entries()).sort(sorter);
+    const sortedItems = Array.from(state.cart.items.entries());
 
     for (const [recordId, itemInfo] of sortedItems) {
         const record = state.records.all.find(r => r.id === recordId);
@@ -222,7 +168,6 @@ export async function updateFavoritesCarousel() {
             if (card) favoritesCarousel.appendChild(card);
         }
     }
-
     updateTotalCost();
 }
 
@@ -239,25 +184,18 @@ export function updateTotalCost() {
     allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-
-        let unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        if (isNaN(unitPrice)) return;
-
-        total += unitPrice;
+        total += getRecordPrice(record, itemInfo.selectedOptionIndex);
     });
 
-    const formattedTotal = `$${total.toFixed(2)}`;
-    totalCostEl.textContent = formattedTotal;
+    totalCostEl.textContent = `$${total.toFixed(2)}`;
 }
 
 export async function openDetailModal(recordId, imageCache) {
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) return;
-
     const modalCard = await createInteractiveCard(record, imageCache);
     modalBody.innerHTML = '';
     modalBody.appendChild(modalCard);
-
     modalContent.style.backgroundImage = modalCard.style.backgroundImage;
     modalOverlay.style.display = 'flex';
 
