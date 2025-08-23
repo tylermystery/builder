@@ -71,7 +71,8 @@ Event Cards: Each event is presented on a card showing its name, image, and pric
 
 Simple Favoriting: Users can select an event by clicking a heart icon, which adds it to the "Your Selections" carousel. Selected items have a simple "Remove" button.
 
-Dynamic Header: A sticky header contains all primary event details and controls: Event Name, Date, Headcount, Event Goals, Collaborators, Total Cost, and the Save & Share button. The header collapses to a single summary line on scroll.
+Dynamic Header: A sticky header contains all primary event details and controls. A static Tool Name ("Event Builder") is positioned in the top-left and includes the trigger for the Beta Toolkit. The main title is a large, editable Event Name input field that dictates the browser's page title. Other controls include Date, Headcount, Event Goals, Collaborators, Total Cost, and the Save & Share button.
+
 
 Filtering and Sorting
 Multi-Faceted Filtering: Users can refine the catalog view using filters for search, price, duration, status, category, and subcategory.
