@@ -511,118 +511,24 @@ export function collapseHeaderOnScroll() {
     }, { passive: true });
 }
 
-export async function openDetailModal(compositeId, imageCache) {
-    const record = state.records.all.find(r => r.id === compositeId.split('-')[0]);
+export async function openDetailModal(recordId, imageCache) {
+    const record = state.records.all.find(r => r.id === recordId);
     if (!record) return;
-    const isLocked = state.cart.lockedItems.has(compositeId);
-    let itemInfo = state.cart.lockedItems.get(compositeId) || state.cart.items.get(compositeId);
-    if (!itemInfo) {
-        const card = document.querySelector(`.event-card[data-record-id="${record.id}"]`) || document.querySelector(`.favorite-item[data-composite-id="${compositeId}"]`);
-        itemInfo = { quantity: card ? parseInt(card.querySelector('.quantity-input')?.value || card.querySelector('.item-quantity')?.textContent.replace('Qty: ', '') || 1) : 1, requests: '' };
-    }
-    const fields = record.fields;
-    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    let basePrice = fields[CONSTANTS.FIELD_NAMES.PRICE] ?
-        parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE]).replace(/[^0-9.-]+/g, "")) : null;
-    let optionsDropdownHTML = '';
-    let selectedOptionIndex = compositeId.split('-')[1] || 0;
-    if (options.length > 0) {
-        optionsDropdownHTML = `<div class="form-group"><label>Options</label><select id="modal-options" ${isLocked ? 'disabled' : ''}>${options.map((opt, index) => `<option value="${index}" ${index == selectedOptionIndex ? 'selected' : ''}>${opt.name}</option>`).join('')}</select></div>`;
-    }
-    const isHearted = state.cart.items.has(compositeId) || state.cart.lockedItems.has(compositeId);
-    modalBody.innerHTML = `<h3>${fields[CONSTANTS.FIELD_NAMES.NAME]}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || 'No description available.'}</p>${optionsDropdownHTML}<div class="price-quantity-wrapper" style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"><div class="price" data-unit-price="${basePrice}"></div><div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity" ${isLocked ? 'disabled' : ''}>-</button><input type="number" id="modal-quantity" class="quantity-input" value="${itemInfo.quantity}" min="${fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1}" ${isLocked ? 'readonly' : ''}><button class="quantity-btn plus" aria-label="Increase quantity" ${isLocked ? 'disabled' : ''}>+</button></div></div><div class="modal-footer"><div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${compositeId}"> <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg></div></div><button class="gallery-arrow left">←</button><button class="gallery-arrow right">→</button>`;
-    
-    const imageUrls = await fetchImagesForRecord(record, imageCache);
-    if (!state.ui.cardImageIndexes.has(record.id)) {
-        state.ui.cardImageIndexes.set(record.id, 0);
-    }
-    let currentIndex = state.ui.cardImageIndexes.get(record.id);
-    modalContent.style.backgroundImage = `url('${imageUrls[currentIndex] || ''}')`;
+
+    // Build a new interactive card for the modal
+    const modalCard = await createInteractiveCard(record, imageCache);
+
+    // Clear the modal body and append the new card
+    modalBody.innerHTML = '';
+    modalBody.appendChild(modalCard);
+
+    // Style the modal and card for the detailed view
+    modalContent.style.backgroundImage = modalCard.style.backgroundImage;
     modalOverlay.style.display = 'flex';
-    
-    const modalPriceEl = modalBody.querySelector('.price');
-    function updateModalPrice() {
-        const unitPrice = getRecordPrice(record, selectedOptionIndex);
-        if (!isNaN(unitPrice)) {
-            modalPriceEl.innerHTML = `$${unitPrice.toFixed(2)} <span style="font-size: 0.7em; font-weight: normal;">${fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''}</span>`;
-        }
-    }
-    
-    updateModalPrice();
-    modalBody.querySelectorAll('select, input, button, .heart-icon').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
 
-    const leftArrow = modalBody.querySelector('.gallery-arrow.left');
-    const rightArrow = modalBody.querySelector('.gallery-arrow.right');
-    if (imageUrls.length > 1) {
-        leftArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + imageUrls.length) % imageUrls.length;
-            state.ui.cardImageIndexes.set(record.id, currentIndex);
-            modalContent.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-        rightArrow.addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % imageUrls.length;
-            state.ui.cardImageIndexes.set(record.id, currentIndex);
-            modalContent.style.backgroundImage = `url('${imageUrls[currentIndex]}')`;
-        });
-    } else {
-        leftArrow.style.display = 'none';
-        rightArrow.style.display = 'none';
-    }
-
-    const modalHeart = modalBody.querySelector('.heart-icon');
-    modalHeart.addEventListener('click', (e) => {
-        e.stopPropagation();
-        recordStateForUndo();
-        const currentCompositeId = modalHeart.dataset.compositeId;
-        if (state.cart.items.has(currentCompositeId)) {
-            state.cart.items.delete(currentCompositeId);
-            modalHeart.classList.remove('hearted');
-        } else {
-            state.cart.items.set(currentCompositeId, itemInfo);
-            modalHeart.classList.add('hearted');
-        }
-        updateRender();
-    });
-    const modalOptions = modalBody.querySelector('#modal-options');
-    if (modalOptions) {
-        modalOptions.addEventListener('change', (e) => {
-            recordStateForUndo();
-            selectedOptionIndex = e.target.value;
-            updateModalPrice();
-            const newCompositeId = options.length > 0 ? `${record.id}-${selectedOptionIndex}` : record.id;
-            const newItemInfo = { quantity: parseInt(modalBody.querySelector('#modal-quantity').value), requests: '' };
-        
-            if (state.cart.items.has(compositeId)) {
-                state.cart.items.delete(compositeId);
-                state.cart.items.set(newCompositeId, newItemInfo);
-            } else if (state.cart.lockedItems.has(compositeId)) {
-                state.cart.lockedItems.delete(compositeId);
-                state.cart.lockedItems.set(newCompositeId, newItemInfo);
-            }
-            modalHeart.dataset.compositeId = newCompositeId;
-            updateRender();
-        });
-    }
-
-    const modalQuantity = modalBody.querySelector('#modal-quantity');
-    modalQuantity.addEventListener('change', () => {
-        recordStateForUndo();
-        const min = parseInt(modalQuantity.min);
-        if (parseInt(modalQuantity.value) < min) modalQuantity.value = min;
-        itemInfo.quantity = parseInt(modalQuantity.value);
-        if (state.cart.items.has(compositeId)) {
-            state.cart.items.set(compositeId, itemInfo);
-        } else if (state.cart.lockedItems.has(compositeId)) {
-            state.cart.lockedItems.set(compositeId, itemInfo);
-        }
-        updateRender();
-    });
-    const modalPlus = modalBody.querySelector('.quantity-btn.plus');
-    const modalMinus = modalBody.querySelector('.quantity-btn.minus');
-    if (modalPlus) modalPlus.addEventListener('click', () => { modalQuantity.value = parseInt(modalQuantity.value) + 1; modalQuantity.dispatchEvent(new Event('change')); });
-    if (modalMinus) modalMinus.addEventListener('click', () => { const current = parseInt(modalQuantity.value); const min = parseInt(modalQuantity.min); if (current > min) { modalQuantity.value = current - 1; modalQuantity.dispatchEvent(new Event('change')); } });
+    // Add a close listener to the overlay
     modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay || e.target.classList.contains('modal-close')) {
+        if (e.target === modalOverlay) {
             modalOverlay.style.display = 'none';
         }
     });
