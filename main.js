@@ -1,12 +1,12 @@
 /*
- * Version: 2.1.1
+ * Version: 2.2.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.1.1 - 2025-08-23
- * - Refactored all click handlers into a single, unified event listener.
- * - Restored missing storeSession and getStoredSessions functions.
+ * v2.2.0 - 2025-08-23
+ * - Made the single event listener context-aware.
+ * - Interactions (explode, navigate, etc.) now work correctly inside the detail modal.
  */
 
 import { state } from './state.js';
@@ -67,19 +67,18 @@ async function initialize() {
 function setupEventListeners() {
     ui.headerEventNameInput.addEventListener('change', () => { ui.updateHeader(); });
     
-    // The single, unified click listener for all card interactions.
     document.body.addEventListener('click', async (e) => {
+        const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-        const cardBody = e.target.closest('.event-card');
+        const cardBody = e.target.closest('.event-card:not(.modal-card)'); // Clicks on catalog cards
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = e.target.closest('.remove-btn');
 
         // --- Interaction Router ---
 
-        // 1. Handle REMOVE from favorites
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
@@ -88,12 +87,11 @@ function setupEventListeners() {
             return;
         }
 
-        // 2. Handle HEART click (in catalog or modal)
         if (heartIcon) {
             e.stopPropagation();
-            const card = heartIcon.closest('.event-card');
-            if (!card) return; // Ignore clicks on favorite item hearts for now
-            const recordId = card.dataset.recordId;
+            const currentCard = heartIcon.closest('.event-card');
+            if (!currentCard) return; 
+            const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -103,8 +101,8 @@ function setupEventListeners() {
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
 
             if (!isGrouping && rawOptions.length > 0) {
-                const selectedIndex = card.querySelector('.configure-options').value;
-                const note = card.querySelector('.item-note').value;
+                const selectedIndex = currentCard.querySelector('.configure-options').value;
+                const note = currentCard.querySelector('.item-note').value;
                 itemInfo.selectedOptionIndex = parseInt(selectedIndex, 10);
                 itemInfo.note = note;
             }
@@ -120,10 +118,8 @@ function setupEventListeners() {
             return;
         }
 
-        // 3. Handle PARENT button click (Go Up)
-        if (parentBtn) {
+        if (parentBtn && card) {
             e.stopPropagation();
-            const card = parentBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const parentId = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0];
@@ -136,27 +132,31 @@ function setupEventListeners() {
             return;
         }
         
-        // 4. Handle EXPLODE button click
-        if (explodeBtn) {
+        if (explodeBtn && card) {
             e.stopPropagation();
-            const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-
+            const container = card.closest('#modal-body') || ui.catalogContainer;
+            
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
-
-            ui.renderRecords(children, imageCache);
             
-            const implodeButton = document.createElement('div');
-            implodeButton.id = 'implode-container';
-            implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
-            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
+            container.innerHTML = ''; // Clear the correct container
+            for (const child of children) {
+                const childCard = await ui.createInteractiveCard(child, imageCache);
+                container.appendChild(childCard);
+            }
+            
+            if (container === ui.catalogContainer) {
+                const implodeButton = document.createElement('div');
+                implodeButton.id = 'implode-container';
+                implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
+                container.insertAdjacentElement('beforebegin', implodeButton);
+            }
             return;
         }
 
-        // 5. Handle IMPLODE button click
         if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
@@ -164,26 +164,18 @@ function setupEventListeners() {
             return;
         }
 
-        // 6. Handle CARD BODY click (in catalog)
-        if (cardBody) {
-            const recordId = cardBody.dataset.recordId;
-            await ui.openDetailModal(recordId, imageCache);
-            return;
-        }
-
-        // 7. Handle FAVORITE ITEM click (in carousel)
-        if (favoriteItem) {
-            const recordId = favoriteItem.dataset.recordId;
+        if (cardBody || favoriteItem) {
+            const recordId = (cardBody || favoriteItem).dataset.recordId;
             await ui.openDetailModal(recordId, imageCache);
             return;
         }
     });
 
-    // Listener for configuration and navigation dropdowns
     document.body.addEventListener('change', async (e) => {
-        // Handle configuration changes
+        const card = e.target.closest('.event-card');
+        if (!card) return;
+
         if (e.target.classList.contains('configure-options')) {
-            const card = e.target.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = ui.parseOptions(record.fields.Options);
@@ -204,12 +196,9 @@ function setupEventListeners() {
             card.querySelector('.description').textContent = selectedOption.description || record.fields.Description || '';
         }
 
-        // Handle navigation changes
         if (e.target.classList.contains('navigate-options')) {
-            const card = e.target.closest('.event-card');
             const childName = e.target.value;
             if (!childName) return;
-    
             const childRecord = state.records.all.find(r => r.fields.Name === childName);
             if (childRecord) {
                 const newCard = await ui.createInteractiveCard(childRecord, imageCache);
