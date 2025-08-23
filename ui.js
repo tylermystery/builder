@@ -313,7 +313,7 @@ export async function renderRecords(recordsToRender, imageCache) {
             continue;
         }
 
-        const eventCard = await createEventCardElement(record, imageCache);
+        const eventCard = await createInteractiveCard(record, imageCache);
         if (eventCard) {
             catalogContainer.appendChild(eventCard);
         }
