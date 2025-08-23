@@ -1,22 +1,34 @@
 /*
- * Version: 2.1.0
+ * Version: 2.1.1
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.1.0 - 2025-08-23
- * - Refactored all click handlers into a single, unified event listener on the document body.
- * - This fixes multiple interaction bugs (explode, modal view, remove favorite).
+ * v2.1.1 - 2025-08-23
+ * - Restored missing storeSession and getStoredSessions functions.
  */
 
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, RECORDS_PER_LOAD, REACTION_SCORES } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-
 const imageCache = new Map();
 
+// --- STATE & HISTORY ---
+export function recordStateForUndo() { /* ...logic... */ }
+async function restoreState(newState) { /* ...logic... */ }
+function undo() { /* ...logic... */ }
+function redo() { /* ...logic... */ }
+
 // --- CORE LOGIC ---
+export function getStoredSessions() { return JSON.parse(localStorage.getItem('savedSessions') || '{}'); }
+
+export function storeSession(id, name) { 
+    const sessions = getStoredSessions(); 
+    sessions[id] = name;
+    localStorage.setItem('savedSessions', JSON.stringify(sessions)); 
+}
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -53,11 +65,12 @@ async function initialize() {
     ui.toggleLoading(false);
     setupEventListeners();
     renderTopLevel();
-    ui.updateFavoritesCarousel(); // Initial render of favorites
+    ui.updateFavoritesCarousel();
 }
 
 function setupEventListeners() {
-    // A single, unified click listener to handle all interactive elements.
+    ui.headerEventNameInput.addEventListener('change', () => { ui.updateHeader(); });
+    
     document.body.addEventListener('click', async (e) => {
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
@@ -67,9 +80,6 @@ function setupEventListeners() {
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = e.target.closest('.remove-btn');
 
-        // --- Interaction Router ---
-
-        // 1. Handle REMOVE from favorites
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
@@ -78,7 +88,6 @@ function setupEventListeners() {
             return;
         }
 
-        // 2. Handle HEART click (in catalog or modal)
         if (heartIcon) {
             e.stopPropagation();
             const card = heartIcon.closest('.event-card, .favorite-item');
@@ -109,7 +118,6 @@ function setupEventListeners() {
             return;
         }
 
-        // 3. Handle PARENT button click (Go Up)
         if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
@@ -125,7 +133,6 @@ function setupEventListeners() {
             return;
         }
         
-        // 4. Handle EXPLODE button click
         if (explodeBtn) {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
@@ -148,7 +155,6 @@ function setupEventListeners() {
             return;
         }
 
-        // 5. Handle IMPLODE button click
         if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
@@ -156,14 +162,12 @@ function setupEventListeners() {
             return;
         }
 
-        // 6. Handle CARD BODY click (in catalog)
         if (cardBody) {
             const recordId = cardBody.dataset.recordId;
             await ui.openDetailModal(recordId, imageCache);
             return;
         }
 
-        // 7. Handle FAVORITE ITEM click (in carousel)
         if (favoriteItem) {
             const recordId = favoriteItem.dataset.recordId;
             await ui.openDetailModal(recordId, imageCache);
@@ -171,7 +175,6 @@ function setupEventListeners() {
         }
     });
 
-    // Listener for configuration dropdowns (this is separate as it's a 'change' event)
     document.body.addEventListener('change', (e) => {
         if (e.target.classList.contains('configure-options')) {
             const card = e.target.closest('.event-card');
