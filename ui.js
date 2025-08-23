@@ -1,13 +1,11 @@
 /*
- * Version: 2.2.0
+ * Version: 2.2.1
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.2.0 - 2025-08-23
- * - Added real-time price/description updates to configurable cards.
- * - Added a notes field to Bookable Item cards.
- * - Updated favorite cards to display saved notes and configurations.
+ * v2.2.1 - 2025-08-23
+ * - Restored filterControls constant to fix ReferenceError in toggleLoading.
  */
 
 import { state } from './state.js';
@@ -31,6 +29,7 @@ const favoritesSection = document.getElementById('favorites-section');
 const modalOverlay = document.getElementById('edit-modal');
 const modalContent = document.querySelector('#edit-modal .modal-content');
 const modalBody = document.getElementById('modal-body');
+const filterControls = document.getElementById('filter-controls'); // This line was restored
 
 // --- HELPER FUNCTIONS ---
 export function parseOptions(optionsText) {
@@ -251,10 +250,6 @@ export function updateTotalCost() {
     totalCostEl.textContent = formattedTotal;
 }
 
-export function populateFilter() { /* ...logic... */ }
-
-export function collapseHeaderOnScroll() { /* ...logic... */ }
-
 export async function openDetailModal(recordId, imageCache) {
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) return;
@@ -276,23 +271,4 @@ export async function openDetailModal(recordId, imageCache) {
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
     filterControls.style.display = show ? 'none' : 'flex';
-}
-
-export function updateHeaderSummary() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
-    const date = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    const headcount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 0;
-    const totalCost = document.getElementById('total-cost').textContent;
-
-    const summaryParts = [];
-    summaryParts.push(`<strong>${eventName}</strong>`);
-    if (date) {
-        summaryParts.push(`📅 ${date}`);
-    }
-    if (headcount > 0) {
-        summaryParts.push(`👤 ${headcount}`);
-    }
-    summaryParts.push(`- ${totalCost}`);
-
-    headerSummary.innerHTML = summaryParts.join(' | ');
 }
