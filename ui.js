@@ -1,12 +1,11 @@
 /*
- * Version: 2.3.0
+ * Version: 2.4.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.3.0 - 2025-08-23
- * - Removed all event listener logic from createInteractiveCard.
- * - All interaction logic is now handled by a unified listener in main.js.
+ * v2.4.0 - 2025-08-23
+ * - Removed openDetailModal function and associated constants to simplify the UI.
  */
 
 import { state } from './state.js';
@@ -21,9 +20,6 @@ export const headerEventNameInput = document.getElementById('header-event-name')
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
-const modalOverlay = document.getElementById('edit-modal');
-const modalContent = document.querySelector('#edit-modal .modal-content');
-const modalBody = document.getElementById('modal-body');
 const filterControls = document.getElementById('filter-controls');
 
 // --- HELPER FUNCTIONS ---
@@ -188,22 +184,6 @@ export function updateTotalCost() {
     });
 
     totalCostEl.textContent = `$${total.toFixed(2)}`;
-}
-
-export async function openDetailModal(recordId, imageCache) {
-    const record = state.records.all.find(r => r.id === recordId);
-    if (!record) return;
-    const modalCard = await createInteractiveCard(record, imageCache);
-    modalBody.innerHTML = '';
-    modalBody.appendChild(modalCard);
-    modalContent.style.backgroundImage = modalCard.style.backgroundImage;
-    modalOverlay.style.display = 'flex';
-
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
-            modalOverlay.style.display = 'none';
-        }
-    });
 }
 
 export function toggleLoading(show) {
