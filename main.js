@@ -1,9 +1,6 @@
 /*
- * Version: 2.5.0 (Polished)
- * Last Modified: 2025-08-23
  * This is the main application entry point and orchestrator.
- * It initializes the app, sets up the main event listeners, and manages the overall flow.
- * It imports from specialist modules (api.js, ui.js) but is not imported by them.
+ * It initializes the app and sets up the main event listeners.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
