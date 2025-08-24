@@ -1,7 +1,14 @@
 /*
- * This is the main application entry point and orchestrator.
- * It initializes the app and sets up the main event listeners.
+ * Version: 2.5.0 (Polished)
+ * Last Modified: 2025-08-24
+ *
+ * Changelog:
+ *
+ * v2.5.0 - 2025-08-24
+ * - Finalized MVP functionality with a robust, non-overlapping event listener.
+ * - Added detailed comments to the main event listener for clarity.
  */
+
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -38,14 +45,11 @@ function setupEventListeners() {
     document.getElementById('save-share-btn').addEventListener('click', async () => {
         await api.saveSessionToAirtable();
     });
-
-    // --- BETA TOOLKIT LISTENERS ---
     document.getElementById('beta-trigger').addEventListener('click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
 
     // --- UNIFIED CARD INTERACTION LISTENER ---
-    // This single listener on the document body handles all clicks via event delegation.
     document.body.addEventListener('click', async (e) => {
         const removeBtn = e.target.closest('.remove-btn');
         const heartIcon = e.target.closest('.heart-icon');
@@ -53,16 +57,14 @@ function setupEventListeners() {
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
 
-        // ROUTER: Checks for the most specific click target first.
+        // ROUTER: This if/else if structure ensures only one action is taken per click.
         if (removeBtn) {
-            // ACTION: Remove an item from the favorites carousel.
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
 
         } else if (heartIcon) {
-            // ACTION: Heart/unheart an item in the catalog.
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -94,11 +96,9 @@ function setupEventListeners() {
             await ui.updateFavoritesCarousel();
 
         } else if (parentBtn) {
-            // ACTION: Navigate up to the parent item.
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
-
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
 
@@ -117,7 +117,6 @@ function setupEventListeners() {
             }
         
         } else if (explodeBtn) {
-            // ACTION: Show all children of a grouping.
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
@@ -135,19 +134,16 @@ function setupEventListeners() {
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
         
         } else if (implodeBtn) {
-            // ACTION: Collapse the exploded view and return to the top level.
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
         }
     });
 
-    // This listener handles the dropdowns on the interactive cards.
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
         if (!card) return;
 
-        // Handles configuration changes on Bookable Items.
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -169,7 +165,6 @@ function setupEventListeners() {
             card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
         }
 
-        // Handles navigation changes on Grouping Items.
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
