@@ -1,26 +1,26 @@
 /*
- * Version: 2.0.0
+ * Version: 2.0.1
  * Last Modified: 2025-08-24
  *
  * Changelog:
  *
+ * v2.0.1 - 2025-08-24
+ * - Changed parseOptions import to utils.js to fix circular dependency.
+ *
  * v2.0.0 - 2025-08-24
  * - Implemented "Fork on Edit" logic in saveSessionToAirtable.
- * - loadSessionFromAirtable now sets session.isOwned to false.
- *
- * v1.6.1 - 2025-08-23
- * - Updated imports to point to new session.js file to fix circular dependency.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './ui.js';
+import { parseOptions } from './utils.js'; // IMPORT FIXED
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
+// ... (rest of the file is unchanged)
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -29,8 +29,6 @@ export async function loadSessionFromAirtable(sessionId) {
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         
-        // When loading from a URL, the user is a viewer, not the owner.
-        // They will "fork" if they make an edit.
         state.session.isOwned = false; 
 
         state.session.collaborators = record.fields.Collaborators ?
@@ -51,10 +49,6 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
-    // --- FORK ON EDIT LOGIC ---
-    // If a session exists but the current user doesn't own it,
-    // this is a "fork" action. We reset the session ID to null
-    // to force the creation of a *new* record.
     if (state.session.id && !state.session.isOwned) {
         state.session.id = null;
     }
@@ -79,9 +73,9 @@ export async function saveSessionToAirtable() {
         }
         const result = await response.json();
         
-        if (!isUpdate) { // This runs for both a new session and a forked session
+        if (!isUpdate) {
             state.session.id = result.records[0].id;
-            state.session.isOwned = true; // The user now owns this new (or forked) session
+            state.session.isOwned = true; 
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
         }
         
@@ -94,7 +88,6 @@ export async function saveSessionToAirtable() {
 }
 
 export async function fetchAllRecords() {
-    // ... (rest of the file is unchanged)
     let records = [];
     let offset = null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
@@ -114,11 +107,11 @@ export async function fetchAllRecords() {
 }
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    // ... (rest of the file is unchanged)
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
     }
+
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -133,13 +126,17 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
             while (childTags.length < 4) {
                 childTags.push('default-event-image');
             }
+
             const collageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_600,h_520,g_auto/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzBdfQ==/fl_layer_apply,g_north_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzFdfQ==/fl_layer_apply,g_north_east,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzJdfQ==/fl_layer_apply,g_south_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzNdfQ==/fl_layer_apply,g_south_east,w_0.5,h_0.5,c_fill/default-event-image.jpg`.replace(/\s/g, '');
+
             imageCache.set(cacheKey, [collageUrl]);
             return [collageUrl];
         }
     }
+
     const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
     const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default-event-image';
+    
     const cloudinaryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/list/${encodeURIComponent(primaryTag)}.json`;
     try {
         const response = await fetch(cloudinaryUrl);
@@ -148,6 +145,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         if (!data.resources || data.resources.length === 0) {
            return [ultimateFallbackUrl];
         }
+       
         const imageUrls = data.resources.map(image =>
             `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${image.version}/${image.public_id}.${image.format}`
         );
