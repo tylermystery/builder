@@ -1,8 +1,12 @@
-// FILE: utils.js
 /*
- * This is a shared utility module.
- * It should not have any dependencies on other project files.
- * It contains common helper functions used by multiple modules.
+ * Version: 1.0.0
+ * Last Modified: 2025-08-24
+ *
+ * Changelog:
+ *
+ * v1.0.0 - 2025-08-24
+ * - Initial file created to break circular dependencies.
+ * - Moved parseOptions function from ui.js.
  */
 
 export function parseOptions(optionsText) {
@@ -25,26 +29,4 @@ export function parseOptions(optionsText) {
         });
         return option;
     });
-}
-
-/**
- * Determines if a record is a "Grouping" by checking if its options are other records.
- * @param {Object} record - The Airtable record object.
- * @param {Array<Object>} allRecords - The complete list of all records.
- * @returns {boolean} True if the record is a grouping.
- */
-export function isGrouping(record, allRecords) {
-    if (!record || !record.fields) return false;
-    const rawOptions = parseOptions(record.fields.Options);
-    const allRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    return rawOptions.some(opt => allRecordNames.has(opt.name));
-}
-
-/**
- * Generates an acronym from a string (e.g., "Team Building" -> "TB").
- * @param {string} name - The string to convert.
- * @returns {string} The generated acronym.
- */
-export function getInitials(name = '') {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
 }
