@@ -6,11 +6,15 @@
  *
  * v2.6.0 - 2025-08-23
  * - Updated calls to fetchImagesForRecord to pass allRecords for collage context.
+/*
+ * This module is responsible for all direct DOM manipulation.
+ * It creates, updates, and removes elements from the page.
+ * It should not import from main.js.
  */
-
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
+import { parseOptions } from './utils.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
