@@ -1,4 +1,3 @@
-// FILE: utils.js
 /*
  * This is a shared utility module.
  * It should not have any dependencies on other project files.
