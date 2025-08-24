@@ -1,11 +1,12 @@
 /*
- * Version: 2.4.3
+ * Version: 2.4.4
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.3 - 2025-08-23
- * - Fixed and robustified the "Go Up" (parent button) logic.
+ * v2.4.4 - 2025-08-23
+ * - Refactored the main click listener to use a robust if/else if structure.
+ * - Correctly implemented the "Go Up" (parent button) functionality.
  */
 
 import { state } from './state.js';
@@ -49,26 +50,23 @@ function setupEventListeners() {
     document.getElementById('beta-trigger').addEventListener('click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
-    // ... other beta listeners would go here
 
     // --- UNIFIED CARD INTERACTION LISTENER ---
     document.body.addEventListener('click', async (e) => {
+        const removeBtn = e.target.closest('.remove-btn');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-        const cardBody = e.target.closest('.event-card');
-        const removeBtn = e.target.closest('.remove-btn');
 
+        // This router ensures only one action is taken per click.
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (heartIcon) {
+        } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -98,10 +96,8 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (parentBtn) {
+        } else if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
@@ -118,28 +114,24 @@ function setupEventListeners() {
                     card.replaceWith(newCard);
                 }
             }
-            return;
-        }
         
-        if (explodeBtn && cardBody) {
+        } else if (explodeBtn) {
             e.stopPropagation();
-            const recordId = cardBody.dataset.recordId;
+            const card = explodeBtn.closest('.event-card');
+            const recordId = card.dataset.recordId;
             const children = state.records.all.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
             
             ui.renderRecords(children, imageCache);
             
             const implodeButton = document.createElement('div');
             implodeButton.id = 'implode-container';
-            implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-            return;
-        }
-
-        if (implodeBtn) {
+        
+        } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
-            return;
         }
     });
 
@@ -151,7 +143,7 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0--9.]/g, ""));
             
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
@@ -171,7 +163,7 @@ function setupEventListeners() {
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
-            const childRecord = state.records.all.find(r => r.id === childName); // Bug was here, should search by name
+            const childRecord = state.records.all.find(r => r.fields.Name === childName);
             if (childRecord) {
                 const newCard = await ui.createInteractiveCard(childRecord, imageCache);
                 card.replaceWith(newCard);
