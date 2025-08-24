@@ -1,11 +1,12 @@
+// FILE: api.js
 /*
- * This module is responsible for all network requests.
- * It should not import from main.js.
+ * This module is responsible for all network requests to external services (Airtable, Cloudinary).
+ * It should not import from main.js. It can import from utility files like utils.js or session.js.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
+import { parseOptions, isGrouping, getInitials } from './utils.js';
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
