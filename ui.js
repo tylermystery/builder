@@ -1,19 +1,17 @@
 /*
- * Version: 2.4.0
+ * Version: 2.5.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.0 - 2025-08-23
- * - Added quantity selector back to Bookable Item cards.
- * - Updated favorite cards to display quantity.
- * - Upgraded updateTotalCost to correctly factor in quantity and pricing type.
+ * v2.5.0 - 2025-08-23
+ * - Grouping cards now display a calculated price range of all descendant items.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { getRecordPrice } from './main.js';
+import { getRecordPrice, getGroupPriceRange } from './main.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -99,12 +97,19 @@ export async function createInteractiveCard(record, imageCache) {
     let optionsControlHTML = '';
     let notesHTML = '';
     let quantitySelectorHTML = '';
+    let priceHTML = '';
 
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options">
             <option value="">Select an option...</option>
             ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
         </select>`;
+        const range = getGroupPriceRange(record);
+        if (range) {
+            priceHTML = range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+        } else {
+            priceHTML = 'From $0.00';
+        }
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         optionsControlHTML = `<select class="options-selector configure-options">
@@ -117,9 +122,10 @@ export async function createInteractiveCard(record, imageCache) {
                 <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
                 <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
             </div>`;
+        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        priceHTML = `$${initialPrice.toFixed(2)}`;
     }
 
-    const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     const isHearted = state.cart.items.has(recordId);
 
     eventCard.innerHTML = `
@@ -133,12 +139,11 @@ export async function createInteractiveCard(record, imageCache) {
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
-                <div class="price">$${initialPrice.toFixed(2)}</div>
+                <div class="price">${priceHTML}</div>
                 ${quantitySelectorHTML}
             </div>
         </div>`;
     
-    // Add listeners for quantity buttons
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -152,7 +157,7 @@ export async function createInteractiveCard(record, imageCache) {
             }
         });
     }
-
+    
     const imageUrls = await fetchImagesForRecord(record, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
@@ -162,7 +167,6 @@ export async function renderRecords(recordsToRender, imageCache) {
     catalogContainer.innerHTML = '';
     const implodeContainer = document.getElementById('implode-container');
     if (implodeContainer) implodeContainer.remove();
-
     if (recordsToRender.length === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
@@ -205,27 +209,22 @@ export function updateHeader() {
 export function updateTotalCost() {
     let total = 0;
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
-
     allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-
         const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
-        
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-
         let itemCost;
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
-            itemCost = unitPrice; // Flat price
+            itemCost = unitPrice;
         }
         total += itemCost;
     });
-
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 }
 
