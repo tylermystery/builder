@@ -1,11 +1,11 @@
 /*
- * Version: 2.3.1
+ * Version: 2.4.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.3.1 - 2025-08-23
- * - Updated hearting logic to save quantity from Bookable Item cards.
+ * v2.4.0 - 2025-08-23
+ * - Added getGroupPriceRange function to calculate min/max price of a group's children.
  */
 
 import { state } from './state.js';
@@ -45,6 +45,49 @@ export function getRecordPrice(record, optionIndex = null) {
         }
     }
     return price;
+}
+
+function getDescendantBookableItems(recordId, allRecords) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+
+    for (const child of children) {
+        const rawOptions = ui.parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
+export function getGroupPriceRange(record) {
+    const descendants = getDescendantBookableItems(record.id, state.records.all);
+    if (descendants.length === 0) return null;
+
+    let minPrice = Infinity;
+    let maxPrice = -Infinity;
+
+    descendants.forEach(item => {
+        const options = ui.parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (options.length > 0) {
+            options.forEach((opt, index) => {
+                const price = getRecordPrice(item, index);
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            });
+        } else {
+            const price = getRecordPrice(item);
+            if (price < minPrice) minPrice = price;
+            if (price > maxPrice) maxPrice = price;
+        }
+    });
+    
+    return { min: minPrice, max: maxPrice };
 }
 
 function renderTopLevel() {
@@ -98,7 +141,6 @@ function setupEventListeners() {
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
         const cardBody = e.target.closest('.event-card');
-        const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = e.target.closest('.remove-btn');
 
         if (removeBtn) {
@@ -121,11 +163,9 @@ function setupEventListeners() {
             const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
             
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
-
             if (!isGrouping) {
                 const noteEl = currentCard.querySelector('.item-note');
                 const quantityEl = currentCard.querySelector('.quantity-input');
-
                 if (rawOptions.length > 0) {
                     itemInfo.selectedOptionIndex = parseInt(currentCard.querySelector('.configure-options').value, 10);
                 }
@@ -162,7 +202,6 @@ function setupEventListeners() {
             e.stopPropagation();
             const recordId = cardBody.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const container = cardBody.closest('#modal-body') || ui.catalogContainer;
             
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
@@ -170,12 +209,10 @@ function setupEventListeners() {
             
             ui.renderRecords(children, imageCache);
             
-            if (container === ui.catalogContainer) {
-                const implodeButton = document.createElement('div');
-                implodeButton.id = 'implode-container';
-                implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
-                document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-            }
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
+            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
             return;
         }
 
