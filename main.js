@@ -1,11 +1,11 @@
 /*
- * Version: 2.4.2
+ * Version: 2.4.3
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.2 - 2025-08-23
- * - Fixed circular dependency by moving session logic to a new session.js file.
+ * v2.4.3 - 2025-08-23
+ * - Fixed and robustified the "Go Up" (parent button) logic.
  */
 
 import { state } from './state.js';
@@ -101,16 +101,22 @@ function setupEventListeners() {
             return;
         }
 
-        if (parentBtn && cardBody) {
+        if (parentBtn) {
             e.stopPropagation();
-            const recordId = cardBody.dataset.recordId;
+            const card = parentBtn.closest('.event-card');
+            if (!card) return;
+
+            const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const parentId = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0];
-            const parentRecord = state.records.all.find(r => r.id === parentId);
-            
-            if (parentRecord) {
-                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
-                cardBody.replaceWith(newCard);
+            const parentIdArray = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+
+            if (parentIdArray && parentIdArray.length > 0) {
+                const parentId = parentIdArray[0];
+                const parentRecord = state.records.all.find(r => r.id === parentId);
+                if (parentRecord) {
+                    const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                    card.replaceWith(newCard);
+                }
             }
             return;
         }
@@ -165,7 +171,7 @@ function setupEventListeners() {
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
-            const childRecord = state.records.all.find(r => r.fields.Name === childName);
+            const childRecord = state.records.all.find(r => r.id === childName); // Bug was here, should search by name
             if (childRecord) {
                 const newCard = await ui.createInteractiveCard(childRecord, imageCache);
                 card.replaceWith(newCard);
