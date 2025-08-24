@@ -14,17 +14,24 @@ A unique, shareable URL is automatically generated and updated as a user builds 
 * **Sharing:** A user can share their plan at any time by simply copying and sharing the URL from their browser.
 * **Fork on Edit:** When a second user opens a shared URL, they see the original plan. The moment this new user makes a change, the system automatically "forks" the plan by creating a brand new session and updating their URL. This prevents collaborators from overwriting each other's work in the MVP and ensures the original shared plan is not altered.
 
+### Catalog Loading Methodology
+The catalog loading process is designed for a smooth and predictable user experience.
+* The application initially displays a "Loading catalog..." message.
+* It fetches all event records from the Airtable database using an asynchronous API call.
+* Once the data is loaded successfully, the loading message is hidden and the interactive catalog elements are displayed.
+* The initial view shows only the top-level "Grouping" items for the user to begin their exploration.
+
 ### Hierarchical Catalog Display
 The catalog is organized as a hierarchy of interactive items. Items can be either **Groupings** (e.g., "Activities") or final **Bookable Items** (e.g., "Escape Room"). This structure allows users to navigate from broad categories to specific details.
 
 ### The Interactive Card
 Every item in the catalog is presented on a versatile "Interactive Card". The card's appearance and functionality adapt based on the item it represents. All cards feature a **Heart (❤️) icon** for universal selection.
 
-### Card Interaction Model
-Users can explore the catalog in two main ways:
-* **Focused Exploration:** A Grouping card has an **Options Control (⚙️)** that transforms the card to display a selected child item, and a **Parent Button (⬆️)** to navigate back up the hierarchy.
-* **Broad Exploration:** A Grouping card features an **Explode (💥) button** which replaces the current view with a grid of its child options. A corresponding **Implode ( اجمع) button** then appears, and clicking it collapses the grid and returns the user to the top-level catalog view.
-All card-based click interactions are managed by a single, unified event handler that prioritizes specific button clicks over general card clicks to ensure a non-overlapping and predictable user experience.
+### Unified Card Interaction Model
+All card-based click interactions are managed by a single, unified event handler on the document's body.
+* The handler uses event delegation to capture all clicks and identify the target element (e.g., a button or icon).
+* It acts as a router, prioritizing specific button clicks (like the Heart, Explode, or Parent buttons) over a general card click to ensure a predictable user experience.
+* This methodology ensures that all interactions are handled consistently and efficiently, regardless of where the catalog item is displayed.
 
 ### Customizable Bottom Layer
 When a card represents a final **Bookable Item**, its **Options Control (⚙️)** switches from navigation to configuration, displaying specific variations. A field for adding custom notes and a quantity selector are also available.
