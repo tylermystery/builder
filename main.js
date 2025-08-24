@@ -1,12 +1,12 @@
 /*
- * Version: 2.4.8
+ * Version: 2.4.9
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.8 - 2025-08-23
- * - Fixed a critical regression in the "Explode" button logic.
- * - The button now correctly finds and displays child items.
+ * v2.4.9 - 2025-08-23
+ * - Rewrote Explode and Go-Up button logic to be consistent with dropdown navigation.
+ * - Navigation is now robust and based on the parent's Options field.
  */
 
 import { state } from './state.js';
@@ -60,15 +60,14 @@ function setupEventListeners() {
         const cardBody = e.target.closest('.event-card');
         const removeBtn = e.target.closest('.remove-btn');
 
+        // This router ensures only one action is taken per click.
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (heartIcon) {
+        } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -98,35 +97,38 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (parentBtn) {
+        } else if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
 
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const parentIdArray = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
-            if (parentIdArray && parentIdArray.length > 0) {
-                const parentId = parentIdArray[0];
-                const parentRecord = state.records.all.find(r => r.id === parentId);
-                if (parentRecord) {
-                    const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
-                    card.replaceWith(newCard);
-                }
+            // NEW LOGIC: Find the parent by searching for which record lists this one as an option.
+            const parentRecord = state.records.all.find(p => {
+                const options = ui.parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+                return options.some(opt => opt.name === record.fields.Name);
+            });
+
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                card.replaceWith(newCard);
+            } else {
+                // If no parent is found (e.g., after an explode), go to the top level.
+                const implodeContainer = document.getElementById('implode-container');
+                if (implodeContainer) implodeContainer.remove();
+                renderTopLevel();
             }
-            return;
-        }
         
-        if (explodeBtn) {
+        } else if (explodeBtn) {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
+            // CORRECTED LOGIC: Find children based on the parent's Options field.
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
@@ -137,14 +139,11 @@ function setupEventListeners() {
             implodeButton.id = 'implode-container';
             implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-            return;
-        }
-
-        if (implodeBtn) {
+        
+        } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
-            return;
         }
     });
 
