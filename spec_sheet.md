@@ -4,7 +4,6 @@
 This document outlines the features of an interactive event catalog. The core application provides a dynamic, hierarchical interface for browsing a catalog and building an event plan. Key features include a consolidated header for event details, a vertically scrolling catalog of "Interactive Cards," and a new Beta Toolkit for advanced features.
 
 ## Core Functionality (MVP)
-
 ### Airtable Integration
 The application's data is powered by an Airtable database. A serverless function is specified for securing the API token, but this is currently deferred.
 
@@ -27,6 +26,11 @@ The catalog is organized as a hierarchy of interactive items. Items can be eithe
 ### The Interactive Card
 Every item in the catalog is presented on a versatile "Interactive Card". The card's appearance and functionality adapt based on the item it represents. All cards feature a **Heart (❤️) icon** for universal selection.
 
+#### Automated Image Tagging
+Card images are loaded dynamically from a media library (Cloudinary) based on an automated, multi-tag system. All tag matching is case-insensitive and ignores differences between spaces and hyphens.
+* **Default Item Image:** The image for an item is found by searching for a single tag generated from its unique name (e.g., "Fort Battle" uses the tag `fort-battle`).
+* **Option-Specific Images:** When a user selects an option, the system performs a search for images that contain **both** the item's tag **and** the option's tag (e.g., searching for tags `fort-battle` AND `classic`). If no images matching both tags are found, the application falls back to the default item image.
+
 ### Unified Card Interaction Model
 All card-based click interactions are managed by a single, unified event handler on the document's body.
 * The handler uses event delegation to capture all clicks and identify the target element (e.g., a button or icon).
@@ -43,4 +47,4 @@ A sticky header contains all primary event details and controls, including a sta
 A simple set of controls allows users to refine the catalog view by **Search by name** and **Price**. A "Sort by" dropdown controls the order of the main catalog.
 
 ## Beta Toolkit
-A subtle "beta" subscript next to the tool name can be clicked to reveal a toolkit with advanced, toggleable features. These features include **Collab Mode**, **Event Planner Mode**, and **History Mode**.
+A subtle "beta" subscript next to the tool name can be-clicked to reveal a toolkit with advanced, toggleable features. These features include **Collab Mode**, **Event Planner Mode**, and **History Mode**.
