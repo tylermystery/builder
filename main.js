@@ -1,11 +1,12 @@
 /*
- * Version: 2.4.7
+ * Version: 2.4.8
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.7 - 2025-08-23
- * - Implemented a robust and safe version of the "Go Up" (parent button) logic.
+ * v2.4.8 - 2025-08-23
+ * - Fixed a critical regression in the "Explode" button logic.
+ * - The button now correctly finds and displays child items.
  */
 
 import { state } from './state.js';
@@ -124,7 +125,11 @@ function setupEventListeners() {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
-            const children = state.records.all.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+            const record = state.records.all.find(r => r.id === recordId);
+            
+            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
             ui.renderRecords(children, imageCache);
             
