@@ -1,13 +1,11 @@
 /*
- * Version: 2.2.1
+ * Version: 2.3.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.2.1 - 2025-08-23
- * - Fixed hearting on favorite/modal cards.
- * - Fixed bug in configure-options change listener.
- * - Cleaned up and consolidated event listener logic.
+ * v2.3.0 - 2025-08-23
+ * - Removed logic for opening the detail modal to simplify the UI.
  */
 
 import { state } from './state.js';
@@ -68,15 +66,13 @@ async function initialize() {
 function setupEventListeners() {
     ui.headerEventNameInput.addEventListener('change', () => { ui.updateHeader(); });
     
-    // The single, unified click listener for all card interactions.
     document.body.addEventListener('click', async (e) => {
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-        const cardBody = e.target.closest('.event-card');
-        const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = e.target.closest('.remove-btn');
+        const cardBody = e.target.closest('.event-card'); // General card click
 
         // --- Interaction Router ---
 
@@ -137,24 +133,17 @@ function setupEventListeners() {
             e.stopPropagation();
             const recordId = cardBody.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const container = cardBody.closest('#modal-body') || ui.catalogContainer;
             
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
-            container.innerHTML = ''; 
-            for (const child of children) {
-                const childCard = await ui.createInteractiveCard(child, imageCache);
-                container.appendChild(childCard);
-            }
+            ui.renderRecords(children, imageCache);
             
-            if (container === ui.catalogContainer) {
-                const implodeButton = document.createElement('div');
-                implodeButton.id = 'implode-container';
-                implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
-                document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-            }
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" data-parent-id="${recordId}" title="Implode"> اجمع </button>`;
+            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
             return;
         }
 
@@ -162,12 +151,6 @@ function setupEventListeners() {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
-            return;
-        }
-
-        if (cardBody || favoriteItem) {
-            const recordId = (cardBody || favoriteItem).dataset.recordId;
-            await ui.openDetailModal(recordId, imageCache);
             return;
         }
     });
