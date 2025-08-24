@@ -1,11 +1,12 @@
 /*
- * Version: 2.5.0
+ * Version: 2.6.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.5.0 - 2025-08-23
- * - Grouping cards now display a calculated price range of all descendant items.
+ * v2.6.0 - 2025-08-23
+ * - Updated calls to fetchImagesForRecord to pass allRecords for collage context.
+ * - Added a new import for parseOptions.
  */
 
 import { state } from './state.js';
@@ -62,7 +63,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
 
-    const imageUrls = await fetchImagesForRecord(record, imageCache);
+    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
 
@@ -158,7 +159,7 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    const imageUrls = await fetchImagesForRecord(record, imageCache);
+    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
