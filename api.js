@@ -49,13 +49,29 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
+    // --- FORK ON EDIT LOGIC ---
+    // If a session exists but the current user doesn't own it,
+    // this is a "fork" action. We reset the session ID to null
+    // to force the creation of a *new* record.
     if (state.session.id && !state.session.isOwned) {
         state.session.id = null;
     }
 
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } };
+    
+    // The payload below is now corrected to use DETAIL_TYPES.GOALS
+    const payload = { 
+        fields: { 
+            "Name": sessionName, 
+            "Items with Variations": JSON.stringify(sessionData), 
+            "Collaborators": state.session.collaborators.join(', '), 
+            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, 
+            "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, 
+            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null, // <-- THIS LINE IS FIXED
+            "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null 
+        } 
+    };
     
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
@@ -73,9 +89,9 @@ export async function saveSessionToAirtable() {
         }
         const result = await response.json();
         
-        if (!isUpdate) {
+        if (!isUpdate) { // This runs for both a new session and a forked session
             state.session.id = result.records[0].id;
-            state.session.isOwned = true; 
+            state.session.isOwned = true; // The user now owns this new (or forked) session
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
         }
         
