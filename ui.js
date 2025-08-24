@@ -1,8 +1,5 @@
 /*
- * Version: 2.6.0
- * Last Modified: 2025-08-23
  * This module is responsible for all direct DOM manipulation.
- * It creates, updates, and removes elements from the page.
  * It should not import from main.js.
  */
 import { state } from './state.js';
