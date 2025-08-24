@@ -9,8 +9,11 @@ export function parseOptions(optionsText) {
     return optionsText.split('\n').map(line => {
         const parts = line.split(',').map(p => p.trim());
         const option = {
-            name: parts[0], priceChange: null, absolutePrice: null,
-            durationChange: null, description: null
+            name: parts[0],
+            priceChange: null,
+            absolutePrice: null,
+            durationChange: null,
+            description: null
         };
         parts.slice(1).forEach(part => {
             const [key, ...valueParts] = part.split(':').map(p => p.trim());
