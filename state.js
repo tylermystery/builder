@@ -8,10 +8,10 @@
  * - Added session.isOwned flag for "Fork on Edit" functionality.
  *
  * v1.6.1 - 2025-08-22
- * - [cite_start]Restored history object to state for Beta Toolkit[cite: 309].
+ * - Restored history object to state for Beta Toolkit.
  *
  * v1.6.0 - 2025-08-21
- * - [cite_start]Removed obsolete history object for MVP cleanup[cite: 310].
+ * - Removed obsolete history object for MVP cleanup.
  */
 
 export const state = {
