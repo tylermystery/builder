@@ -50,6 +50,17 @@
             font-weight: bold;
             margin: 0;
         }
+        .header-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        #beta-trigger {
+            font-style: italic;
+            font-size: 0.7em;
+            color: #007aff;
+            cursor: pointer;
+        }
         .event-name-group { flex-grow: 1; }
         #header-event-name {
             font-size: 1.8em;
@@ -62,6 +73,8 @@
             border-left: 1px solid #e9ecef;
             padding-left: 20px;
         }
+        .history-controls { display: none; }
+        body.history-mode-enabled .history-controls { display: flex; }
         #favorites-section { 
             max-width: 1400px;
             margin: 0 auto; 
@@ -78,14 +91,12 @@
             flex: 0 0 220px;
             height: 220px;
             border-radius: 8px;
-            overflow: hidden;
             background-size: cover;
             background-position: center;
             color: white;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             cursor: pointer;
         }
         .favorite-item-content {
@@ -95,6 +106,7 @@
         .favorite-item p { margin: 2px 0; font-size: 0.9em; }
         .favorite-item .item-name { font-weight: bold; }
         .favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
+        .item-note-display { font-size: 0.8em; font-style: italic; opacity: 0.8;}
         #catalog-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -142,66 +154,92 @@
             flex-direction: column;
             justify-content: flex-end;
         }
-        .event-card-content h3 {
-            margin: 0 0 10px;
-            font-size: 1.6em;
-        }
-        .event-card-content .options-selector {
-            width: 100%;
-            padding: 8px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-        .price-quantity-wrapper {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em; }
+        .event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 15px; }
+        .price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center; }
         .quantity-selector { display: flex; align-items: center; }
         .quantity-selector button { width: 30px; height: 30px; }
         .quantity-selector input { width: 40px; text-align: center; height: 30px; }
         .event-card-content .price { font-size: 1.3em; font-weight: bold; }
-        .card-header-actions {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 10;
-            display: flex;
-            gap: 8px;
-        }
-        .card-btn {
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.5);
-            color: white;
-            font-size: 1.2em;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-        .item-note {
-            width: 100%;
-            box-sizing: border-box;
-            margin-top: 10px;
-            border-radius: 4px;
-            padding: 6px;
-        }
-        .item-note-display { font-size: 0.8em; font-style: italic; }
+        .card-header-actions { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex; gap: 8px; }
+        .card-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.5); color: white; font-size: 1.2em; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
+        .item-note { width: 100%; box-sizing: border-box; margin-top: 10px; border-radius: 4px; padding: 6px; }
         #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px; }
-        #beta-trigger { cursor: pointer; }
     </style>
 </head>
 <body>
+
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
+
     <div id="sticky-header">
+        <div id="header-toolbar">
+            <div class="toolbar-group tool-brand-group">
+                <label>Tool</label>
+                <div class="header-title-container">
+                    <h4>Event Builder</h4>
+                    <sup id="beta-trigger">beta</sup>
+                </div>
+            </div>
+            <div class="toolbar-group event-name-group">
+                <label for="header-event-name">Event Name</label>
+                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
+            </div>
+            <div class="toolbar-group details-group">
+                <div class="toolbar-item">
+                    <label for="header-date">Date</label>
+                    <input type="date" id="header-date">
+                </div>
+                <div class="toolbar-item">
+                    <label for="header-headcount">Headcount</label>
+                    <input type="number" id="header-headcount" min="1" value="1">
+                </div>
+            </div>
+            <div class="toolbar-group people-group">
+                <div id="sessions-dropdown-container" style="display: none;">
+                    <select id="sessions-dropdown">
+                        <option value="">Load a saved list...</option>
+                    </select>
+                </div>
+                <div class="history-controls">
+                    <button id="undo-btn" disabled>↩️</button>
+                    <button id="redo-btn" disabled>↪️</button>
+                </div>
+                <div id="total-cost-section">
+                    <strong>Total:</strong>
+                    <span id="total-cost" title="No items selected">$0.00</span>
+                </div>
+                <div id="share-section">
+                    <button id="save-share-btn">Save & Share</button>
+                </div>
+            </div>
         </div>
-    <div id="favorites-section" style="display: none;">
-        <div id="favorites-carousel"></div>
+        <div id="favorites-section" style="display: none;">
+            <div id="favorites-carousel"></div>
+        </div>
     </div>
+
     <div id="filter-controls" style="display: none;">
-        </div>
+        <input type="text" id="name-filter" placeholder="Search by name...">
+        <select id="price-filter">
+            <option value="all">All Prices</option>
+            <option value="0-50">Under $50</option>
+            <option value="50-100">$50 - $100</option>
+            <option value="100-250">$100 - $250</option>
+            <option value="250-plus">$250+</option>
+        </select>
+        <select id="sort-by">
+            <option value="price-asc">Price (Low to High)</option>
+            <option value="price-desc">Price (High to Low)</option>
+            <option value="name-asc">Name (A-Z)</option>
+        </select>
+    </div>
+
     <div id="catalog-container"></div>
+    
+    <div id="beta-toolkit" style="display: none; position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        </div>
 
     <script type="module" src="main.js"></script>
+
 </body>
 </html>
