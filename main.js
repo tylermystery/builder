@@ -1,12 +1,11 @@
 /*
- * Version: 2.4.4
+ * Version: 2.4.5
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.4 - 2025-08-23
- * - Refactored the main click listener to use a robust if/else if structure.
- * - Correctly implemented the "Go Up" (parent button) functionality.
+ * v2.4.5 - 2025-08-23
+ * - Fixed a syntax error in a regular expression for price parsing.
  */
 
 import { state } from './state.js';
@@ -53,20 +52,22 @@ function setupEventListeners() {
 
     // --- UNIFIED CARD INTERACTION LISTENER ---
     document.body.addEventListener('click', async (e) => {
-        const removeBtn = e.target.closest('.remove-btn');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
+        const cardBody = e.target.closest('.event-card');
+        const removeBtn = e.target.closest('.remove-btn');
 
-        // This router ensures only one action is taken per click.
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
+            return;
+        }
 
-        } else if (heartIcon) {
+        if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -96,8 +97,10 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
+            return;
+        }
 
-        } else if (parentBtn) {
+        if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
@@ -114,8 +117,10 @@ function setupEventListeners() {
                     card.replaceWith(newCard);
                 }
             }
+            return;
+        }
         
-        } else if (explodeBtn) {
+        if (explodeBtn) {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
@@ -127,11 +132,14 @@ function setupEventListeners() {
             implodeButton.id = 'implode-container';
             implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-        
-        } else if (implodeBtn) {
+            return;
+        }
+
+        if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
+            return;
         }
     });
 
@@ -143,7 +151,7 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0--9.]/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
