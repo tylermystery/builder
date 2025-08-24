@@ -1,14 +1,6 @@
 /*
  * Version: 1.7.0
  * Last Modified: 2025-08-23
- *
- * Changelog:
- *
- * v1.7.0 - 2025-08-23
- * - Implemented dynamic collage generation for Grouping items via Cloudinary.
- * - Added text-based acronyms as a fallback for options without images.
- * - fetchImagesForRecord is now hierarchy-aware.
-/*
  * This module is responsible for all network requests to external services (Airtable, Cloudinary).
  * It should not import from main.js. It can import from utility files like utils.js or session.js.
  */
@@ -26,14 +18,25 @@ function getInitials(name = '') {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
 }
 
-export async function loadSessionFromAirtable(sessionId) {
-    // This function remains the same
-}
-export async function saveSessionToAirtable() {
-    // This function remains the same
-}
+export async function loadSessionFromAirtable(sessionId) { /* ...logic... */ }
+export async function saveSessionToAirtable() { /* ...logic... */ }
 export async function fetchAllRecords() {
-    // This function remains the same
+    let records = [];
+    let offset = null;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    try {
+        do {
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
+            const data = await response.json();
+            records = records.concat(data.records);
+            offset = data.offset;
+        } while (offset);
+        return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.NAME]);
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
 }
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
@@ -47,43 +50,34 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
 
-    // --- NEW LOGIC: Check if the record is a Grouping ---
     if (isGrouping) {
         const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
         if (children.length > 0) {
             const collageOverlays = children.slice(0, 4).map(child => {
                 const tags = child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
                 if (tags && tags.trim() !== '') {
-                    // This is an image overlay
                     const primaryTag = tags.split(',')[0].trim();
                     return `l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7cHJpbWFyeVRhZ30=/`;
                 } else {
-                    // This is a text overlay (acronym)
                     const initials = getInitials(child.fields.Name);
                     return `l_text:Arial_80_bold:${encodeURIComponent(initials)},co_white,g_center/`;
                 }
             });
             
-            // Pad with empty overlays if we have fewer than 4 children
             while (collageOverlays.length < 4) {
                 collageOverlays.push('l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC92MTcwMDAwMDAwMC9wbGFubmVycy9kZWZhdWx0LWV2ZW50LWltYWdl');
             }
 
-            const collageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_600,h_520,g_auto/
-${collageOverlays[0]}fl_layer_apply,g_north_west,w_0.5,h_0.5,c_fill/
-${collageOverlays[1]}fl_layer_apply,g_north_east,w_0.5,h_0.5,c_fill/
-${collageOverlays[2]}fl_layer_apply,g_south_west,w_0.5,h_0.5,c_fill/
-${collageOverlays[3]}fl_layer_apply,g_south_east,w_0.5,h_0.5,c_fill/
-default-event-image.jpg`.replace(/\s/g, '');
+            const collageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_600,h_520,g_auto/${collageOverlays[0]}fl_layer_apply,g_north_west,w_0.5,h_0.5,c_fill/${collageOverlays[1]}fl_layer_apply,g_north_east,w_0.5,h_0.5,c_fill/${collageOverlays[2]}fl_layer_apply,g_south_west,w_0.5,h_0.5,c_fill/${collageOverlays[3]}fl_layer_apply,g_south_east,w_0.5,h_0.5,c_fill/default-event-image.jpg`.replace(/\s/g, '');
 
             imageCache.set(cacheKey, [collageUrl]);
             return [collageUrl];
         }
     }
 
-    // --- Original Logic for Bookable Items ---
     const tags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
     const primaryTag = (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : 'default-event-image';
+    
     const cloudinaryUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/list/${encodeURIComponent(primaryTag)}.json`;
 
     try {
