@@ -1,13 +1,17 @@
-// FILE: ui.js
 /*
- * This module is responsible for all direct DOM manipulation.
- * It creates, updates, and removes elements from the page.
- * It should not import from main.js.
+ * Version: 2.5.2
+ * Last Modified: 2025-08-23
+ *
+ * Changelog:
+ *
+ * v2.5.2 - 2025-08-23
+ * - Moved parseOptions to utils.js to resolve final circular dependency.
  */
+
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions, isGrouping } from './utils.js';
+import { parseOptions } from './utils.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -17,6 +21,7 @@ const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
 const filterControls = document.getElementById('filter-controls');
+const headerSummary = document.getElementById('header-summary');
 
 // --- HELPER & LOGIC FUNCTIONS ---
 function getRecordPrice(record, optionIndex = null) {
@@ -70,6 +75,7 @@ function getGroupPriceRange(record) {
     });
     return { min: minPrice, max: maxPrice };
 }
+
 
 // --- UI RENDERING FUNCTIONS ---
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
