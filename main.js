@@ -1,11 +1,11 @@
 /*
- * Version: 2.4.5
+ * Version: 2.4.6
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.5 - 2025-08-23
- * - Fixed a syntax error in a regular expression for price parsing.
+ * v2.4.6 - 2025-08-23
+ * - Corrected the logic for the "Explode" button to properly find child items.
  */
 
 import { state } from './state.js';
@@ -59,15 +59,14 @@ function setupEventListeners() {
         const cardBody = e.target.closest('.event-card');
         const removeBtn = e.target.closest('.remove-btn');
 
+        // This router ensures only one action is taken per click.
         if (removeBtn) {
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (heartIcon) {
+        } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -97,10 +96,8 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
-            return;
-        }
 
-        if (parentBtn) {
+        } else if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
@@ -117,14 +114,16 @@ function setupEventListeners() {
                     card.replaceWith(newCard);
                 }
             }
-            return;
-        }
         
-        if (explodeBtn) {
+        } else if (explodeBtn) {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
-            const children = state.records.all.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+            const record = state.records.all.find(r => r.id === recordId);
+            
+            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
             ui.renderRecords(children, imageCache);
             
@@ -132,14 +131,11 @@ function setupEventListeners() {
             implodeButton.id = 'implode-container';
             implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
-            return;
-        }
-
-        if (implodeBtn) {
+        
+        } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
-            return;
         }
     });
 
