@@ -7,8 +7,11 @@
  * v2.5.0 - 2025-08-23
  * - Finalized MVP functionality.
  * - Added detailed comments to the main event listener for clarity.
+/*
+ * This is the main application entry point and orchestrator.
+ * It initializes the app, sets up the main event listeners, and manages the overall flow.
+ * It imports from specialist modules (api.js, ui.js) but is not imported by them.
  */
-
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
