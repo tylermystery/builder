@@ -1,11 +1,13 @@
+// FILE: ui.js
 /*
  * This module is responsible for all direct DOM manipulation.
+ * It creates, updates, and removes elements from the page.
  * It should not import from main.js.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions } from './utils.js';
+import { parseOptions, isGrouping } from './utils.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
