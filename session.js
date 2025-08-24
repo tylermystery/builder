@@ -1,3 +1,4 @@
+// FILE: session.js
 /*
  * This is a shared utility module for session management.
  * It should not have any dependencies on other project files.
