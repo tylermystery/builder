@@ -1,11 +1,11 @@
 /*
- * Version: 2.5.1
+ * Version: 2.6.0
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.5.1 - 2025-08-23
- * - Moved price logic from main.js to fix circular dependency.
+ * v2.6.0 - 2025-08-23
+ * - Updated calls to fetchImagesForRecord to pass allRecords for collage context.
  */
 
 import { state } from './state.js';
