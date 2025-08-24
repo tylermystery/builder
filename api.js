@@ -1,8 +1,6 @@
 /*
- * Version: 1.7.0
- * Last Modified: 2025-08-23
- * This module is responsible for all network requests to external services (Airtable, Cloudinary).
- * It should not import from main.js. It can import from utility files like utils.js or session.js.
+ * This module is responsible for all network requests.
+ * It should not import from main.js.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
