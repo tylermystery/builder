@@ -1,12 +1,12 @@
 /*
- * Version: 2.4.9
+ * Version: 2.5.0 (Polished)
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.4.9 - 2025-08-23
- * - Rewrote Explode and Go-Up button logic to be consistent with dropdown navigation.
- * - Navigation is now robust and based on the parent's Options field.
+ * v2.5.0 - 2025-08-23
+ * - Finalized MVP functionality.
+ * - Added detailed comments to the main event listener for clarity.
  */
 
 import { state } from './state.js';
@@ -52,22 +52,24 @@ function setupEventListeners() {
     });
 
     // --- UNIFIED CARD INTERACTION LISTENER ---
+    // This single listener on the document body handles all clicks via event delegation.
     document.body.addEventListener('click', async (e) => {
+        const removeBtn = e.target.closest('.remove-btn');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-        const cardBody = e.target.closest('.event-card');
-        const removeBtn = e.target.closest('.remove-btn');
 
-        // This router ensures only one action is taken per click.
+        // ROUTER: Checks for the most specific click target first.
         if (removeBtn) {
+            // ACTION: Remove an item from the favorites carousel.
             e.stopPropagation();
             const recordId = removeBtn.dataset.compositeId;
             state.cart.items.delete(recordId);
             await ui.updateFavoritesCarousel();
 
         } else if (heartIcon) {
+            // ACTION: Heart/unheart an item in the catalog.
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -99,6 +101,7 @@ function setupEventListeners() {
             await ui.updateFavoritesCarousel();
 
         } else if (parentBtn) {
+            // ACTION: Navigate up to the parent item.
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
             if (!card) return;
@@ -106,7 +109,6 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
 
-            // NEW LOGIC: Find the parent by searching for which record lists this one as an option.
             const parentRecord = state.records.all.find(p => {
                 const options = ui.parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 return options.some(opt => opt.name === record.fields.Name);
@@ -116,19 +118,18 @@ function setupEventListeners() {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
             } else {
-                // If no parent is found (e.g., after an explode), go to the top level.
                 const implodeContainer = document.getElementById('implode-container');
                 if (implodeContainer) implodeContainer.remove();
                 renderTopLevel();
             }
         
         } else if (explodeBtn) {
+            // ACTION: Show all children of a grouping.
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
-            // CORRECTED LOGIC: Find children based on the parent's Options field.
             const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
@@ -141,16 +142,19 @@ function setupEventListeners() {
             document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
         
         } else if (implodeBtn) {
+            // ACTION: Collapse the exploded view and return to the top level.
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             renderTopLevel();
         }
     });
 
+    // This listener handles the dropdowns on the interactive cards.
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
         if (!card) return;
 
+        // Handles configuration changes on Bookable Items.
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -172,6 +176,7 @@ function setupEventListeners() {
             card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
         }
 
+        // Handles navigation changes on Grouping Items.
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
