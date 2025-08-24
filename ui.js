@@ -1,16 +1,13 @@
 /*
- * Version: 2.6.0
+ * Version: 2.5.2
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.6.0 - 2025-08-23
- * - Updated calls to fetchImagesForRecord to pass allRecords for collage context.
-/*
- * This module is responsible for all direct DOM manipulation.
- * It creates, updates, and removes elements from the page.
- * It should not import from main.js.
+ * v2.5.2 - 2025-08-23
+ * - Moved parseOptions to utils.js to resolve final circular dependency.
  */
+
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
@@ -27,28 +24,6 @@ const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
 // --- HELPER & LOGIC FUNCTIONS ---
-export function parseOptions(optionsText) {
-    if (!optionsText) return [];
-    return optionsText.split('\n').map(line => {
-        const parts = line.split(',').map(p => p.trim());
-        const option = {
-            name: parts[0], priceChange: null, absolutePrice: null,
-            durationChange: null, description: null
-        };
-        parts.slice(1).forEach(part => {
-            const [key, ...valueParts] = part.split(':').map(p => p.trim());
-            const value = valueParts.join(':');
-            switch (key.toLowerCase()) {
-                case 'price change': option.priceChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
-                case 'price': option.absolutePrice = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
-                case 'duration change': option.durationChange = parseFloat(value.replace(/[^0-9.-]+/g, '')) || 0; break;
-                case 'description': option.description = value.replace(/"/g, ''); break;
-            }
-        });
-        return option;
-    });
-}
-
 function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
