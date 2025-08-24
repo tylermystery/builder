@@ -1,17 +1,14 @@
 /*
- * Version: 3.0.0 (Live URL)
+ * Version: 3.0.1
  * Last Modified: 2025-08-24
  *
  * Changelog:
  *
+ * v3.0.1 - 2025-08-24
+ * - Imported parseOptions from utils.js to fix circular dependency.
+ *
  * v3.0.0 - 2025-08-24
  * - Implemented "Live URL" and "Fork on Edit" functionality.
- * - Removed manual save button and added autosave triggers.
- * - Added session loading from URL on initialization.
- *
- * v2.5.0 - 2025-08-23
- * - Finalized MVP functionality.
- * - Added detailed comments to the main event listener for clarity.
  */
 
 import { state } from './state.js';
@@ -19,6 +16,7 @@ import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
+import { parseOptions } from './utils.js'; // IMPORT ADDED
 
 const imageCache = new Map();
 
@@ -113,7 +111,7 @@ function setupEventListeners() {
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
-            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
             const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
             
@@ -144,7 +142,7 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const parentRecord = state.records.all.find(p => {
-                const options = ui.parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+                const options = parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 return options.some(opt => opt.name === record.fields.Name);
             });
             if (parentRecord) {
@@ -160,7 +158,7 @@ function setupEventListeners() {
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
@@ -185,7 +183,7 @@ function setupEventListeners() {
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             
             const selectedIndex = parseInt(e.target.value, 10);
