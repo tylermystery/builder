@@ -1,18 +1,16 @@
 /*
- * Version: 2.6.0
+ * Version: 2.5.1
  * Last Modified: 2025-08-23
  *
  * Changelog:
  *
- * v2.6.0 - 2025-08-23
- * - Updated calls to fetchImagesForRecord to pass allRecords for collage context.
- * - Added a new import for parseOptions.
+ * v2.5.1 - 2025-08-23
+ * - Moved price logic from main.js to fix circular dependency.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { getRecordPrice, getGroupPriceRange } from './main.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -24,7 +22,7 @@ const favoritesSection = document.getElementById('favorites-section');
 const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
-// --- HELPER FUNCTIONS ---
+// --- HELPER & LOGIC FUNCTIONS ---
 export function parseOptions(optionsText) {
     if (!optionsText) return [];
     return optionsText.split('\n').map(line => {
@@ -46,6 +44,59 @@ export function parseOptions(optionsText) {
         return option;
     });
 }
+
+function getRecordPrice(record, optionIndex = null) {
+    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            if (variation.absolutePrice !== null) return variation.absolutePrice;
+            if (variation.priceChange !== null) price += variation.priceChange;
+        }
+    }
+    return price;
+}
+
+function getDescendantBookableItems(recordId, allRecords) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
+function getGroupPriceRange(record) {
+    const descendants = getDescendantBookableItems(record.id, state.records.all);
+    if (descendants.length === 0) return null;
+    let minPrice = Infinity;
+    let maxPrice = -Infinity;
+
+    descendants.forEach(item => {
+        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (options.length > 0) {
+            options.forEach((opt, index) => {
+                const price = getRecordPrice(item, index);
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            });
+        } else {
+            const price = getRecordPrice(item);
+            if (price < minPrice) minPrice = price;
+            if (price > maxPrice) maxPrice = price;
+        }
+    });
+    return { min: minPrice, max: maxPrice };
+}
+
 
 // --- UI RENDERING FUNCTIONS ---
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
