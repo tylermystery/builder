@@ -12,21 +12,23 @@ The application's data is powered by an Airtable database. A serverless function
 User selections can be saved, generating a unique, shareable URL. A dropdown menu in the header will display saved sessions, allowing a user to load a previous plan.
 
 ### Hierarchical Catalog Display
-The catalog is organized as a hierarchy of interactive items. Items can be either **Groupings** (e.g., "Activities," which contain other items) or final **Bookable Items** (e.g., "Escape Room," which can be configured and added to an event). This structure allows users to navigate from broad categories to specific details.
+The catalog is organized as a hierarchy of interactive items. Items can be either **Groupings** or final **Bookable Items**. This structure allows users to navigate from broad categories to specific details.
 
 ### The Interactive Card
-Every item in the catalog is presented on a versatile "Interactive Card." The card's appearance and functionality adapt based on the item it represents. All cards feature a **Heart (❤️) icon** for universal selection, allowing a user to add any item or grouping to their plan at any level of detail.
+Every item in the catalog is presented on a versatile "Interactive Card." The card's appearance and functionality adapt based on the item it represents. All cards feature a **Heart (❤️) icon** for universal selection.
 
 ### Card Interaction Model
 Users can explore the catalog in two main ways:
-* **Focused Exploration:** Users navigate the hierarchy within a single card. A Grouping card has an **Options Control (⚙️)** that transforms the card to display a selected child item, and a **Parent Button (⬆️)** to navigate back up the hierarchy.
-* **Broad Exploration:** A Grouping card features an **Explode (💥) button**, which replaces the single card with a grid of new cards for each of its child options. A corresponding **Implode ( اجمع) button** collapses this grid back into the single parent card.
+* **Focused Exploration:** A Grouping card has an **Options Control (⚙️)** that transforms the card to display a selected child item, and a **Parent Button (⬆️)** to navigate back up the hierarchy.
+* **Broad Exploration:** A Grouping card features an **Explode (💥) button** which replaces the single card with a grid of its child options. A corresponding **Implode ( اجمع) button** collapses this grid back into the single parent card.
+
+All card-based click interactions are managed by a single, unified event handler that prioritizes specific button clicks (e.g., Heart, Explode) over general card clicks to ensure a non-overlapping and predictable user experience.
 
 ### Customizable Bottom Layer
-When a card represents a final **Bookable Item**, its **Options Control (⚙️)** switches from navigation to configuration. It displays specific variations (e.g., duration, style) that modify the item's price and details. A field for adding custom notes is also available on these cards.
+When a card represents a final **Bookable Item**, its **Options Control (⚙️)** switches from navigation to configuration, displaying specific variations (e.g., duration, style). A field for adding custom notes is also available.
 
 ### Dynamic Header
-A sticky header contains all primary event details and controls. A static **Tool Name** ("Event Builder") is positioned in the top-left and includes the trigger for the Beta Toolkit. The main title is a large, editable **Event Name** input field that dictates the browser's page title. Other controls include Date, Headcount, Event Goals, Total Cost, and the Save & Share button.
+A sticky header contains all primary event details and controls, including a static **Tool Name**, an editable **Event Name**, and other controls like Date, Headcount, Total Cost, and the Save & Share button.
 
 ### Filtering and Sorting
 A simple set of controls allows users to refine the catalog view by **Search by name** and **Price**. A "Sort by" dropdown controls the order of the main catalog.
