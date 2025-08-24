@@ -1,17 +1,21 @@
 /*
- * Version: 2.5.2
- * Last Modified: 2025-08-23
+ * Version: 2.6.0
+ * Last Modified: 2025-08-24
  *
  * Changelog:
  *
- * v2.5.2 - 2025-08-23
- * - Moved parseOptions to utils.js to resolve final circular dependency.
+ * v2.6.0 - 2025-08-24
+ * - Removed parseOptions function (moved to utils.js).
+ * - Imported parseOptions from utils.js to break circular dependency.
+ *
+ * v2.5.1 - 2025-08-23
+ * - Moved price logic from main.js to fix circular dependency.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions } from './utils.js';
+import { parseOptions } from './utils.js'; // IMPORT ADDED
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -24,6 +28,8 @@ const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
 // --- HELPER & LOGIC FUNCTIONS ---
+// parseOptions was removed from here
+
 function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -76,7 +82,7 @@ function getGroupPriceRange(record) {
     return { min: minPrice, max: maxPrice };
 }
 
-
+// ... (rest of the file is unchanged)
 // --- UI RENDERING FUNCTIONS ---
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
     const fields = record.fields;
@@ -92,11 +98,9 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-
     const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
-
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
         <div class="favorite-item-content">
@@ -120,7 +124,6 @@ export async function createInteractiveCard(record, imageCache) {
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-
     const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
     const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
@@ -137,7 +140,8 @@ export async function createInteractiveCard(record, imageCache) {
         </select>`;
         const range = getGroupPriceRange(record);
         if (range) {
-            priceHTML = range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+            priceHTML = range.min === range.max ?
+            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
             priceHTML = 'From $0.00';
         }
@@ -158,7 +162,6 @@ export async function createInteractiveCard(record, imageCache) {
     }
 
     const isHearted = state.cart.items.has(recordId);
-
     eventCard.innerHTML = `
         <div class="card-header-actions">${parentButtonHTML}${explodeButtonHTML}</div>
         <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${recordId}">
@@ -174,7 +177,6 @@ export async function createInteractiveCard(record, imageCache) {
                 ${quantitySelectorHTML}
             </div>
         </div>`;
-    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -220,7 +222,6 @@ export async function updateFavoritesCarousel() {
     const imageCache = new Map();
     
     const sortedItems = Array.from(state.cart.items.entries());
-
     for (const [recordId, itemInfo] of sortedItems) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -249,6 +250,7 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
         let itemCost;
+ 
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
