@@ -1,14 +1,9 @@
+// FILE: main.js
 /*
- * Version: 2.5.0 (Polished)
- * Last Modified: 2025-08-24
- *
- * Changelog:
- *
- * v2.5.0 - 2025-08-24
- * - Finalized MVP functionality with a robust, non-overlapping event listener.
- * - Added detailed comments to the main event listener for clarity.
+ * This is the main application entry point and orchestrator.
+ * It initializes the app, sets up the main event listeners, and manages the overall flow.
+ * It imports from specialist modules (api.js, ui.js) but is not imported by them.
  */
-
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
