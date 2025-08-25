@@ -1,11 +1,13 @@
 /*
- * Version: 2.3.4
+ * Version: 2.4.0
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.3.4 - 2025-08-25
- * - Updated collage logic and default image ID with the correct Public ID.
+ * v2.4.0 - 2025-08-25
+ * - Implemented dynamic, multi-layer collage generation for parent groupings.
+ * - Added getRecursiveChildImageUrls to traverse catalog hierarchy.
+ * - Added buildCollageUrl to create layouts based on image count.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -83,7 +85,6 @@ export async function saveSessionToAirtable() {
     }
 }
 
-
 export async function fetchImagesByTags(tags) {
     if (!tags || tags.length === 0) return null;
 
@@ -141,13 +142,86 @@ export async function fetchAllRecords() {
     }
 }
 
+// --- NEW: Helper function to extract a Public ID from a full Cloudinary URL ---
+function getPublicIdFromUrl(url) {
+    const match = url.match(/\/v\d+\/(.*)/);
+    return match ? match[1] : null;
+}
+
+// --- NEW: Recursive function to gather all child image URLs up to a certain depth ---
+async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
+    if (currentDepth > maxDepth) return [];
+
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+    let imageUrls = [];
+
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const isChildGrouping = rawOptions.some(opt => allRecords.some(r => r.fields.Name === opt.name));
+
+        if (isChildGrouping && currentDepth < maxDepth) {
+            const deeperUrls = await getRecursiveChildImageUrls(child.id, allRecords, imageCache, maxDepth, currentDepth + 1);
+            imageUrls.push(...deeperUrls);
+        } else {
+            const childImageUrls = await fetchImagesForRecord(child, allRecords, imageCache);
+            imageUrls.push(childImageUrls[0]);
+        }
+    }
+    return imageUrls;
+}
+
+// --- NEW: Function to build a dynamic collage URL based on the number of images ---
+function buildCollageUrl(imageUrls, defaultPublicId) {
+    const publicIds = imageUrls.map(getPublicIdFromUrl).filter(id => id);
+    if (publicIds.length === 0) return null;
+
+    const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/`;
+    const baseImage = `c_fill,w_600,h_520,g_auto/${defaultPublicId}`;
+    let overlays = '';
+
+    const createLayer = (publicId, width, height, gravity) => {
+        const safePublicId = publicId.replace(/\//g, ':'); // Required for nested folders
+        return `l_${safePublicId}/c_fill,w_${width},h_${height},g_${gravity}/fl_layer_apply`;
+    };
+
+    switch (publicIds.length) {
+        case 2:
+            overlays = [
+                createLayer(publicIds[0], 300, 520, 'west'),
+                createLayer(publicIds[1], 300, 520, 'east')
+            ].join('/');
+            break;
+        case 3:
+            overlays = [
+                createLayer(publicIds[0], 300, 520, 'west'),
+                createLayer(publicIds[1], 300, 260, 'north_east'),
+                createLayer(publicIds[2], 300, 260, 'south_east')
+            ].join('/');
+            break;
+        default: // Handles 4 or more
+            overlays = [
+                createLayer(publicIds[0], 300, 260, 'north_west'),
+                createLayer(publicIds[1], 300, 260, 'north_east'),
+                createLayer(publicIds[2], 300, 260, 'south_west'),
+                createLayer(publicIds[3], 300, 260, 'south_east')
+            ].join('/');
+            if (publicIds.length > 4) {
+                const remaining = publicIds.length - 4;
+                const text = `+${remaining}`.replace('+', '%2B');
+                overlays += `/l_text:Arial_48_bold:${text},co_white,g_south_east,x_20,y_20/o_70/fl_layer_apply`;
+            }
+            break;
+    }
+    return `${base}${overlays}/${baseImage}`;
+}
+
+
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
     }
 
-    // --- Using the correct default image ID you provided ---
     const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
@@ -157,20 +231,13 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     if (isGrouping) {
-        const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
-        if (children.length > 0) {
-            let childTags = children.slice(0, 4).map(child => {
-                const tags = child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-                const itemNameTag = child.fields.Name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                return (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : itemNameTag;
-            });
-            
-            // --- FIXED: Padding with the correct default image ID (without extension) ---
-            while (childTags.length < 4) childTags.push('ww71meppejsewxsxr4x7');
-            
-            // --- FIXED: Using the correct default image as the base layer for the collage ---
-            const collageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_600,h_520,g_auto/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzBdfQ==/fl_layer_apply,g_north_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzFdfQ==/fl_layer_apply,g_north_east,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzJdfQ==/fl_layer_apply,g_south_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzNdfQ==/fl_layer_apply,g_south_east,w_0.5,h_0.5,c_fill/${defaultImagePublicID}`.replace(/\s/g, '');
-            imageUrls = [collageUrl];
+        // --- IMPLEMENTING THE NEW DYNAMIC COLLAGE LOGIC ---
+        const childImageUrls = await getRecursiveChildImageUrls(record.id, allRecords, imageCache);
+        if (childImageUrls.length > 1) {
+            const collageUrl = buildCollageUrl(childImageUrls, defaultImagePublicID);
+            imageUrls = collageUrl ? [collageUrl] : null;
+        } else if (childImageUrls.length === 1) {
+            imageUrls = childImageUrls;
         }
     } else {
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
