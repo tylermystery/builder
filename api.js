@@ -146,7 +146,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     }
 
     // FIXME: Replace 'default-event-image.jpg' with the correct Public ID from your Cloudinary library.
-    const defaultImagePublicID = 'default-event-image.jpg';
+    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
