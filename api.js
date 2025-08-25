@@ -1,12 +1,12 @@
 /*
- * Version: 2.2.0
- * Last Modified: 2025-08-24
+ * Version: 2.3.0
+ * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.2.0 - 2025-08-24
- * - Replaced fetchImagesByTag with fetchImagesByTags.
- * - Added support for Cloudinary Search API to find images with multiple tags (AND search).
+ * v2.3.0 - 2025-08-25
+ * - Rerouted all Cloudinary requests through a secure serverless function to fix CORS errors.
+ * - Corrected the ultimateFallbackUrl to include a file extension (.jpg).
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -27,8 +27,7 @@ export async function loadSessionFromAirtable(sessionId) {
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         
-        state.session.isOwned = false; 
-
+        state.session.isOwned = false;
         state.session.collaborators = record.fields.Collaborators ?
             record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
@@ -73,7 +72,7 @@ export async function saveSessionToAirtable() {
         
         if (!isUpdate) {
             state.session.id = result.records[0].id;
-            state.session.isOwned = true; 
+            state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
         }
         
@@ -85,30 +84,26 @@ export async function saveSessionToAirtable() {
     }
 }
 
-/**
- * Fetches image URLs from Cloudinary. Handles single tags (string) or multiple tags (array for an AND search).
- * @param {string|string[]} tags The tag or tags to search for.
- * @returns {Promise<string[]|null>} An array of image URLs or null if none are found.
- */
 export async function fetchImagesByTags(tags) {
     if (!tags || tags.length === 0) return null;
 
     try {
-        let response;
+        let payload;
         if (Array.isArray(tags)) {
-            // Use Cloudinary Search API for multi-tag AND search
-            const expression = tags.map(tag => `tags:"${tag}"`).join(' AND ');
-            response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/search`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ expression: expression })
-            });
+            // Prepare payload for multi-tag search
+            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
         } else {
-            // Use original List API for single tag search
-            response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/image/tags/${encodeURIComponent(tags)}`);
+            // Prepare payload for single-tag list
+            payload = { tag: tags };
         }
+        
+        // Call our own secure serverless function instead of Cloudinary directly
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
 
-        if (!response.ok) throw new Error(`Cloudinary API Error: ${response.statusText}`);
+        if (!response.ok) throw new Error(`Serverless function error: ${response.statusText}`);
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) return null;
@@ -117,7 +112,7 @@ export async function fetchImagesByTags(tags) {
             `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${image.version}/${image.public_id}.${image.format}`
         );
     } catch (error) {
-        console.error('Failed to fetch from Cloudinary:', error);
+        console.error('Failed to fetch from Cloudinary via proxy:', error);
         return null;
     }
 }
@@ -147,7 +142,8 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         return imageCache.get(cacheKey);
     }
 
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image`;
+    // CORRECTED: Added .jpg to the fallback URL to prevent 404 errors.
+    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image.jpg`;
     let imageUrls = null;
 
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
