@@ -1,13 +1,11 @@
 /*
- * Version: 2.4.0
+ * Version: 2.4.1
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.4.0 - 2025-08-25
- * - Implemented dynamic, multi-layer collage generation for parent groupings.
- * - Added getRecursiveChildImageUrls to traverse catalog hierarchy.
- * - Added buildCollageUrl to create layouts based on image count.
+ * v2.4.1 - 2025-08-25
+ * - Made the getPublicIdFromUrl helper function more robust to handle fallback URLs.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -85,6 +83,7 @@ export async function saveSessionToAirtable() {
     }
 }
 
+
 export async function fetchImagesByTags(tags) {
     if (!tags || tags.length === 0) return null;
 
@@ -142,13 +141,19 @@ export async function fetchAllRecords() {
     }
 }
 
-// --- NEW: Helper function to extract a Public ID from a full Cloudinary URL ---
+// --- ROBUST FIX: This helper can now parse both standard Cloudinary URLs and fallback URLs ---
 function getPublicIdFromUrl(url) {
-    const match = url.match(/\/v\d+\/(.*)/);
-    return match ? match[1] : null;
+    // First, try to match the standard Cloudinary URL format with a version number.
+    let match = url.match(/\/v\d+\/(.*)/);
+    if (match) return match[1];
+
+    // If that fails, it's likely a simple URL. Extract the filename from the end.
+    match = url.match(/[^/\\&?]+\.\w{3,4}(?=([?&].*$|$))/);
+    if (match) return match[0];
+    
+    return null; // Return null if no parsable ID is found
 }
 
-// --- NEW: Recursive function to gather all child image URLs up to a certain depth ---
 async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
     if (currentDepth > maxDepth) return [];
 
@@ -170,7 +175,6 @@ async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxD
     return imageUrls;
 }
 
-// --- NEW: Function to build a dynamic collage URL based on the number of images ---
 function buildCollageUrl(imageUrls, defaultPublicId) {
     const publicIds = imageUrls.map(getPublicIdFromUrl).filter(id => id);
     if (publicIds.length === 0) return null;
@@ -180,7 +184,7 @@ function buildCollageUrl(imageUrls, defaultPublicId) {
     let overlays = '';
 
     const createLayer = (publicId, width, height, gravity) => {
-        const safePublicId = publicId.replace(/\//g, ':'); // Required for nested folders
+        const safePublicId = publicId.replace(/\//g, ':');
         return `l_${safePublicId}/c_fill,w_${width},h_${height},g_${gravity}/fl_layer_apply`;
     };
 
@@ -198,7 +202,7 @@ function buildCollageUrl(imageUrls, defaultPublicId) {
                 createLayer(publicIds[2], 300, 260, 'south_east')
             ].join('/');
             break;
-        default: // Handles 4 or more
+        default: 
             overlays = [
                 createLayer(publicIds[0], 300, 260, 'north_west'),
                 createLayer(publicIds[1], 300, 260, 'north_east'),
@@ -231,7 +235,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     if (isGrouping) {
-        // --- IMPLEMENTING THE NEW DYNAMIC COLLAGE LOGIC ---
         const childImageUrls = await getRecursiveChildImageUrls(record.id, allRecords, imageCache);
         if (childImageUrls.length > 1) {
             const collageUrl = buildCollageUrl(childImageUrls, defaultImagePublicID);
