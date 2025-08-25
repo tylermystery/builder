@@ -1,12 +1,12 @@
 /*
- * Version: 2.3.0
+ * Version: 2.3.1
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.3.0 - 2025-08-25
- * - Rerouted all Cloudinary requests through a secure serverless function to fix CORS errors.
- * - Corrected the ultimateFallbackUrl to include a file extension (.jpg).
+ * v2.3.1 - 2025-08-25
+ * - Made image URL construction more robust by using the 'secure_url' from the API response.
+ * - Added a placeholder for the correct default image Public ID to fix 404s.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -84,20 +84,18 @@ export async function saveSessionToAirtable() {
     }
 }
 
+
 export async function fetchImagesByTags(tags) {
     if (!tags || tags.length === 0) return null;
 
     try {
         let payload;
         if (Array.isArray(tags)) {
-            // Prepare payload for multi-tag search
             payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
         } else {
-            // Prepare payload for single-tag list
             payload = { tag: tags };
         }
         
-        // Call our own secure serverless function instead of Cloudinary directly
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
@@ -107,10 +105,15 @@ export async function fetchImagesByTags(tags) {
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) return null;
+        
+        // ROBUST FIX: Use the 'secure_url' provided by Cloudinary and add our transformations to it.
+        // This is safer than building the URL manually.
+        const transformations = 'c_fill,g_auto,w_600,h_520';
+        return data.resources.map(image => {
+            const urlParts = image.secure_url.split('/upload/');
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+        });
 
-        return data.resources.map(image =>
-            `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/v${image.version}/${image.public_id}.${image.format}`
-        );
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
         return null;
@@ -142,10 +145,11 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         return imageCache.get(cacheKey);
     }
 
-    // CORRECTED: Added .jpg to the fallback URL to prevent 404 errors.
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/default-event-image.jpg`;
+    // FIXME: Replace 'default-event-image.jpg' with the correct Public ID from your Cloudinary library.
+    const defaultImagePublicID = 'default-event-image.jpg';
+    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
+    
     let imageUrls = null;
-
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -161,7 +165,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         
         if (!imageUrls) {
             const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',')[0].trim() : null;
+            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
             if (primaryManualTag) {
                 imageUrls = await fetchImagesByTags(primaryManualTag);
             }
