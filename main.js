@@ -149,7 +149,6 @@ document.body.addEventListener('change', async (e) => {
         }
     }
 });
-
     // This listener handles the dropdowns on the interactive cards.
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
