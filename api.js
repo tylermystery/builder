@@ -1,11 +1,11 @@
 /*
- * Version: 2.3.2
+ * Version: 2.3.3
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.3.2 - 2025-08-25
- * - Added conditional logic to apply safer transformations for GIFs to prevent 400 errors.
+ * v2.3.3 - 2025-08-25
+ * - Restored the collage generation logic for parent grouping images.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -105,14 +105,11 @@ export async function fetchImagesByTags(tags) {
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) return null;
         
-        // --- NEW: Smart Transformation Logic ---
         return data.resources.map(image => {
             let transformations;
-            // If the image is a GIF, use a simpler, safer transformation.
             if (image.format === 'gif') {
                 transformations = 'c_fit,w_600,h_520';
             } else {
-                // Otherwise, use the advanced crop and gravity transformation.
                 transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
@@ -149,9 +146,11 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
     }
-    
-    // Ensure you have a valid Public ID here for your default image.
-    const defaultImagePublicID = 'default-event-image.jpg';
+
+    // --- FIX FOR FALLBACK IMAGE ---
+    // FIXME: Log in to Cloudinary, find your default image, and paste its Public ID here.
+    // Make sure it includes the extension, e.g., 'my-awesome-default.jpg'
+    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
@@ -159,8 +158,23 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
+    // --- RESTORED COLLAGE LOGIC ---
     if (isGrouping) {
-        // Collage logic would go here
+        const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
+        if (children.length > 0) {
+            let childTags = children.slice(0, 4).map(child => {
+                const tags = child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+                const itemNameTag = child.fields.Name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                return (tags && tags.trim() !== '') ? tags.split(',')[0].trim() : itemNameTag;
+            });
+            
+            // Pad with default tags if there are fewer than 4 children
+            while (childTags.length < 4) childTags.push('default-event-image');
+            
+            // This complex URL creates a 2x2 collage using Cloudinary's fetch and layer transformations
+            const collageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,w_600,h_520,g_auto/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzBdfQ==/fl_layer_apply,g_north_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzFdfQ==/fl_layer_apply,g_north_east,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzJdfQ==/fl_layer_apply,g_south_west,w_0.5,h_0.5,c_fill/l_fetch:aHR0cHM6Ly9yZXMuY2xvdWRpbmFyeS5jb20vZGFlZHFpenJlL2ltYWdlL3VwbG9hZC9jX2ZpbGwsZ19hdXRvLGhfZ2V0L3dfZGVhL3RhZ19yZXNpemU6YXV0by92MV8xL3BsYW5uZXJzLyR7Y2hpbGRUYWdzWzNdfQ==/fl_layer_apply,g_south_east,w_0.5,h_0.5,c_fill/default-event-image.jpg`.replace(/\s/g, '');
+            imageUrls = [collageUrl];
+        }
     } else {
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
         if (itemName) {
