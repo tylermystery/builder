@@ -99,6 +99,8 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
     const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    // --- ADD THIS LINE FOR DIAGNOSTICS ---
+    console.log('Image URLs for record:', fields.Name, imageUrls);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
     itemCard.innerHTML = `
