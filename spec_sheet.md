@@ -4,8 +4,9 @@
 This document outlines the features of an interactive event catalog. The core application provides a dynamic, hierarchical interface for browsing a catalog and building an event plan. Key features include a consolidated header for event details, a vertically scrolling catalog of "Interactive Cards," and a new Beta Toolkit for advanced features.
 
 ## Core Functionality (MVP)
-### Airtable Integration
-The application's data is powered by an Airtable database. A serverless function is specified for securing the API token, but this is currently deferred.
+### Airtable & Cloudinary Integration
+The application's data is powered by an Airtable database and the Cloudinary media library.
+* **Secure API Proxy:** All communication with external APIs (Airtable, Cloudinary) is routed through serverless functions. This acts as a secure proxy, ensuring that private API keys and tokens are never exposed in the browser.
 
 ### Session Management (Live URL & Fork on Edit)
 A unique, shareable URL is automatically generated and updated as a user builds their event plan.
