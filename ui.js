@@ -1,17 +1,21 @@
 /*
- * Version: 2.7.2
- * Last Modified: 2025-08-25
+ * Version: 2.6.0
+ * Last Modified: 2025-08-24
  *
  * Changelog:
  *
- * v2.7.2 - 2025-08-25
- * - Removed local 'isGrouping' check and now use the authoritative value from the API response.
+ * v2.6.0 - 2025-08-24
+ * - Removed parseOptions function (moved to utils.js).
+ * - Imported parseOptions from utils.js to break circular dependency.
+ *
+ * v2.5.1 - 2025-08-23
+ * - Moved price logic from main.js to fix circular dependency.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions } from './utils.js';
+import { parseOptions } from './utils.js'; // IMPORT ADDED
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -23,8 +27,11 @@ const favoritesSection = document.getElementById('favorites-section');
 const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
+// --- HELPER & LOGIC FUNCTIONS ---
+// parseOptions was removed from here
+
 function getRecordPrice(record, optionIndex = null) {
-    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
@@ -40,8 +47,10 @@ function getDescendantBookableItems(recordId, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
     for (const child of children) {
-        const isChildGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === child.id);
-        if (isChildGrouping) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
             bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
         } else {
             bookableItems.push(child);
@@ -73,7 +82,8 @@ function getGroupPriceRange(record) {
     return { min: minPrice, max: maxPrice };
 }
 
-
+// ... (rest of the file is unchanged)
+// --- UI RENDERING FUNCTIONS ---
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
     const fields = record.fields;
     let variationNameHTML = '';
@@ -88,8 +98,10 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    const imageData = await fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageData.imageUrls[0] || ''}')`;
+    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    // --- ADD THIS LINE FOR DIAGNOSTICS ---
+    console.log('Image URLs for record:', fields.Name, imageUrls);
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
@@ -107,56 +119,52 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    
-    // --- API PROVIDES THE TRUTH ---
-    // We get the isGrouping flag and the imageUrls from the API call.
-    const { isGrouping, imageUrls } = await fetchImagesForRecord(record, allRecords, imageCache);
-
     const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
     const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
 
-    let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '';
-    let backgroundContentHTML = ''; 
+    let optionsControlHTML = '';
+    let notesHTML = '';
+    let quantitySelectorHTML = '';
+    let priceHTML = '';
 
     if (isGrouping) {
-        const imageCount = imageUrls.length;
-        let collageItemsHTML = '';
-        const imagesToDisplay = imageUrls.slice(0, 4);
-
-        imagesToDisplay.forEach((url, index) => {
-            let overlayHTML = '';
-            if (index === 3 && imageCount > 4) {
-                overlayHTML = `<div class="collage-overlay">+${imageCount - 3}</div>`;
-            }
-            collageItemsHTML += `<div class="collage-image" style="background-image: url('${url}')">${overlayHTML}</div>`;
-        });
-        
-        const layoutClass = `layout-count-${Math.min(imageCount, 4)}`;
-        backgroundContentHTML = `<div class="collage-container ${layoutClass}">${collageItemsHTML}</div>`;
-
-        const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
+        optionsControlHTML = `<select class="options-selector navigate-options">
+            <option value="">Select an option...</option>
+            ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
+        </select>`;
         const range = getGroupPriceRange(record);
-        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'From $0.00';
+        if (range) {
+            priceHTML = range.min === range.max ?
+            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+        } else {
+            priceHTML = 'From $0.00';
+        }
     } else {
-        eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}</select>`;
+        optionsControlHTML = `<select class="options-selector configure-options">
+             ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
+        </select>`;
         notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
-        quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+        quantitySelectorHTML = `
+            <div class="quantity-selector">
+                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
+                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
+                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
+            </div>`;
+        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         priceHTML = `$${initialPrice.toFixed(2)}`;
     }
 
     const isHearted = state.cart.items.has(recordId);
     eventCard.innerHTML = `
-        ${backgroundContentHTML} 
         <div class="card-header-actions">${parentButtonHTML}${explodeButtonHTML}</div>
         <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${recordId}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
@@ -164,14 +172,13 @@ export async function createInteractiveCard(record, imageCache) {
         <div class="event-card-content">
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
-            ${isGrouping ? optionsControlHTML : (parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).length > 0 ? optionsControlHTML : '')}
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
                 <div class="price">${priceHTML}</div>
                 ${quantitySelectorHTML}
             </div>
         </div>`;
-    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -186,6 +193,8 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
+    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
 
