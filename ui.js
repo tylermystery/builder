@@ -1,11 +1,11 @@
 /*
- * Version: 2.7.1
+ * Version: 2.7.2
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.7.1 - 2025-08-25
- * - Corrected the 'isGrouping' check to use the 'Parent Item' field for consistency.
+ * v2.7.2 - 2025-08-25
+ * - Removed local 'isGrouping' check and now use the authoritative value from the API response.
  */
 
 import { state } from './state.js';
@@ -40,7 +40,6 @@ function getDescendantBookableItems(recordId, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
     for (const child of children) {
-        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const isChildGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === child.id);
         if (isChildGrouping) {
             bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
@@ -89,8 +88,8 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
+    const imageData = await fetchImagesForRecord(record, state.records.all, imageCache);
+    itemCard.style.backgroundImage = `url('${imageData.imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
@@ -109,23 +108,20 @@ export async function createInteractiveCard(record, imageCache) {
     const recordId = record.id;
     const allRecords = state.records.all;
     
-    const isGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
-    
-    // --- ADD THIS LINE FOR DIAGNOSTICS ---
-    console.log(`Checking record: "${fields.Name}". Is it a grouping?`, isGrouping);
-    
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
     
+    // --- API PROVIDES THE TRUTH ---
+    // We get the isGrouping flag and the imageUrls from the API call.
+    const { isGrouping, imageUrls } = await fetchImagesForRecord(record, allRecords, imageCache);
+
     const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
     const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
 
     let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '';
     let backgroundContentHTML = ''; 
-
-    const imageUrls = await fetchImagesForRecord(record, allRecords, imageCache);
 
     if (isGrouping) {
         const imageCount = imageUrls.length;
