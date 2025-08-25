@@ -109,10 +109,11 @@ export async function createInteractiveCard(record, imageCache) {
     const recordId = record.id;
     const allRecords = state.records.all;
     
-    // --- LOGIC FIX: Using the 'Parent Item' field to determine if a card is a grouping. ---
-    // This is now consistent with the logic in api.js.
     const isGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
-
+    
+    // --- ADD THIS LINE FOR DIAGNOSTICS ---
+    console.log(`Checking record: "${fields.Name}". Is it a grouping?`, isGrouping);
+    
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
