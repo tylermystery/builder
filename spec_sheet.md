@@ -33,19 +33,24 @@ Card images are loaded dynamically from a media library (Cloudinary) based on an
 * **Option-Specific Images:** When a user selects an option, the system performs a search for images that contain **both** the item's tag **and** the option's tag (e.g., searching for tags `fort-battle` AND `classic`). If no images matching both tags are found, the application falls back to the default item image.
 
 ### Unified Card Interaction Model
-All card-based click interactions are managed by a single, unified event handler on the document's body.
-* The handler uses event delegation to capture all clicks and identify the target element (e.g., a button or icon).
-* It acts as a router, prioritizing specific button clicks (like the Heart, Explode, or Parent buttons) over a general card click to ensure a predictable user experience.
-* This methodology ensures that all interactions are handled consistently and efficiently, regardless of where the catalog item is displayed.
+[cite_start]All card-based click interactions are managed by a single, unified event handler on the document's body. [cite: 28, 29]
+* [cite_start]The handler uses event delegation to capture all clicks and identify the target element (e.g., a button or icon). [cite: 29]
+* [cite_start]It acts as a router, prioritizing specific button clicks (like the Heart, Explode, or Parent buttons) over a general card click to ensure a predictable user experience. [cite: 30]
+* [cite_start]This methodology ensures that all interactions are handled consistently and efficiently, regardless of where the catalog item is displayed. [cite: 31]
+
+#### **Event Listener Implementation (Locked In)**
+To function correctly, the application's main script attaches two distinct, delegated event listeners to the `document.body`. Both are essential for full functionality and must be present.
+1.  **`addEventListener('click', ...)`:** This listener handles all instantaneous actions, such as clicking the Heart (`❤️`), Explode (`💥`), and Parent (`⬆️`) buttons.
+2.  [cite_start]**`addEventListener('change', ...)`:** This listener handles actions that conclude an editing or selection process, primarily for the `options-selector` (`⚙️`) dropdowns on the interactive cards. [cite: 118, 131]
 
 ### Customizable Bottom Layer
-When a card represents a final **Bookable Item**, its **Options Control (⚙️)** switches from navigation to configuration, displaying specific variations. A field for adding custom notes and a quantity selector are also available.
+[cite_start]When a card represents a final **Bookable Item**, its **Options Control (⚙️)** switches from navigation to configuration, displaying specific variations. [cite: 32] [cite_start]A field for adding custom notes and a quantity selector are also available. [cite: 33]
 
 ### Dynamic Header
-A sticky header contains all primary event details and controls, including a static **Tool Name**, an editable **Event Name**, and other controls like Date, Headcount, Total Cost.
+[cite_start]A sticky header contains all primary event details and controls, including a static **Tool Name**, an editable **Event Name**, and other controls like Date, Headcount, Total Cost. [cite: 34]
 
 ### Filtering and Sorting
-A simple set of controls allows users to refine the catalog view by **Search by name** and **Price**. A "Sort by" dropdown controls the order of the main catalog.
+[cite_start]A simple set of controls allows users to refine the catalog view by **Search by name** and **Price**. [cite: 35] [cite_start]A "Sort by" dropdown controls the order of the main catalog. [cite: 36]
 
 ## Beta Toolkit
-A subtle "beta" subscript next to the tool name can be-clicked to reveal a toolkit with advanced, toggleable features. These features include **Collab Mode**, **Event Planner Mode**, and **History Mode**.
+A subtle "beta" subscript next to the tool name can be-clicked to reveal a toolkit with advanced, toggleable features. [cite_start]These features include **Collab Mode**, **Event Planner Mode**, and **History Mode**. [cite: 37, 38]
