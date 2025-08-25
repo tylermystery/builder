@@ -1,15 +1,12 @@
 /*
  * Version: 3.0.2
- * Last Modified: 2025-08-24
+ * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v3.0.2 - 2025-08-24
+ * v3.0.2 - 2025-08-25
  * - Restored the 'click' event listener to fix non-functioning heart, explode, and parent buttons.
  * - Removed duplicate 'change' event listener.
- *
- * v3.0.1 - 2025-08-24
- * - Imported parseOptions from utils.js to fix circular dependency.
  */
 
 import { state } from './state.js';
@@ -22,13 +19,12 @@ import { parseOptions } from './utils.js';
 const imageCache = new Map();
 
 // --- DEBOUNCER FOR SAVING ---
-// Prevents the app from saving to Airtable on every single keystroke.
 let saveTimeout;
 function debouncedSave() {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         api.saveSessionToAirtable();
-    }, 1000); // Wait 1 second after the last change before saving
+    }, 1000);
 }
 
 // --- CORE LOGIC ---
@@ -48,7 +44,6 @@ async function initialize() {
         return;
     }
 
-    // --- SESSION LOADING FROM URL ---
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
 
@@ -56,7 +51,6 @@ async function initialize() {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
     } else {
-        // This is a new session, so the user owns it.
         state.session.isOwned = true;
     }
     
@@ -91,22 +85,15 @@ function setupEventListeners() {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
     
-    // --- UNIFIED CLICK LISTENER ---
-    // This listener is restored to handle clicks on hearts, explode, implode, and parent buttons.
+    // --- UNIFIED CLICK LISTENER (RESTORED) ---
+    // This listener handles clicks on hearts, explode, implode, and parent buttons.
     document.body.addEventListener('click', async (e) => {
-        const removeBtn = e.target.closest('.remove-btn');
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
 
-        if (removeBtn) {
-            e.stopPropagation();
-            const recordId = removeBtn.dataset.compositeId;
-            state.cart.items.delete(recordId);
-            await ui.updateFavoritesCarousel();
-            debouncedSave();
-        } else if (heartIcon) {
+        if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
@@ -114,18 +101,15 @@ function setupEventListeners() {
             const record = state.records.all.find(r => r.id === recordId);
             
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-            const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+            const isGrouping = rawOptions.some(opt => new Set(state.records.all.map(r => r.fields.Name)).has(opt.name));
             
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
             if (!isGrouping) {
                 const noteEl = currentCard.querySelector('.item-note');
-                const quantityEl = currentCard.querySelector('.quantity-input');
                 if (rawOptions.length > 0) {
                     itemInfo.selectedOptionIndex = parseInt(currentCard.querySelector('.configure-options').value, 10);
                 }
                 if (noteEl) itemInfo.note = noteEl.value;
-                if (quantityEl) itemInfo.quantity = parseInt(quantityEl.value, 10);
             }
 
             if (state.cart.items.has(recordId)) {
@@ -143,16 +127,11 @@ function setupEventListeners() {
             if (!card) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const parentRecord = state.records.all.find(p => {
-                const options = parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-                return options.some(opt => opt.name === record.fields.Name);
-            });
+            const parentRecord = state.records.all.find(p => parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).some(opt => opt.name === record.fields.Name));
             if (parentRecord) {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
             } else {
-                const implodeContainer = document.getElementById('implode-container');
-                if (implodeContainer) implodeContainer.remove();
                 renderTopLevel();
             }
         } else if (explodeBtn) {
@@ -160,8 +139,7 @@ function setupEventListeners() {
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const childNames = new Set(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
             ui.renderRecords(children, imageCache);
@@ -177,37 +155,30 @@ function setupEventListeners() {
     });
 
     // --- UNIFIED CHANGE LISTENER ---
-    // This listener handles the dropdowns on the interactive cards.
+    // This listener handles dropdown selections.
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
         if (!card) return;
 
-        // Handles configuration changes on Bookable Items.
+        // Handles configuration changes (Bookable Items)
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
             
-            // --- Update Price and Description ---
             const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
-                if (selectedOption.absolutePrice != null) {
-                    newPrice = selectedOption.absolutePrice;
-                } else if (selectedOption.priceChange != null) {
-                    newPrice += selectedOption.priceChange;
-                }
+                if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
+                else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
             card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
             
-            // --- Update Image Based On Multi-Tag Search ---
             if (selectedOption) {
                 const formatForTag = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                
                 const itemTag = formatForTag(record.fields[CONSTANTS.FIELD_NAMES.NAME]);
                 const optionTag = formatForTag(selectedOption.name);
                 const optionImageUrls = await api.fetchImagesByTags([itemTag, optionTag]);
@@ -221,7 +192,7 @@ function setupEventListeners() {
             }
         }
 
-        // Handles navigation changes on Grouping Items.
+        // Handles navigation changes (Grouping Items)
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
