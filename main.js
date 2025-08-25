@@ -91,6 +91,7 @@ function setupEventListeners() {
     // --- UNIFIED CLICK LISTENER (RESTORED) ---
     // This listener handles clicks on hearts, explode, implode, and parent buttons.
     document.body.addEventListener('click', async (e) => {
+        console.log("Change event fired!");
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
