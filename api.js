@@ -1,11 +1,13 @@
 /*
- * Version: 2.4.1
+ * Version: 2.5.0
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.4.1 - 2025-08-25
- * - Made the getPublicIdFromUrl helper function more robust to handle fallback URLs.
+ * v2.5.0 - 2025-08-25
+ * - Switched to a client-side collage system.
+ * - Removed buildCollageUrl and getPublicIdFromUrl functions.
+ * - fetchImagesForRecord now returns a simple list of URLs for groupings.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -141,19 +143,6 @@ export async function fetchAllRecords() {
     }
 }
 
-// --- ROBUST FIX: This helper can now parse both standard Cloudinary URLs and fallback URLs ---
-function getPublicIdFromUrl(url) {
-    // First, try to match the standard Cloudinary URL format with a version number.
-    let match = url.match(/\/v\d+\/(.*)/);
-    if (match) return match[1];
-
-    // If that fails, it's likely a simple URL. Extract the filename from the end.
-    match = url.match(/[^/\\&?]+\.\w{3,4}(?=([?&].*$|$))/);
-    if (match) return match[0];
-    
-    return null; // Return null if no parsable ID is found
-}
-
 async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
     if (currentDepth > maxDepth) return [];
 
@@ -175,51 +164,6 @@ async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxD
     return imageUrls;
 }
 
-function buildCollageUrl(imageUrls, defaultPublicId) {
-    const publicIds = imageUrls.map(getPublicIdFromUrl).filter(id => id);
-    if (publicIds.length === 0) return null;
-
-    const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/`;
-    const baseImage = `c_fill,w_600,h_520,g_auto/${defaultPublicId}`;
-    let overlays = '';
-
-    const createLayer = (publicId, width, height, gravity) => {
-        const safePublicId = publicId.replace(/\//g, ':');
-        return `l_${safePublicId}/c_fill,w_${width},h_${height},g_${gravity}/fl_layer_apply`;
-    };
-
-    switch (publicIds.length) {
-        case 2:
-            overlays = [
-                createLayer(publicIds[0], 300, 520, 'west'),
-                createLayer(publicIds[1], 300, 520, 'east')
-            ].join('/');
-            break;
-        case 3:
-            overlays = [
-                createLayer(publicIds[0], 300, 520, 'west'),
-                createLayer(publicIds[1], 300, 260, 'north_east'),
-                createLayer(publicIds[2], 300, 260, 'south_east')
-            ].join('/');
-            break;
-        default: 
-            overlays = [
-                createLayer(publicIds[0], 300, 260, 'north_west'),
-                createLayer(publicIds[1], 300, 260, 'north_east'),
-                createLayer(publicIds[2], 300, 260, 'south_west'),
-                createLayer(publicIds[3], 300, 260, 'south_east')
-            ].join('/');
-            if (publicIds.length > 4) {
-                const remaining = publicIds.length - 4;
-                const text = `+${remaining}`.replace('+', '%2B');
-                overlays += `/l_text:Arial_48_bold:${text},co_white,g_south_east,x_20,y_20/o_70/fl_layer_apply`;
-            }
-            break;
-    }
-    return `${base}${overlays}/${baseImage}`;
-}
-
-
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
@@ -235,13 +179,8 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     if (isGrouping) {
-        const childImageUrls = await getRecursiveChildImageUrls(record.id, allRecords, imageCache);
-        if (childImageUrls.length > 1) {
-            const collageUrl = buildCollageUrl(childImageUrls, defaultImagePublicID);
-            imageUrls = collageUrl ? [collageUrl] : null;
-        } else if (childImageUrls.length === 1) {
-            imageUrls = childImageUrls;
-        }
+        // For groupings, we just return the flat list of child URLs. The UI will build the collage.
+        imageUrls = await getRecursiveChildImageUrls(record.id, allRecords, imageCache);
     } else {
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
         if (itemName) {
@@ -258,7 +197,9 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
-    const finalImageUrls = imageUrls || [ultimateFallbackUrl];
+    // If after all that, we have no URLs, use the fallback.
+    // For groupings, an empty array is a valid result we pass to the UI.
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
     imageCache.set(cacheKey, finalImageUrls);
     return finalImageUrls;
 }
