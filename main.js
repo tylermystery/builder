@@ -1,15 +1,12 @@
 /*
- * Version: 3.0.2
+ * Version: 3.0.3
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v3.0.2 - 2025-08-25
- * - Restored the 'click' event listener to fix non-functioning heart, explode, and parent buttons.
- * - Removed duplicate 'change' event listener.
- *
- * v3.0.1 - 2025-08-24
- * - Imported parseOptions from utils.js to fix circular dependency.
+ * v3.0.3 - 2025-08-25
+ * - Fixed a bug where the click handler used an outdated 'isGrouping' check.
+ * - Unified all 'isGrouping' logic to use the reliable 'Parent Item' field check.
  */
 
 import { state } from './state.js';
@@ -49,7 +46,6 @@ async function initialize() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
-
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
@@ -88,10 +84,8 @@ function setupEventListeners() {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
     
-    // --- UNIFIED CLICK LISTENER (RESTORED) ---
-    // This listener handles clicks on hearts, explode, implode, and parent buttons.
+    // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
-        console.log("Change event fired!");
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
@@ -104,14 +98,17 @@ function setupEventListeners() {
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
-            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const isGrouping = rawOptions.some(opt => new Set(state.records.all.map(r => r.fields.Name)).has(opt.name));
+            // --- LOGIC FIX: Using the correct, consistent 'isGrouping' check ---
+            const isGrouping = state.records.all.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
             
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
             if (!isGrouping) {
+                const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const noteEl = currentCard.querySelector('.item-note');
-                if (rawOptions.length > 0) {
-                    itemInfo.selectedOptionIndex = parseInt(currentCard.querySelector('.configure-options').value, 10);
+                const optionsEl = currentCard.querySelector('.configure-options');
+
+                if (optionsEl && rawOptions.length > 0) {
+                    itemInfo.selectedOptionIndex = parseInt(optionsEl.value, 10);
                 }
                 if (noteEl) itemInfo.note = noteEl.value;
             }
@@ -131,7 +128,7 @@ function setupEventListeners() {
             if (!card) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const parentRecord = state.records.all.find(p => parseOptions(p.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).some(opt => opt.name === record.fields.Name));
+            const parentRecord = state.records.all.find(p => p.id === record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0]);
             if (parentRecord) {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
@@ -142,9 +139,7 @@ function setupEventListeners() {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            const childNames = new Set(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name));
-            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+            const children = state.records.all.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
             
             ui.renderRecords(children, imageCache);
             const implodeButton = document.createElement('div');
@@ -159,7 +154,6 @@ function setupEventListeners() {
     });
 
     // --- UNIFIED CHANGE LISTENER ---
-    // This listener handles dropdown selections.
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
         if (!card) return;
@@ -190,8 +184,8 @@ function setupEventListeners() {
                 if (optionImageUrls && optionImageUrls.length > 0) {
                     card.style.backgroundImage = `url('${optionImageUrls[0]}')`;
                 } else {
-                    const defaultImageUrls = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-                    card.style.backgroundImage = `url('${defaultImageUrls[0]}')`;
+                    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
+                    card.style.backgroundImage = `url('${imageUrls[0]}')`;
                 }
             }
         }
