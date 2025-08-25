@@ -1,12 +1,11 @@
 /*
- * Version: 2.3.1
+ * Version: 2.3.2
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.3.1 - 2025-08-25
- * - Made image URL construction more robust by using the 'secure_url' from the API response.
- * - Added a placeholder for the correct default image Public ID to fix 404s.
+ * v2.3.2 - 2025-08-25
+ * - Added conditional logic to apply safer transformations for GIFs to prevent 400 errors.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -106,10 +105,16 @@ export async function fetchImagesByTags(tags) {
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) return null;
         
-        // ROBUST FIX: Use the 'secure_url' provided by Cloudinary and add our transformations to it.
-        // This is safer than building the URL manually.
-        const transformations = 'c_fill,g_auto,w_600,h_520';
+        // --- NEW: Smart Transformation Logic ---
         return data.resources.map(image => {
+            let transformations;
+            // If the image is a GIF, use a simpler, safer transformation.
+            if (image.format === 'gif') {
+                transformations = 'c_fit,w_600,h_520';
+            } else {
+                // Otherwise, use the advanced crop and gravity transformation.
+                transformations = 'c_fill,g_auto,w_600,h_520';
+            }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
         });
@@ -144,9 +149,9 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     if (imageCache.has(cacheKey)) {
         return imageCache.get(cacheKey);
     }
-
-    // FIXME: Replace 'default-event-image.jpg' with the correct Public ID from your Cloudinary library.
-    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
+    
+    // Ensure you have a valid Public ID here for your default image.
+    const defaultImagePublicID = 'default-event-image.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
