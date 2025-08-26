@@ -1,4 +1,4 @@
-/*/*
+/*
  * Version: 2.8.0
  * Last Modified: 2025-08-26
  *
@@ -7,6 +7,9 @@
  * v2.8.0 - 2025-08-26
  * - Implemented secure API proxy for all Airtable requests.
  * - Removed hard-coded Personal Access Token from client-side code.
+ *
+ * v2.7.5 - 2025-08-26
+ * - Performed a full file review and fixed multiple critical syntax and logical errors.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -56,7 +59,7 @@ export async function saveSessionToAirtable() {
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDateString = dateRange[0];
-        if (startDateString) {
+        if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
             formattedDate = new Date(startDateString).toISOString();
         } else {
             console.error("Invalid date format in state, cannot save:", startDateString);
