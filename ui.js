@@ -98,7 +98,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    const imageUrls = await (record, state.records.all, imageCache);
     // --- ADD THIS LINE FOR DIAGNOSTICS ---
     console.log('Image URLs for record:', fields.Name, imageUrls);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
@@ -194,6 +194,7 @@ export async function createInteractiveCard(record, imageCache) {
     }
     
     const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    console.log(`Checking record: "${fields.Name}". Is it a grouping (from API)?`, isGrouping, imageUrls);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
