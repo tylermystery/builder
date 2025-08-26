@@ -1,36 +1,36 @@
 /*
- * Version: 2.7.5
+ * Version: 2.8.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v2.7.5 - 2025-08-26
- * - Performed a full file review and fixed multiple critical syntax and logical errors.
- * - Corrected all invalid operators, variable initializations, and property accessors.
+ * v2.8.1 - 2025-08-26
+ * - Refined date saving to ensure start time is correctly formatted for Airtable's native date field.
  *
- * v2.7.2 - 2025-08-26
- * - Fixed date saving bug by correctly formatting the date as a full ISO 8601 string before sending to Airtable.
+ * v2.8.0 - 2025-08-26
+ * - Implemented secure API proxy for all Airtable requests.
+ * - Removed hard-coded Personal Access Token from client-side code.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 
-const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
+// The proxy path for our Netlify serverless function
+const AIRTABLE_PROXY_PATH = '/.netlify/functions/airtable';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `${AIRTABLE_PROXY_PATH}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         
         state.session.isOwned = false;
-        // Corrected line: If collaborators exist, split them; otherwise, assign an empty array.
         state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
@@ -58,10 +58,10 @@ export async function saveSessionToAirtable() {
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDateString = dateRange[0]; // Correctly get the first element
-        if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
+        const startDateString = dateRange[0]; // This is now a full ISO string
+        try {
             formattedDate = new Date(startDateString).toISOString();
-        } else {
+        } catch (e) {
             console.error("Invalid date format in state, cannot save:", startDateString);
         }
     }
@@ -77,13 +77,13 @@ export async function saveSessionToAirtable() {
         }
     };
     const isUpdate = state.session.id !== null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const url = `${AIRTABLE_PROXY_PATH}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
 
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         if (!response.ok) {
@@ -109,10 +109,11 @@ export async function saveSessionToAirtable() {
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    const baseUrl = `${AIRTABLE_PROXY_PATH}/${TABLE_ID}?`;
     try {
         do {
-            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
             const data = await response.json();
             records = records.concat(data.records);
@@ -247,7 +248,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     
     const result = {
         isGrouping: isGrouping,
-        imageUrls: finalImageUrls.flat() // Use flat() to handle nested arrays of URLs
+        imageUrls: finalImageUrls.flat()
     };
     imageCache.set(cacheKey, result);
     return result;
