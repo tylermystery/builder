@@ -1,17 +1,17 @@
 /*
- * Version: 3.1.2
+ * Version: 3.2.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v3.2.0 - 2025-08-26
+ * - Refactored calendar logic to support item-specific calendars and lead times.
  *
  * v3.1.2 - 2025-08-26
  * - Fixed a startup crash by removing the call to the obsolete api.fetchCalendarData function.
  *
  * v3.1.1 - 2025-08-26
  * - Polished calendar views to be color-coded (green/orange/red).
- *
- * v3.1.0 - 2025-08-26
- * - Integrated the complete date availability system.
  */
 
 import { state } from './state.js';
@@ -47,21 +47,23 @@ function renderTopLevel() {
  */
 async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        return; // Don't run if no valid range is selected
+        return;
     }
 
     const startDate = mainDatePicker.selectedDates[0];
-    const endDate = mainDatePicker.selectedDates[1];
     const durationHours = parseInt(document.getElementById('header-duration').value, 10) || 1;
     const requestedEnd = new Date(startDate.getTime() + durationHours * 60 * 60 * 1000);
 
     const cards = document.querySelectorAll('.event-card');
-    cards.forEach(card => {
+    for (const card of cards) {
         const recordId = card.dataset.recordId;
-        // NOTE: In a future version, each item might have its own calendar.
-        // For now, we check against the global calendar for all items.
-        const status = checkAvailability(startDate, requestedEnd, state.calendar.busyTimes);
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const status = checkAvailability(startDate, requestedEnd, busyTimes, record);
         const icon = card.querySelector('.availability-btn');
+
         if (icon) {
             switch (status) {
                 case AVAILABILITY_STATUS.FULL:
@@ -78,19 +80,16 @@ async function updateAllCardAvailabilityIcons() {
                     break;
             }
         }
-    });
+    }
 }
 
 /**
  * Opens a read-only pop-up calendar for a single item.
- * @param {HTMLElement} targetElement - The button that was clicked.
+ * @param {object} record - The Airtable record for the item.
  */
-function showItemDetailCalendar(targetElement) {
-    // In this version, all items share a global calendar.
-    // We pass the global busyTimes to the detail view.
-    const busyTimes = state.calendar.busyTimes;
+async function showItemDetailCalendar(record) {
+    const busyTimes = await api.fetchCalendarForRecord(record);
 
-    // Create a temporary, read-only flatpickr instance
     const detailPicker = flatpickr(document.createElement('input'), {
         defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
         onDayCreate: function(dObj, dStr, fp, dayElem) {
@@ -99,7 +98,7 @@ function showItemDetailCalendar(targetElement) {
             const dayEnd = new Date(dayElem.dateObj);
             dayEnd.setHours(23, 59, 59, 999);
 
-            const status = checkAvailability(dayStart, dayEnd, busyTimes);
+            const status = checkAvailability(dayStart, dayEnd, busyTimes, record);
             if (status === AVAILABILITY_STATUS.NONE) {
                 dayElem.classList.add('flatpickr-disabled');
                 dayElem.title = 'Unavailable';
@@ -111,7 +110,6 @@ function showItemDetailCalendar(targetElement) {
                 dayElem.title = 'Fully Available';
             }
         },
-        // When this temporary calendar is closed, destroy it
         onClose: function(selectedDates, dateStr, instance) {
             instance.destroy();
         }
@@ -125,7 +123,6 @@ function showItemDetailCalendar(targetElement) {
 async function initialize() {
     ui.toggleLoading(true);
     try {
-        // Fetch all item records from Airtable. Calendar data is now fetched on-demand.
         state.records.all = await api.fetchAllRecords();
     } catch (error) {
         console.error("Failed to load initial data:", error);
@@ -155,7 +152,6 @@ function setupEventListeners() {
         ui.updateHeader();
         debouncedSave();
     });
-    // Link new duration input to the card availability updates
     document.getElementById('header-duration').addEventListener('change', updateAllCardAvailabilityIcons);
 
     document.getElementById('header-headcount').addEventListener('change', (e) => {
@@ -183,15 +179,16 @@ function setupEventListeners() {
                 updateAllCardAvailabilityIcons();
             }
         },
-        // Summary View: Color the calendar based on favorited items' availability
         onDayCreate: (dObj, dStr, fp, dayElem) => {
-            // For now, we'll just show the global availability on the main calendar too.
+            // This logic will be fully updated in the next step to show combined availability.
+            // For now, it will be incorrect if multiple items are favorited.
             const dayStart = new Date(dayElem.dateObj);
             dayStart.setHours(0, 0, 0, 0);
             const dayEnd = new Date(dayElem.dateObj);
             dayEnd.setHours(23, 59, 59, 999);
             
-            const status = checkAvailability(dayStart, dayEnd, state.calendar.busyTimes);
+            // Placeholder: This doesn't use any specific record, so lead time won't work here yet.
+            const status = checkAvailability(dayStart, dayEnd, [], {});
             if (status === AVAILABILITY_STATUS.NONE) {
                 dayElem.classList.add('flatpickr-disabled');
                 dayElem.title = "Unavailable";
@@ -215,7 +212,12 @@ function setupEventListeners() {
 
         if (availabilityBtn) {
             e.stopPropagation();
-            showItemDetailCalendar(availabilityBtn);
+            const card = availabilityBtn.closest('.event-card');
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                showItemDetailCalendar(record);
+            }
         } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
@@ -250,6 +252,8 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
+            // When favorites change, we need to redraw the main calendar
+            mainDatePicker.redraw();
             debouncedSave();
         } else if (parentBtn) {
             e.stopPropagation();
@@ -269,7 +273,6 @@ function setupEventListeners() {
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            // --- LOGIC FIX: Reverted to parsing the 'Options' field to find children for explode ---
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
