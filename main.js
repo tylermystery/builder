@@ -1,8 +1,11 @@
 /*
- * Version: 3.1.0
+ * Version: 3.1.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v3.1.1 - 2025-08-26
+ * - Polished calendar views to be color-coded (green/orange/red).
  *
  * v3.1.0 - 2025-08-26
  * - Integrated the complete date availability system.
@@ -106,6 +109,9 @@ function showItemDetailCalendar(targetElement) {
             } else if (status === AVAILABILITY_STATUS.PARTIAL) {
                 dayElem.classList.add('flatpickr-partial');
                 dayElem.title = 'Partially Available';
+            } else if (status === AVAILABILITY_STATUS.FULL) {
+                dayElem.classList.add('flatpickr-available');
+                dayElem.title = 'Fully Available';
             }
         },
         // When this temporary calendar is closed, destroy it
@@ -196,10 +202,13 @@ function setupEventListeners() {
             const status = checkAvailability(dayStart, dayEnd, state.calendar.busyTimes);
             if (status === AVAILABILITY_STATUS.NONE) {
                 dayElem.classList.add('flatpickr-disabled');
-                dayElem.title = "A favorited item is unavailable.";
+                dayElem.title = "Unavailable";
             } else if (status === AVAILABILITY_STATUS.PARTIAL) {
                 dayElem.classList.add('flatpickr-partial');
-                dayElem.title = "A favorited item has partial availability.";
+                dayElem.title = "Partially Available";
+            } else if (status === AVAILABILITY_STATUS.FULL) {
+                dayElem.classList.add('flatpickr-available');
+                dayElem.title = "Available";
             }
         }
     });
