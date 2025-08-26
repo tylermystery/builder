@@ -1,21 +1,17 @@
 /*
- * Version: 1.2.0
+ * Version: 1.2.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v1.2.1 - 2025-08-26
+ * - Added LEAD_TIME field name constant.
  *
  * v1.2.0 - 2025-08-26
  * - Added ICAL_URL field name constant.
  *
  * v1.1.1 - 2025-08-22
  * - Added CATEGORIES and SUBCATEGORIES constants.
- *
- * v1.1.0 - 2025-08-21
- * - Added GOALS constant for the new header field.
- * - Removed obsolete LOCATION constant.
- *
- * v1.0.0 - 2025-08-17
- * - Initial versioning and changelog added.
  */
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
@@ -40,6 +36,7 @@ export const CONSTANTS = {
         CATEGORIES: 'Categories',
         SUBCATEGORIES: 'Subcategories',
         ICAL_URL: 'iCal URL',
+        LEAD_TIME: 'Lead Time (days)',
     },
   
     PRICING_TYPES: {
