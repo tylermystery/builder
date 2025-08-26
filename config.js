@@ -1,8 +1,11 @@
 /*
- * Version: 1.1.1
- * Last Modified: 2025-08-22
+ * Version: 1.2.0
+ * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v1.2.0 - 2025-08-26
+ * - Added ICAL_URL field name constant.
  *
  * v1.1.1 - 2025-08-22
  * - Added CATEGORIES and SUBCATEGORIES constants.
@@ -32,9 +35,11 @@ export const CONSTANTS = {
         DURATION: 'Duration (hours)',
         PRICING_TYPE: 'Pricing Type',
         HEADCOUNT_MIN: 'Headcount min',
+      
         MEDIA_TAGS: 'Media Tags',
         CATEGORIES: 'Categories',
         SUBCATEGORIES: 'Subcategories',
+        ICAL_URL: 'iCal URL',
     },
   
     PRICING_TYPES: {
@@ -46,5 +51,6 @@ export const CONSTANTS = {
         GUEST_COUNT: 'guestCount',
         GOALS: 'goals',
         SPECIAL_REQUESTS: 'specialRequests',
+   
     }
 };
