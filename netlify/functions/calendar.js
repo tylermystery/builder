@@ -1,31 +1,57 @@
-// netlify/functions/calendar.js
-const ical = require('node-ical');
+/*
+ * Version: 1.0.0
+ * Last Modified: 2025-08-26
+ *
+ * Changelog:
+ *
+ * v1.0.0 - 2025-08-26
+ * - Initial version. Fetches and parses a remote iCal feed.
+ */
+
+const fetch = require('node-fetch');
+
+// A simple, dependency-free iCal parser.
+function parseICal(icalData) {
+    const events = [];
+    const eventBlocks = icalData.split('BEGIN:VEVENT');
+    eventBlocks.shift(); // Remove the header
+
+    eventBlocks.forEach(block => {
+        const startMatch = block.match(/DTSTART(?:;[^:]+)?:([0-9T]+)/);
+        const endMatch = block.match(/DTEND(?:;[^:]+)?:([0-9T]+)/);
+
+        if (startMatch && endMatch) {
+            events.push({
+                start: startMatch[1],
+                end: endMatch[1]
+            });
+        }
+    });
+    return events;
+}
 
 exports.handler = async function (event, context) {
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
-    }
+    // This URL can be replaced with your actual private iCal feed.
+    const ICAL_URL = 'https://www.thunderbird.net/media/caldata/USHolidays.ics';
 
     try {
-        const { calendarUrl } = JSON.parse(event.body);
-        if (!calendarUrl) {
-            return { statusCode: 400, body: 'Missing calendarUrl' };
+        const response = await fetch(ICAL_URL);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch iCal feed with status: ${response.statusText}`);
         }
+        const icalData = await response.text();
+        const busyTimes = parseICal(icalData);
 
-        const events = await ical.async.fromURL(calendarUrl);
-        const busySlots = [];
-        for (const key in events) {
-            if (events[key].type === 'VEVENT') {
-                busySlots.push({
-                    start: events[key].start,
-                    end: events[key].end
-                });
-            }
-        }
-        return { statusCode: 200, body: JSON.stringify(busySlots) };
-
+        return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(busyTimes),
+        };
     } catch (error) {
-        console.error('Error parsing iCal feed:', error);
-        return { statusCode: 500, body: 'Error parsing iCal feed.' };
+        console.error('iCal fetch/parse error:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Failed to process calendar data.' }),
+        };
     }
 };
