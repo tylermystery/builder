@@ -8,17 +8,17 @@
  * - Added a placeholder button for availability status to the interactive card.
  *
  * v2.6.0 - 2025-08-24
- * - [cite_start]Removed parseOptions function (moved to utils.js). [cite: 159]
- * - [cite_start]Imported parseOptions from utils.js to break circular dependency. [cite: 160]
+ * - Removed parseOptions function (moved to utils.js).
+ * - Imported parseOptions from utils.js to break circular dependency.
  *
  * v2.5.1 - 2025-08-23
- * - [cite_start]Moved price logic from main.js to fix circular dependency. [cite: 161]
+ * - Moved price logic from main.js to fix circular dependency.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions } from './utils.js'; [cite_start]// IMPORT ADDED [cite: 162]
+import { parseOptions } from './utils.js'; // IMPORT ADDED
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -34,13 +34,13 @@ const headerSummary = document.getElementById('header-summary');
 // parseOptions was removed from here
 
 function getRecordPrice(record, optionIndex = null) {
-    [cite_start]let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); [cite: 166]
-    [cite_start]if (optionIndex !== null) { [cite: 166]
-        [cite_start]const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); [cite: 167]
+    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
-        [cite_start]if (variation) { [cite: 167]
-            [cite_start]if (variation.absolutePrice !== null) return variation.absolutePrice; [cite: 168]
-            [cite_start]if (variation.priceChange !== null) price += variation.priceChange; [cite: 168]
+        if (variation) {
+            if (variation.absolutePrice !== null) return variation.absolutePrice;
+            if (variation.priceChange !== null) price += variation.priceChange;
         }
     }
     return price;
@@ -48,15 +48,15 @@ function getRecordPrice(record, optionIndex = null) {
 
 function getDescendantBookableItems(recordId, allRecords) {
     let bookableItems = [];
-    [cite_start]const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId); [cite: 170]
-    [cite_start]for (const child of children) { [cite: 170]
-        [cite_start]const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]); [cite: 171]
-        [cite_start]const childRecordNames = new Set(allRecords.map(r => r.fields.Name)); [cite: 171]
-        [cite_start]const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name)); [cite: 172]
-        [cite_start]if (isGrouping) { [cite: 172]
-            [cite_start]bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords)); [cite: 173]
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
         } else {
-            [cite_start]bookableItems.push(child); [cite: 174]
+            bookableItems.push(child);
         }
     }
     return bookableItems;
@@ -64,18 +64,18 @@ function getDescendantBookableItems(recordId, allRecords) {
 
 function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record.id, state.records.all);
-    [cite_start]if (descendants.length === 0) return null; [cite: 176]
+    if (descendants.length === 0) return null;
     let minPrice = Infinity;
     let maxPrice = -Infinity;
 
-    [cite_start]descendants.forEach(item => { [cite: 176]
+    descendants.forEach(item => {
         const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         if (options.length > 0) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price < minPrice) minPrice = price;
           
-                [cite_start]if (price > maxPrice) maxPrice = price; [cite: 177]
+                if (price > maxPrice) maxPrice = price;
             });
         } else {
             const price = getRecordPrice(item);
@@ -83,42 +83,42 @@ function getGroupPriceRange(record) {
             if (price > maxPrice) maxPrice = price;
         }
     });
-    [cite_start]return { min: minPrice, max: maxPrice }; [cite: 178]
+    return { min: minPrice, max: maxPrice };
 }
 
 // ... (rest of the file is unchanged)
 // --- UI RENDERING FUNCTIONS ---
 // --- NEW: Helper function to format pricing type for display ---
 function formatPricingType(pricingType) {
-    [cite_start]if (!pricingType) return ''; [cite: 179]
+    if (!pricingType) return '';
     // Default for flat rate
     const type = pricingType.toLowerCase();
-    [cite_start]if (type === 'per guest') return '/ guest'; [cite: 180]
-    [cite_start]if (type === 'per hour') return '/ hour'; [cite: 180]
-    [cite_start]return ''; [cite: 181]
+    if (type === 'per guest') return '/ guest';
+    if (type === 'per hour') return '/ hour';
+    return '';
 }
 
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
-    [cite_start]const fields = record.fields; [cite: 182]
+    const fields = record.fields;
     let variationNameHTML = '';
     let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-    let noteHTML = itemInfo.note ? [cite_start]`<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : ''; [cite: 183]
-    [cite_start]const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]); [cite: 183]
+    let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
+    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
-        [cite_start]variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`; [cite: 184]
+        variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
     }
 
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    [cite_start]const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache); [cite: 185]
-    [cite_start]itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`; [cite: 186]
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
     
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    [cite_start]const pricingTypeString = formatPricingType(pricingType); [cite: 187]
-    [cite_start]const showCardTotal = itemInfo.quantity > 1 && pricingTypeString; [cite: 188]
+    const pricingTypeString = formatPricingType(pricingType);
+    const showCardTotal = itemInfo.quantity > 1 && pricingTypeString;
     const cardTotal = itemPrice * itemInfo.quantity;
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
@@ -129,10 +129,10 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
             <div class="favorite-pricing-details">
                 <div class="pricing-line-item">
              
-                    [cite_start]<span class="item-quantity">Qty: ${itemInfo.quantity}</span> [cite: 189]
+                    <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
-                [cite_start]${showCardTotal ? [cite: 190]
+                ${showCardTotal ?
                 `
                 <div class="pricing-line-item-total">
                     <span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span>
@@ -140,58 +140,58 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
                 ` : ''}
             </div>
         </div>`;
-    [cite_start]return itemCard; [cite: 191]
+    return itemCard;
 }
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
-    [cite_start]const allRecords = state.records.all; [cite: 192]
+    const allRecords = state.records.all;
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    [cite_start]const childRecordNames = new Set(allRecords.map(r => r.fields.Name)); [cite: 193]
-    [cite_start]const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name)); [cite: 193]
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    [cite_start]const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null; [cite: 194]
-    const parentButtonHTML = parentId ? [cite_start]`<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : ''; [cite: 195]
-    const explodeButtonHTML = isGrouping ? [cite_start]`<button class="card-btn explode-btn" title="Explode">💥</button>` : ''; [cite: 195]
+    const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
+    const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
+    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
     const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
 
     let optionsControlHTML = '';
-    [cite_start]let notesHTML = ''; [cite: 196]
-    [cite_start]let quantitySelectorHTML = ''; [cite: 196]
-    [cite_start]let priceHTML = ''; [cite: 196]
+    let notesHTML = '';
+    let quantitySelectorHTML = '';
+    let priceHTML = '';
 
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options">
             <option value="">Select an option...</option>
             ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
         </select>`;
-        [cite_start]const range = getGroupPriceRange(record); [cite: 197]
+        const range = getGroupPriceRange(record);
         if (range) {
-            [cite_start]priceHTML = range.min === range.max ? [cite: 198]
+            priceHTML = range.min === range.max ?
                 `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
-            [cite_start]priceHTML = 'From $0.00'; [cite: 199]
+            priceHTML = 'From $0.00';
         }
     } else {
-        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || [cite_start]1; [cite: 200]
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         optionsControlHTML = `<select class="options-selector configure-options">
              ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
-        [cite_start]</select>`; [cite: 201]
-        [cite_start]notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`; [cite: 201]
+        </select>`;
+        notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
         quantitySelectorHTML = `
             <div class="quantity-selector">
                 <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
                 <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
                 <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
             </div>`;
-        [cite_start]const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); [cite: 202]
+        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         priceHTML = `$${initialPrice.toFixed(2)}`;
     }
 
-    [cite_start]const isHearted = state.cart.items.has(recordId); [cite: 203]
+    const isHearted = state.cart.items.has(recordId);
     eventCard.innerHTML = `
         <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
         <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${recordId}">
@@ -199,10 +199,10 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         <div class="event-card-content">
          
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || [cite_start]'Untitled Event'}</h3> [cite: 204]
-            [cite_start]<p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || [cite: 205]
+            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
                 ''}</p>
-            [cite_start]${rawOptions.length > 0 ? [cite: 206]
+            ${rawOptions.length > 0 ?
                 optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
@@ -210,12 +210,12 @@ export async function createInteractiveCard(record, imageCache) {
                 ${quantitySelectorHTML}
             </div>
         </div>`;
-    [cite_start]const plusBtn = eventCard.querySelector('.quantity-btn.plus'); [cite: 207]
-    [cite_start]const minusBtn = eventCard.querySelector('.quantity-btn.minus'); [cite: 208]
-    [cite_start]const quantityInput = eventCard.querySelector('.quantity-input'); [cite: 208]
-    [cite_start]if (plusBtn && minusBtn && quantityInput) { [cite: 208]
-        [cite_start]plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; }); [cite: 209]
-        [cite_start]minusBtn.addEventListener('click', () => { [cite: 209]
+    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
+    const quantityInput = eventCard.querySelector('.quantity-input');
+    if (plusBtn && minusBtn && quantityInput) {
+        plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; });
+        minusBtn.addEventListener('click', () => {
             const current = parseInt(quantityInput.value);
             const min = parseInt(quantityInput.min);
             if (current > min) {
@@ -224,57 +224,57 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    [cite_start]const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache); [cite: 210]
-    [cite_start]console.log(`Checking record: "${fields.Name}". Is it a grouping (from API)?`, isGrouping, imageUrls); [cite: 211]
+    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    console.log(`Checking record: "${fields.Name}". Is it a grouping (from API)?`, isGrouping, imageUrls);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-    [cite_start]return eventCard; [cite: 212]
+    return eventCard;
 }
 
 export async function renderRecords(recordsToRender, imageCache) {
     catalogContainer.innerHTML = '';
     const implodeContainer = document.getElementById('implode-container');
-    [cite_start]if (implodeContainer) implodeContainer.remove(); [cite: 213]
-    [cite_start]if (recordsToRender.length === 0) { [cite: 213]
-        [cite_start]catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>"; [cite: 214]
+    if (implodeContainer) implodeContainer.remove();
+    if (recordsToRender.length === 0) {
+        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
     for (const record of recordsToRender) {
         const eventCard = await createInteractiveCard(record, imageCache);
-        [cite_start]if (eventCard) { [cite: 215]
-            [cite_start]catalogContainer.appendChild(eventCard); [cite: 216]
+        if (eventCard) {
+            catalogContainer.appendChild(eventCard);
         }
     }
 }
 
 export async function updateFavoritesCarousel() {
     if (state.cart.items.size === 0) {
-        [cite_start]favoritesSection.style.display = 'none'; [cite: 217]
+        favoritesSection.style.display = 'none';
         return;
     }
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
     
-    [cite_start]const sortedItems = Array.from(state.cart.items.entries()); [cite: 218]
+    const sortedItems = Array.from(state.cart.items.entries());
     for (const [recordId, itemInfo] of sortedItems) {
         const record = state.records.all.find(r => r.id === recordId);
-        [cite_start]if (record) { [cite: 219]
+        if (record) {
             const card = await createFavoriteCardElement(record, itemInfo, false, imageCache);
-            [cite_start]if (card) favoritesCarousel.appendChild(card); [cite: 220]
+            if (card) favoritesCarousel.appendChild(card);
         }
     }
-    [cite_start]updateTotalCost(); [cite: 221]
+    updateTotalCost();
 }
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Builder';
     document.title = eventName;
-    [cite_start]headerEventNameInput.value = eventName; [cite: 222]
+    headerEventNameInput.value = eventName;
 }
 
 export function updateTotalCost() {
     let total = 0;
-    [cite_start]const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]); [cite: 223]
+    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
     allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
@@ -286,17 +286,17 @@ export function updateTotalCost() {
         let itemCost;
  
         
-        [cite_start]if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) { [cite: 224]
+        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
             itemCost = unitPrice;
         }
         total += itemCost;
     });
-    [cite_start]totalCostEl.textContent = `$${total.toFixed(2)}`; [cite: 225]
+    totalCostEl.textContent = `$${total.toFixed(2)}`;
 }
 
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
-    filterControls.style.display = show ? [cite_start]'none' : 'flex'; [cite: 226]
+    filterControls.style.display = show ? 'none' : 'flex';
 }
