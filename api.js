@@ -1,17 +1,14 @@
 /*
- * Version: 2.7.0
+ * Version: 2.7.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
+ * v2.7.1 - 2025-08-26
+ * - saveSessionToAirtable now returns a boolean indicating success or failure.
+ *
  * v2.7.0 - 2025-08-26
  * - Replaced global fetchCalendarData with fetchCalendarForRecord, which includes caching.
- *
- * v2.6.0 - 2025-08-26
- * - Added fetchCalendarData function to get iCal events.
- *
- * v2.5.1 - 2025-08-25
- * - fetchImagesForRecord now returns an object { isGrouping, imageUrls }
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -23,7 +20,7 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
-// ... (loadSessionFromAirtable and saveSessionToAirtable are unchanged)
+// ... (loadSessionFromAirtable is unchanged)
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -142,6 +139,7 @@ export async function fetchCalendarForRecord(record) {
     }
 }
 
+// ... (fetchImagesByTags, getRecursiveChildImageUrls, fetchImagesForRecord are unchanged)
 export async function fetchImagesByTags(tags) {
     if (!tags || tags.length === 0) return null;
     try {
