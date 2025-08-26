@@ -1,18 +1,17 @@
 /*
- * Version: 2.7.0
+ * Version: 2.8.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v2.8.0 - 2025-08-26
+ * - Expanded updateHeader to populate headcount and goals fields on session load.
  *
  * v2.7.0 - 2025-08-26
  * - Added a placeholder button for availability status to the interactive card.
  *
  * v2.6.0 - 2025-08-24
  * - Removed parseOptions function (moved to utils.js).
- * - Imported parseOptions from utils.js to break circular dependency.
- *
- * v2.5.1 - 2025-08-23
- * - Moved price logic from main.js to fix circular dependency.
  */
 
 import { state } from './state.js';
@@ -267,9 +266,12 @@ export async function updateFavoritesCarousel() {
 }
 
 export function updateHeader() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Builder';
-    document.title = eventName;
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.title = eventName || 'Event Builder';
     headerEventNameInput.value = eventName;
+
+    document.getElementById('header-headcount').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
+    document.getElementById('header-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
 export function updateTotalCost() {
