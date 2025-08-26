@@ -107,13 +107,19 @@ function setupEventListeners() {
                 const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const noteEl = currentCard.querySelector('.item-note');
                 const optionsEl = currentCard.querySelector('.configure-options');
-
+                const quantityEl = currentCard.querySelector('.quantity-input'); // Get the quantity input
+        
+                // --- FIX: Read the quantity from the input field if it exists ---
+                if (quantityEl) {
+                    itemInfo.quantity = parseInt(quantityEl.value, 10);
+                }
+        
                 if (optionsEl && rawOptions.length > 0) {
                     itemInfo.selectedOptionIndex = parseInt(optionsEl.value, 10);
                 }
                 if (noteEl) itemInfo.note = noteEl.value;
             }
-
+        
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
                 heartIcon.classList.remove('hearted');
