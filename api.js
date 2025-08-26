@@ -1,15 +1,17 @@
 /*
- * Version: 2.6.0
+ * Version: 2.7.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v2.7.0 - 2025-08-26
+ * - Replaced global fetchCalendarData with fetchCalendarForRecord, which includes caching.
  *
  * v2.6.0 - 2025-08-26
  * - Added fetchCalendarData function to get iCal events.
  *
  * v2.5.1 - 2025-08-25
  * - fetchImagesForRecord now returns an object { isGrouping, imageUrls }
- * to make it the single source of truth for this logic.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -106,16 +108,37 @@ export async function fetchAllRecords() {
     }
 }
 
-export async function fetchCalendarData() {
+/**
+ * Fetches calendar data for a specific record. Uses a cache to avoid re-fetching.
+ * @param {object} record - The Airtable record object for an item.
+ * @returns {Promise<Array>} A promise that resolves to an array of busy time objects.
+ */
+export async function fetchCalendarForRecord(record) {
+    const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+    if (!icalUrl) {
+        return []; // No calendar for this item.
+    }
+
+    // Check cache first
+    if (state.calendar.busyTimes.has(icalUrl)) {
+        return state.calendar.busyTimes.get(icalUrl);
+    }
+
     try {
-        const response = await fetch('/api/calendar');
+        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
+        const response = await fetch(proxyUrl);
         if (!response.ok) {
             throw new Error(`Calendar API Error: ${response.statusText}`);
         }
-        return await response.json();
+        const busyTimes = await response.json();
+        // Cache the successful result
+        state.calendar.busyTimes.set(icalUrl, busyTimes);
+        return busyTimes;
     } catch (error) {
-        console.error("Failed to fetch calendar data:", error);
-        return []; // Return an empty array on failure
+        console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
+        // Cache the error as an empty array to prevent repeated failed calls
+        state.calendar.busyTimes.set(icalUrl, []);
+        return [];
     }
 }
 
