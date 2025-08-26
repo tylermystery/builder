@@ -32,7 +32,10 @@ export const state = {
         user: '',
         collaborators: [],
         reactions: new Map(),
-    },
+        },
+    calendar: {
+        busyTimes: [], // Will hold events from the iCal feed
+        },
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
