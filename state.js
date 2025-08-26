@@ -1,20 +1,17 @@
 /*
- * Version: 1.8.0
+ * Version: 1.8.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v1.8.1 - 2025-08-26
+ * - Added ui.saveState to track autosave status.
  *
  * v1.8.0 - 2025-08-26
  * - Converted calendar.busyTimes to a Map to act as a cache for iCal feeds.
  *
  * v1.7.0 - 2025-08-24
  * - Added session.isOwned flag for "Fork on Edit" functionality.
- *
- * v1.6.1 - 2025-08-22
- * - Restored history object to state for Beta Toolkit.
- *
- * v1.6.0 - 2025-08-21
- * - Removed obsolete history object for MVP cleanup.
  */
 
 export const state = {
@@ -45,7 +42,7 @@ export const state = {
         isLoadingMore: false,
         currentSort: 'reactions-desc',
         cardImageIndexes: new Map(), // Tracks current image index for each card
- 
+        saveState: 'SAVED', // Can be 'SAVED', 'MODIFIED', 'SAVING'
     },
     history: {
         undoStack: [],
