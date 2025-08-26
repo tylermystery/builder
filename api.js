@@ -143,6 +143,8 @@ export async function fetchAllRecords() {
 }
 
 async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
+    console.log(`%cENTERING recursion for: ${record.fields.Name} (depth: ${currentDepth})`, 'color: blue;');
+
     if (!record || typeof record !== 'object' || !record.id) {
         console.error("Invalid data passed to getRecursiveChildImageUrls:", record);
         return [];
@@ -156,7 +158,8 @@ async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDep
         const childNames = new Set(rawOptions.map(opt => opt.name));
         children = allRecords.filter(r => childNames.has(r.fields.Name));
     }
-    
+    console.log(`%cEXITING recursion for: ${record.fields.Name}`, 'color: green;');
+
     let imageUrls = [];
 
     for (const child of children) {
