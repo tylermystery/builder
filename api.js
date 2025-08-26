@@ -1,12 +1,12 @@
 /*
- * Version: 2.5.2
+ * Version: 2.5.3
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.5.2 - 2025-08-25
- * - Made getRecursiveChildImageUrls more robust to find children defined
- * in either the 'Parent Item' field or the 'Options' field.
+ * v2.5.3 - 2025-08-25
+ * - Fixed a critical bug where the wrong data type was passed to the recursive image search.
+ * - Added a guard clause to the recursive function for future resiliency.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -143,12 +143,15 @@ export async function fetchAllRecords() {
 }
 
 async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
+    // --- RESILIENCY: Add a "guard clause" to ensure we have a valid record object. ---
+    if (!record || typeof record !== 'object' || !record.id) {
+        console.error("Invalid data passed to getRecursiveChildImageUrls:", record);
+        return [];
+    }
     if (currentDepth > maxDepth) return [];
 
-    // --- LOGIC FIX: Find children using two different methods ---
     let children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
     
-    // If no children were found using the 'Parent Item' field, fall back to parsing the 'Options' field.
     if (children.length === 0) {
         const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const childNames = new Set(rawOptions.map(opt => opt.name));
@@ -184,6 +187,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const isGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
 
     if (isGrouping) {
+        // --- CRITICAL FIX: Pass the entire 'record' object, not just its ID. ---
         imageUrls = await getRecursiveChildImageUrls(record, allRecords, imageCache);
     } else {
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
