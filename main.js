@@ -26,6 +26,32 @@ let mainDatePicker = null;
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
+function debouncedSave() {
+    const saveStatusEl = document.getElementById('save-status');
+    if (saveStatusEl) {
+        saveStatusEl.textContent = 'Changes pending...';
+        saveStatusEl.style.color = '#666';
+    }
+
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+        if (saveStatusEl) saveStatusEl.textContent = 'Saving...';
+
+        const success = await api.saveSessionToAirtable();
+
+        if (saveStatusEl) {
+            if (success) {
+                saveStatusEl.textContent = 'All changes saved.';
+                // Optional: Fade out the message after a few seconds
+                setTimeout(() => { saveStatusEl.textContent = ''; }, 3000);
+            } else {
+                saveStatusEl.textContent = 'Save failed. Please check connection and try again.';
+                saveStatusEl.style.color = 'red';
+            }
+        }
+    }, 1000);
+}
+
 const saveShareBtn = document.getElementById('save-share-btn');
 
 function updateSaveShareButton() {
