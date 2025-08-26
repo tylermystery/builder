@@ -33,7 +33,7 @@ export async function loadSessionFromAirtable(sessionId) {
         
         state.session.isOwned = false;
         // Corrected line: If collaborators exist, split them into an array; otherwise, create an empty array.
-        state.session.collaborators = record.fields.Collaborators? record.fields.Collaborators.split(',').map(name => name.trim()) :;
+        state.session.collaborators = record.fields.Collaborators? record.fields.Collaborators.split(',').map(name => name.trim()) ;
         
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
