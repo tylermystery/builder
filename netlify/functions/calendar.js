@@ -1,8 +1,11 @@
 /*
- * Version: 1.0.0
+ * Version: 2.0.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v2.0.0 - 2025-08-26
+ * - Function now accepts a 'url' query parameter to fetch any iCal feed dynamically.
  *
  * v1.0.0 - 2025-08-26
  * - Initial version. Fetches and parses a remote iCal feed.
@@ -31,11 +34,17 @@ function parseICal(icalData) {
 }
 
 exports.handler = async function (event, context) {
-    // This URL can be replaced with your actual private iCal feed.
-    const ICAL_URL = 'https://www.thunderbird.net/media/caldata/USHolidays.ics';
+    const { url } = event.queryStringParameters;
+
+    if (!url) {
+        return {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Missing "url" query parameter.' }),
+        };
+    }
 
     try {
-        const response = await fetch(ICAL_URL);
+        const response = await fetch(decodeURIComponent(url));
         if (!response.ok) {
             throw new Error(`Failed to fetch iCal feed with status: ${response.statusText}`);
         }
