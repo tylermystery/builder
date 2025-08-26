@@ -1,12 +1,16 @@
 /*
- * Version: 1.0.0
+ * Version: 1.1.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
+ * v1.1.0 - 2025-08-26
+ * - Added lead time check to the beginning of the availability logic.
+ *
  * v1.0.0 - 2025-08-26
  * - Initial version. Contains core availability checking logic.
  */
+import { CONSTANTS } from './config.js';
 
 // Exportable constants for availability status.
 export const AVAILABILITY_STATUS = {
@@ -38,13 +42,25 @@ function parseICalDate(dateString) {
 
 
 /**
- * Checks the availability of a time range against a list of busy events.
+ * Checks the availability of a time range against a list of busy events and lead time.
  * @param {Date} requestedStart - The start of the desired time slot.
  * @param {Date} requestedEnd - The end of the desired time slot.
  * @param {Array} busyEvents - An array of objects with {start, end} string properties from our calendar API.
+ * @param {object} record - The Airtable record for the item being checked.
  * @returns {string} - The availability status ('FULL', 'PARTIAL', or 'NONE').
  */
-export function checkAvailability(requestedStart, requestedEnd, busyEvents) {
+export function checkAvailability(requestedStart, requestedEnd, busyEvents, record) {
+    // --- 1. LEAD TIME CHECK ---
+    const leadTimeDays = record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0;
+    if (leadTimeDays > 0) {
+        const now = new Date();
+        const earliestBookableDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + leadTimeDays);
+        if (requestedStart < earliestBookableDate) {
+            return AVAILABILITY_STATUS.NONE; // Requested date is within the lead time period.
+        }
+    }
+
+    // --- 2. ICAL EVENT CHECK ---
     if (!busyEvents || busyEvents.length === 0) {
         return AVAILABILITY_STATUS.FULL;
     }
