@@ -1,14 +1,12 @@
 /*
- * Version: 2.7.3
+ * Version: 2.7.4
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v2.7.3 - 2025-08-26
- * - Fixed multiple critical syntax and logical errors throughout the file.
- * - Corrected ternary operator in loadSessionFromAirtable.
- * - Corrected all invalid logical OR operators.
- * - Fixed date formatting logic to correctly handle the date array.
+ * v2.7.4 - 2025-08-26
+ * - Performed a full file review and fixed multiple critical syntax and logical errors.
+ * - Corrected all invalid operators, variable initializations, and property accessors.
  *
  * v2.7.2 - 2025-08-26
  * - Fixed date saving bug by correctly formatting the date as a full ISO 8601 string before sending to Airtable.
