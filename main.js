@@ -1,16 +1,16 @@
 /*
- * Version: 3.5.0
+ * Version: 3.6.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v3.5.0 - 2025-08-26
- * - Implemented a save/share button with visual feedback for save status.
- * - Added a navigation guard to prevent losing unsaved changes.
- * - Centralized save triggers to a single function.
+ * v3.6.0 - 2025-08-26
+ * - Enhanced date picker to include start and end time selection.
+ * - Removed separate "Duration" input, deriving duration from the date/time range.
+ * - Ensured date/time range is correctly saved and loaded with sessions.
  *
- * v3.4.1 - 2025-08-26
- * - Ensured all header fields (Date, Headcount, Goals) are populated on session load.
+ * v3.5.1 - 2025-08-26
+ * - Removed unused debouncedSave function.
  */
 
 import { state } from './state.js';
@@ -20,40 +20,13 @@ import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
-
 const imageCache = new Map();
 let mainDatePicker = null;
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
-function debouncedSave() {
-    const saveStatusEl = document.getElementById('save-status');
-    if (saveStatusEl) {
-        saveStatusEl.textContent = 'Changes pending...';
-        saveStatusEl.style.color = '#666';
-    }
-
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
-        if (saveStatusEl) saveStatusEl.textContent = 'Saving...';
-
-        const success = await api.saveSessionToAirtable();
-
-        if (saveStatusEl) {
-            if (success) {
-                saveStatusEl.textContent = 'All changes saved.';
-                // Optional: Fade out the message after a few seconds
-                setTimeout(() => { saveStatusEl.textContent = ''; }, 3000);
-            } else {
-                saveStatusEl.textContent = 'Save failed. Please check connection and try again.';
-                saveStatusEl.style.color = 'red';
-            }
-        }
-    }, 1000);
-}
 
 const saveShareBtn = document.getElementById('save-share-btn');
-
 function updateSaveShareButton() {
     switch (state.ui.saveState) {
         case 'MODIFIED':
@@ -75,7 +48,6 @@ function triggerSave() {
     clearTimeout(saveTimeout);
     state.ui.saveState = 'MODIFIED';
     updateSaveShareButton();
-
     saveTimeout = setTimeout(async () => {
         state.ui.saveState = 'SAVING';
         updateSaveShareButton();
@@ -101,8 +73,7 @@ async function updateAllCardAvailabilityIcons() {
     }
 
     const startDate = mainDatePicker.selectedDates[0];
-    const durationHours = parseInt(document.getElementById('header-duration').value, 10) || 1;
-    const requestedEnd = new Date(startDate.getTime() + durationHours * 60 * 60 * 1000);
+    const requestedEnd = mainDatePicker.selectedDates[1]; // Use the end time from the picker
 
     const cards = document.querySelectorAll('.event-card');
     for (const card of cards) {
@@ -132,7 +103,6 @@ async function updateAllCardAvailabilityIcons() {
 
 async function showItemDetailCalendar(record) {
     const busyTimes = await api.fetchCalendarForRecord(record);
-
     const detailPicker = flatpickr(document.createElement('input'), {
         defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
         onDayCreate: function(dObj, dStr, fp, dayElem) {
@@ -174,13 +144,13 @@ async function initialize() {
     const sessionId = urlParams.get('session');
     
     setupEventListeners();
-
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
 
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (savedDate && savedDate.length === 2) {
+        if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
+            // savedDate contains ISO strings, which flatpickr can parse directly
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
         }
     } else {
@@ -199,7 +169,7 @@ function setupEventListeners() {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
-    document.getElementById('header-duration').addEventListener('change', updateAllCardAvailabilityIcons);
+    // Removed listener for 'header-duration'
     document.getElementById('header-headcount').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
         triggerSave();
@@ -208,19 +178,19 @@ function setupEventListeners() {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-
     // --- BETA TOOLKIT ---
     document.getElementById('beta-trigger').addEventListener('click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
-
     // --- MAIN DATE PICKER ---
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
-        dateFormat: "M j, Y",
+        enableTime: true,
+        dateFormat: "M j, Y h:i K", // e.g., Aug 26, 2025 05:30 PM
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString().split('T')[0]));
+                // Save full ISO strings to preserve time and timezone info
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
                 updateAllCardAvailabilityIcons();
             }
@@ -239,7 +209,6 @@ function setupEventListeners() {
 
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
-
             let finalStatus = AVAILABILITY_STATUS.FULL;
             let tooltipContent = [`<strong>${day.toLocaleDateString()}</strong><hr>`];
 
@@ -250,7 +219,6 @@ function setupEventListeners() {
                 
                 let statusIcon = '✅';
                 let statusText = `Available`;
-
                 if (status === AVAILABILITY_STATUS.NONE) {
                     finalStatus = AVAILABILITY_STATUS.NONE;
                     statusIcon = '❌';
@@ -288,7 +256,6 @@ function setupEventListeners() {
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
-
     // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
         const heartIcon = e.target.closest('.heart-icon');
@@ -320,7 +287,6 @@ function setupEventListeners() {
             if (!currentCard) return; 
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            
             const isGrouping = state.records.all.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
             
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
@@ -329,7 +295,6 @@ function setupEventListeners() {
                 const noteEl = currentCard.querySelector('.item-note');
                 const optionsEl = currentCard.querySelector('.configure-options');
                 const quantityEl = currentCard.querySelector('.quantity-input');
-        
                 if (quantityEl) {
                     itemInfo.quantity = parseInt(quantityEl.value, 10);
                 }
