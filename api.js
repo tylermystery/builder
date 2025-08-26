@@ -205,7 +205,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     
     const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
     
-    // The final returned object is now the single source of truth.
     const result = {
         isGrouping: isGrouping,
         imageUrls: finalImageUrls
