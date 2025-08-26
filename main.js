@@ -1,11 +1,14 @@
 /*
- * Version: 3.0.5
- * Last Modified: 2025-08-26
+ * Version: 3.0.4
+ * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v3.0.5 - 2025-08-26
- * - Wrapped initialize() in a DOMContentLoaded listener to prevent race conditions on page load.
+ * v3.0.4 - 2025-08-25
+ * - Restored the original child-finding logic for the Explode button to fix its functionality.
+ *
+ * v3.0.3 - 2025-08-25
+ * - Fixed a bug where the click handler used an outdated 'isGrouping' check.
  */
 
 import { state } from './state.js';
@@ -104,8 +107,9 @@ function setupEventListeners() {
                 const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const noteEl = currentCard.querySelector('.item-note');
                 const optionsEl = currentCard.querySelector('.configure-options');
-                const quantityEl = currentCard.querySelector('.quantity-input');
+                const quantityEl = currentCard.querySelector('.quantity-input'); // Get the quantity input
         
+                // --- FIX: Read the quantity from the input field if it exists ---
                 if (quantityEl) {
                     itemInfo.quantity = parseInt(quantityEl.value, 10);
                 }
@@ -143,6 +147,8 @@ function setupEventListeners() {
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
+
+            // --- LOGIC FIX: Reverted to parsing the 'Options' field to find children for explode ---
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
@@ -168,7 +174,6 @@ function setupEventListeners() {
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-    
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
@@ -210,7 +215,4 @@ function setupEventListeners() {
     });
 }
 
-// --- RESILIENCY FIX: Wait for the DOM to be fully loaded before running the app ---
-document.addEventListener('DOMContentLoaded', () => {
-    initialize();
-});
+initialize();
