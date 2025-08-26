@@ -1,12 +1,11 @@
 /*
- * Version: 2.8.0
+ * Version: 2.8.1
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.8.0 - 2025-08-25
- * - Fixed a critical bug where createInteractiveCard and createFavoriteCardElement were not
- * correctly handling the new object returned by fetchImagesForRecord.
+ * v2.8.1 - 2025-08-25
+ * - Fixed a variable scope bug in createInteractiveCard that broke grouping card rendering.
  */
 
 import { state } from './state.js';
@@ -89,10 +88,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    
-    // --- FIX: Correctly destructuring the object returned by fetchImagesForRecord ---
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
-    
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
     itemCard.innerHTML = `
@@ -116,8 +112,12 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
     
-    // --- FIX: Only call fetchImagesForRecord once and get both properties from the object ---
     const { isGrouping, imageUrls } = await fetchImagesForRecord(record, allRecords, imageCache);
+
+    // --- LESSON LEARNED (SCOPE): Moved rawOptions here to a shared scope. ---
+    // It's needed by both the 'if (isGrouping)' and the 'else' blocks,
+    // so it must be defined before them.
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
     const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
     const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
@@ -142,15 +142,12 @@ export async function createInteractiveCard(record, imageCache) {
         const layoutClass = `layout-count-${Math.min(imageCount, 4)}`;
         backgroundContentHTML = `<div class="collage-container ${layoutClass}">${collageItemsHTML}</div>`;
 
-        const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
         const range = getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'From $0.00';
     } else {
-        // --- For single items, we now use the imageUrls from the API call at the top ---
         eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}</select>`;
         notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
         quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
@@ -168,7 +165,7 @@ export async function createInteractiveCard(record, imageCache) {
         <div class="event-card-content">
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
-            ${isGrouping ? optionsControlHTML : (parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).length > 0 ? optionsControlHTML : '')}
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
                 <div class="price">${priceHTML}</div>
