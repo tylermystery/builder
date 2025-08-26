@@ -78,6 +78,21 @@
             border-left: 1px solid #e9ecef;
             padding-left: 20px;
         }
+        #save-share-btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #007aff;
+            background-color: #007aff;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        #save-share-btn:disabled {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            cursor: not-allowed;
+        }
         .history-controls { display: none;
         }
         body.history-mode-enabled .history-controls { display: flex;
@@ -292,8 +307,8 @@
                 <div id="total-cost-section">
                     <strong>Total:</strong>
                     <span id="total-cost" title="No items selected">$0.00</span>
-    
                 </div>
+                <button id="save-share-btn">🔗 Copy Link</button>
             </div>
         </div>
     </div>
