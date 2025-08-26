@@ -1,10 +1,10 @@
 /*
- * Version: 2.7.4
+ * Version: 2.7.5
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v2.7.4 - 2025-08-26
+ * v2.7.5 - 2025-08-26
  * - Performed a full file review and fixed multiple critical syntax and logical errors.
  * - Corrected all invalid operators, variable initializations, and property accessors.
  *
@@ -31,8 +31,7 @@ export async function loadSessionFromAirtable(sessionId) {
         
         state.session.isOwned = false;
         // Corrected line: If collaborators exist, split them; otherwise, assign an empty array.
-        state.session.collaborators = record.fields.Collaborators? record.fields.Collaborators.split(',').map(name => name.trim()) :;
-        
+        state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
             const savedState = JSON.parse(sessionDataString);
@@ -49,20 +48,17 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
-    if (state.session.id &&!state.session.isOwned) {
+    if (state.session.id && !state.session.isOwned) {
         state.session.id = null;
     }
 
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
-    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) |
-
-| `Session from ${new Date().toLocaleString()}`;
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
 
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
-
     if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDateString = dateRange; // Correctly get the first element
+        const startDateString = dateRange[0]; // Correctly get the first element
         if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
             formattedDate = new Date(startDateString).toISOString();
         } else {
@@ -75,25 +71,20 @@ export async function saveSessionToAirtable() {
             "Name": sessionName,
             "Items with Variations": JSON.stringify(sessionData),
             "Collaborators": state.session.collaborators.join(', '),
-            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) |
-
-| null,
-            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) |
-
-| null,
+            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
+            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
             "Date": formattedDate
         }
     };
-
-    const isUpdate = state.session.id!== null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate? `/${state.session.id}` : '');
-    const method = isUpdate? 'PATCH' : 'POST';
+    const isUpdate = state.session.id !== null;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const method = isUpdate ? 'PATCH' : 'POST';
 
     try {
         const response = await fetch(url, {
             method: method,
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(isUpdate? payload : { records: [payload] })
+            body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -101,7 +92,7 @@ export async function saveSessionToAirtable() {
         }
         const result = await response.json();
         if (!isUpdate) {
-            state.session.id = result.records.id;
+            state.session.id = result.records[0].id;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
         }
@@ -116,12 +107,12 @@ export async function saveSessionToAirtable() {
 
 
 export async function fetchAllRecords() {
-    let records =;
+    let records = [];
     let offset = null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
     try {
         do {
-            const response = await fetch(offset? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
             const data = await response.json();
             records = records.concat(data.records);
@@ -135,9 +126,9 @@ export async function fetchAllRecords() {
 }
 
 export async function fetchCalendarForRecord(record) {
-    const icalUrl = record.fields;
+    const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
-        return;
+        return [];
     }
 
     if (state.calendar.busyTimes.has(icalUrl)) {
@@ -155,15 +146,13 @@ export async function fetchCalendarForRecord(record) {
         return busyTimes;
     } catch (error) {
         console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
-        state.calendar.busyTimes.set(icalUrl,);
-        return;
+        state.calendar.busyTimes.set(icalUrl, []);
+        return [];
     }
 }
 
 export async function fetchImagesByTags(tags) {
-    if (!tags |
-
-| tags.length === 0) return null;
+    if (!tags || tags.length === 0) return null;
     try {
         let payload;
         if (Array.isArray(tags)) {
@@ -179,9 +168,7 @@ export async function fetchImagesByTags(tags) {
         if (!response.ok) throw new Error(`Serverless function error: ${response.statusText}`);
         
         const data = await response.json();
-        if (!data.resources |
-
-| data.resources.length === 0) return null;
+        if (!data.resources || data.resources.length === 0) return null;
         
         return data.resources.map(image => {
             let transformations;
@@ -191,7 +178,7 @@ export async function fetchImagesByTags(tags) {
                 transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts}/upload/${transformations}/${urlParts[1]}`;
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
         });
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
@@ -200,30 +187,28 @@ export async function fetchImagesByTags(tags) {
 }
 
 async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
-    if (!record |
-
-| typeof record!== 'object' ||!record.id) {
+    if (!record || typeof record !== 'object' || !record.id) {
         console.error("Invalid data passed to getRecursiveChildImageUrls:", record);
-        return;
+        return [];
     }
-    if (currentDepth > maxDepth) return;
+    if (currentDepth > maxDepth) return [];
 
-    let children = allRecords.filter(r => r.fields?. === record.id);
+    let children = allRecords.filter(r => r.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
     if (children.length === 0) {
-        const rawOptions = parseOptions(record.fields);
+        const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const childNames = new Set(rawOptions.map(opt => opt.name));
         children = allRecords.filter(r => childNames.has(r.fields.Name));
     }
     
-    let imageUrls =;
+    let imageUrls = [];
     for (const child of children) {
-        const isChildGrouping = allRecords.some(r => r.fields?. === child.id);
+        const isChildGrouping = allRecords.some(r => r.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === child.id);
         if (isChildGrouping && currentDepth < maxDepth) {
             const deeperUrls = await getRecursiveChildImageUrls(child, allRecords, imageCache, maxDepth, currentDepth + 1);
             imageUrls.push(...deeperUrls);
         } else {
             const imageData = await fetchImagesForRecord(child, allRecords, imageCache);
-            imageUrls.push(imageData.imageUrls);
+            imageUrls.push(...imageData.imageUrls);
         }
     }
     return imageUrls;
@@ -239,30 +224,30 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
-    const isGrouping = allRecords.some(r => r.fields?. === record.id);
+    const isGrouping = allRecords.some(r => r.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
     if (isGrouping) {
         imageUrls = await getRecursiveChildImageUrls(record, allRecords, imageCache);
     } else {
-        const itemName = record.fields;
+        const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
         if (itemName) {
             const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
             imageUrls = await fetchImagesByTags(autoTagName);
         }
         
         if (!imageUrls) {
-            const manualTags = record.fields;
-            const primaryManualTag = (manualTags && manualTags.trim()!== '')? manualTags.split(',').shift().trim() : null;
+            const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
             if (primaryManualTag) {
                 imageUrls = await fetchImagesByTags(primaryManualTag);
             }
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0)? imageUrls : [ultimateFallbackUrl];
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
-        imageUrls: finalImageUrls
+        imageUrls: finalImageUrls.flat() // Use flat() to handle nested arrays of URLs
     };
     imageCache.set(cacheKey, result);
     return result;
