@@ -84,6 +84,15 @@ function getGroupPriceRange(record) {
 
 // ... (rest of the file is unchanged)
 // --- UI RENDERING FUNCTIONS ---
+// --- NEW: Helper function to format pricing type for display ---
+function formatPricingType(pricingType) {
+    if (!pricingType) return ''; // Default for flat rate
+    const type = pricingType.toLowerCase();
+    if (type === 'per guest') return '/ guest';
+    if (type === 'per hour') return '/ hour';
+    return ''; // Fallback for other types
+}
+
 export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
     const fields = record.fields;
     let variationNameHTML = '';
@@ -98,23 +107,35 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    const imageUrls = await (record, state.records.all, imageCache);
-    // --- ADD THIS LINE FOR DIAGNOSTICS ---
-    console.log('Image URLs for record:', fields.Name, imageUrls);
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
+    
+    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const pricingTypeString = formatPricingType(pricingType);
+    const showCardTotal = itemInfo.quantity > 1 && pricingTypeString;
+    const cardTotal = itemPrice * itemInfo.quantity;
+
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
         <div class="favorite-item-content">
             <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
             ${variationNameHTML}
-            <p class="item-quantity">Qty: ${itemInfo.quantity}</p>
             ${noteHTML}
-            <p class="item-price">$${itemPrice.toFixed(2)}</p>
+            <div class="favorite-pricing-details">
+                <div class="pricing-line-item">
+                    <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
+                    <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
+                </div>
+                ${showCardTotal ? `
+                <div class="pricing-line-item-total">
+                    <span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span>
+                </div>
+                ` : ''}
+            </div>
         </div>`;
     return itemCard;
 }
-
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
