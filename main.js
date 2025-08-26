@@ -1,18 +1,15 @@
 /*
- * Version: 3.4.0
+ * Version: 3.4.1
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
+ * v3.4.1 - 2025-08-26
+ * - Ensured all header fields (Date, Headcount, Goals) are populated on session load.
+ *
  * v3.4.0 - 2025-08-26
  * - Integrated Tippy.js for detailed availability tooltips on the main calendar.
  * - Refactored calendar logic to correctly distinguish between partial and full-day unavailability.
- *
- * v3.3.0 - 2025-08-26
- * - Refactored the main header calendar logic to correctly show the combined availability of favorited items.
- *
- * v3.2.0 - 2025-08-26
- * - Refactored calendar logic to support item-specific calendars and lead times.
  */
 
 import { state } from './state.js';
@@ -119,15 +116,24 @@ async function initialize() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
+    
+    // Setup listeners before loading session to ensure date picker exists
+    setupEventListeners();
+
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
-        ui.updateHeader();
+        ui.updateHeader(); // This now updates name, headcount, and goals
+
+        // Manually set the date picker's value from the loaded state
+        const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+        if (savedDate && savedDate.length === 2) {
+            mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
+        }
     } else {
         state.session.isOwned = true;
     }
     
     ui.toggleLoading(false);
-    setupEventListeners();
     renderTopLevel();
     ui.updateFavoritesCarousel();
 }
