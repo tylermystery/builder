@@ -1,15 +1,16 @@
 /*
- * Version: 3.4.1
+ * Version: 3.5.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
+ * v3.5.0 - 2025-08-26
+ * - Implemented a save/share button with visual feedback for save status.
+ * - Added a navigation guard to prevent losing unsaved changes.
+ * - Centralized save triggers to a single function.
+ *
  * v3.4.1 - 2025-08-26
  * - Ensured all header fields (Date, Headcount, Goals) are populated on session load.
- *
- * v3.4.0 - 2025-08-26
- * - Integrated Tippy.js for detailed availability tooltips on the main calendar.
- * - Refactored calendar logic to correctly distinguish between partial and full-day unavailability.
  */
 
 import { state } from './state.js';
@@ -23,14 +24,43 @@ import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATU
 const imageCache = new Map();
 let mainDatePicker = null;
 
-// --- DEBOUNCER FOR SAVING ---
+// --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
-function debouncedSave() {
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-        api.saveSessionToAirtable();
-    }, 1000);
+const saveShareBtn = document.getElementById('save-share-btn');
+
+function updateSaveShareButton() {
+    switch (state.ui.saveState) {
+        case 'MODIFIED':
+            saveShareBtn.textContent = 'Changes pending...';
+            saveShareBtn.disabled = true;
+            break;
+        case 'SAVING':
+            saveShareBtn.textContent = '⚙️ Saving...';
+            saveShareBtn.disabled = true;
+            break;
+        case 'SAVED':
+            saveShareBtn.textContent = '🔗 Copy Link';
+            saveShareBtn.disabled = false;
+            break;
+    }
 }
+
+function triggerSave() {
+    clearTimeout(saveTimeout);
+    state.ui.saveState = 'MODIFIED';
+    updateSaveShareButton();
+
+    saveTimeout = setTimeout(async () => {
+        state.ui.saveState = 'SAVING';
+        updateSaveShareButton();
+        const success = await api.saveSessionToAirtable();
+        if (success) {
+            state.ui.saveState = 'SAVED';
+            updateSaveShareButton();
+        }
+    }, 1500); // Increased debounce time slightly
+}
+
 
 // --- CORE LOGIC ---
 function renderTopLevel() {
@@ -117,14 +147,12 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     
-    // Setup listeners before loading session to ensure date picker exists
     setupEventListeners();
 
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
-        ui.updateHeader(); // This now updates name, headcount, and goals
+        ui.updateHeader();
 
-        // Manually set the date picker's value from the loaded state
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (savedDate && savedDate.length === 2) {
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
@@ -136,23 +164,23 @@ async function initialize() {
     ui.toggleLoading(false);
     renderTopLevel();
     ui.updateFavoritesCarousel();
+    updateSaveShareButton();
 }
 
 function setupEventListeners() {
     // --- AUTOSAVE TRIGGERS ---
-    ui.headerEventNameInput.addEventListener('change', () => { 
-        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, ui.headerEventNameInput.value);
-        ui.updateHeader();
-        debouncedSave();
+    ui.headerEventNameInput.addEventListener('change', (e) => { 
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        triggerSave();
     });
     document.getElementById('header-duration').addEventListener('change', updateAllCardAvailabilityIcons);
     document.getElementById('header-headcount').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
-        debouncedSave();
+        triggerSave();
     });
     document.getElementById('header-goals').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
-        debouncedSave();
+        triggerSave();
     });
 
     // --- BETA TOOLKIT ---
@@ -167,7 +195,7 @@ function setupEventListeners() {
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString().split('T')[0]));
-                debouncedSave();
+                triggerSave();
                 updateAllCardAvailabilityIcons();
             }
         },
@@ -227,6 +255,14 @@ function setupEventListeners() {
         }
     });
 
+    // --- NAVIGATION GUARD ---
+    window.addEventListener('beforeunload', (e) => {
+        if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    });
+
     // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
         const heartIcon = e.target.closest('.heart-icon');
@@ -234,8 +270,17 @@ function setupEventListeners() {
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
         const availabilityBtn = e.target.closest('.availability-btn');
+        const saveShareBtn = e.target.closest('#save-share-btn');
 
-        if (availabilityBtn) {
+        if (saveShareBtn) {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                const originalText = saveShareBtn.textContent;
+                saveShareBtn.textContent = 'Copied!';
+                setTimeout(() => {
+                    saveShareBtn.textContent = originalText;
+                }, 1500);
+            });
+        } else if (availabilityBtn) {
             e.stopPropagation();
             const card = availabilityBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
@@ -278,7 +323,7 @@ function setupEventListeners() {
             }
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
-            debouncedSave();
+            triggerSave();
         } else if (parentBtn) {
             e.stopPropagation();
             const card = parentBtn.closest('.event-card');
