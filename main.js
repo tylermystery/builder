@@ -1,12 +1,14 @@
 /*
- * Version: 3.0.3
+ * Version: 3.0.4
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
+ * v3.0.4 - 2025-08-25
+ * - Restored the original child-finding logic for the Explode button to fix its functionality.
+ *
  * v3.0.3 - 2025-08-25
  * - Fixed a bug where the click handler used an outdated 'isGrouping' check.
- * - Unified all 'isGrouping' logic to use the reliable 'Parent Item' field check.
  */
 
 import { state } from './state.js';
@@ -98,7 +100,6 @@ function setupEventListeners() {
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             
-            // --- LOGIC FIX: Using the correct, consistent 'isGrouping' check ---
             const isGrouping = state.records.all.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
             
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
@@ -139,7 +140,12 @@ function setupEventListeners() {
             e.stopPropagation();
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
-            const children = state.records.all.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+            const record = state.records.all.find(r => r.id === recordId);
+
+            // --- LOGIC FIX: Reverted to parsing the 'Options' field to find children for explode ---
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
             
             ui.renderRecords(children, imageCache);
             const implodeButton = document.createElement('div');
