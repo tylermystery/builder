@@ -1,8 +1,11 @@
 /*
- * Version: 1.7.0
- * Last Modified: 2025-08-24
+ * Version: 1.8.0
+ * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v1.8.0 - 2025-08-26
+ * - Converted calendar.busyTimes to a Map to act as a cache for iCal feeds.
  *
  * v1.7.0 - 2025-08-24
  * - Added session.isOwned flag for "Fork on Edit" functionality.
@@ -28,19 +31,21 @@ export const state = {
     },
     session: {
         id: null,
+       
         isOwned: false, // true if the user created this session, false if loaded from a shared URL
         user: '',
         collaborators: [],
         reactions: new Map(),
-        },
+    },
     calendar: {
-        busyTimes: [], // Will hold events from the iCal feed
-        },
+        busyTimes: new Map(), // Will cache events from iCal feeds, keyed by URL
+    },
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
         currentSort: 'reactions-desc',
         cardImageIndexes: new Map(), // Tracks current image index for each card
+ 
     },
     history: {
         undoStack: [],
