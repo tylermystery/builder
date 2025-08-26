@@ -1,17 +1,18 @@
 /*
- * Version: 3.3.0
+ * Version: 3.4.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v3.4.0 - 2025-08-26
+ * - Integrated Tippy.js for detailed availability tooltips on the main calendar.
+ * - Refactored calendar logic to correctly distinguish between partial and full-day unavailability.
  *
  * v3.3.0 - 2025-08-26
  * - Refactored the main header calendar logic to correctly show the combined availability of favorited items.
  *
  * v3.2.0 - 2025-08-26
  * - Refactored calendar logic to support item-specific calendars and lead times.
- *
- * v3.1.2 - 2025-08-26
- * - Fixed a startup crash by removing the call to the obsolete api.fetchCalendarData function.
  */
 
 import { state } from './state.js';
@@ -20,10 +21,10 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { checkAvailability, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
 
 const imageCache = new Map();
-let mainDatePicker = null; // To hold the main flatpickr instance
+let mainDatePicker = null;
 
 // --- DEBOUNCER FOR SAVING ---
 let saveTimeout;
@@ -41,10 +42,6 @@ function renderTopLevel() {
 }
 
 // --- AVAILABILITY LOGIC ---
-
-/**
- * Updates all visible card icons to reflect availability for a given date range.
- */
 async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
         return;
@@ -61,50 +58,41 @@ async function updateAllCardAvailabilityIcons() {
         if (!record) continue;
 
         const busyTimes = await api.fetchCalendarForRecord(record);
-        const status = checkAvailability(startDate, requestedEnd, busyTimes, record);
+        const dayStatus = getDayStatus(startDate, busyTimes, record);
+        const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
+        
         const icon = card.querySelector('.availability-btn');
-
         if (icon) {
-            switch (status) {
-                case AVAILABILITY_STATUS.FULL:
-                    icon.textContent = '✅';
-                    icon.title = 'Fully Available';
-                    break;
-                case AVAILABILITY_STATUS.PARTIAL:
-                    icon.textContent = '🟠';
-                    icon.title = 'Partially Available';
-                    break;
-                case AVAILABILITY_STATUS.NONE:
-                    icon.textContent = '❌';
-                    icon.title = 'Unavailable';
-                    break;
+            if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
+                icon.textContent = '❌';
+                icon.title = 'Unavailable';
+            } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
+                icon.textContent = '🟠';
+                icon.title = 'Partially Available';
+            } else {
+                icon.textContent = '✅';
+                icon.title = 'Fully Available';
             }
         }
     }
 }
 
-/**
- * Opens a read-only pop-up calendar for a single item.
- * @param {object} record - The Airtable record for the item.
- */
 async function showItemDetailCalendar(record) {
     const busyTimes = await api.fetchCalendarForRecord(record);
 
     const detailPicker = flatpickr(document.createElement('input'), {
         defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
         onDayCreate: function(dObj, dStr, fp, dayElem) {
-            const dayStart = new Date(dayElem.dateObj);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(dayElem.dateObj);
-            dayEnd.setHours(23, 59, 59, 999);
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, busyTimes, record);
 
-            const status = checkAvailability(dayStart, dayEnd, busyTimes, record);
             if (status === AVAILABILITY_STATUS.NONE) {
                 dayElem.classList.add('flatpickr-disabled');
                 dayElem.title = 'Unavailable';
             } else if (status === AVAILABILITY_STATUS.PARTIAL) {
                 dayElem.classList.add('flatpickr-partial');
-                dayElem.title = 'Partially Available';
+                const busySlots = getBusySlotsForDay(day, busyTimes);
+                dayElem.title = `Partially Available ${busySlots}`;
             } else if (status === AVAILABILITY_STATUS.FULL) {
                 dayElem.classList.add('flatpickr-available');
                 dayElem.title = 'Fully Available';
@@ -117,7 +105,6 @@ async function showItemDetailCalendar(record) {
 
     detailPicker.open();
 }
-
 
 // --- INITIALIZATION & MAIN FLOW ---
 async function initialize() {
@@ -146,14 +133,13 @@ async function initialize() {
 }
 
 function setupEventListeners() {
-    // --- AUTOSAVE TRIGGERS FOR HEADER ---
+    // --- AUTOSAVE TRIGGERS ---
     ui.headerEventNameInput.addEventListener('change', () => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, ui.headerEventNameInput.value);
         ui.updateHeader();
         debouncedSave();
     });
     document.getElementById('header-duration').addEventListener('change', updateAllCardAvailabilityIcons);
-
     document.getElementById('header-headcount').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
         debouncedSave();
@@ -163,12 +149,12 @@ function setupEventListeners() {
         debouncedSave();
     });
 
-    // --- BETA TOOLKIT LISTENERS ---
+    // --- BETA TOOLKIT ---
     document.getElementById('beta-trigger').addEventListener('click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
 
-    // --- MAIN DATE PICKER INITIALIZATION ---
+    // --- MAIN DATE PICKER ---
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
         dateFormat: "M j, Y",
@@ -180,55 +166,58 @@ function setupEventListeners() {
             }
         },
         onDayCreate: async (dObj, dStr, fp, dayElem) => {
-            // Get all records for favorited items
+            const day = dayElem.dateObj;
             const favoritedRecords = Array.from(state.cart.items.keys())
                 .map(id => state.records.all.find(r => r.id === id))
-                .filter(record => record); // Filter out any undefined records
+                .filter(record => record);
 
-            // If no items are favorited, all days are available
             if (favoritedRecords.length === 0) {
                 dayElem.classList.add('flatpickr-available');
-                dayElem.title = 'Available';
+                tippy(dayElem, { content: 'Available' });
                 return;
             }
 
-            const dayStart = new Date(dayElem.dateObj);
-            dayStart.setHours(0, 0, 0, 0);
-            const dayEnd = new Date(dayElem.dateObj);
-            dayEnd.setHours(23, 59, 59, 999);
-
-            // Fetch busy times for all favorited items in parallel and wait for all to resolve
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
 
-            let hasPartial = false;
-            let hasNone = false;
+            let finalStatus = AVAILABILITY_STATUS.FULL;
+            let tooltipContent = [`<strong>${day.toLocaleDateString()}</strong><hr>`];
 
-            // Check the availability of this specific day against all favorited items' calendars
             for (let i = 0; i < favoritedRecords.length; i++) {
                 const record = favoritedRecords[i];
                 const busyTimes = allBusyTimes[i];
+                const status = getDayStatus(day, busyTimes, record);
+                
+                let statusIcon = '✅';
+                let statusText = `Available`;
 
-                const status = checkAvailability(dayStart, dayEnd, busyTimes, record);
                 if (status === AVAILABILITY_STATUS.NONE) {
-                    hasNone = true;
-                    break; // No need to check other items, the day is unavailable.
+                    finalStatus = AVAILABILITY_STATUS.NONE;
+                    statusIcon = '❌';
+                    statusText = 'Unavailable';
                 } else if (status === AVAILABILITY_STATUS.PARTIAL) {
-                    hasPartial = true;
+                    if (finalStatus !== AVAILABILITY_STATUS.NONE) {
+                        finalStatus = AVAILABILITY_STATUS.PARTIAL;
+                    }
+                    statusIcon = '🟠';
+                    const busySlots = getBusySlotsForDay(day, busyTimes);
+                    statusText = `Partial ${busySlots}`;
                 }
+                tooltipContent.push(`<span>${statusIcon} ${record.fields.Name}: ${statusText}</span>`);
             }
             
-            // Apply the final status to the calendar day
-            if (hasNone) {
+            if (finalStatus === AVAILABILITY_STATUS.NONE) {
                 dayElem.classList.add('flatpickr-disabled');
-                dayElem.title = 'Unavailable';
-            } else if (hasPartial) {
+            } else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) {
                 dayElem.classList.add('flatpickr-partial');
-                dayElem.title = 'Partially Available';
             } else {
                 dayElem.classList.add('flatpickr-available');
-                dayElem.title = 'Available';
             }
+            
+            tippy(dayElem, {
+                content: tooltipContent.join('<br>'),
+                allowHTML: true,
+            });
         }
     });
 
@@ -282,7 +271,6 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
-            // When favorites change, we need to redraw the main calendar to reflect the combined availability
             mainDatePicker.redraw();
             debouncedSave();
         } else if (parentBtn) {
@@ -324,7 +312,6 @@ function setupEventListeners() {
         const card = e.target.closest('.event-card');
         if (!card) return;
 
-        // Handles configuration changes (Bookable Items)
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -356,7 +343,6 @@ function setupEventListeners() {
             }
         }
 
-        // Handles navigation changes (Grouping Items)
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
