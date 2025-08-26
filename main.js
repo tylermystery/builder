@@ -1,17 +1,17 @@
 /*
- * Version: 3.2.0
+ * Version: 3.3.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v3.3.0 - 2025-08-26
+ * - Refactored the main header calendar logic to correctly show the combined availability of favorited items.
  *
  * v3.2.0 - 2025-08-26
  * - Refactored calendar logic to support item-specific calendars and lead times.
  *
  * v3.1.2 - 2025-08-26
  * - Fixed a startup crash by removing the call to the obsolete api.fetchCalendarData function.
- *
- * v3.1.1 - 2025-08-26
- * - Polished calendar views to be color-coded (green/orange/red).
  */
 
 import { state } from './state.js';
@@ -179,25 +179,55 @@ function setupEventListeners() {
                 updateAllCardAvailabilityIcons();
             }
         },
-        onDayCreate: (dObj, dStr, fp, dayElem) => {
-            // This logic will be fully updated in the next step to show combined availability.
-            // For now, it will be incorrect if multiple items are favorited.
+        onDayCreate: async (dObj, dStr, fp, dayElem) => {
+            // Get all records for favorited items
+            const favoritedRecords = Array.from(state.cart.items.keys())
+                .map(id => state.records.all.find(r => r.id === id))
+                .filter(record => record); // Filter out any undefined records
+
+            // If no items are favorited, all days are available
+            if (favoritedRecords.length === 0) {
+                dayElem.classList.add('flatpickr-available');
+                dayElem.title = 'Available';
+                return;
+            }
+
             const dayStart = new Date(dayElem.dateObj);
             dayStart.setHours(0, 0, 0, 0);
             const dayEnd = new Date(dayElem.dateObj);
             dayEnd.setHours(23, 59, 59, 999);
+
+            // Fetch busy times for all favorited items in parallel and wait for all to resolve
+            const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
+            const allBusyTimes = await Promise.all(busyTimePromises);
+
+            let hasPartial = false;
+            let hasNone = false;
+
+            // Check the availability of this specific day against all favorited items' calendars
+            for (let i = 0; i < favoritedRecords.length; i++) {
+                const record = favoritedRecords[i];
+                const busyTimes = allBusyTimes[i];
+
+                const status = checkAvailability(dayStart, dayEnd, busyTimes, record);
+                if (status === AVAILABILITY_STATUS.NONE) {
+                    hasNone = true;
+                    break; // No need to check other items, the day is unavailable.
+                } else if (status === AVAILABILITY_STATUS.PARTIAL) {
+                    hasPartial = true;
+                }
+            }
             
-            // Placeholder: This doesn't use any specific record, so lead time won't work here yet.
-            const status = checkAvailability(dayStart, dayEnd, [], {});
-            if (status === AVAILABILITY_STATUS.NONE) {
+            // Apply the final status to the calendar day
+            if (hasNone) {
                 dayElem.classList.add('flatpickr-disabled');
-                dayElem.title = "Unavailable";
-            } else if (status === AVAILABILITY_STATUS.PARTIAL) {
+                dayElem.title = 'Unavailable';
+            } else if (hasPartial) {
                 dayElem.classList.add('flatpickr-partial');
-                dayElem.title = "Partially Available";
-            } else if (status === AVAILABILITY_STATUS.FULL) {
+                dayElem.title = 'Partially Available';
+            } else {
                 dayElem.classList.add('flatpickr-available');
-                dayElem.title = "Available";
+                dayElem.title = 'Available';
             }
         }
     });
@@ -252,7 +282,7 @@ function setupEventListeners() {
                 heartIcon.classList.add('hearted');
             }
             await ui.updateFavoritesCarousel();
-            // When favorites change, we need to redraw the main calendar
+            // When favorites change, we need to redraw the main calendar to reflect the combined availability
             mainDatePicker.redraw();
             debouncedSave();
         } else if (parentBtn) {
