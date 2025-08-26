@@ -1,8 +1,11 @@
 /*
- * Version: 2.5.1https://github.com/tylermystery/builder/blob/trim-down/api.js
- * Last Modified: 2025-08-25
+ * Version: 2.6.0
+ * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v2.6.0 - 2025-08-26
+ * - Added fetchCalendarData function to get iCal events.
  *
  * v2.5.1 - 2025-08-25
  * - fetchImagesForRecord now returns an object { isGrouping, imageUrls }
@@ -52,8 +55,8 @@ export async function saveSessionToAirtable() {
 
     const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } };
-    
+    const payload = { fields: { "Name": sessionName, "Items with Variations": JSON.stringify(sessionData), "Collaborators": state.session.collaborators.join(', '), "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
+        null, "Location": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.LOCATION) || null, "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null, "Date": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE) || null } };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
@@ -69,7 +72,6 @@ export async function saveSessionToAirtable() {
             throw new Error(`Airtable API Error: ${errorData.error.message}`);
         }
         const result = await response.json();
-        
         if (!isUpdate) {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
@@ -84,44 +86,6 @@ export async function saveSessionToAirtable() {
     }
 }
 
-
-export async function fetchImagesByTags(tags) {
-    if (!tags || tags.length === 0) return null;
-
-    try {
-        let payload;
-        if (Array.isArray(tags)) {
-            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
-        } else {
-            payload = { tag: tags };
-        }
-        
-        const response = await fetch('/.netlify/functions/cloudinary', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) throw new Error(`Serverless function error: ${response.statusText}`);
-        
-        const data = await response.json();
-        if (!data.resources || data.resources.length === 0) return null;
-        
-        return data.resources.map(image => {
-            let transformations;
-            if (image.format === 'gif') {
-                transformations = 'c_fit,w_600,h_520';
-            } else {
-                transformations = 'c_fill,g_auto,w_600,h_520';
-            }
-            const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
-        });
-
-    } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return null;
-    }
-}
 
 export async function fetchAllRecords() {
     let records = [];
@@ -142,6 +106,55 @@ export async function fetchAllRecords() {
     }
 }
 
+export async function fetchCalendarData() {
+    try {
+        const response = await fetch('/api/calendar');
+        if (!response.ok) {
+            throw new Error(`Calendar API Error: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch calendar data:", error);
+        return []; // Return an empty array on failure
+    }
+}
+
+export async function fetchImagesByTags(tags) {
+    if (!tags || tags.length === 0) return null;
+    try {
+        let payload;
+        if (Array.isArray(tags)) {
+            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
+        } else {
+            payload = { tag: tags };
+        }
+        
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`Serverless function error: ${response.statusText}`);
+        
+        const data = await response.json();
+        if (!data.resources || data.resources.length === 0) return null;
+        
+        return data.resources.map(image => {
+            let transformations;
+            if (image.format === 'gif') {
+                transformations = 'c_fit,w_600,h_520';
+            } else {
+                transformations = 'c_fill,g_auto,w_600,h_520';
+          
+            }
+            const urlParts = image.secure_url.split('/upload/');
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+        });
+    } catch (error) {
+        console.error('Failed to fetch from Cloudinary via proxy:', error);
+        return null;
+    }
+}
+
 async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
     if (!record || typeof record !== 'object' || !record.id) {
         console.error("Invalid data passed to getRecursiveChildImageUrls:", record);
@@ -150,7 +163,6 @@ async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDep
     if (currentDepth > maxDepth) return [];
 
     let children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
-    
     if (children.length === 0) {
         const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const childNames = new Set(rawOptions.map(opt => opt.name));
@@ -158,10 +170,8 @@ async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDep
     }
     
     let imageUrls = [];
-
     for (const child of children) {
         const isChildGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === child.id);
-
         if (isChildGrouping && currentDepth < maxDepth) {
             const deeperUrls = await getRecursiveChildImageUrls(child, allRecords, imageCache, maxDepth, currentDepth + 1);
             imageUrls.push(...deeperUrls);
@@ -184,7 +194,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     
     let imageUrls = null;
     const isGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
-
     if (isGrouping) {
         imageUrls = await getRecursiveChildImageUrls(record, allRecords, imageCache);
     } else {
@@ -203,13 +212,13 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
+        imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
         imageUrls: finalImageUrls
     };
-
     imageCache.set(cacheKey, result);
     return result;
 }
