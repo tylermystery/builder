@@ -1,20 +1,17 @@
 /*
- * Version: 3.1.1
+ * Version: 3.1.2
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v3.1.2 - 2025-08-26
+ * - Fixed a startup crash by removing the call to the obsolete api.fetchCalendarData function.
  *
  * v3.1.1 - 2025-08-26
  * - Polished calendar views to be color-coded (green/orange/red).
  *
  * v3.1.0 - 2025-08-26
  * - Integrated the complete date availability system.
- *
- * v3.0.4 - 2025-08-25
- * - Restored the original child-finding logic for the Explode button to fix its functionality.
- *
- * v3.0.3 - 2025-08-25
- * - Fixed a bug where the click handler used an outdated 'isGrouping' check.
  */
 
 import { state } from './state.js';
@@ -128,13 +125,8 @@ function showItemDetailCalendar(targetElement) {
 async function initialize() {
     ui.toggleLoading(true);
     try {
-        // Fetch records and calendar data in parallel
-        const [records, busyTimes] = await Promise.all([
-            api.fetchAllRecords(),
-            api.fetchCalendarData()
-        ]);
-        state.records.all = records;
-        state.calendar.busyTimes = busyTimes;
+        // Fetch all item records from Airtable. Calendar data is now fetched on-demand.
+        state.records.all = await api.fetchAllRecords();
     } catch (error) {
         console.error("Failed to load initial data:", error);
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
