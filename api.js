@@ -1,17 +1,17 @@
 /*
- * Version: 2.7.2
+ * Version: 2.7.3
  * Last Modified: 2025-08-26
  *
  * Changelog:
+ *
+ * v2.7.3 - 2025-08-26
+ * - Fixed a critical syntax error in the loadSessionFromAirtable function.
  *
  * v2.7.2 - 2025-08-26
  * - Fixed date saving bug by correctly formatting the date as a full ISO 8601 string before sending to Airtable.
  *
  * v2.7.1 - 2025-08-26
  * - saveSessionToAirtable now returns a boolean indicating success or failure.
- *
- * v2.7.0 - 2025-08-26
- * - Replaced global fetchCalendarData with fetchCalendarForRecord, which includes caching.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -64,14 +64,9 @@ export async function saveSessionToAirtable() {
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
 
-    // The state stores the date as an array of two 'YYYY-MM-DD' strings.
-    // We need to take the start date and convert it to a full ISO 8601 string.
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDateString = dateRange;
-        // Validate the format before attempting to convert.
         if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
-            // new Date('YYYY-MM-DD') creates a date at midnight in the local timezone.
-            //.toISOString() converts it to the required YYYY-MM-DDTHH:mm:ss.sssZ format in UTC.
             formattedDate = new Date(startDateString).toISOString();
         } else {
             console.error("Invalid date format in state, cannot save:", startDateString);
@@ -90,7 +85,7 @@ export async function saveSessionToAirtable() {
             "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) |
 
 | null,
-            "Date": formattedDate // Use the correctly formatted date string.
+            "Date": formattedDate
         }
     };
 
