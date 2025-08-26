@@ -1,11 +1,8 @@
-/*
- * Version: 2.8.1
+/*/*
+ * Version: 2.8.0
  * Last Modified: 2025-08-26
  *
  * Changelog:
- *
- * v2.8.1 - 2025-08-26
- * - Refined date saving to ensure start time is correctly formatted for Airtable's native date field.
  *
  * v2.8.0 - 2025-08-26
  * - Implemented secure API proxy for all Airtable requests.
@@ -58,10 +55,10 @@ export async function saveSessionToAirtable() {
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDateString = dateRange[0]; // This is now a full ISO string
-        try {
+        const startDateString = dateRange[0];
+        if (startDateString) {
             formattedDate = new Date(startDateString).toISOString();
-        } catch (e) {
+        } else {
             console.error("Invalid date format in state, cannot save:", startDateString);
         }
     }
