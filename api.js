@@ -1,12 +1,13 @@
 /*
- * Version: 2.5.3
+ * Version: 2.5.0
  * Last Modified: 2025-08-25
  *
  * Changelog:
  *
- * v2.5.3 - 2025-08-25
- * - Fixed a critical bug where the wrong data type was passed to the recursive image search.
- * - Added a guard clause to the recursive function for future resiliency.
+ * v2.5.0 - 2025-08-25
+ * - Switched to a client-side collage system.
+ * - Removed buildCollageUrl and getPublicIdFromUrl functions.
+ * - fetchImagesForRecord now returns a simple list of URLs for groupings.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -142,33 +143,22 @@ export async function fetchAllRecords() {
     }
 }
 
-async function getRecursiveChildImageUrls(record, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
-    // --- RESILIENCY: Add a "guard clause" to ensure we have a valid record object. ---
-    if (!record || typeof record !== 'object' || !record.id) {
-        console.error("Invalid data passed to getRecursiveChildImageUrls:", record);
-        return [];
-    }
+async function getRecursiveChildImageUrls(recordId, allRecords, imageCache, maxDepth = 2, currentDepth = 1) {
     if (currentDepth > maxDepth) return [];
 
-    let children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
-    
-    if (children.length === 0) {
-        const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const childNames = new Set(rawOptions.map(opt => opt.name));
-        children = allRecords.filter(r => childNames.has(r.fields.Name));
-    }
-    
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
     let imageUrls = [];
 
     for (const child of children) {
-        const isChildGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === child.id);
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const isChildGrouping = rawOptions.some(opt => allRecords.some(r => r.fields.Name === opt.name));
 
         if (isChildGrouping && currentDepth < maxDepth) {
-            const deeperUrls = await getRecursiveChildImageUrls(child, allRecords, imageCache, maxDepth, currentDepth + 1);
+            const deeperUrls = await getRecursiveChildImageUrls(child.id, allRecords, imageCache, maxDepth, currentDepth + 1);
             imageUrls.push(...deeperUrls);
         } else {
-            const imageData = await fetchImagesForRecord(child, allRecords, imageCache);
-            imageUrls.push(imageData.imageUrls[0]);
+            const childImageUrls = await fetchImagesForRecord(child, allRecords, imageCache);
+            imageUrls.push(childImageUrls[0]);
         }
     }
     return imageUrls;
@@ -184,11 +174,13 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
-    const isGrouping = allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === record.id);
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     if (isGrouping) {
-        // --- CRITICAL FIX: Pass the entire 'record' object, not just its ID. ---
-        imageUrls = await getRecursiveChildImageUrls(record, allRecords, imageCache);
+        // For groupings, we just return the flat list of child URLs. The UI will build the collage.
+        imageUrls = await getRecursiveChildImageUrls(record.id, allRecords, imageCache);
     } else {
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
         if (itemName) {
@@ -205,13 +197,9 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
+    // If after all that, we have no URLs, use the fallback.
+    // For groupings, an empty array is a valid result we pass to the UI.
     const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
-    
-    const result = {
-        isGrouping: isGrouping,
-        imageUrls: finalImageUrls
-    };
-
-    imageCache.set(cacheKey, result);
-    return result;
+    imageCache.set(cacheKey, finalImageUrls);
+    return finalImageUrls;
 }
