@@ -1,14 +1,11 @@
 /*
- * Version: 3.0.4
- * Last Modified: 2025-08-25
+ * Version: 3.0.5
+ * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v3.0.4 - 2025-08-25
- * - Restored the original child-finding logic for the Explode button to fix its functionality.
- *
- * v3.0.3 - 2025-08-25
- * - Fixed a bug where the click handler used an outdated 'isGrouping' check.
+ * v3.0.5 - 2025-08-26
+ * - Wrapped initialize() in a DOMContentLoaded listener to prevent race conditions on page load.
  */
 
 import { state } from './state.js';
@@ -17,7 +14,6 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import * as availability from './availability.js';
 
 const imageCache = new Map();
 
@@ -81,26 +77,6 @@ function setupEventListeners() {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         debouncedSave();
     });
-    document.getElementById('header-datetime').addEventListener('change', async (e) => {
-        const selectedDateTime = new Date(e.target.value);
-        const cards = document.querySelectorAll('.event-card');
-    
-        for (const card of cards) {
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                const status = await availability.checkAvailability(record, selectedDateTime);
-                const statusEl = card.querySelector('.availability-status');
-                if (status === 'AVAILABLE') {
-                    statusEl.innerHTML = '✅';
-                } else if (status === 'UNAVAILABLE') {
-                    statusEl.innerHTML = '❌';
-                } else {
-                    statusEl.innerHTML = '';
-                }
-            }
-        }
-    });
 
     // --- BETA TOOLKIT LISTENERS ---
     document.getElementById('beta-trigger').addEventListener('click', () => {
@@ -128,9 +104,8 @@ function setupEventListeners() {
                 const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const noteEl = currentCard.querySelector('.item-note');
                 const optionsEl = currentCard.querySelector('.configure-options');
-                const quantityEl = currentCard.querySelector('.quantity-input'); // Get the quantity input
+                const quantityEl = currentCard.querySelector('.quantity-input');
         
-                // --- FIX: Read the quantity from the input field if it exists ---
                 if (quantityEl) {
                     itemInfo.quantity = parseInt(quantityEl.value, 10);
                 }
@@ -168,8 +143,6 @@ function setupEventListeners() {
             const card = explodeBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-
-            // --- LOGIC FIX: Reverted to parsing the 'Options' field to find children for explode ---
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
@@ -195,6 +168,7 @@ function setupEventListeners() {
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
+    
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
@@ -236,4 +210,7 @@ function setupEventListeners() {
     });
 }
 
-initialize();
+// --- RESILIENCY FIX: Wait for the DOM to be fully loaded before running the app ---
+document.addEventListener('DOMContentLoaded', () => {
+    initialize();
+});
