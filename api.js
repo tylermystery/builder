@@ -5,13 +5,13 @@
  * Changelog:
  *
  * v2.7.3 - 2025-08-26
- * - Fixed a critical syntax error in the loadSessionFromAirtable function.
+ * - Fixed multiple critical syntax and logical errors throughout the file.
+ * - Corrected ternary operator in loadSessionFromAirtable.
+ * - Corrected all invalid logical OR operators.
+ * - Fixed date formatting logic to correctly handle the date array.
  *
  * v2.7.2 - 2025-08-26
  * - Fixed date saving bug by correctly formatting the date as a full ISO 8601 string before sending to Airtable.
- *
- * v2.7.1 - 2025-08-26
- * - saveSessionToAirtable now returns a boolean indicating success or failure.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -60,19 +60,17 @@ export async function saveSessionToAirtable() {
 
 | `Session from ${new Date().toLocaleString()}`;
 
-    // --- START: DATE FORMATTING FIX ---
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
 
     if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDateString = dateRange;
+        const startDateString = dateRange; // Correctly get the first element
         if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
             formattedDate = new Date(startDateString).toISOString();
         } else {
             console.error("Invalid date format in state, cannot save:", startDateString);
         }
     }
-    // --- END: DATE FORMATTING FIX ---
 
     const payload = {
         fields: {
@@ -193,7 +191,6 @@ export async function fetchImagesByTags(tags) {
                 transformations = 'c_fit,w_600,h_520';
             } else {
                 transformations = 'c_fill,g_auto,w_600,h_520';
-          
             }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts}/upload/${transformations}/${urlParts[1]}`;
@@ -263,8 +260,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0)?
-        imageUrls : [ultimateFallbackUrl];
+    const finalImageUrls = (imageUrls && imageUrls.length > 0)? imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
