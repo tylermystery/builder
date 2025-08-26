@@ -17,6 +17,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
+import * as availability from './availability.js';
 
 const imageCache = new Map();
 
@@ -79,6 +80,26 @@ function setupEventListeners() {
     document.getElementById('header-goals').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         debouncedSave();
+    });
+    document.getElementById('header-datetime').addEventListener('change', async (e) => {
+        const selectedDateTime = new Date(e.target.value);
+        const cards = document.querySelectorAll('.event-card');
+    
+        for (const card of cards) {
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const status = await availability.checkAvailability(record, selectedDateTime);
+                const statusEl = card.querySelector('.availability-status');
+                if (status === 'AVAILABLE') {
+                    statusEl.innerHTML = '✅';
+                } else if (status === 'UNAVAILABLE') {
+                    statusEl.innerHTML = '❌';
+                } else {
+                    statusEl.innerHTML = '';
+                }
+            }
+        }
     });
 
     // --- BETA TOOLKIT LISTENERS ---
