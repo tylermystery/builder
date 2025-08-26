@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
     <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         body {
             padding-bottom: 80px;
@@ -61,7 +63,8 @@
             color: #007aff;
             cursor: pointer;
         }
-        .event-name-group { flex-grow: 1; }
+        .event-name-group { flex-grow: 1;
+        }
         #header-event-name {
             font-size: 1.8em;
             font-weight: bold;
@@ -73,8 +76,10 @@
             border-left: 1px solid #e9ecef;
             padding-left: 20px;
         }
-        .history-controls { display: none; }
-        body.history-mode-enabled .history-controls { display: flex; }
+        .history-controls { display: none;
+        }
+        body.history-mode-enabled .history-controls { display: flex;
+        }
         #favorites-section { 
             max-width: 1400px;
             margin: 0 auto; 
@@ -103,10 +108,14 @@
             background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
             padding: 10px;
         }
-        .favorite-item p { margin: 2px 0; font-size: 0.9em; }
-        .favorite-item .item-name { font-weight: bold; }
-        .favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
-        .item-note-display { font-size: 0.8em; font-style: italic; opacity: 0.8;}
+        .favorite-item p { margin: 2px 0; font-size: 0.9em;
+        }
+        .favorite-item .item-name { font-weight: bold;
+        }
+        .favorite-item .variation-name { font-size: 0.8em; font-style: italic;
+        }
+        .item-note-display { font-size: 0.8em; font-style: italic;
+            opacity: 0.8;}
         #catalog-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -145,7 +154,8 @@
             fill: rgba(0,0,0,0.3);
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
         }
-        .heart-icon.hearted svg { fill: #ff4f6c; }
+        .heart-icon.hearted svg { fill: #ff4f6c;
+        }
         .event-card-content {
             background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
             padding: 20px;
@@ -154,17 +164,29 @@
             flex-direction: column;
             justify-content: flex-end;
         }
-        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em; }
-        .event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 15px; }
-        .price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center; }
-        .quantity-selector { display: flex; align-items: center; }
-        .quantity-selector button { width: 30px; height: 30px; }
-        .quantity-selector input { width: 40px; text-align: center; height: 30px; }
-        .event-card-content .price { font-size: 1.3em; font-weight: bold; }
-        .card-header-actions { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex; gap: 8px; }
-        .card-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.5); color: white; font-size: 1.2em; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
-        .item-note { width: 100%; box-sizing: border-box; margin-top: 10px; border-radius: 4px; padding: 6px; }
-        #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px; }
+        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em;
+        }
+        .event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 15px;
+        }
+        .price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center;
+        }
+        .quantity-selector { display: flex; align-items: center;
+        }
+        .quantity-selector button { width: 30px; height: 30px;
+        }
+        .quantity-selector input { width: 40px; text-align: center; height: 30px;
+        }
+        .event-card-content .price { font-size: 1.3em; font-weight: bold;
+        }
+        .card-header-actions { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex;
+            gap: 8px; }
+        .card-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.5); color: white;
+            font-size: 1.2em; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+        }
+        .item-note { width: 100%; box-sizing: border-box; margin-top: 10px; border-radius: 4px; padding: 6px;
+        }
+        #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px;
+        }
 
 
         /* --- FAVORITE CARD PRICING REFINEMENTS --- */
@@ -199,45 +221,56 @@
             <div class="toolbar-group tool-brand-group">
                 <label>Tool</label>
                 <div class="header-title-container">
+                   
                     <h4>Event Builder</h4>
                     <sup id="beta-trigger">beta</sup>
                 </div>
             </div>
             <div class="toolbar-group event-name-group">
                 <label for="header-event-name">Event Name</label>
-                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
+                <input 
+                    type="text" id="header-event-name" placeholder="Enter Your Event Name...">
             </div>
             <div class="toolbar-group details-group">
                 <div class="toolbar-item">
                     <label for="header-date">Date</label>
-                    <input type="date" id="header-date">
+                    <input type="text" id="header-date" placeholder="Select a date range...">
+                </div>
+                <div class="toolbar-item">
+                    <label for="header-duration">Duration (hours)</label>
+                    <input type="number" id="header-duration" min="1" value="1">
                 </div>
                 <div class="toolbar-item">
                     <label for="header-headcount">Headcount</label>
                     <input type="number" id="header-headcount" min="1" value="1">
                 </div>
             </div>
+   
             <div class="toolbar-group goals-group">
                 <label for="header-goals">Event Goals</label>
                 <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
             </div>
             <div class="toolbar-group people-group">
                 <div id="sessions-dropdown-container" style="display: none;">
+    
                     <select id="sessions-dropdown">
                         <option value="">Load a saved list...</option>
                     </select>
                 </div>
                 <div class="history-controls">
+  
                     <button id="undo-btn" disabled>↩️</button>
                     <button id="redo-btn" disabled>↪️</button>
                 </div>
                 <div id="collaborators-section" style="display: none;">
                     <div id="collaborator-avatars"></div>
+  
                     <button id="add-collaborator-btn">+</button>
                 </div>
                 <div id="total-cost-section">
                     <strong>Total:</strong>
                     <span id="total-cost" title="No items selected">$0.00</span>
+    
                 </div>
             </div>
         </div>
@@ -249,6 +282,7 @@
 
     <div id="filter-controls" style="display: none;">
         <input type="text" id="name-filter" placeholder="Search by name...">
+        
         <select id="price-filter">
             <option value="all">All Prices</option>
             <option value="0-50">Under $50</option>
@@ -257,6 +291,7 @@
             <option value="250-plus">$250+</option>
         </select>
         <select id="sort-by">
+           
             <option value="price-asc">Price (Low to High)</option>
             <option value="price-desc">Price (High to Low)</option>
             <option value="name-asc">Name (A-Z)</option>
@@ -265,7 +300,9 @@
 
     <div id="catalog-container"></div>
     
-    <div id="beta-toolkit" style="display: none; position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <div id="beta-toolkit" style="display: none;
+        position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
         </div>
 
     <script type="module" src="main.js"></script>
