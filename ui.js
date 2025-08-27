@@ -103,7 +103,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
     let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
     }
@@ -113,7 +112,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove" data-composite-id="${record.id}">×</button>`;
+    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">×</button>`;
     
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeString = formatPricingType(pricingType);
