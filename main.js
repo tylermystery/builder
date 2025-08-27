@@ -1,14 +1,14 @@
 /*
- * Version: 3.8.4
+ * Version: 3.8.5
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.8.5 - 2025-08-27
+ * - Made all event listener attachments in setupEventListeners more robust to prevent load-time errors.
+ *
  * v3.8.4 - 2025-08-27
  * - Made DOM element selection in event listeners more robust to prevent load-time errors.
- *
- * v3.8.3 - 2025-08-27
- * - Unified click listener now handles heart and explode buttons within the detail modal.
  */
 
 import { state } from './state.js';
@@ -183,13 +183,23 @@ async function initialize() {
     updateSaveShareButton();
 }
 
+// ** THE FIX IS HERE: Rewritten to be more robust **
 function setupEventListeners() {
+    // Helper function to safely add listeners
+    const safeAddEventListener = (selector, event, handler) => {
+        const element = document.getElementById(selector);
+        if (element) {
+            element.addEventListener(event, handler);
+        } else {
+            console.warn(`Element with ID "${selector}" not found.`);
+        }
+    };
+
     // --- FILTER & RESET LISTENERS ---
-    const debouncedSearch = debounce(() => applyFiltersAndSort());
-    document.getElementById('name-filter').addEventListener('input', debouncedSearch);
-    document.getElementById('price-filter').addEventListener('change', applyFiltersAndSort);
-    document.getElementById('sort-by').addEventListener('change', applyFiltersAndSort);
-    document.getElementById('reset-filters-btn').addEventListener('click', () => {
+    safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
+    safeAddEventListener('price-filter', 'change', applyFiltersAndSort);
+    safeAddEventListener('sort-by', 'change', applyFiltersAndSort);
+    safeAddEventListener('reset-filters-btn', 'click', () => {
         document.getElementById('name-filter').value = '';
         document.getElementById('price-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
@@ -197,23 +207,24 @@ function setupEventListeners() {
     });
 
     // --- AUTOSAVE TRIGGERS ---
-    // THE FIX IS HERE: Query for the element directly instead of importing.
-    document.getElementById('header-event-name').addEventListener('change', (e) => { 
+    safeAddEventListener('header-event-name', 'change', (e) => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
-    document.getElementById('header-headcount').addEventListener('change', (e) => {
+    safeAddEventListener('header-headcount', 'change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
         triggerSave();
     });
-    document.getElementById('header-goals').addEventListener('change', (e) => {
+    safeAddEventListener('header-goals', 'change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
+
     // --- BETA TOOLKIT ---
-    document.getElementById('beta-trigger').addEventListener('click', () => {
+    safeAddEventListener('beta-trigger', 'click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
+
     // --- MAIN DATE PICKER ---
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
@@ -270,6 +281,7 @@ function setupEventListeners() {
             });
         }
     });
+
     // --- NAVIGATION GUARD ---
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
