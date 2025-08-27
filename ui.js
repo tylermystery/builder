@@ -1,17 +1,15 @@
 /*
- * Version: 2.8.0
- * Last Modified: 2025-08-26
+ * Version: 2.8.1
+ * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v2.8.1 - 2025-08-27
+ * - Fixed bug where initial catalog card images would not load.
+ * - Corrected use of object destructuring for the image URL payload.
+ *
  * v2.8.0 - 2025-08-26
  * - Expanded updateHeader to populate headcount and goals fields on session load.
- *
- * v2.7.0 - 2025-08-26
- * - Added a placeholder button for availability status to the interactive card.
- *
- * v2.6.0 - 2025-08-24
- * - Removed parseOptions function (moved to utils.js).
  */
 
 import { state } from './state.js';
@@ -30,8 +28,6 @@ const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
 // --- HELPER & LOGIC FUNCTIONS ---
-// parseOptions was removed from here
-
 function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -73,7 +69,6 @@ function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price < minPrice) minPrice = price;
-          
                 if (price > maxPrice) maxPrice = price;
             });
         } else {
@@ -85,12 +80,9 @@ function getGroupPriceRange(record) {
     return { min: minPrice, max: maxPrice };
 }
 
-// ... (rest of the file is unchanged)
 // --- UI RENDERING FUNCTIONS ---
-// --- NEW: Helper function to format pricing type for display ---
 function formatPricingType(pricingType) {
     if (!pricingType) return '';
-    // Default for flat rate
     const type = pricingType.toLowerCase();
     if (type === 'per guest') return '/ guest';
     if (type === 'per hour') return '/ hour';
@@ -103,6 +95,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
     let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
     }
@@ -126,7 +119,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
             ${noteHTML}
             <div class="favorite-pricing-details">
                 <div class="pricing-line-item">
-             
                     <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
@@ -196,12 +188,9 @@ export async function createInteractiveCard(record, imageCache) {
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
         <div class="event-card-content">
-         
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
-                ''}</p>
-            ${rawOptions.length > 0 ?
-                optionsControlHTML : ''}
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
                 <div class="price">${priceHTML}</div>
@@ -222,7 +211,9 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    const imageUrls = await fetchImagesForRecord(record, state.records.all, imageCache);
+    // --- THE FIX IS HERE ---
+    // Correctly destructure the 'imageUrls' array from the result object.
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
     console.log(`Checking record: "${fields.Name}". Is it a grouping (from API)?`, isGrouping, imageUrls);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
