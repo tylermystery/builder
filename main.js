@@ -1,15 +1,14 @@
 /*
- * Version: 3.8.2
+ * Version: 3.8.3
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.8.3 - 2025-08-27
+ * - Unified click listener now handles heart and explode buttons within the detail modal.
+ *
  * v3.8.2 - 2025-08-27
  * - Fixed bug where clicking an options dropdown opened the detail modal.
- * - Removed redundant showItemDetailCalendar function.
- *
- * v3.8.1 - 2025-08-27
- * - Fixed bug where card buttons were not working after modal implementation.
  */
 
 import { state } from './state.js';
@@ -18,7 +17,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability } from './availability.js';
+import { getDayStatus, checkAvailability, getBusySlotsForDay } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -284,7 +283,10 @@ function setupEventListeners() {
             ui.hideDetailModal();
             return;
         }
-        if (e.target.closest('.modal-content')) {
+
+        const modalHeartBtn = e.target.closest('#modal-heart-btn');
+        const modalExplodeBtn = e.target.closest('#modal-explode-btn');
+        if(e.target.closest('.modal-content') && !modalHeartBtn && !modalExplodeBtn) {
             return;
         }
 
@@ -307,30 +309,30 @@ function setupEventListeners() {
             e.stopPropagation();
             const record = state.records.all.find(r => r.id === availabilityBtn.closest('.event-card').dataset.recordId);
             if (record) ui.showDetailModal(record);
-        } else if (heartIcon) {
+        } else if (heartIcon || modalHeartBtn) {
             e.stopPropagation();
-            const currentCard = heartIcon.closest('.event-card, .favorite-item');
-            if (!currentCard) return; 
-            const recordId = currentCard.dataset.recordId;
+            const targetElement = heartIcon || modalHeartBtn;
+            const recordId = targetElement.closest('[data-record-id]').dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const isGrouping = !!(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).find(opt => state.records.all.some(r => r.fields.Name === opt.name)));
-            let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
+            let itemInfo = state.cart.items.get(recordId) || { quantity: 1, selectedOptionIndex: null, note: '' };
+
             if (!isGrouping) {
-                const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-                const noteEl = currentCard.querySelector('.item-note');
-                const optionsEl = currentCard.querySelector('.configure-options');
-                const quantityEl = currentCard.querySelector('.quantity-input');
-                if (quantityEl) { itemInfo.quantity = parseInt(quantityEl.value, 10); }
-                if (optionsEl && rawOptions.length > 0) { itemInfo.selectedOptionIndex = parseInt(optionsEl.value, 10); }
-                if (noteEl) itemInfo.note = noteEl.value;
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input') || targetElement.closest('.event-card')?.querySelector('.quantity-input');
+                if (quantityInput) itemInfo.quantity = parseInt(quantityInput.value);
             }
+
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
-                heartIcon.classList.remove('hearted');
+                targetElement.classList.remove('hearted');
             } else {
                 state.cart.items.set(recordId, itemInfo);
-                heartIcon.classList.add('hearted');
+                targetElement.classList.add('hearted');
             }
+
+            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.toggle('hearted', state.cart.items.has(recordId));
+            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', state.cart.items.has(recordId));
+            
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
             triggerSave();
@@ -342,8 +344,7 @@ function setupEventListeners() {
             if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId); }
             const mainCatalogCard = document.querySelector(`.event-card[data-record-id="${recordId}"]`);
             if (mainCatalogCard) {
-                const heart = mainCatalogCard.querySelector('.heart-icon');
-                if (heart) { heart.classList.remove('hearted'); }
+                mainCatalogCard.querySelector('.heart-icon')?.classList.remove('hearted');
             }
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
@@ -362,10 +363,10 @@ function setupEventListeners() {
             } else {
                 applyFiltersAndSort();
             }
-        } else if (explodeBtn) {
+        } else if (explodeBtn || modalExplodeBtn) {
             e.stopPropagation();
-            const card = explodeBtn.closest('.event-card');
-            const recordId = card.dataset.recordId;
+            ui.hideDetailModal();
+            const recordId = (explodeBtn || modalExplodeBtn).closest('[data-record-id]').dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
