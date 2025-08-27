@@ -1,16 +1,14 @@
 /*
- * Version: 3.7.0
+ * Version: 3.7.1
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.7.1 - 2025-08-27
+ * - Added a "Reset" button to clear all active filters and searches.
+ *
  * v3.7.0 - 2025-08-27
  * - Implemented search, filter, and sort functionality.
- * - Search includes name, description, and tags with relevance scoring.
- * - Added debounce to search input for better performance.
- *
- * v3.6.4 - 2025-08-27
- * - Fixed calendar tooltip and popup positioning issues.
  */
 
 import { state } from './state.js';
@@ -36,7 +34,6 @@ function debounce(func, delay = 300) {
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
-
 const saveShareBtn = document.getElementById('save-share-btn');
 function updateSaveShareButton() {
     switch (state.ui.saveState) {
@@ -54,7 +51,6 @@ function updateSaveShareButton() {
             break;
     }
 }
-
 function triggerSave() {
     clearTimeout(saveTimeout);
     state.ui.saveState = 'MODIFIED';
@@ -70,7 +66,6 @@ function triggerSave() {
     }, 1500);
 }
 
-
 // --- CORE LOGIC ---
 function applyFiltersAndSort() {
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -79,7 +74,6 @@ function applyFiltersAndSort() {
 
     let recordsToDisplay = state.records.all;
 
-    // 1. APPLY SEARCH (with relevance scoring)
     if (searchTerm) {
         const scoredRecords = [];
         recordsToDisplay.forEach(record => {
@@ -93,25 +87,21 @@ function applyFiltersAndSort() {
                 ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])
             ].map(t => t.toLowerCase().trim());
 
-            if (name.includes(searchTerm)) score = 3; // Highest priority
-            else if (description.includes(searchTerm)) score = 2; // Medium priority
-            else if (tags.some(tag => tag.includes(searchTerm))) score = 1; // Low priority
+            if (name.includes(searchTerm)) score = 3;
+            else if (description.includes(searchTerm)) score = 2;
+            else if (tags.some(tag => tag.includes(searchTerm))) score = 1;
 
             if (score > 0) {
                 scoredRecords.push({ record, score });
             }
         });
         
-        // Sort by score first before applying other sorts
         scoredRecords.sort((a, b) => b.score - a.score);
         recordsToDisplay = scoredRecords.map(item => item.record);
-
     } else {
-         // Only show top-level items if there's no search term
         recordsToDisplay = recordsToDisplay.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
 
-    // 2. APPLY PRICE FILTER
     if (priceFilter !== 'all') {
         const [minStr, maxStr] = priceFilter.split('-');
         const min = parseFloat(minStr);
@@ -124,7 +114,6 @@ function applyFiltersAndSort() {
 
             if (isGrouping) {
                 const range = ui.getGroupPriceRange(record);
-                // Check for overlap between the group's price range and the filter's range
                 return range && range.min <= max && range.max >= min;
             } else {
                 const price = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
@@ -133,7 +122,6 @@ function applyFiltersAndSort() {
         });
     }
 
-    // 3. APPLY SORT
     recordsToDisplay.sort((a, b) => {
         const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
@@ -155,26 +143,19 @@ function applyFiltersAndSort() {
     ui.renderRecords(recordsToDisplay, imageCache);
 }
 
-
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        return;
-    }
-
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) { return; }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1]; 
-
     const cards = document.querySelectorAll('.event-card');
     for (const card of cards) {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-
         const busyTimes = await api.fetchCalendarForRecord(record);
         const dayStatus = getDayStatus(startDate, busyTimes, record);
         const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
-        
         const icon = card.querySelector('.availability-btn');
         if (icon) {
             if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
@@ -190,13 +171,10 @@ async function updateAllCardAvailabilityIcons() {
         }
     }
 }
-
 async function showItemDetailCalendar(record, targetElement) {
     if (targetElement._tippy) return;
-
     const busyTimes = await api.fetchCalendarForRecord(record);
     const calendarContainer = document.createElement('div');
-
     tippy(targetElement, {
         content: calendarContainer,
         allowHTML: true,
@@ -211,7 +189,6 @@ async function showItemDetailCalendar(record, targetElement) {
                 onDayCreate: function(dObj, dStr, fp, dayElem) {
                     const day = dayElem.dateObj;
                     const status = getDayStatus(day, busyTimes, record);
-
                     if (status === AVAILABILITY_STATUS.NONE) {
                         dayElem.classList.add('flatpickr-disabled');
                         dayElem.title = 'Unavailable';
@@ -226,9 +203,7 @@ async function showItemDetailCalendar(record, targetElement) {
                 }
             });
         },
-        onHidden(instance) {
-            instance.destroy();
-        }
+        onHidden(instance) { instance.destroy(); }
     }).show();
 }
 
@@ -242,15 +217,12 @@ async function initialize() {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
         return;
     }
-
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
-    
     setupEventListeners();
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
-
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
@@ -258,9 +230,8 @@ async function initialize() {
     } else {
         state.session.isOwned = true;
     }
-    
     ui.toggleLoading(false);
-    applyFiltersAndSort(); // Initial render
+    applyFiltersAndSort();
     ui.updateFavoritesCarousel();
     updateSaveShareButton();
 }
@@ -271,6 +242,12 @@ function setupEventListeners() {
     document.getElementById('name-filter').addEventListener('input', debouncedSearch);
     document.getElementById('price-filter').addEventListener('change', applyFiltersAndSort);
     document.getElementById('sort-by').addEventListener('change', applyFiltersAndSort);
+    document.getElementById('reset-filters-btn').addEventListener('click', () => {
+        document.getElementById('name-filter').value = '';
+        document.getElementById('price-filter').selectedIndex = 0;
+        document.getElementById('sort-by').selectedIndex = 0;
+        applyFiltersAndSort();
+    });
 
     // --- AUTOSAVE TRIGGERS ---
     ui.headerEventNameInput.addEventListener('change', (e) => { 
@@ -306,23 +283,19 @@ function setupEventListeners() {
             const favoritedRecords = Array.from(state.cart.items.keys())
                 .map(id => state.records.all.find(r => r.id === id))
                 .filter(record => record);
-
             if (favoritedRecords.length === 0) {
                 dayElem.classList.add('flatpickr-available');
                 tippy(dayElem, { content: 'Available' });
                 return;
             }
-
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
             let finalStatus = AVAILABILITY_STATUS.FULL;
             let tooltipContent = [`<strong>${day.toLocaleDateString()}</strong><hr>`];
-
             for (let i = 0; i < favoritedRecords.length; i++) {
                 const record = favoritedRecords[i];
                 const busyTimes = allBusyTimes[i];
                 const status = getDayStatus(day, busyTimes, record);
-                
                 let statusIcon = '✅';
                 let statusText = `Available`;
                 if (status === AVAILABILITY_STATUS.NONE) {
@@ -339,15 +312,9 @@ function setupEventListeners() {
                 }
                 tooltipContent.push(`<span>${statusIcon} ${record.fields.Name}: ${statusText}</span>`);
             }
-            
-            if (finalStatus === AVAILABILITY_STATUS.NONE) {
-                dayElem.classList.add('flatpickr-disabled');
-            } else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) {
-                dayElem.classList.add('flatpickr-partial');
-            } else {
-                dayElem.classList.add('flatpickr-available');
-            }
-            
+            if (finalStatus === AVAILABILITY_STATUS.NONE) { dayElem.classList.add('flatpickr-disabled'); }
+            else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) { dayElem.classList.add('flatpickr-partial'); }
+            else { dayElem.classList.add('flatpickr-available'); }
             tippy(dayElem, {
                 content: tooltipContent.join('<br>'),
                 allowHTML: true,
@@ -355,7 +322,6 @@ function setupEventListeners() {
             });
         }
     });
-
     // --- NAVIGATION GUARD ---
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
@@ -377,18 +343,14 @@ function setupEventListeners() {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
-                setTimeout(() => {
-                    saveShareBtn.textContent = originalText;
-                }, 1500);
+                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
         } else if (availabilityBtn) {
             e.stopPropagation();
             const card = availabilityBtn.closest('.event-card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                showItemDetailCalendar(record, availabilityBtn);
-            }
+            if (record) { showItemDetailCalendar(record, availabilityBtn); }
         } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
@@ -396,23 +358,16 @@ function setupEventListeners() {
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const isGrouping = state.records.all.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
-            
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
             if (!isGrouping) {
                 const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
                 const noteEl = currentCard.querySelector('.item-note');
                 const optionsEl = currentCard.querySelector('.configure-options');
                 const quantityEl = currentCard.querySelector('.quantity-input');
-                if (quantityEl) {
-                    itemInfo.quantity = parseInt(quantityEl.value, 10);
-                }
-        
-                if (optionsEl && rawOptions.length > 0) {
-                    itemInfo.selectedOptionIndex = parseInt(optionsEl.value, 10);
-                }
+                if (quantityEl) { itemInfo.quantity = parseInt(quantityEl.value, 10); }
+                if (optionsEl && rawOptions.length > 0) { itemInfo.selectedOptionIndex = parseInt(optionsEl.value, 10); }
                 if (noteEl) itemInfo.note = noteEl.value;
             }
-        
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
                 heartIcon.classList.remove('hearted');
@@ -427,21 +382,13 @@ function setupEventListeners() {
             e.stopPropagation();
             const favoriteCard = removeBtn.closest('.favorite-item');
             if (!favoriteCard) return;
-    
             const recordId = favoriteCard.dataset.recordId;
-            
-            if (state.cart.items.has(recordId)) {
-                state.cart.items.delete(recordId);
-            }
-    
+            if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId); }
             const mainCatalogCard = document.querySelector(`.event-card[data-record-id="${recordId}"]`);
             if (mainCatalogCard) {
                 const heart = mainCatalogCard.querySelector('.heart-icon');
-                if (heart) {
-                    heart.classList.remove('hearted');
-                }
+                if (heart) { heart.classList.remove('hearted'); }
             }
-            
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
             triggerSave();
@@ -451,10 +398,8 @@ function setupEventListeners() {
             if (!card) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            
             const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
             const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
-            
             if (parentRecord) {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
@@ -469,7 +414,6 @@ function setupEventListeners() {
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
             const children = state.records.all.filter(r => childNames.has(r.fields.Name));
-            
             ui.renderRecords(children, imageCache);
             const implodeButton = document.createElement('div');
             implodeButton.id = 'implode-container';
@@ -481,20 +425,16 @@ function setupEventListeners() {
             applyFiltersAndSort();
         }
     });
-
     // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
         if (!card) return;
-
         if (e.target.classList.contains('configure-options')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-    
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            
             const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
@@ -503,7 +443,6 @@ function setupEventListeners() {
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
             card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
-            
             if (selectedOption) {
                 const formatForTag = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
                 const itemTag = formatForTag(record.fields[CONSTANTS.FIELD_NAMES.NAME]);
@@ -517,7 +456,6 @@ function setupEventListeners() {
                 }
             }
         }
-
         if (e.target.classList.contains('navigate-options')) {
             const childName = e.target.value;
             if (!childName) return;
