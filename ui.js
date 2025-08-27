@@ -57,7 +57,7 @@ function getDescendantBookableItems(recordId, allRecords) {
     return bookableItems;
 }
 
-function getGroupPriceRange(record) {
+export function getGroupPriceRange(record) { // Added 'export'
     const descendants = getDescendantBookableItems(record.id, state.records.all);
     if (descendants.length === 0) return null;
     let minPrice = Infinity;
