@@ -1,32 +1,31 @@
 /*
- * Version: 2.8.0
+ * Version: 2.7.5
  * Last Modified: 2025-08-26
  *
  * Changelog:
  *
- * v2.8.0 - 2025-08-26
- * - Implemented secure API proxy for all Airtable requests.
- * - Removed hard-coded Personal Access Token from client-side code.
- *
  * v2.7.5 - 2025-08-26
  * - Performed a full file review and fixed multiple critical syntax and logical errors.
+ * - Corrected all invalid operators, variable initializations, and property accessors.
+ *
+ * v2.7.2 - 2025-08-26
+ * - Fixed date saving bug by correctly formatting the date as a full ISO 8601 string before sending to Airtable.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 
+const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
-// The proxy path for our Netlify serverless function
-const AIRTABLE_PROXY_PATH = '/.netlify/functions/airtable';
-
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
-    const url = `${AIRTABLE_PROXY_PATH}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         
@@ -77,13 +76,13 @@ export async function saveSessionToAirtable() {
         }
     };
     const isUpdate = state.session.id !== null;
-    const url = `${AIRTABLE_PROXY_PATH}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
 
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         if (!response.ok) {
@@ -109,11 +108,10 @@ export async function saveSessionToAirtable() {
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
-    const baseUrl = `${AIRTABLE_PROXY_PATH}/${TABLE_ID}?`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
     try {
         do {
-            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
-            const response = await fetch(url);
+            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
             const data = await response.json();
             records = records.concat(data.records);
