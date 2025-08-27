@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+    <link rel="icon" href="data:;" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://unpkg.com/@popperjs/core@2"></script>
@@ -33,6 +33,22 @@
             margin: 0 auto;
             border-bottom: 1px solid #e9ecef;
         }
+        #filter-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            padding: 10px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            border-bottom: 1px solid #e9ecef;
+        }
+        #reset-filters-btn {
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #6c757d;
+            background-color: #f8f9fa;
+            cursor: pointer;
+        }
         .toolbar-group {
             display: flex;
             flex-direction: column;
@@ -44,7 +60,7 @@
             text-transform: uppercase;
             font-weight: 500;
         }
-        .toolbar-group input, .toolbar-group textarea {
+        .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
             border: 1px solid #ced4da;
             border-radius: 4px;
             padding: 6px 8px;
@@ -112,7 +128,7 @@
         .favorite-item {
             position: relative;
             flex: 0 0 220px;
-            height: 358px; /* Changed from 220px to match catalog card aspect ratio */
+            height: 358px;
             border-radius: 8px;
             background-size: cover;
             background-position: center;
@@ -205,9 +221,6 @@
         }
         #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px;
         }
-
-
-        /* --- FAVORITE CARD PRICING REFINEMENTS --- */
         .favorite-pricing-details {
             margin-top: 8px;
             padding-top: 8px;
@@ -228,8 +241,6 @@
             font-weight: bold;
             margin-top: 4px;
         }
-
-        /* --- AVAILABILITY CALENDAR COLORS --- */
         .flatpickr-day.flatpickr-available {
             background: #28a745;
             color: white;
@@ -246,20 +257,15 @@
             color: white !important;
             cursor: not-allowed !important;
         }
-
-
     </style>
 </head>
 <body>
-
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
-
     <div id="sticky-header">
         <div id="header-toolbar">
             <div class="toolbar-group tool-brand-group">
                 <label>Tool</label>
                 <div class="header-title-container">
-                   
                     <h4>Event Builder</h4>
                     <sup id="beta-trigger">beta</sup>
                 </div>
@@ -284,19 +290,16 @@
             </div>
             <div class="toolbar-group people-group">
                 <div id="sessions-dropdown-container" style="display: none;">
-    
                     <select id="sessions-dropdown">
                         <option value="">Load a saved list...</option>
                     </select>
                 </div>
                 <div class="history-controls">
-  
                     <button id="undo-btn" disabled>↩️</button>
                     <button id="redo-btn" disabled>↪️</button>
                 </div>
                 <div id="collaborators-section" style="display: none;">
                     <div id="collaborator-avatars"></div>
-  
                     <button id="add-collaborator-btn">+</button>
                 </div>
                 <div id="total-cost-section">
@@ -306,39 +309,29 @@
                 <button id="save-share-btn">🔗 Copy Link</button>
             </div>
         </div>
-    </div>
         <div id="favorites-section" style="display: none;">
- 
             <div id="favorites-carousel"></div>
         </div>
-    </div>
-
-    <div id="filter-controls">
-        <input type="text" id="name-filter" placeholder="Search by name, tag, or description...">
-        
-        <select id="price-filter">
-            <option value="all">All Prices</option>
-            <option value="0-50">Under $50</option>
-            <option value="50-100">$50 - $100</option>
-            <option value="100-250">$100 - $250</option>
-            <option value="250-plus">$250+</option>
-        </select>
-        <select id="sort-by">
-           
-            <option value="price-asc">Price (Low to High)</option>
-            <option value="price-desc">Price (High to Low)</option>
-            <option value="name-asc">Name (A-Z)</option>
-        </select>
-    </div>
-
-    <div id="catalog-container"></div>
-    
-    <div id="beta-toolkit" style="display: none;
-        position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        <div id="filter-controls">
+            <input type="text" id="name-filter" placeholder="Search by name, tag, or description...">
+            <select id="price-filter">
+                <option value="all">All Prices</option>
+                <option value="0-50">Under $50</option>
+                <option value="50-100">$50 - $100</option>
+                <option value="100-250">$100 - $250</option>
+                <option value="250-plus">$250+</option>
+            </select>
+            <select id="sort-by">
+                <option value="price-asc">Price (Low to High)</option>
+                <option value="price-desc">Price (High to Low)</option>
+                <option value="name-asc">Name (A-Z)</option>
+            </select>
+            <button id="reset-filters-btn">Reset</button>
         </div>
-
+    </div>
+    <div id="catalog-container"></div>
+    <div id="beta-toolkit" style="display: none; position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    </div>
     <script type="module" src="main.js"></script>
-
 </body>
 </html>
