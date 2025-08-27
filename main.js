@@ -1,15 +1,15 @@
 /*
- * Version: 3.6.3
+ * Version: 3.6.4
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.6.4 - 2025-08-27
+ * - Fixed header calendar tooltip position by appending it to the document body.
+ * - Fixed item calendar popup position by anchoring it to the clicked button.
+ *
  * v3.6.3 - 2025-08-27
  * - Fixed level-up button by searching for parent record by name instead of ID.
- * - Removed diagnostic logging.
- *
- * v3.6.2 - 2025-08-27
- * - Removed reference to non-existent 'header-duration' element causing script error.
  */
 
 import { state } from './state.js';
@@ -100,32 +100,47 @@ async function updateAllCardAvailabilityIcons() {
     }
 }
 
-async function showItemDetailCalendar(record) {
+async function showItemDetailCalendar(record, targetElement) {
+    if (targetElement._tippy) return; // Prevent creating multiple popups if one is already open on this element
+
     const busyTimes = await api.fetchCalendarForRecord(record);
-    const detailPicker = flatpickr(document.createElement('input'), {
-        defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
-        onDayCreate: function(dObj, dStr, fp, dayElem) {
-            const day = dayElem.dateObj;
-            const status = getDayStatus(day, busyTimes, record);
+    const calendarContainer = document.createElement('div');
 
-            if (status === AVAILABILITY_STATUS.NONE) {
-                dayElem.classList.add('flatpickr-disabled');
-                dayElem.title = 'Unavailable';
-            } else if (status === AVAILABILITY_STATUS.PARTIAL) {
-                dayElem.classList.add('flatpickr-partial');
-                const busySlots = getBusySlotsForDay(day, busyTimes);
-                dayElem.title = `Partially Available ${busySlots}`;
-            } else if (status === AVAILABILITY_STATUS.FULL) {
-                dayElem.classList.add('flatpickr-available');
-                dayElem.title = 'Fully Available';
-            }
+    // Use Tippy.js to create a well-positioned popup
+    tippy(targetElement, {
+        content: calendarContainer,
+        allowHTML: true,
+        interactive: true,
+        trigger: 'click',
+        placement: 'right-start',
+        appendTo: () => document.body, // Ensures it appears on top of other elements
+        onShow(instance) {
+            // Render the flatpickr calendar inside the Tippy popup
+            flatpickr(calendarContainer, {
+                inline: true,
+                defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
+                onDayCreate: function(dObj, dStr, fp, dayElem) {
+                    const day = dayElem.dateObj;
+                    const status = getDayStatus(day, busyTimes, record);
+
+                    if (status === AVAILABILITY_STATUS.NONE) {
+                        dayElem.classList.add('flatpickr-disabled');
+                        dayElem.title = 'Unavailable';
+                    } else if (status === AVAILABILITY_STATUS.PARTIAL) {
+                        dayElem.classList.add('flatpickr-partial');
+                        const busySlots = getBusySlotsForDay(day, busyTimes);
+                        dayElem.title = `Partially Available ${busySlots}`;
+                    } else if (status === AVAILABILITY_STATUS.FULL) {
+                        dayElem.classList.add('flatpickr-available');
+                        dayElem.title = 'Fully Available';
+                    }
+                }
+            });
         },
-        onClose: function(selectedDates, dateStr, instance) {
-            instance.destroy();
+        onHidden(instance) {
+            instance.destroy(); // Clean up the tippy instance so it can be reopened
         }
-    });
-
-    detailPicker.open();
+    }).show();
 }
 
 // --- INITIALIZATION & MAIN FLOW ---
@@ -241,6 +256,7 @@ function setupEventListeners() {
             tippy(dayElem, {
                 content: tooltipContent.join('<br>'),
                 allowHTML: true,
+                appendTo: () => document.body, // This is the fix for the header tooltip
             });
         }
     });
@@ -276,7 +292,7 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
-                showItemDetailCalendar(record);
+                showItemDetailCalendar(record, availabilityBtn); // Pass the button element for positioning
             }
         } else if (heartIcon) {
             e.stopPropagation();
