@@ -1,14 +1,14 @@
 /*
- * Version: 2.11.1
+ * Version: 2.11.2
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v2.11.2 - 2025-08-27
+ * - Refactored all DOM element selections to be function-scoped, fixing a timing bug where the favorites section would not appear.
+ *
  * v2.11.1 - 2025-08-27
  * - Made DOM element selection more robust to prevent load-time errors.
- *
- * v2.11.0 - 2025-08-27
- * - Fixed price range calculation and enhanced detail modal.
  */
 
 import { state } from './state.js';
@@ -16,29 +16,6 @@ import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
-
-// --- DOM ELEMENT EXPORTS ---
-export const catalogContainer = document.getElementById('catalog-container');
-export const favoritesCarousel = document.getElementById('favorites-carousel');
-// REMOVED: export const headerEventNameInput = document.getElementById('header-event-name');
-const loadingMessage = document.getElementById('loading-message');
-const totalCostEl = document.getElementById('total-cost');
-const favoritesSection = document.getElementById('favorites-section');
-const filterControls = document.getElementById('filter-controls');
-
-// --- MODAL DOM ELEMENTS ---
-const modalOverlay = document.getElementById('detail-modal-overlay');
-const modalParentBtn = document.getElementById('modal-parent-btn');
-const modalHeaderActions = document.getElementById('modal-header-actions');
-const modalItemName = document.getElementById('modal-item-name');
-const modalItemPrice = document.getElementById('modal-item-price');
-const modalItemDescription = document.getElementById('modal-item-description');
-const modalMainImage = document.getElementById('modal-main-image');
-const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
-const modalOptionsContainer = document.getElementById('modal-options-container');
-const modalQuantitySelector = document.getElementById('modal-quantity-selector');
-const modalCalendarContainer = document.getElementById('modal-calendar-container');
-
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -237,9 +214,13 @@ export async function createInteractiveCard(record, imageCache) {
 }
 
 export async function renderRecords(recordsToRender, imageCache) {
+    const catalogContainer = document.getElementById('catalog-container');
+    if (!catalogContainer) return;
     catalogContainer.innerHTML = '';
+
     const implodeContainer = document.getElementById('implode-container');
     if (implodeContainer) implodeContainer.remove();
+
     if (recordsToRender.length === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
@@ -253,6 +234,10 @@ export async function renderRecords(recordsToRender, imageCache) {
 }
 
 export async function updateFavoritesCarousel() {
+    const favoritesSection = document.getElementById('favorites-section');
+    const favoritesCarousel = document.getElementById('favorites-carousel');
+    if (!favoritesSection || !favoritesCarousel) return;
+
     if (state.cart.items.size === 0) {
         favoritesSection.style.display = 'none';
         return;
@@ -273,6 +258,18 @@ export async function updateFavoritesCarousel() {
 }
 
 export async function showDetailModal(record) {
+    const modalOverlay = document.getElementById('detail-modal-overlay');
+    const modalParentBtn = document.getElementById('modal-parent-btn');
+    const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalItemName = document.getElementById('modal-item-name');
+    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemDescription = document.getElementById('modal-item-description');
+    const modalMainImage = document.getElementById('modal-main-image');
+    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+    const modalOptionsContainer = document.getElementById('modal-options-container');
+    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
+    const modalCalendarContainer = document.getElementById('modal-calendar-container');
+
     modalOverlay.dataset.recordId = record.id;
     
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
@@ -380,6 +377,7 @@ export async function showDetailModal(record) {
 }
 
 export function hideDetailModal() {
+    const modalOverlay = document.getElementById('detail-modal-overlay');
     modalOverlay.style.display = 'none';
     document.body.classList.remove('modal-open');
 }
@@ -387,13 +385,14 @@ export function hideDetailModal() {
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    // THE FIX IS HERE: Query for the element directly.
     document.getElementById('header-event-name').value = eventName;
     document.getElementById('header-headcount').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
     document.getElementById('header-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
 export function updateTotalCost() {
+    const totalCostEl = document.getElementById('total-cost');
+    if (!totalCostEl) return;
     let total = 0;
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
     allItems.forEach((itemInfo, recordId) => {
@@ -416,6 +415,8 @@ export function updateTotalCost() {
 }
 
 export function toggleLoading(show) {
-    loadingMessage.style.display = show ? 'block' : 'none';
-    filterControls.style.display = show ? 'block' : 'flex';
+    const loadingMessage = document.getElementById('loading-message');
+    const filterControls = document.getElementById('filter-controls');
+    if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
+    if (filterControls) filterControls.style.display = show ? 'none' : 'flex';
 }
