@@ -1,14 +1,14 @@
 /*
- * Version: 3.8.3
+ * Version: 3.8.4
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.8.4 - 2025-08-27
+ * - Made DOM element selection in event listeners more robust to prevent load-time errors.
+ *
  * v3.8.3 - 2025-08-27
  * - Unified click listener now handles heart and explode buttons within the detail modal.
- *
- * v3.8.2 - 2025-08-27
- * - Fixed bug where clicking an options dropdown opened the detail modal.
  */
 
 import { state } from './state.js';
@@ -197,7 +197,8 @@ function setupEventListeners() {
     });
 
     // --- AUTOSAVE TRIGGERS ---
-    ui.headerEventNameInput.addEventListener('change', (e) => { 
+    // THE FIX IS HERE: Query for the element directly instead of importing.
+    document.getElementById('header-event-name').addEventListener('change', (e) => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
@@ -324,10 +325,8 @@ function setupEventListeners() {
 
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
-                targetElement.classList.remove('hearted');
             } else {
                 state.cart.items.set(recordId, itemInfo);
-                targetElement.classList.add('hearted');
             }
 
             document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.toggle('hearted', state.cart.items.has(recordId));
@@ -346,6 +345,7 @@ function setupEventListeners() {
             if (mainCatalogCard) {
                 mainCatalogCard.querySelector('.heart-icon')?.classList.remove('hearted');
             }
+            document.getElementById('modal-heart-btn')?.classList.remove('hearted');
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
             triggerSave();
@@ -365,8 +365,8 @@ function setupEventListeners() {
             }
         } else if (explodeBtn || modalExplodeBtn) {
             e.stopPropagation();
-            ui.hideDetailModal();
             const recordId = (explodeBtn || modalExplodeBtn).closest('[data-record-id]').dataset.recordId;
+            ui.hideDetailModal();
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const childNames = new Set(rawOptions.map(opt => opt.name));
