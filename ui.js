@@ -1,21 +1,20 @@
 /*
- * Version: 2.8.1
+ * Version: 2.9.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v2.9.0 - 2025-08-27
+ * - Added showDetailModal and hideDetailModal functions for the item detail view.
+ *
  * v2.8.1 - 2025-08-27
  * - Fixed bug where initial catalog card images would not load.
- * - Corrected use of object destructuring for the image URL payload.
- *
- * v2.8.0 - 2025-08-26
- * - Expanded updateHeader to populate headcount and goals fields on session load.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord } from './api.js';
-import { parseOptions } from './utils.js'; // IMPORT ADDED
+import { parseOptions } from './utils.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -27,8 +26,17 @@ const favoritesSection = document.getElementById('favorites-section');
 const filterControls = document.getElementById('filter-controls');
 const headerSummary = document.getElementById('header-summary');
 
+// --- MODAL DOM ELEMENTS ---
+const modalOverlay = document.getElementById('detail-modal-overlay');
+const modalItemName = document.getElementById('modal-item-name');
+const modalItemPrice = document.getElementById('modal-item-price');
+const modalItemDescription = document.getElementById('modal-item-description');
+const modalMainImage = document.getElementById('modal-main-image');
+const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+
+
 // --- HELPER & LOGIC FUNCTIONS ---
-function getRecordPrice(record, optionIndex = null) {
+export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -57,7 +65,7 @@ function getDescendantBookableItems(recordId, allRecords) {
     return bookableItems;
 }
 
-export function getGroupPriceRange(record) { // Added 'export'
+export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record.id, state.records.all);
     if (descendants.length === 0) return null;
     let minPrice = Infinity;
@@ -132,6 +140,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
         </div>`;
     return itemCard;
 }
+
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
@@ -211,10 +220,7 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    // --- THE FIX IS HERE ---
-    // Correctly destructure the 'imageUrls' array from the result object.
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
-    console.log(`Checking record: "${fields.Name}". Is it a grouping (from API)?`, isGrouping, imageUrls);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
@@ -255,6 +261,40 @@ export async function updateFavoritesCarousel() {
     updateTotalCost();
 }
 
+export function showDetailModal(record) {
+    const { imageUrls } = record.cachedImages; // Use cached images passed from main.js
+    
+    modalItemName.textContent = record.fields.Name || 'Untitled';
+    modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
+    modalItemDescription.textContent = record.fields.Description || '';
+
+    modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
+    modalThumbnailStrip.innerHTML = '';
+
+    imageUrls.forEach((url, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumbnail-img';
+        thumb.style.backgroundImage = `url('${url}')`;
+        if (index === 0) {
+            thumb.classList.add('active');
+        }
+        thumb.addEventListener('click', () => {
+            modalMainImage.style.backgroundImage = `url('${url}')`;
+            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+            thumb.classList.add('active');
+        });
+        modalThumbnailStrip.appendChild(thumb);
+    });
+
+    modalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+}
+
+export function hideDetailModal() {
+    modalOverlay.style.display = 'none';
+    document.body.classList.remove('modal-open');
+}
+
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
@@ -276,7 +316,6 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
         let itemCost;
- 
         
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
