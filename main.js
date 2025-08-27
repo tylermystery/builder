@@ -1,14 +1,14 @@
 /*
- * Version: 3.6.1 (with debugging)
+ * Version: 3.6.2 (with debugging)
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.6.2 - 2025-08-27
+ * - Removed reference to non-existent 'header-duration' element causing script error.
+ *
  * v3.6.1 - 2025-08-27
  * - Added diagnostic logging to the parent-btn click handler.
- *
- * v3.6.0 - 2025-08-27
- * - Merged favorite card and date/time picker enhancements.
  */
 
 import { state } from './state.js';
@@ -23,31 +23,6 @@ let mainDatePicker = null;
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
-function debouncedSave() {
-    const saveStatusEl = document.getElementById('save-status');
-    if (saveStatusEl) {
-        saveStatusEl.textContent = 'Changes pending...';
-        saveStatusEl.style.color = '#666';
-    }
-
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
-        if (saveStatusEl) saveStatusEl.textContent = 'Saving...';
-
-        const success = await api.saveSessionToAirtable();
-
-        if (saveStatusEl) {
-            if (success) {
-                saveStatusEl.textContent = 'All changes saved.';
-                // Optional: Fade out the message after a few seconds
-                setTimeout(() => { saveStatusEl.textContent = ''; }, 3000);
-            } else {
-                saveStatusEl.textContent = 'Save failed. Please check connection and try again.';
-                saveStatusEl.style.color = 'red';
-            }
-        }
-    }, 1000);
-}
 
 const saveShareBtn = document.getElementById('save-share-btn');
 function updateSaveShareButton() {
@@ -96,8 +71,7 @@ async function updateAllCardAvailabilityIcons() {
     }
 
     const startDate = mainDatePicker.selectedDates[0];
-    const durationHours = parseInt(document.getElementById('header-duration').value, 10) || 1;
-    const requestedEnd = new Date(startDate.getTime() + durationHours * 60 * 60 * 1000);
+    const requestedEnd = mainDatePicker.selectedDates[1]; 
 
     const cards = document.querySelectorAll('.event-card');
     for (const card of cards) {
@@ -173,7 +147,7 @@ async function initialize() {
         ui.updateHeader();
 
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (savedDate && savedDate.length === 2) {
+        if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
         }
     } else {
@@ -192,7 +166,6 @@ function setupEventListeners() {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
-    document.getElementById('header-duration').addEventListener('change', updateAllCardAvailabilityIcons);
     document.getElementById('header-headcount').addEventListener('change', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
         triggerSave();
@@ -208,10 +181,11 @@ function setupEventListeners() {
     // --- MAIN DATE PICKER ---
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
-        dateFormat: "M j, Y",
+        enableTime: true,
+        dateFormat: "M j, Y h:i K",
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString().split('T')[0]));
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
                 updateAllCardAvailabilityIcons();
             }
