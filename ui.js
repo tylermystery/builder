@@ -1,20 +1,22 @@
 /*
- * Version: 2.9.0
+ * Version: 2.10.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v2.10.0 - 2025-08-27
+ * - Significantly enhanced showDetailModal to render options, parent button, and availability calendar.
+ * - Added logic for in-modal navigation.
+ *
  * v2.9.0 - 2025-08-27
  * - Added showDetailModal and hideDetailModal functions for the item detail view.
- *
- * v2.8.1 - 2025-08-27
- * - Fixed bug where initial catalog card images would not load.
  */
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
-import { fetchImagesForRecord } from './api.js';
+import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
+import { getDayStatus } from './availability.js';
 
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
@@ -24,15 +26,17 @@ const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
 const filterControls = document.getElementById('filter-controls');
-const headerSummary = document.getElementById('header-summary');
 
 // --- MODAL DOM ELEMENTS ---
 const modalOverlay = document.getElementById('detail-modal-overlay');
+const modalParentBtn = document.getElementById('modal-parent-btn');
 const modalItemName = document.getElementById('modal-item-name');
 const modalItemPrice = document.getElementById('modal-item-price');
 const modalItemDescription = document.getElementById('modal-item-description');
 const modalMainImage = document.getElementById('modal-main-image');
 const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+const modalOptionsContainer = document.getElementById('modal-options-container');
+const modalCalendarContainer = document.getElementById('modal-calendar-container');
 
 
 // --- HELPER & LOGIC FUNCTIONS ---
@@ -152,8 +156,8 @@ export async function createInteractiveCard(record, imageCache) {
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    const parentId = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] ? fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] : null;
-    const parentButtonHTML = parentId ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
     const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
 
@@ -193,7 +197,7 @@ export async function createInteractiveCard(record, imageCache) {
     const isHearted = state.cart.items.has(recordId);
     eventCard.innerHTML = `
         <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
-        <div class="heart-icon ${isHearted ? 'hearted' : ''}" data-composite-id="${recordId}">
+        <div class="heart-icon ${isHearted ? 'hearted' : ''}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
         <div class="event-card-content">
@@ -210,8 +214,9 @@ export async function createInteractiveCard(record, imageCache) {
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
     if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', () => { quantityInput.value = parseInt(quantityInput.value) + 1; });
-        minusBtn.addEventListener('click', () => {
+        plusBtn.addEventListener('click', (e) => { e.stopPropagation(); quantityInput.value = parseInt(quantityInput.value) + 1; });
+        minusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const current = parseInt(quantityInput.value);
             const min = parseInt(quantityInput.min);
             if (current > min) {
@@ -261,8 +266,8 @@ export async function updateFavoritesCarousel() {
     updateTotalCost();
 }
 
-export function showDetailModal(record) {
-    const { imageUrls } = record.cachedImages; // Use cached images passed from main.js
+export async function showDetailModal(record) {
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
@@ -270,20 +275,66 @@ export function showDetailModal(record) {
 
     modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
     modalThumbnailStrip.innerHTML = '';
-
     imageUrls.forEach((url, index) => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
         thumb.style.backgroundImage = `url('${url}')`;
-        if (index === 0) {
-            thumb.classList.add('active');
-        }
+        if (index === 0) thumb.classList.add('active');
         thumb.addEventListener('click', () => {
             modalMainImage.style.backgroundImage = `url('${url}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
         });
         modalThumbnailStrip.appendChild(thumb);
+    });
+
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
+    if (parentRecord) {
+        modalParentBtn.style.display = 'block';
+        modalParentBtn.onclick = () => showDetailModal(parentRecord);
+    } else {
+        modalParentBtn.style.display = 'none';
+    }
+
+    modalOptionsContainer.innerHTML = '';
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    rawOptions.forEach(opt => {
+        const optionButton = document.createElement('button');
+        optionButton.className = 'option-btn';
+        let priceModText = '';
+        if (opt.absolutePrice != null) {
+            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        } else if (opt.priceChange != null) {
+            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+        }
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
+        
+        if (allRecordNames.has(opt.name)) {
+            optionButton.onclick = () => {
+                const childRecord = state.records.all.find(r => r.fields.Name === opt.name);
+                if (childRecord) showDetailModal(childRecord);
+            };
+        } else {
+            optionButton.onclick = () => {
+                modalItemDescription.textContent = opt.description || record.fields.Description;
+            };
+        }
+        modalOptionsContainer.appendChild(optionButton);
+    });
+
+    modalCalendarContainer.innerHTML = '';
+    const busyTimes = await fetchCalendarForRecord(record);
+    flatpickr(modalCalendarContainer, {
+        inline: true,
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, busyTimes, record);
+            if (status === 'NONE') dayElem.classList.add('flatpickr-disabled');
+            else if (status === 'PARTIAL') dayElem.classList.add('flatpickr-partial');
+            else dayElem.classList.add('flatpickr-available');
+        }
     });
 
     modalOverlay.style.display = 'flex';
