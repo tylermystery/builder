@@ -261,7 +261,7 @@
             cursor: not-allowed !important;
         }
         
-        /* --- NEW STYLES FOR DETAIL MODAL --- */
+        /* --- DETAIL MODAL STYLES --- */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -329,6 +329,45 @@
         }
         .details-column h2 {
             margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        #modal-parent-btn {
+            font-size: 0.8em;
+            padding: 5px;
+            cursor: pointer;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .options-container {
+            margin: 20px 0;
+        }
+        .option-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .option-btn:hover {
+            background-color: #e9ecef;
+            border-color: #007aff;
+        }
+        .option-btn .price-mod {
+            float: right;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .inline-calendar-container .flatpickr-calendar {
+            box-shadow: none;
+            width: 100%;
         }
     </style>
 </head>
@@ -419,9 +458,14 @@
                     <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
                 </div>
                 <div class="details-column">
-                    <h2 id="modal-item-name">Item Name</h2>
+                    <h2>
+                        <button id="modal-parent-btn" style="display: none;">⬆️</button>
+                        <span id="modal-item-name">Item Name</span>
+                    </h2>
                     <p id="modal-item-price">Price</p>
                     <p id="modal-item-description">Full description goes here...</p>
+                    <div id="modal-options-container" class="options-container"></div>
+                    <div id="modal-calendar-container" class="inline-calendar-container"></div>
                 </div>
             </div>
         </div>
