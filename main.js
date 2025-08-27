@@ -1,15 +1,15 @@
 /*
- * Version: 3.8.1
+ * Version: 3.8.2
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.8.2 - 2025-08-27
+ * - Fixed bug where clicking an options dropdown opened the detail modal.
+ * - Removed redundant showItemDetailCalendar function.
+ *
  * v3.8.1 - 2025-08-27
  * - Fixed bug where card buttons were not working after modal implementation.
- * - Correctly merged all click handlers into a single, prioritized listener.
- *
- * v3.8.0 - 2025-08-27
- * - Implemented Detailed Item View modal.
  */
 
 import { state } from './state.js';
@@ -18,7 +18,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, checkAvailability } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -154,41 +154,6 @@ async function updateAllCardAvailabilityIcons() {
         }
     }
 }
-async function showItemDetailCalendar(record, targetElement) {
-    if (targetElement._tippy) return;
-    const busyTimes = await api.fetchCalendarForRecord(record);
-    const calendarContainer = document.createElement('div');
-    tippy(targetElement, {
-        content: calendarContainer,
-        allowHTML: true,
-        interactive: true,
-        trigger: 'click',
-        placement: 'right-start',
-        appendTo: () => document.body,
-        onShow(instance) {
-            flatpickr(calendarContainer, {
-                inline: true,
-                defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
-                onDayCreate: function(dObj, dStr, fp, dayElem) {
-                    const day = dayElem.dateObj;
-                    const status = getDayStatus(day, busyTimes, record);
-                    if (status === AVAILABILITY_STATUS.NONE) {
-                        dayElem.classList.add('flatpickr-disabled');
-                        dayElem.title = 'Unavailable';
-                    } else if (status === AVAILABILITY_STATUS.PARTIAL) {
-                        dayElem.classList.add('flatpickr-partial');
-                        const busySlots = getBusySlotsForDay(day, busyTimes);
-                        dayElem.title = `Partially Available ${busySlots}`;
-                    } else if (status === AVAILABILITY_STATUS.FULL) {
-                        dayElem.classList.add('flatpickr-available');
-                        dayElem.title = 'Fully Available';
-                    }
-                }
-            });
-        },
-        onHidden(instance) { instance.destroy(); }
-    }).show();
-}
 
 // --- INITIALIZATION & MAIN FLOW ---
 async function initialize() {
@@ -312,19 +277,17 @@ function setupEventListeners() {
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
-
+    
     // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
-        // Modal Closing Logic
         if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) {
             ui.hideDetailModal();
             return;
         }
         if (e.target.closest('.modal-content')) {
-            return; // Ignore clicks inside the modal content
+            return;
         }
 
-        // Define all possible specific targets
         const heartIcon = e.target.closest('.heart-icon');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
@@ -334,7 +297,6 @@ function setupEventListeners() {
         const removeBtn = e.target.closest('.remove-btn');
         const card = e.target.closest('.event-card');
 
-        // Prioritize specific button clicks over general card clicks
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -343,17 +305,15 @@ function setupEventListeners() {
             });
         } else if (availabilityBtn) {
             e.stopPropagation();
-            const card = availabilityBtn.closest('.event-card');
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) { showItemDetailCalendar(record, availabilityBtn); }
+            const record = state.records.all.find(r => r.id === availabilityBtn.closest('.event-card').dataset.recordId);
+            if (record) ui.showDetailModal(record);
         } else if (heartIcon) {
             e.stopPropagation();
             const currentCard = heartIcon.closest('.event-card, .favorite-item');
             if (!currentCard) return; 
             const recordId = currentCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            const isGrouping = state.records.all.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+            const isGrouping = !!(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).find(opt => state.records.all.some(r => r.fields.Name === opt.name)));
             let itemInfo = { quantity: 1, selectedOptionIndex: null, note: '' };
             if (!isGrouping) {
                 const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -420,15 +380,17 @@ function setupEventListeners() {
             implodeBtn.closest('#implode-container').remove();
             applyFiltersAndSort();
         } else if (card) {
+            if (e.target.closest('.options-selector, .quantity-selector')) {
+                return;
+            }
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
-                record.cachedImages = await api.fetchImagesForRecord(record, state.records.all, imageCache);
                 ui.showDetailModal(record);
             }
         }
     });
-    
+
     // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
