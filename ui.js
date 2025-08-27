@@ -378,16 +378,23 @@ export async function showDetailModal(record) {
 
 export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
-    modalOverlay.style.display = 'none';
-    document.body.classList.remove('modal-open');
+    if (modalOverlay) {
+        modalOverlay.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
 }
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    document.getElementById('header-event-name').value = eventName;
-    document.getElementById('header-headcount').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
-    document.getElementById('header-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    const eventNameInput = document.getElementById('header-event-name');
+    if (eventNameInput) eventNameInput.value = eventName;
+    
+    const headcountInput = document.getElementById('header-headcount');
+    if (headcountInput) headcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
+    
+    const goalsInput = document.getElementById('header-goals');
+    if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
 export function updateTotalCost() {
