@@ -1,15 +1,14 @@
 /*
- * Version: 2.11.0
+ * Version: 2.11.1
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v2.11.0 - 2025-08-27
- * - Fixed price range calculation for groupings and now ignores $0 items.
- * - Detail modal now renders a quantity selector, heart button, and explode button.
+ * v2.11.1 - 2025-08-27
+ * - Made DOM element selection more robust to prevent load-time errors.
  *
- * v2.10.0 - 2025-08-27
- * - Enhanced showDetailModal to render options, parent button, and availability calendar.
+ * v2.11.0 - 2025-08-27
+ * - Fixed price range calculation and enhanced detail modal.
  */
 
 import { state } from './state.js';
@@ -21,7 +20,7 @@ import { getDayStatus } from './availability.js';
 // --- DOM ELEMENT EXPORTS ---
 export const catalogContainer = document.getElementById('catalog-container');
 export const favoritesCarousel = document.getElementById('favorites-carousel');
-export const headerEventNameInput = document.getElementById('header-event-name');
+// REMOVED: export const headerEventNameInput = document.getElementById('header-event-name');
 const loadingMessage = document.getElementById('loading-message');
 const totalCostEl = document.getElementById('total-cost');
 const favoritesSection = document.getElementById('favorites-section');
@@ -82,14 +81,14 @@ export function getGroupPriceRange(record) {
         if (options.length > 0) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
-                if (price > 0) { // Ignore $0 or unpriced items
+                if (price > 0) {
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price > 0) { // Ignore $0 or unpriced items
+            if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -388,7 +387,8 @@ export function hideDetailModal() {
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    headerEventNameInput.value = eventName;
+    // THE FIX IS HERE: Query for the element directly.
+    document.getElementById('header-event-name').value = eventName;
     document.getElementById('header-headcount').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
     document.getElementById('header-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
