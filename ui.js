@@ -1,15 +1,15 @@
 /*
- * Version: 2.10.0
+ * Version: 2.11.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v2.10.0 - 2025-08-27
- * - Significantly enhanced showDetailModal to render options, parent button, and availability calendar.
- * - Added logic for in-modal navigation.
+ * v2.11.0 - 2025-08-27
+ * - Fixed price range calculation for groupings and now ignores $0 items.
+ * - Detail modal now renders a quantity selector, heart button, and explode button.
  *
- * v2.9.0 - 2025-08-27
- * - Added showDetailModal and hideDetailModal functions for the item detail view.
+ * v2.10.0 - 2025-08-27
+ * - Enhanced showDetailModal to render options, parent button, and availability calendar.
  */
 
 import { state } from './state.js';
@@ -30,18 +30,20 @@ const filterControls = document.getElementById('filter-controls');
 // --- MODAL DOM ELEMENTS ---
 const modalOverlay = document.getElementById('detail-modal-overlay');
 const modalParentBtn = document.getElementById('modal-parent-btn');
+const modalHeaderActions = document.getElementById('modal-header-actions');
 const modalItemName = document.getElementById('modal-item-name');
 const modalItemPrice = document.getElementById('modal-item-price');
 const modalItemDescription = document.getElementById('modal-item-description');
 const modalMainImage = document.getElementById('modal-main-image');
 const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
 const modalOptionsContainer = document.getElementById('modal-options-container');
+const modalQuantitySelector = document.getElementById('modal-quantity-selector');
 const modalCalendarContainer = document.getElementById('modal-calendar-container');
 
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
-    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
@@ -53,15 +55,15 @@ export function getRecordPrice(record, optionIndex = null) {
     return price;
 }
 
-function getDescendantBookableItems(recordId, allRecords) {
+function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
-    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.[0] === recordId);
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     for (const child of children) {
         const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
         const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
         if (isGrouping) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child.id, allRecords));
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
         } else {
             bookableItems.push(child);
         }
@@ -70,7 +72,7 @@ function getDescendantBookableItems(recordId, allRecords) {
 }
 
 export function getGroupPriceRange(record) {
-    const descendants = getDescendantBookableItems(record.id, state.records.all);
+    const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
     let minPrice = Infinity;
     let maxPrice = -Infinity;
@@ -80,16 +82,21 @@ export function getGroupPriceRange(record) {
         if (options.length > 0) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
-                if (price < minPrice) minPrice = price;
-                if (price > maxPrice) maxPrice = price;
+                if (price > 0) { // Ignore $0 or unpriced items
+                    if (price < minPrice) minPrice = price;
+                    if (price > maxPrice) maxPrice = price;
+                }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price < minPrice) minPrice = price;
-            if (price > maxPrice) maxPrice = price;
+            if (price > 0) { // Ignore $0 or unpriced items
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            }
         }
     });
-    return { min: minPrice, max: maxPrice };
+
+    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
 
 // --- UI RENDERING FUNCTIONS ---
@@ -176,7 +183,7 @@ export async function createInteractiveCard(record, imageCache) {
             priceHTML = range.min === range.max ?
                 `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
-            priceHTML = 'From $0.00';
+            priceHTML = 'Price Varies';
         }
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
@@ -267,11 +274,22 @@ export async function updateFavoritesCarousel() {
 }
 
 export async function showDetailModal(record) {
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
+    modalOverlay.dataset.recordId = record.id;
     
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
-    modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
     modalItemDescription.textContent = record.fields.Description || '';
+    
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+
+    if (isGrouping) {
+        const range = getGroupPriceRange(record);
+        modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+    } else {
+        modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
+    }
 
     modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
     modalThumbnailStrip.innerHTML = '';
@@ -290,16 +308,22 @@ export async function showDetailModal(record) {
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
-    if (parentRecord) {
-        modalParentBtn.style.display = 'block';
+    modalParentBtn.style.display = parentRecord ? 'block' : 'none';
+    if(parentRecord) {
         modalParentBtn.onclick = () => showDetailModal(parentRecord);
-    } else {
-        modalParentBtn.style.display = 'none';
     }
 
+    modalHeaderActions.innerHTML = '';
+    if (isGrouping) {
+        modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
+    }
+    const isHearted = state.cart.items.has(record.id);
+    modalHeaderActions.innerHTML += `
+        <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+        </div>`;
+
     modalOptionsContainer.innerHTML = '';
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     rawOptions.forEach(opt => {
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
@@ -310,7 +334,6 @@ export async function showDetailModal(record) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
         optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
-        
         if (allRecordNames.has(opt.name)) {
             optionButton.onclick = () => {
                 const childRecord = state.records.all.find(r => r.fields.Name === opt.name);
@@ -323,6 +346,22 @@ export async function showDetailModal(record) {
         }
         modalOptionsContainer.appendChild(optionButton);
     });
+
+    modalQuantitySelector.innerHTML = '';
+    if (!isGrouping) {
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        modalQuantitySelector.innerHTML = `
+            <div class="quantity-selector">
+                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
+                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
+                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
+            </div>`;
+        const plusBtn = modalQuantitySelector.querySelector('.plus');
+        const minusBtn = modalQuantitySelector.querySelector('.minus');
+        const input = modalQuantitySelector.querySelector('input');
+        plusBtn.addEventListener('click', () => input.stepUp());
+        minusBtn.addEventListener('click', () => input.stepDown());
+    }
 
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await fetchCalendarForRecord(record);
@@ -350,7 +389,6 @@ export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
     headerEventNameInput.value = eventName;
-
     document.getElementById('header-headcount').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
     document.getElementById('header-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
@@ -367,7 +405,6 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
         let itemCost;
-        
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
@@ -380,5 +417,5 @@ export function updateTotalCost() {
 
 export function toggleLoading(show) {
     loadingMessage.style.display = show ? 'block' : 'none';
-    filterControls.style.display = show ? 'none' : 'flex';
+    filterControls.style.display = show ? 'block' : 'flex';
 }
