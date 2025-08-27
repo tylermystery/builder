@@ -1,15 +1,16 @@
 /*
- * Version: 3.6.4
+ * Version: 3.7.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v3.6.4 - 2025-08-27
- * - Fixed header calendar tooltip position by appending it to the document body.
- * - Fixed item calendar popup position by anchoring it to the clicked button.
+ * v3.7.0 - 2025-08-27
+ * - Implemented search, filter, and sort functionality.
+ * - Search includes name, description, and tags with relevance scoring.
+ * - Added debounce to search input for better performance.
  *
- * v3.6.3 - 2025-08-27
- * - Fixed level-up button by searching for parent record by name instead of ID.
+ * v3.6.4 - 2025-08-27
+ * - Fixed calendar tooltip and popup positioning issues.
  */
 
 import { state } from './state.js';
@@ -21,6 +22,17 @@ import { parseOptions } from './utils.js';
 import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
+
+// --- UTILITY FUNCTIONS ---
+function debounce(func, delay = 300) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
@@ -60,10 +72,89 @@ function triggerSave() {
 
 
 // --- CORE LOGIC ---
-function renderTopLevel() {
-    const topLevelRecords = state.records.all.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-    ui.renderRecords(topLevelRecords, imageCache);
+function applyFiltersAndSort() {
+    const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+    const priceFilter = document.getElementById('price-filter').value;
+    const sortBy = document.getElementById('sort-by').value;
+
+    let recordsToDisplay = state.records.all;
+
+    // 1. APPLY SEARCH (with relevance scoring)
+    if (searchTerm) {
+        const scoredRecords = [];
+        recordsToDisplay.forEach(record => {
+            let score = 0;
+            const fields = record.fields;
+            const name = (fields.Name || '').toLowerCase();
+            const description = (fields.Description || '').toLowerCase();
+            const tags = [
+                ...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || []),
+                ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || []),
+                ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])
+            ].map(t => t.toLowerCase().trim());
+
+            if (name.includes(searchTerm)) score = 3; // Highest priority
+            else if (description.includes(searchTerm)) score = 2; // Medium priority
+            else if (tags.some(tag => tag.includes(searchTerm))) score = 1; // Low priority
+
+            if (score > 0) {
+                scoredRecords.push({ record, score });
+            }
+        });
+        
+        // Sort by score first before applying other sorts
+        scoredRecords.sort((a, b) => b.score - a.score);
+        recordsToDisplay = scoredRecords.map(item => item.record);
+
+    } else {
+         // Only show top-level items if there's no search term
+        recordsToDisplay = recordsToDisplay.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    }
+
+    // 2. APPLY PRICE FILTER
+    if (priceFilter !== 'all') {
+        const [minStr, maxStr] = priceFilter.split('-');
+        const min = parseFloat(minStr);
+        const max = maxStr === 'plus' ? Infinity : parseFloat(maxStr);
+        
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+            const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
+            if (isGrouping) {
+                const range = ui.getGroupPriceRange(record);
+                // Check for overlap between the group's price range and the filter's range
+                return range && range.min <= max && range.max >= min;
+            } else {
+                const price = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+                return price >= min && price <= max;
+            }
+        });
+    }
+
+    // 3. APPLY SORT
+    recordsToDisplay.sort((a, b) => {
+        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+        const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+        const aName = a.fields.Name || '';
+        const bName = b.fields.Name || '';
+
+        switch (sortBy) {
+            case 'price-asc':
+                return aPrice - bPrice;
+            case 'price-desc':
+                return bPrice - aPrice;
+            case 'name-asc':
+                return aName.localeCompare(bName);
+            default:
+                return 0;
+        }
+    });
+
+    ui.renderRecords(recordsToDisplay, imageCache);
 }
+
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
@@ -101,21 +192,19 @@ async function updateAllCardAvailabilityIcons() {
 }
 
 async function showItemDetailCalendar(record, targetElement) {
-    if (targetElement._tippy) return; // Prevent creating multiple popups if one is already open on this element
+    if (targetElement._tippy) return;
 
     const busyTimes = await api.fetchCalendarForRecord(record);
     const calendarContainer = document.createElement('div');
 
-    // Use Tippy.js to create a well-positioned popup
     tippy(targetElement, {
         content: calendarContainer,
         allowHTML: true,
         interactive: true,
         trigger: 'click',
         placement: 'right-start',
-        appendTo: () => document.body, // Ensures it appears on top of other elements
+        appendTo: () => document.body,
         onShow(instance) {
-            // Render the flatpickr calendar inside the Tippy popup
             flatpickr(calendarContainer, {
                 inline: true,
                 defaultDate: mainDatePicker?.selectedDates[0] || new Date(),
@@ -138,7 +227,7 @@ async function showItemDetailCalendar(record, targetElement) {
             });
         },
         onHidden(instance) {
-            instance.destroy(); // Clean up the tippy instance so it can be reopened
+            instance.destroy();
         }
     }).show();
 }
@@ -171,12 +260,18 @@ async function initialize() {
     }
     
     ui.toggleLoading(false);
-    renderTopLevel();
+    applyFiltersAndSort(); // Initial render
     ui.updateFavoritesCarousel();
     updateSaveShareButton();
 }
 
 function setupEventListeners() {
+    // --- FILTER & SORT LISTENERS ---
+    const debouncedSearch = debounce(() => applyFiltersAndSort());
+    document.getElementById('name-filter').addEventListener('input', debouncedSearch);
+    document.getElementById('price-filter').addEventListener('change', applyFiltersAndSort);
+    document.getElementById('sort-by').addEventListener('change', applyFiltersAndSort);
+
     // --- AUTOSAVE TRIGGERS ---
     ui.headerEventNameInput.addEventListener('change', (e) => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -256,7 +351,7 @@ function setupEventListeners() {
             tippy(dayElem, {
                 content: tooltipContent.join('<br>'),
                 allowHTML: true,
-                appendTo: () => document.body, // This is the fix for the header tooltip
+                appendTo: () => document.body,
             });
         }
     });
@@ -292,7 +387,7 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
-                showItemDetailCalendar(record, availabilityBtn); // Pass the button element for positioning
+                showItemDetailCalendar(record, availabilityBtn);
             }
         } else if (heartIcon) {
             e.stopPropagation();
@@ -364,7 +459,7 @@ function setupEventListeners() {
                 const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
                 card.replaceWith(newCard);
             } else {
-                renderTopLevel();
+                applyFiltersAndSort();
             }
         } else if (explodeBtn) {
             e.stopPropagation();
@@ -383,7 +478,7 @@ function setupEventListeners() {
         } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
-            renderTopLevel();
+            applyFiltersAndSort();
         }
     });
 
