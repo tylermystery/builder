@@ -16,6 +16,9 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
+        body.modal-open {
+            overflow: hidden;
+        }
         #sticky-header {
             position: sticky;
             top: 0;
@@ -257,10 +260,82 @@
             color: white !important;
             cursor: not-allowed !important;
         }
+        
+        /* --- NEW STYLES FOR DETAIL MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            width: 80%;
+            max-width: 1200px;
+            height: 80vh;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+            padding: 25px;
+            overflow-y: auto;
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+        .detail-view-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            height: 100%;
+        }
+        .gallery-column .main-image {
+            width: 100%;
+            height: 70%;
+            background-size: cover;
+            background-position: center;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .thumbnail-strip {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .thumbnail-img {
+            width: 80px;
+            height: 80px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .thumbnail-img.active {
+            border-color: #007aff;
+        }
+        .details-column h2 {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
+
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
+
     <div id="sticky-header">
         <div id="header-toolbar">
             <div class="toolbar-group tool-brand-group">
@@ -329,9 +404,29 @@
             <button id="reset-filters-btn">Reset</button>
         </div>
     </div>
+
     <div id="catalog-container"></div>
+    
     <div id="beta-toolkit" style="display: none; position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
     </div>
+    
+    <div id="detail-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <div class="detail-view-grid">
+                <div class="gallery-column">
+                    <div id="modal-main-image" class="main-image"></div>
+                    <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
+                </div>
+                <div class="details-column">
+                    <h2 id="modal-item-name">Item Name</h2>
+                    <p id="modal-item-price">Price</p>
+                    <p id="modal-item-description">Full description goes here...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="main.js"></script>
 </body>
 </html>
