@@ -5,10 +5,8 @@
  * Changelog:
  *
  * v3.6.0 - 2025-08-27
- * - Merged favorite card and date/time picker enhancements.
- * - Enhanced date picker to include start and end time selection.
- * - Removed separate "Duration" input and related logic.
- * - Ensured date/time range is correctly saved and loaded with sessions.
+ * - Merged features: Enabled date/time picker and implemented favorite card remove button.
+ * - Removed obsolete "Duration (hours)" logic and unused debouncedSave function.
  *
  * v3.5.1 - 2025-08-26
  * - Implemented remove button functionality on favorite cards.
@@ -26,8 +24,8 @@ let mainDatePicker = null;
 
 // --- SAVE STATE MANAGEMENT ---
 let saveTimeout;
-
 const saveShareBtn = document.getElementById('save-share-btn');
+
 function updateSaveShareButton() {
     switch (state.ui.saveState) {
         case 'MODIFIED':
@@ -185,7 +183,7 @@ function setupEventListeners() {
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
         enableTime: true,
-        dateFormat: "M j, Y h:i K", // e.g., Aug 26, 2025 05:30 PM
+        dateFormat: "M j, Y h:i K",
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
