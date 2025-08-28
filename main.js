@@ -1,14 +1,15 @@
 /*
- * Version: 3.8.5
+ * Version: 3.8.6
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v3.8.5 - 2025-08-27
- * - Made all event listener attachments in setupEventListeners more robust to prevent load-time errors.
+ * v3.8.6 - 2025-08-27
+ * - Clicking a favorite item now opens the detail view.
+ * - Quantity changes are now synchronized across the main card and detail view when an item is favorited.
  *
- * v3.8.4 - 2025-08-27
- * - Made DOM element selection in event listeners more robust to prevent load-time errors.
+ * v3.8.5 - 2025-08-27
+ * - Made all event listener attachments more robust to prevent load-time errors.
  */
 
 import { state } from './state.js';
@@ -183,7 +184,6 @@ async function initialize() {
     updateSaveShareButton();
 }
 
-// ** THE FIX IS HERE: Rewritten to be more robust **
 function setupEventListeners() {
     // Helper function to safely add listeners
     const safeAddEventListener = (selector, event, handler) => {
@@ -281,7 +281,7 @@ function setupEventListeners() {
             });
         }
     });
-
+    
     // --- NAVIGATION GUARD ---
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
@@ -303,7 +303,7 @@ function setupEventListeners() {
             return;
         }
 
-        const heartIcon = e.target.closest('.heart-icon');
+        const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
         const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
@@ -311,6 +311,7 @@ function setupEventListeners() {
         const saveShareBtn = e.target.closest('#save-share-btn');
         const removeBtn = e.target.closest('.remove-btn');
         const card = e.target.closest('.event-card');
+        const favoriteItem = e.target.closest('.favorite-item');
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -332,7 +333,9 @@ function setupEventListeners() {
 
             if (!isGrouping) {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input') || targetElement.closest('.event-card')?.querySelector('.quantity-input');
-                if (quantityInput) itemInfo.quantity = parseInt(quantityInput.value);
+                if (quantityInput) {
+                    itemInfo.quantity = parseInt(quantityInput.value, 10);
+                }
             }
 
             if (state.cart.items.has(recordId)) {
@@ -340,9 +343,22 @@ function setupEventListeners() {
             } else {
                 state.cart.items.set(recordId, itemInfo);
             }
+            
+            // Sync all views
+            const newQuantity = itemInfo.quantity;
+            const isHearted = state.cart.items.has(recordId);
 
-            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.toggle('hearted', state.cart.items.has(recordId));
-            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', state.cart.items.has(recordId));
+            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.toggle('hearted', isHearted);
+            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', isHearted);
+            
+            const mainCardInput = document.querySelector(`.event-card[data-record-id="${recordId}"] .quantity-input`);
+            if (mainCardInput) mainCardInput.value = newQuantity;
+
+            const modalInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            if (modalOverlay.dataset.recordId === recordId && modalInput) {
+                modalInput.value = newQuantity;
+            }
             
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
@@ -353,10 +369,7 @@ function setupEventListeners() {
             if (!favoriteCard) return;
             const recordId = favoriteCard.dataset.recordId;
             if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId); }
-            const mainCatalogCard = document.querySelector(`.event-card[data-record-id="${recordId}"]`);
-            if (mainCatalogCard) {
-                mainCatalogCard.querySelector('.heart-icon')?.classList.remove('hearted');
-            }
+            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.remove('hearted');
             document.getElementById('modal-heart-btn')?.classList.remove('hearted');
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
@@ -392,6 +405,13 @@ function setupEventListeners() {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
             applyFiltersAndSort();
+        } else if (favoriteItem) {
+            e.stopPropagation();
+            const recordId = favoriteItem.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                ui.showDetailModal(record);
+            }
         } else if (card) {
             if (e.target.closest('.options-selector, .quantity-selector')) {
                 return;
