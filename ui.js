@@ -1,21 +1,23 @@
 /*
- * Version: 2.12.0
- * Last Modified: 2025-08-27
+ * Version: 2.13.0
+ * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v2.13.0 - 2025-08-28
+ * - showCheckoutModal now initializes the Stripe Elements payment form.
+ *
  * v2.12.0 - 2025-08-27
  * - Added showCheckoutModal and hideCheckoutModal for the e-commerce flow.
- *
- * v2.11.3 - 2025-08-27
- * - Added logic to enable/disable the new checkout button based on cart total.
  */
 
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
 import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
+
+let stripe, elements, cardElement; // Global references for Stripe
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -384,7 +386,7 @@ export function hideDetailModal() {
     }
 }
 
-export function showCheckoutModal() {
+export async function showCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const summaryList = document.getElementById('checkout-summary-list');
     const totalPriceEl = document.getElementById('checkout-total-price');
@@ -392,6 +394,7 @@ export function showCheckoutModal() {
 
     summaryList.innerHTML = '';
     let finalTotal = 0;
+    let finalTotalInCents = 0;
 
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
@@ -400,27 +403,52 @@ export function showCheckoutModal() {
         const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
-
         const listItem = document.createElement('li');
-        listItem.innerHTML = `
-            <span>${record.fields.Name} (x${itemInfo.quantity})</span>
-            <span>$${itemTotal.toFixed(2)}</span>
-        `;
+        listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
         summaryList.appendChild(listItem);
     }
     
+    finalTotalInCents = Math.round(finalTotal * 100);
     totalPriceEl.textContent = `$${finalTotal.toFixed(2)}`;
-    checkoutModalOverlay.style.display = 'flex';
-    document.body.classList.add('modal-open');
+    
+    try {
+        const response = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: finalTotalInCents }),
+        });
+        const { clientSecret, error } = await response.json();
+        if (error) throw new Error(error);
+
+        stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+        elements = stripe.elements({ clientSecret });
+        cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+        
+        checkoutModalOverlay.style.display = 'flex';
+        document.body.classList.add('modal-open');
+
+    } catch (err) {
+        console.error("Failed to initialize payment form:", err);
+        alert("Could not initialize payment form. Please try again.");
+    }
 }
 
 export function hideCheckoutModal() {
+    if (cardElement) {
+        cardElement.unmount();
+    }
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
         checkoutModalOverlay.style.display = 'none';
         document.body.classList.remove('modal-open');
     }
 }
+
+export function getStripe() {
+    return { stripe, elements, cardElement };
+}
+
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
@@ -470,5 +498,5 @@ export function toggleLoading(show) {
     const loadingMessage = document.getElementById('loading-message');
     const filterControls = document.getElementById('filter-controls');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (filterControls) filterControls.style.display = show ? 'none' : 'flex';
+    if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
 }
