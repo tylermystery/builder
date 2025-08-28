@@ -355,7 +355,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-left: auto; /* Pushes buttons to the right */
+            margin-left: auto;
         }
         #modal-header-actions .heart-icon svg {
              stroke: #333;
@@ -403,6 +403,57 @@
         .inline-calendar-container .flatpickr-calendar {
             box-shadow: none;
             width: 100%;
+        }
+
+        /* --- CHECKOUT MODAL STYLES --- */
+        .checkout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .order-summary {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .order-summary ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .order-summary li {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .order-summary .total-row {
+            font-weight: bold;
+            font-size: 1.2em;
+            padding-top: 15px;
+            border-top: 2px solid #dee2e6;
+            margin-top: 10px;
+        }
+        .checkout-form .form-group {
+            margin-bottom: 15px;
+        }
+        .checkout-form label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .checkout-form input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        #payment-form-placeholder {
+            border: 1px dashed #ced4da;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -497,17 +548,47 @@
                     <h2>
                         <button id="modal-parent-btn" style="display: none;">⬆️</button>
                         <span id="modal-item-name">Item Name</span>
-                        <div id="modal-header-actions">
-                            </div>
+                        <div id="modal-header-actions"></div>
                     </h2>
                     <p id="modal-item-price">Price</p>
                     <p id="modal-item-description">Full description goes here...</p>
                     <div id="modal-options-container" class="options-container"></div>
                     <div class="modal-details-footer">
-                        <div id="modal-quantity-selector">
-                            </div>
+                        <div id="modal-quantity-selector"></div>
                     </div>
                     <div id="modal-calendar-container" class="inline-calendar-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="checkout-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="checkout-close-btn" class="modal-close-btn">&times;</button>
+            <h2>Finalize Your Plan</h2>
+            <div class="checkout-grid">
+                <div class="order-summary">
+                    <h3>Order Summary</h3>
+                    <ul id="checkout-summary-list"></ul>
+                    <div id="checkout-total-row" class="total-row">
+                        <span>Total</span>
+                        <span id="checkout-total-price">$0.00</span>
+                    </div>
+                </div>
+                <div class="checkout-form">
+                    <h3>Your Information</h3>
+                    <div class="form-group">
+                        <label for="customer-name">Name</label>
+                        <input type="text" id="customer-name" placeholder="Enter your name">
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-email">Email</label>
+                        <input type="email" id="customer-email" placeholder="Enter your email">
+                    </div>
+                    <h3>Payment Details</h3>
+                    <div id="payment-form-placeholder">
+                        Secure Payment Form will be here
+                    </div>
                 </div>
             </div>
         </div>
