@@ -1,18 +1,19 @@
 /*
- * Version: 1.2.1
- * Last Modified: 2025-08-26
+ * Version: 1.3.0
+ * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v1.3.0 - 2025-08-28
+ * - Added Stripe Publishable Key constant.
+ *
  * v1.2.1 - 2025-08-26
  * - Added LEAD_TIME field name constant.
- *
- * v1.2.0 - 2025-08-26
- * - Added ICAL_URL field name constant.
- *
- * v1.1.1 - 2025-08-22
- * - Added CATEGORIES and SUBCATEGORIES constants.
  */
+
+// ACTION REQUIRED: Replace with your actual Stripe Publishable Key
+export const STRIPE_PUBLISHABLE_KEY = 'pk_test_mK3MLvoZurxcqIQHyWB7eqlY';
+
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
 export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
@@ -45,6 +46,7 @@ export const CONSTANTS = {
     DETAIL_TYPES: {
         EVENT_NAME: 'eventName',
         DATE: 'date',
+   
         GUEST_COUNT: 'guestCount',
         GOALS: 'goals',
         SPECIAL_REQUESTS: 'specialRequests',
