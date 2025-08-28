@@ -1,14 +1,14 @@
 /*
- * Version: 3.9.1
+ * Version: 3.9.2
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v3.9.2 - 2025-08-28
+ * - Fixed Stripe payment submission by correctly passing the clientSecret.
+ *
  * v3.9.1 - 2025-08-28
  * - Added Stripe payment submission logic.
- *
- * v3.9.0 - 2025-08-27
- * - Added checkout button functionality to open the checkout modal.
  */
 
 import { state } from './state.js';
@@ -207,11 +207,11 @@ function setupEventListeners() {
     // --- PAYMENT FORM SUBMISSION ---
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
-        const { stripe, elements, cardElement } = ui.getStripe();
-        if (!stripe || !cardElement) return;
+        const { stripe, cardElement, clientSecret } = ui.getStripeContext();
+        if (!stripe || !cardElement || !clientSecret) return;
 
         const { error } = await stripe.confirmCardPayment(
-            elements.getElement('card')._clientSecret, {
+            clientSecret, {
                 payment_method: {
                     card: cardElement,
                     billing_details: {
@@ -228,11 +228,9 @@ function setupEventListeners() {
         } else {
             cardErrors.textContent = '';
             alert('Payment successful! Your event is booked.');
-            // Here you would typically clear the cart, save the order, etc.
             ui.hideCheckoutModal();
         }
     });
-
 
     // --- AUTOSAVE TRIGGERS ---
     safeAddEventListener('header-event-name', 'change', (e) => { 
