@@ -1,14 +1,14 @@
 /*
- * Version: 2.11.3
+ * Version: 2.12.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v2.12.0 - 2025-08-27
+ * - Added showCheckoutModal and hideCheckoutModal for the e-commerce flow.
+ *
  * v2.11.3 - 2025-08-27
  * - Added logic to enable/disable the new checkout button based on cart total.
- *
- * v2.11.2 - 2025-08-27
- * - Refactored all DOM element selections to be function-scoped.
  */
 
 import { state } from './state.js';
@@ -138,7 +138,7 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
-    eventCard.dataset.recordId = record.id;
+    eventCard.dataset.recordId = recordId;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
@@ -315,7 +315,7 @@ export async function showDetailModal(record) {
     }
     const isHearted = state.cart.items.has(record.id);
     modalHeaderActions.innerHTML += `
-        <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}">
+        <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}" data-record-id="${record.id}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>`;
 
@@ -349,7 +349,7 @@ export async function showDetailModal(record) {
         modalQuantitySelector.innerHTML = `
             <div class="quantity-selector">
                 <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
+                <input type="number" class="quantity-input" value="${state.cart.items.get(record.id)?.quantity || headcountMin}" min="${headcountMin}">
                 <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
             </div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
@@ -380,6 +380,44 @@ export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
         modalOverlay.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
+}
+
+export function showCheckoutModal() {
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    const summaryList = document.getElementById('checkout-summary-list');
+    const totalPriceEl = document.getElementById('checkout-total-price');
+    if (!checkoutModalOverlay || !summaryList || !totalPriceEl) return;
+
+    summaryList.innerHTML = '';
+    let finalTotal = 0;
+
+    for (const [recordId, itemInfo] of state.cart.items.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const itemTotal = price * itemInfo.quantity;
+        finalTotal += itemTotal;
+
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+            <span>${record.fields.Name} (x${itemInfo.quantity})</span>
+            <span>$${itemTotal.toFixed(2)}</span>
+        `;
+        summaryList.appendChild(listItem);
+    }
+    
+    totalPriceEl.textContent = `$${finalTotal.toFixed(2)}`;
+    checkoutModalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+}
+
+export function hideCheckoutModal() {
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    if (checkoutModalOverlay) {
+        checkoutModalOverlay.style.display = 'none';
         document.body.classList.remove('modal-open');
     }
 }
@@ -432,5 +470,5 @@ export function toggleLoading(show) {
     const loadingMessage = document.getElementById('loading-message');
     const filterControls = document.getElementById('filter-controls');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
+    if (filterControls) filterControls.style.display = show ? 'none' : 'flex';
 }
