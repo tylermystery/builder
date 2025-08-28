@@ -1,15 +1,14 @@
 /*
- * Version: 3.8.6
+ * Version: 3.8.7
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v3.8.6 - 2025-08-27
- * - Clicking a favorite item now opens the detail view.
- * - Quantity changes are now synchronized across the main card and detail view when an item is favorited.
+ * v3.8.7 - 2025-08-27
+ * - Added functionality to open the detail view when clicking on a favorite item.
  *
- * v3.8.5 - 2025-08-27
- * - Made all event listener attachments more robust to prevent load-time errors.
+ * v3.8.6 - 2025-08-27
+ * - Quantity changes are now synchronized across the main card and detail view.
  */
 
 import { state } from './state.js';
@@ -185,7 +184,6 @@ async function initialize() {
 }
 
 function setupEventListeners() {
-    // Helper function to safely add listeners
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) {
@@ -344,7 +342,6 @@ function setupEventListeners() {
                 state.cart.items.set(recordId, itemInfo);
             }
             
-            // Sync all views
             const newQuantity = itemInfo.quantity;
             const isHearted = state.cart.items.has(recordId);
 
@@ -434,7 +431,7 @@ function setupEventListeners() {
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
