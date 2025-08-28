@@ -6,6 +6,7 @@
     <title>Event Catalog</title>
     <link rel="icon" href="data:;" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
@@ -448,12 +449,30 @@
             border: 1px solid #ced4da;
             border-radius: 4px;
         }
-        #payment-form-placeholder {
-            border: 1px dashed #ced4da;
-            padding: 20px;
-            text-align: center;
-            color: #6c757d;
+        #payment-form {
+            margin-top: 20px;
+        }
+        #card-element {
+            border: 1px solid #ced4da;
+            padding: 10px;
             border-radius: 4px;
+        }
+        #submit-payment-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            border: 1px solid #007aff;
+            background-color: #007aff;
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #card-errors {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -586,9 +605,12 @@
                         <input type="email" id="customer-email" placeholder="Enter your email">
                     </div>
                     <h3>Payment Details</h3>
-                    <div id="payment-form-placeholder">
-                        Secure Payment Form will be here
-                    </div>
+                    <form id="payment-form">
+                        <div id="card-element">
+                            </div>
+                        <div id="card-errors" role="alert"></div>
+                        <button id="submit-payment-btn">Pay Now</button>
+                    </form>
                 </div>
             </div>
         </div>
