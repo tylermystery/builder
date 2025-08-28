@@ -1,14 +1,14 @@
 /*
- * Version: 2.13.0
+ * Version: 2.13.1
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v2.13.1 - 2025-08-28
+ * - Correctly stores and provides the Stripe clientSecret for payment submission.
+ *
  * v2.13.0 - 2025-08-28
  * - showCheckoutModal now initializes the Stripe Elements payment form.
- *
- * v2.12.0 - 2025-08-27
- * - Added showCheckoutModal and hideCheckoutModal for the e-commerce flow.
  */
 
 import { state } from './state.js';
@@ -17,7 +17,7 @@ import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
-let stripe, elements, cardElement; // Global references for Stripe
+let stripe, elements, cardElement, clientSecret; // Global references for Stripe
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -394,8 +394,7 @@ export async function showCheckoutModal() {
 
     summaryList.innerHTML = '';
     let finalTotal = 0;
-    let finalTotalInCents = 0;
-
+    
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
@@ -408,7 +407,7 @@ export async function showCheckoutModal() {
         summaryList.appendChild(listItem);
     }
     
-    finalTotalInCents = Math.round(finalTotal * 100);
+    const finalTotalInCents = Math.round(finalTotal * 100);
     totalPriceEl.textContent = `$${finalTotal.toFixed(2)}`;
     
     try {
@@ -417,8 +416,10 @@ export async function showCheckoutModal() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: finalTotalInCents }),
         });
-        const { clientSecret, error } = await response.json();
-        if (error) throw new Error(error);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        clientSecret = data.clientSecret; // Assign to the top-level variable
 
         stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
@@ -445,10 +446,9 @@ export function hideCheckoutModal() {
     }
 }
 
-export function getStripe() {
-    return { stripe, elements, cardElement };
+export function getStripeContext() {
+    return { stripe, elements, cardElement, clientSecret };
 }
-
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
