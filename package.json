@@ -2,7 +2,8 @@
   "name": "tmt-catalog-functions",
   "version": "1.0.0",
   "dependencies": {
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "stripe": "^13.2.0"
   },
   "scripts": {
     "build": "node export.js"
