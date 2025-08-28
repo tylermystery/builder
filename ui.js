@@ -1,14 +1,15 @@
 /*
- * Version: 2.13.2
+ * Version: 2.13.3
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v2.13.2 - 2025-08-28
+ * v2.13.3 - 2025-08-28
+ * - Implemented a robust, unified isRecordGrouping function to fix visual inconsistencies.
  * - Added a visual "stacked card" effect to all grouping items.
  *
- * v2.13.1 - 2025-08-28
- * - Correctly stores and provides the Stripe clientSecret for payment submission.
+ * v2.13.2 - 2025-08-28
+ * - Refactored all DOM element selections to be function-scoped.
  */
 
 import { state } from './state.js';
@@ -20,6 +21,23 @@ import { getDayStatus } from './availability.js';
 let stripe, elements, cardElement, clientSecret;
 
 // --- HELPER & LOGIC FUNCTIONS ---
+
+// NEW ROBUST FUNCTION
+function isRecordGrouping(record, allRecords) {
+    if (!record || !allRecords) return false;
+    // Condition 1: Does this item's Options list another record's name?
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    if (rawOptions.some(opt => allRecordNames.has(opt.name))) {
+        return true;
+    }
+    // Condition 2: Does another record list this item as its Parent?
+    if (allRecords.some(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name)) {
+        return true;
+    }
+    return false;
+}
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -37,10 +55,7 @@ function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     for (const child of children) {
-        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-        if (isGrouping) {
+        if (isRecordGrouping(child, allRecords)) {
             bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
         } else {
             bookableItems.push(child);
@@ -100,10 +115,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
-    if (isGrouping) {
+    if (isRecordGrouping(record, state.records.all)) {
         itemCard.classList.add('is-grouping');
     }
 
@@ -142,9 +154,7 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+    const isGrouping = isRecordGrouping(record, allRecords);
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
@@ -162,6 +172,8 @@ export async function createInteractiveCard(record, imageCache) {
     let notesHTML = '';
     let quantitySelectorHTML = '';
     let priceHTML = '';
+
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
 
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options">
@@ -222,7 +234,7 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    const { imageUrls } = await fetchImagesForRecord(record, allRecords, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
@@ -290,9 +302,7 @@ export async function showDetailModal(record) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
     
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+    const isGrouping = isRecordGrouping(record, state.records.all);
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -334,6 +344,8 @@ export async function showDetailModal(record) {
         </div>`;
 
     modalOptionsContainer.innerHTML = '';
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     rawOptions.forEach(opt => {
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
