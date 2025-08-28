@@ -1,13 +1,14 @@
-# Version: 1.1.0
-# Last Modified: 2025-08-26
+# Version: 1.2.0
+# Last Modified: 2025-08-27
 #
 # Changelog:
 #
+# v1.2.0 - 2025-08-27
+#   - Added redirect for the new create-payment-intent API endpoint.
+#
 # v1.1.0 - 2025-08-26
 #   - Added redirect for the new calendar API endpoint.
-#
-# v1.0.0 - 2025-08-17
-#   - Initial versioning and changelog added.
+
 [build]
   functions = "netlify/functions"
   command = "npm run build"
@@ -15,4 +16,9 @@
 [[redirects]]
   from = "/api/calendar"
   to = "/.netlify/functions/calendar"
+  status = 200
+
+[[redirects]]
+  from = "/api/create-payment-intent"
+  to = "/.netlify/functions/create-payment-intent"
   status = 200
