@@ -1,14 +1,14 @@
 /*
- * Version: 2.13.1
+ * Version: 2.13.2
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v2.13.2 - 2025-08-28
+ * - Added a visual "stacked card" effect to all grouping items.
+ *
  * v2.13.1 - 2025-08-28
  * - Correctly stores and provides the Stripe clientSecret for payment submission.
- *
- * v2.13.0 - 2025-08-28
- * - showCheckoutModal now initializes the Stripe Elements payment form.
  */
 
 import { state } from './state.js';
@@ -17,7 +17,7 @@ import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
-let stripe, elements, cardElement, clientSecret; // Global references for Stripe
+let stripe, elements, cardElement, clientSecret;
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -99,6 +99,14 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
 
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
+    
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+    if (isGrouping) {
+        itemCard.classList.add('is-grouping');
+    }
+
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
@@ -140,6 +148,10 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
+    if (isGrouping) {
+        eventCard.classList.add('is-grouping');
+    }
+
     eventCard.dataset.recordId = recordId;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
@@ -419,7 +431,7 @@ export async function showCheckoutModal() {
         const data = await response.json();
         if (data.error) throw new Error(data.error);
 
-        clientSecret = data.clientSecret; // Assign to the top-level variable
+        clientSecret = data.clientSecret;
 
         stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
