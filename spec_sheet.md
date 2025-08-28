@@ -29,7 +29,17 @@ Once the data is loaded successfully, the loading message is hidden and the inte
 The initial view shows only the top-level "Grouping" items for the user to begin their exploration.
 
 Hierarchical Catalog Display
-The catalog is organized as a hierarchy of interactive items. Items can be either Groupings (e.g., "Activities") or final Bookable Items (e.g., "Escape Room"). This structure allows users to navigate from broad categories to specific details.
+The catalog is organized as a hierarchy of interactive items. This structure allows users to navigate from broad categories to specific details.
+
+**Defining a "Grouping" (Robust)**
+To ensure all parent-child relationships are recognized, an item is considered a "Grouping" if it meets **either** of the following conditions:
+1.  **Forward Link**: The item's "Options" field contains the name of another record in the catalog.
+2.  **Backward Link**: Any other record in the catalog lists the item's name in its "Parent Item" field.
+
+This dual-check system ensures that all items with child relations are correctly identified.
+
+**Visual Distinction for Groupings**
+To visually distinguish Groupings from final Bookable Items, all grouping cards are given a "stacked card" appearance. This is achieved using CSS to render two additional card-like layers directly behind the main card, creating a subtle 3D effect that suggests more content is available within.
 
 The Interactive Card
 Every item in the catalog is presented on a versatile "Interactive Card". The card's appearance and functionality adapt based on the item it represents. All cards feature a Heart (❤️) icon for universal selection.
