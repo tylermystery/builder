@@ -1,14 +1,14 @@
 /*
- * Version: 2.11.2
+ * Version: 2.11.3
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
- * v2.11.2 - 2025-08-27
- * - Refactored all DOM element selections to be function-scoped, fixing a timing bug where the favorites section would not appear.
+ * v2.11.3 - 2025-08-27
+ * - Added logic to enable/disable the new checkout button based on cart total.
  *
- * v2.11.1 - 2025-08-27
- * - Made DOM element selection more robust to prevent load-time errors.
+ * v2.11.2 - 2025-08-27
+ * - Refactored all DOM element selections to be function-scoped.
  */
 
 import { state } from './state.js';
@@ -138,7 +138,7 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
-    eventCard.dataset.recordId = recordId;
+    eventCard.dataset.recordId = record.id;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
     const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
@@ -399,7 +399,9 @@ export function updateHeader() {
 
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
+    const checkoutBtn = document.getElementById('checkout-btn');
     if (!totalCostEl) return;
+    
     let total = 0;
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
     allItems.forEach((itemInfo, recordId) => {
@@ -418,12 +420,17 @@ export function updateTotalCost() {
         }
         total += itemCost;
     });
+
     totalCostEl.textContent = `$${total.toFixed(2)}`;
+
+    if (checkoutBtn) {
+        checkoutBtn.disabled = total === 0;
+    }
 }
 
 export function toggleLoading(show) {
     const loadingMessage = document.getElementById('loading-message');
     const filterControls = document.getElementById('filter-controls');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (filterControls) filterControls.style.display = show ? 'none' : 'flex';
+    if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
 }
