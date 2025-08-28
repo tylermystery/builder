@@ -1,14 +1,14 @@
 /*
- * Version: 3.8.7
+ * Version: 3.9.0
  * Last Modified: 2025-08-27
  *
  * Changelog:
  *
+ * v3.9.0 - 2025-08-27
+ * - Added checkout button functionality to open the checkout modal.
+ *
  * v3.8.7 - 2025-08-27
  * - Added functionality to open the detail view when clicking on a favorite item.
- *
- * v3.8.6 - 2025-08-27
- * - Quantity changes are now synchronized across the main card and detail view.
  */
 
 import { state } from './state.js';
@@ -294,6 +294,10 @@ function setupEventListeners() {
             ui.hideDetailModal();
             return;
         }
+        if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) {
+            ui.hideCheckoutModal();
+            return;
+        }
 
         const modalHeartBtn = e.target.closest('#modal-heart-btn');
         const modalExplodeBtn = e.target.closest('#modal-explode-btn');
@@ -307,6 +311,7 @@ function setupEventListeners() {
         const implodeBtn = e.target.closest('.implode-btn');
         const availabilityBtn = e.target.closest('.availability-btn');
         const saveShareBtn = e.target.closest('#save-share-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
         const removeBtn = e.target.closest('.remove-btn');
         const card = e.target.closest('.event-card');
         const favoriteItem = e.target.closest('.favorite-item');
@@ -317,6 +322,8 @@ function setupEventListeners() {
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
+        } else if (checkoutBtn) {
+            ui.showCheckoutModal();
         } else if (availabilityBtn) {
             e.stopPropagation();
             const record = state.records.all.find(r => r.id === availabilityBtn.closest('.event-card').dataset.recordId);
@@ -431,7 +438,7 @@ function setupEventListeners() {
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
