@@ -1,14 +1,14 @@
 /*
- * Version: 3.9.0
- * Last Modified: 2025-08-27
+ * Version: 3.9.1
+ * Last Modified: 2025-08-28
  *
  * Changelog:
  *
+ * v3.9.1 - 2025-08-28
+ * - Added Stripe payment submission logic.
+ *
  * v3.9.0 - 2025-08-27
  * - Added checkout button functionality to open the checkout modal.
- *
- * v3.8.7 - 2025-08-27
- * - Added functionality to open the detail view when clicking on a favorite item.
  */
 
 import { state } from './state.js';
@@ -203,6 +203,36 @@ function setupEventListeners() {
         document.getElementById('sort-by').selectedIndex = 0;
         applyFiltersAndSort();
     });
+
+    // --- PAYMENT FORM SUBMISSION ---
+    safeAddEventListener('payment-form', 'submit', async (e) => {
+        e.preventDefault();
+        const { stripe, elements, cardElement } = ui.getStripe();
+        if (!stripe || !cardElement) return;
+
+        const { error } = await stripe.confirmCardPayment(
+            elements.getElement('card')._clientSecret, {
+                payment_method: {
+                    card: cardElement,
+                    billing_details: {
+                        name: document.getElementById('customer-name').value,
+                        email: document.getElementById('customer-email').value,
+                    },
+                },
+            }
+        );
+
+        const cardErrors = document.getElementById('card-errors');
+        if (error) {
+            cardErrors.textContent = error.message;
+        } else {
+            cardErrors.textContent = '';
+            alert('Payment successful! Your event is booked.');
+            // Here you would typically clear the cart, save the order, etc.
+            ui.hideCheckoutModal();
+        }
+    });
+
 
     // --- AUTOSAVE TRIGGERS ---
     safeAddEventListener('header-event-name', 'change', (e) => { 
