@@ -1,12 +1,14 @@
 /*
- * Version: 3.12.1
- * Last Modified: 2025-08-28
+ * Version: 3.9.3
+ * Last Modified: 2025-08-29
  *
  * Changelog:
  *
- * v3.12.1 - 2025-08-28
- * - Replaced the native browser tooltip on card availability icons with a tippy.js tooltip.
- * - Positioned the new tooltip above the icon as requested.
+ * v3.9.3 - 2025-08-29
+ * - Added call to renderFilterPanel on initialization.
+ *
+ * v3.9.2 - 2025-08-28
+ * - Fixed Stripe payment submission by correctly passing the clientSecret.
  */
 
 import { state } from './state.js';
@@ -15,7 +17,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, checkAvailability, getBusySlotsForDay } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -79,8 +81,7 @@ function applyFiltersAndSort() {
             const name = (fields.Name || '').toLowerCase();
             const description = (fields.Description || '').toLowerCase();
             const tags = [...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || []), ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || []), ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])].map(t => t.toLowerCase().trim());
-         
-           if (name.includes(searchTerm)) score = 3;
+            if (name.includes(searchTerm)) score = 3;
             else if (description.includes(searchTerm)) score = 2;
             else if (tags.some(tag => tag.includes(searchTerm))) score = 1;
             if (score > 0) { scoredRecords.push({ record, score }); }
@@ -101,8 +102,7 @@ function applyFiltersAndSort() {
             const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
             if (isGrouping) {
                 const range = ui.getGroupPriceRange(record);
-             
-               return range && range.min <= max && range.max >= min;
+                return range && range.min <= max && range.max >= min;
             } else {
                 const price = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
                 return price >= min && price <= max;
@@ -117,7 +117,6 @@ function applyFiltersAndSort() {
         const bName = b.fields.Name || '';
         switch (sortBy) {
             case 'price-asc': return aPrice - bPrice;
-        
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
             default: return 0;
@@ -128,65 +127,29 @@ function applyFiltersAndSort() {
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        return;
-    }
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) { return; }
     const startDate = mainDatePicker.selectedDates[0];
-    const requestedEnd = mainDatePicker.selectedDates[1];
+    const requestedEnd = mainDatePicker.selectedDates[1]; 
     const cards = document.querySelectorAll('.event-card');
-
     for (const card of cards) {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-
         const busyTimes = await api.fetchCalendarForRecord(record);
         const dayStatus = getDayStatus(startDate, busyTimes, record);
         const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
-
         const icon = card.querySelector('.availability-btn');
         if (icon) {
-            // Destroy previous tippy instance if it exists to prevent memory leaks
-            if (icon._tippy) {
-                icon._tippy.destroy();
-            }
-
-            let statusIcon, statusText, titleText;
-
             if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
                 icon.textContent = '❌';
-                statusIcon = '❌';
-                statusText = 'Unavailable';
-                titleText = 'Unavailable';
+                icon.title = 'Unavailable';
             } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
                 icon.textContent = '🟠';
-                statusIcon = '🟠';
-                statusText = 'Partially Available';
-                titleText = 'Partially Available';
+                icon.title = 'Partially Available';
             } else {
                 icon.textContent = '✅';
-                statusIcon = '✅';
-                statusText = 'Fully Available';
-                titleText = 'Fully Available';
+                icon.title = 'Fully Available';
             }
-            
-            const dateString = startDate.toLocaleDateString();
-            const tooltipContent = `
-                <div style="text-align: left;">
-                    <strong>${dateString}</strong>
-                    <hr style="margin: 2px 0 5px;">
-                    <span>${statusIcon} ${record.fields.Name}: ${statusText}</span>
-                </div>
-            `;
-
-            tippy(icon, {
-                content: tooltipContent,
-                allowHTML: true,
-                placement: 'top',
-                arrow: true,
-            });
-
-            icon.title = titleText; // Keep native title as a simple fallback
         }
     }
 }
@@ -215,6 +178,7 @@ async function initialize() {
         state.session.isOwned = true;
     }
     ui.toggleLoading(false);
+    ui.renderFilterPanel();
     applyFiltersAndSort();
     ui.updateFavoritesCarousel();
     updateSaveShareButton();
@@ -240,6 +204,7 @@ function setupEventListeners() {
         document.getElementById('sort-by').selectedIndex = 0;
         applyFiltersAndSort();
     });
+
     // --- PAYMENT FORM SUBMISSION ---
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
@@ -249,13 +214,11 @@ function setupEventListeners() {
         const { error } = await stripe.confirmCardPayment(
             clientSecret, {
                 payment_method: {
-     
-                   card: cardElement,
+                    card: cardElement,
                     billing_details: {
                         name: document.getElementById('customer-name').value,
                         email: document.getElementById('customer-email').value,
-             
-           },
+                    },
                 },
             }
         );
@@ -264,12 +227,12 @@ function setupEventListeners() {
         if (error) {
             cardErrors.textContent = error.message;
         } else {
-            
             cardErrors.textContent = '';
             alert('Payment successful! Your event is booked.');
             ui.hideCheckoutModal();
         }
     });
+
     // --- AUTOSAVE TRIGGERS ---
     safeAddEventListener('header-event-name', 'change', (e) => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -283,10 +246,12 @@ function setupEventListeners() {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
+
     // --- BETA TOOLKIT ---
     safeAddEventListener('beta-trigger', 'click', () => {
         document.getElementById('beta-toolkit').classList.toggle('visible');
     });
+
     // --- MAIN DATE PICKER ---
     mainDatePicker = flatpickr("#header-date", {
         mode: "range",
@@ -295,22 +260,20 @@ function setupEventListeners() {
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-           
-             triggerSave();
+                triggerSave();
                 updateAllCardAvailabilityIcons();
             }
         },
         onDayCreate: async (dObj, dStr, fp, dayElem) => {
             const day = dayElem.dateObj;
             const favoritedRecords = Array.from(state.cart.items.keys())
-              
-              .map(id => state.records.all.find(r => r.id === id))
+                .map(id => state.records.all.find(r => r.id === id))
                 .filter(record => record);
             if (favoritedRecords.length === 0) {
                 dayElem.classList.add('flatpickr-available');
                 tippy(dayElem, { content: 'Available' });
                 return;
-              }
+            }
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
             let finalStatus = AVAILABILITY_STATUS.FULL;
@@ -335,12 +298,9 @@ function setupEventListeners() {
                 }
                 tooltipContent.push(`<span>${statusIcon} ${record.fields.Name}: ${statusText}</span>`);
             }
-            if (finalStatus === AVAILABILITY_STATUS.NONE) { dayElem.classList.add('flatpickr-disabled');
-            }
-            else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) { dayElem.classList.add('flatpickr-partial');
-            }
-            else { dayElem.classList.add('flatpickr-available');
-            }
+            if (finalStatus === AVAILABILITY_STATUS.NONE) { dayElem.classList.add('flatpickr-disabled'); }
+            else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) { dayElem.classList.add('flatpickr-partial'); }
+            else { dayElem.classList.add('flatpickr-available'); }
             tippy(dayElem, {
                 content: tooltipContent.join('<br>'),
                 allowHTML: true,
@@ -356,6 +316,7 @@ function setupEventListeners() {
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
+    
     // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
         if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) {
@@ -367,29 +328,22 @@ function setupEventListeners() {
             return;
         }
 
-        const modalContent = e.target.closest('.modal-content');
-        if (modalContent) {
-            const isInteractiveElement = e.target.closest('button, .heart-icon, a, input, select, textarea, .thumbnail-img');
-            if (!isInteractiveElement) {
-                return; 
-            }
+        const modalHeartBtn = e.target.closest('#modal-heart-btn');
+        const modalExplodeBtn = e.target.closest('#modal-explode-btn');
+        if(e.target.closest('.modal-content') && !modalHeartBtn && !modalExplodeBtn) {
+            return;
         }
 
         const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
+        const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-  
         const availabilityBtn = e.target.closest('.availability-btn');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
         const removeBtn = e.target.closest('.remove-btn');
         const card = e.target.closest('.event-card');
         const favoriteItem = e.target.closest('.favorite-item');
-        const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
-        const editBtn = e.target.closest('.edit-btn');
-        const modalHeartBtn = e.target.closest('#modal-heart-btn');
-        const parentLink = e.target.closest('.parent-link');
-
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -399,77 +353,20 @@ function setupEventListeners() {
             });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
-        } else if (addToPlanBtn) {
-            const modalOverlay = document.getElementById('detail-modal-overlay');
-            const recordId = modalOverlay.dataset.recordId;
-            if (!recordId) return;
-            
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-            const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
-            const noteInput = document.getElementById('modal-item-note');
-
-            const itemInfo = {
-                quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
-                selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : null,
-                note: noteInput ? noteInput.value.trim() : ''
-            };
-
-            state.cart.lockedItems.set(recordId, itemInfo);
-
-            const cardIcon = document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`);
-            if (cardIcon) {
-                cardIcon.className = 'heart-icon locked';
-                cardIcon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-            }
-
-            ui.updateEventPlanPanel();
-            ui.updateTotalCost();
-            triggerSave();
-            
-            ui.hideDetailModal();
-        } else if (editBtn) {
-            const lockedItemCard = editBtn.closest('.locked-item-card');
-            if (!lockedItemCard) return;
-
-            const recordId = lockedItemCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                ui.showDetailModal(record);
-            }
-        } else if (parentLink) {
-            e.stopPropagation();
-            const card = parentLink.closest('.event-card');
-            if (!card) return;
-            
-            const parentName = parentLink.dataset.parentName;
-            const parentRecord = state.records.all.find(p => p.fields.Name === parentName);
-        
-            if (parentRecord) {
-                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
-                card.replaceWith(newCard);
-            }
         } else if (availabilityBtn) {
             e.stopPropagation();
             const record = state.records.all.find(r => r.id === availabilityBtn.closest('.event-card').dataset.recordId);
             if (record) ui.showDetailModal(record);
         } else if (heartIcon || modalHeartBtn) {
             e.stopPropagation();
-            
             const targetElement = heartIcon || modalHeartBtn;
-            const iconContainer = targetElement.closest('.heart-icon');
-            if (iconContainer && iconContainer.classList.contains('locked')) {
-                return; // Do nothing if the item is locked in
-            }
-
             const recordId = targetElement.closest('[data-record-id]').dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const isGrouping = !!(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).find(opt => state.records.all.some(r => r.fields.Name === opt.name)));
-            let itemInfo = state.cart.items.get(recordId) ||
-            { quantity: 1, selectedOptionIndex: null, note: '' };
+            let itemInfo = state.cart.items.get(recordId) || { quantity: 1, selectedOptionIndex: null, note: '' };
 
             if (!isGrouping) {
-                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input') ||
-                targetElement.closest('.event-card')?.querySelector('.quantity-input');
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input') || targetElement.closest('.event-card')?.querySelector('.quantity-input');
                 if (quantityInput) {
                     itemInfo.quantity = parseInt(quantityInput.value, 10);
                 }
@@ -489,6 +386,7 @@ function setupEventListeners() {
             
             const mainCardInput = document.querySelector(`.event-card[data-record-id="${recordId}"] .quantity-input`);
             if (mainCardInput) mainCardInput.value = newQuantity;
+
             const modalInput = document.querySelector('#modal-quantity-selector .quantity-input');
             const modalOverlay = document.getElementById('detail-modal-overlay');
             if (modalOverlay.dataset.recordId === recordId && modalInput) {
@@ -503,16 +401,29 @@ function setupEventListeners() {
             const favoriteCard = removeBtn.closest('.favorite-item');
             if (!favoriteCard) return;
             const recordId = favoriteCard.dataset.recordId;
-            if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId);
-            }
+            if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId); }
             document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.remove('hearted');
             document.getElementById('modal-heart-btn')?.classList.remove('hearted');
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
             triggerSave();
-        } else if (explodeBtn) {
+        } else if (parentBtn) {
             e.stopPropagation();
-            const recordId = explodeBtn.closest('[data-record-id]').dataset.recordId;
+            const card = parentBtn.closest('.event-card');
+            if (!card) return;
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+            const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                card.replaceWith(newCard);
+            } else {
+                applyFiltersAndSort();
+            }
+        } else if (explodeBtn || modalExplodeBtn) {
+            e.stopPropagation();
+            const recordId = (explodeBtn || modalExplodeBtn).closest('[data-record-id]').dataset.recordId;
             ui.hideDetailModal();
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -522,7 +433,7 @@ function setupEventListeners() {
             const implodeButton = document.createElement('div');
             implodeButton.id = 'implode-container';
             implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
-            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
+            document.querySelector('#catalog-area').insertAdjacentElement('afterbegin', implodeButton);
         } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
@@ -535,7 +446,7 @@ function setupEventListeners() {
                 ui.showDetailModal(record);
             }
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link')) {
+            if (e.target.closest('.options-selector, .quantity-selector')) {
                 return;
             }
             const recordId = card.dataset.recordId;
@@ -545,6 +456,7 @@ function setupEventListeners() {
             }
         }
     });
+
     // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', async (e) => {
         const card = e.target.closest('.event-card');
@@ -553,14 +465,13 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-       
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
-                 else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
+                else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
             card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
