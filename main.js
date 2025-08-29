@@ -354,7 +354,7 @@ function setupEventListeners() {
 
         const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
         const parentBtn = e.target.closest('.parent-btn');
-        const explodeBtn = e.target.closest('.explode-btn');
+        const explodeBtn = e.target.closest('.explode-btn:not(#modal-explode-btn)');
         const implodeBtn = e.target.closest('.implode-btn');
         const availabilityBtn = e.target.closest('.availability-btn');
         const saveShareBtn = e.target.closest('#save-share-btn');
