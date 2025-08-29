@@ -70,6 +70,97 @@
             padding: 6px 8px;
             font-size: 0.9em;
         }
+        .tool-brand-group h4 {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin: 0;
+        }
+        .header-title-container {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+        #beta-trigger {
+            font-style: italic;
+            font-size: 0.7em;
+            color: #007aff;
+            cursor: pointer;
+        }
+        .event-name-group { flex-grow: 1;
+        }
+        #header-event-name {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .people-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-left: 1px solid #e9ecef;
+            padding-left: 20px;
+        }
+        #save-share-btn, #checkout-btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        #save-share-btn {
+            border: 1px solid #007aff;
+            background-color: #007aff;
+        }
+        #checkout-btn {
+            border: 1px solid #28a745;
+            background-color: #28a745;
+            font-weight: bold;
+        }
+        #save-share-btn:disabled, #checkout-btn:disabled {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .history-controls { display: none;
+        }
+        body.history-mode-enabled .history-controls { display: flex;
+        }
+        #favorites-section { 
+            max-width: 1400px;
+            margin: 0 auto; 
+            padding: 15px 20px; 
+        }
+        #favorites-carousel { 
+            display: flex;
+            gap: 15px;
+            overflow-x: auto; 
+            padding-bottom: 5px; 
+        }
+        .favorite-item {
+            position: relative;
+            flex: 0 0 220px;
+            height: 358px;
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            cursor: pointer;
+        }
+        .favorite-item-content {
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+            padding: 10px;
+        }
+        .favorite-item p { margin: 2px 0; font-size: 0.9em;
+        }
+        .favorite-item .item-name { font-weight: bold;
+        }
+        .favorite-item .variation-name { font-size: 0.8em; font-style: italic;
+        }
+        .item-note-display { font-size: 0.8em; font-style: italic;
+            opacity: 0.8;}
         #main-content-area {
             display: grid;
             grid-template-columns: 280px 1fr;
@@ -103,7 +194,7 @@
             transition: max-height 0.3s ease-in-out;
         }
         .category-group.open .subcategory-list {
-            max-height: 1000px; /* Arbitrary large number */
+            max-height: 1000px;
         }
         .subcategory-list li {
             padding: 8px;
@@ -113,7 +204,7 @@
         .subcategory-list li:hover {
             background-color: #f0f0f0;
         }
-        .subcategory-list li.active, .category-group h4.active {
+        .subcategory-list li.active {
             background-color: #007aff;
             color: white;
             font-weight: bold;
@@ -122,7 +213,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
-            padding: 0; /* Adjusted padding as parent provides it now */
+            padding: 0;
             margin: 0;
             max-width: none;
         }
@@ -139,6 +230,7 @@
             overflow: hidden;
             cursor: pointer;
         }
+        /* ... other styles unchanged ... */
     </style>
 </head>
 <body>
@@ -222,66 +314,6 @@
         </main>
     </div>
     
-    <div id="detail-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
-            <div class="detail-view-grid">
-                <div class="gallery-column">
-                    <div id="modal-main-image" class="main-image"></div>
-                    <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
-                </div>
-                <div class="details-column">
-                    <h2>
-                        <button id="modal-parent-btn" style="display: none;">⬆️</button>
-                        <span id="modal-item-name">Item Name</span>
-                        <div id="modal-header-actions"></div>
-                    </h2>
-                    <p id="modal-item-price">Price</p>
-                    <p id="modal-item-description">Full description goes here...</p>
-                    <div id="modal-options-container" class="options-container"></div>
-                    <div class="modal-details-footer">
-                        <div id="modal-quantity-selector"></div>
-                    </div>
-                    <div id="modal-calendar-container" class="inline-calendar-container"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="checkout-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn">&times;</button>
-            <h2>Finalize Your Plan</h2>
-            <div class="checkout-grid">
-                <div class="order-summary">
-                    <h3>Order Summary</h3>
-                    <ul id="checkout-summary-list"></ul>
-                    <div id="checkout-total-row" class="total-row">
-                        <span>Total</span>
-                        <span id="checkout-total-price">$0.00</span>
-                    </div>
-                </div>
-                <div class="checkout-form">
-                    <h3>Your Information</h3>
-                    <div class="form-group">
-                        <label for="customer-name">Name</label>
-                        <input type="text" id="customer-name" placeholder="Enter your name">
-                    </div>
-                    <div class="form-group">
-                        <label for="customer-email">Email</label>
-                        <input type="email" id="customer-email" placeholder="Enter your email">
-                    </div>
-                    <h3>Payment Details</h3>
-                    <form id="payment-form">
-                        <div id="card-element"></div>
-                        <div id="card-errors" role="alert"></div>
-                        <button id="submit-payment-btn">Pay Now</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script type="module" src="main.js"></script>
 </body>
 </html>
