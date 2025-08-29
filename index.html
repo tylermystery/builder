@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;" />
+    <link rel="icon" href="data:;"
+[cite_start][cite: 60] />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -13,98 +14,98 @@
     <style>
         body {
             padding-bottom: 80px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+[cite_start][cite: 61] font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
-        }
+[cite_start][cite: 62] }
         body.modal-open {
             overflow: hidden;
-        }
+[cite_start][cite: 63] }
         #sticky-header {
             position: sticky;
-            top: 0;
+[cite_start][cite: 64] top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+[cite_start][cite: 65] }
         #header-toolbar {
             display: flex;
-            flex-wrap: wrap;
+[cite_start][cite: 66] flex-wrap: wrap;
             align-items: flex-end;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
             margin: 0 auto;
-        }
+[cite_start][cite: 67] }
         .toolbar-group {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 68] flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-            color: #666;
+[cite_start][cite: 69] color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+[cite_start][cite: 70] border-radius: 4px;
             padding: 6px 8px;
             font-size: 0.9em;
             width: 100%;
             box-sizing: border-box;
-        }
+[cite_start][cite: 71] }
         .main-container {
             display: grid;
-            grid-template-columns: 1fr 380px;
+[cite_start][cite: 72] grid-template-columns: 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
-        }
+[cite_start][cite: 73] }
         #right-sidebar h3 {
             margin-top: 0;
-            border-bottom: 1px solid #dee2e6;
+[cite_start][cite: 74] border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
         #filter-controls, #cart-panel {
             background-color: #fff;
-            padding: 20px;
+[cite_start][cite: 75] padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 25px;
             display: flex;
             flex-direction: column;
             gap: 15px;
-        }
+[cite_start][cite: 76] }
         #favorites-section { 
             max-width: 1800px;
-            margin: 0 auto; 
+[cite_start][cite: 77] margin: 0 auto; 
             padding: 15px 20px; 
             border-bottom: 1px solid #e9ecef;
-        }
+[cite_start][cite: 78] }
         #favorites-carousel { 
             display: flex;
-            gap: 15px;
+[cite_start][cite: 79] gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
         }
         .favorite-item {
             position: relative;
-            flex: 0 0 220px;
-            height: 220px; /* Reverting to square for better carousel look */
+[cite_start][cite: 80] flex: 0 0 220px;
+            height: 220px;
             border-radius: 8px;
-            background-size: cover;
+[cite_start][cite: 81] background-size: cover;
             background-position: center;
         }
         #catalog-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+[cite_start][cite: 82] grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
             position: relative;
-            border-radius: 10px;
+[cite_start][cite: 83] border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
@@ -112,8 +113,116 @@
             background-size: cover;
             background-position: center;
             color: white;
-            overflow: hidden;
+[cite_start][cite: 84] overflow: hidden;
             cursor: pointer;
+        }
+
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 1100px;
+            height: 90vh;
+            max-height: 700px;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+            color: #333;
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            color: #999;
+            z-index: 1010;
+        }
+        .modal-main-column {
+            flex: 2; /* Takes 2/3 of space */
+            display: flex;
+            flex-direction: column;
+        }
+        #modal-main-image {
+            flex-grow: 1;
+            background-size: cover;
+            background-position: center;
+            border-right: 1px solid #eee;
+        }
+        #modal-thumbnail-strip {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #eee;
+            overflow-x: auto;
+        }
+        .thumbnail-img {
+            width: 80px;
+            height: 60px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .thumbnail-img.active {
+            border-color: #007bff;
+        }
+        .modal-sidebar-column {
+            flex: 1; /* Takes 1/3 of space */
+            padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        #modal-header-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        #modal-item-name { margin-top: 0; }
+        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
+        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+        #modal-quantity-selector { margin: 20px 0; }
+        #modal-actions-container {
+            margin-top: auto; /* Pushes to the bottom */
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .primary-action-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #fff;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .primary-action-btn:hover {
+            background-color: #218838;
         }
     </style>
 </head>
@@ -127,7 +236,8 @@
             <div id="favorites-carousel"></div>
         </div>
         <div id="category-bar-container">
-            </div>
+   
+[cite_start][cite: 85]          </div>
     </div>
 
     <div class="main-container">
@@ -137,32 +247,58 @@
         <div id="right-sidebar">
             <div id="filter-controls">
                 <h3>Filters</h3>
-                <input type="text" id="name-filter" placeholder="Search...">
+              
+[cite_start][cite: 86]   <input type="text" id="name-filter" placeholder="Search...">
                 <select id="price-filter">
                     <option value="all">All Prices</option>
                     <option value="0-50">Under $50</option>
                     <option value="50-100">$50 - $100</option>
-                    <option value="100-250">$100 - $250</option>
+           
+[cite_start][cite: 87]          <option value="100-250">$100 - $250</option>
                     <option value="250-plus">$250+</option>
                 </select>
                 <select id="sort-by">
                     <option value="price-asc">Price (Low to High)</option>
-                    <option value="price-desc">Price (High to Low)</option>
+          
+[cite_start][cite: 88]           <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
                 <button id="reset-filters-btn">Reset</button>
             </div>
             <div id="cart-panel">
-                <h3>Event Plan</h3>
+      
+[cite_start][cite: 89]           <h3>Event Plan</h3>
                 <div id="cart-items-container">
-                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                    <p style="font-size: 0.9em;
+[cite_start][cite: 90] color: #6c757d;">No items locked in yet.</p>
                 </div>
             </div>
         </div>
     </div>
     
     <div id="detail-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="modal-main-column">
+                <div id="modal-main-image"></div>
+                <div id="modal-thumbnail-strip"></div>
+            </div>
+            <div class="modal-sidebar-column">
+                <div id="modal-header-actions">
+                    <button id="modal-parent-btn" class="card-btn" title="Go Up">⬆️</button>
+                </div>
+                <h2 id="modal-item-name"></h2>
+                <p id="modal-item-price" class="price"></p>
+                <p id="modal-item-description"></p>
+                <div id="modal-options-container"></div>
+                <div id="modal-quantity-selector"></div>
+                <div id="modal-actions-container">
+                    <button id="modal-add-to-plan-btn" class="primary-action-btn">Add to Plan</button>
+                </div>
+                <div id="modal-calendar-container"></div>
+            </div>
         </div>
+    </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
         </div>
 
