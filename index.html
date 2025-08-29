@@ -204,7 +204,7 @@
         .subcategory-list li:hover {
             background-color: #f0f0f0;
         }
-        .subcategory-list li.active {
+        .subcategory-list li.active, .category-group h4.active {
             background-color: #007aff;
             color: white;
             font-weight: bold;
@@ -230,7 +230,298 @@
             overflow: hidden;
             cursor: pointer;
         }
-        /* ... other styles unchanged ... */
+        .heart-icon {
+            position: relative;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .card-header-actions .heart-icon {
+             position: absolute;
+            top: 15px;
+            right: 15px;
+        }
+        .heart-icon svg {
+            width: 100%;
+            height: 100%;
+            stroke: white;
+            stroke-width: 2;
+            fill: rgba(0,0,0,0.3);
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+        }
+        .heart-icon.hearted svg { fill: #ff4f6c;
+        }
+        .event-card-content {
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+            padding: 20px;
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em;
+        }
+        .event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 15px;
+        }
+        .price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center;
+        }
+        .quantity-selector { display: flex; align-items: center;
+        }
+        .quantity-selector button { width: 30px; height: 30px;
+        }
+        .quantity-selector input { width: 40px; text-align: center; height: 30px;
+        }
+        .event-card-content .price { font-size: 1.3em; font-weight: bold;
+        }
+        .card-header-actions { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex;
+            gap: 8px; }
+        .card-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.5); color: white;
+            font-size: 1.2em; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+        }
+        .item-note { width: 100%; box-sizing: border-box; margin-top: 10px; border-radius: 4px; padding: 6px;
+        }
+        #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px;
+        }
+        .favorite-pricing-details {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .pricing-line-item {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            font-size: 0.9em;
+        }
+        .item-price {
+            font-weight: bold;
+        }
+        .pricing-line-item-total {
+            text-align: right;
+            font-size: 0.95em;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+        .flatpickr-day.flatpickr-available {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+        .flatpickr-day.flatpickr-partial {
+            background: #ffc107;
+            color: #111;
+            border-color: #ffc107;
+        }
+        .flatpickr-day.flatpickr-disabled,
+        .flatpickr-day.flatpickr-disabled:hover {
+            background: #dc3545 !important;
+            color: white !important;
+            cursor: not-allowed !important;
+        }
+        
+        /* --- DETAIL MODAL STYLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            width: 80%;
+            max-width: 1200px;
+            height: 80vh;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+            padding: 25px;
+            overflow-y: auto;
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+        .detail-view-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            height: 100%;
+        }
+        .gallery-column .main-image {
+            width: 100%;
+            height: 70%;
+            background-size: cover;
+            background-position: center;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .thumbnail-strip {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .thumbnail-img {
+            width: 80px;
+            height: 80px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .thumbnail-img.active {
+            border-color: #007aff;
+        }
+        .details-column h2 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        #modal-parent-btn {
+            font-size: 0.8em;
+            padding: 5px;
+            cursor: pointer;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #modal-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+        #modal-header-actions .heart-icon svg {
+             stroke: #333;
+             fill: rgba(0,0,0,0.1);
+        }
+        #modal-header-actions .heart-icon.hearted svg {
+            stroke: #ff4f6c;
+            fill: #ff4f6c;
+        }
+        #modal-header-actions .card-btn {
+            color: #333;
+            background: rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .options-container {
+            margin: 20px 0;
+        }
+        .option-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .option-btn:hover {
+            background-color: #e9ecef;
+            border-color: #007aff;
+        }
+        .option-btn .price-mod {
+            float: right;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .modal-details-footer {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .inline-calendar-container .flatpickr-calendar {
+            box-shadow: none;
+            width: 100%;
+        }
+
+        /* --- CHECKOUT MODAL STYLES --- */
+        .checkout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .order-summary {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .order-summary ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .order-summary li {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .order-summary .total-row {
+            font-weight: bold;
+            font-size: 1.2em;
+            padding-top: 15px;
+            border-top: 2px solid #dee2e6;
+            margin-top: 10px;
+        }
+        .checkout-form .form-group {
+            margin-bottom: 15px;
+        }
+        .checkout-form label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .checkout-form input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        #payment-form {
+            margin-top: 20px;
+        }
+        #card-element {
+            border: 1px solid #ced4da;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        #submit-payment-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            border: 1px solid #007aff;
+            background-color: #007aff;
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #card-errors {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -314,6 +605,67 @@
         </main>
     </div>
     
+    <div id="detail-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <div class="detail-view-grid">
+                <div class="gallery-column">
+                    <div id="modal-main-image" class="main-image"></div>
+                    <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
+                </div>
+                <div class="details-column">
+                    <h2>
+                        <button id="modal-parent-btn" style="display: none;">⬆️</button>
+                        <span id="modal-item-name">Item Name</span>
+                        <div id="modal-header-actions"></div>
+                    </h2>
+                    <p id="modal-item-price">Price</p>
+                    <p id="modal-item-description">Full description goes here...</p>
+                    <div id="modal-options-container" class="options-container"></div>
+                    <div class="modal-details-footer">
+                        <div id="modal-quantity-selector"></div>
+                    </div>
+                    <div id="modal-calendar-container" class="inline-calendar-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="checkout-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="checkout-close-btn" class="modal-close-btn">&times;</button>
+            <h2>Finalize Your Plan</h2>
+            <div class="checkout-grid">
+                <div class="order-summary">
+                    <h3>Order Summary</h3>
+                    <ul id="checkout-summary-list"></ul>
+                    <div id="checkout-total-row" class="total-row">
+                        <span>Total</span>
+                        <span id="checkout-total-price">$0.00</span>
+                    </div>
+                </div>
+                <div class="checkout-form">
+                    <h3>Your Information</h3>
+                    <div class="form-group">
+                        <label for="customer-name">Name</label>
+                        <input type="text" id="customer-name" placeholder="Enter your name">
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-email">Email</label>
+                        <input type="email" id="customer-email" placeholder="Enter your email">
+                    </div>
+                    <h3>Payment Details</h3>
+                    <form id="payment-form">
+                        <div id="card-element">
+                            </div>
+                        <div id="card-errors" role="alert"></div>
+                        <button id="submit-payment-btn">Pay Now</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="main.js"></script>
 </body>
 </html>
