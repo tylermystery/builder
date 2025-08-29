@@ -1,11 +1,12 @@
 /*
- * Version: 3.12.0
+ * Version: 3.12.1
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v3.12.0 - 2025-08-28
- * - Replaced parent button logic with a handler for the new parent link text.
+ * v3.12.1 - 2025-08-28
+ * - Replaced the native browser tooltip on card availability icons with a tippy.js tooltip.
+ * - Positioned the new tooltip above the icon as requested.
  */
 
 import { state } from './state.js';
@@ -127,30 +128,65 @@ function applyFiltersAndSort() {
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) { return;
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
+        return;
     }
     const startDate = mainDatePicker.selectedDates[0];
-    const requestedEnd = mainDatePicker.selectedDates[1]; 
+    const requestedEnd = mainDatePicker.selectedDates[1];
     const cards = document.querySelectorAll('.event-card');
+
     for (const card of cards) {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
+
         const busyTimes = await api.fetchCalendarForRecord(record);
         const dayStatus = getDayStatus(startDate, busyTimes, record);
         const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
+
         const icon = card.querySelector('.availability-btn');
         if (icon) {
+            // Destroy previous tippy instance if it exists to prevent memory leaks
+            if (icon._tippy) {
+                icon._tippy.destroy();
+            }
+
+            let statusIcon, statusText, titleText;
+
             if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
                 icon.textContent = '❌';
-                icon.title = 'Unavailable';
+                statusIcon = '❌';
+                statusText = 'Unavailable';
+                titleText = 'Unavailable';
             } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
                 icon.textContent = '🟠';
-                icon.title = 'Partially Available';
+                statusIcon = '🟠';
+                statusText = 'Partially Available';
+                titleText = 'Partially Available';
             } else {
                 icon.textContent = '✅';
-                icon.title = 'Fully Available';
+                statusIcon = '✅';
+                statusText = 'Fully Available';
+                titleText = 'Fully Available';
             }
+            
+            const dateString = startDate.toLocaleDateString();
+            const tooltipContent = `
+                <div style="text-align: left;">
+                    <strong>${dateString}</strong>
+                    <hr style="margin: 2px 0 5px;">
+                    <span>${statusIcon} ${record.fields.Name}: ${statusText}</span>
+                </div>
+            `;
+
+            tippy(icon, {
+                content: tooltipContent,
+                allowHTML: true,
+                placement: 'top',
+                arrow: true,
+            });
+
+            icon.title = titleText; // Keep native title as a simple fallback
         }
     }
 }
@@ -520,7 +556,7 @@ function setupEventListeners() {
        
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
