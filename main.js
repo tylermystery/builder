@@ -1,14 +1,12 @@
 /*
- * Version: 3.10.0
+ * Version: 3.11.0
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v3.10.0 - 2025-08-28
- * - Implemented "Edit" flow for items in the event plan panel.
- *
- * v3.9.2 - 2025-08-28
- * - Fixed Stripe payment submission by correctly passing the clientSecret.
+ * v3.11.0 - 2025-08-28
+ * - Added logic to update card icon to a checkmark when an item is locked into the plan.
+ * - Locked icons are no longer interactive.
  */
 
 import { state } from './state.js';
@@ -382,6 +380,12 @@ function setupEventListeners() {
 
             state.cart.lockedItems.set(recordId, itemInfo);
 
+            const cardIcon = document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`);
+            if (cardIcon) {
+                cardIcon.className = 'heart-icon locked';
+                cardIcon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+            }
+
             ui.updateEventPlanPanel();
             ui.updateTotalCost();
             triggerSave();
@@ -402,7 +406,13 @@ function setupEventListeners() {
             if (record) ui.showDetailModal(record);
         } else if (heartIcon || modalHeartBtn) {
             e.stopPropagation();
+            
             const targetElement = heartIcon || modalHeartBtn;
+            const iconContainer = targetElement.closest('.heart-icon');
+            if (iconContainer && iconContainer.classList.contains('locked')) {
+                return; // Do nothing if the item is locked in
+            }
+
             const recordId = targetElement.closest('[data-record-id]').dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const isGrouping = !!(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).find(opt => state.records.all.some(r => r.fields.Name === opt.name)));
