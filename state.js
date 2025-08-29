@@ -1,17 +1,14 @@
 /*
- * Version: 1.8.1
- * Last Modified: 2025-08-26
+ * Version: 1.8.2
+ * Last Modified: 2025-08-29
  *
  * Changelog:
  *
+ * v1.8.2 - 2025-08-29
+ * - Added ui.activeCategoryFilter to track sidebar filter state.
+ *
  * v1.8.1 - 2025-08-26
  * - Added ui.saveState to track autosave status.
- *
- * v1.8.0 - 2025-08-26
- * - Converted calendar.busyTimes to a Map to act as a cache for iCal feeds.
- *
- * v1.7.0 - 2025-08-24
- * - Added session.isOwned flag for "Fork on Edit" functionality.
  */
 
 export const state = {
@@ -28,21 +25,21 @@ export const state = {
     },
     session: {
         id: null,
-       
-        isOwned: false, // true if the user created this session, false if loaded from a shared URL
+        isOwned: false,
         user: '',
         collaborators: [],
         reactions: new Map(),
     },
     calendar: {
-        busyTimes: new Map(), // Will cache events from iCal feeds, keyed by URL
+        busyTimes: new Map(),
     },
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
         currentSort: 'reactions-desc',
-        cardImageIndexes: new Map(), // Tracks current image index for each card
-        saveState: 'SAVED', // Can be 'SAVED', 'MODIFIED', 'SAVING'
+        cardImageIndexes: new Map(),
+        saveState: 'SAVED',
+        activeCategoryFilter: null, // New property to track the selected category
     },
     history: {
         undoStack: [],
