@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;"
-[cite_start][cite: 60] />
+    <link rel="icon" href="data:;" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -14,98 +13,98 @@
     <style>
         body {
             padding-bottom: 80px;
-[cite_start][cite: 61] font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
-[cite_start][cite: 62] }
+        }
         body.modal-open {
             overflow: hidden;
-[cite_start][cite: 63] }
+        }
         #sticky-header {
             position: sticky;
-[cite_start][cite: 64] top: 0;
+            top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-[cite_start][cite: 65] }
+        }
         #header-toolbar {
             display: flex;
-[cite_start][cite: 66] flex-wrap: wrap;
+            flex-wrap: wrap;
             align-items: flex-end;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
             margin: 0 auto;
-[cite_start][cite: 67] }
+        }
         .toolbar-group {
             display: flex;
-[cite_start][cite: 68] flex-direction: column;
+            flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-[cite_start][cite: 69] color: #666;
+            color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
             border: 1px solid #ced4da;
-[cite_start][cite: 70] border-radius: 4px;
+            border-radius: 4px;
             padding: 6px 8px;
             font-size: 0.9em;
             width: 100%;
             box-sizing: border-box;
-[cite_start][cite: 71] }
+        }
         .main-container {
             display: grid;
-[cite_start][cite: 72] grid-template-columns: 1fr 380px;
+            grid-template-columns: 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
-[cite_start][cite: 73] }
+        }
         #right-sidebar h3 {
             margin-top: 0;
-[cite_start][cite: 74] border-bottom: 1px solid #dee2e6;
+            border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
         #filter-controls, #cart-panel {
             background-color: #fff;
-[cite_start][cite: 75] padding: 20px;
+            padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 25px;
             display: flex;
             flex-direction: column;
             gap: 15px;
-[cite_start][cite: 76] }
+        }
         #favorites-section { 
             max-width: 1800px;
-[cite_start][cite: 77] margin: 0 auto; 
+            margin: 0 auto; 
             padding: 15px 20px; 
             border-bottom: 1px solid #e9ecef;
-[cite_start][cite: 78] }
+        }
         #favorites-carousel { 
             display: flex;
-[cite_start][cite: 79] gap: 15px;
+            gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
         }
         .favorite-item {
             position: relative;
-[cite_start][cite: 80] flex: 0 0 220px;
+            flex: 0 0 220px;
             height: 220px;
             border-radius: 8px;
-[cite_start][cite: 81] background-size: cover;
+            background-size: cover;
             background-position: center;
         }
         #catalog-container {
             display: grid;
-[cite_start][cite: 82] grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
             position: relative;
-[cite_start][cite: 83] border-radius: 10px;
+            border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
@@ -113,7 +112,7 @@
             background-size: cover;
             background-position: center;
             color: white;
-[cite_start][cite: 84] overflow: hidden;
+            overflow: hidden;
             cursor: pointer;
         }
 
@@ -237,7 +236,7 @@
         </div>
         <div id="category-bar-container">
    
-[cite_start][cite: 85]          </div>
+          </div>
     </div>
 
     <div class="main-container">
@@ -248,29 +247,29 @@
             <div id="filter-controls">
                 <h3>Filters</h3>
               
-[cite_start][cite: 86]   <input type="text" id="name-filter" placeholder="Search...">
+   <input type="text" id="name-filter" placeholder="Search...">
                 <select id="price-filter">
                     <option value="all">All Prices</option>
                     <option value="0-50">Under $50</option>
                     <option value="50-100">$50 - $100</option>
            
-[cite_start][cite: 87]          <option value="100-250">$100 - $250</option>
+          <option value="100-250">$100 - $250</option>
                     <option value="250-plus">$250+</option>
                 </select>
                 <select id="sort-by">
                     <option value="price-asc">Price (Low to High)</option>
           
-[cite_start][cite: 88]           <option value="price-desc">Price (High to Low)</option>
+           <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
                 <button id="reset-filters-btn">Reset</button>
             </div>
             <div id="cart-panel">
       
-[cite_start][cite: 89]           <h3>Event Plan</h3>
+           <h3>Event Plan</h3>
                 <div id="cart-items-container">
                     <p style="font-size: 0.9em;
-[cite_start][cite: 90] color: #6c757d;">No items locked in yet.</p>
+ color: #6c757d;">No items locked in yet.</p>
                 </div>
             </div>
         </div>
