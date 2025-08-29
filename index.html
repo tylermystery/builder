@@ -292,11 +292,11 @@
             color: #999;
             z-index: 1010;
         }
-        /* UPDATED: Changed flex from 2 to 1 for a 50/50 split */
         .modal-main-column {
             flex: 1;
             display: flex;
             flex-direction: column;
+            min-width: 0; /* Prevents wide content from breaking flexbox */
         }
         #modal-main-image {
             flex-grow: 1;
@@ -331,6 +331,7 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            min-width: 0; /* Prevents content from breaking flexbox */
         }
         #modal-header-actions {
             display: flex;
