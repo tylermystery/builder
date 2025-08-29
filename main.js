@@ -1,8 +1,13 @@
+// FILE: main.js
+
 /*
- * Version: 3.12.1
- * Last Modified: 2025-08-28
+ * Version: 3.12.2
+ * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v3.12.2 - 2025-08-29
+ * - Patched category filter to correctly parse comma-separated string values.
  *
  * v3.12.1 - 2025-08-28
  * - Replaced the native browser tooltip on card availability icons with a tippy.js tooltip.
@@ -71,12 +76,15 @@ function applyFiltersAndSort() {
     const priceFilter = document.getElementById('price-filter').value;
     const sortBy = document.getElementById('sort-by').value;
     let recordsToDisplay = state.records.all;
-
     if (activeCategories.length > 0) {
         recordsToDisplay = recordsToDisplay.filter(record => {
+            const getTagsFromString = (str) => {
+                if (!str || typeof str !== 'string') return [];
+                return str.split(',').map(tag => tag.trim());
+            };
             const recordTags = [
-                ...(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || []),
-                ...(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || [])
+                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]),
+                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES])
             ].map(t => t.toLowerCase());
             return activeCategories.some(cat => recordTags.includes(cat));
         });
@@ -90,7 +98,7 @@ function applyFiltersAndSort() {
             const name = (fields.Name || '').toLowerCase();
             const description = (fields.Description || '').toLowerCase();
             const tags = [...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || []), ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || []), ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])].map(t => t.toLowerCase().trim());
-         
+            
            if (name.includes(searchTerm)) score = 3;
             else if (description.includes(searchTerm)) score = 2;
             else if (tags.some(tag => tag.includes(searchTerm))) score = 1;
@@ -110,13 +118,13 @@ function applyFiltersAndSort() {
             const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
             if (isGrouping) {
                 const range = ui.getGroupPriceRange(record);
-             
+                
                return range && range.min <= max && range.max >= min;
             } else {
                 const price = parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
                 return price >= min && price <= max;
             }
-         });
+        });
     }
 
     recordsToDisplay.sort((a, b) => {
@@ -126,7 +134,7 @@ function applyFiltersAndSort() {
         const bName = b.fields.Name || '';
         switch (sortBy) {
             case 'price-asc': return aPrice - bPrice;
-    
+     
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
             default: return 0;
@@ -183,7 +191,7 @@ async function updateAllCardAvailabilityIcons() {
                     <strong>${dateString}</strong>
                     <hr style="margin: 2px 0 5px;">
                     <span>${statusIcon} ${record.fields.Name}: ${statusText}</span>
-                 </div>
+                </div>
             `;
             tippy(icon, {
                 content: tooltipContent,
@@ -263,11 +271,11 @@ function setupEventListeners() {
         const { error } = await stripe.confirmCardPayment(
             clientSecret, {
                 payment_method: {
-                     card: cardElement,
+                    card: cardElement,
                     billing_details: {
                         name: document.getElementById('customer-name').value,
                         email: document.getElementById('customer-email').value,
-                      },
+                    },
                 },
             }
         );
@@ -313,13 +321,13 @@ function setupEventListeners() {
         onDayCreate: async (dObj, dStr, fp, dayElem) => {
             const day = dayElem.dateObj;
             const favoritedRecords = Array.from(state.cart.items.keys())
-                   .map(id => state.records.all.find(r => r.id === id))
+                .map(id => state.records.all.find(r => r.id === id))
                 .filter(record => record);
             if (favoritedRecords.length === 0) {
                 dayElem.classList.add('flatpickr-available');
                 tippy(dayElem, { content: 'Available' });
                  return;
-              }
+            }
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
             let finalStatus = AVAILABILITY_STATUS.FULL;
@@ -376,7 +384,7 @@ function setupEventListeners() {
             return;
         }
 
- 
+        
         const modalContent = e.target.closest('.modal-content');
         if (modalContent) {
             const isInteractiveElement = e.target.closest('button, .heart-icon, a, input, select, textarea, .thumbnail-img');
@@ -386,10 +394,11 @@ function setupEventListeners() {
         }
 
         
+         
         const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
-  
+        
         const availabilityBtn = e.target.closest('.availability-btn');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
@@ -467,7 +476,8 @@ function setupEventListeners() {
             const targetElement = heartIcon || modalHeartBtn;
             const iconContainer = targetElement.closest('.heart-icon');
             if (iconContainer && iconContainer.classList.contains('locked')) {
-                return; // Do nothing if the item is locked in
+                return;
+                // Do nothing if the item is locked in
             }
 
             const recordId = targetElement.closest('[data-record-id]').dataset.recordId;
@@ -561,13 +571,14 @@ function setupEventListeners() {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-       
+            
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
             const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
-                if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
+                if (selectedOption.absolutePrice != null) newPrice = 
+                    selectedOption.absolutePrice;
                  else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
