@@ -56,13 +56,13 @@
         }
         .main-container {
             display: grid;
-            grid-template-columns: 1fr 380px;
+            grid-template-columns: 300px 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
         }
-        #right-sidebar h3 {
+        #right-sidebar h3, #left-sidebar h3 {
             margin-top: 0;
             border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
@@ -72,7 +72,6 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 25px;
             display: flex;
             flex-direction: column;
             gap: 15px;
@@ -240,36 +239,33 @@
     </div>
 
     <div class="main-container">
-        <div id="catalog-area">
-            <div id="catalog-container"></div>
-        </div>
-        <div id="right-sidebar">
+        <div id="left-sidebar">
             <div id="filter-controls">
                 <h3>Filters</h3>
-              
-   <input type="text" id="name-filter" placeholder="Search...">
+                <input type="text" id="name-filter" placeholder="Search...">
                 <select id="price-filter">
                     <option value="all">All Prices</option>
                     <option value="0-50">Under $50</option>
                     <option value="50-100">$50 - $100</option>
-           
-          <option value="100-250">$100 - $250</option>
+                    <option value="100-250">$100 - $250</option>
                     <option value="250-plus">$250+</option>
                 </select>
                 <select id="sort-by">
                     <option value="price-asc">Price (Low to High)</option>
-          
-           <option value="price-desc">Price (High to Low)</option>
+                    <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
                 <button id="reset-filters-btn">Reset</button>
             </div>
+        </div>
+        <div id="catalog-area">
+            <div id="catalog-container"></div>
+        </div>
+        <div id="right-sidebar">
             <div id="cart-panel">
-      
-           <h3>Event Plan</h3>
+                <h3>Event Plan</h3>
                 <div id="cart-items-container">
-                    <p style="font-size: 0.9em;
- color: #6c757d;">No items locked in yet.</p>
+                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
             </div>
         </div>
