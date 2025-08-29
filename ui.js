@@ -18,7 +18,6 @@ import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
 let stripe, elements, cardElement, clientSecret;
-
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
@@ -61,19 +60,20 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
+            
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
+       
             if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
         }
     });
-
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
 
@@ -92,7 +92,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
     let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
     }
@@ -116,7 +115,8 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
             ${noteHTML}
             <div class="favorite-pricing-details">
                 <div class="pricing-line-item">
-                    <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
+             
+                   <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
                 ${showCardTotal ?
@@ -143,14 +143,14 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.dataset.recordId = recordId;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
-    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
+    const explodeButtonHTML = isGrouping ?
+    `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
     const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
 
     let optionsControlHTML = '';
     let notesHTML = '';
     let quantitySelectorHTML = '';
     let priceHTML = '';
-
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options">
             <option value="">Select an option...</option>
@@ -159,7 +159,7 @@ export async function createInteractiveCard(record, imageCache) {
         const range = getGroupPriceRange(record);
         if (range) {
             priceHTML = range.min === range.max ?
-                `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
             priceHTML = 'Price Varies';
         }
@@ -186,9 +186,12 @@ export async function createInteractiveCard(record, imageCache) {
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
         <div class="event-card-content">
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
-            ${rawOptions.length > 0 ? optionsControlHTML : ''}
+          
+           <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
+            ''}</p>
+            ${rawOptions.length > 0 ?
+            optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
                 <div class="price">${priceHTML}</div>
@@ -207,7 +210,8 @@ export async function createInteractiveCard(record, imageCache) {
             if (current > min) {
                 quantityInput.value = current - 1;
             }
-        });
+       
+         });
     }
     
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
@@ -222,7 +226,6 @@ export async function renderRecords(recordsToRender, imageCache) {
 
     const implodeContainer = document.getElementById('implode-container');
     if (implodeContainer) implodeContainer.remove();
-
     if (recordsToRender.length === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
@@ -271,20 +274,20 @@ export async function showDetailModal(record) {
     const modalOptionsContainer = document.getElementById('modal-options-container');
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    const modalActionsContainer = document.getElementById('modal-actions-container');
+
 
     modalOverlay.dataset.recordId = record.id;
-    
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
-    
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
-
     if (isGrouping) {
         const range = getGroupPriceRange(record);
-        modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+        modalItemPrice.textContent = range ?
+        `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
     } else {
         modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
     }
@@ -300,7 +303,8 @@ export async function showDetailModal(record) {
             modalMainImage.style.backgroundImage = `url('${url}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
-        });
+     
+       });
         modalThumbnailStrip.appendChild(thumb);
     });
 
@@ -320,7 +324,6 @@ export async function showDetailModal(record) {
         <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}" data-record-id="${record.id}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>`;
-
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach(opt => {
         const optionButton = document.createElement('button');
@@ -330,13 +333,15 @@ export async function showDetailModal(record) {
             priceModText = `$${opt.absolutePrice.toFixed(2)}`;
         } else if (opt.priceChange != null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-        }
+   
+         }
         optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
         if (allRecordNames.has(opt.name)) {
             optionButton.onclick = () => {
                 const childRecord = state.records.all.find(r => r.fields.Name === opt.name);
                 if (childRecord) showDetailModal(childRecord);
             };
+    
         } else {
             optionButton.onclick = () => {
                 modalItemDescription.textContent = opt.description || record.fields.Description;
@@ -346,7 +351,20 @@ export async function showDetailModal(record) {
     });
 
     modalQuantitySelector.innerHTML = '';
-    if (!isGrouping) {
+    if (isGrouping) {
+        if (modalActionsContainer) modalActionsContainer.style.display = 'none';
+    } else {
+        if (modalActionsContainer) modalActionsContainer.style.display = 'block';
+        
+        const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
+        if (addToPlanBtn) {
+            if (state.cart.lockedItems.has(record.id)) {
+                addToPlanBtn.textContent = 'Update Plan';
+            } else {
+                addToPlanBtn.textContent = 'Add to Plan';
+            }
+        }
+
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         modalQuantitySelector.innerHTML = `
             <div class="quantity-selector">
@@ -370,6 +388,7 @@ export async function showDetailModal(record) {
             const status = getDayStatus(day, busyTimes, record);
             if (status === 'NONE') dayElem.classList.add('flatpickr-disabled');
             else if (status === 'PARTIAL') dayElem.classList.add('flatpickr-partial');
+            
             else dayElem.classList.add('flatpickr-available');
         }
     });
@@ -394,7 +413,6 @@ export async function showCheckoutModal() {
 
     summaryList.innerHTML = '';
     let finalTotal = 0;
-    
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
@@ -428,7 +446,6 @@ export async function showCheckoutModal() {
         
         checkoutModalOverlay.style.display = 'flex';
         document.body.classList.add('modal-open');
-
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
         alert("Could not initialize payment form. Please try again.");
@@ -458,7 +475,6 @@ export function updateHeader() {
     
     const headcountInput = document.getElementById('header-headcount');
     if (headcountInput) headcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
-    
     const goalsInput = document.getElementById('header-goals');
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
@@ -467,7 +483,6 @@ export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
     if (!totalCostEl) return;
-    
     let total = 0;
     const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
     allItems.forEach((itemInfo, recordId) => {
@@ -479,6 +494,7 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
         let itemCost;
+ 
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
@@ -486,7 +502,6 @@ export function updateTotalCost() {
         }
         total += itemCost;
     });
-
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 
     if (checkoutBtn) {
