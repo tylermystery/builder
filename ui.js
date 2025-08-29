@@ -1,24 +1,21 @@
 /*
- * Version: 2.11.5
+ * Version: 2.11.4
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
- * v2.11.5 - 2025-08-29
- * - Added a safeguard to prevent infinite loops in recursive price calculation.
- * - Corrected heart icon HTML structure in createInteractiveCard.
- *
  * v2.11.4 - 2025-08-29
- * - Added renderFilterPanel function.
+ * - Added renderFilterPanel function to dynamically build the category/subcategory filter UI.
+ *
+ * v2.11.3 - 2025-08-27
+ * - Added logic to enable/disable the new checkout button based on cart total.
  */
 
 import { state } from './state.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
+import { CONSTANTS } from './config.js';
 import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
-
-let stripe, elements, cardElement, clientSecret;
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -34,13 +31,7 @@ export function getRecordPrice(record, optionIndex = null) {
     return price;
 }
 
-function getDescendantBookableItems(record, allRecords, visited = new Set()) {
-    if (visited.has(record.id)) {
-        console.warn('Circular reference detected in hierarchy for record:', record.fields.Name);
-        return []; // Prevent infinite loop
-    }
-    visited.add(record.id);
-
+function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     for (const child of children) {
@@ -48,7 +39,7 @@ function getDescendantBookableItems(record, allRecords, visited = new Set()) {
         const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
         const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
         if (isGrouping) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords, new Set(visited)));
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
         } else {
             bookableItems.push(child);
         }
@@ -67,14 +58,14 @@ export function getGroupPriceRange(record) {
         if (options.length > 0) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
-                if (price > 0) { // Ignore $0 or unpriced items
+                if (price > 0) {
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price > 0) { // Ignore $0 or unpriced items
+            if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -179,7 +170,7 @@ export async function createInteractiveCard(record, imageCache) {
         quantitySelectorHTML = `
             <div class="quantity-selector">
                 <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                <input type="number" class="quantity-input" value="${state.cart.items.get(recordId)?.quantity || headcountMin}" min="${headcountMin}">
+                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
                 <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
             </div>`;
         const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
@@ -188,11 +179,7 @@ export async function createInteractiveCard(record, imageCache) {
 
     const isHearted = state.cart.items.has(recordId);
     eventCard.innerHTML = `
-        <div class="card-header-actions">
-            ${availabilityButtonHTML}
-            ${parentButtonHTML}
-            ${explodeButtonHTML}
-        </div>
+        <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
         <div class="heart-icon ${isHearted ? 'hearted' : ''}">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
         </div>
@@ -385,14 +372,14 @@ export async function showDetailModal(record) {
         }
     });
 
-    modalOverlay.classList.add('visible');
+    modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
 export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
-        modalOverlay.classList.remove('visible');
+        modalOverlay.style.display = 'none';
         document.body.classList.remove('modal-open');
     }
 }
@@ -437,7 +424,7 @@ export async function showCheckoutModal() {
         cardElement = elements.create('card');
         cardElement.mount('#card-element');
         
-        checkoutModalOverlay.classList.add('visible');
+        checkoutModalOverlay.style.display = 'flex';
         document.body.classList.add('modal-open');
 
     } catch (err) {
@@ -452,7 +439,7 @@ export function hideCheckoutModal() {
     }
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
-        checkoutModalOverlay.classList.remove('visible');
+        checkoutModalOverlay.style.display = 'none';
         document.body.classList.remove('modal-open');
     }
 }
@@ -460,6 +447,7 @@ export function hideCheckoutModal() {
 export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
+
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
