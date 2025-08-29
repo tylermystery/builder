@@ -14,76 +14,54 @@ For development purposes, the application communicates directly with the Airtabl
 Session Management (Live URL & Fork on Edit)
 A unique, shareable URL is automatically generated and updated as a user builds their event plan.
 
-Live URL: The URL in the browser address bar is the canonical link for the event plan. Any change made to the plan (e.g., selecting an item, editing the event name) is automatically saved to the database and reflected in this URL.
+* **Live URL**: The URL in the browser address bar is the canonical link for the event plan. Any change made to the plan is automatically saved to the database and reflected in this URL.
+* **Sharing**: A user can share their plan at any time by simply copying and sharing the URL from their browser.
+* **Fork on Edit**: When a second user opens a shared URL, they see the original plan. The moment this new user makes a change, the system automatically "forks" the plan by creating a brand new session and updating their URL. This prevents collaborators from overwriting each other's work and ensures the original shared plan is not altered.
 
-Sharing: A user can share their plan at any time by simply copying and sharing the URL from their browser.
-
-Fork on Edit: When a second user opens a shared URL, they see the original plan. The moment this new user makes a change, the system automatically "forks" the plan by creating a brand new session and updating their URL. This prevents collaborators from overwriting each other's work in the MVP and ensures the original shared plan is not altered.
-
-Catalog Loading Methodology
-The catalog loading process is designed for a smooth and predictable user experience.
-
-The application initially displays a "Loading catalog..." message.
-It fetches all event records from the Airtable database using an asynchronous API call.
-Once the data is loaded successfully, the loading message is hidden and the interactive catalog elements are displayed.
-The initial view shows only the top-level "Grouping" items for the user to begin their exploration.
+Catalog Loading and Display
+The catalog loading process is designed for a smooth user experience. The application initially displays a "Loading catalog..." message and fetches all event records. Once loaded, the initial view shows only the top-level "Grouping" items.
 
 Hierarchical Catalog Display
-The catalog is organized as a hierarchy of interactive items. This structure allows users to navigate from broad categories to specific details.
-
-**Defining a "Grouping" (Robust)**
-To ensure all parent-child relationships are recognized, an item is considered a "Grouping" if it meets **either** of the following conditions:
-1.  **Forward Link**: The item's "Options" field contains the name of another record in the catalog.
-2.  **Backward Link**: Any other record in the catalog lists the item's name in its "Parent Item" field.
-
-This dual-check system ensures that all items with child relations are correctly identified.
-
-**Visual Distinction for Groupings**
-To visually distinguish Groupings from final Bookable Items, all grouping cards are given a "stacked card" appearance. This is achieved using CSS to render two additional card-like layers directly behind the main card, creating a subtle 3D effect that suggests more content is available within.
+The catalog is organized as a hierarchy of interactive items. Items can be either Groupings (e.g., "Activities") or final Bookable Items (e.g., "Escape Room"). This structure allows users to navigate from broad categories to specific details.
 
 The Interactive Card
-Every item in the catalog is presented on a versatile "Interactive Card". The card's appearance and functionality adapt based on the item it represents. All cards feature a Heart (❤️) icon for universal selection.
+Every item in the catalog is presented on a versatile "Interactive Card." The card's appearance and functionality adapt based on the item it represents. All cards feature a Heart (❤️) icon for universal selection, a Parent (⬆️) button for navigation, and an Availability (📅) icon.
 
 Favorites Carousel
 When a user selects one or more items, a horizontally scrolling carousel appears below the main header.
 
-Consistent Design: Cards in the carousel are styled with the same aspect ratio as the main catalog cards for visual consistency.
-Remove Functionality: Each favorite card includes a remove (×) button, allowing users to quickly un-favorite an item directly from the carousel.
+* **Consistent Design**: Cards in the carousel are styled with the same aspect ratio as the main catalog cards for visual consistency.
+* **Remove Functionality**: Each favorite card includes a remove (×) button, allowing users to quickly un-favorite an item directly from the carousel.
+* **Open Detail View**: Clicking on a favorite card opens the Detailed Item View for that item.
 
-Automated Image Tagging
-Card images are loaded dynamically from a media library (Cloudinary) based on an automated, multi-tag system. All tag matching is case-insensitive and ignores differences between spaces and hyphens.
+Search & Filtering
+A set of controls allows users to refine and organize the catalog view.
 
-Default Item Image: The image for an item is found by searching for a single tag generated from its unique name (e.g., "Fort Battle" uses the tag fort-battle).
+* **Smart Search**: A search bar allows users to filter the catalog by item name, description, categories, and tags. Results are prioritized to show name matches first.
+* **Filtering**: Users can filter the catalog by pre-defined price ranges.
+* **Sorting**: A dropdown menu controls the sort order of the catalog (e.g., Price Low to High, Name A-Z).
+* **Reset**: A "Reset" button clears all active search terms and filters, returning the catalog to its default view.
 
-Option-Specific Images: When a user selects an option, the system performs a search for images that contain both the item's tag and the option's tag (e.g., searching for tags fort-battle AND classic). If no images matching both tags are found, the application falls back to the default item image.
+Detailed Item View
+Clicking on a catalog card opens a large modal overlay with comprehensive information.
 
-Unified Card Interaction Model
-All card-based click interactions are managed by a single, unified event handler on the document's body. The handler uses event delegation to capture all clicks and identify the target element (e.g., a button or icon). It acts as a router, prioritizing specific button clicks (like the Heart, Explode, or Parent buttons) over a general card click to ensure a predictable user experience. This methodology ensures that all interactions are handled consistently and efficiently, regardless of where the catalog item is displayed.
-
-Event Listener Implementation (Locked In)
-To function correctly, the application's main script attaches two distinct, delegated event listeners to the document.body. Both are essential for full functionality and must be present.
-
-addEventListener('click', ...): This listener handles all instantaneous actions, such as clicking the Heart (❤️), Explode (💥), and Parent (⬆️) buttons.
-
-addEventListener('change', ...): This listener handles actions that conclude an editing or selection process, primarily for the options-selector (⚙️) dropdowns on the interactive cards.
-
-Customizable Bottom Layer
-When a card represents a final Bookable Item, its Options Control (⚙️) switches from navigation to configuration, displaying specific variations. A field for adding custom notes and a quantity selector are also available.
-
-Dynamic Header
-A sticky header contains all primary event details and controls, including a static Tool Name, an editable Event Name, and other controls like Date, Headcount, Total Cost.
-
-Filtering and Sorting
-A simple set of controls allows users to refine the catalog view by Search by name and Price. A "Sort by" dropdown controls the order of the main catalog.
+* **Layout**: The view uses a two-column layout, with an image gallery on the left and item details on the right.
+* **Image Gallery**: Displays all available images for an item from Cloudinary, with a main image and clickable thumbnails.
+* **Interactive Options**: For items with choices, options are displayed as clickable buttons showing any price modifications.
+* **In-Modal Navigation**: The modal includes a Parent (⬆️) button for navigating up the hierarchy and supports clicking on navigational options to drill down, all without closing the modal.
+* **Controls**: The Heart (❤️), Explode (💥), and Quantity Selector controls are available directly within the modal.
+* **Availability**: An inline, read-only calendar is displayed, showing the specific day-by-day availability for that item.
 
 Date Availability System
-The application provides real-time event availability at three distinct levels, powered by a JavaScript date picker library (flatpickr) and a serverless function that parses a remote iCal feed. Users specify the event length by selecting a start and end time directly within the date picker for accurate time-based checks.
+The application provides real-time event availability at three distinct levels, powered by a JavaScript date picker library (flatpickr) and a serverless function that parses a remote iCal feed. Users specify the event length by selecting a start and end time directly within the date picker.
 
-The Header Calendar (Summary View): The main date picker in the header shows a color-coded monthly calendar. This view reflects the combined availability of all favorited items, giving users an instant overview of which dates will work for their entire plan.
+* **The Header Calendar (Summary View)**: The main date picker shows a color-coded monthly calendar reflecting the combined availability of all favorited items.
+* **The Card Icons (Status View)**: After a date range is selected, an icon on every card updates to show its specific availability (✅, 🟠, or ❌).
+* **The Item Calendar (Detail View)**: The detail view modal shows the detailed day-by-day availability for that specific item only.
 
-The Card Icons (Status View): After a date range is selected in the header, an icon on every card in the catalog updates to show its specific availability for that range. The icon indicates whether the item is fully available (✅), partially available (🟠), or unavailable (❌).
+Payment & Checkout
+The application includes a complete checkout flow to finalize and pay for an event plan.
 
-The Item Calendar (Detail View): Clicking the availability icon on any individual card opens a pop-up, read-only calendar. This modal shows the detailed day-by-day availability for that specific item only.
-
-Beta Toolkit
-A subtle "beta" subscript next to the tool name can be-clicked to reveal a toolkit with advanced, toggleable features. These features include Collab Mode, Event Planner Mode, and History Mode.
+* **Checkout Button**: A "Checkout" button in the header becomes active when the plan total is greater than zero.
+* **Checkout Modal**: Clicking the button opens a checkout modal with three sections: an order summary, fields for customer information, and a secure payment form.
+* **Secure Payment Processing**: Payment details are handled by integrating Stripe Elements. This ensures sensitive credit card information is sent directly to Stripe and never touches the application's server, providing maximum security and PCI compliance.
