@@ -16,577 +16,122 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
-        body.modal-open {
-            overflow: hidden;
-        }
-        #sticky-header {
-            position: sticky;
-            top: 0;
-            background-color: white;
-            z-index: 999;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #header-toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: flex-end;
-            gap: 20px;
-            padding: 15px 20px;
-            max-width: 1400px;
-            margin: 0 auto;
-            border-bottom: 1px solid #e9ecef;
-        }
-        #filter-controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            padding: 10px 20px;
-            max-width: 1400px;
-            margin: 0 auto;
-            border-bottom: 1px solid #e9ecef;
-        }
-        #reset-filters-btn {
-            padding: 4px 10px;
-            border-radius: 4px;
-            border: 1px solid #6c757d;
-            background-color: #f8f9fa;
-            cursor: pointer;
-        }
-        .toolbar-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .toolbar-group label {
-            font-size: 0.75em;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: 500;
-        }
-        .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            padding: 6px 8px;
-            font-size: 0.9em;
-        }
-        .tool-brand-group h4 {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin: 0;
-        }
-        .header-title-container {
-            display: flex;
-            align-items: baseline;
-            gap: 5px;
-        }
-        #beta-trigger {
-            font-style: italic;
-            font-size: 0.7em;
-            color: #007aff;
-            cursor: pointer;
-        }
-        .event-name-group { flex-grow: 1;
-        }
-        #header-event-name {
-            font-size: 1.8em;
-            font-weight: bold;
-        }
-        .people-group {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            border-left: 1px solid #e9ecef;
-            padding-left: 20px;
-        }
-        #save-share-btn, #checkout-btn {
-            padding: 6px 12px;
-            border-radius: 4px;
-            color: white;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background-color 0.2s;
-        }
-        #save-share-btn {
-            border: 1px solid #007aff;
-            background-color: #007aff;
-        }
-        #checkout-btn {
-            border: 1px solid #28a745;
-            background-color: #28a745;
-            font-weight: bold;
-        }
-        #save-share-btn:disabled, #checkout-btn:disabled {
-            background-color: #6c757d;
-            border-color: #6c757d;
-            cursor: not-allowed;
-        }
-        .history-controls { display: none;
-        }
-        body.history-mode-enabled .history-controls { display: flex;
-        }
-        #favorites-section { 
-            max-width: 1400px;
-            margin: 0 auto; 
-            padding: 15px 20px; 
-        }
-        #favorites-carousel { 
-            display: flex;
-            gap: 15px;
-            overflow-x: auto; 
-            padding-bottom: 5px; 
-            padding-top: 10px;
-        }
-        .favorite-item {
-            position: relative;
-            flex: 0 0 220px;
-            height: 358px;
-            border-radius: 8px;
-            background-size: cover;
-            background-position: center;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            cursor: pointer;
-        }
-        .favorite-item-content {
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-            padding: 10px;
-        }
-        .favorite-item p { margin: 2px 0; font-size: 0.9em;
-        }
-        .favorite-item .item-name { font-weight: bold;
-        }
-        .favorite-item .variation-name { font-size: 0.8em; font-style: italic;
-        }
-        .item-note-display { font-size: 0.8em; font-style: italic;
-            opacity: 0.8;}
-        #catalog-container {
+        .main-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: 1fr 400px; /* Main content and sidebar */
             gap: 25px;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        #right-sidebar {
+            padding-top: 20px;
+        }
+        #right-sidebar h3 {
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+        }
+        #filter-controls, #cart-panel {
+            background-color: #fff;
             padding: 20px;
-            max-width: 1400px;
-            margin: 10px auto 0;
-        }
-        .event-card {
-            position: relative;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            display: flex;
-            flex-direction: column;
-            height: 520px;
-            background-size: cover;
-            background-position: center;
-            color: white;
-            overflow: hidden;
-            cursor: pointer;
-        }
-        .heart-icon {
-            position: relative;
-            width: 30px;
-            height: 30px;
-            cursor: pointer;
-            z-index: 10;
-        }
-        .card-header-actions .heart-icon {
-             position: absolute;
-            top: 15px;
-            right: 15px;
-        }
-        .heart-icon svg {
-            width: 100%;
-            height: 100%;
-            stroke: white;
-            stroke-width: 2;
-            fill: rgba(0,0,0,0.3);
-            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
-        }
-        .heart-icon.hearted svg { fill: #ff4f6c;
-        }
-        .event-card-content {
-            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
-            padding: 20px;
-            margin-top: auto;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-        }
-        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em;
-        }
-        .event-card-content .options-selector { width: 100%; padding: 8px; border-radius: 6px; margin-bottom: 15px;
-        }
-        .price-quantity-wrapper { display: flex; justify-content: space-between; align-items: center;
-        }
-        .quantity-selector { display: flex; align-items: center;
-        }
-        .quantity-selector button { width: 30px; height: 30px;
-        }
-        .quantity-selector input { width: 40px; text-align: center; height: 30px;
-        }
-        .event-card-content .price { font-size: 1.3em; font-weight: bold;
-        }
-        .card-header-actions { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex;
-            gap: 8px; }
-        .card-btn { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.5); color: white;
-            font-size: 1.2em; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
-        }
-        .item-note { width: 100%; box-sizing: border-box; margin-top: 10px; border-radius: 4px; padding: 6px;
-        }
-        #implode-container { max-width: 1400px; margin: -10px auto 15px; padding: 0 20px;
-        }
-        .favorite-pricing-details {
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .pricing-line-item {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            font-size: 0.9em;
-        }
-        .item-price {
-            font-weight: bold;
-        }
-        .pricing-line-item-total {
-            text-align: right;
-            font-size: 0.95em;
-            font-weight: bold;
-            margin-top: 4px;
-        }
-        .flatpickr-day.flatpickr-available {
-            background: #28a745;
-            color: white;
-            border-color: #28a745;
-        }
-        .flatpickr-day.flatpickr-partial {
-            background: #ffc107;
-            color: #111;
-            border-color: #ffc107;
-        }
-        .flatpickr-day.flatpickr-disabled,
-        .flatpickr-day.flatpickr-disabled:hover {
-            background: #dc3545 !important;
-            color: white !important;
-            cursor: not-allowed !important;
-        }
-        
-        /* --- DETAIL MODAL STYLES --- */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 1000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background-color: white;
-            width: 80%;
-            max-width: 1200px;
-            height: 80vh;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            position: relative;
-            padding: 25px;
-            overflow-y: auto;
-        }
-        .modal-close-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            font-size: 2em;
-            font-weight: bold;
-            color: #333;
-            cursor: pointer;
-            border: none;
-            background: none;
-        }
-        .detail-view-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            height: 100%;
-        }
-        .gallery-column .main-image {
-            width: 100%;
-            height: 70%;
-            background-size: cover;
-            background-position: center;
             border-radius: 8px;
-            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
         }
-        .thumbnail-strip {
+        .cart-item {
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .thumbnail-img {
-            width: 80px;
-            height: 80px;
-            background-size: cover;
-            background-position: center;
-            border-radius: 4px;
-            cursor: pointer;
-            border: 2px solid transparent;
-        }
-        .thumbnail-img.active {
-            border-color: #007aff;
-        }
-        .details-column h2 {
-            margin-top: 0;
-            display: flex;
-            align-items: center;
             gap: 15px;
-        }
-        #modal-parent-btn {
-            font-size: 0.8em;
-            padding: 5px;
-            cursor: pointer;
-            background: #eee;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        #modal-header-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-left: auto;
-        }
-        #modal-header-actions .heart-icon svg {
-             stroke: #333;
-             fill: rgba(0,0,0,0.1);
-        }
-        #modal-header-actions .heart-icon.hearted svg {
-            stroke: #ff4f6c;
-            fill: #ff4f6c;
-        }
-        #modal-header-actions .card-btn {
-            color: #333;
-            background: rgba(0,0,0,0.05);
-            border: 1px solid rgba(0,0,0,0.2);
-        }
-        .options-container {
-            margin: 20px 0;
-        }
-        .option-btn {
-            display: block;
-            width: 100%;
-            text-align: left;
-            padding: 10px;
-            margin-bottom: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-            cursor: pointer;
-            font-size: 0.9em;
-        }
-        .option-btn:hover {
-            background-color: #e9ecef;
-            border-color: #007aff;
-        }
-        .option-btn .price-mod {
-            float: right;
-            font-weight: bold;
-            color: #28a745;
-        }
-        .modal-details-footer {
-            margin-top: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .inline-calendar-container .flatpickr-calendar {
-            box-shadow: none;
-            width: 100%;
-        }
-
-        /* --- CHECKOUT MODAL STYLES --- */
-        .checkout-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-        .order-summary {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        .order-summary ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .order-summary li {
-            display: flex;
-            justify-content: space-between;
             padding: 10px 0;
             border-bottom: 1px solid #e9ecef;
         }
-        .order-summary .total-row {
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+        .cart-item-img {
+            width: 60px;
+            height: 60px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+        }
+        .cart-item-details {
+            flex-grow: 1;
+        }
+        .cart-item-details p {
+            margin: 0;
+            font-size: 0.9em;
+        }
+        .cart-item-name {
             font-weight: bold;
-            font-size: 1.2em;
-            padding-top: 15px;
-            border-top: 2px solid #dee2e6;
-            margin-top: 10px;
         }
-        .checkout-form .form-group {
-            margin-bottom: 15px;
+        .cart-item-meta {
+            font-size: 0.8em !important;
+            color: #6c757d;
+            font-style: italic;
         }
-        .checkout-form label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
+        .cart-item-actions button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #007aff;
         }
-        .checkout-form input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-        }
-        #payment-form {
-            margin-top: 20px;
-        }
-        #card-element {
-            border: 1px solid #ced4da;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        #submit-payment-btn {
-            width: 100%;
-            padding: 12px;
-            margin-top: 20px;
-            border-radius: 4px;
-            border: 1px solid #007aff;
-            background-color: #007aff;
+        #modal-add-to-plan-btn {
+            padding: 10px 20px;
+            border: none;
+            background-color: #28a745;
             color: white;
-            font-size: 1em;
             font-weight: bold;
+            border-radius: 5px;
             cursor: pointer;
         }
-        #card-errors {
-            color: #dc3545;
-            font-size: 0.9em;
-            margin-top: 10px;
-        }
-        
-        /* --- Stacked Card Effect for Groupings --- */
-        .is-grouping::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 4px;
-            width: 98%;
-            left: 1%;
-            height: 100%;
-            z-index: -1;
-            background-color: #fff;
-            border-radius: inherit;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border: 1px solid #e9ecef;
-        }
-        .is-grouping::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 8px;
-            width: 95%;
-            left: 2.5%;
-            height: 100%;
-            z-index: -2;
-            background-color: #fff;
-            border-radius: inherit;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border: 1px solid #e9ecef;
+        .card-header-actions .icon-locked svg {
+            fill: #28a745;
+            stroke: white;
         }
     </style>
 </head>
 <body>
-
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
-
     <div id="sticky-header">
         <div id="header-toolbar">
-            <div class="toolbar-group tool-brand-group">
-                <label>Tool</label>
-                <div class="header-title-container">
-                    <h4>Event Builder</h4>
-                    <sup id="beta-trigger">beta</sup>
-                </div>
             </div>
-            <div class="toolbar-group event-name-group">
-                <label for="header-event-name">Event Name</label>
-                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
-            </div>
-            <div class="toolbar-group details-group">
-                <div class="toolbar-item">
-                    <label for="header-date">Start & End Time</label>
-                    <input type="text" id="header-date" placeholder="Select a date and time range...">
-                </div>
-                <div class="toolbar-item">
-                    <label for="header-headcount">Headcount</label>
-                    <input type="number" id="header-headcount" min="1" value="1">
-                </div>
-            </div>
-            <div class="toolbar-group goals-group">
-                <label for="header-goals">Event Goals</label>
-                <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
-            </div>
-            <div class="toolbar-group people-group">
-                <div id="sessions-dropdown-container" style="display: none;">
-                    <select id="sessions-dropdown">
-                        <option value="">Load a saved list...</option>
-                    </select>
-                </div>
-                <div class="history-controls">
-                    <button id="undo-btn" disabled>↩️</button>
-                    <button id="redo-btn" disabled>↪️</button>
-                </div>
-                <div id="collaborators-section" style="display: none;">
-                    <div id="collaborator-avatars"></div>
-                    <button id="add-collaborator-btn">+</button>
-                </div>
-                <div id="total-cost-section">
-                    <strong>Total:</strong>
-                    <span id="total-cost" title="No items selected">$0.00</span>
-                </div>
-                <button id="checkout-btn" disabled>Checkout</button>
-                <button id="save-share-btn">🔗 Copy Link</button>
-            </div>
-        </div>
         <div id="favorites-section" style="display: none;">
             <div id="favorites-carousel"></div>
         </div>
-        <div id="filter-controls">
-            <input type="text" id="name-filter" placeholder="Search by name, tag, or description...">
-            <select id="price-filter">
-                <option value="all">All Prices</option>
-                <option value="0-50">Under $50</option>
-                <option value="50-100">$50 - $100</option>
-                <option value="100-250">$100 - $250</option>
-                <option value="250-plus">$250+</option>
-            </select>
-            <select id="sort-by">
-                <option value="price-asc">Price (Low to High)</option>
-                <option value="price-desc">Price (High to Low)</option>
-                <option value="name-asc">Name (A-Z)</option>
-            </select>
-            <button id="reset-filters-btn">Reset</button>
-        </div>
     </div>
 
-    <div id="catalog-container"></div>
-    
-    <div id="beta-toolkit" style="display: none; position: absolute; top: 40px; left: 20px; background: white; border: 1px solid #ccc; padding: 15px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <div class="main-container">
+        <div id="catalog-area">
+            <div id="catalog-container"></div>
+        </div>
+        <div id="right-sidebar">
+            <div id="filter-controls">
+                <h3>Filters</h3>
+                <input type="text" id="name-filter" placeholder="Search...">
+                <select id="price-filter">
+                    <option value="all">All Prices</option>
+                    <option value="0-50">Under $50</option>
+                    <option value="50-100">$50 - $100</option>
+                    <option value="100-250">$100 - $250</option>
+                    <option value="250-plus">$250+</option>
+                </select>
+                <select id="sort-by">
+                    <option value="price-asc">Price (Low to High)</option>
+                    <option value="price-desc">Price (High to Low)</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                </select>
+                <button id="reset-filters-btn">Reset</button>
+            </div>
+            <div id="cart-panel">
+                <h3>Your Event Plan</h3>
+                <div id="cart-items-container"></div>
+            </div>
+        </div>
     </div>
     
     <div id="detail-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
+         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn">&times;</button>
             <div class="detail-view-grid">
                 <div class="gallery-column">
@@ -600,51 +145,19 @@
                         <div id="modal-header-actions"></div>
                     </h2>
                     <p id="modal-item-price">Price</p>
-                    <p id="modal-item-description">Full description goes here...</p>
+                    <p id="modal-item-description">Full description...</p>
                     <div id="modal-options-container" class="options-container"></div>
                     <div class="modal-details-footer">
                         <div id="modal-quantity-selector"></div>
+                        <button id="modal-add-to-plan-btn">Add to Plan</button>
                     </div>
                     <div id="modal-calendar-container" class="inline-calendar-container"></div>
                 </div>
             </div>
         </div>
     </div>
-
     <div id="checkout-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn">&times;</button>
-            <h2>Finalize Your Plan</h2>
-            <div class="checkout-grid">
-                <div class="order-summary">
-                    <h3>Order Summary</h3>
-                    <ul id="checkout-summary-list"></ul>
-                    <div id="checkout-total-row" class="total-row">
-                        <span>Total</span>
-                        <span id="checkout-total-price">$0.00</span>
-                    </div>
-                </div>
-                <div class="checkout-form">
-                    <h3>Your Information</h3>
-                    <div class="form-group">
-                        <label for="customer-name">Name</label>
-                        <input type="text" id="customer-name" placeholder="Enter your name">
-                    </div>
-                    <div class="form-group">
-                        <label for="customer-email">Email</label>
-                        <input type="email" id="customer-email" placeholder="Enter your email">
-                    </div>
-                    <h3>Payment Details</h3>
-                    <form id="payment-form">
-                        <div id="card-element">
-                            </div>
-                        <div id="card-errors" role="alert"></div>
-                        <button id="submit-payment-btn">Pay Now</button>
-                    </form>
-                </div>
-            </div>
         </div>
-    </div>
 
     <script type="module" src="main.js"></script>
 </body>
