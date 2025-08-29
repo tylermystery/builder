@@ -270,3 +270,331 @@ function setupEventListeners() {
                       },
                 },
             }
+        );
+
+        const cardErrors = document.getElementById('card-errors');
+        if (error) {
+            cardErrors.textContent = error.message;
+        } else {
+            cardErrors.textContent = '';
+            alert('Payment successful! Your event is booked.');
+            ui.hideCheckoutModal();
+        }
+    });
+    // --- AUTOSAVE TRIGGERS ---
+    safeAddEventListener('header-event-name', 'change', (e) => { 
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        triggerSave();
+    });
+    safeAddEventListener('header-headcount', 'change', (e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
+        triggerSave();
+    });
+    safeAddEventListener('header-goals', 'change', (e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        triggerSave();
+    });
+    // --- BETA TOOLKIT ---
+    safeAddEventListener('beta-trigger', 'click', () => {
+        document.getElementById('beta-toolkit').classList.toggle('visible');
+    });
+    // --- MAIN DATE PICKER ---
+    mainDatePicker = flatpickr("#header-date", {
+        mode: "range",
+        enableTime: true,
+        dateFormat: "M j, Y h:i K",
+        onClose: (selectedDates) => {
+            if (selectedDates.length === 2) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                triggerSave();
+                updateAllCardAvailabilityIcons();
+            }
+        },
+        onDayCreate: async (dObj, dStr, fp, dayElem) => {
+            const day = dayElem.dateObj;
+            const favoritedRecords = Array.from(state.cart.items.keys())
+                   .map(id => state.records.all.find(r => r.id === id))
+                .filter(record => record);
+            if (favoritedRecords.length === 0) {
+                dayElem.classList.add('flatpickr-available');
+                tippy(dayElem, { content: 'Available' });
+                 return;
+              }
+            const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
+            const allBusyTimes = await Promise.all(busyTimePromises);
+            let finalStatus = AVAILABILITY_STATUS.FULL;
+            let tooltipContent = [`<strong>${day.toLocaleDateString()}</strong><hr>`];
+            for (let i = 0; i < favoritedRecords.length; i++) {
+                const record = favoritedRecords[i];
+                const busyTimes = allBusyTimes[i];
+                const status = getDayStatus(day, busyTimes, record);
+                let statusIcon = '✅';
+                let statusText = `Available`;
+                if (status === AVAILABILITY_STATUS.NONE) {
+                    finalStatus = AVAILABILITY_STATUS.NONE;
+                    statusIcon = '❌';
+                    statusText = 'Unavailable';
+                } else if (status === AVAILABILITY_STATUS.PARTIAL) {
+                    if (finalStatus !== AVAILABILITY_STATUS.NONE) {
+                        finalStatus = AVAILABILITY_STATUS.PARTIAL;
+                    }
+                    statusIcon = '🟠';
+                    const busySlots = getBusySlotsForDay(day, busyTimes);
+                    statusText = `Partial ${busySlots}`;
+                }
+                tooltipContent.push(`<span>${statusIcon} ${record.fields.Name}: ${statusText}</span>`);
+            }
+            if (finalStatus === AVAILABILITY_STATUS.NONE) { dayElem.classList.add('flatpickr-disabled');
+            }
+            else if (finalStatus === AVAILABILITY_STATUS.PARTIAL) { dayElem.classList.add('flatpickr-partial');
+            }
+            else { dayElem.classList.add('flatpickr-available');
+            }
+            tippy(dayElem, {
+                content: tooltipContent.join('<br>'),
+                allowHTML: true,
+                appendTo: () => document.body,
+            });
+        }
+    });
+    
+    // --- NAVIGATION GUARD ---
+    window.addEventListener('beforeunload', (e) => {
+        if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    });
+    // --- UNIFIED CLICK LISTENER ---
+    document.body.addEventListener('click', async (e) => {
+        if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) {
+            ui.hideDetailModal();
+            return;
+        }
+        if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) {
+            ui.hideCheckoutModal();
+            return;
+        }
+
+ 
+        const modalContent = e.target.closest('.modal-content');
+        if (modalContent) {
+            const isInteractiveElement = e.target.closest('button, .heart-icon, a, input, select, textarea, .thumbnail-img');
+            if (!isInteractiveElement) {
+                return; 
+            }
+        }
+
+        
+        const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
+        const explodeBtn = e.target.closest('.explode-btn');
+        const implodeBtn = e.target.closest('.implode-btn');
+  
+        const availabilityBtn = e.target.closest('.availability-btn');
+        const saveShareBtn = e.target.closest('#save-share-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
+        const removeBtn = e.target.closest('.remove-btn');
+        const card = e.target.closest('.event-card');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
+        const editBtn = e.target.closest('.edit-btn');
+        const modalHeartBtn = e.target.closest('#modal-heart-btn');
+        const parentLink = e.target.closest('.parent-link');
+        if (saveShareBtn) {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                const originalText = saveShareBtn.textContent;
+                saveShareBtn.textContent = 'Copied!';
+                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
+            });
+        } else if (checkoutBtn) {
+            ui.showCheckoutModal();
+        } else if (addToPlanBtn) {
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            const recordId = modalOverlay.dataset.recordId;
+            if (!recordId) return;
+            
+            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
+            const noteInput = document.getElementById('modal-item-note');
+
+            const itemInfo = {
+                quantity: quantityInput ?
+                    parseInt(quantityInput.value, 10) : 1,
+                selectedOptionIndex: selectedOptionEl ?
+                    parseInt(selectedOptionEl.dataset.optionIndex, 10) : null,
+                note: noteInput ?
+                    noteInput.value.trim() : ''
+            };
+
+            state.cart.lockedItems.set(recordId, itemInfo);
+            const cardIcon = document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`);
+            if (cardIcon) {
+                cardIcon.className = 'heart-icon locked';
+                cardIcon.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+            }
+
+            ui.updateEventPlanPanel();
+            ui.updateTotalCost();
+            triggerSave();
+            
+            ui.hideDetailModal();
+        } else if (editBtn) {
+            const lockedItemCard = editBtn.closest('.locked-item-card');
+            if (!lockedItemCard) return;
+
+            const recordId = lockedItemCard.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                ui.showDetailModal(record);
+            }
+        } else if (parentLink) {
+            e.stopPropagation();
+            const card = parentLink.closest('.event-card');
+            if (!card) return;
+            
+            const parentName = parentLink.dataset.parentName;
+            const parentRecord = state.records.all.find(p => p.fields.Name === parentName);
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                card.replaceWith(newCard);
+            }
+        } else if (availabilityBtn) {
+            e.stopPropagation();
+            const record = state.records.all.find(r => r.id === availabilityBtn.closest('.event-card').dataset.recordId);
+            if (record) ui.showDetailModal(record);
+        } else if (heartIcon || modalHeartBtn) {
+            e.stopPropagation();
+            const targetElement = heartIcon || modalHeartBtn;
+            const iconContainer = targetElement.closest('.heart-icon');
+            if (iconContainer && iconContainer.classList.contains('locked')) {
+                return; // Do nothing if the item is locked in
+            }
+
+            const recordId = targetElement.closest('[data-record-id]').dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const isGrouping = !!(parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]).find(opt => state.records.all.some(r => r.fields.Name === opt.name)));
+            let itemInfo = state.cart.items.get(recordId) ||
+            { quantity: 1, selectedOptionIndex: null, note: '' };
+            if (!isGrouping) {
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input') ||
+                    targetElement.closest('.event-card')?.querySelector('.quantity-input');
+                if (quantityInput) {
+                    itemInfo.quantity = parseInt(quantityInput.value, 10);
+                }
+            }
+
+            if (state.cart.items.has(recordId)) {
+                state.cart.items.delete(recordId);
+            } else {
+                state.cart.items.set(recordId, itemInfo);
+            }
+            
+            const newQuantity = itemInfo.quantity;
+            const isHearted = state.cart.items.has(recordId);
+
+            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.toggle('hearted', isHearted);
+            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', isHearted);
+            
+            const mainCardInput = document.querySelector(`.event-card[data-record-id="${recordId}"] .quantity-input`);
+            if (mainCardInput) mainCardInput.value = newQuantity;
+            const modalInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            if (modalOverlay.dataset.recordId === recordId && modalInput) {
+                modalInput.value = newQuantity;
+            }
+            
+            await ui.updateFavoritesCarousel();
+            mainDatePicker.redraw();
+            triggerSave();
+        } else if (removeBtn) {
+            e.stopPropagation();
+            const favoriteCard = removeBtn.closest('.favorite-item');
+            if (!favoriteCard) return;
+            const recordId = favoriteCard.dataset.recordId;
+            if (state.cart.items.has(recordId)) { state.cart.items.delete(recordId);
+            }
+            document.querySelector(`.event-card[data-record-id="${recordId}"] .heart-icon`)?.classList.remove('hearted');
+            document.getElementById('modal-heart-btn')?.classList.remove('hearted');
+            await ui.updateFavoritesCarousel();
+            mainDatePicker.redraw();
+            triggerSave();
+        } else if (explodeBtn) {
+            e.stopPropagation();
+            const recordId = explodeBtn.closest('[data-record-id]').dataset.recordId;
+            ui.hideDetailModal();
+            const record = state.records.all.find(r => r.id === recordId);
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+            ui.renderRecords(children, imageCache);
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
+            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
+        } else if (implodeBtn) {
+            e.stopPropagation();
+            implodeBtn.closest('#implode-container').remove();
+            applyFiltersAndSort();
+        } else if (favoriteItem) {
+            e.stopPropagation();
+            const recordId = favoriteItem.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                ui.showDetailModal(record);
+            }
+        } else if (card) {
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link')) {
+                return;
+            }
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                ui.showDetailModal(record);
+            }
+        }
+    });
+    // --- UNIFIED CHANGE LISTENER ---
+    document.body.addEventListener('change', async (e) => {
+        const card = e.target.closest('.event-card');
+        if (!card) return;
+        if (e.target.classList.contains('configure-options')) {
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+       
+            const selectedIndex = parseInt(e.target.value, 10);
+            const selectedOption = rawOptions[selectedIndex];
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+            let newPrice = initialPrice;
+            if (selectedOption) {
+                if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
+                 else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
+            }
+            card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
+            card.querySelector('.description').textContent = selectedOption.description || record.fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '';
+            if (selectedOption) {
+                const formatForTag = (name) => name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                const itemTag = formatForTag(record.fields[CONSTANTS.FIELD_NAMES.NAME]);
+                const optionTag = formatForTag(selectedOption.name);
+                const optionImageUrls = await api.fetchImagesByTags([itemTag, optionTag]);
+                if (optionImageUrls && optionImageUrls.length > 0) {
+                    card.style.backgroundImage = `url('${optionImageUrls[0]}')`;
+                } else {
+                    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
+                    card.style.backgroundImage = `url('${imageUrls[0]}')`;
+                }
+            }
+        }
+        if (e.target.classList.contains('navigate-options')) {
+            const childName = e.target.value;
+            if (!childName) return;
+            const childRecord = state.records.all.find(r => r.fields.Name === childName);
+            if (childRecord) {
+                const newCard = await ui.createInteractiveCard(childRecord, imageCache);
+                card.replaceWith(newCard);
+            }
+        }
+    });
+}
+
+initialize();
