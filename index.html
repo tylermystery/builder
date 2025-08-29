@@ -4,222 +4,201 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;" />
+    <link rel="icon" href="data:;"
+ />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
-    <span id="save-status" style="font-size: 0.8em; color: #666;"></span>
     <style>
         body {
-            padding-bottom: 80px;
+            padding-bottom: 150px;
+ /* Increased padding to make space for the new bottom favorites bar */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-            background-color: #f8f9fa;
+ background-color: #f8f9fa;
         }
         body.modal-open {
             overflow: hidden;
-        }
+ }
         #sticky-header {
             position: sticky;
-            top: 0;
+ top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+ }
         #header-toolbar {
             display: flex;
-            flex-wrap: wrap;
-            align-items: flex-end;
+ flex-wrap: wrap;
+            align-items: center; /* Vertically center items */
             gap: 20px;
-            padding: 15px 20px;
-            max-width: 1400px;
+ padding: 15px 20px;
+            max-width: 1800px;
             margin: 0 auto;
-            border-bottom: 1px solid #e9ecef;
         }
-        #filter-controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            padding: 10px 20px;
-            max-width: 1400px;
-            margin: 0 auto;
-            border-bottom: 1px solid #e9ecef;
-        }
-        #reset-filters-btn {
-            padding: 4px 10px;
-            border-radius: 4px;
-            border: 1px solid #6c757d;
-            background-color: #f8f9fa;
-            cursor: pointer;
+        #header-title {
+            font-size: 1.5em;
+ font-weight: bold;
+            margin: 0;
         }
         .toolbar-group {
             display: flex;
-            flex-direction: column;
+ flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-            color: #666;
+ color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+ border-radius: 4px;
             padding: 6px 8px;
             font-size: 0.9em;
+            width: 100%;
+            box-sizing: border-box;
+ }
+        .main-container {
+            display: grid;
+ grid-template-columns: 300px 1fr 380px;
+            gap: 25px;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+ }
+        #right-sidebar h3, #left-sidebar h3 {
+            margin-top: 0;
+ border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
         }
-        .tool-brand-group h4 {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin: 0;
-        }
-        .header-title-container {
+        #filter-controls {
+            background-color: #fff;
+ padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
-            align-items: baseline;
-            gap: 5px;
+            flex-direction: column;
+            gap: 15px;
+ }
+        .filter-group {
+            border-top: 1px solid #eee;
+            padding-top: 15px;
         }
-        #beta-trigger {
-            font-style: italic;
-            font-size: 0.7em;
-            color: #007aff;
-            cursor: pointer;
+        .filter-group h4 {
+            font-size: 0.8em;
+            text-transform: uppercase;
+            color: #666;
+            margin: 0 0 10px 0;
         }
-        .event-name-group { flex-grow: 1;
-        }
-        #header-event-name {
-            font-size: 1.8em;
+        #category-filter-container .category-item .category-label {
             font-weight: bold;
-        }
-        .people-group {
             display: flex;
             align-items: center;
-            gap: 15px;
-            border-left: 1px solid #e9ecef;
-            padding-left: 20px;
-        }
-        #save-share-btn, #checkout-btn {
-            padding: 6px 12px;
-            border-radius: 4px;
-            color: white;
             cursor: pointer;
+        }
+        #category-filter-container .category-item .arrow {
+            margin-left: auto;
+            transition: transform 0.2s;
+        }
+        #category-filter-container .category-item .arrow.expanded {
+            transform: rotate(90deg);
+        }
+        #category-filter-container .subcategory-list {
+            padding-left: 25px;
+            margin-top: 8px;
+            display: none; /* Hidden by default */
+        }
+        #category-filter-container label {
+            display: block;
             font-size: 0.9em;
-            transition: background-color 0.2s;
+            margin-bottom: 8px;
+            cursor: pointer;
         }
-        #save-share-btn {
-            border: 1px solid #007aff;
-            background-color: #007aff;
+        #category-filter-container input {
+            margin-right: 8px;
         }
-        #checkout-btn {
-            border: 1px solid #28a745;
-            background-color: #28a745;
+        #cart-panel {
+            background-color: #fff;
+ padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+ }
+        #cart-items-container {
+            flex-grow: 1;
+ }
+        #cart-footer {
+            margin-top: 20px;
+ padding-top: 15px;
+            border-top: 2px solid #dee2e6;
+        }
+        #cart-footer .total-row {
+            display: flex;
+ justify-content: space-between;
+            align-items: center;
+            font-size: 1.4em;
             font-weight: bold;
+            margin-bottom: 15px;
+ }
+        #cart-footer button {
+            width: 100%;
+ padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+ }
+        #cart-footer #checkout-btn {
+            background-color: #28a745;
+ color: white;
+            border-color: #28a745;
         }
-        #save-share-btn:disabled, #checkout-btn:disabled {
-            background-color: #6c757d;
-            border-color: #6c757d;
-            cursor: not-allowed;
-        }
-        .history-controls { display: none;
-        }
-        body.history-mode-enabled .history-controls { display: flex;
+        #cart-footer #save-share-btn {
+            background-color: #f0f0f0;
+ color: #333;
+            margin-top: 10px;
         }
         #favorites-section { 
-            max-width: 1400px;
-            margin: 0 auto; 
-            padding: 15px 20px; 
+            position: fixed;
+ bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            z-index: 998;
+ padding: 15px 20px; 
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
         }
         #favorites-carousel { 
             display: flex;
-            gap: 15px;
+ gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
-        }
+            max-width: 1800px;
+            margin: 0 auto;
+ }
         .favorite-item {
             position: relative;
-            flex: 0 0 220px;
-            height: 358px;
-            border-radius: 8px;
+ flex: 0 0 100px; /* Smaller size for bottom bar */
+            height: 100px;
+ border-radius: 8px;
             background-size: cover;
             background-position: center;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            cursor: pointer;
-        }
-        .favorite-item-content {
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-            padding: 10px;
-        }
-        .favorite-item p { margin: 2px 0; font-size: 0.9em;
-        }
-        .favorite-item .item-name { font-weight: bold;
-        }
-        .favorite-item .variation-name { font-size: 0.8em; font-style: italic;
-        }
-        .item-note-display { font-size: 0.8em; font-style: italic;
-            opacity: 0.8;}
-        #main-content-area {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 20px;
-            max-width: 1400px;
-            margin: 20px auto;
-            padding: 0 20px;
-        }
-        #filter-panel {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            height: fit-content;
-        }
-        .category-group h4 {
-            cursor: pointer;
-            margin-bottom: 10px;
-            padding: 8px;
-            border-radius: 4px;
-        }
-        .category-group h4:hover {
-            background-color: #f0f0f0;
-        }
-        .subcategory-list {
-            list-style: none;
-            padding-left: 15px;
-            margin-top: 0;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-in-out;
-        }
-        .category-group.open .subcategory-list {
-            max-height: 1000px;
-        }
-        .subcategory-list li {
-            padding: 8px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .subcategory-list li:hover {
-            background-color: #f0f0f0;
-        }
-        .subcategory-list li.active {
-            background-color: #007aff;
-            color: white;
-            font-weight: bold;
         }
         #catalog-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+ grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
-            padding: 0;
-            margin: 0;
-            max-width: none;
         }
         .event-card {
             position: relative;
-            border-radius: 10px;
+ border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
@@ -227,93 +206,442 @@
             background-size: cover;
             background-position: center;
             color: white;
-            overflow: hidden;
+ overflow: hidden;
             cursor: pointer;
         }
-        /* ... other styles unchanged ... */
+        .parent-link {
+            font-size: 0.8em;
+ margin: 0 0 5px 0;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            cursor: pointer;
+ }
+
+        /* --- ICON STYLES --- */
+        .heart-icon svg {
+            width: 28px;
+ height: 28px;
+            fill: rgba(255, 255, 255, 0.8);
+            stroke: white;
+            stroke-width: 1.5;
+            transition: all 0.2s ease-in-out;
+ }
+        .heart-icon.hearted svg {
+            fill: #ff3b30;
+ stroke: #ff3b30;
+        }
+        .heart-icon.locked svg {
+            fill: #34c759;
+ stroke: none;
+        }
+        .heart-icon.locked {
+            cursor: default;
+ }
+
+        /* --- LOCKED ITEM STYLES --- */
+        .locked-item-card {
+            display: flex;
+ gap: 15px;
+            align-items: flex-start;
+            padding: 15px 0;
+            border-bottom: 1px solid #e9ecef;
+ }
+        .locked-item-card:last-child {
+            border-bottom: none;
+ padding-bottom: 5px;
+        }
+        .locked-item-card:first-child {
+            padding-top: 5px;
+ }
+        .locked-item-thumbnail {
+            width: 60px;
+ height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .locked-item-details {
+            flex-grow: 1;
+ min-width: 0; /* Prevents text overflow issues */
+        }
+        .locked-item-details p {
+            margin: 0 0 5px 0;
+ font-size: 0.9em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .locked-item-name {
+            font-weight: bold;
+ }
+        .locked-item-option, .locked-item-note {
+            font-size: 0.8em;
+ color: #6c757d;
+        }
+        .locked-item-pricing {
+            font-size: 0.85em !important;
+ }
+        .locked-item-actions .edit-btn {
+            font-size: 0.8em;
+ padding: 4px 8px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+ }
+        .locked-item-actions .edit-btn:hover {
+            background-color: #e0e0e0;
+ }
+
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            display: none;
+ position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            justify-content: center;
+ align-items: center;
+        }
+        .modal-content {
+            background: #fff;
+ border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 1100px;
+            height: 90vh;
+            max-height: 700px;
+            display: flex;
+            overflow: hidden;
+ position: relative;
+            color: #333;
+        }
+        .modal-close-btn {
+            position: absolute;
+ top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            color: #999;
+            z-index: 1010;
+ }
+        .modal-main-column {
+            flex: 1;
+ display: flex;
+            flex-direction: column;
+            min-width: 0; /* Prevents wide content from breaking flexbox */
+        }
+        #modal-main-image {
+            flex-grow: 1;
+ background-size: cover;
+            background-position: center;
+            border-right: 1px solid #eee;
+        }
+        #modal-thumbnail-strip {
+            display: flex;
+ gap: 5px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #eee;
+            overflow-x: auto;
+ }
+        .thumbnail-img {
+            width: 80px;
+ height: 60px;
+            background-size: cover;
+            background-position: center;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+ }
+        .thumbnail-img.active {
+            border-color: #007bff;
+ }
+        .modal-sidebar-column {
+            flex: 1;
+ padding: 30px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+ /* Prevents content from breaking flexbox */
+        }
+        #modal-header-actions {
+            display: flex;
+ justify-content: flex-end;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        #modal-breadcrumbs {
+            font-size: 0.9em;
+ color: #6c757d;
+            margin-bottom: 8px;
+        }
+        #modal-breadcrumbs a {
+            color: #007bff;
+ text-decoration: none;
+        }
+        #modal-breadcrumbs a:hover {
+            text-decoration: underline;
+ }
+        #modal-item-name { margin-top: 0;
+ }
+        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0;
+ }
+        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px;
+ }
+        .option-btn {
+            padding: 8px 12px;
+ border: 1px solid #ccc;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+            cursor: pointer;
+ }
+        .option-btn.selected {
+            border-color: #007bff;
+ background-color: #e7f3ff;
+        }
+        #modal-quantity-selector { margin: 20px 0;
+ }
+        #modal-notes-container { margin-bottom: 20px;
+ }
+        #modal-item-note {
+            width: 100%;
+ height: 80px;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+            resize: vertical;
+            box-sizing: border-box;
+ }
+        #modal-actions-container {
+            margin-top: auto;
+ padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .primary-action-btn {
+            width: 100%;
+ padding: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #fff;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+ }
+        .primary-action-btn:hover {
+            background-color: #218838;
+ }
+        
+        /* --- CHECKOUT MODAL STYLES --- */
+        .checkout-modal-content {
+            background: #fff;
+ border-radius: 8px;
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            color: #333;
+ }
+        #checkout-summary-list {
+            list-style: none;
+ padding: 0;
+            margin: 0 0 20px 0;
+        }
+        #checkout-summary-list li {
+            display: flex;
+ justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .checkout-total {
+            display: flex;
+ justify-content: space-between;
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+        #payment-form .form-row {
+            margin-bottom: 15px;
+ }
+        #payment-form label {
+            display: block;
+ margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        #payment-form input, #card-element {
+            width: 100%;
+ padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+ }
+        #card-errors {
+            color: #fa755a;
+ font-size: 0.9em;
+            margin-top: 5px;
+        }
+
     </style>
 </head>
 <body>
-
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
-
     <div id="sticky-header">
         <div id="header-toolbar">
-            <div class="toolbar-group tool-brand-group">
-                <label>Tool</label>
-                <div class="header-title-container">
-                    <h4>Event Builder</h4>
-                    <sup id="beta-trigger">beta</sup>
-                </div>
-            </div>
-            <div class="toolbar-group event-name-group">
+            <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
+            <div class="toolbar-group" style="flex-grow: 2;">
                 <label for="header-event-name">Event Name</label>
-                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
+             
+    <input type="text" id="header-event-name" value="My Awesome Event">
             </div>
-            <div class="toolbar-group details-group">
-                <div class="toolbar-item">
-                    <label for="header-date">Start & End Time</label>
-                    <input type="text" id="header-date" placeholder="Select a date and time range...">
-                </div>
-                <div class="toolbar-item">
-                    <label for="header-headcount">Headcount</label>
-                    <input type="number" id="header-headcount" min="1" value="1">
-                </div>
+            <div class="toolbar-group">
+                <label for="header-date">Date & Time</label>
+                <input type="text" id="header-date" placeholder="Select date and time range">
             </div>
-            <div class="toolbar-group goals-group">
-                <label for="header-goals">Event Goals</label>
-                <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
+            <div 
+ class="toolbar-group">
+                <label for="header-headcount">Headcount</label>
+                <input type="number" id="header-headcount" value="10" min="1">
             </div>
-            <div class="toolbar-group people-group">
-                <div id="sessions-dropdown-container" style="display: none;">
-                    <select id="sessions-dropdown">
-                        <option value="">Load a saved list...</option>
-                    </select>
-                </div>
-                <div class="history-controls">
-                    <button id="undo-btn" disabled>↩️</button>
-                    <button id="redo-btn" disabled>↪️</button>
-                </div>
-                <div id="collaborators-section" style="display: none;">
-                    <div id="collaborator-avatars"></div>
-                    <button id="add-collaborator-btn">+</button>
-                </div>
-                <div id="total-cost-section">
-                    <strong>Total:</strong>
-                    <span id="total-cost" title="No items selected">$0.00</span>
-                </div>
-                <button id="checkout-btn" disabled>Checkout</button>
-                <button id="save-share-btn">🔗 Copy Link</button>
+            <div class="toolbar-group" style="flex-grow: 2;">
+                <label for="header-goals">Goals / Notes</label>
+                <input 
+ type="text" id="header-goals" placeholder="What are the goals for your event?">
             </div>
         </div>
-        <div id="favorites-section" style="display: none;">
-            <div id="favorites-carousel"></div>
+    </div>
+
+    <div class="main-container">
+        <div id="left-sidebar">
+            <div id="filter-controls">
+                <h3>Filters</h3>
+                <input type="text" id="name-filter" placeholder="Search...">
+      
+           <select id="price-filter">
+                    <option value="all">All Prices</option>
+                    <option value="0-50">Under $50</option>
+                    <option value="50-100">$50 - $100</option>
+                    <option value="100-250">$100 
+ - $250</option>
+                    <option value="250-plus">$250+</option>
+                </select>
+                <select id="sort-by">
+                    <option value="price-asc">Price (Low to High)</option>
+                    <option 
+ value="price-desc">Price (High to Low)</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                </select>
+                <div id="category-filter-container" class="filter-group"></div>
+                <button id="reset-filters-btn">Reset</button>
+            </div>
         </div>
-        <div id="filter-controls">
-            <input type="text" id="name-filter" placeholder="Search by name, tag, or description...">
-            <select id="price-filter">
-                <option value="all">All Prices</option>
-                <option value="0-50">Under $50</option>
-                <option value="50-100">$50 - $100</option>
-                <option value="100-250">$100 - $250</option>
-                <option value="250-plus">$250+</option>
-            </select>
-            <select id="sort-by">
-                <option value="price-asc">Price (Low to High)</option>
-                <option value="price-desc">Price (High to Low)</option>
-                <option value="name-asc">Name (A-Z)</option>
-            </select>
-            <button id="reset-filters-btn">Reset</button>
+        <div id="catalog-area">
+            <div 
+ id="catalog-container"></div>
+        </div>
+        <div id="right-sidebar">
+             <div id="cart-panel">
+                <h3>Event Plan</h3>
+                <div id="cart-items-container">
+                    <p style="font-size: 0.9em;
+ color: #6c757d;">No items locked in yet.</p>
+                </div>
+                <div id="cart-footer">
+                    <div class="total-row">
+                        <span>Total:</span>
+                 
+        <span id="total-cost">$0.00</span>
+                    </div>
+                    <button id="checkout-btn" disabled>Checkout</button>
+                    <button id="save-share-btn" disabled>🔗 Copy Link</button>
+                </div>
+          
+   </div>
         </div>
     </div>
     
-    <div id="main-content-area">
-        <aside id="filter-panel"></aside>
-        <main id="catalog-area">
-            <div id="catalog-container"></div>
-        </main>
+    <div id="detail-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="modal-main-column">
+                <div id="modal-main-image"></div>
+                <div id="modal-thumbnail-strip"></div>
+     
+        </div>
+            <div class="modal-sidebar-column">
+                <div id="modal-header-actions">
+                </div>
+                <div id="modal-breadcrumbs"></div>
+                <h2 id="modal-item-name"></h2>
+             
+    <p id="modal-item-price" class="price"></p>
+                <p id="modal-item-description"></p>
+                <div id="modal-options-container"></div>
+                <div id="modal-quantity-selector"></div>
+                  <div id="modal-notes-container">
+                    <textarea id="modal-item-note" placeholder="Add a note..."></textarea>
+ 
+                </div>
+                <div id="modal-actions-container">
+                    <button id="modal-add-to-plan-btn" class="primary-action-btn">Add to Plan</button>
+                </div>
+                <div id="modal-calendar-container"></div>
+           
+  </div>
+        </div>
+    </div>
+    <div id="checkout-modal-overlay" class="modal-overlay">
+        <div class="checkout-modal-content">
+            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3>Checkout Summary</h3>
+            <ul id="checkout-summary-list">
+                </ul>
+            <div class="checkout-total">
+  
+               <strong>Total:</strong>
+                <strong id="checkout-total-price">$0.00</strong>
+            </div>
+            <hr>
+            <form id="payment-form">
+                <div class="form-row">
+               
+      <label for="customer-name">Full Name</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-row">
+                    <label for="customer-email">Email Address</label>
+               
+      <input type="email" id="customer-email" required>
+                </div>
+                <div class="form-row">
+                    <label for="card-element">Credit or debit card</label>
+                    <div id="card-element"></div>
+              
+       <div id="card-errors" role="alert"></div>
+                </div>
+                <button class="primary-action-btn" type="submit">Pay Now</button>
+            </form>
+        </div>
     </div>
     
+    <div id="favorites-section" style="display: none;">
+        <h4>Favorites</h4>
+        <div id="favorites-carousel"></div>
+    </div>
+
+ 
     <script type="module" src="main.js"></script>
 </body>
 </html>
