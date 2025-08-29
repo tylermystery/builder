@@ -1,14 +1,12 @@
 /*
- * Version: 2.13.1
+ * Version: 2.14.0
  * Last Modified: 2025-08-28
  *
  * Changelog:
- *
- * v2.13.1 - 2025-08-28
- * - Correctly stores and provides the Stripe clientSecret for payment submission.
- *
- * v2.13.0 - 2025-08-28
- * - showCheckoutModal now initializes the Stripe Elements payment form.
+ * v2.14.0 - 2025-08-28
+ * - Added createLockedInItemElement to build detailed item view for the event plan.
+ * - Added updateEventPlanPanel to render the right-hand sidebar from state.
+ * - Modified updateTotalCost to calculate totals based only on lockedItems.
  */
 
 import { state } from './state.js';
@@ -128,6 +126,56 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
             </div>
         </div>`;
     return itemCard;
+}
+
+export async function createLockedInItemElement(record, itemInfo) {
+    const fields = record.fields;
+    const itemElement = document.createElement('div');
+    itemElement.className = 'locked-item-card';
+    itemElement.dataset.recordId = record.id;
+
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
+    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    let optionName = '';
+    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
+        optionName = options[itemInfo.selectedOptionIndex].name;
+    }
+
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const total = price * itemInfo.quantity;
+
+    itemElement.innerHTML = `
+        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <div class="locked-item-details">
+            <p class="locked-item-name">${fields.Name}</p>
+            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
+            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
+            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+        </div>
+        <div class="locked-item-actions">
+            <button class="edit-btn">Edit</button>
+        </div>
+    `;
+    return itemElement;
+}
+
+export async function updateEventPlanPanel() {
+    const container = document.getElementById('cart-items-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (state.cart.lockedItems.size === 0) {
+        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        return;
+    }
+
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createLockedInItemElement(record, itemInfo);
+            container.appendChild(itemElement);
+        }
+    }
 }
 
 export async function createInteractiveCard(record, imageCache) {
@@ -496,7 +544,7 @@ export function updateTotalCost() {
     const checkoutBtn = document.getElementById('checkout-btn');
     if (!totalCostEl) return;
     let total = 0;
-    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+    const allItems = state.cart.lockedItems;
     allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
