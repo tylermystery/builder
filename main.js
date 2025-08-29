@@ -1,15 +1,14 @@
 /*
- * Version: 3.9.5
+ * Version: 3.9.6
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
+ * v3.9.6 - 2025-08-29
+ * - Restored all button functionality within the single unified click listener.
+ *
  * v3.9.5 - 2025-08-29
  * - Refactored all click handling into a single, unified listener on document.body.
- * - Removed separate listener for filter panel to resolve interaction conflicts.
- *
- * v3.9.4 - 2025-08-29
- * - Implemented interactive filter panel with accordion and filtering logic.
  */
 
 import { state } from './state.js';
@@ -502,7 +501,7 @@ function setupEventListeners() {
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
