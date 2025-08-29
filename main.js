@@ -136,7 +136,8 @@ function applyFiltersAndSort() {
     }
 
     recordsToDisplay.sort((a, b) => {
-        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0--9.-]+/g, ""));
+        // CORRECTED REGEX on the next two lines
+        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
         const aName = a.fields.Name || '';
         const bName = b.fields.Name || '';
@@ -149,6 +150,7 @@ function applyFiltersAndSort() {
     });
     ui.renderRecords(recordsToDisplay, imageCache);
 }
+
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
