@@ -1,10 +1,11 @@
 /*
- * Version: 2.15.1
+ * Version: 2.16.0
  * Last Modified: 2025-08-28
  *
  * Changelog:
- * v2.15.1 - 2025-08-28
- * - Fixed TypeError in showDetailModal by dynamically creating the parent button.
+ * v2.16.0 - 2025-08-28
+ * - Replaced "Go Up" button with a parent-name link on catalog cards.
+ * - Added a breadcrumb navigation trail to the detail modal.
  */
 
 import { state } from './state.js';
@@ -15,6 +16,22 @@ import { getDayStatus } from './availability.js';
 
 let stripe, elements, cardElement, clientSecret;
 // --- HELPER & LOGIC FUNCTIONS ---
+function getBreadcrumbs(record, allRecords) {
+    const breadcrumbs = [];
+    let current = record;
+    while (current && current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]) {
+        const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+        const parentRecord = allRecords.find(r => r.fields.Name === parentName);
+        if (parentRecord) {
+            breadcrumbs.unshift(parentRecord); // Add to the beginning of the array
+            current = parentRecord;
+        } else {
+            break; // Stop if a parent isn't found
+        }
+    }
+    return breadcrumbs;
+}
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -186,11 +203,11 @@ export async function createInteractiveCard(record, imageCache) {
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
-    const explodeButtonHTML = isGrouping ?
-    `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
+    
+    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
     const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆ ${parentName}</p>` : '';
 
     let optionsControlHTML = '';
     let notesHTML = '';
@@ -243,9 +260,10 @@ export async function createInteractiveCard(record, imageCache) {
     }
 
     eventCard.innerHTML = `
-        <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
+        <div class="card-header-actions">${availabilityButtonHTML}${explodeButtonHTML}</div>
         <div class="heart-icon ${iconClass}">${iconSVG}</div>
         <div class="event-card-content">
+           ${parentLinkHTML}
            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
@@ -322,6 +340,7 @@ export async function updateFavoritesCarousel() {
 export async function showDetailModal(record) {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalBreadcrumbsContainer = document.getElementById('modal-breadcrumbs');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
     const modalItemDescription = document.getElementById('modal-item-description');
@@ -368,16 +387,25 @@ export async function showDetailModal(record) {
 
     modalHeaderActions.innerHTML = '';
     
-    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
-    if(parentRecord) {
-        const parentBtn = document.createElement('button');
-        parentBtn.id = 'modal-parent-btn';
-        parentBtn.className = 'card-btn';
-        parentBtn.title = 'Go Up';
-        parentBtn.innerHTML = '⬆️';
-        parentBtn.onclick = () => showDetailModal(parentRecord);
-        modalHeaderActions.appendChild(parentBtn);
+    modalBreadcrumbsContainer.innerHTML = '';
+    const breadcrumbs = getBreadcrumbs(record, state.records.all);
+    if (breadcrumbs.length > 0) {
+        breadcrumbs.forEach((crumb, index) => {
+            const crumbLink = document.createElement('a');
+            crumbLink.href = '#';
+            crumbLink.textContent = crumb.fields.Name;
+            crumbLink.onclick = (e) => {
+                e.preventDefault();
+                showDetailModal(crumb);
+            };
+            modalBreadcrumbsContainer.appendChild(crumbLink);
+
+            if (index < breadcrumbs.length - 1) {
+                const separator = document.createElement('span');
+                separator.textContent = ' > ';
+                modalBreadcrumbsContainer.appendChild(separator);
+            }
+        });
     }
 
     if (isGrouping) {
