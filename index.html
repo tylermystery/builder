@@ -115,6 +115,28 @@
             cursor: pointer;
         }
 
+        /* --- ICON STYLES --- */
+        .heart-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: rgba(255, 255, 255, 0.8);
+            stroke: white;
+            stroke-width: 1.5;
+            transition: all 0.2s ease-in-out;
+        }
+        .heart-icon.hearted svg {
+            fill: #ff3b30;
+            stroke: #ff3b30;
+        }
+        .heart-icon.locked svg {
+            fill: #34c759;
+            stroke: none;
+        }
+        .heart-icon.locked {
+            cursor: default;
+        }
+
+
         /* --- LOCKED ITEM STYLES --- */
         .locked-item-card {
             display: flex;
