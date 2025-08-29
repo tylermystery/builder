@@ -18,6 +18,15 @@ A unique, shareable URL is automatically generated and updated as a user builds 
 * **Sharing**: A user can share their plan at any time by simply copying and sharing the URL from their browser.
 * **Fork on Edit**: When a second user opens a shared URL, they see the original plan. The moment this new user makes a change, the system automatically "forks" the plan by creating a brand new session and updating their URL. This prevents collaborators from overwriting each other's work and ensures the original shared plan is not altered.
 
+Unified Interaction Model
+All primary click interactions throughout the application are managed by a single, unified event handler delegated to the document's body. This single interaction layer is responsible for routing clicks from the filter panel, catalog cards, modal views, and all buttons. It uses a prioritized `if/else if` chain to ensure that specific button clicks (like the Heart ❤️ or Parent ⬆️) are handled before more general clicks (like a click on the card itself). This methodology guarantees a predictable user experience and prevents conflicting event listeners.
+
+Event Listener Implementation (Locked In)
+To function correctly, the application's main script attaches two distinct, delegated event listeners to the document.body.
+
+* **addEventListener('click', ...)**: This listener handles all instantaneous actions, such as clicking buttons, opening modals, and filtering the catalog.
+* **addEventListener('change', ...)**: This listener handles actions that conclude an editing or selection process, primarily for dropdowns.
+
 Catalog Loading and Display
 The catalog loading process is designed for a smooth user experience. The application initially displays a "Loading catalog..." message and fetches all event records. Once loaded, the initial view shows only the top-level "Grouping" items.
 
@@ -34,13 +43,14 @@ When a user selects one or more items, a horizontally scrolling carousel appears
 * **Remove Functionality**: Each favorite card includes a remove (×) button, allowing users to quickly un-favorite an item directly from the carousel.
 * **Open Detail View**: Clicking on a favorite card opens the Detailed Item View for that item.
 
-Search & Filtering
-A set of controls allows users to refine and organize the catalog view.
+Filter Panel & Search
+A persistent left-hand sidebar and a top bar of controls allow users to refine and organize the catalog view.
 
+* **Category & Subcategory Filtering**: The sidebar displays an accordion-style list of parent categories and their subcategories. Clicking any of these filters the catalog to show only relevant items.
 * **Smart Search**: A search bar allows users to filter the catalog by item name, description, categories, and tags. Results are prioritized to show name matches first.
 * **Filtering**: Users can filter the catalog by pre-defined price ranges.
 * **Sorting**: A dropdown menu controls the sort order of the catalog (e.g., Price Low to High, Name A-Z).
-* **Reset**: A "Reset" button clears all active search terms and filters, returning the catalog to its default view.
+* **Reset**: A "Reset" button clears all active search terms and filters.
 
 Detailed Item View
 Clicking on a catalog card opens a large modal overlay with comprehensive information.
@@ -53,7 +63,7 @@ Clicking on a catalog card opens a large modal overlay with comprehensive inform
 * **Availability**: An inline, read-only calendar is displayed, showing the specific day-by-day availability for that item.
 
 Date Availability System
-The application provides real-time event availability at three distinct levels, powered by a JavaScript date picker library (flatpickr) and a serverless function that parses a remote iCal feed. Users specify the event length by selecting a start and end time directly within the date picker.
+The application provides real-time event availability at three distinct levels. Users specify the event length by selecting a start and end time directly within the date picker.
 
 * **The Header Calendar (Summary View)**: The main date picker shows a color-coded monthly calendar reflecting the combined availability of all favorited items.
 * **The Card Icons (Status View)**: After a date range is selected, an icon on every card updates to show its specific availability (✅, 🟠, or ❌).
@@ -64,4 +74,4 @@ The application includes a complete checkout flow to finalize and pay for an eve
 
 * **Checkout Button**: A "Checkout" button in the header becomes active when the plan total is greater than zero.
 * **Checkout Modal**: Clicking the button opens a checkout modal with three sections: an order summary, fields for customer information, and a secure payment form.
-* **Secure Payment Processing**: Payment details are handled by integrating Stripe Elements. This ensures sensitive credit card information is sent directly to Stripe and never touches the application's server, providing maximum security and PCI compliance.
+* **Secure Payment Processing**: Payment details are handled by integrating Stripe Elements. This ensures sensitive credit card information is sent directly to Stripe and never touches the application's server.
