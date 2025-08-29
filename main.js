@@ -1,11 +1,11 @@
 /*
- * Version: 3.11.2
+ * Version: 3.12.0
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v3.11.2 - 2025-08-28
- * - Fixed a bug where a guard clause was blocking clicks on the "Add to Plan" button in the modal.
+ * v3.12.0 - 2025-08-28
+ * - Replaced parent button logic with a handler for the new parent link text.
  */
 
 import { state } from './state.js';
@@ -340,7 +340,6 @@ function setupEventListeners() {
         }
 
         const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
-        const parentBtn = e.target.closest('.parent-btn');
         const explodeBtn = e.target.closest('.explode-btn');
         const implodeBtn = e.target.closest('.implode-btn');
   
@@ -353,6 +352,7 @@ function setupEventListeners() {
         const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
         const editBtn = e.target.closest('.edit-btn');
         const modalHeartBtn = e.target.closest('#modal-heart-btn');
+        const parentLink = e.target.closest('.parent-link');
 
 
         if (saveShareBtn) {
@@ -399,6 +399,18 @@ function setupEventListeners() {
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
                 ui.showDetailModal(record);
+            }
+        } else if (parentLink) {
+            e.stopPropagation();
+            const card = parentLink.closest('.event-card');
+            if (!card) return;
+            
+            const parentName = parentLink.dataset.parentName;
+            const parentRecord = state.records.all.find(p => p.fields.Name === parentName);
+        
+            if (parentRecord) {
+                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
+                card.replaceWith(newCard);
             }
         } else if (availabilityBtn) {
             e.stopPropagation();
@@ -462,20 +474,19 @@ function setupEventListeners() {
             await ui.updateFavoritesCarousel();
             mainDatePicker.redraw();
             triggerSave();
-        } else if (parentBtn) {
+        } else if (explodeBtn) {
             e.stopPropagation();
-            const card = parentBtn.closest('.event-card');
-            if (!card) return;
-            const recordId = card.dataset.recordId;
+            const recordId = explodeBtn.closest('[data-record-id]').dataset.recordId;
+            ui.hideDetailModal();
             const record = state.records.all.find(r => r.id === recordId);
-            const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-            const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
-            if (parentRecord) {
-                const newCard = await ui.createInteractiveCard(parentRecord, imageCache);
-                card.replaceWith(newCard);
-            } else {
-                applyFiltersAndSort();
-            }
+            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const childNames = new Set(rawOptions.map(opt => opt.name));
+            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
+            ui.renderRecords(children, imageCache);
+            const implodeButton = document.createElement('div');
+            implodeButton.id = 'implode-container';
+            implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
+            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
         } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
@@ -488,7 +499,7 @@ function setupEventListeners() {
                 ui.showDetailModal(record);
             }
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector')) {
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link')) {
                 return;
             }
             const recordId = card.dataset.recordId;
