@@ -1,14 +1,14 @@
 /*
- * Version: 3.9.3
+ * Version: 3.9.4
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
+ * v3.9.4 - 2025-08-29
+ * - Implemented interactive filter panel with accordion and filtering logic.
+ *
  * v3.9.3 - 2025-08-29
  * - Added call to renderFilterPanel on initialization.
- *
- * v3.9.2 - 2025-08-28
- * - Fixed Stripe payment submission by correctly passing the clientSecret.
  */
 
 import { state } from './state.js';
@@ -17,7 +17,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability, getBusySlotsForDay } from './availability.js';
+import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -67,12 +67,34 @@ function triggerSave() {
 }
 
 // --- CORE LOGIC ---
+function isDescendantOf(record, categoryName, allRecords) {
+    let current = record;
+    while (current && current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]) {
+        const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+        if (parentName === categoryName) {
+            return true;
+        }
+        current = allRecords.find(r => r.fields.Name === parentName);
+    }
+    return false;
+}
+
 function applyFiltersAndSort() {
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const priceFilter = document.getElementById('price-filter').value;
     const sortBy = document.getElementById('sort-by').value;
+    const categoryFilter = state.ui.activeCategoryFilter;
+
     let recordsToDisplay = state.records.all;
 
+    // 1. APPLY CATEGORY FILTER
+    if (categoryFilter) {
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            return record.fields.Name === categoryFilter || isDescendantOf(record, categoryFilter, state.records.all);
+        });
+    }
+
+    // 2. APPLY SEARCH (with relevance scoring)
     if (searchTerm) {
         const scoredRecords = [];
         recordsToDisplay.forEach(record => {
@@ -88,10 +110,11 @@ function applyFiltersAndSort() {
         });
         scoredRecords.sort((a, b) => b.score - a.score);
         recordsToDisplay = scoredRecords.map(item => item.record);
-    } else {
+    } else if (!categoryFilter) { // Only show top-level if no search or category is active
         recordsToDisplay = recordsToDisplay.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
 
+    // 3. APPLY PRICE FILTER
     if (priceFilter !== 'all') {
         const [minStr, maxStr] = priceFilter.split('-');
         const min = parseFloat(minStr);
@@ -110,6 +133,7 @@ function applyFiltersAndSort() {
         });
     }
 
+    // 4. APPLY SORT
     recordsToDisplay.sort((a, b) => {
         const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
@@ -122,6 +146,7 @@ function applyFiltersAndSort() {
             default: return 0;
         }
     });
+    
     ui.renderRecords(recordsToDisplay, imageCache);
 }
 
@@ -194,7 +219,40 @@ function setupEventListeners() {
         }
     };
 
-    // --- FILTER & RESET LISTENERS ---
+    // --- FILTER PANEL LISTENER ---
+    const filterPanel = document.getElementById('filter-panel');
+    if (filterPanel) {
+        filterPanel.addEventListener('click', (e) => {
+            const categoryHeader = e.target.closest('h4');
+            const subcategoryItem = e.target.closest('li');
+
+            if (categoryHeader && !subcategoryItem) { // Only toggle accordion on parent click
+                categoryHeader.parentElement.classList.toggle('open');
+            }
+            if (subcategoryItem || categoryHeader) { // Filter on click of either
+                const target = subcategoryItem || categoryHeader;
+                const categoryName = target.dataset.category;
+
+                // Toggle filter on/off
+                if (state.ui.activeCategoryFilter === categoryName) {
+                    state.ui.activeCategoryFilter = null;
+                } else {
+                    state.ui.activeCategoryFilter = categoryName;
+                }
+
+                // Update active class
+                document.querySelectorAll('#filter-panel li, #filter-panel h4').forEach(el => el.classList.remove('active'));
+                if (state.ui.activeCategoryFilter) {
+                    document.querySelector(`#filter-panel [data-category="${state.ui.activeCategoryFilter}"]`)?.classList.add('active');
+                }
+                
+                applyFiltersAndSort();
+            }
+        });
+    }
+
+
+    // --- TOP FILTER & RESET LISTENERS ---
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('price-filter', 'change', applyFiltersAndSort);
     safeAddEventListener('sort-by', 'change', applyFiltersAndSort);
@@ -202,6 +260,8 @@ function setupEventListeners() {
         document.getElementById('name-filter').value = '';
         document.getElementById('price-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
+        state.ui.activeCategoryFilter = null; // Also reset the category filter
+        document.querySelectorAll('#filter-panel li, #filter-panel h4').forEach(el => el.classList.remove('active'));
         applyFiltersAndSort();
     });
 
@@ -467,7 +527,7 @@ function setupEventListeners() {
             const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
             const selectedIndex = parseInt(e.target.value, 10);
             const selectedOption = rawOptions[selectedIndex];
-            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]/g, ""));
+            const initialPrice = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
