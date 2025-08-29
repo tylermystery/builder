@@ -115,6 +115,61 @@
             cursor: pointer;
         }
 
+        /* --- LOCKED ITEM STYLES --- */
+        .locked-item-card {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+            padding: 15px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .locked-item-card:last-child {
+            border-bottom: none;
+            padding-bottom: 5px;
+        }
+        .locked-item-card:first-child {
+            padding-top: 5px;
+        }
+        .locked-item-thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .locked-item-details {
+            flex-grow: 1;
+            min-width: 0; /* Prevents text overflow issues */
+        }
+        .locked-item-details p {
+            margin: 0 0 5px 0;
+            font-size: 0.9em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .locked-item-name {
+            font-weight: bold;
+        }
+        .locked-item-option, .locked-item-note {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        .locked-item-pricing {
+            font-size: 0.85em !important;
+        }
+        .locked-item-actions .edit-btn {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .locked-item-actions .edit-btn:hover {
+            background-color: #e0e0e0;
+        }
+
         /* --- MODAL STYLES --- */
         .modal-overlay {
             display: none; /* Hidden by default */
