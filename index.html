@@ -103,7 +103,7 @@
             transition: max-height 0.3s ease-in-out;
         }
         .category-group.open .subcategory-list {
-            max-height: 1000px; /* Arbitrary large number */
+            max-height: 1000px;
         }
         .subcategory-list li {
             padding: 8px;
@@ -122,7 +122,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
-            padding: 0; /* Adjusted padding as parent provides it now */
+            padding: 0;
             margin: 0;
             max-width: none;
         }
@@ -139,149 +139,87 @@
             overflow: hidden;
             cursor: pointer;
         }
+        .heart-icon {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .heart-icon svg {
+            width: 100%;
+            height: 100%;
+            stroke: white;
+            stroke-width: 2;
+            fill: rgba(0,0,0,0.3);
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+        }
+        .heart-icon.hearted svg { 
+            fill: #ff4f6c;
+            stroke: #ff4f6c;
+        }
+        .event-card-content {
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+            padding: 20px;
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .event-card-content h3 { margin: 0 0 10px; font-size: 1.6em; }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: flex; /* Changed from none to flex by default, visibility handled by opacity/pointer-events */
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background-color: white;
+            width: 80%;
+            max-width: 1200px;
+            height: 80vh;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+            padding: 25px;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
     </style>
 </head>
 <body>
-
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
-
     <div id="sticky-header">
-        <div id="header-toolbar">
-            <div class="toolbar-group tool-brand-group">
-                <label>Tool</label>
-                <div class="header-title-container">
-                    <h4>Event Builder</h4>
-                    <sup id="beta-trigger">beta</sup>
-                </div>
-            </div>
-            <div class="toolbar-group event-name-group">
-                <label for="header-event-name">Event Name</label>
-                <input type="text" id="header-event-name" placeholder="Enter Your Event Name...">
-            </div>
-            <div class="toolbar-group details-group">
-                <div class="toolbar-item">
-                    <label for="header-date">Start & End Time</label>
-                    <input type="text" id="header-date" placeholder="Select a date and time range...">
-                </div>
-                <div class="toolbar-item">
-                    <label for="header-headcount">Headcount</label>
-                    <input type="number" id="header-headcount" min="1" value="1">
-                </div>
-            </div>
-            <div class="toolbar-group goals-group">
-                <label for="header-goals">Event Goals</label>
-                <textarea id="header-goals" placeholder="e.g., Team building, client appreciation..."></textarea>
-            </div>
-            <div class="toolbar-group people-group">
-                <div id="sessions-dropdown-container" style="display: none;">
-                    <select id="sessions-dropdown">
-                        <option value="">Load a saved list...</option>
-                    </select>
-                </div>
-                <div class="history-controls">
-                    <button id="undo-btn" disabled>↩️</button>
-                    <button id="redo-btn" disabled>↪️</button>
-                </div>
-                <div id="collaborators-section" style="display: none;">
-                    <div id="collaborator-avatars"></div>
-                    <button id="add-collaborator-btn">+</button>
-                </div>
-                <div id="total-cost-section">
-                    <strong>Total:</strong>
-                    <span id="total-cost" title="No items selected">$0.00</span>
-                </div>
-                <button id="checkout-btn" disabled>Checkout</button>
-                <button id="save-share-btn">🔗 Copy Link</button>
-            </div>
         </div>
-        <div id="favorites-section" style="display: none;">
-            <div id="favorites-carousel"></div>
-        </div>
-        <div id="filter-controls">
-            <input type="text" id="name-filter" placeholder="Search by name, tag, or description...">
-            <select id="price-filter">
-                <option value="all">All Prices</option>
-                <option value="0-50">Under $50</option>
-                <option value="50-100">$50 - $100</option>
-                <option value="100-250">$100 - $250</option>
-                <option value="250-plus">$250+</option>
-            </select>
-            <select id="sort-by">
-                <option value="price-asc">Price (Low to High)</option>
-                <option value="price-desc">Price (High to Low)</option>
-                <option value="name-asc">Name (A-Z)</option>
-            </select>
-            <button id="reset-filters-btn">Reset</button>
-        </div>
-    </div>
-    
     <div id="main-content-area">
         <aside id="filter-panel"></aside>
         <main id="catalog-area">
             <div id="catalog-container"></div>
         </main>
     </div>
-    
     <div id="detail-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
-            <div class="detail-view-grid">
-                <div class="gallery-column">
-                    <div id="modal-main-image" class="main-image"></div>
-                    <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
-                </div>
-                <div class="details-column">
-                    <h2>
-                        <button id="modal-parent-btn" style="display: none;">⬆️</button>
-                        <span id="modal-item-name">Item Name</span>
-                        <div id="modal-header-actions"></div>
-                    </h2>
-                    <p id="modal-item-price">Price</p>
-                    <p id="modal-item-description">Full description goes here...</p>
-                    <div id="modal-options-container" class="options-container"></div>
-                    <div class="modal-details-footer">
-                        <div id="modal-quantity-selector"></div>
-                    </div>
-                    <div id="modal-calendar-container" class="inline-calendar-container"></div>
-                </div>
-            </div>
         </div>
-    </div>
-
     <div id="checkout-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn">&times;</button>
-            <h2>Finalize Your Plan</h2>
-            <div class="checkout-grid">
-                <div class="order-summary">
-                    <h3>Order Summary</h3>
-                    <ul id="checkout-summary-list"></ul>
-                    <div id="checkout-total-row" class="total-row">
-                        <span>Total</span>
-                        <span id="checkout-total-price">$0.00</span>
-                    </div>
-                </div>
-                <div class="checkout-form">
-                    <h3>Your Information</h3>
-                    <div class="form-group">
-                        <label for="customer-name">Name</label>
-                        <input type="text" id="customer-name" placeholder="Enter your name">
-                    </div>
-                    <div class="form-group">
-                        <label for="customer-email">Email</label>
-                        <input type="email" id="customer-email" placeholder="Enter your email">
-                    </div>
-                    <h3>Payment Details</h3>
-                    <form id="payment-form">
-                        <div id="card-element"></div>
-                        <div id="card-errors" role="alert"></div>
-                        <button id="submit-payment-btn">Pay Now</button>
-                    </form>
-                </div>
-            </div>
         </div>
-    </div>
-
     <script type="module" src="main.js"></script>
 </body>
 </html>
