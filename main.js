@@ -1,12 +1,11 @@
 /*
- * Version: 3.11.0
+ * Version: 3.11.1
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v3.11.0 - 2025-08-28
- * - Added logic to update card icon to a checkmark when an item is locked into the plan.
- * - Locked icons are no longer interactive.
+ * v3.11.1 - 2025-08-28
+ * - Fixed ReferenceError by importing AVAILABILITY_STATUS.
  */
 
 import { state } from './state.js';
@@ -15,7 +14,7 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability, getBusySlotsForDay } from './availability.js';
+import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -275,7 +274,6 @@ function setupEventListeners() {
                 dayElem.classList.add('flatpickr-available');
                 tippy(dayElem, { content: 'Available' });
                 return;
-      
               }
             const busyTimePromises = favoritedRecords.map(record => api.fetchCalendarForRecord(record));
             const allBusyTimes = await Promise.all(busyTimePromises);
@@ -526,7 +524,6 @@ function setupEventListeners() {
             let newPrice = initialPrice;
             if (selectedOption) {
                 if (selectedOption.absolutePrice != null) newPrice = selectedOption.absolutePrice;
-       
                  else if (selectedOption.priceChange != null) newPrice += selectedOption.priceChange;
             }
             card.querySelector('.price').textContent = `$${newPrice.toFixed(2)}`;
