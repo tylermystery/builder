@@ -65,9 +65,9 @@ export async function saveSessionToAirtable() {
             "Items with Variations": JSON.stringify(sessionData),
             "Collaborators": state.session.collaborators.join(', '),
             "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
-            null,
+ null,
             "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) ||
-            null,
+ null,
             "Date": formattedDate
         }
     };
@@ -160,7 +160,6 @@ export async function fetchImagesByTags(tags) {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        
         if (!response.ok) {
             console.warn(`Cloudinary function error: ${response.statusText}`);
             return null;
@@ -175,6 +174,7 @@ export async function fetchImagesByTags(tags) {
                 transformations = 'c_fit,w_600,h_520';
             } else {
                 transformations = 'c_fill,g_auto,w_600,h_520';
+          
             }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
@@ -209,7 +209,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         // Rule 2: If no specific group image, find the first child and use its image.
         if (!imageUrls || imageUrls.length === 0) {
             const firstChildOption = rawOptions.length > 0 ?
-            rawOptions[0] : null;
+ rawOptions[0] : null;
 
             if (firstChildOption) {
                 const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
@@ -238,7 +238,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     }
     
     const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
-    imageUrls : [ultimateFallbackUrl];
+ imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
