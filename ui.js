@@ -12,10 +12,12 @@
  */
 
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
 import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
+
+let stripe, elements, cardElement, clientSecret;
 
 // --- HELPER & LOGIC FUNCTIONS ---
 export function getRecordPrice(record, optionIndex = null) {
@@ -64,14 +66,14 @@ export function getGroupPriceRange(record) {
         if (options.length > 0) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
-                if (price > 0) {
+                if (price > 0) { // Ignore $0 or unpriced items
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price > 0) {
+            if (price > 0) { // Ignore $0 or unpriced items
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -176,7 +178,7 @@ export async function createInteractiveCard(record, imageCache) {
         quantitySelectorHTML = `
             <div class="quantity-selector">
                 <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
+                <input type="number" class="quantity-input" value="${state.cart.items.get(recordId)?.quantity || headcountMin}" min="${headcountMin}">
                 <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
             </div>`;
         const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
@@ -454,7 +456,6 @@ export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
 
-
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
@@ -504,39 +505,4 @@ export function toggleLoading(show) {
     const filterControls = document.getElementById('filter-controls');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
     if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
-}
-
-export function renderFilterPanel() {
-    const filterPanel = document.getElementById('filter-panel');
-    if (!filterPanel) return;
-
-    const allRecords = state.records.all;
-    const parentCategories = allRecords.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-
-    parentCategories.forEach(parent => {
-        const subcategories = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === parent.fields.Name);
-
-        const group = document.createElement('div');
-        group.className = 'category-group';
-
-        const title = document.createElement('h4');
-        title.textContent = parent.fields.Name;
-        title.dataset.category = parent.fields.Name;
-        
-        const subcategoryList = document.createElement('ul');
-        subcategoryList.className = 'subcategory-list';
-
-        if (subcategories.length > 0) {
-            subcategories.forEach(sub => {
-                const listItem = document.createElement('li');
-                listItem.textContent = sub.fields.Name;
-                listItem.dataset.category = sub.fields.Name;
-                subcategoryList.appendChild(listItem);
-            });
-        }
-        
-        group.appendChild(title);
-        group.appendChild(subcategoryList);
-        filterPanel.appendChild(group);
-    });
 }
