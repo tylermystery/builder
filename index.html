@@ -337,6 +337,10 @@
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
     <div id="sticky-header">
         <div id="header-toolbar">
+            <div class="toolbar-group">
+                <label>Tool Name<sup id="beta-trigger" style="cursor: pointer;">beta</sup></label>
+                <h2>Event Builder</h2>
+            </div>
             <div class="toolbar-group" style="flex-grow: 2;">
                 <label for="header-event-name">Event Name</label>
                 <input type="text" id="header-event-name" value="My Awesome Event">
@@ -367,7 +371,6 @@
             <div id="favorites-carousel"></div>
         </div>
         <div id="category-bar-container">
-   
           </div>
     </div>
 
@@ -431,7 +434,13 @@
         </div>
     </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+             <form id="payment-form">
+                <h3>Checkout</h3>
+                <button type="submit">Pay Now</button>
+            </form>
         </div>
+    </div>
 
     <script type="module" src="main.js"></script>
 </body>
