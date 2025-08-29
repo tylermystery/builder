@@ -1,12 +1,10 @@
 /*
- * Version: 2.14.0
+ * Version: 2.15.0
  * Last Modified: 2025-08-28
  *
  * Changelog:
- * v2.14.0 - 2025-08-28
- * - Added createLockedInItemElement to build detailed item view for the event plan.
- * - Added updateEventPlanPanel to render the right-hand sidebar from state.
- * - Modified updateTotalCost to calculate totals based only on lockedItems.
+ * v2.15.0 - 2025-08-28
+ * - Added checkmark icon logic for locked items in createInteractiveCard and showDetailModal.
  */
 
 import { state } from './state.js';
@@ -227,25 +225,38 @@ export async function createInteractiveCard(record, imageCache) {
         priceHTML = `$${initialPrice.toFixed(2)}`;
     }
 
+    let iconClass = '';
+    let iconSVG = '';
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+
+    const isLockedIn = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
+
+    if (isLockedIn) {
+        iconClass = 'locked';
+        iconSVG = checkSVG;
+    } else if (isHearted) {
+        iconClass = 'hearted';
+        iconSVG = heartSVG;
+    } else {
+        iconSVG = heartSVG;
+    }
+
     eventCard.innerHTML = `
         <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
-        <div class="heart-icon ${isHearted ? 'hearted' : ''}">
-            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-        </div>
+        <div class="heart-icon ${iconClass}">${iconSVG}</div>
         <div class="event-card-content">
-          
            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
-            ''}</p>
-            ${rawOptions.length > 0 ?
-            optionsControlHTML : ''}
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
             <div class="price-quantity-wrapper">
                 <div class="price">${priceHTML}</div>
                 ${quantitySelectorHTML}
             </div>
         </div>`;
+
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -258,7 +269,6 @@ export async function createInteractiveCard(record, imageCache) {
             if (current > min) {
                 quantityInput.value = current - 1;
             }
-       
          });
     }
     
@@ -370,10 +380,27 @@ export async function showDetailModal(record) {
     if (isGrouping) {
         modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
     }
+
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+    const isLockedIn = state.cart.lockedItems.has(record.id);
     const isHearted = state.cart.items.has(record.id);
+    let iconClass = '';
+    let iconSVG = '';
+
+    if (isLockedIn) {
+        iconClass = 'locked';
+        iconSVG = checkSVG;
+    } else if (isHearted) {
+        iconClass = 'hearted';
+        iconSVG = heartSVG;
+    } else {
+        iconSVG = heartSVG;
+    }
+    
     modalHeaderActions.innerHTML += `
-        <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}" data-record-id="${record.id}">
-            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+        <div id="modal-heart-btn" class="heart-icon ${iconClass}" data-record-id="${record.id}">
+            ${iconSVG}
         </div>`;
         
     modalOptionsContainer.innerHTML = '';
