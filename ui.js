@@ -1,328 +1,529 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Catalog</title>
-    <link rel="icon" href="data:;" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://unpkg.com/tippy.js@6"></script>
-    <style>
-        body {
-            padding-bottom: 80px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-            background-color: #f8f9fa;
-        }
-        body.modal-open {
-            overflow: hidden;
-        }
-        #sticky-header {
-            position: sticky;
-            top: 0;
-            background-color: white;
-            z-index: 999;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #header-toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: flex-end;
-            gap: 20px;
-            padding: 15px 20px;
-            max-width: 1800px;
-            margin: 0 auto;
-        }
-        .toolbar-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .toolbar-group label {
-            font-size: 0.75em;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: 500;
-        }
-        .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            padding: 6px 8px;
-            font-size: 0.9em;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        .main-container {
-            display: grid;
-            grid-template-columns: 300px 1fr 380px;
-            gap: 25px;
-            max-width: 1800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        #right-sidebar h3, #left-sidebar h3 {
-            margin-top: 0;
-            border-bottom: 1px solid #dee2e6;
-            padding-bottom: 10px;
-        }
-        #filter-controls, #cart-panel {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        #favorites-section { 
-            max-width: 1800px;
-            margin: 0 auto; 
-            padding: 15px 20px; 
-            border-bottom: 1px solid #e9ecef;
-        }
-        #favorites-carousel { 
-            display: flex;
-            gap: 15px;
-            overflow-x: auto; 
-            padding-bottom: 5px; 
-        }
-        .favorite-item {
-            position: relative;
-            flex: 0 0 220px;
-            height: 220px;
-            border-radius: 8px;
-            background-size: cover;
-            background-position: center;
-        }
-        #catalog-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 25px;
-        }
-        .event-card {
-            position: relative;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            display: flex;
-            flex-direction: column;
-            height: 520px;
-            background-size: cover;
-            background-position: center;
-            color: white;
-            overflow: hidden;
-            cursor: pointer;
-        }
+/*
+ * Version: 2.13.1
+ * Last Modified: 2025-08-28
+ *
+ * Changelog:
+ *
+ * v2.13.1 - 2025-08-28
+ * - Correctly stores and provides the Stripe clientSecret for payment submission.
+ *
+ * v2.13.0 - 2025-08-28
+ * - showCheckoutModal now initializes the Stripe Elements payment form.
+ */
 
-        /* --- MODAL STYLES --- */
-        .modal-overlay {
-            display: none; /* Hidden by default */
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            width: 90%;
-            max-width: 1100px;
-            height: 90vh;
-            max-height: 700px;
-            display: flex;
-            overflow: hidden;
-            position: relative;
-            color: #333;
-        }
-        .modal-close-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 2em;
-            cursor: pointer;
-            color: #999;
-            z-index: 1010;
-        }
-        .modal-main-column {
-            flex: 2; /* Takes 2/3 of space */
-            display: flex;
-            flex-direction: column;
-        }
-        #modal-main-image {
-            flex-grow: 1;
-            background-size: cover;
-            background-position: center;
-            border-right: 1px solid #eee;
-        }
-        #modal-thumbnail-strip {
-            display: flex;
-            gap: 5px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-top: 1px solid #eee;
-            overflow-x: auto;
-        }
-        .thumbnail-img {
-            width: 80px;
-            height: 60px;
-            background-size: cover;
-            background-position: center;
-            border-radius: 4px;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: border-color 0.2s;
-        }
-        .thumbnail-img.active {
-            border-color: #007bff;
-        }
-        .modal-sidebar-column {
-            flex: 1; /* Takes 1/3 of space */
-            padding: 30px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-        #modal-header-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        #modal-item-name { margin-top: 0; }
-        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
-        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }
-        .option-btn {
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            background-color: #f8f8f8;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .option-btn.selected {
-            border-color: #007bff;
-            background-color: #e7f3ff;
-        }
-        #modal-quantity-selector { margin: 20px 0; }
-        #modal-notes-container { margin-bottom: 20px; }
-        #modal-item-note {
-            width: 100%;
-            height: 80px;
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 0.9em;
-            resize: vertical;
-            box-sizing: border-box;
-        }
-        #modal-actions-container {
-            margin-top: auto; /* Pushes to the bottom */
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }
-        .primary-action-btn {
-            width: 100%;
-            padding: 15px;
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #fff;
-            background-color: #28a745;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .primary-action-btn:hover {
-            background-color: #218838;
-        }
-    </style>
-</head>
-<body>
-    <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
-    <div id="sticky-header">
-        <div id="header-toolbar">
-            </div>
-        <div id="favorites-section" style="display: none;">
-            <h4>Favorites</h4>
-            <div id="favorites-carousel"></div>
-        </div>
-        <div id="category-bar-container">
-   
-          </div>
-    </div>
+import { state } from './state.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
+import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
+import { parseOptions } from './utils.js';
+import { getDayStatus } from './availability.js';
 
-    <div class="main-container">
-        <div id="left-sidebar">
-            <div id="filter-controls">
-                <h3>Filters</h3>
-                <input type="text" id="name-filter" placeholder="Search...">
-                <select id="price-filter">
-                    <option value="all">All Prices</option>
-                    <option value="0-50">Under $50</option>
-                    <option value="50-100">$50 - $100</option>
-                    <option value="100-250">$100 - $250</option>
-                    <option value="250-plus">$250+</option>
-                </select>
-                <select id="sort-by">
-                    <option value="price-asc">Price (Low to High)</option>
-                    <option value="price-desc">Price (High to Low)</option>
-                    <option value="name-asc">Name (A-Z)</option>
-                </select>
-                <button id="reset-filters-btn">Reset</button>
-            </div>
-        </div>
-        <div id="catalog-area">
-            <div id="catalog-container"></div>
-        </div>
-        <div id="right-sidebar">
-            <div id="cart-panel">
-                <h3>Event Plan</h3>
-                <div id="cart-items-container">
-                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
-                </div>
-            </div>
-        </div>
-    </div>
+let stripe, elements, cardElement, clientSecret;
+// --- HELPER & LOGIC FUNCTIONS ---
+export function getRecordPrice(record, optionIndex = null) {
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            if (variation.absolutePrice !== null) return variation.absolutePrice;
+            if (variation.priceChange !== null) price += variation.priceChange;
+        }
+    }
+    return price;
+}
+
+function getDescendantBookableItems(record, allRecords) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
+export function getGroupPriceRange(record) {
+    const descendants = getDescendantBookableItems(record, state.records.all);
+    if (descendants.length === 0) return null;
+    let minPrice = Infinity;
+    let maxPrice = -Infinity;
+
+    descendants.forEach(item => {
+        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (options.length > 0) {
+            options.forEach((opt, index) => {
+                const price = getRecordPrice(item, index);
+                if (price > 0) {
+            
+                    if (price < minPrice) minPrice = price;
+                    if (price > maxPrice) maxPrice = price;
+                }
+            });
+        } else {
+            const price = getRecordPrice(item);
+       
+            if (price > 0) {
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            }
+        }
+    });
+    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
+}
+
+// --- UI RENDERING FUNCTIONS ---
+function formatPricingType(pricingType) {
+    if (!pricingType) return '';
+    const type = pricingType.toLowerCase();
+    if (type === 'per guest') return '/ guest';
+    if (type === 'per hour') return '/ hour';
+    return '';
+}
+
+export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
+    const fields = record.fields;
+    let variationNameHTML = '';
+    let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+    let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
+    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
+        variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
+    }
+
+    const itemCard = document.createElement('div');
+    itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
+    itemCard.dataset.recordId = record.id;
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
+    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">×</button>`;
     
-    <div id="detail-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="modal-main-column">
-                <div id="modal-main-image"></div>
-                <div id="modal-thumbnail-strip"></div>
+    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const pricingTypeString = formatPricingType(pricingType);
+    const showCardTotal = itemInfo.quantity > 1 && pricingTypeString;
+    const cardTotal = itemPrice * itemInfo.quantity;
+    itemCard.innerHTML = `
+        <div class="card-actions">${cardActionsHTML}</div>
+        <div class="favorite-item-content">
+            <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
+            ${variationNameHTML}
+            ${noteHTML}
+            <div class="favorite-pricing-details">
+                <div class="pricing-line-item">
+             
+                   <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
+                    <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
+                </div>
+                ${showCardTotal ?
+                `
+                <div class="pricing-line-item-total">
+                    <span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span>
+                </div>
+                ` : ''}
             </div>
-            <div class="modal-sidebar-column">
-                <div id="modal-header-actions">
-                    <button id="modal-parent-btn" class="card-btn" title="Go Up">⬆️</button>
-                </div>
-                <h2 id="modal-item-name"></h2>
-                <p id="modal-item-price" class="price"></p>
-                <p id="modal-item-description"></p>
-                <div id="modal-options-container"></div>
-                <div id="modal-quantity-selector"></div>
-                <div id="modal-notes-container">
-                    <textarea id="modal-item-note" placeholder="Add a note..."></textarea>
-                </div>
-                <div id="modal-actions-container">
-                    <button id="modal-add-to-plan-btn" class="primary-action-btn">Add to Plan</button>
-                </div>
-                <div id="modal-calendar-container"></div>
-            </div>
-        </div>
-    </div>
-    <div id="checkout-modal-overlay" class="modal-overlay">
-        </div>
+        </div>`;
+    return itemCard;
+}
 
-    <script type="module" src="main.js"></script>
-</body>
-</html>
+export async function createInteractiveCard(record, imageCache) {
+    const fields = record.fields;
+    const recordId = record.id;
+    const allRecords = state.records.all;
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
+    const eventCard = document.createElement('div');
+    eventCard.className = 'event-card';
+    eventCard.dataset.recordId = recordId;
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentButtonHTML = parentName ? `<button class="card-btn parent-btn" title="Go Up">⬆️</button>` : '';
+    const explodeButtonHTML = isGrouping ?
+    `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
+    const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
+
+    let optionsControlHTML = '';
+    let notesHTML = '';
+    let quantitySelectorHTML = '';
+    let priceHTML = '';
+    if (isGrouping) {
+        optionsControlHTML = `<select class="options-selector navigate-options">
+            <option value="">Select an option...</option>
+            ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
+        </select>`;
+        const range = getGroupPriceRange(record);
+        if (range) {
+            priceHTML = range.min === range.max ?
+            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+        } else {
+            priceHTML = 'Price Varies';
+        }
+    } else {
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        optionsControlHTML = `<select class="options-selector configure-options">
+             ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
+        </select>`;
+        notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
+        quantitySelectorHTML = `
+            <div class="quantity-selector">
+                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
+                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
+                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
+            </div>`;
+        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        priceHTML = `$${initialPrice.toFixed(2)}`;
+    }
+
+    const isHearted = state.cart.items.has(recordId);
+    eventCard.innerHTML = `
+        <div class="card-header-actions">${availabilityButtonHTML}${parentButtonHTML}${explodeButtonHTML}</div>
+        <div class="heart-icon ${isHearted ? 'hearted' : ''}">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+        </div>
+        <div class="event-card-content">
+          
+           <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
+            ''}</p>
+            ${rawOptions.length > 0 ?
+            optionsControlHTML : ''}
+            ${notesHTML}
+            <div class="price-quantity-wrapper">
+                <div class="price">${priceHTML}</div>
+                ${quantitySelectorHTML}
+            </div>
+        </div>`;
+    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
+    const quantityInput = eventCard.querySelector('.quantity-input');
+    if (plusBtn && minusBtn && quantityInput) {
+        plusBtn.addEventListener('click', (e) => { e.stopPropagation(); quantityInput.value = parseInt(quantityInput.value) + 1; });
+        minusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const current = parseInt(quantityInput.value);
+            const min = parseInt(quantityInput.min);
+            if (current > min) {
+                quantityInput.value = current - 1;
+            }
+       
+         });
+    }
+    
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
+    return eventCard;
+}
+
+export async function renderRecords(recordsToRender, imageCache) {
+    const catalogContainer = document.getElementById('catalog-container');
+    if (!catalogContainer) return;
+    catalogContainer.innerHTML = '';
+
+    const implodeContainer = document.getElementById('implode-container');
+    if (implodeContainer) implodeContainer.remove();
+    if (recordsToRender.length === 0) {
+        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
+        return;
+    }
+    for (const record of recordsToRender) {
+        const eventCard = await createInteractiveCard(record, imageCache);
+        if (eventCard) {
+            catalogContainer.appendChild(eventCard);
+        }
+    }
+}
+
+export async function updateFavoritesCarousel() {
+    const favoritesSection = document.getElementById('favorites-section');
+    const favoritesCarousel = document.getElementById('favorites-carousel');
+    if (!favoritesSection || !favoritesCarousel) return;
+
+    if (state.cart.items.size === 0) {
+        favoritesSection.style.display = 'none';
+        return;
+    }
+    favoritesSection.style.display = 'block';
+    favoritesCarousel.innerHTML = '';
+    const imageCache = new Map();
+    
+    const sortedItems = Array.from(state.cart.items.entries());
+    for (const [recordId, itemInfo] of sortedItems) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const card = await createFavoriteCardElement(record, itemInfo, false, imageCache);
+            if (card) favoritesCarousel.appendChild(card);
+        }
+    }
+    updateTotalCost();
+}
+
+export async function showDetailModal(record) {
+    const modalOverlay = document.getElementById('detail-modal-overlay');
+    const modalParentBtn = document.getElementById('modal-parent-btn');
+    const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalItemName = document.getElementById('modal-item-name');
+    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemDescription = document.getElementById('modal-item-description');
+    const modalMainImage = document.getElementById('modal-main-image');
+    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+    const modalOptionsContainer = document.getElementById('modal-options-container');
+    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
+    const modalNotesContainer = document.getElementById('modal-notes-container');
+    const modalItemNote = document.getElementById('modal-item-note');
+    const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    const modalActionsContainer = document.getElementById('modal-actions-container');
+
+    modalOverlay.dataset.recordId = record.id;
+    
+    const lockedItemInfo = state.cart.lockedItems.get(record.id);
+
+    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
+    modalItemName.textContent = record.fields.Name || 'Untitled';
+    modalItemDescription.textContent = record.fields.Description || '';
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+    if (isGrouping) {
+        const range = getGroupPriceRange(record);
+        modalItemPrice.textContent = range ?
+        `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+    } else {
+        modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
+    }
+
+    modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
+    modalThumbnailStrip.innerHTML = '';
+    imageUrls.forEach((url, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumbnail-img';
+        thumb.style.backgroundImage = `url('${url}')`;
+        if (index === 0) thumb.classList.add('active');
+        thumb.addEventListener('click', () => {
+            modalMainImage.style.backgroundImage = `url('${url}')`;
+            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+            thumb.classList.add('active');
+        });
+        modalThumbnailStrip.appendChild(thumb);
+    });
+
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
+    modalParentBtn.style.display = parentRecord ? 'block' : 'none';
+    if(parentRecord) {
+        modalParentBtn.onclick = () => showDetailModal(parentRecord);
+    }
+
+    modalHeaderActions.innerHTML = '';
+    if (isGrouping) {
+        modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
+    }
+    const isHearted = state.cart.items.has(record.id);
+    modalHeaderActions.innerHTML += `
+        <div id="modal-heart-btn" class="heart-icon ${isHearted ? 'hearted' : ''}" data-record-id="${record.id}">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+        </div>`;
+        
+    modalOptionsContainer.innerHTML = '';
+    rawOptions.forEach((opt, index) => {
+        const optionButton = document.createElement('button');
+        optionButton.className = 'option-btn';
+        optionButton.dataset.optionIndex = index;
+
+        let priceModText = '';
+        if (opt.absolutePrice != null) {
+            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        } else if (opt.priceChange != null) {
+            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+         }
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
+        if (allRecordNames.has(opt.name)) {
+            optionButton.onclick = () => {
+                const childRecord = state.records.all.find(r => r.fields.Name === opt.name);
+                if (childRecord) showDetailModal(childRecord);
+            };
+        } else {
+            optionButton.onclick = (e) => {
+                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                e.currentTarget.classList.add('selected');
+                modalItemDescription.textContent = opt.description || record.fields.Description;
+            };
+        }
+        modalOptionsContainer.appendChild(optionButton);
+    });
+
+    modalQuantitySelector.innerHTML = '';
+    if (isGrouping) {
+        if (modalActionsContainer) modalActionsContainer.style.display = 'none';
+        if (modalNotesContainer) modalNotesContainer.style.display = 'none';
+    } else {
+        if (modalActionsContainer) modalActionsContainer.style.display = 'block';
+        if (modalNotesContainer) modalNotesContainer.style.display = 'block';
+        
+        const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
+        if (addToPlanBtn) {
+            addToPlanBtn.textContent = lockedItemInfo ? 'Update Plan' : 'Add to Plan';
+        }
+        
+        if (lockedItemInfo?.selectedOptionIndex != null) {
+            const btnToSelect = modalOptionsContainer.querySelector(`.option-btn[data-option-index="${lockedItemInfo.selectedOptionIndex}"]`);
+            if(btnToSelect) btnToSelect.classList.add('selected');
+        }
+
+        modalItemNote.value = lockedItemInfo?.note || '';
+
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const currentQuantity = lockedItemInfo?.quantity || state.cart.items.get(record.id)?.quantity || headcountMin;
+        
+        modalQuantitySelector.innerHTML = `
+            <div class="quantity-selector">
+                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
+                <input type="number" class="quantity-input" value="${currentQuantity}" min="${headcountMin}">
+                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
+            </div>`;
+        const plusBtn = modalQuantitySelector.querySelector('.plus');
+        const minusBtn = modalQuantitySelector.querySelector('.minus');
+        const input = modalQuantitySelector.querySelector('input');
+        plusBtn.addEventListener('click', () => input.stepUp());
+        minusBtn.addEventListener('click', () => input.stepDown());
+    }
+
+    modalCalendarContainer.innerHTML = '';
+    const busyTimes = await fetchCalendarForRecord(record);
+    flatpickr(modalCalendarContainer, {
+        inline: true,
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, busyTimes, record);
+            if (status === 'NONE') dayElem.classList.add('flatpickr-disabled');
+            else if (status === 'PARTIAL') dayElem.classList.add('flatpickr-partial');
+            else dayElem.classList.add('flatpickr-available');
+        }
+    });
+
+    modalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+}
+
+export function hideDetailModal() {
+    const modalOverlay = document.getElementById('detail-modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
+}
+
+export async function showCheckoutModal() {
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    const summaryList = document.getElementById('checkout-summary-list');
+    const totalPriceEl = document.getElementById('checkout-total-price');
+    if (!checkoutModalOverlay || !summaryList || !totalPriceEl) return;
+
+    summaryList.innerHTML = '';
+    let finalTotal = 0;
+    for (const [recordId, itemInfo] of state.cart.items.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const itemTotal = price * itemInfo.quantity;
+        finalTotal += itemTotal;
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
+        summaryList.appendChild(listItem);
+    }
+    
+    const finalTotalInCents = Math.round(finalTotal * 100);
+    totalPriceEl.textContent = `$${finalTotal.toFixed(2)}`;
+    
+    try {
+        const response = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: finalTotalInCents }),
+        });
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        clientSecret = data.clientSecret;
+
+        stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+        elements = stripe.elements({ clientSecret });
+        cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+        
+        checkoutModalOverlay.style.display = 'flex';
+        document.body.classList.add('modal-open');
+    } catch (err) {
+        console.error("Failed to initialize payment form:", err);
+        alert("Could not initialize payment form. Please try again.");
+    }
+}
+
+export function hideCheckoutModal() {
+    if (cardElement) {
+        cardElement.unmount();
+    }
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    if (checkoutModalOverlay) {
+        checkoutModalOverlay.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
+}
+
+export function getStripeContext() {
+    return { stripe, elements, cardElement, clientSecret };
+}
+
+export function updateHeader() {
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.title = eventName || 'Event Builder';
+    const eventNameInput = document.getElementById('header-event-name');
+    if (eventNameInput) eventNameInput.value = eventName;
+    
+    const headcountInput = document.getElementById('header-headcount');
+    if (headcountInput) headcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
+    const goalsInput = document.getElementById('header-goals');
+    if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+}
+
+export function updateTotalCost() {
+    const totalCostEl = document.getElementById('total-cost');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (!totalCostEl) return;
+    let total = 0;
+    const allItems = new Map([...state.cart.items, ...state.cart.lockedItems]);
+    allItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) return;
+        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        if (isNaN(unitPrice)) return;
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
+        let itemCost;
+ 
+        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
+            itemCost = unitPrice * effectiveQuantity;
+        } else {
+            itemCost = unitPrice;
+        }
+        total += itemCost;
+    });
+    totalCostEl.textContent = `$${total.toFixed(2)}`;
+
+    if (checkoutBtn) {
+        checkoutBtn.disabled = total === 0;
+    }
+}
+
+export function toggleLoading(show) {
+    const loadingMessage = document.getElementById('loading-message');
+    const filterControls = document.getElementById('filter-controls');
+    if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
+    if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
+}
