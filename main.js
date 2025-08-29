@@ -98,7 +98,7 @@ function applyFiltersAndSort() {
         });
         scoredRecords.sort((a, b) => b.score - a.score);
         recordsToDisplay = scoredRecords.map(item => item.record);
-    } else {
+    } else if (activeCategories.length === 0) {
         recordsToDisplay = recordsToDisplay.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
 
