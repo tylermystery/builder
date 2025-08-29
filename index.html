@@ -170,6 +170,14 @@
             overflow: hidden;
             cursor: pointer;
         }
+        .parent-link {
+            font-size: 0.8em;
+            margin: 0 0 5px 0;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
 
         /* --- ICON STYLES --- */
         .heart-icon svg {
@@ -329,6 +337,18 @@
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
+        }
+        #modal-breadcrumbs {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        #modal-breadcrumbs a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        #modal-breadcrumbs a:hover {
+            text-decoration: underline;
         }
         #modal-item-name { margin-top: 0; }
         #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
@@ -504,6 +524,7 @@
             <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                 </div>
+                <div id="modal-breadcrumbs"></div>
                 <h2 id="modal-item-name"></h2>
                 <p id="modal-item-price" class="price"></p>
                 <p id="modal-item-description"></p>
