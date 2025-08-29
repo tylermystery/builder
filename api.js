@@ -1,27 +1,20 @@
 /*
- * Version: 2.7.6
- * Last Modified: 2025-08-27
+ * Version: 2.7.7
+ * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v2.7.6 - 2025-08-27
- * - Fixed bug with grouping item images not displaying.
- * - Unified the logic for identifying a "grouping" item.
- * - Implemented new rule: find a group-specific image, or fall back to the first child's image.
- *
- * v2.7.5 - 2025-08-26
- * - Reverted to hard-coded keys for development purposes.
+ * v2.7.7 - 2025-08-28
+ * - Made fetchImagesByTags more resilient to server errors to allow UI to render with fallback images.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
-
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
-
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -71,8 +64,10 @@ export async function saveSessionToAirtable() {
             "Name": sessionName,
             "Items with Variations": JSON.stringify(sessionData),
             "Collaborators": state.session.collaborators.join(', '),
-            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
-            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
+            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
+            null,
+            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) ||
+            null,
             "Date": formattedDate
         }
     };
@@ -165,7 +160,11 @@ export async function fetchImagesByTags(tags) {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        if (!response.ok) throw new Error(`Serverless function error: ${response.statusText}`);
+        
+        if (!response.ok) {
+            console.warn(`Cloudinary function error: ${response.statusText}`);
+            return null;
+        }
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) return null;
@@ -207,10 +206,10 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         // Rule 1: Try to find an image tagged with the group's name.
         const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         imageUrls = await fetchImagesByTags(groupNameTag);
-
         // Rule 2: If no specific group image, find the first child and use its image.
         if (!imageUrls || imageUrls.length === 0) {
-            const firstChildOption = rawOptions.length > 0 ? rawOptions[0] : null;
+            const firstChildOption = rawOptions.length > 0 ?
+            rawOptions[0] : null;
 
             if (firstChildOption) {
                 const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
@@ -238,7 +237,8 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
+    imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
