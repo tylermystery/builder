@@ -1,11 +1,11 @@
 /*
- * Version: 3.11.1
+ * Version: 3.11.2
  * Last Modified: 2025-08-28
  *
  * Changelog:
  *
- * v3.11.1 - 2025-08-28
- * - Fixed ReferenceError by importing AVAILABILITY_STATUS.
+ * v3.11.2 - 2025-08-28
+ * - Fixed a bug where a guard clause was blocking clicks on the "Add to Plan" button in the modal.
  */
 
 import { state } from './state.js';
@@ -331,11 +331,12 @@ function setupEventListeners() {
             return;
         }
 
- 
-        const modalHeartBtn = e.target.closest('#modal-heart-btn');
-        const modalExplodeBtn = e.target.closest('#modal-explode-btn');
-        if(e.target.closest('.modal-content') && !modalHeartBtn && !modalExplodeBtn) {
-            return;
+        const modalContent = e.target.closest('.modal-content');
+        if (modalContent) {
+            const isInteractiveElement = e.target.closest('button, .heart-icon, a, input, select, textarea, .thumbnail-img');
+            if (!isInteractiveElement) {
+                return; 
+            }
         }
 
         const heartIcon = e.target.closest('.heart-icon:not(#modal-heart-btn)');
@@ -351,6 +352,7 @@ function setupEventListeners() {
         const favoriteItem = e.target.closest('.favorite-item');
         const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
         const editBtn = e.target.closest('.edit-btn');
+        const modalHeartBtn = e.target.closest('#modal-heart-btn');
 
 
         if (saveShareBtn) {
@@ -474,19 +476,6 @@ function setupEventListeners() {
             } else {
                 applyFiltersAndSort();
             }
-        } else if (explodeBtn || modalExplodeBtn) {
-            e.stopPropagation();
-            const recordId = (explodeBtn || modalExplodeBtn).closest('[data-record-id]').dataset.recordId;
-            ui.hideDetailModal();
-            const record = state.records.all.find(r => r.id === recordId);
-            const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const childNames = new Set(rawOptions.map(opt => opt.name));
-            const children = state.records.all.filter(r => childNames.has(r.fields.Name));
-            ui.renderRecords(children, imageCache);
-            const implodeButton = document.createElement('div');
-            implodeButton.id = 'implode-container';
-            implodeButton.innerHTML = `<button class="card-btn implode-btn" title="Implode"> اجمع </button>`;
-            document.querySelector('#catalog-container').insertAdjacentElement('beforebegin', implodeButton);
         } else if (implodeBtn) {
             e.stopPropagation();
             implodeBtn.closest('#implode-container').remove();
