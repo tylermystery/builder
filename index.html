@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
         body {
-            padding-bottom: 80px;
+            padding-bottom: 150px; /* Increased padding to make space for the new bottom favorites bar */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
@@ -29,11 +29,16 @@
         #header-toolbar {
             display: flex;
             flex-wrap: wrap;
-            align-items: flex-end;
+            align-items: center; /* Vertically center items */
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
             margin: 0 auto;
+        }
+        #header-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 0;
         }
         .toolbar-group {
             display: flex;
@@ -67,7 +72,7 @@
             border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
-        #filter-controls, #cart-panel {
+        #filter-controls {
             background-color: #fff;
             padding: 20px;
             border-radius: 8px;
@@ -76,22 +81,73 @@
             flex-direction: column;
             gap: 15px;
         }
+        #cart-panel {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        #cart-items-container {
+            flex-grow: 1;
+        }
+        #cart-footer {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #dee2e6;
+        }
+        #cart-footer .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #cart-footer button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+        }
+        #cart-footer #checkout-btn {
+            background-color: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+        #cart-footer #save-share-btn {
+            background-color: #f0f0f0;
+            color: #333;
+            margin-top: 10px;
+        }
         #favorites-section { 
-            max-width: 1800px;
-            margin: 0 auto; 
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            z-index: 998;
             padding: 15px 20px; 
-            border-bottom: 1px solid #e9ecef;
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
         }
         #favorites-carousel { 
             display: flex;
             gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
+            max-width: 1800px;
+            margin: 0 auto;
         }
         .favorite-item {
             position: relative;
-            flex: 0 0 220px;
-            height: 220px;
+            flex: 0 0 100px; /* Smaller size for bottom bar */
+            height: 100px;
             border-radius: 8px;
             background-size: cover;
             background-position: center;
@@ -135,7 +191,6 @@
         .heart-icon.locked {
             cursor: default;
         }
-
 
         /* --- LOCKED ITEM STYLES --- */
         .locked-item-card {
@@ -195,7 +250,6 @@
         /* --- MODAL STYLES --- */
         .modal-overlay {
             display: none;
-            /* Hidden by default */
             position: fixed;
             top: 0;
             left: 0;
@@ -232,7 +286,6 @@
         }
         .modal-main-column {
             flex: 2;
-            /* Takes 2/3 of space */
             display: flex;
             flex-direction: column;
         }
@@ -265,7 +318,6 @@
         }
         .modal-sidebar-column {
             flex: 1;
-            /* Takes 1/3 of space */
             padding: 30px;
             overflow-y: auto;
             display: flex;
@@ -278,12 +330,9 @@
             align-items: center;
             margin-bottom: 10px;
         }
-        #modal-item-name { margin-top: 0;
-        }
-        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0;
-        }
-        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px;
-        }
+        #modal-item-name { margin-top: 0; }
+        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
+        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }
         .option-btn {
             padding: 8px 12px;
             border: 1px solid #ccc;
@@ -295,10 +344,8 @@
             border-color: #007bff;
             background-color: #e7f3ff;
         }
-        #modal-quantity-selector { margin: 20px 0;
-        }
-        #modal-notes-container { margin-bottom: 20px;
-        }
+        #modal-quantity-selector { margin: 20px 0; }
+        #modal-notes-container { margin-bottom: 20px; }
         #modal-item-note {
             width: 100%;
             height: 80px;
@@ -312,7 +359,6 @@
         }
         #modal-actions-container {
             margin-top: auto;
-            /* Pushes to the bottom */
             padding-top: 20px;
             border-top: 1px solid #eee;
         }
@@ -331,16 +377,63 @@
         .primary-action-btn:hover {
             background-color: #218838;
         }
+        
+        /* --- CHECKOUT MODAL STYLES --- */
+        .checkout-modal-content {
+            background: #fff;
+            border-radius: 8px;
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            color: #333;
+        }
+        #checkout-summary-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+        #checkout-summary-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .checkout-total {
+            display: flex;
+            justify-content: space-between;
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+        #payment-form .form-row {
+            margin-bottom: 15px;
+        }
+        #payment-form label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        #payment-form input, #card-element {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        #card-errors {
+            color: #fa755a;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
     </style>
 </head>
 <body>
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
     <div id="sticky-header">
         <div id="header-toolbar">
-            <div class="toolbar-group">
-                <label>Tool Name<sup id="beta-trigger" style="cursor: pointer;">beta</sup></label>
-                <h2>Event Builder</h2>
-            </div>
+            <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
             <div class="toolbar-group" style="flex-grow: 2;">
                 <label for="header-event-name">Event Name</label>
                 <input type="text" id="header-event-name" value="My Awesome Event">
@@ -357,21 +450,7 @@
                 <label for="header-goals">Goals / Notes</label>
                 <input type="text" id="header-goals" placeholder="What are the goals for your event?">
             </div>
-            <div class="toolbar-group">
-                <label>Total Cost</label>
-                <div id="total-cost" style="font-size: 1.5em; font-weight: bold;">$0.00</div>
-            </div>
-            <div class="toolbar-group">
-                <button id="save-share-btn" disabled>🔗 Copy Link</button>
-                <button id="checkout-btn" disabled>Checkout</button>
-            </div>
         </div>
-        <div id="favorites-section" style="display: none;">
-            <h4>Favorites</h4>
-            <div id="favorites-carousel"></div>
-        </div>
-        <div id="category-bar-container">
-          </div>
     </div>
 
     <div class="main-container">
@@ -403,6 +482,14 @@
                 <div id="cart-items-container">
                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
+                <div id="cart-footer">
+                    <div class="total-row">
+                        <span>Total:</span>
+                        <span id="total-cost">$0.00</span>
+                    </div>
+                    <button id="checkout-btn" disabled>Checkout</button>
+                    <button id="save-share-btn" disabled>🔗 Copy Link</button>
+                </div>
             </div>
         </div>
     </div>
@@ -433,12 +520,38 @@
         </div>
     </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
-        <div class="modal-content">
-             <form id="payment-form">
-                <h3>Checkout</h3>
-                <button type="submit">Pay Now</button>
+        <div class="checkout-modal-content">
+            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3>Checkout Summary</h3>
+            <ul id="checkout-summary-list">
+                </ul>
+            <div class="checkout-total">
+                <strong>Total:</strong>
+                <strong id="checkout-total-price">$0.00</strong>
+            </div>
+            <hr>
+            <form id="payment-form">
+                <div class="form-row">
+                    <label for="customer-name">Full Name</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-row">
+                    <label for="customer-email">Email Address</label>
+                    <input type="email" id="customer-email" required>
+                </div>
+                <div class="form-row">
+                    <label for="card-element">Credit or debit card</label>
+                    <div id="card-element"></div>
+                    <div id="card-errors" role="alert"></div>
+                </div>
+                <button class="primary-action-btn" type="submit">Pay Now</button>
             </form>
         </div>
+    </div>
+    
+    <div id="favorites-section" style="display: none;">
+        <h4>Favorites</h4>
+        <div id="favorites-carousel"></div>
     </div>
 
     <script type="module" src="main.js"></script>
