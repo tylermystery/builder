@@ -506,3 +506,38 @@ export function toggleLoading(show) {
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
     if (filterControls) filterControls.style.display = show ? 'block' : 'flex';
 }
+
+export function renderFilterPanel() {
+    const filterPanel = document.getElementById('filter-panel');
+    if (!filterPanel) return;
+
+    const allRecords = state.records.all;
+    const parentCategories = allRecords.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+
+    parentCategories.forEach(parent => {
+        const subcategories = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === parent.fields.Name);
+
+        const group = document.createElement('div');
+        group.className = 'category-group';
+
+        const title = document.createElement('h4');
+        title.textContent = parent.fields.Name;
+        title.dataset.category = parent.fields.Name;
+        
+        const subcategoryList = document.createElement('ul');
+        subcategoryList.className = 'subcategory-list';
+
+        if (subcategories.length > 0) {
+            subcategories.forEach(sub => {
+                const listItem = document.createElement('li');
+                listItem.textContent = sub.fields.Name;
+                listItem.dataset.category = sub.fields.Name;
+                subcategoryList.appendChild(listItem);
+            });
+        }
+        
+        group.appendChild(title);
+        group.appendChild(subcategoryList);
+        filterPanel.appendChild(group);
+    });
+}
