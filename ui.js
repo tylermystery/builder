@@ -1,14 +1,14 @@
 /*
- * Version: 2.11.4
+ * Version: 2.11.5
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
- * v2.11.4 - 2025-08-29
- * - Added renderFilterPanel function to dynamically build the category/subcategory filter UI.
+ * v2.11.5 - 2025-08-29
+ * - Added a safeguard to prevent infinite loops in recursive price calculation.
  *
- * v2.11.3 - 2025-08-27
- * - Added logic to enable/disable the new checkout button based on cart total.
+ * v2.11.4 - 2025-08-29
+ * - Added renderFilterPanel function.
  */
 
 import { state } from './state.js';
@@ -31,7 +31,13 @@ export function getRecordPrice(record, optionIndex = null) {
     return price;
 }
 
-function getDescendantBookableItems(record, allRecords) {
+function getDescendantBookableItems(record, allRecords, visited = new Set()) {
+    if (visited.has(record.id)) {
+        console.warn('Circular reference detected in hierarchy for record:', record.fields.Name);
+        return []; // Prevent infinite loop
+    }
+    visited.add(record.id);
+
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     for (const child of children) {
@@ -39,7 +45,7 @@ function getDescendantBookableItems(record, allRecords) {
         const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
         const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
         if (isGrouping) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords, new Set(visited)));
         } else {
             bookableItems.push(child);
         }
