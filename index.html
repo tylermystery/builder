@@ -16,18 +16,54 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
+        body.modal-open {
+            overflow: hidden;
+        }
+        #sticky-header {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 999;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #header-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 15px 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .toolbar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .toolbar-group label {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 0.9em;
+            width: 100%;
+            box-sizing: border-box;
+        }
         .main-container {
             display: grid;
-            grid-template-columns: 1fr 400px; /* Main content and sidebar */
+            grid-template-columns: 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
-            padding: 0 20px;
-        }
-        #right-sidebar {
-            padding-top: 20px;
+            padding: 20px;
         }
         #right-sidebar h3 {
+            margin-top: 0;
             border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
@@ -37,57 +73,47 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 25px;
-        }
-        .cart-item {
             display: flex;
+            flex-direction: column;
             gap: 15px;
-            padding: 10px 0;
+        }
+        #favorites-section { 
+            max-width: 1800px;
+            margin: 0 auto; 
+            padding: 15px 20px; 
             border-bottom: 1px solid #e9ecef;
         }
-        .cart-item:last-child {
-            border-bottom: none;
+        #favorites-carousel { 
+            display: flex;
+            gap: 15px;
+            overflow-x: auto; 
+            padding-bottom: 5px; 
         }
-        .cart-item-img {
-            width: 60px;
-            height: 60px;
+        .favorite-item {
+            position: relative;
+            flex: 0 0 220px;
+            height: 220px; /* Reverting to square for better carousel look */
+            border-radius: 8px;
             background-size: cover;
             background-position: center;
-            border-radius: 4px;
         }
-        .cart-item-details {
-            flex-grow: 1;
+        #catalog-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 25px;
         }
-        .cart-item-details p {
-            margin: 0;
-            font-size: 0.9em;
-        }
-        .cart-item-name {
-            font-weight: bold;
-        }
-        .cart-item-meta {
-            font-size: 0.8em !important;
-            color: #6c757d;
-            font-style: italic;
-        }
-        .cart-item-actions button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 0.9em;
-            color: #007aff;
-        }
-        #modal-add-to-plan-btn {
-            padding: 10px 20px;
-            border: none;
-            background-color: #28a745;
+        .event-card {
+            position: relative;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            height: 520px;
+            background-size: cover;
+            background-position: center;
             color: white;
-            font-weight: bold;
-            border-radius: 5px;
+            overflow: hidden;
             cursor: pointer;
-        }
-        .card-header-actions .icon-locked svg {
-            fill: #28a745;
-            stroke: white;
         }
     </style>
 </head>
@@ -97,8 +123,11 @@
         <div id="header-toolbar">
             </div>
         <div id="favorites-section" style="display: none;">
+            <h4>Favorites</h4>
             <div id="favorites-carousel"></div>
         </div>
+        <div id="category-bar-container">
+            </div>
     </div>
 
     <div class="main-container">
@@ -124,38 +153,16 @@
                 <button id="reset-filters-btn">Reset</button>
             </div>
             <div id="cart-panel">
-                <h3>Your Event Plan</h3>
-                <div id="cart-items-container"></div>
+                <h3>Event Plan</h3>
+                <div id="cart-items-container">
+                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                </div>
             </div>
         </div>
     </div>
     
     <div id="detail-modal-overlay" class="modal-overlay">
-         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
-            <div class="detail-view-grid">
-                <div class="gallery-column">
-                    <div id="modal-main-image" class="main-image"></div>
-                    <div id="modal-thumbnail-strip" class="thumbnail-strip"></div>
-                </div>
-                <div class="details-column">
-                    <h2>
-                        <button id="modal-parent-btn" style="display: none;">⬆️</button>
-                        <span id="modal-item-name">Item Name</span>
-                        <div id="modal-header-actions"></div>
-                    </h2>
-                    <p id="modal-item-price">Price</p>
-                    <p id="modal-item-description">Full description...</p>
-                    <div id="modal-options-container" class="options-container"></div>
-                    <div class="modal-details-footer">
-                        <div id="modal-quantity-selector"></div>
-                        <button id="modal-add-to-plan-btn">Add to Plan</button>
-                    </div>
-                    <div id="modal-calendar-container" class="inline-calendar-container"></div>
-                </div>
-            </div>
         </div>
-    </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
         </div>
 
