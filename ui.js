@@ -1,10 +1,10 @@
 /*
- * Version: 2.15.0
+ * Version: 2.15.1
  * Last Modified: 2025-08-28
  *
  * Changelog:
- * v2.15.0 - 2025-08-28
- * - Added checkmark icon logic for locked items in createInteractiveCard and showDetailModal.
+ * v2.15.1 - 2025-08-28
+ * - Fixed TypeError in showDetailModal by dynamically creating the parent button.
  */
 
 import { state } from './state.js';
@@ -161,7 +161,6 @@ export async function updateEventPlanPanel() {
     const container = document.getElementById('cart-items-container');
     if (!container) return;
     container.innerHTML = '';
-
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         return;
@@ -322,7 +321,6 @@ export async function updateFavoritesCarousel() {
 
 export async function showDetailModal(record) {
     const modalOverlay = document.getElementById('detail-modal-overlay');
-    const modalParentBtn = document.getElementById('modal-parent-btn');
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -339,7 +337,6 @@ export async function showDetailModal(record) {
     modalOverlay.dataset.recordId = record.id;
     
     const lockedItemInfo = state.cart.lockedItems.get(record.id);
-
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
@@ -369,14 +366,20 @@ export async function showDetailModal(record) {
         modalThumbnailStrip.appendChild(thumb);
     });
 
+    modalHeaderActions.innerHTML = '';
+    
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentRecord = parentName ? state.records.all.find(p => p.fields.Name === parentName) : null;
-    modalParentBtn.style.display = parentRecord ? 'block' : 'none';
     if(parentRecord) {
-        modalParentBtn.onclick = () => showDetailModal(parentRecord);
+        const parentBtn = document.createElement('button');
+        parentBtn.id = 'modal-parent-btn';
+        parentBtn.className = 'card-btn';
+        parentBtn.title = 'Go Up';
+        parentBtn.innerHTML = '⬆️';
+        parentBtn.onclick = () => showDetailModal(parentRecord);
+        modalHeaderActions.appendChild(parentBtn);
     }
 
-    modalHeaderActions.innerHTML = '';
     if (isGrouping) {
         modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
     }
@@ -387,7 +390,6 @@ export async function showDetailModal(record) {
     const isHearted = state.cart.items.has(record.id);
     let iconClass = '';
     let iconSVG = '';
-
     if (isLockedIn) {
         iconClass = 'locked';
         iconSVG = checkSVG;
@@ -398,10 +400,12 @@ export async function showDetailModal(record) {
         iconSVG = heartSVG;
     }
     
-    modalHeaderActions.innerHTML += `
-        <div id="modal-heart-btn" class="heart-icon ${iconClass}" data-record-id="${record.id}">
-            ${iconSVG}
-        </div>`;
+    const heartBtnContainer = document.createElement('div');
+    heartBtnContainer.id = 'modal-heart-btn';
+    heartBtnContainer.className = `heart-icon ${iconClass}`;
+    heartBtnContainer.dataset.recordId = record.id;
+    heartBtnContainer.innerHTML = iconSVG;
+    modalHeaderActions.appendChild(heartBtnContainer);
         
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
@@ -580,7 +584,8 @@ export function updateTotalCost() {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-        let itemCost;
+  
+       let itemCost;
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
