@@ -1,20 +1,20 @@
 /*
- * Version: 4.1.0
+ * Version: 4.2.0
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
+ * v4.2.0 - 2025-08-29
+ * - Implemented a centralized state management system for item interactions.
+ * - Added getItemState and updateItemState functions to sync quantity, options, and notes.
+ * - Added a unified 'change' listener to update state from cards and modals.
+ * - Refactored hearting/unhearting logic to preserve item state.
+ *
  * v4.1.0 - 2025-08-29
  * - Implemented infinite scroll for catalog items to improve performance.
- * - Added throttled scroll listener to load more records on demand.
- * - Refactored applyFiltersAndSort to manage the full filtered list in state.
  *
  * v4.0.0 - 2025-08-29
  * - Refactored to support the new consolidated filter panel in the left sidebar.
- * - Moved date picker and headcount logic from the main header to the sidebar.
- * - Implemented new filtering logic for Headcount, Location, and Budget.
- * - Replaced category filter buttons with a more scalable dropdown menu.
- * - Relocated the Sort By dropdown logic to the new catalog toolbar.
  */
 
 import { state } from './state.js';
@@ -38,6 +38,38 @@ function debounce(func, delay = 300) {
     };
 }
 
+// --- NEW STATE MANAGEMENT HELPERS ---
+function getItemState(recordId) {
+    const record = state.records.all.find(r => r.id === recordId);
+    if (!record) return null;
+
+    const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    const defaultState = {
+        quantity: headcountMin,
+        selectedOptionIndex: 0,
+        note: ''
+    };
+    return state.cart.items.get(recordId) || defaultState;
+}
+
+function updateItemState(recordId, updates) {
+    if (!state.records.all.find(r => r.id === recordId)) return;
+    
+    // Ensure the item is in the cart before updating, preserving existing data
+    if (!state.cart.items.has(recordId)) {
+        state.cart.items.set(recordId, getItemState(recordId));
+    }
+    
+    const currentState = state.cart.items.get(recordId);
+    const newState = { ...currentState, ...updates };
+    state.cart.items.set(recordId, newState);
+    
+    // Also update the UI and trigger save
+    ui.updateFavoritesCarousel();
+    triggerSave();
+}
+
+
 // --- INFINITE SCROLL LOGIC ---
 function loadMoreRecords() {
     if (state.ui.isLoadingMore) return;
@@ -48,7 +80,6 @@ function loadMoreRecords() {
 
     if (recordsToLoad.length > 0) {
         state.ui.isLoadingMore = true;
-        // The 'true' flag tells renderRecords to append instead of replacing.
         ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
             state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
             state.ui.isLoadingMore = false;
@@ -184,23 +215,18 @@ function applyFiltersAndSort() {
         }
     });
 
-    // Store the full filtered list in state
     state.records.filtered = recordsToDisplay;
-    // Reset the display count
     state.ui.recordsCurrentlyDisplayed = 0;
     
-    // Render the FIRST batch of records
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
-    ui.renderRecords(initialRecords, imageCache, false).then(() => { // false = replace content
+    ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 }
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        return;
-    }
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) return;
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
     const cards = document.querySelectorAll('.event-card');
@@ -208,26 +234,19 @@ async function updateAllCardAvailabilityIcons() {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-
         const busyTimes = await api.fetchCalendarForRecord(record);
         const dayStatus = getDayStatus(startDate, busyTimes, record);
         const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
-
         const icon = card.querySelector('.availability-btn');
         if (icon) {
-            if (icon._tippy) {
-                icon._tippy.destroy();
-            }
+            if (icon._tippy) icon._tippy.destroy();
             let statusIcon, statusText;
             if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
-                statusIcon = '❌';
-                statusText = 'Unavailable';
+                statusIcon = '❌'; statusText = 'Unavailable';
             } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
-                statusIcon = '🟠';
-                statusText = 'Partially Available';
+                statusIcon = '🟠'; statusText = 'Partially Available';
             } else {
-                statusIcon = '✅';
-                statusText = 'Fully Available';
+                statusIcon = '✅'; statusText = 'Fully Available';
             }
             const dateString = startDate.toLocaleDateString();
             const tooltipContent = `<div style="text-align: left;"><strong>${dateString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${statusText}</span></div>`;
@@ -252,7 +271,7 @@ async function initialize() {
     setupEventListeners();
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
-        ui.updateHeader(); // Still need to update event name/goals
+        ui.updateHeader();
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
@@ -273,12 +292,11 @@ function setupEventListeners() {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
-    // --- INFINITE SCROLL LISTENER ---
     let scrollTimeout;
     window.addEventListener('scroll', () => {
-        if (scrollTimeout) return; // Throttle the event
+        if (scrollTimeout) return;
         scrollTimeout = setTimeout(() => {
-            const buffer = 300; // Load more when 300px from the bottom
+            const buffer = 300;
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer) {
                 loadMoreRecords();
             }
@@ -286,12 +304,10 @@ function setupEventListeners() {
         }, 100);
     });
 
-    // --- NEW FILTER LISTENERS ---
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('headcount-filter', 'change', (e) => {
-        const customInput = document.getElementById('headcount-custom');
-        customInput.style.display = (e.target.value === 'custom') ? 'block' : 'none';
+        document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
         applyFiltersAndSort();
     });
     safeAddEventListener('location-filter', 'change', applyFiltersAndSort);
@@ -312,21 +328,17 @@ function setupEventListeners() {
         applyFiltersAndSort();
     });
 
-    // --- MAIN DATE PICKER (Now in sidebar) ---
     mainDatePicker = flatpickr("#date-filter", {
-        mode: "range",
-        enableTime: true,
-        dateFormat: "M j, Y h:i K",
+        mode: "range", enableTime: true, dateFormat: "M j, Y h:i K",
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                triggerSave(); // Autosave date changes
+                triggerSave();
                 updateAllCardAvailabilityIcons();
             }
         },
     });
 
-    // --- AUTOSAVE TRIGGERS (For header fields) ---
     safeAddEventListener('header-event-name', 'change', (e) => { 
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
@@ -336,7 +348,6 @@ function setupEventListeners() {
         triggerSave();
     });
     
-    // --- PAYMENT FORM SUBMISSION ---
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
         const { stripe, cardElement, clientSecret } = ui.getStripeContext();
@@ -359,7 +370,6 @@ function setupEventListeners() {
         }
     });
 
-    // --- NAVIGATION GUARD ---
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
             e.preventDefault();
@@ -367,20 +377,14 @@ function setupEventListeners() {
         }
     });
     
-    // --- UNIFIED CLICK LISTENER (No changes needed here for now) ---
     document.body.addEventListener('click', async (e) => {
-        if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) {
-            ui.hideDetailModal();
-            return;
-        }
-        if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) {
-            ui.hideCheckoutModal();
-            return;
-        }
+        if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) { ui.hideDetailModal(); return; }
+        if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
+        
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
-        // ... (rest of the unified click listener is largely unaffected)
+        
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -390,24 +394,50 @@ function setupEventListeners() {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.items.has(recordId)) {
+            const isHearted = state.cart.items.has(recordId);
+
+            if (isHearted) {
                 state.cart.items.delete(recordId);
             } else {
-                state.cart.items.set(recordId, { quantity: 1 });
+                // When hearting, add the item with its default/current state
+                updateItemState(recordId, {}); 
             }
-            heartIcon.classList.toggle('hearted', state.cart.items.has(recordId));
-            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', state.cart.items.has(recordId));
+            
+            // Visually update all relevant heart icons
+            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon`).forEach(icon => {
+                icon.classList.toggle('hearted', !isHearted);
+            });
+            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', !isHearted);
+
             await ui.updateFavoritesCarousel();
             triggerSave();
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link')) {
-                return;
-            }
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note')) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                ui.showDetailModal(record);
-            }
+            if (record) ui.showDetailModal(record);
+        }
+    });
+
+    // Unified CHANGE listener for all inputs
+    document.body.addEventListener('change', (e) => {
+        const target = e.target;
+        const container = target.closest('[data-record-id]');
+        if (!container) return;
+
+        const recordId = container.dataset.recordId;
+        let updates = {};
+
+        if (target.matches('.quantity-input')) {
+            updates.quantity = parseInt(target.value, 10);
+        } else if (target.matches('.configure-options')) {
+            updates.selectedOptionIndex = parseInt(target.value, 10);
+        } else if (target.matches('.item-note, #modal-item-note')) {
+            updates.note = target.value;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+            updateItemState(recordId, updates);
         }
     });
 }
