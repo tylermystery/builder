@@ -1,15 +1,14 @@
 /*
- * Version: 2.18.0
- * Last Modified: 2025-08-29
+ * Version: 2.18.1
+ * Last Modified: 2025-08-30
  *
  * Changelog:
- * v2.18.0 - 2025-08-29
- * - Added a "Remove" (×) button to locked item cards in the Event Plan.
- * - Added a utility function `updateCardIcon` to sync a card's icon with its state.
- * - `showDetailModal` now sets a `data-mode` to differentiate editing a favorite vs. a locked item.
+ * v2.18.1 - 2025-08-30
+ * - Fixed checkout modal to calculate total from "lockedItems" instead of "items".
+ * - "Copy Link" button is now correctly enabled/disabled based on plan total.
  *
- * v2.17.0 - 2025-08-29
- * - Refactored UI to read from the central item state, keeping components in sync.
+ * v2.18.0 - 2025-08-29
+ * - Implemented finalized "One-Way Street" logic for Favorites and Locked Items.
  */
 
 import { state } from './state.js';
@@ -340,7 +339,6 @@ export async function showDetailModal(record) {
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
 
-    // Get the correct state depending on whether the item is locked or just a favorite
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : mainGetItemState(record.id);
     
     if (addToPlanBtn) {
@@ -489,7 +487,8 @@ export async function showCheckoutModal() {
 
     summaryList.innerHTML = '';
     let finalTotal = 0;
-    for (const [recordId, itemInfo] of state.cart.items.entries()) {
+    
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
@@ -511,7 +510,9 @@ export async function showCheckoutModal() {
             body: JSON.stringify({ amount: finalTotalInCents }),
         });
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to fetch payment details.');
+        }
 
         clientSecret = data.clientSecret;
 
@@ -556,7 +557,9 @@ export function updateHeader() {
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
+    const saveShareBtn = document.getElementById('save-share-btn');
     if (!totalCostEl) return;
+
     let total = 0;
     const allItems = state.cart.lockedItems;
     allItems.forEach((itemInfo, recordId) => {
@@ -579,8 +582,16 @@ export function updateTotalCost() {
     });
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 
+    const isPlanEmpty = total === 0;
     if (checkoutBtn) {
-        checkoutBtn.disabled = total === 0;
+        checkoutBtn.disabled = isPlanEmpty;
+    }
+    if (saveShareBtn) {
+        if (isPlanEmpty) {
+            saveShareBtn.disabled = true;
+        } else if (state.ui.saveState === 'SAVED') {
+            saveShareBtn.disabled = false;
+        }
     }
 }
 
