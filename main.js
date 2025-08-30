@@ -1,26 +1,20 @@
 /*
- * Version: 4.2.2
+ * Version: 4.3.0
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v4.3.0 - 2025-08-29
+ * - Implemented the "One-Way Street" model for item state.
+ * - "Add to Plan" now moves an item from Favorites to the Event Plan.
+ * - Editing a locked item now correctly updates the Event Plan.
+ * - Added logic for the new "Remove from Plan" button.
  *
  * v4.2.2 - 2025-08-29
  * - Restored "Edit" button functionality for items in the Event Plan.
  *
  * v4.2.1 - 2025-08-29
- * - Fixed "mainGetItemState is not a function" TypeError by initializing state helpers.
- * - Restored click functionality for "Add to Plan" button.
- * - Restored click functionality for favorite items in the carousel.
- * - Restored functionality for the "remove" button on favorite items.
- *
- * v4.2.0 - 2025-08-29
- * - Implemented a centralized state management system for item interactions.
- *
- * v4.1.0 - 2025-08-29
- * - Implemented infinite scroll for catalog items to improve performance.
- *
- * v4.0.0 - 2025-08-29
- * - Refactored to support the new consolidated filter panel in the left sidebar.
+ * - Fixed core state management bugs and restored button functionalities.
  */
 
 import { state } from './state.js';
@@ -44,7 +38,7 @@ function debounce(func, delay = 300) {
     };
 }
 
-// --- NEW STATE MANAGEMENT HELPERS ---
+// --- STATE MANAGEMENT HELPERS ---
 function getItemState(recordId) {
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) return null;
@@ -70,6 +64,18 @@ function updateItemState(recordId, updates) {
     state.cart.items.set(recordId, newState);
     
     ui.updateFavoritesCarousel();
+    triggerSave();
+}
+
+function updateLockedItemState(recordId, updates) {
+    if (!state.cart.lockedItems.has(recordId)) return;
+    
+    const currentState = state.cart.lockedItems.get(recordId);
+    const newState = { ...currentState, ...updates };
+    state.cart.lockedItems.set(recordId, newState);
+    
+    ui.updateEventPlanPanel();
+    ui.updateTotalCost();
     triggerSave();
 }
 
@@ -389,12 +395,13 @@ function setupEventListeners() {
         if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
         
         const card = e.target.closest('.event-card');
-        const heartIcon = e.target.closest('.heart-icon');
+        const heartIcon = e.target.closest('.heart-icon:not(.locked)');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-        const editBtn = e.target.closest('.edit-btn'); // **THE FIX**
+        const editBtn = e.target.closest('.edit-btn');
+        const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
 
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
@@ -405,38 +412,62 @@ function setupEventListeners() {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            const isHearted = state.cart.items.has(recordId);
-            if (isHearted) {
+            if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
             } else {
                 updateItemState(recordId, {}); 
             }
-            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
-                icon.classList.toggle('hearted', !isHearted);
-            });
+            ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel();
             triggerSave();
         } else if (addToPlanBtn) {
-            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
-            const itemInfo = getItemState(recordId);
-            state.cart.lockedItems.set(recordId, itemInfo);
-            ui.updateEventPlanPanel();
+            const modal = addToPlanBtn.closest('#detail-modal-overlay');
+            const recordId = modal.dataset.recordId;
+            const mode = modal.dataset.mode;
+            
+            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
+            const noteInput = document.getElementById('modal-item-note');
+            
+            const currentItemInfo = {
+                quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
+                selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                note: noteInput ? noteInput.value.trim() : ''
+            };
+
+            if (mode === 'edit-locked') {
+                updateLockedItemState(recordId, currentItemInfo);
+            } else {
+                state.cart.lockedItems.set(recordId, currentItemInfo);
+                state.cart.items.delete(recordId);
+            }
+            
+            ui.updateCardIcon(recordId);
+            await ui.updateFavoritesCarousel();
+            await ui.updateEventPlanPanel();
             ui.updateTotalCost();
             triggerSave();
             ui.hideDetailModal();
-        } else if (editBtn) { // **THE FIX**
+        } else if (editBtn) {
             const lockedItemCard = editBtn.closest('.locked-item-card');
             if (!lockedItemCard) return;
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
+        } else if (removeLockedItemBtn) {
+             const lockedItemCard = removeLockedItemBtn.closest('.locked-item-card');
+             if (!lockedItemCard) return;
+             const recordId = lockedItemCard.dataset.recordId;
+             state.cart.lockedItems.delete(recordId);
+             ui.updateCardIcon(recordId);
+             await ui.updateEventPlanPanel();
+             ui.updateTotalCost();
+             triggerSave();
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
             const recordId = favoriteItem.dataset.recordId;
             state.cart.items.delete(recordId);
-            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
-                icon.classList.remove('hearted');
-            });
+            ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel();
             triggerSave();
         } else if (favoriteItem) {
@@ -454,12 +485,16 @@ function setupEventListeners() {
     // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', (e) => {
         const target = e.target;
-        const container = target.closest('[data-record-id]') || document.getElementById('detail-modal-overlay');
+        const modal = document.getElementById('detail-modal-overlay');
+        const container = target.closest('[data-record-id]');
+        
+        const isInModal = modal.style.display === 'flex' && modal.contains(target);
+        const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
+        
         if (!container) return;
-
         const recordId = container.dataset.recordId;
+        
         let updates = {};
-
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
@@ -473,7 +508,11 @@ function setupEventListeners() {
         }
         
         if (Object.keys(updates).length > 0) {
-            updateItemState(recordId, updates);
+            if (isEditLockedMode) {
+                updateLockedItemState(recordId, updates);
+            } else {
+                updateItemState(recordId, updates);
+            }
         }
     });
 }
