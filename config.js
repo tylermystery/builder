@@ -1,8 +1,11 @@
 /*
- * Version: 1.3.0
- * Last Modified: 2025-08-28
+ * Version: 1.3.1
+ * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v1.3.1 - 2025-08-29
+ * - Exported RECORDS_PER_LOAD for use in the new infinite scroll feature.
  *
  * v1.3.0 - 2025-08-28
  * - Added Stripe Publishable Key constant.
