@@ -1,8 +1,11 @@
 /*
- * Version: 2.16.0
- * Last Modified: 2025-08-28
+ * Version: 2.16.1
+ * Last Modified: 2025-08-29
  *
  * Changelog:
+ * v2.16.1 - 2025-08-29
+ * - Implemented batch processing in renderRecords to avoid API rate-limiting when fetching images.
+ *
  * v2.16.0 - 2025-08-28
  * - Replaced "Go Up" button with a parent-name link on catalog cards.
  * - Added a breadcrumb navigation trail to the detail modal.
@@ -73,14 +76,12 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-            
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-       
             if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
@@ -114,7 +115,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">Ã—</button>`;
+    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">×</button>`;
     
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeString = formatPricingType(pricingType);
@@ -128,8 +129,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
             ${noteHTML}
             <div class="favorite-pricing-details">
                 <div class="pricing-line-item">
-             
-                   <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
+                    <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
                 ${showCardTotal ?
@@ -158,7 +158,6 @@ export async function createLockedInItemElement(record, itemInfo) {
 
     const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
-
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -203,11 +202,10 @@ export async function createInteractiveCard(record, imageCache) {
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-    
-    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">ðŸ’¥</button>` : '';
-    const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">ðŸ“…</button>`;
+    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
+    const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">â¬† ${parentName}</p>` : '';
+    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
     let optionsControlHTML = '';
     let notesHTML = '';
@@ -273,7 +271,6 @@ export async function createInteractiveCard(record, imageCache) {
                 ${quantitySelectorHTML}
             </div>
         </div>`;
-
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -286,7 +283,7 @@ export async function createInteractiveCard(record, imageCache) {
             if (current > min) {
                 quantityInput.value = current - 1;
             }
-         });
+        });
     }
     
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
@@ -301,17 +298,25 @@ export async function renderRecords(recordsToRender, imageCache) {
 
     const implodeContainer = document.getElementById('implode-container');
     if (implodeContainer) implodeContainer.remove();
+    
     if (recordsToRender.length === 0) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
-    for (const record of recordsToRender) {
-        const eventCard = await createInteractiveCard(record, imageCache);
-        if (eventCard) {
-            catalogContainer.appendChild(eventCard);
-        }
+
+    const CHUNK_SIZE = 5; // Process 5 image requests at a time to avoid rate-limiting
+    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
+        const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
+        const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
+        const cards = await Promise.all(cardPromises);
+        cards.forEach(card => {
+            if (card) {
+                catalogContainer.appendChild(card);
+            }
+        });
     }
 }
+
 
 export async function updateFavoritesCarousel() {
     const favoritesSection = document.getElementById('favorites-section');
@@ -365,7 +370,7 @@ export async function showDetailModal(record) {
     if (isGrouping) {
         const range = getGroupPriceRange(record);
         modalItemPrice.textContent = range ?
-        `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+            `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
     } else {
         modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
     }
@@ -386,7 +391,6 @@ export async function showDetailModal(record) {
     });
 
     modalHeaderActions.innerHTML = '';
-    
     modalBreadcrumbsContainer.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record, state.records.all);
     if (breadcrumbs.length > 0) {
@@ -409,7 +413,7 @@ export async function showDetailModal(record) {
     }
 
     if (isGrouping) {
-        modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">ðŸ’¥</button>`;
+        modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
     }
 
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
@@ -470,7 +474,6 @@ export async function showDetailModal(record) {
     } else {
         if (modalActionsContainer) modalActionsContainer.style.display = 'block';
         if (modalNotesContainer) modalNotesContainer.style.display = 'block';
-        
         const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
         if (addToPlanBtn) {
             addToPlanBtn.textContent = lockedItemInfo ? 'Update Plan' : 'Add to Plan';
@@ -592,8 +595,6 @@ export function updateHeader() {
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
-    const headcountInput = document.getElementById('header-headcount');
-    if (headcountInput) headcountInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || 1;
     const goalsInput = document.getElementById('header-goals');
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
@@ -612,7 +613,7 @@ export function updateTotalCost() {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-  
+ 
        let itemCost;
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
