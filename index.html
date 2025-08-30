@@ -51,10 +51,10 @@
             text-transform: uppercase;
             font-weight: 500;
         }
-        .toolbar-group input, .toolbar-group textarea, #filter-controls select, #filter-controls input {
+        .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
             border: 1px solid #ced4da;
             border-radius: 4px;
-            padding: 6px 8px;
+            padding: 8px 10px;
             font-size: 0.9em;
             width: 100%;
             box-sizing: border-box;
@@ -80,6 +80,55 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
+        }
+        /* --- NEW FILTER GROUP STYLES --- */
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .filter-group label {
+            font-size: 0.9em;
+            font-weight: 500;
+            color: #333;
+        }
+        .filter-btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 8px;
+            border: 1px solid #ccc; border-radius: 4px;
+            background-color: #f8f8f8; cursor: pointer; text-align: center; font-size: 0.85em;
+        }
+        .filter-btn.active {
+            background-color: #e7f3ff;
+            border-color: #007bff; font-weight: bold;
+        }
+        #reset-filters-btn {
+            width: 100%;
+            padding: 10px;
+            font-size: 0.9em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+            margin-top: 10px;
+        }
+        /* --- NEW CATALOG TOOLBAR STYLES --- */
+        #catalog-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #catalog-toolbar select {
+             border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.9em;
         }
         #cart-panel {
             background-color: #fff;
@@ -254,22 +303,7 @@
         .locked-item-actions .edit-btn:hover {
             background-color: #e0e0e0;
         }
-        /* --- CATEGORY FILTER STYLES --- */
-        #category-filters { margin-bottom: 15px; }
-        #category-filters .filter-btn-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-top: 8px;
-        }
-        .category-filter-btn {
-            padding: 8px; border: 1px solid #ccc; border-radius: 4px;
-            background-color: #f8f8f8; cursor: pointer; text-align: center; font-size: 0.9em;
-        }
-        .category-filter-btn.active {
-            background-color: #e7f3ff; border-color: #007bff; font-weight: bold;
-        }
-
+        
         /* --- MODAL STYLES --- */
         .modal-overlay {
             display: none;
@@ -346,7 +380,8 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            min-width: 0; /* Prevents content from breaking flexbox */
+            min-width: 0;
+            /* Prevents content from breaking flexbox */
         }
         #modal-header-actions {
             display: flex;
@@ -367,9 +402,12 @@
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
         }
-        #modal-item-name { margin-top: 0; }
-        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0; }
-        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px; }
+        #modal-item-name { margin-top: 0;
+        }
+        #modal-item-price { font-size: 1.5em; font-weight: bold; margin: 10px 0;
+        }
+        #modal-options-container { margin: 20px 0; display: flex; flex-wrap: wrap; gap: 10px;
+        }
         .option-btn {
             padding: 8px 12px;
             border: 1px solid #ccc;
@@ -381,8 +419,10 @@
             border-color: #007bff;
             background-color: #e7f3ff;
         }
-        #modal-quantity-selector { margin: 20px 0; }
-        #modal-notes-container { margin-bottom: 20px; }
+        #modal-quantity-selector { margin: 20px 0;
+        }
+        #modal-notes-container { margin-bottom: 20px;
+        }
         #modal-item-note {
             width: 100%;
             height: 80px;
@@ -475,14 +515,6 @@
                 <label for="header-event-name">Event Name</label>
                 <input type="text" id="header-event-name" value="My Awesome Event">
             </div>
-            <div class="toolbar-group">
-                <label for="header-date">Date & Time</label>
-                <input type="text" id="header-date" placeholder="Select date and time range">
-            </div>
-            <div class="toolbar-group">
-                <label for="header-headcount">Headcount</label>
-                <input type="number" id="header-headcount" value="10" min="1">
-            </div>
             <div class="toolbar-group" style="flex-grow: 2;">
                 <label for="header-goals">Goals / Notes</label>
                 <input type="text" id="header-goals" placeholder="What are the goals for your event?">
@@ -494,34 +526,92 @@
         <div id="left-sidebar">
             <div id="filter-controls">
                 <h3>Filters</h3>
-                <div id="category-filters">
-                    <label style="font-size: 0.9em; font-weight: 500;">Categories</label>
-                    <div class="filter-btn-group">
-                        <button class="category-filter-btn" data-filter="Activities">Activities</button>
-                        <button class="category-filter-btn" data-filter="Venues">Venues</button>
-                        <button class="category-filter-btn" data-filter="Food & Drink">Food & Drink</button>
-                        <button class="category-filter-btn" data-filter="Extras">Extras</button>
+                
+                <div class="filter-group">
+                    <label for="date-filter">Date & Time</label>
+                    <input type="text" id="date-filter" placeholder="Select date and time range">
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
+                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
+                    </div>
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <button class="filter-btn" data-time-quick="morning">Morning</button>
+                        <button class="filter-btn" data-time-quick="afternoon">Afternoon</button>
+                        <button class="filter-btn" data-time-quick="evening">Evening</button>
                     </div>
                 </div>
-                <input type="text" id="name-filter" placeholder="Search...">
-                <select id="price-filter">
-                    <option value="all">All Prices</option>
-                    <option value="0-50">Under $50</option>
-                    <option value="50-100">$50 - $100</option>
-                    <option value="100-250">$100 - $250</option>
-                    <option value="250-plus">$250+</option>
-                </select>
+
+                <div class="filter-group">
+                    <label for="headcount-filter">Headcount</label>
+                    <select id="headcount-filter">
+                        <option value="any">Any Size</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-25">11-25</option>
+                        <option value="26-50">26-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-250">101-250</option>
+                        <option value="250-plus">250+</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;">
+                </div>
+
+                <div class="filter-group">
+                    <label for="location-filter">Location</label>
+                    <select id="location-filter">
+                        <option value="any">Any Location</option>
+                        <option value="sf">San Francisco</option>
+                        <option value="oakland">Oakland</option>
+                        <option value="peninsula">Peninsula</option>
+                        <option value="south-bay">South Bay</option>
+                        <option value="north-bay">North Bay</option>
+                        <option value="east-bay">East Bay</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="budget-filter">Budget</label>
+                    <select id="budget-filter">
+                        <option value="any">Any Budget</option>
+                        <option value="budget-friendly">Budget-Friendly</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="executive">Executive</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="category-filter">Category</label>
+                    <select id="category-filter">
+                        <option value="any">Any Category</option>
+                        <option value="Activities">Activities</option>
+                        <option value="Venues">Venues</option>
+                        <option value="Food & Drink">Food & Drink</option>
+                        <option value="Extras">Extras</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="name-filter">Search by Name</label>
+                    <input type="text" id="name-filter" placeholder="Search...">
+                </div>
+
+                <button id="reset-filters-btn">Reset All Filters</button>
+            </div>
+        </div>
+        <div id="catalog-area">
+            <div id="catalog-toolbar">
                 <select id="sort-by">
                     <option value="price-asc">Price (Low to High)</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
-                <button id="reset-filters-btn">Reset</button>
             </div>
-        </div>
-        <div id="catalog-area">
             <div id="catalog-container"></div>
         </div>
+ 
         <div id="right-sidebar">
              <div id="cart-panel">
                 <h3>Event Plan</h3>
@@ -536,7 +626,7 @@
                     <button id="checkout-btn" disabled>Checkout</button>
                     <button id="save-share-btn" disabled>🔗 Copy Link</button>
                 </div>
-             </div>
+            </div>
         </div>
     </div>
     
@@ -546,7 +636,7 @@
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
-             </div>
+            </div>
             <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                 </div>
@@ -572,19 +662,19 @@
             <h3>Checkout Summary</h3>
             <ul id="checkout-summary-list">
                 </ul>
-            <div class="checkout-total">
+             <div class="checkout-total">
                 <strong>Total:</strong>
                 <strong id="checkout-total-price">$0.00</strong>
             </div>
             <hr>
             <form id="payment-form">
                 <div class="form-row">
-                     <label for="customer-name">Full Name</label>
+                  <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required>
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
-                     <input type="email" id="customer-email" required>
+                    <input type="email" id="customer-email" required>
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
@@ -598,7 +688,7 @@
     
     <div id="favorites-section" style="display: none;">
         <h4>Favorites</h4>
-        <div id="favorites-carousel"></div>
+         <div id="favorites-carousel"></div>
     </div>
 
  
