@@ -1,8 +1,11 @@
 /*
- * Version: 2.7.7
- * Last Modified: 2025-08-28
+ * Version: 2.7.8
+ * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v2.7.8 - 2025-08-29
+ * - Implemented a retry mechanism in fetchImagesByTags to handle API rate-limiting (420 errors).
  *
  * v2.7.7 - 2025-08-28
  * - Made fetchImagesByTags more resilient to server errors to allow UI to render with fallback images.
@@ -15,6 +18,7 @@ const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba9
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -64,10 +68,8 @@ export async function saveSessionToAirtable() {
             "Name": sessionName,
             "Items with Variations": JSON.stringify(sessionData),
             "Collaborators": state.session.collaborators.join(', '),
-            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
- null,
-            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) ||
- null,
+            "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
+            "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
             "Date": formattedDate
         }
     };
@@ -125,11 +127,9 @@ export async function fetchCalendarForRecord(record) {
     if (!icalUrl) {
         return [];
     }
-
     if (state.calendar.busyTimes.has(icalUrl)) {
         return state.calendar.busyTimes.get(icalUrl);
     }
-
     try {
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
         const response = await fetch(proxyUrl);
@@ -146,7 +146,7 @@ export async function fetchCalendarForRecord(record) {
     }
 }
 
-export async function fetchImagesByTags(tags) {
+export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) return null;
     try {
         let payload;
@@ -160,6 +160,13 @@ export async function fetchImagesByTags(tags) {
             method: 'POST',
             body: JSON.stringify(payload)
         });
+        
+        if (response.status === 420 && retries > 0) {
+            console.warn(`Cloudinary rate limit hit. Retrying in 250ms... (${retries} retries left)`);
+            await new Promise(res => setTimeout(res, 250)); // Wait 250ms before retrying
+            return fetchImagesByTags(tags, retries - 1);
+        }
+
         if (!response.ok) {
             console.warn(`Cloudinary function error: ${response.statusText}`);
             return null;
@@ -174,7 +181,6 @@ export async function fetchImagesByTags(tags) {
                 transformations = 'c_fit,w_600,h_520';
             } else {
                 transformations = 'c_fill,g_auto,w_600,h_520';
-          
             }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
@@ -196,32 +202,24 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     
     let imageUrls = null;
     
-    // --- UNIFIED GROUPING LOGIC ---
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-    // --- END UNIFIED LOGIC ---
 
     if (isGrouping) {
-        // Rule 1: Try to find an image tagged with the group's name.
         const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         imageUrls = await fetchImagesByTags(groupNameTag);
-        // Rule 2: If no specific group image, find the first child and use its image.
         if (!imageUrls || imageUrls.length === 0) {
-            const firstChildOption = rawOptions.length > 0 ?
- rawOptions[0] : null;
-
+            const firstChildOption = rawOptions.length > 0 ? rawOptions[0] : null;
             if (firstChildOption) {
                 const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
                 if (firstChildRecord) {
-                    // Recursively call this function to get the child's image data
                     const childImageData = await fetchImagesForRecord(firstChildRecord, allRecords, imageCache);
                     imageUrls = childImageData.imageUrls;
                 }
             }
         }
     } else {
-        // This is the existing, working logic for final (non-grouping) items.
         const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
         if (itemName) {
             const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -237,8 +235,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
- imageUrls : [ultimateFallbackUrl];
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
     
     const result = {
         isGrouping: isGrouping,
