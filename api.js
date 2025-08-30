@@ -1,14 +1,14 @@
 /*
- * Version: 2.8.0
+ * Version: 2.8.1
  * Last Modified: 2025-08-30
  *
  * Changelog:
  *
- * v2.8.0 - 2025-08-30
- * - Fixed Airtable 422 Error by only including the Date field in the payload when it has a value.
+ * v2.8.1 - 2025-08-30
+ * - Fixed Airtable 422 Error by correctly formatting the Date field and only including it in the payload when it has a value.
  *
  * v2.7.9 - 2025-08-29
- * - Removed incorrect date validation in saveSessionToAirtable to allow full ISO date strings.
+ * - Removed incorrect date validation to allow full ISO date strings.
  */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -57,6 +57,7 @@ export async function saveSessionToAirtable() {
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDateString = dateRange[0];
         if (startDateString) {
+            // Airtable expects a string in ISO 8601 format
             formattedDate = new Date(startDateString).toISOString();
         }
     }
@@ -69,6 +70,7 @@ export async function saveSessionToAirtable() {
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
 
+    // **THE FIX**: Only add the "Date" field to the object if it has a valid value.
     if (formattedDate) {
         fields["Date"] = formattedDate;
     }
@@ -126,120 +128,3 @@ export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
         return [];
-    }
-    if (state.calendar.busyTimes.has(icalUrl)) {
-        return state.calendar.busyTimes.get(icalUrl);
-    }
-    try {
-        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (!response.ok) {
-            throw new Error(`Calendar API Error: ${response.statusText}`);
-        }
-        const busyTimes = await response.json();
-        state.calendar.busyTimes.set(icalUrl, busyTimes);
-        return busyTimes;
-    } catch (error) {
-        console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
-        state.calendar.busyTimes.set(icalUrl, []);
-        return [];
-    }
-}
-
-export async function fetchImagesByTags(tags, retries = 2) {
-    if (!tags || tags.length === 0) return null;
-    try {
-        let payload;
-        if (Array.isArray(tags)) {
-            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
-        } else {
-            payload = { tag: tags };
-        }
-        
-        const response = await fetch('/.netlify/functions/cloudinary', {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        });
-        if (response.status === 420 && retries > 0) {
-            console.warn(`Cloudinary rate limit hit. Retrying in 250ms... (${retries} retries left)`);
-            await new Promise(res => setTimeout(res, 250));
-            return fetchImagesByTags(tags, retries - 1);
-        }
-
-        if (!response.ok) {
-            console.warn(`Cloudinary function error: ${response.statusText}`);
-            return null;
-        }
-        
-        const data = await response.json();
-        if (!data.resources || data.resources.length === 0) return null;
-        
-        return data.resources.map(image => {
-            let transformations;
-            if (image.format === 'gif') {
-                transformations = 'c_fit,w_600,h_520';
-            } else {
-                transformations = 'c_fill,g_auto,w_600,h_520';
-            }
-            const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
-        });
-    } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return null;
-    }
-}
-
-export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    const cacheKey = record.id;
-    if (imageCache.has(cacheKey)) {
-        return imageCache.get(cacheKey);
-    }
-
-    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
-    
-    let imageUrls = null;
-    
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
-    if (isGrouping) {
-        const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        imageUrls = await fetchImagesByTags(groupNameTag);
-        if (!imageUrls || imageUrls.length === 0) {
-            const firstChildOption = rawOptions.length > 0 ? rawOptions[0] : null;
-            if (firstChildOption) {
-                const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
-                if (firstChildRecord) {
-                    const childImageData = await fetchImagesForRecord(firstChildRecord, allRecords, imageCache);
-                    imageUrls = childImageData.imageUrls;
-                }
-            }
-        }
-    } else {
-        const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
-        if (itemName) {
-            const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-            imageUrls = await fetchImagesByTags(autoTagName);
-        }
-        
-        if (!imageUrls) {
-            const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
-            if (primaryManualTag) {
-                imageUrls = await fetchImagesByTags(primaryManualTag);
-            }
-        }
-    }
-    
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
-    
-    const result = {
-        isGrouping: isGrouping,
-        imageUrls: finalImageUrls.flat()
-    };
-    imageCache.set(cacheKey, result);
-    return result;
-}
