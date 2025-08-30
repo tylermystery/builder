@@ -1,8 +1,11 @@
 /*
- * Version: 4.3.0
+ * Version: 4.3.1
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v4.3.1 - 2025-08-29
+ * - Restored "Checkout" button functionality.
  *
  * v4.3.0 - 2025-08-29
  * - Implemented the "One-Way Street" model for item state.
@@ -402,6 +405,7 @@ function setupEventListeners() {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const editBtn = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn'); // **THE FIX**
 
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
@@ -409,6 +413,8 @@ function setupEventListeners() {
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
+        } else if (checkoutBtn) { // **THE FIX**
+            ui.showCheckoutModal();
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
