@@ -1,14 +1,13 @@
 /*
- * Version: 2.18.2
+ * Version: 2.18.3
  * Last Modified: 2025-08-30
  *
  * Changelog:
- * v2.18.2 - 2025-08-30
- * - This version reflects the finalized "One-Way Street" model from v2.18.0.
+ * v2.18.3 - 2025-08-30
+ * - Ensured correct import from the new availability.js file.
  *
  * v2.18.1 - 2025-08-30
- * - Fixed checkout modal to calculate total from "lockedItems" instead of "items".
- * - "Copy Link" button is now correctly enabled/disabled based on plan total.
+ * - Fixed checkout modal and "Copy Link" button logic.
  *
  * v2.18.0 - 2025-08-29
  * - Implemented finalized "One-Way Street" logic for Favorites and Locked Items.
@@ -458,7 +457,7 @@ export async function showDetailModal(record) {
     }
 
     modalCalendarContainer.innerHTML = '';
-    const busyTimes = await fetchCalendarForRecord(record);
+    const busyTimes = await api.fetchCalendarForRecord(record);
     flatpickr(modalCalendarContainer, {
         inline: true,
         onDayCreate: function(dObj, dStr, fp, dayElem) {
