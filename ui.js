@@ -1,11 +1,16 @@
 /*
- * Version: 2.16.2
+ * Version: 2.17.0
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ * v2.17.0 - 2025-08-29
+ * - Refactored createInteractiveCard and showDetailModal to read from the central item state.
+ * - Ensured UI elements (quantity, options, notes) are always in sync with the state.
+ *
  * v2.16.2 - 2025-08-29
  * - Modified renderRecords to support appending for infinite scroll.
- * * v2.16.1 - 2025-08-29
+ *
+ * v2.16.1 - 2025-08-29
  * - Implemented batch processing in renderRecords to avoid API rate-limiting when fetching images.
  *
  * v2.16.0 - 2025-08-28
@@ -19,7 +24,16 @@ import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
+// HACK: A bit of a hack to get a reference to the main.js state helpers.
+// A better solution would be a more formal state management pattern (like Redux, Vuex, etc.)
+// but for this project, this avoids circular dependencies.
+let mainGetItemState;
+export function initStateHelpers(helpers) {
+    mainGetItemState = helpers.getItemState;
+}
+
 let stripe, elements, cardElement, clientSecret;
+
 // --- HELPER & LOGIC FUNCTIONS ---
 function getBreadcrumbs(record, allRecords) {
     const breadcrumbs = [];
@@ -28,10 +42,10 @@ function getBreadcrumbs(record, allRecords) {
         const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
         const parentRecord = allRecords.find(r => r.fields.Name === parentName);
         if (parentRecord) {
-            breadcrumbs.unshift(parentRecord); // Add to the beginning of the array
+            breadcrumbs.unshift(parentRecord);
             current = parentRecord;
         } else {
-            break; // Stop if a parent isn't found
+            break;
         }
     }
     return breadcrumbs;
@@ -69,9 +83,7 @@ function getDescendantBookableItems(record, allRecords) {
 export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
-    let minPrice = Infinity;
-    let maxPrice = -Infinity;
-
+    let minPrice = Infinity, maxPrice = -Infinity;
     descendants.forEach(item => {
         const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         if (options.length > 0) {
@@ -134,12 +146,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
                     <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
-                ${showCardTotal ?
-                `
-                <div class="pricing-line-item-total">
-                    <span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span>
-                </div>
-                ` : ''}
+                ${showCardTotal ? `<div class="pricing-line-item-total"><span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span></div>` : ''}
             </div>
         </div>`;
     return itemCard;
@@ -150,14 +157,12 @@ export async function createLockedInItemElement(record, itemInfo) {
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
-
     const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
@@ -168,10 +173,7 @@ export async function createLockedInItemElement(record, itemInfo) {
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
-        <div class="locked-item-actions">
-            <button class="edit-btn">Edit</button>
-        </div>
-    `;
+        <div class="locked-item-actions"><button class="edit-btn">Edit</button></div>`;
     return itemElement;
 }
 
@@ -183,7 +185,6 @@ export async function updateEventPlanPanel() {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         return;
     }
-
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -197,6 +198,7 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
+    const itemState = mainGetItemState(recordId); // Use central state
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -209,82 +211,42 @@ export async function createInteractiveCard(record, imageCache) {
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
-    let optionsControlHTML = '';
-    let notesHTML = '';
-    let quantitySelectorHTML = '';
-    let priceHTML = '';
+    let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '';
     if (isGrouping) {
-        optionsControlHTML = `<select class="options-selector navigate-options">
-            <option value="">Select an option...</option>
-            ${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}
-        </select>`;
+        optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
         const range = getGroupPriceRange(record);
-        if (range) {
-            priceHTML = range.min === range.max ?
-            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
-        } else {
-            priceHTML = 'Price Varies';
-        }
+        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        optionsControlHTML = `<select class="options-selector configure-options">
-             ${rawOptions.map((opt, index) => `<option value="${index}">${opt.name}</option>`).join('')}
-        </select>`;
-        notesHTML = `<textarea class="item-note" placeholder="Add a note..."></textarea>`;
-        quantitySelectorHTML = `
-            <div class="quantity-selector">
-                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                <input type="number" class="quantity-input" value="${headcountMin}" min="${headcountMin}">
-                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
-            </div>`;
+        optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}" ${itemState.selectedOptionIndex === index ? 'selected' : ''}>${opt.name}</option>`).join('')}</select>`;
+        notesHTML = `<textarea class="item-note" placeholder="Add a note...">${itemState.note}</textarea>`;
+        quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         priceHTML = `$${initialPrice.toFixed(2)}`;
     }
 
-    let iconClass = '';
-    let iconSVG = '';
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-
     const isLockedIn = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
+    let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
+    let iconSVG = isLockedIn ? checkSVG : heartSVG;
 
-    if (isLockedIn) {
-        iconClass = 'locked';
-        iconSVG = checkSVG;
-    } else if (isHearted) {
-        iconClass = 'hearted';
-        iconSVG = heartSVG;
-    } else {
-        iconSVG = heartSVG;
-    }
-
-    eventCard.innerHTML = `
-        <div class="card-header-actions">${availabilityButtonHTML}${explodeButtonHTML}</div>
-        <div class="heart-icon ${iconClass}">${iconSVG}</div>
-        <div class="event-card-content">
-           ${parentLinkHTML}
-           <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
-            ${rawOptions.length > 0 ? optionsControlHTML : ''}
-            ${notesHTML}
-            <div class="price-quantity-wrapper">
-                <div class="price">${priceHTML}</div>
-                ${quantitySelectorHTML}
-            </div>
-        </div>`;
+    eventCard.innerHTML = `<div class="card-header-actions">${availabilityButtonHTML}${explodeButtonHTML}</div><div class="heart-icon ${iconClass}">${iconSVG}</div><div class="event-card-content">${parentLinkHTML}<h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>${rawOptions.length > 0 ? optionsControlHTML : ''}${notesHTML}<div class="price-quantity-wrapper"><div class="price">${priceHTML}</div>${quantitySelectorHTML}</div></div>`;
+    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
     if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', (e) => { e.stopPropagation(); quantityInput.value = parseInt(quantityInput.value) + 1; });
-        minusBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const current = parseInt(quantityInput.value);
-            const min = parseInt(quantityInput.min);
-            if (current > min) {
-                quantityInput.value = current - 1;
-            }
+        plusBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            quantityInput.stepUp(); 
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
+        });
+        minusBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            quantityInput.stepDown(); 
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
         });
     }
     
@@ -296,27 +258,22 @@ export async function createInteractiveCard(record, imageCache) {
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
-    
     if (!append) {
         catalogContainer.innerHTML = '';
         const implodeContainer = document.getElementById('implode-container');
         if (implodeContainer) implodeContainer.remove();
     }
-    
     if (recordsToRender.length === 0 && !append) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
-
-    const CHUNK_SIZE = 5; // Process 5 image requests at a time to avoid rate-limiting
+    const CHUNK_SIZE = 5;
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
         const cards = await Promise.all(cardPromises);
         cards.forEach(card => {
-            if (card) {
-                catalogContainer.appendChild(card);
-            }
+            if (card) catalogContainer.appendChild(card);
         });
     }
 }
@@ -333,7 +290,6 @@ export async function updateFavoritesCarousel() {
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     const imageCache = new Map();
-    
     const sortedItems = Array.from(state.cart.items.entries());
     for (const [recordId, itemInfo] of sortedItems) {
         const record = state.records.all.find(r => r.id === recordId);
@@ -362,7 +318,7 @@ export async function showDetailModal(record) {
     const modalActionsContainer = document.getElementById('modal-actions-container');
 
     modalOverlay.dataset.recordId = record.id;
-    
+    const itemState = mainGetItemState(record.id); // Use central state
     const lockedItemInfo = state.cart.lockedItems.get(record.id);
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
@@ -370,10 +326,10 @@ export async function showDetailModal(record) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+
     if (isGrouping) {
         const range = getGroupPriceRange(record);
-        modalItemPrice.textContent = range ?
-            `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+        modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
     } else {
         modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
     }
@@ -418,22 +374,13 @@ export async function showDetailModal(record) {
     if (isGrouping) {
         modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
     }
-
+    
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
     const isLockedIn = state.cart.lockedItems.has(record.id);
     const isHearted = state.cart.items.has(record.id);
-    let iconClass = '';
-    let iconSVG = '';
-    if (isLockedIn) {
-        iconClass = 'locked';
-        iconSVG = checkSVG;
-    } else if (isHearted) {
-        iconClass = 'hearted';
-        iconSVG = heartSVG;
-    } else {
-        iconSVG = heartSVG;
-    }
+    let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
+    let iconSVG = isLockedIn ? checkSVG : heartSVG;
     
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
@@ -447,13 +394,15 @@ export async function showDetailModal(record) {
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
         optionButton.dataset.optionIndex = index;
-
+        if (itemState.selectedOptionIndex === index) {
+            optionButton.classList.add('selected');
+        }
         let priceModText = '';
         if (opt.absolutePrice != null) {
             priceModText = `$${opt.absolutePrice.toFixed(2)}`;
         } else if (opt.priceChange != null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-         }
+        }
         optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
         if (allRecordNames.has(opt.name)) {
             optionButton.onclick = () => {
@@ -464,45 +413,35 @@ export async function showDetailModal(record) {
             optionButton.onclick = (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
+                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
+                e.currentTarget.dispatchEvent(new CustomEvent('change', {
+                    bubbles: true,
+                    detail: { selectedOptionIndex: newIndex }
+                }));
                 modalItemDescription.textContent = opt.description || record.fields.Description;
             };
         }
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    modalQuantitySelector.innerHTML = '';
-    if (isGrouping) {
-        if (modalActionsContainer) modalActionsContainer.style.display = 'none';
-        if (modalNotesContainer) modalNotesContainer.style.display = 'none';
-    } else {
-        if (modalActionsContainer) modalActionsContainer.style.display = 'block';
-        if (modalNotesContainer) modalNotesContainer.style.display = 'block';
-        const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-        if (addToPlanBtn) {
-            addToPlanBtn.textContent = lockedItemInfo ? 'Update Plan' : 'Add to Plan';
-        }
+    if (!isGrouping) {
+        modalActionsContainer.style.display = 'block';
+        modalNotesContainer.style.display = 'block';
+        document.getElementById('modal-add-to-plan-btn').textContent = lockedItemInfo ? 'Update Plan' : 'Add to Plan';
         
-        if (lockedItemInfo?.selectedOptionIndex != null) {
-            const btnToSelect = modalOptionsContainer.querySelector(`.option-btn[data-option-index="${lockedItemInfo.selectedOptionIndex}"]`);
-            if(btnToSelect) btnToSelect.classList.add('selected');
-        }
-
-        modalItemNote.value = lockedItemInfo?.note || '';
+        modalItemNote.value = itemState.note;
 
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const currentQuantity = lockedItemInfo?.quantity || state.cart.items.get(record.id)?.quantity || headcountMin;
-        
-        modalQuantitySelector.innerHTML = `
-            <div class="quantity-selector">
-                <button class="quantity-btn minus" aria-label="Decrease quantity">-</button>
-                <input type="number" class="quantity-input" value="${currentQuantity}" min="${headcountMin}">
-                <button class="quantity-btn plus" aria-label="Increase quantity">+</button>
-            </div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
-        plusBtn.addEventListener('click', () => input.stepUp());
-        minusBtn.addEventListener('click', () => input.stepDown());
+        plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+        minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+    } else {
+        modalActionsContainer.style.display = 'none';
+        modalNotesContainer.style.display = 'none';
+        modalQuantitySelector.innerHTML = '';
     }
 
     modalCalendarContainer.innerHTML = '';
