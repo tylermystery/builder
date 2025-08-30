@@ -1,9 +1,11 @@
 /*
- * Version: 2.16.1
+ * Version: 2.16.2
  * Last Modified: 2025-08-29
  *
  * Changelog:
- * v2.16.1 - 2025-08-29
+ * v2.16.2 - 2025-08-29
+ * - Modified renderRecords to support appending for infinite scroll.
+ * * v2.16.1 - 2025-08-29
  * - Implemented batch processing in renderRecords to avoid API rate-limiting when fetching images.
  *
  * v2.16.0 - 2025-08-28
@@ -291,15 +293,17 @@ export async function createInteractiveCard(record, imageCache) {
     return eventCard;
 }
 
-export async function renderRecords(recordsToRender, imageCache) {
+export async function renderRecords(recordsToRender, imageCache, append = false) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
-    catalogContainer.innerHTML = '';
-
-    const implodeContainer = document.getElementById('implode-container');
-    if (implodeContainer) implodeContainer.remove();
     
-    if (recordsToRender.length === 0) {
+    if (!append) {
+        catalogContainer.innerHTML = '';
+        const implodeContainer = document.getElementById('implode-container');
+        if (implodeContainer) implodeContainer.remove();
+    }
+    
+    if (recordsToRender.length === 0 && !append) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
@@ -316,7 +320,6 @@ export async function renderRecords(recordsToRender, imageCache) {
         });
     }
 }
-
 
 export async function updateFavoritesCarousel() {
     const favoritesSection = document.getElementById('favorites-section');
