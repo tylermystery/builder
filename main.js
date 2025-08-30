@@ -1,8 +1,11 @@
 /*
- * Version: 4.2.1
+ * Version: 4.2.2
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v4.2.2 - 2025-08-29
+ * - Restored "Edit" button functionality for items in the Event Plan.
  *
  * v4.2.1 - 2025-08-29
  * - Fixed "mainGetItemState is not a function" TypeError by initializing state helpers.
@@ -259,7 +262,6 @@ async function updateAllCardAvailabilityIcons() {
 
 // --- INITIALIZATION & MAIN FLOW ---
 async function initialize() {
-    // **THE FIX**: Initialize UI module with state helper functions
     ui.initStateHelpers({ getItemState });
 
     ui.toggleLoading(true);
@@ -383,17 +385,16 @@ function setupEventListeners() {
     
     // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
-        // Modal closing
         if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) { ui.hideDetailModal(); return; }
         if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
         
-        // Element selectors
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
+        const editBtn = e.target.closest('.edit-btn'); // **THE FIX**
 
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
@@ -423,6 +424,12 @@ function setupEventListeners() {
             ui.updateTotalCost();
             triggerSave();
             ui.hideDetailModal();
+        } else if (editBtn) { // **THE FIX**
+            const lockedItemCard = editBtn.closest('.locked-item-card');
+            if (!lockedItemCard) return;
+            const recordId = lockedItemCard.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
             const recordId = favoriteItem.dataset.recordId;
@@ -447,7 +454,6 @@ function setupEventListeners() {
     // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', (e) => {
         const target = e.target;
-        // The event target for option buttons is the button itself, not a container with the recordId
         const container = target.closest('[data-record-id]') || document.getElementById('detail-modal-overlay');
         if (!container) return;
 
@@ -461,7 +467,6 @@ function setupEventListeners() {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
-            // This is a custom event from the modal option buttons
             if(e.detail?.selectedOptionIndex !== undefined) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
             }
