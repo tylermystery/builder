@@ -1,15 +1,16 @@
 /*
- * Version: 4.3.2
+ * Version: 4.4.0
  * Last Modified: 2025-08-30
  *
  * Changelog:
  *
+ * v4.4.0 - 2025-08-30
+ * - Implemented advanced headcount filtering based on Capacity range overlap.
+ * - Integrated lead time logic by importing from the new availability.js module.
+ *
  * v4.3.2 - 2025-08-30
  * - Fixed a bug where the Event Plan UI would not update after loading a saved session.
  * - Fully implemented the "One-Way Street" state management model to prevent duplicate items.
- *
- * v4.3.1 - 2025-08-29
- * - Restored "Checkout" button functionality.
  */
 
 import { state } from './state.js';
@@ -139,19 +140,29 @@ function applyFiltersAndSort() {
     let recordsToDisplay = state.records.all;
 
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
-        let min = 0, max = Infinity;
+        let filterMin = 0, filterMax = Infinity;
+
         if (headcountFilter === 'custom') {
-            min = parseInt(customHeadcount, 10) || 0;
-            max = min;
+            filterMin = parseInt(customHeadcount, 10) || 0;
+            filterMax = filterMin;
         } else {
             const [minStr, maxStr] = headcountFilter.split('-');
-            min = parseInt(minStr, 10);
-            max = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
+            filterMin = parseInt(minStr, 10);
+            filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
         }
+
+        const parseCapacity = (capacityStr) => {
+            if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
+            if (capacityStr.includes('+')) {
+                return { min: parseInt(capacityStr, 10) || 0, max: Infinity };
+            }
+            const parts = capacityStr.split('-').map(p => parseInt(p, 10));
+            return { min: parts[0] || 0, max: parts[1] || Infinity };
+        };
+
         recordsToDisplay = recordsToDisplay.filter(record => {
-            const recordMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-            const recordMax = record.fields['Headcount max'] || Infinity; 
-            return recordMin <= max && recordMax >= min;
+            const capacity = parseCapacity(record.fields['Capacity']);
+            return filterMin <= capacity.max && filterMax >= capacity.min;
         });
     }
 
