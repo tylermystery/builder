@@ -1,8 +1,11 @@
 /*
- * Version: 2.7.8
+ * Version: 2.7.9
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v2.7.9 - 2025-08-29
+ * - Removed incorrect date validation in saveSessionToAirtable to allow full ISO date strings.
  *
  * v2.7.8 - 2025-08-29
  * - Implemented a retry mechanism in fetchImagesByTags to handle API rate-limiting (420 errors).
@@ -56,7 +59,8 @@ export async function saveSessionToAirtable() {
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDateString = dateRange[0];
-        if (startDateString && /^\d{4}-\d{2}-\d{2}$/.test(startDateString)) {
+        // THE FIX: Remove faulty validation and simply trust the date string from flatpickr
+        if (startDateString) {
             formattedDate = new Date(startDateString).toISOString();
         } else {
             console.error("Invalid date format in state, cannot save:", startDateString);
@@ -163,7 +167,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
         
         if (response.status === 420 && retries > 0) {
             console.warn(`Cloudinary rate limit hit. Retrying in 250ms... (${retries} retries left)`);
-            await new Promise(res => setTimeout(res, 250)); // Wait 250ms before retrying
+            await new Promise(res => setTimeout(res, 250));
             return fetchImagesByTags(tags, retries - 1);
         }
 
