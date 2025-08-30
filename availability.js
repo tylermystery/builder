@@ -7,7 +7,7 @@ export const AVAILABILITY_STATUS = {
     NONE: 'NONE',
 };
 
-// Helper to get the start of a given day
+// Helper to get the start of a given day, ignoring time
 function getStartOfDay(date) {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
@@ -25,7 +25,7 @@ export function getDayStatus(day, busyTimes, record) {
     const today = getStartOfDay(new Date());
     const checkDay = getStartOfDay(day);
 
-    // Check for lead time
+    // 1. Check for lead time
     const leadTime = record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0;
     const leadTimeCutoff = new Date(today);
     leadTimeCutoff.setDate(today.getDate() + leadTime);
@@ -34,7 +34,7 @@ export function getDayStatus(day, busyTimes, record) {
         return AVAILABILITY_STATUS.NONE;
     }
     
-    // Check iCal busy times
+    // 2. Check iCal busy times
     const dayBusySlots = busyTimes.filter(slot => {
         const start = getStartOfDay(new Date(slot.start));
         return start.getTime() === checkDay.getTime();
@@ -44,8 +44,7 @@ export function getDayStatus(day, busyTimes, record) {
         return AVAILABILITY_STATUS.FULL;
     }
     
-    // For now, if there are any busy slots, we'll consider the day partially available.
-    // A more advanced check could see if the *entire* day is blocked.
+    // 3. Check if a busy slot is an all-day event
     const isFullDayEvent = dayBusySlots.some(slot => slot.isFullDay);
     if (isFullDayEvent) {
         return AVAILABILITY_STATUS.NONE;
@@ -55,7 +54,7 @@ export function getDayStatus(day, busyTimes, record) {
 }
 
 /**
- * Checks if a requested time range is available.
+ * Checks if a requested time range is available against a list of busy slots.
  * @param {Date} start - The requested start time.
  * @param {Date} end - The requested end time.
  * @param {Array} busyTimes - An array of busy time slots.
@@ -65,7 +64,7 @@ export function checkAvailability(start, end, busyTimes) {
     for (const busySlot of busyTimes) {
         const busyStart = new Date(busySlot.start);
         const busyEnd = new Date(busySlot.end);
-        // Check for overlap
+        // Check for overlap: (StartA < EndB) and (EndA > StartB)
         if (start < busyEnd && end > busyStart) {
             return false;
         }
