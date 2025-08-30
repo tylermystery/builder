@@ -1,14 +1,17 @@
 /*
- * Version: 4.2.0
+ * Version: 4.2.1
  * Last Modified: 2025-08-29
  *
  * Changelog:
  *
+ * v4.2.1 - 2025-08-29
+ * - Fixed "mainGetItemState is not a function" TypeError by initializing state helpers.
+ * - Restored click functionality for "Add to Plan" button.
+ * - Restored click functionality for favorite items in the carousel.
+ * - Restored functionality for the "remove" button on favorite items.
+ *
  * v4.2.0 - 2025-08-29
  * - Implemented a centralized state management system for item interactions.
- * - Added getItemState and updateItemState functions to sync quantity, options, and notes.
- * - Added a unified 'change' listener to update state from cards and modals.
- * - Refactored hearting/unhearting logic to preserve item state.
  *
  * v4.1.0 - 2025-08-29
  * - Implemented infinite scroll for catalog items to improve performance.
@@ -55,7 +58,6 @@ function getItemState(recordId) {
 function updateItemState(recordId, updates) {
     if (!state.records.all.find(r => r.id === recordId)) return;
     
-    // Ensure the item is in the cart before updating, preserving existing data
     if (!state.cart.items.has(recordId)) {
         state.cart.items.set(recordId, getItemState(recordId));
     }
@@ -64,7 +66,6 @@ function updateItemState(recordId, updates) {
     const newState = { ...currentState, ...updates };
     state.cart.items.set(recordId, newState);
     
-    // Also update the UI and trigger save
     ui.updateFavoritesCarousel();
     triggerSave();
 }
@@ -258,6 +259,9 @@ async function updateAllCardAvailabilityIcons() {
 
 // --- INITIALIZATION & MAIN FLOW ---
 async function initialize() {
+    // **THE FIX**: Initialize UI module with state helper functions
+    ui.initStateHelpers({ getItemState });
+
     ui.toggleLoading(true);
     try {
         state.records.all = await api.fetchAllRecords();
@@ -377,14 +381,20 @@ function setupEventListeners() {
         }
     });
     
+    // --- UNIFIED CLICK LISTENER ---
     document.body.addEventListener('click', async (e) => {
+        // Modal closing
         if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) { ui.hideDetailModal(); return; }
         if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
         
+        // Element selectors
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
-        
+        const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const removeBtn = favoriteItem?.querySelector('.remove-btn');
+
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -395,34 +405,50 @@ function setupEventListeners() {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
             const isHearted = state.cart.items.has(recordId);
-
             if (isHearted) {
                 state.cart.items.delete(recordId);
             } else {
-                // When hearting, add the item with its default/current state
                 updateItemState(recordId, {}); 
             }
-            
-            // Visually update all relevant heart icons
-            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon`).forEach(icon => {
+            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
                 icon.classList.toggle('hearted', !isHearted);
             });
-            document.getElementById('modal-heart-btn')?.classList.toggle('hearted', !isHearted);
-
             await ui.updateFavoritesCarousel();
             triggerSave();
+        } else if (addToPlanBtn) {
+            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
+            const itemInfo = getItemState(recordId);
+            state.cart.lockedItems.set(recordId, itemInfo);
+            ui.updateEventPlanPanel();
+            ui.updateTotalCost();
+            triggerSave();
+            ui.hideDetailModal();
+        } else if (removeBtn && e.target === removeBtn) {
+            e.stopPropagation();
+            const recordId = favoriteItem.dataset.recordId;
+            state.cart.items.delete(recordId);
+            document.querySelectorAll(`[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
+                icon.classList.remove('hearted');
+            });
+            await ui.updateFavoritesCarousel();
+            triggerSave();
+        } else if (favoriteItem) {
+            const recordId = favoriteItem.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note')) return;
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon')) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         }
     });
 
-    // Unified CHANGE listener for all inputs
+    // --- UNIFIED CHANGE LISTENER ---
     document.body.addEventListener('change', (e) => {
         const target = e.target;
-        const container = target.closest('[data-record-id]');
+        // The event target for option buttons is the button itself, not a container with the recordId
+        const container = target.closest('[data-record-id]') || document.getElementById('detail-modal-overlay');
         if (!container) return;
 
         const recordId = container.dataset.recordId;
@@ -434,6 +460,11 @@ function setupEventListeners() {
             updates.selectedOptionIndex = parseInt(target.value, 10);
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
+        } else if (target.matches('.option-btn')) {
+            // This is a custom event from the modal option buttons
+            if(e.detail?.selectedOptionIndex !== undefined) {
+                 updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+            }
         }
         
         if (Object.keys(updates).length > 0) {
