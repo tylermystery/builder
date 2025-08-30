@@ -1,9 +1,10 @@
 Feature Specification Sheet (Final Version)
 
-**Version: 1.1.0**
-**Last Modified: 2025-08-29**
+**Version: 1.2.0**
+**Last Modified: 2025-08-30**
 
 ### Changelog
+* **v1.2.0 (2025-08-30):** Added "State Management Model" section to document the user flow for favorited and locked items.
 * **v1.1.0 (2025-08-29):** Added clarification on the data format for multi-value text fields like `Categories` from Airtable.
 
 ### Summary of Improvements
@@ -17,6 +18,13 @@ The application's data is powered by an Airtable database and the Cloudinary med
 
 #### Direct API Communication (Development)
 For development purposes, the application communicates directly with the Airtable API from the browser. This method uses a hard-coded Personal Access Token. Note: This approach poses a security risk by exposing the API key and is intended as a temporary measure. The final version should use a secure serverless proxy.
+
+### State Management Model ("One-Way Street")
+To ensure a clear and predictable user experience, the application uses a "one-way street" model for managing user selections. An item progresses from a temporary favorite to a permanent part of the event plan.
+* **Core Rule**: An item can be either a **Favorite** (in the bottom carousel) or a **Locked Item** (in the right-hand Event Plan), but never both simultaneously.
+* **Favoriting**: Clicking a heart icon (❤️) adds an item to the temporary `Favorites` list. It can be un-favorited at any time.
+* **Locking In**: Clicking "Add to Plan" moves the item from the `Favorites` list to the `Event Plan`. It disappears from the favorites carousel, and its icon on the main catalog card changes to a disabled checkmark (✅).
+* **Editing & Removing**: Once locked, an item can only be modified via the "Edit" button or removed via the "×" button within the Event Plan sidebar.
 
 #### Session Management (Live URL & Fork on Edit)
 A unique, shareable URL is automatically generated and updated as a user builds their event plan.
