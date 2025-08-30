@@ -1,8 +1,13 @@
 /*
- * Version: 4.0.0
+ * Version: 4.1.0
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ *
+ * v4.1.0 - 2025-08-29
+ * - Implemented infinite scroll for catalog items to improve performance.
+ * - Added throttled scroll listener to load more records on demand.
+ * - Refactored applyFiltersAndSort to manage the full filtered list in state.
  *
  * v4.0.0 - 2025-08-29
  * - Refactored to support the new consolidated filter panel in the left sidebar.
@@ -13,7 +18,7 @@
  */
 
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
@@ -31,6 +36,24 @@ function debounce(func, delay = 300) {
             func.apply(this, args);
         }, delay);
     };
+}
+
+// --- INFINITE SCROLL LOGIC ---
+function loadMoreRecords() {
+    if (state.ui.isLoadingMore) return;
+
+    const start = state.ui.recordsCurrentlyDisplayed;
+    const end = start + RECORDS_PER_LOAD;
+    const recordsToLoad = state.records.filtered.slice(start, end);
+
+    if (recordsToLoad.length > 0) {
+        state.ui.isLoadingMore = true;
+        // The 'true' flag tells renderRecords to append instead of replacing.
+        ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
+            state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
+            state.ui.isLoadingMore = false;
+        });
+    }
 }
 
 // --- SAVE STATE MANAGEMENT ---
@@ -69,7 +92,6 @@ function triggerSave() {
 
 // --- CORE LOGIC ---
 function applyFiltersAndSort() {
-    // 1. Get all filter values from the new UI
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const headcountFilter = document.getElementById('headcount-filter').value;
     const customHeadcount = document.getElementById('headcount-custom').value;
@@ -80,9 +102,6 @@ function applyFiltersAndSort() {
     
     let recordsToDisplay = state.records.all;
 
-    // 2. Apply each filter sequentially
-
-    // HEADCOUNT FILTER
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let min = 0, max = Infinity;
         if (headcountFilter === 'custom') {
@@ -95,20 +114,17 @@ function applyFiltersAndSort() {
         }
         recordsToDisplay = recordsToDisplay.filter(record => {
             const recordMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-            // Assuming a max headcount field might exist, otherwise check against min
             const recordMax = record.fields['Headcount max'] || Infinity; 
             return recordMin <= max && recordMax >= min;
         });
     }
 
-    // LOCATION FILTER (Assumes a 'Location' field in Airtable)
     if (locationFilter !== 'any') {
         recordsToDisplay = recordsToDisplay.filter(record => {
             return record.fields['Location']?.toLowerCase().replace(/\s+/g, '-') === locationFilter;
         });
     }
 
-    // BUDGET FILTER (Maps friendly names to price ranges)
     if (budgetFilter !== 'any') {
         const BUDGET_RANGES = {
             'budget-friendly': { min: 0, max: 50 },
@@ -123,7 +139,6 @@ function applyFiltersAndSort() {
         });
     }
 
-    // CATEGORY FILTER
     if (categoryFilter !== 'any') {
         recordsToDisplay = recordsToDisplay.filter(record => {
             const getTagsFromString = (str) => {
@@ -138,7 +153,6 @@ function applyFiltersAndSort() {
         });
     }
 
-    // SEARCH TERM FILTER
     if (searchTerm) {
         const scoredRecords = [];
         recordsToDisplay.forEach(record => {
@@ -157,7 +171,6 @@ function applyFiltersAndSort() {
         recordsToDisplay = scoredRecords.map(item => item.record);
     }
     
-    // 3. Apply Sorting
     recordsToDisplay.sort((a, b) => {
         const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
@@ -171,8 +184,16 @@ function applyFiltersAndSort() {
         }
     });
 
-    // 4. Render the final list of records
-    ui.renderRecords(recordsToDisplay, imageCache);
+    // Store the full filtered list in state
+    state.records.filtered = recordsToDisplay;
+    // Reset the display count
+    state.ui.recordsCurrentlyDisplayed = 0;
+    
+    // Render the FIRST batch of records
+    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+    ui.renderRecords(initialRecords, imageCache, false).then(() => { // false = replace content
+        state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+    });
 }
 
 // --- AVAILABILITY LOGIC ---
@@ -251,6 +272,19 @@ function setupEventListeners() {
         if (element) element.addEventListener(event, handler);
         else console.warn(`Element with ID "${selector}" not found.`);
     };
+
+    // --- INFINITE SCROLL LISTENER ---
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        if (scrollTimeout) return; // Throttle the event
+        scrollTimeout = setTimeout(() => {
+            const buffer = 300; // Load more when 300px from the bottom
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer) {
+                loadMoreRecords();
+            }
+            scrollTimeout = null;
+        }, 100);
+    });
 
     // --- NEW FILTER LISTENERS ---
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
@@ -379,4 +413,3 @@ function setupEventListeners() {
 }
 
 initialize();
-
