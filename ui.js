@@ -1,13 +1,14 @@
 /*
- * Version: 2.18.6
+ * Version: 2.18.5
  * Last Modified: 2025-08-30
  *
  * Changelog:
- * v2.18.6 - 2025-08-30
- * - Cleared card-element div before mounting Stripe to prevent console warnings.
  *
  * v2.18.5 - 2025-08-30
- * - Added availability tooltips (popups) to the calendar in the detail modal.
+ * - Verified correct import from the new availability.js module.
+ *
+ * v2.18.4 - 2025-08-30
+ * - Fixed "api is not defined" ReferenceError by restoring the missing api.js import.
  */
 
 import { state } from './state.js';
