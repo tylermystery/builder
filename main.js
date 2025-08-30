@@ -1,16 +1,13 @@
-/*
- * Version: 4.4.0
+ * Version: 4.4.1
  * Last Modified: 2025-08-30
  *
  * Changelog:
  *
+ * v4.4.1 - 2025-08-30
+ * - Verified correct import from the new availability.js module.
+ *
  * v4.4.0 - 2025-08-30
  * - Implemented advanced headcount filtering based on Capacity range overlap.
- * - Integrated lead time logic by importing from the new availability.js module.
- *
- * v4.3.2 - 2025-08-30
- * - Fixed a bug where the Event Plan UI would not update after loading a saved session.
- * - Fully implemented the "One-Way Street" state management model to prevent duplicate items.
  */
 
 import { state } from './state.js';
