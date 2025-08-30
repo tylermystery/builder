@@ -1,21 +1,15 @@
 /*
- * Version: 2.17.0
+ * Version: 2.18.0
  * Last Modified: 2025-08-29
  *
  * Changelog:
+ * v2.18.0 - 2025-08-29
+ * - Added a "Remove" (×) button to locked item cards in the Event Plan.
+ * - Added a utility function `updateCardIcon` to sync a card's icon with its state.
+ * - `showDetailModal` now sets a `data-mode` to differentiate editing a favorite vs. a locked item.
+ *
  * v2.17.0 - 2025-08-29
- * - Refactored createInteractiveCard and showDetailModal to read from the central item state.
- * - Ensured UI elements (quantity, options, notes) are always in sync with the state.
- *
- * v2.16.2 - 2025-08-29
- * - Modified renderRecords to support appending for infinite scroll.
- *
- * v2.16.1 - 2025-08-29
- * - Implemented batch processing in renderRecords to avoid API rate-limiting when fetching images.
- *
- * v2.16.0 - 2025-08-28
- * - Replaced "Go Up" button with a parent-name link on catalog cards.
- * - Added a breadcrumb navigation trail to the detail modal.
+ * - Refactored UI to read from the central item state, keeping components in sync.
  */
 
 import { state } from './state.js';
@@ -24,9 +18,6 @@ import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
-// HACK: A bit of a hack to get a reference to the main.js state helpers.
-// A better solution would be a more formal state management pattern (like Redux, Vuex, etc.)
-// but for this project, this avoids circular dependencies.
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
@@ -157,12 +148,14 @@ export async function createLockedInItemElement(record, itemInfo) {
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
+
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
+
     const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
@@ -173,7 +166,11 @@ export async function createLockedInItemElement(record, itemInfo) {
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
-        <div class="locked-item-actions"><button class="edit-btn">Edit</button></div>`;
+        <div class="locked-item-actions">
+            <button class="edit-btn">Edit</button>
+            <button class="remove-locked-item-btn" title="Remove from Plan">×</button>
+        </div>
+    `;
     return itemElement;
 }
 
@@ -194,11 +191,32 @@ export async function updateEventPlanPanel() {
     }
 }
 
+export function updateCardIcon(recordId) {
+    const isLocked = state.cart.lockedItems.has(recordId);
+    const isHearted = state.cart.items.has(recordId);
+    
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+
+    document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
+        if (isLocked) {
+            icon.className = 'heart-icon locked';
+            icon.innerHTML = checkSVG;
+        } else if (isHearted) {
+            icon.className = 'heart-icon hearted';
+            icon.innerHTML = heartSVG;
+        } else {
+            icon.className = 'heart-icon';
+            icon.innerHTML = heartSVG;
+        }
+    });
+}
+
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const itemState = mainGetItemState(recordId); // Use central state
+    const itemState = mainGetItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -316,17 +334,26 @@ export async function showDetailModal(record) {
     const modalItemNote = document.getElementById('modal-item-note');
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
+    const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
     modalOverlay.dataset.recordId = record.id;
-    const itemState = mainGetItemState(record.id); // Use central state
-    const lockedItemInfo = state.cart.lockedItems.get(record.id);
+    const isLocked = state.cart.lockedItems.has(record.id);
+    modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
+
+    // Get the correct state depending on whether the item is locked or just a favorite
+    const itemState = isLocked ? state.cart.lockedItems.get(record.id) : mainGetItemState(record.id);
+    
+    if (addToPlanBtn) {
+        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+    }
+
     const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
-
+    
     if (isGrouping) {
         const range = getGroupPriceRange(record);
         modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
@@ -357,12 +384,8 @@ export async function showDetailModal(record) {
             const crumbLink = document.createElement('a');
             crumbLink.href = '#';
             crumbLink.textContent = crumb.fields.Name;
-            crumbLink.onclick = (e) => {
-                e.preventDefault();
-                showDetailModal(crumb);
-            };
+            crumbLink.onclick = (e) => { e.preventDefault(); showDetailModal(crumb); };
             modalBreadcrumbsContainer.appendChild(crumbLink);
-
             if (index < breadcrumbs.length - 1) {
                 const separator = document.createElement('span');
                 separator.textContent = ' > ';
@@ -375,19 +398,11 @@ export async function showDetailModal(record) {
         modalHeaderActions.innerHTML += `<button id="modal-explode-btn" class="card-btn">💥</button>`;
     }
     
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-    const isLockedIn = state.cart.lockedItems.has(record.id);
-    const isHearted = state.cart.items.has(record.id);
-    let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
-    let iconSVG = isLockedIn ? checkSVG : heartSVG;
-    
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
-    heartBtnContainer.className = `heart-icon ${iconClass}`;
     heartBtnContainer.dataset.recordId = record.id;
-    heartBtnContainer.innerHTML = iconSVG;
     modalHeaderActions.appendChild(heartBtnContainer);
+    updateCardIcon(record.id);
         
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
@@ -427,10 +442,7 @@ export async function showDetailModal(record) {
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
-        document.getElementById('modal-add-to-plan-btn').textContent = lockedItemInfo ? 'Update Plan' : 'Add to Plan';
-        
         modalItemNote.value = itemState.note;
-
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
