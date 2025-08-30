@@ -1,8 +1,11 @@
 /*
- * Version: 2.18.1
+ * Version: 2.18.2
  * Last Modified: 2025-08-30
  *
  * Changelog:
+ * v2.18.2 - 2025-08-30
+ * - This version reflects the finalized "One-Way Street" model from v2.18.0.
+ *
  * v2.18.1 - 2025-08-30
  * - Fixed checkout modal to calculate total from "lockedItems" instead of "items".
  * - "Copy Link" button is now correctly enabled/disabled based on plan total.
