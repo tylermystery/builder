@@ -30,7 +30,8 @@ export function getDayStatus(day, busyTimes, record) {
     const leadTimeCutoff = new Date(today);
     leadTimeCutoff.setDate(today.getDate() + leadTime);
 
-    if (checkDay < leadTimeCutoff) {
+    // THE FIX: Compare dates by their numeric value using getTime() for reliability
+    if (checkDay.getTime() < leadTimeCutoff.getTime()) {
         return AVAILABILITY_STATUS.NONE;
     }
     
