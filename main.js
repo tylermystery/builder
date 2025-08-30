@@ -1,23 +1,15 @@
 /*
- * Version: 4.3.1
- * Last Modified: 2025-08-29
+ * Version: 4.3.2
+ * Last Modified: 2025-08-30
  *
  * Changelog:
  *
+ * v4.3.2 - 2025-08-30
+ * - Fixed a bug where the Event Plan UI would not update after loading a saved session.
+ * - Fully implemented the "One-Way Street" state management model to prevent duplicate items.
+ *
  * v4.3.1 - 2025-08-29
  * - Restored "Checkout" button functionality.
- *
- * v4.3.0 - 2025-08-29
- * - Implemented the "One-Way Street" model for item state.
- * - "Add to Plan" now moves an item from Favorites to the Event Plan.
- * - Editing a locked item now correctly updates the Event Plan.
- * - Added logic for the new "Remove from Plan" button.
- *
- * v4.2.2 - 2025-08-29
- * - Restored "Edit" button functionality for items in the Event Plan.
- *
- * v4.2.1 - 2025-08-29
- * - Fixed core state management bugs and restored button functionalities.
  */
 
 import { state } from './state.js';
@@ -287,6 +279,10 @@ async function initialize() {
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
+        
+        ui.updateEventPlanPanel();
+        ui.updateTotalCost();
+
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
             mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
@@ -405,7 +401,7 @@ function setupEventListeners() {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const editBtn = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
-        const checkoutBtn = e.target.closest('#checkout-btn'); // **THE FIX**
+        const checkoutBtn = e.target.closest('#checkout-btn');
 
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
@@ -413,7 +409,7 @@ function setupEventListeners() {
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
-        } else if (checkoutBtn) { // **THE FIX**
+        } else if (checkoutBtn) {
             ui.showCheckoutModal();
         } else if (heartIcon) {
             e.stopPropagation();
