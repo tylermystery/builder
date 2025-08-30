@@ -1,13 +1,13 @@
 /*
- * Version: 2.18.5
+ * Version: 2.18.6
  * Last Modified: 2025-08-30
  *
  * Changelog:
+ * v2.18.6 - 2025-08-30
+ * - Cleared card-element div before mounting Stripe to prevent console warnings.
+ *
  * v2.18.5 - 2025-08-30
  * - Added availability tooltips (popups) to the calendar in the detail modal.
- *
- * v2.18.4 - 2025-08-30
- * - Fixed "api is not defined" ReferenceError by restoring the missing api.js import.
  */
 
 import { state } from './state.js';
@@ -461,12 +461,10 @@ export async function showDetailModal(record) {
             const day = dayElem.dateObj;
             const status = getDayStatus(day, busyTimes, record);
             
-            // Add the appropriate CSS class for coloring
             if (status === 'NONE') dayElem.classList.add('flatpickr-disabled');
             else if (status === 'PARTIAL') dayElem.classList.add('flatpickr-partial');
             else dayElem.classList.add('flatpickr-available');
 
-            // **THE FIX**: Add the tooltip creation logic
             let statusIcon = '✅';
             let statusText = 'Available';
             let busySlotsText = '';
@@ -551,6 +549,10 @@ export async function showCheckoutModal() {
 
         stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
+
+        const cardElementContainer = document.getElementById('card-element');
+        if(cardElementContainer) cardElementContainer.innerHTML = '';
+        
         cardElement = elements.create('card');
         cardElement.mount('#card-element');
         
