@@ -1,8 +1,11 @@
 /*
- * Version: 2.18.3
+ * Version: 2.18.4
  * Last Modified: 2025-08-30
  *
  * Changelog:
+ * v2.18.4 - 2025-08-30
+ * - Fixed "api is not defined" ReferenceError by restoring the missing api.js import.
+ *
  * v2.18.3 - 2025-08-30
  * - Ensured correct import from the new availability.js file.
  *
@@ -15,7 +18,7 @@
 
 import { state } from './state.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
-import { fetchImagesForRecord, fetchCalendarForRecord } from './api.js';
+import * as api from './api.js'; // THE FIX
 import { parseOptions } from './utils.js';
 import { getDayStatus } from './availability.js';
 
@@ -119,7 +122,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
     itemCard.dataset.recordId = record.id;
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">×</button>`;
     
@@ -150,7 +153,7 @@ export async function createLockedInItemElement(record, itemInfo) {
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
 
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
@@ -269,7 +272,7 @@ export async function createInteractiveCard(record, imageCache) {
         });
     }
     
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, imageCache);
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     eventCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
     return eventCard;
 }
@@ -347,7 +350,7 @@ export async function showDetailModal(record) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
     }
 
-    const { imageUrls } = await fetchImagesForRecord(record, state.records.all, new Map());
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
