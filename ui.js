@@ -1,26 +1,20 @@
 /*
- * Version: 2.18.4
+ * Version: 2.18.5
  * Last Modified: 2025-08-30
  *
  * Changelog:
+ * v2.18.5 - 2025-08-30
+ * - Added availability tooltips (popups) to the calendar in the detail modal.
+ *
  * v2.18.4 - 2025-08-30
  * - Fixed "api is not defined" ReferenceError by restoring the missing api.js import.
- *
- * v2.18.3 - 2025-08-30
- * - Ensured correct import from the new availability.js file.
- *
- * v2.18.1 - 2025-08-30
- * - Fixed checkout modal and "Copy Link" button logic.
- *
- * v2.18.0 - 2025-08-29
- * - Implemented finalized "One-Way Street" logic for Favorites and Locked Items.
  */
 
 import { state } from './state.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from './config.js';
-import * as api from './api.js'; // THE FIX
+import * as api from './api.js';
 import { parseOptions } from './utils.js';
-import { getDayStatus } from './availability.js';
+import { getDayStatus, getBusySlotsForDay } from './availability.js';
 
 let mainGetItemState;
 export function initStateHelpers(helpers) {
@@ -466,9 +460,43 @@ export async function showDetailModal(record) {
         onDayCreate: function(dObj, dStr, fp, dayElem) {
             const day = dayElem.dateObj;
             const status = getDayStatus(day, busyTimes, record);
+            
+            // Add the appropriate CSS class for coloring
             if (status === 'NONE') dayElem.classList.add('flatpickr-disabled');
             else if (status === 'PARTIAL') dayElem.classList.add('flatpickr-partial');
             else dayElem.classList.add('flatpickr-available');
+
+            // **THE FIX**: Add the tooltip creation logic
+            let statusIcon = '✅';
+            let statusText = 'Available';
+            let busySlotsText = '';
+
+            if (status === 'NONE') {
+                statusIcon = '❌';
+                statusText = 'Unavailable';
+            } else if (status === 'PARTIAL') {
+                statusIcon = '🟠';
+                statusText = 'Partially Available';
+                const busySlots = getBusySlotsForDay(day, busyTimes);
+                if (busySlots) {
+                    busySlotsText = `<br><small style="color:#666;">Booked: ${busySlots}</small>`;
+                }
+            }
+
+            const tooltipContent = `
+                <div style="text-align: left; padding: 2px;">
+                    <strong>${day.toLocaleDateString()}</strong>
+                    <hr style="margin: 2px 0 5px;">
+                    <span>${statusIcon} ${record.fields.Name}: ${statusText}</span>
+                    ${busySlotsText}
+                </div>
+            `;
+
+            tippy(dayElem, {
+                content: tooltipContent,
+                allowHTML: true,
+                placement: 'top',
+            });
         }
     });
 
