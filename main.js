@@ -1,4 +1,4 @@
- * Version: 4.4.1
+ /* Version: 4.4.1
  * Last Modified: 2025-08-30
  *
  * Changelog:
