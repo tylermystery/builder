@@ -1,13 +1,14 @@
- /* Version: 4.4.1
- * Last Modified: 2025-08-30
+/*
+ * Version: 4.5.0
+ * Last Modified: 2025-08-31
  *
  * Changelog:
  *
+ * v4.5.0 - 2025-08-31
+ * - Implemented functionality for the quick-select date filter buttons.
+ *
  * v4.4.1 - 2025-08-30
  * - Verified correct import from the new availability.js module.
- *
- * v4.4.0 - 2025-08-30
- * - Implemented advanced headcount filtering based on Capacity range overlap.
  */
 
 import { state } from './state.js';
@@ -525,6 +526,51 @@ function setupEventListeners() {
             }
         }
     });
+ 
+    // **THE FIX**: Add click listener for the date quick-select buttons
+    const dateFilterGroup = document.getElementById('date-filter-group');
+    if (dateFilterGroup) {
+        dateFilterGroup.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-date-quick]');
+            if (!button) return;
+
+            const quickAction = button.dataset.dateQuick;
+            let startDate = new Date();
+            let endDate = new Date();
+            startDate.setHours(0, 0, 0, 0); // Set to start of day
+            endDate.setHours(23, 59, 59, 999); // Set to end of day
+
+            switch (quickAction) {
+                case 'tomorrow':
+                    startDate.setDate(startDate.getDate() + 1);
+                    endDate.setDate(endDate.getDate() + 1);
+                    break;
+                case 'this-week':
+                    // End of the week is Saturday. getDay() is 0 for Sun, 6 for Sat.
+                    const dayOfWeek = startDate.getDay();
+                    const daysUntilSaturday = 6 - dayOfWeek;
+                    endDate.setDate(startDate.getDate() + daysUntilSaturday);
+                    break;
+                case 'next-2-weeks':
+                    endDate.setDate(startDate.getDate() + 14);
+                    break;
+            }
+            // Update the flatpickr instance, which will trigger the filter update
+            mainDatePicker.setDate([startDate, endDate], true);
+        });
+    }
+
+    mainDatePicker = flatpickr("#date-filter", {
+        mode: "range", enableTime: true, dateFormat: "M j, Y h:i K",
+        onClose: (selectedDates) => {
+            if (selectedDates.length === 2) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                triggerSave();
+                updateAllCardAvailabilityIcons();
+            }
+        },
+    });
+ 
 }
 
 initialize();
