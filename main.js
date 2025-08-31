@@ -1,16 +1,14 @@
 /*
- * Version: 4.7.0
+ * Version: 4.7.1
  * Last Modified: 2025-08-31
  *
  * Changelog:
  *
+ * v4.7.1 - 2025-08-31
+ * - Added logic to handle "Add to Plan" clicks from catalog and favorite cards.
+ *
  * v4.7.0 - 2025-08-31
  * - Reverted Categories to multi-select buttons at the top of the filter panel.
- * - Moved Status filter to the bottom of the panel.
- * - Updated filtering and reset logic to support new layout.
- *
- * v4.6.0 - 2025-08-31
- * - Added a new "Status" filter and set "Available" as the default view.
  */
 
 import { state } from './state.js';
@@ -461,7 +459,7 @@ function setupEventListeners() {
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon:not(.locked)');
         const saveShareBtn = e.target.closest('#save-share-btn');
-        const addToPlanBtn = e.target.closest('#modal-add-to-plan-btn');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const editBtn = e.target.closest('.edit-btn');
@@ -488,24 +486,26 @@ function setupEventListeners() {
             await ui.updateFavoritesCarousel();
             triggerSave();
         } else if (addToPlanBtn) {
-            const modal = addToPlanBtn.closest('#detail-modal-overlay');
-            const recordId = modal.dataset.recordId;
-            const mode = modal.dataset.mode;
-            
-            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
-            const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
-            const noteInput = document.getElementById('modal-item-note');
-            
-            const currentItemInfo = {
-                quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
-                selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                note: noteInput ? noteInput.value.trim() : ''
-            };
+            e.stopPropagation();
+            const container = addToPlanBtn.closest('[data-record-id]');
+            const recordId = container.dataset.recordId;
+            const mode = container.dataset.mode;
 
+            let itemInfo;
             if (mode === 'edit-locked') {
-                updateLockedItemState(recordId, currentItemInfo);
+                const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+                const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
+                const noteInput = document.getElementById('modal-item-note');
+                
+                itemInfo = {
+                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ? noteInput.value.trim() : ''
+                };
+                updateLockedItemState(recordId, itemInfo);
             } else {
-                state.cart.lockedItems.set(recordId, currentItemInfo);
+                itemInfo = getItemState(recordId); 
+                state.cart.lockedItems.set(recordId, itemInfo);
                 state.cart.items.delete(recordId);
             }
             
@@ -514,7 +514,10 @@ function setupEventListeners() {
             await ui.updateEventPlanPanel();
             ui.updateTotalCost();
             triggerSave();
-            ui.hideDetailModal();
+            
+            if (container.id === 'detail-modal-overlay') {
+                ui.hideDetailModal();
+            }
         } else if (editBtn) {
             const lockedItemCard = editBtn.closest('.locked-item-card');
             if (!lockedItemCard) return;
@@ -542,7 +545,7 @@ function setupEventListeners() {
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon')) return;
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon, .add-to-plan-btn')) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
