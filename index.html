@@ -81,7 +81,6 @@
             flex-direction: column;
             gap: 15px;
         }
-        /* --- NEW FILTER GROUP STYLES --- */
         .filter-group {
             display: flex;
             flex-direction: column;
@@ -117,7 +116,6 @@
             background-color: #f0f0f0;
             margin-top: 10px;
         }
-        /* --- NEW CATALOG TOOLBAR STYLES --- */
         #catalog-toolbar {
             display: flex;
             justify-content: flex-end;
@@ -195,11 +193,31 @@
         }
         .favorite-item {
             position: relative;
-            flex: 0 0 100px; /* Smaller size for bottom bar */
+            flex: 0 0 100px;
             height: 100px;
             border-radius: 8px;
             background-size: cover;
             background-position: center;
+        }
+        .favorite-item .card-actions {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: flex;
+            gap: 5px;
+        }
+        .favorite-item .action-btn {
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            line-height: 24px;
+            cursor: pointer;
+            padding: 0;
+            font-weight: bold;
         }
         #catalog-container {
             display: grid;
@@ -219,6 +237,31 @@
             overflow: hidden;
             cursor: pointer;
         }
+        .event-card-content {
+            margin-top: auto;
+        }
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(5px);
+        }
+        .card-action-btn {
+            padding: 8px 16px;
+            font-weight: bold;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .card-action-btn:disabled {
+            background-color: #5a6268;
+            cursor: not-allowed;
+        }
         .parent-link {
             font-size: 0.8em;
             margin: 0 0 5px 0;
@@ -227,8 +270,6 @@
             text-shadow: 0 1px 2px rgba(0,0,0,0.5);
             cursor: pointer;
         }
-
-        /* --- ICON STYLES --- */
         .heart-icon svg {
             width: 28px;
             height: 28px;
@@ -249,8 +290,6 @@
             cursor: default;
             pointer-events: none;
         }
-
-        /* --- LOCKED ITEM STYLES --- */
         .locked-item-card {
             display: flex;
             gap: 15px;
@@ -274,7 +313,7 @@
         }
         .locked-item-details {
             flex-grow: 1;
-            min-width: 0; /* Prevents text overflow issues */
+            min-width: 0;
         }
         .locked-item-details p {
             margin: 0 0 5px 0;
@@ -318,8 +357,6 @@
             padding: 0 5px;
             cursor: pointer;
         }
-        
-        /* --- MODAL STYLES --- */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -463,8 +500,6 @@
         .primary-action-btn:hover {
             background-color: #218838;
         }
-        
-        /* --- CHECKOUT MODAL STYLES --- */
         .checkout-modal-content {
             background: #fff;
             border-radius: 8px;
@@ -512,7 +547,6 @@
             font-size: 0.9em;
             margin-top: 5px;
         }
-
     </style>
 </head>
 <body>
@@ -530,12 +564,10 @@
             </div>
         </div>
     </div>
-
     <div class="main-container">
         <div id="left-sidebar">
             <div id="filter-controls">
                 <h3>Filters</h3>
-                
                 <div id="category-filters" class="filter-group">
                     <label>Category</label>
                     <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr;">
@@ -545,14 +577,11 @@
                         <button class="filter-btn category-filter-btn" data-filter="Extras">Extras</button>
                     </div>
                 </div>
-
                 <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
-
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
                     <input type="text" id="name-filter" placeholder="Search...">
                 </div>
-
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
@@ -562,7 +591,6 @@
                         <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
                     </div>
                 </div>
-
                 <div class="filter-group">
                     <label for="headcount-filter">Headcount</label>
                     <select id="headcount-filter">
@@ -577,7 +605,6 @@
                     </select>
                     <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;">
                 </div>
-
                 <div class="filter-group">
                     <label for="location-filter">Location</label>
                     <select id="location-filter">
@@ -591,7 +618,6 @@
                         <option value="other">Other</option>
                     </select>
                 </div>
-
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
                     <select id="budget-filter">
@@ -602,7 +628,6 @@
                         <option value="luxury">Luxury</option>
                     </select>
                 </div>
-                
                 <div class="filter-group">
                     <label for="status-filter">Status</label>
                     <select id="status-filter">
@@ -612,7 +637,6 @@
                         <option value="Sold Out">Sold Out</option>
                     </select>
                 </div>
-
                 <button id="reset-filters-btn">Reset All Filters</button>
             </div>
         </div>
@@ -626,7 +650,6 @@
             </div>
             <div id="catalog-container"></div>
         </div>
- 
         <div id="right-sidebar">
              <div id="cart-panel">
                 <h3>Event Plan</h3>
@@ -644,7 +667,6 @@
             </div>
         </div>
     </div>
-    
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
@@ -700,13 +722,10 @@
             </form>
         </div>
     </div>
-    
     <div id="favorites-section" style="display: none;">
         <h4>Favorites</h4>
          <div id="favorites-carousel"></div>
     </div>
-
- 
     <script type="module" src="main.js"></script>
 </body>
 </html>
