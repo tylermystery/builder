@@ -1,14 +1,16 @@
 /*
- * Version: 4.5.1
+ * Version: 4.6.0
  * Last Modified: 2025-08-31
  *
  * Changelog:
  *
- * v4.5.1 - 2025-08-31
- * - Fixed a bug where quick-select date buttons were not working due to incorrect initialization order.
+ * v4.6.0 - 2025-08-31
+ * - Added a new "Status" filter.
+ * - Catalog now defaults to showing "Available" items on page load.
+ * - Reorganized filter panel elements and updated reset logic.
  *
- * v4.5.0 - 2025-08-31
- * - Implemented functionality for the quick-select date filter buttons.
+ * v4.5.2 - 2025-08-31
+ * - No logical changes. Syncing version with index.html fix.
  */
 
 import { state } from './state.js';
@@ -128,6 +130,7 @@ function triggerSave() {
 // --- CORE LOGIC ---
 function applyFiltersAndSort() {
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+    const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
     const customHeadcount = document.getElementById('headcount-custom').value;
     const locationFilter = document.getElementById('location-filter').value;
@@ -136,6 +139,12 @@ function applyFiltersAndSort() {
     const sortBy = document.getElementById('sort-by').value;
     
     let recordsToDisplay = state.records.all;
+
+    if (statusFilter !== 'all') {
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            return record.fields.Status === statusFilter;
+        });
+    }
 
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let filterMin = 0, filterMax = Infinity;
@@ -300,6 +309,9 @@ async function initialize() {
         state.session.isOwned = true;
     }
     ui.toggleLoading(false);
+
+    document.getElementById('status-filter').value = 'Available';
+
     applyFiltersAndSort();
     ui.updateFavoritesCarousel();
     updateSaveShareButton();
@@ -324,6 +336,7 @@ function setupEventListeners() {
         }, 100);
     });
 
+    safeAddEventListener('status-filter', 'change', applyFiltersAndSort);
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('headcount-filter', 'change', (e) => {
@@ -337,6 +350,7 @@ function setupEventListeners() {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         document.getElementById('name-filter').value = '';
+        document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
@@ -348,7 +362,6 @@ function setupEventListeners() {
         applyFiltersAndSort();
     });
 
-    // **THE FIX**: Initialize the date picker BEFORE the listener that uses it.
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range", enableTime: true, dateFormat: "M j, Y h:i K",
         onClose: (selectedDates) => {
@@ -360,7 +373,6 @@ function setupEventListeners() {
         },
     });
 
-    // Add click listener for the date quick-select buttons
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
