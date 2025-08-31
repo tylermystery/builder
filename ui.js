@@ -1,14 +1,11 @@
 /*
- * Version: 2.18.5
- * Last Modified: 2025-08-30
+ * Version: 2.19.0
+ * Last Modified: 2025-08-31
  *
  * Changelog:
- *
- * v2.18.5 - 2025-08-30
- * - Verified correct import from the new availability.js module.
- *
- * v2.18.4 - 2025-08-30
- * - Fixed "api is not defined" ReferenceError by restoring the missing api.js import.
+ * v2.19.0 - 2025-08-31
+ * - Added "Add to Plan" button to main catalog cards for quicker workflow.
+ * - Added "+" button to favorite carousel cards to move items to the plan.
  */
 
 import { state } from './state.js';
@@ -119,7 +116,10 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-    const cardActionsHTML = `<button class="action-btn remove-btn" title="Remove">×</button>`;
+    const cardActionsHTML = `
+        <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
+        <button class="action-btn remove-btn" title="Remove">×</button>
+    `;
     
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeString = formatPricingType(pricingType);
@@ -228,11 +228,12 @@ export async function createInteractiveCard(record, imageCache) {
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
-    let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '';
+    let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '', footerHTML = '';
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
         const range = getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div></div>`;
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}" ${itemState.selectedOptionIndex === index ? 'selected' : ''}>${opt.name}</option>`).join('')}</select>`;
@@ -240,6 +241,17 @@ export async function createInteractiveCard(record, imageCache) {
         quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         priceHTML = `$${initialPrice.toFixed(2)}`;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        
+        footerHTML = `
+            <div class="card-footer">
+                <div class="price-quantity-wrapper">
+                    <div class="price">${priceHTML}</div>
+                    ${quantitySelectorHTML}
+                </div>
+                ${addToPlanBtnHTML}
+            </div>`;
     }
 
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
@@ -249,7 +261,17 @@ export async function createInteractiveCard(record, imageCache) {
     let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
     let iconSVG = isLockedIn ? checkSVG : heartSVG;
 
-    eventCard.innerHTML = `<div class="card-header-actions">${availabilityButtonHTML}${explodeButtonHTML}</div><div class="heart-icon ${iconClass}">${iconSVG}</div><div class="event-card-content">${parentLinkHTML}<h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3><p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>${rawOptions.length > 0 ? optionsControlHTML : ''}${notesHTML}<div class="price-quantity-wrapper"><div class="price">${priceHTML}</div>${quantitySelectorHTML}</div></div>`;
+    eventCard.innerHTML = `
+        <div class="card-header-actions">${availabilityButtonHTML}${explodeButtonHTML}</div>
+        <div class="heart-icon ${iconClass}">${iconSVG}</div>
+        <div class="event-card-content">
+           ${parentLinkHTML}
+           <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
+            ${rawOptions.length > 0 ? optionsControlHTML : ''}
+            ${notesHTML}
+        </div>
+        ${footerHTML}`;
     
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
