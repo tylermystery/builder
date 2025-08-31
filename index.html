@@ -536,22 +536,22 @@
             <div id="filter-controls">
                 <h3>Filters</h3>
                 
+                <div id="category-filters" class="filter-group">
+                    <label>Category</label>
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr;">
+                        <button class="filter-btn category-filter-btn" data-filter="Activities">Activities</button>
+                        <button class="filter-btn category-filter-btn" data-filter="Venues">Venues</button>
+                        <button class="filter-btn category-filter-btn" data-filter="Food & Drink">Food & Drink</button>
+                        <button class="filter-btn category-filter-btn" data-filter="Extras">Extras</button>
+                    </div>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
+
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
                     <input type="text" id="name-filter" placeholder="Search...">
                 </div>
-
-                <div class="filter-group">
-                    <label for="status-filter">Status</label>
-                    <select id="status-filter">
-                        <option value="Available">Available</option>
-                        <option value="all">Show All</option>
-                        <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
-                    </select>
-                </div>
-                
-                <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
 
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
@@ -604,13 +604,12 @@
                 </div>
                 
                 <div class="filter-group">
-                    <label for="category-filter">Category</label>
-                    <select id="category-filter">
-                        <option value="any">Any Category</option>
-                        <option value="Activities">Activities</option>
-                        <option value="Venues">Venues</option>
-                        <option value="Food & Drink">Food & Drink</option>
-                        <option value="Extras">Extras</option>
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter">
+                        <option value="Available">Available</option>
+                        <option value="all">Show All</option>
+                        <option value="Coming Soon">Coming Soon</option>
+                        <option value="Sold Out">Sold Out</option>
                     </select>
                 </div>
 
