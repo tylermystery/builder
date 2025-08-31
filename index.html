@@ -536,6 +536,23 @@
             <div id="filter-controls">
                 <h3>Filters</h3>
                 
+                <div class="filter-group">
+                    <label for="name-filter">Search by Name</label>
+                    <input type="text" id="name-filter" placeholder="Search...">
+                </div>
+
+                <div class="filter-group">
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter">
+                        <option value="Available">Available</option>
+                        <option value="all">Show All</option>
+                        <option value="Coming Soon">Coming Soon</option>
+                        <option value="Sold Out">Sold Out</option>
+                    </select>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
+
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
@@ -595,11 +612,6 @@
                         <option value="Food & Drink">Food & Drink</option>
                         <option value="Extras">Extras</option>
                     </select>
-                </div>
-
-                <div class="filter-group">
-                    <label for="name-filter">Search by Name</label>
-                    <input type="text" id="name-filter" placeholder="Search...">
                 </div>
 
                 <button id="reset-filters-btn">Reset All Filters</button>
