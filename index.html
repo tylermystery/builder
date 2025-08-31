@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
         body {
-            padding-bottom: 150px; /* Increased padding to make space for the new bottom favorites bar */
+            padding-bottom: 150px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
@@ -29,7 +29,7 @@
         #header-toolbar {
             display: flex;
             flex-wrap: wrap;
-            align-items: center; /* Vertically center items */
+            align-items: center;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
@@ -230,6 +230,7 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
+            justify-content: flex-end;
             height: 520px;
             background-size: cover;
             background-position: center;
@@ -238,7 +239,8 @@
             cursor: pointer;
         }
         .event-card-content {
-            margin-top: auto;
+            padding: 15px;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
         }
         .card-footer {
             display: flex;
@@ -269,6 +271,13 @@
             color: rgba(255, 255, 255, 0.9);
             text-shadow: 0 1px 2px rgba(0,0,0,0.5);
             cursor: pointer;
+        }
+        .heart-icon {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            z-index: 2;
         }
         .heart-icon svg {
             width: 28px;
