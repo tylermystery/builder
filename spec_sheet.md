@@ -1,9 +1,11 @@
 Feature Specification Sheet (Final Version)
 
-**Version: 1.2.0**
-**Last Modified: 2025-08-30**
+**Version: 1.2.2**
+**Last Modified: 2025-08-31**
 
 ### Changelog
+* **v1.2.2 (2025-08-31):** Updated filter layout description, making Categories buttons at the top.
+* **v1.2.1 (2025-08-31):** Added "Status Filter" to the Search & Filtering section.
 * **v1.2.0 (2025-08-30):** Added "State Management Model" section to document the user flow for favorited and locked items.
 * **v1.1.0 (2025-08-29):** Added clarification on the data format for multi-value text fields like `Categories` from Airtable.
 
@@ -49,8 +51,10 @@ When a user selects one or more items, a horizontally scrolling carousel appears
 
 ### Search & Filtering
 A set of controls allows users to refine and organize the catalog view.
+* **Category Buttons**: Multi-select buttons at the top of the panel allow users to filter by one or more categories.
 * **Smart Search**: A search bar allows users to filter the catalog by item name, description, categories, and tags. Results are prioritized to show name matches first.
-* **Filtering**: Users can filter the catalog by pre-defined price ranges.
+* **Filtering**: Users can filter the catalog by pre-defined price ranges and other attributes like headcount and location.
+* **Status Filter**: A dropdown allows filtering by item status (e.g., "Available", "Coming Soon"). The catalog defaults to showing only "Available" items on page load.
 * **Sorting**: A dropdown menu controls the sort order of the catalog (e.g., Price Low to High, Name A-Z).
 * **Reset**: A "Reset" button clears all active search terms and filters, returning the catalog to its default view.
 
