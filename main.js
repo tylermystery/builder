@@ -1,16 +1,16 @@
 /*
- * Version: 4.6.0
+ * Version: 4.7.0
  * Last Modified: 2025-08-31
  *
  * Changelog:
  *
- * v4.6.0 - 2025-08-31
- * - Added a new "Status" filter.
- * - Catalog now defaults to showing "Available" items on page load.
- * - Reorganized filter panel elements and updated reset logic.
+ * v4.7.0 - 2025-08-31
+ * - Reverted Categories to multi-select buttons at the top of the filter panel.
+ * - Moved Status filter to the bottom of the panel.
+ * - Updated filtering and reset logic to support new layout.
  *
- * v4.5.2 - 2025-08-31
- * - No logical changes. Syncing version with index.html fix.
+ * v4.6.0 - 2025-08-31
+ * - Added a new "Status" filter and set "Available" as the default view.
  */
 
 import { state } from './state.js';
@@ -129,16 +129,31 @@ function triggerSave() {
 
 // --- CORE LOGIC ---
 function applyFiltersAndSort() {
+    const activeCategoryNodes = document.querySelectorAll('#category-filters .category-filter-btn.active');
+    const activeCategories = Array.from(activeCategoryNodes).map(btn => btn.dataset.filter.toLowerCase());
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
     const customHeadcount = document.getElementById('headcount-custom').value;
     const locationFilter = document.getElementById('location-filter').value;
     const budgetFilter = document.getElementById('budget-filter').value;
-    const categoryFilter = document.getElementById('category-filter').value;
     const sortBy = document.getElementById('sort-by').value;
     
     let recordsToDisplay = state.records.all;
+
+    if (activeCategories.length > 0) {
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            const getTagsFromString = (str) => {
+                if (!str || typeof str !== 'string') return [];
+                return str.split(',').map(tag => tag.trim().toLowerCase());
+            };
+            const recordTags = [
+                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]),
+                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES])
+            ];
+            return activeCategories.some(cat => recordTags.includes(cat));
+        });
+    }
 
     if (statusFilter !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
@@ -190,20 +205,6 @@ function applyFiltersAndSort() {
         recordsToDisplay = recordsToDisplay.filter(record => {
              const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
              return price >= range.min && price <= range.max;
-        });
-    }
-
-    if (categoryFilter !== 'any') {
-        recordsToDisplay = recordsToDisplay.filter(record => {
-            const getTagsFromString = (str) => {
-                if (!str || typeof str !== 'string') return [];
-                return str.split(',').map(tag => tag.trim().toLowerCase());
-            };
-            const recordTags = [
-                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]),
-                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES])
-            ];
-            return recordTags.includes(categoryFilter.toLowerCase());
         });
     }
 
@@ -336,6 +337,16 @@ function setupEventListeners() {
         }, 100);
     });
 
+    const categoryFilters = document.getElementById('category-filters');
+    if (categoryFilters) {
+        categoryFilters.addEventListener('click', (e) => {
+            if (e.target.classList.contains('category-filter-btn')) {
+                e.target.classList.toggle('active');
+                applyFiltersAndSort();
+            }
+        });
+    }
+
     safeAddEventListener('status-filter', 'change', applyFiltersAndSort);
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort()));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort()));
@@ -345,10 +356,12 @@ function setupEventListeners() {
     });
     safeAddEventListener('location-filter', 'change', applyFiltersAndSort);
     safeAddEventListener('budget-filter', 'change', applyFiltersAndSort);
-    safeAddEventListener('category-filter', 'change', applyFiltersAndSort);
     safeAddEventListener('sort-by', 'change', applyFiltersAndSort);
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
+        document.querySelectorAll('#category-filters .category-filter-btn.active').forEach(btn => {
+            btn.classList.remove('active');
+        });
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -356,7 +369,6 @@ function setupEventListeners() {
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
         document.getElementById('budget-filter').selectedIndex = 0;
-        document.getElementById('category-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
         mainDatePicker.clear();
         applyFiltersAndSort();
