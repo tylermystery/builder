@@ -30,7 +30,17 @@ export function getDayStatus(day, busyTimes, record) {
     const leadTimeCutoff = new Date(today);
     leadTimeCutoff.setDate(today.getDate() + leadTime);
 
-    // THE FIX: Compare dates by their numeric value using getTime() for reliability
+    // --- DEBUGGING LOGS ---
+    if (record.fields.Name === "Murder Mystery") {
+        console.log(`--- Checking Availability for: ${record.fields.Name} ---`);
+        console.log(`Lead Time from Airtable: ${leadTime} days`);
+        console.log(`- Day being checked: ${checkDay.toDateString()}`);
+        console.log(`- Today's date is: ${today.toDateString()}`);
+        console.log(`- Calculated cutoff date (Today + Lead Time): ${leadTimeCutoff.toDateString()}`);
+        console.log(`- Is day < cutoff? [${checkDay.getTime() < leadTimeCutoff.getTime()}] -> Result: ${checkDay.getTime() < leadTimeCutoff.getTime() ? 'Unavailable' : 'Available'}`);
+    }
+    // --- END DEBUGGING LOGS ---
+
     if (checkDay.getTime() < leadTimeCutoff.getTime()) {
         return AVAILABILITY_STATUS.NONE;
     }
@@ -65,7 +75,6 @@ export function checkAvailability(start, end, busyTimes) {
     for (const busySlot of busyTimes) {
         const busyStart = new Date(busySlot.start);
         const busyEnd = new Date(busySlot.end);
-        // Check for overlap: (StartA < EndB) and (EndA > StartB)
         if (start < busyEnd && end > busyStart) {
             return false;
         }
