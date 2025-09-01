@@ -1,20 +1,18 @@
 import { state } from '../state.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
+import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { parseOptions } from '../utils.js';
-import { getDayStatus, getBusySlotsForDay } from '../availability.js';
-import { getGroupPriceRange, getRecordPrice, getBreadcrumbs, updateCardIcon } from '../ui.js';
-import { getItemState } from '../events.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
+import { parseOptions } from '../utils/utils.js';
+import { getDayStatus } from '../availability.js';
 import { log } from '../utils/debug.js';
+
 
 let stripe, elements, cardElement, clientSecret;
 
 export async function showDetailModal(record) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
-    // ... all other getElementById calls
     const modalHeaderActions = document.getElementById('modal-header-actions');
-    const modalBreadcrumbsContainer = document.getElementById('modal-breadcrumbs');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
     const modalItemDescription = document.getElementById('modal-item-description');
@@ -32,7 +30,7 @@ export async function showDetailModal(record) {
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
 
-    const itemState = isLocked ? state.cart.lockedItems.get(record.id) : getItemState(record.id);
+    const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
     }
@@ -45,10 +43,10 @@ export async function showDetailModal(record) {
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
     
     if (isGrouping) {
-        const range = getGroupPriceRange(record);
+        const range = ui.getGroupPriceRange(record);
         modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
     } else {
-        modalItemPrice.textContent = `$${getRecordPrice(record).toFixed(2)}`;
+        modalItemPrice.textContent = `$${ui.getRecordPrice(record).toFixed(2)}`;
     }
 
     modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
@@ -65,24 +63,83 @@ export async function showDetailModal(record) {
         });
         modalThumbnailStrip.appendChild(thumb);
     });
-
+    
     modalHeaderActions.innerHTML = '';
-    const breadcrumbs = getBreadcrumbs(record, state.records.all);
-    modalBreadcrumbsContainer.innerHTML = breadcrumbs.map((crumb, index) => `<a href="#" data-record-id="${crumb.id}">${crumb.fields.Name}</a>`).join(' &gt; ');
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    if (parentName) {
+         modalHeaderActions.innerHTML += `<button class="parent-link" data-parent-name="${parentName}" title="Go to ${parentName}">⬆️</button>`;
+    }
     
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-    updateCardIcon(record.id);
-    
-    // Continue with the rest of showDetailModal logic...
+    ui.updateCardIcon(record.id);
+
+    modalOptionsContainer.innerHTML = '';
+    rawOptions.forEach((opt, index) => {
+        const optionButton = document.createElement('button');
+        optionButton.className = 'option-btn';
+        optionButton.dataset.optionIndex = index;
+        if (itemState.selectedOptionIndex === index) {
+            optionButton.classList.add('selected');
+        }
+        let priceModText = '';
+        if (opt.absolutePrice != null) {
+            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        } else if (opt.priceChange != null) {
+            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+        }
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
+
+        if (allRecordNames.has(opt.name)) {
+            optionButton.dataset.childName = opt.name;
+        } else {
+             optionButton.addEventListener('click', (e) => {
+                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                e.currentTarget.classList.add('selected');
+                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
+                e.currentTarget.dispatchEvent(new CustomEvent('change', {
+                    bubbles: true,
+                    detail: { selectedOptionIndex: newIndex }
+                }));
+                modalItemDescription.textContent = opt.description || record.fields.Description;
+            });
+        }
+        modalOptionsContainer.appendChild(optionButton);
+    });
+
+    if (!isGrouping) {
+        modalActionsContainer.style.display = 'block';
+        modalNotesContainer.style.display = 'block';
+        modalItemNote.value = itemState.note;
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        const plusBtn = modalQuantitySelector.querySelector('.plus');
+        const minusBtn = modalQuantitySelector.querySelector('.minus');
+        const input = modalQuantitySelector.querySelector('input');
+        plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+        minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+    } else {
+        modalActionsContainer.style.display = 'none';
+        modalNotesContainer.style.display = 'none';
+        modalQuantitySelector.innerHTML = '';
+    }
+
+    modalCalendarContainer.innerHTML = '';
+    flatpickr(modalCalendarContainer, {
+        inline: true,
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, [], record);
+        }
+    });
+
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
 export function hideDetailModal() {
-    log('Modal', 'Hiding detail modal.');
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
         modalOverlay.style.display = 'none';
@@ -102,7 +159,8 @@ export async function showCheckoutModal() {
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+
+        const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
@@ -120,12 +178,20 @@ export async function showCheckoutModal() {
             body: JSON.stringify({ amount: finalTotalInCents }),
         });
         const data = await response.json();
-        if (!response.ok || data.error) throw new Error(data.error || 'Failed to fetch payment details.');
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to fetch payment details.');
+        }
+
         clientSecret = data.clientSecret;
+
         stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
+        const cardElementContainer = document.getElementById('card-element');
+        if(cardElementContainer) cardElementContainer.innerHTML = '';
+        
         cardElement = elements.create('card');
         cardElement.mount('#card-element');
+        
         checkoutModalOverlay.style.display = 'flex';
         document.body.classList.add('modal-open');
     } catch (err) {
@@ -135,8 +201,9 @@ export async function showCheckoutModal() {
 }
 
 export function hideCheckoutModal() {
-    log('Modal', 'Hiding checkout modal.');
-    if (cardElement) cardElement.unmount();
+    if (cardElement) {
+        cardElement.unmount();
+    }
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
         checkoutModalOverlay.style.display = 'none';
@@ -147,3 +214,4 @@ export function hideCheckoutModal() {
 export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
+
