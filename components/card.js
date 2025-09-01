@@ -1,17 +1,16 @@
 import { state } from '../state.js';
-import { CONSTANTS } from '../config.js';
+import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { parseOptions } from '../utils.js';
-import { getGroupPriceRange, getRecordPrice, formatPricingType } from '../ui.js'; // We'll get these from the main ui.js hub
-import { getItemState } from '../events.js';
+import { CONSTANTS } from '../config.js';
+import { parseOptions } from '../utils/utils.js';
 import { log } from '../utils/debug.js';
 
 export async function createInteractiveCard(record, imageCache) {
-    log('Card', `Creating interactive card for "${record.fields.Name}"`);
+    log('UI', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const itemState = getItemState(recordId);
+    const itemState = ui.getMainGetItemState()(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -28,20 +27,21 @@ export async function createInteractiveCard(record, imageCache) {
     let footerHTML = '';
 
     if (isGrouping) {
-        const range = getGroupPriceRange(record);
+        const range = ui.getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
-                <button class="card-action-btn explode-btn" title="Explore Options">💥</button>
+                <button class="card-action-btn view-options-btn" title="View Options">View Options</button>
             </div>
         `;
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        let displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+        let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
+
         const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
@@ -75,7 +75,7 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         ${footerHTML}
     `;
-
+    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -95,43 +95,3 @@ export async function createInteractiveCard(record, imageCache) {
     return eventCard;
 }
 
-export async function createFavoriteCardElement(record, itemInfo, isLocked, imageCache) {
-    log('Card', `Creating favorite card for "${record.fields.Name}"`);
-    const fields = record.fields;
-    let variationNameHTML = '';
-    let itemPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-    let noteHTML = itemInfo.note ? `<p class="item-note-display"><em>Note: ${itemInfo.note}</em></p>` : '';
-    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
-        variationNameHTML = `<p class="variation-name">${options[itemInfo.selectedOptionIndex].name}</p>`;
-    }
-
-    const itemCard = document.createElement('div');
-    itemCard.className = `favorite-item ${isLocked ? 'locked-item' : ''}`;
-    itemCard.dataset.recordId = record.id;
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
-    const cardActionsHTML = `
-        <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-        <button class="action-btn remove-btn" title="Remove">×</button>
-    `;
-    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeString = formatPricingType(pricingType);
-    const showCardTotal = itemInfo.quantity > 1 && pricingTypeString;
-    const cardTotal = itemPrice * itemInfo.quantity;
-    itemCard.innerHTML = `
-        <div class="card-actions">${cardActionsHTML}</div>
-        <div class="favorite-item-content">
-            <p class="item-name">${fields.Name}</p>
-            ${variationNameHTML}
-            ${noteHTML}
-            <div class="favorite-pricing-details">
-                <div class="pricing-line-item">
-                    <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
-                    <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
-                </div>
-                ${showCardTotal ? `<div class="pricing-line-item-total"><span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span></div>` : ''}
-            </div>
-        </div>`;
-    return itemCard;
-}
