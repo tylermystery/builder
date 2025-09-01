@@ -20,3 +20,4 @@ export function storeSession(id, name) {
         console.error("Failed to store session:", e);
     }
 }
+
