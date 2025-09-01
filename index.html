@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
         body {
-            padding-bottom: 150px;
+            padding-bottom: 150px; /* Increased padding to make space for the new bottom favorites bar */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
@@ -29,7 +29,7 @@
         #header-toolbar {
             display: flex;
             flex-wrap: wrap;
-            align-items: center;
+            align-items: center; /* Vertically center items */
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
@@ -81,6 +81,7 @@
             flex-direction: column;
             gap: 15px;
         }
+        /* --- NEW FILTER GROUP STYLES --- */
         .filter-group {
             display: flex;
             flex-direction: column;
@@ -116,6 +117,7 @@
             background-color: #f0f0f0;
             margin-top: 10px;
         }
+        /* --- NEW CATALOG TOOLBAR STYLES --- */
         #catalog-toolbar {
             display: flex;
             justify-content: flex-end;
@@ -193,7 +195,7 @@
         }
         .favorite-item {
             position: relative;
-            flex: 0 0 100px;
+            flex: 0 0 100px; /* Smaller size for bottom bar */
             height: 100px;
             border-radius: 8px;
             background-size: cover;
@@ -563,14 +565,6 @@
     <div id="sticky-header">
         <div id="header-toolbar">
             <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
-            <div class="toolbar-group" style="flex-grow: 2;">
-                <label for="header-event-name">Event Name</label>
-                <input type="text" id="header-event-name" value="My Awesome Event">
-            </div>
-            <div class="toolbar-group" style="flex-grow: 2;">
-                <label for="header-goals">Goals / Notes</label>
-                <input type="text" id="header-goals" placeholder="What are the goals for your event?">
-            </div>
         </div>
     </div>
     <div class="main-container">
@@ -662,6 +656,15 @@
         <div id="right-sidebar">
              <div id="cart-panel">
                 <h3>Event Plan</h3>
+                <div class="toolbar-group">
+                    <label for="header-event-name">Event Name</label>
+                    <input type="text" id="header-event-name" value="My Awesome Event">
+                </div>
+                <div class="toolbar-group">
+                    <label for="header-goals">Goals / Notes</label>
+                    <input type="text" id="header-goals" placeholder="What are the goals for your event?">
+                </div>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="cart-items-container">
                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
