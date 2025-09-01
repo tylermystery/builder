@@ -1,14 +1,14 @@
 /*
- * Version: 4.8.1
- * Last Modified: 2025-09-01
+ * Version: 4.7.1
+ * Last Modified: 2025-08-31
  *
  * Changelog:
  *
- * v4.8.1 - 2025-09-01
- * - Fixed a bug where the catalog view preference was not persisting on page load when a session had items.
+ * v4.7.1 - 2025-08-31
+ * - Added logic to handle "Add to Plan" clicks from catalog and favorite cards.
  *
- * v4.8.0 - 2025-08-31
- * - Implemented Beta Toolkit for toggling between Grid, List, and Compact catalog layouts.
+ * v4.7.0 - 2025-08-31
+ * - Reverted Categories to multi-select buttons at the top of the filter panel.
  */
 
 import { state } from './state.js';
@@ -282,14 +282,6 @@ async function updateAllCardAvailabilityIcons() {
 async function initialize() {
     ui.initStateHelpers({ getItemState });
 
-    // THE FIX: Load and apply the saved catalog view preference at the very beginning.
-    const savedView = localStorage.getItem('catalogView') || 'grid';
-    const catalogContainer = document.getElementById('catalog-container');
-    if(catalogContainer) catalogContainer.className = `view-${savedView}`;
-    document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === savedView);
-    });
-
     ui.toggleLoading(true);
     try {
         state.records.all = await api.fetchAllRecords();
@@ -303,7 +295,8 @@ async function initialize() {
     setupEventListeners();
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
-        ui.updateEventDetailsPanel();
+        ui.updateHeader();
+        
         ui.updateEventPlanPanel();
         ui.updateTotalCost();
 
@@ -341,28 +334,6 @@ function setupEventListeners() {
             scrollTimeout = null;
         }, 100);
     });
-
-    const betaTrigger = document.getElementById('beta-trigger');
-    const betaToolkit = document.getElementById('beta-toolkit');
-
-    if (betaTrigger && betaToolkit) {
-        betaTrigger.addEventListener('click', () => {
-            betaToolkit.classList.toggle('visible');
-        });
-
-        betaToolkit.addEventListener('click', (e) => {
-            const button = e.target.closest('.view-toggle-btn');
-            if (!button) return;
-
-            const view = button.dataset.view;
-            document.getElementById('catalog-container').className = `view-${view}`;
-            
-            betaToolkit.querySelectorAll('.view-toggle-btn').forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-
-            localStorage.setItem('catalogView', view);
-        });
-    }
 
     const categoryFilters = document.getElementById('category-filters');
     if (categoryFilters) {
