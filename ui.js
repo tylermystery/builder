@@ -1,13 +1,14 @@
 /*
- * Version: 2.22.1
+ * Version: 2.20.0
  * Last Modified: 2025-09-01
  *
  * Changelog:
- * v2.22.1 - 2025-09-01
- * - Fixed a ReferenceError in `createInteractiveCard` by fetching images before they are used.
- *
- * v2.22.0 - 2025-09-01
- * - Refactored `createInteractiveCard` to generate a standardized, more professional layout.
+ * v2.20.0 - 2025-09-01
+ * - Refined card visuals with a standardized image container and content layout.
+ * - Added a status badge for "Coming Soon" or "Sold Out" items.
+ * v2.19.0 - 2025-08-31
+ * - Added "Add to Plan" button to main catalog cards for quicker workflow.
+ * - Added "+" button to favorite carousel cards to move items to the plan.
  */
 
 import { state } from './state.js';
@@ -22,7 +23,6 @@ export function initStateHelpers(helpers) {
 }
 
 let stripe, elements, cardElement, clientSecret;
-
 // --- HELPER & LOGIC FUNCTIONS ---
 function getBreadcrumbs(record, allRecords) {
     const breadcrumbs = [];
@@ -122,7 +122,6 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
         <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
         <button class="action-btn remove-btn" title="Remove">×</button>
     `;
-    
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeString = formatPricingType(pricingType);
     const showCardTotal = itemInfo.quantity > 1 && pricingTypeString;
@@ -130,7 +129,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
         <div class="favorite-item-content">
-            <p class="item-name">${fields.Name}</p>
+            <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
             ${variationNameHTML}
             ${noteHTML}
             <div class="favorite-pricing-details">
@@ -138,7 +137,8 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
                     <span class="item-quantity">Qty: ${itemInfo.quantity}</span>
                     <span class="item-price">$${itemPrice.toFixed(2)} ${pricingTypeString}</span>
                 </div>
-                ${showCardTotal ? `<div class="pricing-line-item-total"><span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span></div>` : ''}
+                ${showCardTotal ?
+`<div class="pricing-line-item-total"><span class="item-total-price">Total: $${cardTotal.toFixed(2)}</span></div>` : ''}
             </div>
         </div>`;
     return itemCard;
@@ -195,10 +195,8 @@ export async function updateEventPlanPanel() {
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
-    
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
         if (isLocked) {
             icon.className = 'heart-icon locked';
@@ -216,16 +214,63 @@ export function updateCardIcon(recordId) {
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
+    const allRecords = state.records.all;
     const itemState = mainGetItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
+    const status = fields[CONSTANTS.FIELD_NAMES.STATUS] || 'Available';
+    const isAvailable = status === 'Available';
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
+
+    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
+
+    let optionsControlHTML = '';
+    let quantitySelectorHTML = '';
+    let priceHTML = '';
+    let footerHTML = '';
+    let statusBadgeHTML = '';
+
+    if (!isAvailable) {
+        statusBadgeHTML = `<span class="status-badge">${status}</span>`;
+    }
+    
+    // BUILD FOOTER
+    if (isGrouping) {
+        const range = getGroupPriceRange(record);
+        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        footerHTML = `
+            <div class="card-footer">
+                <div class="price">${priceHTML}</div>
+                <button class="card-action-btn explode-btn" title="Explore Options">💥</button>
+            </div>
+        `;
+    } else {
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        
+        optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}" ${itemState.selectedOptionIndex === index ? 'selected' : ''}>${opt.name}</option>`).join('')}</select>`;
+        quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        
+        let displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+        priceHTML = `$${displayPrice.toFixed(2)}`;
+
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        footerHTML = `
+            <div class="card-footer">
+                <div class="price-quantity-wrapper">
+                    <div class="price">${priceHTML}</div>
+                    ${quantitySelectorHTML}
+                </div>
+                ${addToPlanBtnHTML}
+            </div>
+        `;
+    }
 
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
@@ -233,32 +278,39 @@ export async function createInteractiveCard(record, imageCache) {
     const isHearted = state.cart.items.has(recordId);
     let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
     let iconSVG = isLockedIn ? checkSVG : heartSVG;
-    const heartIconHTML = `<div class="heart-icon ${iconClass}">${iconSVG}</div>`;
-    
-    let priceHTML = '', footerHTML = '';
-
-    if (isGrouping) {
-        const range = getGroupPriceRange(record);
-        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
-        footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div></div>`;
-    } else {
-        const price = getRecordPrice(record);
-        const pricingType = formatPricingType(fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]);
-        priceHTML = `$${price.toFixed(2)} ${pricingType}`;
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLockedIn ? 'disabled' : ''}>${isLockedIn ? 'In Plan' : 'Add to Plan'}</button>`;
-        footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div>${addToPlanBtnHTML}</div>`;
-    }
 
     eventCard.innerHTML = `
-        <div class="card-image-container" style="background-image: url('${imageUrls[0] || ''}')">
-            ${heartIconHTML}
+        <div class="event-card-image-container" style="background-image: url('${imageUrls[0] || ''}');">
+            <div class="event-card-actions">
+                <button class="action-btn availability-btn" title="Check Availability">📅</button>
+            </div>
+            <div class="heart-icon ${iconClass}" data-record-id="${record.id}">${iconSVG}</div>
         </div>
-        <div class="card-content-container">
-            <h3>${fields.Name || 'Untitled Event'}</h3>
-            <p class="description">${fields.Description || ''}</p>
+        <div class="event-card-content">
+            ${parentLinkHTML}
+            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
         </div>
-        ${footerHTML}`;
-    
+        ${footerHTML}
+    `;
+
+    // Re-attach listeners for quantity buttons
+    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
+    const quantityInput = eventCard.querySelector('.quantity-input');
+    if (plusBtn && minusBtn && quantityInput) {
+        plusBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            quantityInput.stepUp(); 
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
+        });
+        minusBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            quantityInput.stepDown(); 
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
+        });
+    }
+
     return eventCard;
 }
 
@@ -330,7 +382,6 @@ export async function showDetailModal(record) {
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
 
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : mainGetItemState(record.id);
-    
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
     }
@@ -363,7 +414,6 @@ export async function showDetailModal(record) {
         });
         modalThumbnailStrip.appendChild(thumb);
     });
-
     modalHeaderActions.innerHTML = '';
     modalBreadcrumbsContainer.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record, state.records.all);
@@ -391,7 +441,6 @@ export async function showDetailModal(record) {
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
     updateCardIcon(record.id);
-        
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -426,7 +475,6 @@ export async function showDetailModal(record) {
         }
         modalOptionsContainer.appendChild(optionButton);
     });
-
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
@@ -480,7 +528,6 @@ export async function showDetailModal(record) {
                     ${busySlotsText}
                 </div>
             `;
-
             tippy(dayElem, {
                 content: tooltipContent,
                 allowHTML: true,
@@ -509,7 +556,6 @@ export async function showCheckoutModal() {
 
     summaryList.innerHTML = '';
     let finalTotal = 0;
-    
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
@@ -540,7 +586,6 @@ export async function showCheckoutModal() {
 
         stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
-
         const cardElementContainer = document.getElementById('card-element');
         if(cardElementContainer) cardElementContainer.innerHTML = '';
         
@@ -570,7 +615,7 @@ export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
 
-export function updateEventDetailsPanel() {
+export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
     const eventNameInput = document.getElementById('header-event-name');
