@@ -46,9 +46,6 @@ function updateItemState(recordId, updates) {
     const currentState = state.cart.items.get(recordId);
     const newState = { ...currentState, ...updates };
     state.cart.items.set(recordId, newState);
-    
-    ui.updateFavoritesCarousel();
-    triggerSave();
 }
 
 function updateLockedItemState(recordId, updates) {
@@ -153,6 +150,7 @@ export function initializeEventListeners(imageCache) {
         betaTrigger.addEventListener('click', () => {
             debugEnabled = !debugEnabled;
             setDebugMode(debugEnabled);
+            log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
         });
     }
 
@@ -305,6 +303,8 @@ export function initializeEventListeners(imageCache) {
         const editBtn = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
+        const optionBtn = e.target.closest('.option-btn');
+        const parentLink = e.target.closest('.parent-link');
 
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
@@ -317,16 +317,15 @@ export function initializeEventListeners(imageCache) {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
+            
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
-                // When deleting, we also need to manually update the carousel
-                await ui.updateFavoritesCarousel(); 
             } else {
                 updateItemState(recordId, {});
             }
+            
             ui.updateCardIcon(recordId);
-            // THE FIX: This line was removed to prevent the double-render
-            // await ui.updateFavoritesCarousel(); 
+            await ui.updateFavoritesCarousel(); 
             triggerSave();
         } else if (addToPlanBtn) {
             e.stopPropagation();
@@ -383,12 +382,21 @@ export function initializeEventListeners(imageCache) {
             ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel();
             triggerSave();
+        // REPAIRED: This logic restores the in-modal navigation functionality.
+        } else if (optionBtn && optionBtn.dataset.childName) {
+            const childName = optionBtn.dataset.childName;
+            const childRecord = state.records.all.find(r => r.fields.Name === childName);
+            if (childRecord) ui.showDetailModal(childRecord);
+        } else if (parentLink && parentLink.dataset.parentName) {
+            const parentName = parentLink.dataset.parentName;
+            const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
+            if (parentRecord) ui.showDetailModal(parentRecord);
         } else if (favoriteItem) {
             const recordId = favoriteItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon, .add-to-plan-btn')) return;
+            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon, .add-to-plan-btn, .option-btn')) return;
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
@@ -400,7 +408,7 @@ export function initializeEventListeners(imageCache) {
         const modal = document.getElementById('detail-modal-overlay');
         const container = target.closest('[data-record-id]');
         
-        const isInModal = modal.style.display === 'flex' && modal.contains(target);
+        const isInModal = modal && modal.style.display === 'flex' && modal.contains(target);
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         
         if (!container) return;
@@ -424,6 +432,9 @@ export function initializeEventListeners(imageCache) {
                 updateLockedItemState(recordId, updates);
             } else {
                 updateItemState(recordId, updates);
+                // After an option changes, we need to save and redraw the carousel.
+                triggerSave();
+                ui.updateFavoritesCarousel();
             }
         }
     });
