@@ -4,7 +4,7 @@
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
-import { parseOptions } from './utils.js';
+import { parseOptions } from './utils/utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 
@@ -85,6 +85,7 @@ export function getGroupPriceRange(record) {
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
 
+
 export function formatPricingType(pricingType) {
     if (!pricingType) return '';
     const type = pricingType.toLowerCase();
@@ -134,14 +135,11 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
 }
 
-
-// This function allows events.js to pass its getItemState function to the UI modules
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
 }
 
-// This is needed so that card.js etc. can access it via the UI hub
 export function getMainGetItemState() {
     return mainGetItemState;
 }
