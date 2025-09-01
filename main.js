@@ -9,7 +9,7 @@ import * as ui from './ui.js';
 import { getDayStatus, checkAvailability, AVAILABILITY_STATUS } from './availability.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, getItemState, updateSaveShareButton } from './events.js';
-
+const imageCache = new Map();
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
@@ -57,7 +57,7 @@ async function initialize() {
     }
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
-    initializeEventListeners();
+    initializeEventListeners(imageCache);
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         ui.updateHeader();
@@ -78,7 +78,7 @@ async function initialize() {
 
     document.getElementById('status-filter').value = 'Available';
 
-    applyFiltersAndSort();
+    applyFiltersAndSort(imageCache);
     ui.updateFavoritesCarousel();
     updateSaveShareButton();
 }
