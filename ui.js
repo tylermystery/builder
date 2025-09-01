@@ -4,7 +4,7 @@
  *
  * Changelog:
  * v2.22.1 - 2025-09-01
- * - Fixed an "Illegal return statement" syntax error by removing duplicated code.
+ * - Fixed a ReferenceError in `createInteractiveCard` by fetching images before they are used.
  *
  * v2.22.0 - 2025-09-01
  * - Refactored `createInteractiveCard` to generate a standardized, more professional layout.
@@ -130,7 +130,7 @@ export async function createFavoriteCardElement(record, itemInfo, isLocked, imag
     itemCard.innerHTML = `
         <div class="card-actions">${cardActionsHTML}</div>
         <div class="favorite-item-content">
-            <p class="item-name">${fields[CONSTANTS.FIELD_NAMES.NAME]}</p>
+            <p class="item-name">${fields.Name}</p>
             ${variationNameHTML}
             ${noteHTML}
             <div class="favorite-pricing-details">
