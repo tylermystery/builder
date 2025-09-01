@@ -1,14 +1,14 @@
 /*
- * Version: 4.7.1
+ * Version: 4.7.2
  * Last Modified: 2025-08-31
  *
  * Changelog:
  *
+ * v4.7.2 - 2025-08-31
+ * - No logical changes. Syncing version with index.html fix.
+ *
  * v4.7.1 - 2025-08-31
  * - Added logic to handle "Add to Plan" clicks from catalog and favorite cards.
- *
- * v4.7.0 - 2025-08-31
- * - Reverted Categories to multi-select buttons at the top of the filter panel.
  */
 
 import { state } from './state.js';
@@ -295,7 +295,7 @@ async function initialize() {
     setupEventListeners();
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
-        ui.updateHeader();
+        ui.updateEventDetailsPanel();
         
         ui.updateEventPlanPanel();
         ui.updateTotalCost();
