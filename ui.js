@@ -212,8 +212,10 @@ export function updateCardIcon(recordId) {
 }
 
 export async function createInteractiveCard(record, imageCache) {
+    console.log(`UI: Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
+    // ... the rest of the function remains the same ...
     const allRecords = state.records.all;
     const itemState = mainGetItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -221,7 +223,6 @@ export async function createInteractiveCard(record, imageCache) {
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
     const status = fields[CONSTANTS.FIELD_NAMES.STATUS] || 'Available';
     const isAvailable = status === 'Available';
-
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
@@ -230,17 +231,9 @@ export async function createInteractiveCard(record, imageCache) {
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
-    let optionsControlHTML = '';
-    let quantitySelectorHTML = '';
     let priceHTML = '';
     let footerHTML = '';
-    let statusBadgeHTML = '';
 
-    if (!isAvailable) {
-        statusBadgeHTML = `<span class="status-badge">${status}</span>`;
-    }
-    
-    // BUILD FOOTER
     if (isGrouping) {
         const range = getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
@@ -253,10 +246,7 @@ export async function createInteractiveCard(record, imageCache) {
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
-        
-        optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}" ${itemState.selectedOptionIndex === index ? 'selected' : ''}>${opt.name}</option>`).join('')}</select>`;
-        quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        
+        const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         let displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
@@ -294,7 +284,6 @@ export async function createInteractiveCard(record, imageCache) {
         ${footerHTML}
     `;
 
-    // Re-attach listeners for quantity buttons
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -313,24 +302,31 @@ export async function createInteractiveCard(record, imageCache) {
 
     return eventCard;
 }
-
 export async function renderRecords(recordsToRender, imageCache, append = false) {
+    console.log(`UI: renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
-    if (!catalogContainer) return;
+    if (!catalogContainer) {
+        console.error("UI ERROR: catalog-container element not found in the DOM!");
+        return;
+    }
+
     if (!append) {
         catalogContainer.innerHTML = '';
-        const implodeContainer = document.getElementById('implode-container');
-        if (implodeContainer) implodeContainer.remove();
     }
+
     if (recordsToRender.length === 0 && !append) {
+        console.log("UI: No records to render, displaying 'No items to show.'");
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         return;
     }
+
     const CHUNK_SIZE = 5;
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
         const cards = await Promise.all(cardPromises);
+
+        console.log(`UI: Appending a chunk of ${cards.length} card elements to the DOM.`);
         cards.forEach(card => {
             if (card) catalogContainer.appendChild(card);
         });
