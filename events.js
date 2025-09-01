@@ -5,7 +5,6 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 
 // These variables are now scoped to the events module
-const imageCache = new Map();
 let mainDatePicker = null;
 let saveTimeout;
 const saveShareBtn = document.getElementById('save-share-btn');
@@ -57,7 +56,7 @@ function updateLockedItemState(recordId, updates) {
 }
 
 // --- INFINITE SCROLL LOGIC ---
-function loadMoreRecords() {
+function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
@@ -107,7 +106,7 @@ function setupEventListeners() {
     // All original setupEventListeners code goes here...
 }
 
-export function initializeEventListeners() {
+export function initializeEventListeners(imageCache) {
     // --- The contents of the original setupEventListeners function ---
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -121,7 +120,7 @@ export function initializeEventListeners() {
         scrollTimeout = setTimeout(() => {
             const buffer = 300;
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer) {
-                loadMoreRecords();
+                loadMoreRecords(imageCache);
             }
             scrollTimeout = null;
         }, 100);
