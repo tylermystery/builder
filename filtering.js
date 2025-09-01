@@ -2,7 +2,7 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 
-export { applyFiltersAndSort };
+export function applyFiltersAndSort(imageCache) {
 
 // --- CORE LOGIC ---
 function applyFiltersAndSort() {
