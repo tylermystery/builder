@@ -1,31 +1,15 @@
 /*
- * Version: 4.7.1
- * Last Modified: 2025-08-31
- *
- * Changelog:
- *
- * v4.7.1 - 2025-08-31
- * - Added logic to handle "Add to Plan" clicks from catalog and favorite cards.
- *
- * v4.7.0 - 2025-08-31
- * - Reverted Categories to multi-select buttons at the top of the filter panel.
+ * Version: 4.8.0 (Refactored)
+ * Last Modified: 2025-09-01
  */
-
 import { state } from './state.js';
-import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
+import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
-import { getStoredSessions, storeSession } from './session.js';
-import { parseOptions } from './utils.js';
-import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, checkAvailability, AVAILABILITY_STATUS } from './availability.js';
 import { applyFiltersAndSort } from './filtering.js';
-import { initializeEventListeners } from './events.js';
-const imageCache = new Map();
-let mainDatePicker = null;
+import { initializeEventListeners, getItemState, updateSaveShareButton } from './events.js';
 
-// --- SAVE STATE MANAGEMENT ---
-let saveTimeout;
-const saveShareBtn = document.getElementById('save-share-btn');
 
 // --- AVAILABILITY LOGIC ---
 async function updateAllCardAvailabilityIcons() {
@@ -83,7 +67,9 @@ async function initialize() {
 
         const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
-            mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
+            // This will rely on mainDatePicker being initialized within events.js
+            const mainDatePicker = flatpickr("#date-filter");
+            if(mainDatePicker) mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
         }
     } else {
         state.session.isOwned = true;
