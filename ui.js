@@ -14,36 +14,6 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 
 // --- SHARED HELPER FUNCTIONS ---
-
-export function getBreadcrumbs(record, allRecords) {
-    const breadcrumbs = [];
-    let current = record;
-    while (current && current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]) {
-        const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-        const parentRecord = allRecords.find(r => r.fields.Name === parentName);
-        if (parentRecord) {
-            breadcrumbs.unshift(parentRecord);
-            current = parentRecord;
-        } else {
-            break;
-        }
-    }
-    return breadcrumbs;
-}
-
-export function getRecordPrice(record, optionIndex = null) {
-    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-    if (optionIndex !== null) {
-        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const variation = options[optionIndex];
-        if (variation) {
-            if (variation.absolutePrice !== null) return variation.absolutePrice;
-            if (variation.priceChange !== null) price += variation.priceChange;
-        }
-    }
-    return price;
-}
-
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -85,13 +55,17 @@ export function getGroupPriceRange(record) {
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
 
-
-export function formatPricingType(pricingType) {
-    if (!pricingType) return '';
-    const type = pricingType.toLowerCase();
-    if (type === 'per guest') return '/ guest';
-    if (type === 'per hour') return '/ hour';
-    return '';
+export function getRecordPrice(record, optionIndex = null) {
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            if (variation.absolutePrice !== null) return variation.absolutePrice;
+            if (variation.priceChange !== null) price += variation.priceChange;
+        }
+    }
+    return price;
 }
 
 // --- CORE UI FUNCTIONS ---
@@ -104,7 +78,6 @@ export function toggleLoading(show) {
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
-// REPAIRED: This function is now async and returns a promise.
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
