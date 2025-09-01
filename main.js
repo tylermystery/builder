@@ -18,6 +18,7 @@ import * as ui from './ui.js';
 import { getStoredSessions, storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { getDayStatus, checkAvailability, getBusySlotsForDay, AVAILABILITY_STATUS } from './availability.js';
+import { applyFiltersAndSort } from './filtering.js';
 const imageCache = new Map();
 let mainDatePicker = null;
 
