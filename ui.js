@@ -1,5 +1,5 @@
 /*
- * Version: 3.0.0 (Refactored into Modules)
+ * Version: 3.0.1 (Repaired)
  * Last Modified: 2025-09-01
  */
 import { state } from './state.js';
@@ -14,7 +14,6 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 
 // --- SHARED HELPER FUNCTIONS ---
-// These are used by multiple UI components, so they live in the main hub.
 
 export function getBreadcrumbs(record, allRecords) {
     const breadcrumbs = [];
@@ -45,9 +44,45 @@ export function getRecordPrice(record, optionIndex = null) {
     return price;
 }
 
+function getDescendantBookableItems(record, allRecords) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
 export function getGroupPriceRange(record) {
-    // This function's implementation would be here...
-    // (It can be copied from the old ui.js file)
+    const descendants = getDescendantBookableItems(record, state.records.all);
+    if (descendants.length === 0) return null;
+    let minPrice = Infinity, maxPrice = -Infinity;
+    descendants.forEach(item => {
+        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (options.length > 0) {
+            options.forEach((opt, index) => {
+                const price = getRecordPrice(item, index);
+                if (price > 0) {
+                    if (price < minPrice) minPrice = price;
+                    if (price > maxPrice) maxPrice = price;
+                }
+            });
+        } else {
+            const price = getRecordPrice(item);
+            if (price > 0) {
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            }
+        }
+    });
+    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
 
 export function formatPricingType(pricingType) {
@@ -68,7 +103,8 @@ export function toggleLoading(show) {
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
-export function renderRecords(recordsToRender, imageCache, append = false) {
+// REPAIRED: This function is now async and returns a promise.
+export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) {
@@ -90,14 +126,14 @@ export function renderRecords(recordsToRender, imageCache, append = false) {
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
-        Promise.all(cardPromises).then(cards => {
-            log('UI', `Appending a chunk of ${cards.length} card elements to the DOM.`);
-            cards.forEach(card => {
-                if (card) catalogContainer.appendChild(card);
-            });
+        const cards = await Promise.all(cardPromises);
+        log('UI', `Appending a chunk of ${cards.length} card elements to the DOM.`);
+        cards.forEach(card => {
+            if (card) catalogContainer.appendChild(card);
         });
     }
 }
+
 
 // This function allows events.js to pass its getItemState function to the UI modules
 let mainGetItemState;
