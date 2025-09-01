@@ -12,13 +12,11 @@
     <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
         body {
-            padding-bottom: 150px; /* Increased padding to make space for the new bottom favorites bar */
+            padding-bottom: 150px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
-        body.modal-open {
-            overflow: hidden;
-        }
+        body.modal-open { overflow: hidden; }
         #sticky-header {
             position: sticky;
             top: 0;
@@ -28,8 +26,7 @@
         }
         #header-toolbar {
             display: flex;
-            flex-wrap: wrap;
-            align-items: center; /* Vertically center items */
+            align-items: center;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
@@ -39,25 +36,6 @@
             font-size: 1.5em;
             font-weight: bold;
             margin: 0;
-        }
-        .toolbar-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .toolbar-group label {
-            font-size: 0.75em;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: 500;
-        }
-        .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            padding: 8px 10px;
-            font-size: 0.9em;
-            width: 100%;
-            box-sizing: border-box;
         }
         .main-container {
             display: grid;
@@ -135,6 +113,25 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
+        }
+        .toolbar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .toolbar-group label {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .toolbar-group input {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.9em;
+            width: 100%;
+            box-sizing: border-box;
         }
         #cart-items-container {
             flex-grow: 1;
@@ -219,36 +216,71 @@
             padding: 0;
             font-weight: bold;
         }
+
+        /* --- BETA TOOLKIT STYLES --- */
+        #beta-toolkit {
+            display: none;
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+        #beta-toolkit.visible {
+            display: block;
+        }
+        .beta-group { display: flex; flex-direction: column; gap: 8px; }
+        .beta-group label { font-size: 0.8em; font-weight: bold; color: #555; }
+        .view-toggle-btns { display: flex; gap: 5px; }
+        .view-toggle-btns button {
+            padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; background: #f0f0f0; cursor: pointer;
+        }
+        .view-toggle-btns button.active {
+            background-color: #007bff; color: white; border-color: #007bff;
+        }
+
+        /* --- CARD & CATALOG STYLES --- */
         #catalog-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
-            position: relative;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             display: flex;
             flex-direction: column;
-            justify-content: flex-end;
-            height: 520px;
-            background-size: cover;
-            background-position: center;
-            color: white;
+            background: #fff;
+            color: #333;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             overflow: hidden;
             cursor: pointer;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
-        .event-card-content {
-            padding: 15px;
-            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+        .event-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        .card-image-container {
+            position: relative;
+            background-size: cover;
+            background-position: center;
+        }
+        .card-content-container { padding: 15px; }
+        .card-content-container h3 { margin: 0 0 10px 0; font-size: 1.2em; }
+        .card-content-container .description {
+            font-size: 0.9em; color: #666;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
         }
         .card-footer {
+            margin-top: auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 15px;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(5px);
+            border-top: 1px solid #eee;
         }
         .card-action-btn {
             padding: 8px 16px;
@@ -264,12 +296,43 @@
             background-color: #5a6268;
             cursor: not-allowed;
         }
+        
+        /* --- GRID VIEW (DEFAULT) --- */
+        .view-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .view-grid .event-card { height: 420px; }
+        .view-grid .card-image-container { height: 240px; }
+
+        /* --- LIST VIEW --- */
+        .view-list { grid-template-columns: 1fr; }
+        .view-list .event-card {
+            flex-direction: row;
+            height: auto;
+        }
+        .view-list .card-image-container {
+            flex: 0 0 250px;
+            height: 180px;
+        }
+        .view-list .card-content-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .view-list .description { -webkit-line-clamp: 2; }
+        .view-list .card-footer { border-top: none; padding-left: 0; }
+
+        /* --- COMPACT VIEW --- */
+        .view-compact { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+        .view-compact .event-card { height: 250px; }
+        .view-compact .card-image-container { height: 180px; }
+        .view-compact .card-content-container { padding: 10px; }
+        .view-compact h3 { font-size: 1em; margin-bottom: 5px; }
+        .view-compact .description, .view-compact .card-footer { display: none; }
+        
         .parent-link {
             font-size: 0.8em;
             margin: 0 0 5px 0;
             font-weight: 500;
-            color: rgba(255, 255, 255, 0.9);
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            color: #6c757d;
             cursor: pointer;
         }
         .heart-icon {
@@ -282,7 +345,7 @@
         .heart-icon svg {
             width: 28px;
             height: 28px;
-            fill: rgba(255, 255, 255, 0.8);
+            fill: rgba(0,0,0,0.5);
             stroke: white;
             stroke-width: 1.5;
             transition: all 0.2s ease-in-out;
@@ -563,6 +626,16 @@
     <div id="sticky-header">
         <div id="header-toolbar">
             <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
+        </div>
+    </div>
+    <div id="beta-toolkit">
+        <div class="beta-group">
+            <label>Catalog View</label>
+            <div class="view-toggle-btns">
+                <button data-view="grid" class="view-toggle-btn active">Grid</button>
+                <button data-view="list" class="view-toggle-btn">List</button>
+                <button data-view="compact" class="view-toggle-btn">Compact</button>
+            </div>
         </div>
     </div>
     <div class="main-container">
