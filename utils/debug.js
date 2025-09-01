@@ -1,9 +1,7 @@
-// A simple logger that can be toggled on or off for debugging.
 let isDebugMode = false;
 
 export function setDebugMode(enabled) {
-    isDebugMode = !!enabled;
-    console.log(`Debug mode is now ${isDebugMode ? 'ON' : 'OFF'}.`);
+    isDebugMode = enabled;
 }
 
 export function log(prefix, ...args) {
@@ -11,3 +9,4 @@ export function log(prefix, ...args) {
         console.log(`[${prefix}]`, ...args);
     }
 }
+
