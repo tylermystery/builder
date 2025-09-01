@@ -1,11 +1,13 @@
 /*
- * Version: 2.21.0
- * Last Modified: 2025-08-31
+ * Version: 2.20.1
+ * Last Modified: 2025-09-01
  *
  * Changelog:
- * v2.21.0 - 2025-08-31
- * - Refactored `createInteractiveCard` to support multiple layouts (Grid, List, Compact).
- * - Card HTML is now more semantic with distinct image, content, and footer sections.
+ * v2.20.1 - 2025-09-01
+ * - Fixed TypeError by renaming updateHeader to updateEventDetailsPanel.
+ *
+ * v2.20.0 - 2025-08-31
+ * - Renamed updateHeader to updateEventDetailsPanel to reflect new location of inputs.
  */
 
 import { state } from './state.js';
@@ -223,22 +225,12 @@ export async function createInteractiveCard(record, imageCache) {
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
-
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-    const isLockedIn = state.cart.lockedItems.has(recordId);
-    const isHearted = state.cart.items.has(recordId);
-    let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
-    let iconSVG = isLockedIn ? checkSVG : heartSVG;
-    const heartIconHTML = `<div class="heart-icon ${iconClass}">${iconSVG}</div>`;
-
+    const explodeButtonHTML = isGrouping ? `<button class="card-btn explode-btn" title="Explode">💥</button>` : '';
+    const availabilityButtonHTML = `<button class="card-btn availability-btn" title="Check Availability">📅</button>`;
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
     let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '', footerHTML = '';
-    
     if (isGrouping) {
         optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
         const range = getGroupPriceRange(record);
@@ -246,11 +238,13 @@ export async function createInteractiveCard(record, imageCache) {
         footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div></div>`;
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        optionsControlHTML = `<select class="options-selector configure-options">${rawOptions.map((opt, index) => `<option value="${index}" ${itemState.selectedOptionIndex === index ? 'selected' : ''}>${opt.name}</option>`).join('')}</select>`;
         notesHTML = `<textarea class="item-note" placeholder="Add a note...">${itemState.note}</textarea>`;
         quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         priceHTML = `$${initialPrice.toFixed(2)}`;
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLockedIn ? 'disabled' : ''}>${isLockedIn ? 'In Plan' : 'Add to Plan'}</button>`;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         
         footerHTML = `
             <div class="card-footer">
@@ -262,13 +256,20 @@ export async function createInteractiveCard(record, imageCache) {
             </div>`;
     }
 
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+    const isLockedIn = state.cart.lockedItems.has(recordId);
+    const isHearted = state.cart.items.has(recordId);
+    let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
+    let iconSVG = isLockedIn ? checkSVG : heartSVG;
+
     eventCard.innerHTML = `
         <div class="card-image-container" style="background-image: url('${imageUrls[0] || ''}')">
-            ${heartIconHTML}
+            ${heartSVG}
         </div>
         <div class="card-content-container">
-            ${parentLinkHTML}
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+           ${parentLinkHTML}
+           <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
             ${rawOptions.length > 0 ? optionsControlHTML : ''}
             ${notesHTML}
@@ -602,7 +603,7 @@ export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
 
-export function updateHeader() {
+export function updateEventDetailsPanel() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
     const eventNameInput = document.getElementById('header-event-name');
