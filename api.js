@@ -1,19 +1,8 @@
-/*
- * Version: 2.8.2
- * Last Modified: 2025-08-30
- *
- * Changelog:
- *
- * v2.8.2 - 2025-08-30
- * - Fixed a syntax error (missing closing brace) in saveSessionToAirtable.
- *
- * v2.8.1 - 2025-08-30
- * - Fixed Airtable 422 Error by only including the Date field in the payload when it has a value.
- */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
+import { parseOptions } from './utils/utils.js'; // REPAIRED: Corrected the import path
+
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
@@ -101,7 +90,7 @@ export async function saveSessionToAirtable() {
         console.error("Failed to save session:", error);
         return false;
     }
-} // **THE FIX**: This closing brace was missing.
+}
 
 export async function fetchAllRecords() {
     let records = [];
