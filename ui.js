@@ -1,11 +1,13 @@
 /*
- * Version: 2.19.0
+ * Version: 2.20.0
  * Last Modified: 2025-08-31
  *
  * Changelog:
+ * v2.20.0 - 2025-08-31
+ * - Renamed updateHeader to updateEventDetailsPanel to reflect new location of inputs.
+ *
  * v2.19.0 - 2025-08-31
- * - Added "Add to Plan" button to main catalog cards for quicker workflow.
- * - Added "+" button to favorite carousel cards to move items to the plan.
+ * - Added "Add to Plan" button to catalog and favorite cards.
  */
 
 import { state } from './state.js';
