@@ -6,6 +6,6 @@
     "stripe": "^13.2.0"
   },
   "scripts": {
-    "build": "node export.js"
+    "build": "node build.js"
   }
 }
