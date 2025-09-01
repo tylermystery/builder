@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Catalog</title>
+    <title>Event Builder</title>
     <link rel="icon" href="data:;" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
@@ -48,7 +48,6 @@
 
         /* --- BETA TOOLKIT STYLES --- */
         #beta-toolkit {
-            display: none; /* Hidden by default */
             position: absolute;
             top: 60px;
             left: 20px;
@@ -154,6 +153,177 @@
         .aspect-1-1 .card-image-container { aspect-ratio: 1 / 1; }
         
         /* --- OTHER STYLES --- */
+        #right-sidebar h3, #left-sidebar h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 10px;
+        }
+        #filter-controls {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .filter-group label {
+            font-size: 0.9em;
+            font-weight: 500;
+            color: #333;
+        }
+        .filter-btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 8px;
+            border: 1px solid #ccc; border-radius: 4px;
+            background-color: #f8f8f8; cursor: pointer; text-align: center; font-size: 0.85em;
+        }
+        .filter-btn.active {
+            background-color: #e7f3ff;
+            border-color: #007bff; font-weight: bold;
+        }
+        #reset-filters-btn {
+            width: 100%;
+            padding: 10px;
+            font-size: 0.9em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+            margin-top: 10px;
+        }
+        #catalog-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #catalog-toolbar select {
+             border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.9em;
+        }
+        #cart-panel {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+        .toolbar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .toolbar-group label {
+            font-size: 0.75em;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .toolbar-group input {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.9em;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #cart-items-container {
+            flex-grow: 1;
+        }
+        #cart-footer {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #dee2e6;
+        }
+        #cart-footer .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #cart-footer button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+        }
+        #cart-footer #checkout-btn {
+            background-color: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+        #cart-footer #save-share-btn {
+            background-color: #f0f0f0;
+            color: #333;
+            margin-top: 10px;
+        }
+        #favorites-section { 
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            z-index: 998;
+            padding: 15px 20px; 
+            box-sizing: border-box;
+            backdrop-filter: blur(5px);
+        }
+        #favorites-carousel { 
+            display: flex;
+            gap: 15px;
+            overflow-x: auto; 
+            padding-bottom: 5px; 
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        .favorite-item {
+            position: relative;
+            flex: 0 0 100px;
+            height: 100px;
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+        }
+        .favorite-item .card-actions {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            display: flex;
+            gap: 5px;
+        }
+        .favorite-item .action-btn {
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            line-height: 24px;
+            cursor: pointer;
+            padding: 0;
+            font-weight: bold;
+        }
         .heart-icon {
             position: absolute; top: 15px; right: 15px; cursor: pointer; z-index: 2;
         }
