@@ -1,15 +1,13 @@
 /*
- * Version: 2.22.0
+ * Version: 2.22.1
  * Last Modified: 2025-09-01
  *
  * Changelog:
+ * v2.22.1 - 2025-09-01
+ * - Fixed an "Illegal return statement" syntax error by removing duplicated code.
+ *
  * v2.22.0 - 2025-09-01
  * - Refactored `createInteractiveCard` to generate a standardized, more professional layout.
- * - Removed notes, quantity, and parent item from the main card view.
- * - Ensured image fetching occurs before card HTML is constructed to prevent errors.
- *
- * v2.21.1 - 2025-09-01
- * - Fixed a ReferenceError in `createInteractiveCard` by fetching images before they are used.
  */
 
 import { state } from './state.js';
@@ -218,9 +216,9 @@ export function updateCardIcon(recordId) {
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
-    const allRecords = state.records.all;
+    const itemState = mainGetItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
@@ -260,38 +258,6 @@ export async function createInteractiveCard(record, imageCache) {
             <p class="description">${fields.Description || ''}</p>
         </div>
         ${footerHTML}`;
-    
-    return eventCard;
-}
-
-    eventCard.innerHTML = `
-        <div class="card-image-container" style="background-image: url('${imageUrls[0] || ''}')">
-            ${heartIconHTML}
-        </div>
-        <div class="card-content-container">
-            ${parentLinkHTML}
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
-            ${rawOptions.length > 0 ? optionsControlHTML : ''}
-            ${notesHTML}
-        </div>
-        ${footerHTML}`;
-    
-    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
-    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
-    const quantityInput = eventCard.querySelector('.quantity-input');
-    if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            quantityInput.stepUp(); 
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
-        });
-        minusBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            quantityInput.stepDown(); 
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
-        });
-    }
     
     return eventCard;
 }
