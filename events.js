@@ -4,6 +4,8 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { getDayStatus, checkAvailability, AVAILABILITY_STATUS } from './availability.js';
+import { setDebugMode } from './utils/debug.js';
+
 // Note: tippy.js is loaded globally via a CDN in index.html
 
 // These variables are now scoped to the events module
@@ -147,6 +149,14 @@ async function updateAllCardAvailabilityIcons() {
 // --- INITIALIZER ---
 
 export function initializeEventListeners(imageCache) {
+    let debugEnabled = false;
+    const betaTrigger = document.getElementById('beta-trigger');
+    if (betaTrigger) {
+        betaTrigger.addEventListener('click', () => {
+            debugEnabled = !debugEnabled;
+            setDebugMode(debugEnabled);
+        });
+    }  
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
