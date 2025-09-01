@@ -1,15 +1,14 @@
 /*
- * Version: 4.8.0
- * Last Modified: 2025-08-31
+ * Version: 4.8.1
+ * Last Modified: 2025-09-01
  *
  * Changelog:
  *
+ * v4.8.1 - 2025-09-01
+ * - Fixed a bug where the catalog view preference was not persisting on page load when a session had items.
+ *
  * v4.8.0 - 2025-08-31
  * - Implemented Beta Toolkit for toggling between Grid, List, and Compact catalog layouts.
- * - Added logic to save and load the user's preferred layout from localStorage.
- *
- * v4.7.1 - 2025-08-31
- * - Added logic to handle "Add to Plan" clicks from catalog and favorite cards.
  */
 
 import { state } from './state.js';
@@ -283,6 +282,7 @@ async function updateAllCardAvailabilityIcons() {
 async function initialize() {
     ui.initStateHelpers({ getItemState });
 
+    // THE FIX: Load and apply the saved catalog view preference at the very beginning.
     const savedView = localStorage.getItem('catalogView') || 'grid';
     const catalogContainer = document.getElementById('catalog-container');
     if(catalogContainer) catalogContainer.className = `view-${savedView}`;
