@@ -14,7 +14,7 @@ const sources = [
     { type: 'directory', path: 'utils', files: ['debug.js', 'utils.js'] },
     { type: 'directory', path: 'components', files: ['card.js', 'modal.js', 'sidebar.js'] },
     { type: 'file', path: 'netlify.toml' },
-    { type: 'file', path: 'package.json' }
+    { type: 'file', path: 'package.json' },
     // NOTE: Add any new files or directories here in the future
 ];
 
@@ -23,6 +23,7 @@ let fullContent = `Project Export - ${new Date().toISOString()}\n\n`;
 console.log('Starting project source build...');
 
 sources.forEach(source => {
+    const sourcePath = source.path === './' ? '' : source.path;
     if (source.type === 'file') {
         const filePath = path.join(__dirname, source.path);
         if (fs.existsSync(filePath)) {
@@ -37,9 +38,9 @@ sources.forEach(source => {
         }
     } else if (source.type === 'directory') {
         source.files.forEach(fileName => {
-            const filePath = path.join(__dirname, source.path, fileName);
+            const filePath = path.join(__dirname, sourcePath, fileName);
             if (fs.existsSync(filePath)) {
-                const relativePath = path.join(source.path, fileName).replace(/\\/g, '/');
+                const relativePath = path.join(sourcePath, fileName).replace(/\\/g, '/');
                 console.log(`Adding file: ${relativePath}`);
                 const content = fs.readFileSync(filePath, 'utf8');
                 fullContent += `============================================================\n`;
