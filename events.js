@@ -4,11 +4,9 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { getDayStatus, checkAvailability, AVAILABILITY_STATUS } from './availability.js';
-import { setDebugMode } from './utils/debug.js';
-
+import { setDebugMode, log } from './utils/debug.js';
 // Note: tippy.js is loaded globally via a CDN in index.html
 
-// These variables are now scoped to the events module
 let mainDatePicker = null;
 let saveTimeout;
 const saveShareBtn = document.getElementById('save-share-btn');
@@ -156,7 +154,8 @@ export function initializeEventListeners(imageCache) {
             debugEnabled = !debugEnabled;
             setDebugMode(debugEnabled);
         });
-    }  
+    }
+
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
@@ -320,11 +319,14 @@ export function initializeEventListeners(imageCache) {
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
+                // When deleting, we also need to manually update the carousel
+                await ui.updateFavoritesCarousel(); 
             } else {
                 updateItemState(recordId, {});
             }
             ui.updateCardIcon(recordId);
-            await ui.updateFavoritesCarousel();
+            // THE FIX: This line was removed to prevent the double-render
+            // await ui.updateFavoritesCarousel(); 
             triggerSave();
         } else if (addToPlanBtn) {
             e.stopPropagation();
@@ -428,3 +430,4 @@ export function initializeEventListeners(imageCache) {
 
     return mainDatePicker;
 }
+
