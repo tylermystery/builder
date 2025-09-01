@@ -11,8 +11,6 @@ let mainDatePicker = null;
 let saveTimeout;
 const saveShareBtn = document.getElementById('save-share-btn');
 
-// --- UTILITY & HELPER FUNCTIONS ---
-
 function debounce(func, delay = 300) {
     let timeout;
     return (...args) => {
@@ -62,7 +60,6 @@ function updateLockedItemState(recordId, updates) {
 
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
-
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
     const recordsToLoad = state.records.filtered.slice(start, end);
@@ -139,9 +136,6 @@ async function updateAllCardAvailabilityIcons() {
         }
     }
 }
-
-
-// --- INITIALIZER ---
 
 export function initializeEventListeners(imageCache) {
     let debugEnabled = false;
@@ -227,20 +221,18 @@ export function initializeEventListeners(imageCache) {
         dateFilterGroup.addEventListener('click', (e) => {
             const button = e.target.closest('[data-date-quick]');
             if (!button || !mainDatePicker) return;
-
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
-
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
                     endDate.setDate(endDate.getDate() + 1);
                     break;
                 case 'this-week':
-                    const dayOfWeek = startDate.getDay(); // 0=Sun, 6=Sat
+                    const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
@@ -317,13 +309,11 @@ export function initializeEventListeners(imageCache) {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            
             if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
             } else {
                 updateItemState(recordId, {});
             }
-            
             ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel(); 
             triggerSave();
@@ -332,13 +322,11 @@ export function initializeEventListeners(imageCache) {
             const container = addToPlanBtn.closest('[data-record-id]');
             const recordId = container.dataset.recordId;
             const mode = container.dataset.mode;
-
             let itemInfo;
             if (mode === 'edit-locked') {
                 const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
-                
                 itemInfo = {
                     quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
                     selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
@@ -350,13 +338,11 @@ export function initializeEventListeners(imageCache) {
                 state.cart.lockedItems.set(recordId, itemInfo);
                 state.cart.items.delete(recordId);
             }
-            
             ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel();
             await ui.updateEventPlanPanel();
             ui.updateTotalCost();
             triggerSave();
-            
             if (container.id === 'detail-modal-overlay') {
                 ui.hideDetailModal();
             }
@@ -382,7 +368,6 @@ export function initializeEventListeners(imageCache) {
             ui.updateCardIcon(recordId);
             await ui.updateFavoritesCarousel();
             triggerSave();
-        // REPAIRED: This logic restores the in-modal navigation functionality.
         } else if (optionBtn && optionBtn.dataset.childName) {
             const childName = optionBtn.dataset.childName;
             const childRecord = state.records.all.find(r => r.fields.Name === childName);
@@ -407,13 +392,10 @@ export function initializeEventListeners(imageCache) {
         const target = e.target;
         const modal = document.getElementById('detail-modal-overlay');
         const container = target.closest('[data-record-id]');
-        
         const isInModal = modal && modal.style.display === 'flex' && modal.contains(target);
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
-        
         if (!container) return;
         const recordId = container.dataset.recordId;
-        
         let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
@@ -426,13 +408,11 @@ export function initializeEventListeners(imageCache) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
             }
         }
-        
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
                 updateLockedItemState(recordId, updates);
             } else {
                 updateItemState(recordId, updates);
-                // After an option changes, we need to save and redraw the carousel.
                 triggerSave();
                 ui.updateFavoritesCarousel();
             }
