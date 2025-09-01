@@ -25,7 +25,6 @@ async function initialize() {
     }
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
-    initializeEventListeners(imageCache);
     const mainDatePicker = initializeEventListeners(imageCache);
     if (sessionId) {
         await api.loadSessionFromAirtable(sessionId);
