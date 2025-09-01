@@ -1,13 +1,15 @@
 /*
- * Version: 2.21.1
+ * Version: 2.22.0
  * Last Modified: 2025-09-01
  *
  * Changelog:
+ * v2.22.0 - 2025-09-01
+ * - Refactored `createInteractiveCard` to generate a standardized, more professional layout.
+ * - Removed notes, quantity, and parent item from the main card view.
+ * - Ensured image fetching occurs before card HTML is constructed to prevent errors.
+ *
  * v2.21.1 - 2025-09-01
  * - Fixed a ReferenceError in `createInteractiveCard` by fetching images before they are used.
- *
- * v2.21.0 - 2025-08-31
- * - Refactored `createInteractiveCard` to support multiple layouts (Grid, List, Compact).
  */
 
 import { state } from './state.js';
@@ -217,12 +219,10 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const itemState = mainGetItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
-    // THE FIX: Fetch images BEFORE using them in the HTML string.
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
 
     const eventCard = document.createElement('div');
@@ -236,34 +236,33 @@ export async function createInteractiveCard(record, imageCache) {
     let iconClass = isLockedIn ? 'locked' : (isHearted ? 'hearted' : '');
     let iconSVG = isLockedIn ? checkSVG : heartSVG;
     const heartIconHTML = `<div class="heart-icon ${iconClass}">${iconSVG}</div>`;
-
-    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
-
-    let optionsControlHTML = '', notesHTML = '', quantitySelectorHTML = '', priceHTML = '', footerHTML = '';
     
+    let priceHTML = '', footerHTML = '';
+
     if (isGrouping) {
-        optionsControlHTML = `<select class="options-selector navigate-options"><option value="">Select an option...</option>${rawOptions.map(opt => `<option value="${opt.name}">${opt.name}</option>`).join('')}</select>`;
         const range = getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div></div>`;
     } else {
-        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        notesHTML = `<textarea class="item-note" placeholder="Add a note...">${itemState.note}</textarea>`;
-        quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        const initialPrice = parseFloat(String(fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        priceHTML = `$${initialPrice.toFixed(2)}`;
+        const price = getRecordPrice(record);
+        const pricingType = formatPricingType(fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]);
+        priceHTML = `$${price.toFixed(2)} ${pricingType}`;
         const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLockedIn ? 'disabled' : ''}>${isLockedIn ? 'In Plan' : 'Add to Plan'}</button>`;
-        
-        footerHTML = `
-            <div class="card-footer">
-                <div class="price-quantity-wrapper">
-                    <div class="price">${priceHTML}</div>
-                    ${quantitySelectorHTML}
-                </div>
-                ${addToPlanBtnHTML}
-            </div>`;
+        footerHTML = `<div class="card-footer"><div class="price">${priceHTML}</div>${addToPlanBtnHTML}</div>`;
     }
+
+    eventCard.innerHTML = `
+        <div class="card-image-container" style="background-image: url('${imageUrls[0] || ''}')">
+            ${heartIconHTML}
+        </div>
+        <div class="card-content-container">
+            <h3>${fields.Name || 'Untitled Event'}</h3>
+            <p class="description">${fields.Description || ''}</p>
+        </div>
+        ${footerHTML}`;
+    
+    return eventCard;
+}
 
     eventCard.innerHTML = `
         <div class="card-image-container" style="background-image: url('${imageUrls[0] || ''}')">
