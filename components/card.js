@@ -5,12 +5,13 @@ import { CONSTANTS } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
-// REPAIRED: Export this function so it can be used by other modules.
+// REPAIRED: This function is now exported, making it available to other modules.
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+    
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
         if (isLocked) {
             icon.className = 'heart-icon locked';
@@ -73,9 +74,6 @@ export async function createInteractiveCard(record, imageCache) {
             </div>
         `;
     }
-
-    const isLockedIn = state.cart.lockedItems.has(recordId);
-    const isHearted = state.cart.items.has(recordId);
     
     eventCard.innerHTML = `
         <div class="event-card-image-container" style="background-image: url('${imageUrls[0] || ''}');">
@@ -92,7 +90,7 @@ export async function createInteractiveCard(record, imageCache) {
         ${footerHTML}
     `;
     
-    // Call updateCardIcon AFTER the element is in the DOM
+    // Call updateCardIcon AFTER the element is in the DOM to set the initial state
     updateCardIcon(recordId);
 
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
