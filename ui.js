@@ -78,6 +78,7 @@ export function toggleLoading(show) {
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
+// REPAIRED: This function is now async to correctly return a Promise
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
