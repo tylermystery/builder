@@ -1,18 +1,13 @@
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js'; // REPAIRED: Corrected import path
-
-const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
-const TABLE_ID = 'tblUA4uuS8IYlhKpD';
-const SESSIONS_TABLE_NAME = 'Sessions';
+import { parseOptions } from './utils.js';
 
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `/api/airtable/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        const response = await fetch(url);
         if (!response.ok) throw new Error('Could not fetch session data.');
         const record = await response.json();
         
@@ -38,7 +33,13 @@ export async function saveSessionToAirtable() {
         state.session.id = null;
     }
 
-    const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
+    const sessionData = { 
+        favoritedItems: Object.fromEntries(state.cart.items), 
+        lockedInunion In Items: 0
+lockedInItems: Object.fromEntries(state.cart.lockedItems), 
+        itemReactions: Object.fromEntries(state.session.reactions), 
+        favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
+    };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
 
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
@@ -64,13 +65,13 @@ export async function saveSessionToAirtable() {
 
     const payload = { fields };
     const isUpdate = state.session.id !== null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const url = `/api/airtable/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
 
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         if (!response.ok) {
@@ -95,10 +96,10 @@ export async function saveSessionToAirtable() {
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    const baseUrl = `/api/airtable/${TABLE_ID}?`;
     try {
         do {
-            const response = await fetch(offset ? `${url}&offset=${offset}` : url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            const response = await fetch(offset ? `${baseUrl}&offset=${offset}` : baseUrl);
             if (!response.ok) throw new Error('Failed to fetch data from Airtable.');
             const data = await response.json();
             records = records.concat(data.records);
@@ -193,43 +194,24 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
     if (isGrouping) {
-        const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        imageUrls = await fetchImagesByTags(groupNameTag);
-        if (!imageUrls || imageUrls.length === 0) {
-            const firstChildOption = rawOptions.length > 0 ? rawOptions[0] : null;
-            if (firstChildOption) {
-                const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
-                if (firstChildRecord) {
-                    const childImageData = await fetchImagesForRecord(firstChildRecord, allRecords, imageCache);
-                    imageUrls = childImageData.imageUrls;
-                }
-            }
-        }
-    } else {
-        const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
-        if (itemName) {
-            const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-            imageUrls = await fetchImagesByTags(autoTagName);
-        }
-        
-        if (!imageUrls) {
-            const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
-            if (primaryManualTag) {
-                imageUrls = await fetchImagesByTags(primaryManualTag);
+        const bookableItems = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+        for (const child of bookableItems) {
+            const childImages = await fetchImagesByTags(child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+            if (childImages) {
+                imageUrls = imageUrls ? [...imageUrls, ...childImages] : childImages;
             }
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ? imageUrls : [ultimateFallbackUrl];
+    if (!imageUrls) {
+        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+    }
     
-    const result = {
-        isGrouping: isGrouping,
-        imageUrls: finalImageUrls.flat()
-    };
-    imageCache.set(cacheKey, result);
-    return result;
+    if (!imageUrls || imageUrls.length === 0) {
+        imageUrls = [ultimateFallbackUrl];
+    }
+    
+    imageCache.set(cacheKey, imageUrls);
+    return { imageUrls };
 }
-
