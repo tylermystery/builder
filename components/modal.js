@@ -2,7 +2,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions } from '../utils.js'; // REPAIRED: Corrected import path
+import { parseOptions } from '../utils.js';
 import { getDayStatus } from '../availability.js';
 import { log } from '../utils/debug.js';
 
@@ -13,6 +13,7 @@ export async function showDetailModal(record) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
     const modalHeaderActions = document.getElementById('modal-header-actions');
+    const modalBreadcrumbsContainer = document.getElementById('modal-breadcrumbs');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
     const modalItemDescription = document.getElementById('modal-item-description');
@@ -64,10 +65,24 @@ export async function showDetailModal(record) {
         modalThumbnailStrip.appendChild(thumb);
     });
     
+    // REPAIRED: This section restores the breadcrumbs/parent link display.
     modalHeaderActions.innerHTML = '';
-    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    if (parentName) {
-         modalHeaderActions.innerHTML += `<button class="parent-link" data-parent-name="${parentName}" title="Go to ${parentName}">⬆️</button>`;
+    modalBreadcrumbsContainer.innerHTML = '';
+    const breadcrumbs = ui.getBreadcrumbs(record, state.records.all);
+    if (breadcrumbs.length > 0) {
+        breadcrumbs.forEach((crumb, index) => {
+            const crumbLink = document.createElement('a');
+            crumbLink.href = '#';
+            crumbLink.textContent = crumb.fields.Name;
+            crumbLink.dataset.parentName = crumb.fields.Name; // Use dataset for event listener
+            crumbLink.classList.add('parent-link');
+            modalBreadcrumbsContainer.appendChild(crumbLink);
+            if (index < breadcrumbs.length - 1) {
+                const separator = document.createElement('span');
+                separator.textContent = ' > ';
+                modalBreadcrumbsContainer.appendChild(separator);
+            }
+        });
     }
     
     const heartBtnContainer = document.createElement('div');
@@ -84,12 +99,14 @@ export async function showDetailModal(record) {
         if (itemState.selectedOptionIndex === index) {
             optionButton.classList.add('selected');
         }
+        
         let priceModText = '';
-        if (opt.absolutePrice != null) {
-            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        if (opt.price != null) {
+            priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange != null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
+        
         optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
