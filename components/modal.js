@@ -1,6 +1,9 @@
 /*
- * Version: 3.0.4 (Enhanced)
+ * Version: 3.0.5 (Enhanced)
  * Last Modified: 2025-09-02
+ * Changelog:
+ * v3.0.5 - 2025-09-02
+ *   - Added resetModalState to clear stale data before showing modal.
  */
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -10,8 +13,29 @@ import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 
-
 let stripe, elements, cardElement, clientSecret;
+
+function resetModalState() {
+    const modalItemName = document.getElementById('modal-item-name');
+    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemDescription = document.getElementById('modal-item-description');
+    const modalMainImage = document.getElementById('modal-main-image');
+    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
+    const modalOptionsContainer = document.getElementById('modal-options-container');
+    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
+    const modalItemNote = document.getElementById('modal-item-note');
+    const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    
+    modalItemName.textContent = '';
+    modalItemPrice.textContent = '';
+    modalItemDescription.textContent = '';
+    modalMainImage.style.backgroundImage = '';
+    modalThumbnailStrip.innerHTML = '';
+    modalOptionsContainer.innerHTML = '';
+    modalQuantitySelector.innerHTML = '';
+    modalItemNote.value = '';
+    modalCalendarContainer.innerHTML = '';
+}
 
 export async function showDetailModal(record) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
@@ -29,6 +53,8 @@ export async function showDetailModal(record) {
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
+
+    resetModalState(); // Clear previous modal state
 
     modalOverlay.dataset.recordId = record.id;
     const isLocked = state.cart.lockedItems.has(record.id);
@@ -107,9 +133,7 @@ export async function showDetailModal(record) {
                     bubbles: true,
                     detail: { selectedOptionIndex: newIndex }
                 }));
-                // Update description if option has one
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                // Update displayed price based on selection
                 const newPrice = ui.getRecordPrice(record, newIndex);
                 modalItemPrice.textContent = `$${newPrice.toFixed(2)}`;
             });
@@ -141,8 +165,8 @@ export async function showDetailModal(record) {
     } else {
         const calendarInstance = flatpickr(modalCalendarContainer, {
             inline: true,
-            showMonths: 1, // Or 2 for side-by-side
-            disable: [() => true], // Makes it read-only (no clickable dates)
+            showMonths: 1,
+            disable: [() => true],
             onDayCreate: function(dObj, dStr, fp, dayElem) {
                 const day = dayElem.dateObj;
                 const status = getDayStatus(day, busyTimes, record);
@@ -166,21 +190,26 @@ export async function showDetailModal(record) {
                 tippy('.flatpickr-day', {
                     content: reference => reference.getAttribute('data-tippy-content'),
                     placement: 'top',
-                    theme: 'light', // Customize as needed
-                    allowHTML: true, // If you want to format tooltip with <br> etc.
+                    theme: 'light',
+                    allowHTML: true,
                 });
             }
         });
     }
 
-    modalOverlay.style.display = 'flex';
+    modalOverlay.classList.add('active');
+    setTimeout(() => { modalOverlay.style.display = 'flex'; }, 0);
     document.body.classList.add('modal-open');
 }
 
 export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
-        modalOverlay.style.display = 'none';
+        modalOverlay.classList.remove('active');
+        setTimeout(() => { 
+            modalOverlay.style.display = 'none'; 
+            resetModalState(); // Clear state when hiding
+        }, 300);
         document.body.classList.remove('modal-open');
     }
 }
@@ -215,9 +244,12 @@ export async function showCheckoutModal() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ amount: finalTotalInCents }),
         });
+        if (!response.ok) {
+            throw new Error('Network error: Could not connect to payment server.');
+        }
         const data = await response.json();
-        if (!response.ok || data.error) {
-            throw new Error(data.error || 'Failed to fetch payment details.');
+        if (data.error) {
+            throw new Error(data.error);
         }
 
         clientSecret = data.clientSecret;
@@ -230,11 +262,13 @@ export async function showCheckoutModal() {
         cardElement = elements.create('card');
         cardElement.mount('#card-element');
         
-        checkoutModalOverlay.style.display = 'flex';
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => { checkoutModalOverlay.style.display = 'flex'; }, 0);
         document.body.classList.add('modal-open');
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
-        alert("Could not initialize payment form. Please try again.");
+        alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
+        hideCheckoutModal();
     }
 }
 
@@ -244,7 +278,8 @@ export function hideCheckoutModal() {
     }
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
-        checkoutModalOverlay.style.display = 'none';
+        checkoutModalOverlay.classList.remove('active');
+        setTimeout(() => { checkoutModalOverlay.style.display = 'none'; }, 300);
         document.body.classList.remove('modal-open');
     }
 }
