@@ -1,3 +1,4 @@
+// FILE: availability.js
 import { CONSTANTS } from './config.js';
 
 export const AVAILABILITY_STATUS = {
@@ -68,3 +69,37 @@ export function getBusySlotsForDay(day, busyTimes) {
     }).join(', ');
 }
 
+export function getAvailableSlotsForDay(day, busyTimes) {
+    const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const timeFormat = { hour: 'numeric', minute: '2-digit', hour12: true };
+
+    if (busyTimes.length === 0) {
+        return `${dayStart.toLocaleTimeString([], timeFormat)} - ${dayEnd.toLocaleTimeString([], timeFormat)}`;
+    }
+
+    const eventsThisDay = busyTimes.filter(event => {
+        const start = parseICalDate(event.DTSTART);
+        const end = parseICalDate(event.DTEND);
+        return start < dayEnd && end > dayStart;
+    }).map(event => ({
+        start: parseICalDate(event.DTSTART),
+        end: parseICalDate(event.DTEND)
+    })).sort((a, b) => a.start - b.start);
+
+    const available = [];
+    let current = dayStart;
+
+    for (const { start, end } of eventsThisDay) {
+        if (current < start) {
+            available.push(`${current.toLocaleTimeString([], timeFormat)} - ${start.toLocaleTimeString([], timeFormat)}`);
+        }
+        current = new Date(Math.max(current.getTime(), end.getTime()));
+    }
+
+    if (current < dayEnd) {
+        available.push(`${current.toLocaleTimeString([], timeFormat)} - ${dayEnd.toLocaleTimeString([], timeFormat)}`);
+    }
+
+    return available.join(', ') || 'No availability';
+}
