@@ -3,21 +3,46 @@ export function parseOptions(optionsString) {
         return [];
     }
 
-    // 1. Split the string by commas to handle multiple options.
-    const optionParts = optionsString.split(',');
+    // 1. Split by new lines, not commas.
+    const lines = optionsString.split('\n').filter(line => line.trim() !== '');
 
-    // 2. This regex now processes each individual part.
-    const optionRegex = /([\w\s'-]+)(?:\s?\(\+?\$?(-?\d*\.?\d+)\)?)?/;
+    return lines.map(line => {
+        const option = {
+            name: '',
+            price: null,
+            priceChange: null,
+            description: null,
+            duration: null
+        };
 
-    // 3. Map over each part to extract its name and price modification.
-    return optionParts.map(part => {
-        const match = part.trim().match(optionRegex);
-        if (!match) {
-            return { name: part.trim(), priceChange: null, absolutePrice: null };
+        // 2. Use a more robust regex to find attributes like "key: value" or "key: ""quoted value"""
+        const attributeRegex = /(\w+):\s*("([^"]*)"|(-?\d*\.?\d+))/g;
+        let lastIndex = 0;
+        let match;
+        
+        while ((match = attributeRegex.exec(line)) !== null) {
+            // The text before the first attribute is the name
+            if (option.name === '') {
+                option.name = line.substring(0, match.index).trim();
+            }
+            
+            const key = match[1].toLowerCase().replace(/\s+/g, ''); // e.g., "price change" -> "pricechange"
+            const value = match[3] !== undefined ? match[3] : parseFloat(match[4]); // Handle strings vs. numbers
+
+            if (key === 'price') option.price = value;
+            if (key === 'pricechange') option.priceChange = value;
+            if (key === 'description') option.description = value;
+            if (key === 'duration') option.duration = value;
+            
+            lastIndex = attributeRegex.lastIndex;
         }
-        const name = match[1].trim();
-        const priceChange = match[2] ? parseFloat(match[2]) : null;
-        return { name, priceChange, absolutePrice: null };
+
+        // If no attributes were found, the whole line is the name
+        if (option.name === '') {
+            option.name = line.trim();
+        }
+
+        return option;
     });
 }
 
