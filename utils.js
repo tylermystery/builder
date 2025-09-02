@@ -20,15 +20,18 @@ export function parseOptions(optionsStr) {
         
         for (let part of parts.slice(1)) {
             if (part.includes(':')) {
-                const [key, value] = part.split(':', 1).map(x => x.trim());
-                if (key === 'price change') {
-                    opt.priceChange = parseFloat(value);
-                } else if (key === 'price') {
-                    opt.absolutePrice = parseFloat(value);
-                } else if (key === 'duration') {
-                    opt.duration = parseFloat(value);
-                } else if (key === 'description') {
-                    opt.description = value.replace(/^"|"$/g, ''); // Strip surrounding quotes
+                const [key, ...valueParts] = part.split(':').map(x => x.trim());
+                const value = valueParts.join(':'); // Handles values containing ':'
+                if (value) { // Only process if value exists
+                    if (key === 'price change') {
+                        opt.priceChange = parseFloat(value);
+                    } else if (key === 'price') {
+                        opt.absolutePrice = parseFloat(value);
+                    } else if (key === 'duration') {
+                        opt.duration = parseFloat(value);
+                    } else if (key === 'description') {
+                        opt.description = value.replace(/^"|"$/g, ''); // Strip quotes safely
+                    }
                 }
             }
         }
@@ -37,4 +40,17 @@ export function parseOptions(optionsStr) {
     }
     
     return options;
+}
+
+// From debug.js (if merged; otherwise keep separate)
+let isDebugMode = false;
+
+export function setDebugMode(enabled) {
+    isDebugMode = enabled;
+}
+
+export function log(prefix, ...args) {
+    if (isDebugMode) {
+        console.log(`[${prefix}]`, ...args);
+    }
 }
