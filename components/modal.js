@@ -1,10 +1,3 @@
-/*
- * Version: 3.0.5 (Enhanced)
- * Last Modified: 2025-09-02
- * Changelog:
- * v3.0.5 - 2025-09-02
- *   - Added resetModalState to clear stale data before showing modal.
- */
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -35,6 +28,7 @@ function resetModalState() {
     modalQuantitySelector.innerHTML = '';
     modalItemNote.value = '';
     modalCalendarContainer.innerHTML = '';
+    log('Modal', 'Reset modal state.');
 }
 
 export async function showDetailModal(record) {
@@ -52,9 +46,10 @@ export async function showDetailModal(record) {
     const modalItemNote = document.getElementById('modal-item-note');
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
-    resetModalState(); // Clear previous modal state
+    resetModalState();
 
     modalOverlay.dataset.recordId = record.id;
     const isLocked = state.cart.lockedItems.has(record.id);
@@ -63,6 +58,7 @@ export async function showDetailModal(record) {
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+        addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
 
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -198,7 +194,11 @@ export async function showDetailModal(record) {
     }
 
     modalOverlay.classList.add('active');
-    setTimeout(() => { modalOverlay.style.display = 'flex'; }, 0);
+    setTimeout(() => { 
+        modalOverlay.style.display = 'flex'; 
+        modalCloseBtn.focus();
+        log('Modal', 'Detail modal shown, focused close button.');
+    }, 0);
     document.body.classList.add('modal-open');
 }
 
@@ -208,7 +208,9 @@ export function hideDetailModal() {
         modalOverlay.classList.remove('active');
         setTimeout(() => { 
             modalOverlay.style.display = 'none'; 
-            resetModalState(); // Clear state when hiding
+            resetModalState();
+            document.querySelector('#header-title').focus();
+            log('Modal', 'Detail modal hidden, focused header title.');
         }, 300);
         document.body.classList.remove('modal-open');
     }
@@ -219,6 +221,7 @@ export async function showCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const summaryList = document.getElementById('checkout-summary-list');
     const totalPriceEl = document.getElementById('checkout-total-price');
+    const checkoutCloseBtn = document.getElementById('checkout-close-btn');
     if (!checkoutModalOverlay || !summaryList || !totalPriceEl) return;
 
     summaryList.innerHTML = '';
@@ -263,10 +266,15 @@ export async function showCheckoutModal() {
         cardElement.mount('#card-element');
         
         checkoutModalOverlay.classList.add('active');
-        setTimeout(() => { checkoutModalOverlay.style.display = 'flex'; }, 0);
+        setTimeout(() => { 
+            checkoutModalOverlay.style.display = 'flex'; 
+            checkoutCloseBtn.focus();
+            log('Modal', 'Checkout modal shown, focused close button.');
+        }, 0);
         document.body.classList.add('modal-open');
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
+        log('Modal', `Failed to initialize payment form: ${err.message}`);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
     }
@@ -279,7 +287,11 @@ export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
         checkoutModalOverlay.classList.remove('active');
-        setTimeout(() => { checkoutModalOverlay.style.display = 'none'; }, 300);
+        setTimeout(() => { 
+            checkoutModalOverlay.style.display = 'none'; 
+            document.querySelector('#header-title').focus();
+            log('Modal', 'Checkout modal hidden, focused header title.');
+        }, 300);
         document.body.classList.remove('modal-open');
     }
 }
