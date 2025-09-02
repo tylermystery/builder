@@ -3,6 +3,9 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 
+const TABLE_ID = 'tblUA4uuS8IYlhKpD';
+const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `/api/airtable/${SESSIONS_TABLE_NAME}/${sessionId}`;
