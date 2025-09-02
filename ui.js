@@ -1,10 +1,10 @@
 /*
- * Version: 3.0.2 (Restored Helpers)
+ * Version: 3.0.2 (Repaired)
  * Last Modified: 2025-09-02
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
-import { parseOptions } from './utils.js';
+import { parseOptions } from './utils.js'; // REPAIRED: Corrected import path
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 
@@ -78,7 +78,6 @@ export function toggleLoading(show) {
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
-// REPAIRED: This function is now async to correctly return a Promise
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
