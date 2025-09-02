@@ -1,9 +1,13 @@
+/*
+ * Version: 3.0.3 (Repaired)
+ * Last Modified: 2025-09-02
+ */
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
-import { getDayStatus } from '../availability.js';
+import { getDayStatus, getBusySlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 
 
@@ -13,7 +17,6 @@ export async function showDetailModal(record) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
     const modalHeaderActions = document.getElementById('modal-header-actions');
-    const modalBreadcrumbsContainer = document.getElementById('modal-breadcrumbs');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
     const modalItemDescription = document.getElementById('modal-item-description');
@@ -65,24 +68,10 @@ export async function showDetailModal(record) {
         modalThumbnailStrip.appendChild(thumb);
     });
     
-    // REPAIRED: This section restores the breadcrumbs/parent link display.
     modalHeaderActions.innerHTML = '';
-    modalBreadcrumbsContainer.innerHTML = '';
-    const breadcrumbs = ui.getBreadcrumbs(record, state.records.all);
-    if (breadcrumbs.length > 0) {
-        breadcrumbs.forEach((crumb, index) => {
-            const crumbLink = document.createElement('a');
-            crumbLink.href = '#';
-            crumbLink.textContent = crumb.fields.Name;
-            crumbLink.dataset.parentName = crumb.fields.Name; // Use dataset for event listener
-            crumbLink.classList.add('parent-link');
-            modalBreadcrumbsContainer.appendChild(crumbLink);
-            if (index < breadcrumbs.length - 1) {
-                const separator = document.createElement('span');
-                separator.textContent = ' > ';
-                modalBreadcrumbsContainer.appendChild(separator);
-            }
-        });
+    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+    if (parentName) {
+         modalHeaderActions.innerHTML += `<button class="parent-link" data-parent-name="${parentName}" title="Go to ${parentName}">⬆️</button>`;
     }
     
     const heartBtnContainer = document.createElement('div');
@@ -99,14 +88,12 @@ export async function showDetailModal(record) {
         if (itemState.selectedOptionIndex === index) {
             optionButton.classList.add('selected');
         }
-        
         let priceModText = '';
-        if (opt.price != null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
-        } else if (opt.priceChange != null) {
+        if (opt.absolutePrice !== null) {
+            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        
         optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
@@ -120,7 +107,11 @@ export async function showDetailModal(record) {
                     bubbles: true,
                     detail: { selectedOptionIndex: newIndex }
                 }));
-                modalItemDescription.textContent = opt.description || record.fields.Description;
+                // Update description if option has one
+                modalItemDescription.textContent = opt.description || record.fields.Description || '';
+                // Update displayed price based on selection
+                const newPrice = ui.getRecordPrice(record, newIndex);
+                modalItemPrice.textContent = `$${newPrice.toFixed(2)}`;
             });
         }
         modalOptionsContainer.appendChild(optionButton);
@@ -144,13 +135,35 @@ export async function showDetailModal(record) {
     }
 
     modalCalendarContainer.innerHTML = '';
-    flatpickr(modalCalendarContainer, {
-        inline: true,
-        onDayCreate: function(dObj, dStr, fp, dayElem) {
-            const day = dayElem.dateObj;
-            const status = getDayStatus(day, [], record);
-        }
-    });
+    const busyTimes = await api.fetchCalendarForRecord(record);
+    if (!record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
+        modalCalendarContainer.innerHTML = '<p>No availability data available.</p>';
+    } else {
+        flatpickr(modalCalendarContainer, {
+            inline: true,
+            showMonths: 1, // Or 2 for side-by-side
+            disable: [() => true], // Makes it read-only (no clickable dates)
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+                const day = dayElem.dateObj;
+                const status = getDayStatus(day, busyTimes, record);
+                let className = '';
+                let tooltip = 'Fully Available';
+                
+                if (status === AVAILABILITY_STATUS.FULL) {
+                    className = 'available-full';
+                } else if (status === AVAILABILITY_STATUS.PARTIAL) {
+                    className = 'available-partial';
+                    tooltip = `Partially Available\nBusy slots: ${getBusySlotsForDay(day, busyTimes) || 'None'}`;
+                } else {
+                    className = 'unavailable';
+                    tooltip = 'Unavailable';
+                }
+                
+                dayElem.classList.add(className);
+                dayElem.title = tooltip; // Simple browser tooltip; could use Tippy for richer
+            }
+        });
+    }
 
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
@@ -231,4 +244,3 @@ export function hideCheckoutModal() {
 export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
-
