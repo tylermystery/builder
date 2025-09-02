@@ -1,56 +1,28 @@
-// FILE: utils.js
-export function parseOptions(optionsStr) {
-    if (!optionsStr) return [];
-    
-    const options = [];
-    const lines = optionsStr.trim().split('\n');
-    
-    for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-        
-        const parts = line.split(',').map(p => p.trim());
-        const opt = {
-            name: parts[0],
-            priceChange: null,
-            absolutePrice: null,
-            duration: null,
-            description: null
+import { log } from './utils/debug.js';
+
+export function parseOptions(optionsString) {
+    if (!optionsString || typeof optionsString !== 'string') return [];
+    try {
+        return JSON.parse(optionsString).map(opt => ({
+            name: opt.name || '',
+            description: opt.description || '',
+            absolutePrice: opt.absolutePrice !== undefined ? parseFloat(opt.absolutePrice) : null,
+            priceChange: opt.priceChange !== undefined ? parseFloat(opt.priceChange) : null,
+        }));
+    } catch (error) {
+        console.error('Failed to parse options:', error);
+        return [];
+    }
+}
+
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
         };
-        
-        for (let part of parts.slice(1)) {
-            if (part.includes(':')) {
-                const [key, ...valueParts] = part.split(':').map(x => x.trim());
-                const value = valueParts.join(':'); // Handles values containing ':'
-                if (value) { // Only process if value exists
-                    if (key === 'price change') {
-                        opt.priceChange = parseFloat(value);
-                    } else if (key === 'price') {
-                        opt.absolutePrice = parseFloat(value);
-                    } else if (key === 'duration') {
-                        opt.duration = parseFloat(value);
-                    } else if (key === 'description') {
-                        opt.description = value.replace(/^"|"$/g, ''); // Strip quotes safely
-                    }
-                }
-            }
-        }
-        
-        options.push(opt);
-    }
-    
-    return options;
-}
-
-// From debug.js (if merged; otherwise keep separate)
-let isDebugMode = false;
-
-export function setDebugMode(enabled) {
-    isDebugMode = enabled;
-}
-
-export function log(prefix, ...args) {
-    if (isDebugMode) {
-        console.log(`[${prefix}]`, ...args);
-    }
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
