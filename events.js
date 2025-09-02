@@ -1,61 +1,41 @@
+/*
+ * Version: 4.8.1
+ * Last Modified: 2025-09-02
+ * Changelog:
+ * v4.8.1 - 2025-09-02
+ *   - Debounced updateFavoritesCarousel to prevent rapid update issues.
+ *   - Added date picker clear handling for availability icons.
+ */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
-import * as api from './api.js';
 import * as ui from './ui.js';
+import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
-import { getDayStatus, checkAvailability, AVAILABILITY_STATUS } from './availability.js';
-import { setDebugMode, log } from './utils/debug.js';
-// Note: tippy.js is loaded globally via a CDN in index.html
+import { log } from './utils/debug.js';
+import { AVAILABILITY_STATUS } from './availability.js';
+import { debounce } from './utils.js';
 
 let mainDatePicker = null;
-let saveTimeout;
+let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
 
-function debounce(func, delay = 300) {
-    let timeout;
-    return (...args) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            func.apply(this, args);
-        }, delay);
-    };
-}
-
 export function getItemState(recordId) {
-    const record = state.records.all.find(r => r.id === recordId);
-    if (!record) return null;
-
-    const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-    const defaultState = {
-        quantity: headcountMin,
-        selectedOptionIndex: 0,
-        note: ''
-    };
-    return state.cart.items.get(recordId) || defaultState;
+    if (state.cart.items.has(recordId)) {
+        return state.cart.items.get(recordId);
+    }
+    return { quantity: 1, selectedOptionIndex: 0, note: '' };
 }
 
-function updateItemState(recordId, updates) {
-    if (!state.records.all.find(r => r.id === recordId)) return;
-    
-    if (!state.cart.items.has(recordId)) {
-        state.cart.items.set(recordId, getItemState(recordId));
-    }
-    
-    const currentState = state.cart.items.get(recordId);
-    const newState = { ...currentState, ...updates };
+export function updateItemState(recordId, updates) {
+    const existing = getItemState(recordId);
+    const newState = { ...existing, ...updates };
     state.cart.items.set(recordId, newState);
 }
 
-function updateLockedItemState(recordId, updates) {
-    if (!state.cart.lockedItems.has(recordId)) return;
-    
-    const currentState = state.cart.lockedItems.get(recordId);
-    const newState = { ...currentState, ...updates };
+export function updateLockedItemState(recordId, updates) {
+    const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
+    const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
-    
-    ui.updateEventPlanPanel();
-    ui.updateTotalCost();
-    triggerSave();
 }
 
 function loadMoreRecords(imageCache) {
@@ -87,6 +67,7 @@ export function updateSaveShareButton() {
         case 'SAVED':
             saveShareBtn.textContent = '🔗 Copy Link';
             saveShareBtn.disabled = state.cart.lockedItems.size === 0;
+            saveShareBtn.dataset.tooltip = state.cart.lockedItems.size === 0 ? 'Add items to enable sharing' : '';
             break;
     }
 }
@@ -107,7 +88,14 @@ function triggerSave() {
 }
 
 async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) return;
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
+        document.querySelectorAll('.availability-btn').forEach(icon => {
+            if (icon._tippy) icon._tippy.destroy();
+            icon.title = 'Select a date range to check availability';
+            icon.textContent = '📅';
+        });
+        return;
+    }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
     const cards = document.querySelectorAll('.event-card');
@@ -133,6 +121,7 @@ async function updateAllCardAvailabilityIcons() {
             const tooltipContent = `<div style="text-align: left;"><strong>${dateString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${statusText}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = statusText;
+            icon.textContent = statusIcon;
         }
     }
 }
@@ -159,7 +148,7 @@ export function initializeEventListeners(imageCache) {
         if (scrollTimeout) return;
         scrollTimeout = setTimeout(() => {
             const buffer = 300;
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer) {
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
             scrollTimeout = null;
@@ -177,8 +166,8 @@ export function initializeEventListeners(imageCache) {
     }
 
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
-    safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache)));
-    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache)));
+    safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
         document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
         applyFiltersAndSort(imageCache);
@@ -210,6 +199,10 @@ export function initializeEventListeners(imageCache) {
         onClose: (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                triggerSave();
+                updateAllCardAvailabilityIcons();
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 updateAllCardAvailabilityIcons();
             }
@@ -315,7 +308,7 @@ export function initializeEventListeners(imageCache) {
                 updateItemState(recordId, {});
             }
             ui.updateCardIcon(recordId);
-            await ui.updateFavoritesCarousel(); 
+            await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } else if (addToPlanBtn) {
             e.stopPropagation();
@@ -339,7 +332,7 @@ export function initializeEventListeners(imageCache) {
                 state.cart.items.delete(recordId);
             }
             ui.updateCardIcon(recordId);
-            await ui.updateFavoritesCarousel();
+            await debounce(ui.updateFavoritesCarousel, 300)();
             await ui.updateEventPlanPanel();
             ui.updateTotalCost();
             triggerSave();
@@ -366,7 +359,7 @@ export function initializeEventListeners(imageCache) {
             const recordId = favoriteItem.dataset.recordId;
             state.cart.items.delete(recordId);
             ui.updateCardIcon(recordId);
-            await ui.updateFavoritesCarousel();
+            await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } else if (optionBtn && optionBtn.dataset.childName) {
             const childName = optionBtn.dataset.childName;
@@ -414,11 +407,10 @@ export function initializeEventListeners(imageCache) {
             } else {
                 updateItemState(recordId, updates);
                 triggerSave();
-                ui.updateFavoritesCarousel();
+                debounce(ui.updateFavoritesCarousel, 300)();
             }
         }
     });
 
     return mainDatePicker;
 }
-
