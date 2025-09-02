@@ -1,5 +1,5 @@
 /*
- * Version: 3.0.3 (Repaired)
+ * Version: 3.0.4 (Enhanced)
  * Last Modified: 2025-09-02
  */
 import { state } from '../state.js';
@@ -7,7 +7,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
-import { getDayStatus, getBusySlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
+import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 
 
@@ -139,7 +139,7 @@ export async function showDetailModal(record) {
     if (!record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
         modalCalendarContainer.innerHTML = '<p>No availability data available.</p>';
     } else {
-        flatpickr(modalCalendarContainer, {
+        const calendarInstance = flatpickr(modalCalendarContainer, {
             inline: true,
             showMonths: 1, // Or 2 for side-by-side
             disable: [() => true], // Makes it read-only (no clickable dates)
@@ -153,14 +153,22 @@ export async function showDetailModal(record) {
                     className = 'available-full';
                 } else if (status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `Partially Available\nBusy slots: ${getBusySlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `Partially Available\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                     tooltip = 'Unavailable';
                 }
                 
                 dayElem.classList.add(className);
-                dayElem.title = tooltip; // Simple browser tooltip; could use Tippy for richer
+                dayElem.setAttribute('data-tippy-content', tooltip);
+            },
+            onReady: function() {
+                tippy('.flatpickr-day', {
+                    content: reference => reference.getAttribute('data-tippy-content'),
+                    placement: 'top',
+                    theme: 'light', // Customize as needed
+                    allowHTML: true, // If you want to format tooltip with <br> etc.
+                });
             }
         });
     }
