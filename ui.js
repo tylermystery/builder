@@ -1,10 +1,10 @@
 /*
- * Version: 3.0.2 (Repaired)
+ * Version: 3.0.3 (Repaired)
  * Last Modified: 2025-09-02
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
-import { parseOptions } from './utils.js'; // REPAIRED: Corrected import path
+import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 
