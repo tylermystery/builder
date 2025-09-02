@@ -1,7 +1,10 @@
-# Version: 1.2.0
-# Last Modified: 2025-08-27
+# Version: 1.2.1
+# Last Modified: 2025-09-02
 #
 # Changelog:
+#
+# v1.2.1 - 2025-09-02
+#   - Added redirect for Airtable API proxy endpoint.
 #
 # v1.2.0 - 2025-08-27
 #   - Added redirect for the new create-payment-intent API endpoint.
@@ -21,4 +24,9 @@
 [[redirects]]
   from = "/api/create-payment-intent"
   to = "/.netlify/functions/create-payment-intent"
+  status = 200
+
+[[redirects]]
+  from = "/api/airtable/*"
+  to = "/.netlify/functions/airtable"
   status = 200
