@@ -80,6 +80,9 @@
             }
         }
         @media (max-width: 600px) {
+            .main-container {
+                padding: 10px;
+            }
             #catalog-container {
                 grid-template-columns: 1fr;
             }
@@ -343,6 +346,7 @@
             right: 50px;
             cursor: pointer;
             z-index: 10;
+            display: block;
         }
         .heart-icon svg {
             width: 28px;
@@ -528,6 +532,19 @@
             overflow: hidden;
             position: relative;
             color: #333;
+            transform: scale(0.8);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        @media (max-width: 600px) {
+            .modal-content {
+                width: 95%;
+                height: 85vh;
+                max-height: 600px;
+            }
         }
         .modal-close-btn {
             position: absolute;
@@ -691,6 +708,18 @@
             max-width: 500px;
             position: relative;
             color: #333;
+            transform: scale(0.8);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .modal-overlay.active .checkout-modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        @media (max-width: 600px) {
+            .checkout-modal-content {
+                width: 95%;
+                padding: 20px;
+            }
         }
         #checkout-summary-list {
             list-style: none;
