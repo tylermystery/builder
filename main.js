@@ -1,6 +1,9 @@
 /*
- * Version: 4.8.0 (Refactored)
- * Last Modified: 2025-09-01
+ * Version: 4.8.1
+ * Last Modified: 2025-09-02
+ * Changelog:
+ * v4.8.1 - 2025-09-02
+ *   - Added storage error handling during initialization.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -8,6 +11,8 @@ import * as api from './api.js';
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, getItemState, updateSaveShareButton } from './events.js';
+import { getStoredSessions } from './session.js';
+
 const imageCache = new Map();
 
 async function initialize() {
@@ -30,14 +35,22 @@ async function initialize() {
     console.log("3. Event listeners initialized.");
 
     if (sessionId) {
-        await api.loadSessionFromAirtable(sessionId);
-        ui.updateHeader();
-        ui.updateEventPlanPanel();
-        ui.updateTotalCost();
+        try {
+            await api.loadSessionFromAirtable(sessionId);
+            ui.updateHeader();
+            ui.updateEventPlanPanel();
+            ui.updateTotalCost();
 
-        const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
-            if(mainDatePicker) mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
+            const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+            if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
+                if(mainDatePicker) mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
+            }
+        } catch (error) {
+            console.error("Failed to load session:", error);
+            if (error.message.includes('FILE_ERROR_NO_SPACE')) {
+                console.warn('Clearing local storage due to storage error.');
+                localStorage.removeItem('eventBuilderSessions');
+            }
         }
     } else {
         state.session.isOwned = true;
