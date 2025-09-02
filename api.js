@@ -4,15 +4,19 @@ import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 
+const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
-    const url = `/api/airtable/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     log('API', `Loading session from URL: ${url}`);
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
         log('API', `Session load response: status ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
@@ -34,6 +38,7 @@ export async function loadSessionFromAirtable(sessionId) {
         }
     } catch (error) {
         console.error("Failed to load session:", error);
+        log('API', `Failed to load session: ${error.message}`);
         alert("Could not load the shared session.");
         window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -76,14 +81,17 @@ export async function saveSessionToAirtable() {
 
     const payload = { fields };
     const isUpdate = state.session.id !== null;
-    const url = `/api/airtable/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
     log('API', `Saving session to URL: ${url}, Method: ${method}`);
 
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
@@ -112,13 +120,15 @@ export async function saveSessionToAirtable() {
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
-    const baseUrl = `/api/airtable/${TABLE_ID}?`;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
     log('API', `Fetching records from base URL: ${baseUrl}`);
     try {
         do {
             const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
             log('API', `Fetching records from: ${url}`);
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
             log('API', `Records fetch response: status ${response.status}`);
             if (!response.ok) {
                 const errorData = await response.json();
