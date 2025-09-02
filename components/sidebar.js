@@ -2,7 +2,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS } from '../config.js';
-import { parseOptions } from '../utils/utils.js';
+import { parseOptions } from '../utils.js'; // REPAIRED: Corrected import path
 import { log } from '../utils/debug.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
