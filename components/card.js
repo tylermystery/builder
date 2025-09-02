@@ -5,7 +5,6 @@ import { CONSTANTS } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
-// REPAIRED: This function is now exported, making it available to other modules.
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
@@ -13,6 +12,10 @@ export function updateCardIcon(recordId) {
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
     
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
+        if (!icon) {
+            log('Card', `No heart icon found for record: ${recordId}`);
+            return;
+        }
         if (isLocked) {
             icon.className = 'heart-icon locked';
             icon.innerHTML = checkSVG;
@@ -23,11 +26,13 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.innerHTML = heartSVG;
         }
+        icon.style.display = 'block'; // Ensure visibility
+        log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
 
 export async function createInteractiveCard(record, imageCache) {
-    log('UI', `Creating card for "${record.fields.Name}"`);
+    log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
@@ -63,7 +68,7 @@ export async function createInteractiveCard(record, imageCache) {
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
@@ -90,8 +95,10 @@ export async function createInteractiveCard(record, imageCache) {
         ${footerHTML}
     `;
     
-    // Call updateCardIcon AFTER the element is in the DOM to set the initial state
-    updateCardIcon(recordId);
+    // Ensure heart icon is updated after DOM insertion
+    setTimeout(() => {
+        updateCardIcon(recordId);
+    }, 0);
 
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
@@ -111,4 +118,3 @@ export async function createInteractiveCard(record, imageCache) {
 
     return eventCard;
 }
-
