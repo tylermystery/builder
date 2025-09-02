@@ -1,8 +1,8 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS } from '../config.js';
-import { parseOptions } from '../utils.js'; // REPAIRED: Corrected import path
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -11,7 +11,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || ''}')`;
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
     
     itemCard.innerHTML = `
         <div class="card-actions">
@@ -38,7 +38,7 @@ async function createLockedInItemElement(record, itemInfo) {
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
-        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -87,13 +87,16 @@ export async function updateFavoritesCarousel() {
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
-            const card = await createFavoriteCardElement(record, itemInfo, imageCache);
-            if (card) favoritesCarousel.appendChild(card);
+            try {
+                const card = await createFavoriteCardElement(record, itemInfo, imageCache);
+                if (card) favoritesCarousel.appendChild(card);
+            } catch (error) {
+                console.error(`Failed to create favorite card for ${record.fields.Name}:`, error);
+            }
         }
     }
     updateTotalCost();
 }
-
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
@@ -121,6 +124,6 @@ export function updateTotalCost() {
 
     if (checkoutBtn) {
         checkoutBtn.disabled = total === 0;
+        checkoutBtn.dataset.tooltip = total === 0 ? 'Add items to enable checkout' : '';
     }
 }
-
