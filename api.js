@@ -35,8 +35,7 @@ export async function saveSessionToAirtable() {
 
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
-        lockedInunion In Items: 0
-lockedInItems: Object.fromEntries(state.cart.lockedItems), 
+        lockedInItems: Object.fromEntries(state.cart.lockedItems), 
         itemReactions: Object.fromEntries(state.session.reactions), 
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
