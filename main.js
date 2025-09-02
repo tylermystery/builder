@@ -1,7 +1,11 @@
 /*
- * Version: 4.8.1
+ * Version: 4.8.3
  * Last Modified: 2025-09-02
  * Changelog:
+ * v4.8.3 - 2025-09-02
+ *   - Continue initialization if session loading fails due to storage errors.
+ * v4.8.2 - 2025-09-02
+ *   - Added retry logic for fetchAllRecords to handle transient errors.
  * v4.8.1 - 2025-09-02
  *   - Added storage error handling during initialization.
  */
@@ -21,8 +25,19 @@ async function initialize() {
 
     ui.toggleLoading(true);
     try {
-        state.records.all = await api.fetchAllRecords();
-        console.log("2. All records fetched from Airtable:", state.records.all.length, "records found.");
+        let retries = 3;
+        while (retries > 0) {
+            try {
+                state.records.all = await api.fetchAllRecords();
+                console.log("2. All records fetched from Airtable:", state.records.all.length, "records found.");
+                break;
+            } catch (error) {
+                retries--;
+                if (retries === 0) throw error;
+                console.warn(`Retrying fetchAllRecords (${retries} attempts left)...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
     } catch (error) {
         console.error("Failed to load initial data:", error);
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
@@ -49,8 +64,10 @@ async function initialize() {
             console.error("Failed to load session:", error);
             if (error.message.includes('FILE_ERROR_NO_SPACE')) {
                 console.warn('Clearing local storage due to storage error.');
-                localStorage.removeItem('eventBuilderSessions');
+                localStorage.clear();
             }
+            // Continue initialization even if session loading fails
+            state.session.isOwned = true;
         }
     } else {
         state.session.isOwned = true;
