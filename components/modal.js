@@ -8,6 +8,18 @@ import { log } from '../utils/debug.js';
 
 let stripe, elements, cardElement, clientSecret;
 
+function getBreadcrumbs(record) {
+    const breadcrumbs = [];
+    let current = record;
+    while (current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]) {
+        const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+        breadcrumbs.unshift(parentName);
+        current = state.records.all.find(r => r.fields.Name === parentName);
+        if (!current) break;
+    }
+    return breadcrumbs;
+}
+
 function resetModalState() {
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -18,6 +30,7 @@ function resetModalState() {
     const modalQuantitySelector = document.getElementById('modal-quantity-selector');
     const modalItemNote = document.getElementById('modal-item-note');
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
+    const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     
     modalItemName.textContent = '';
     modalItemPrice.textContent = '';
@@ -28,6 +41,7 @@ function resetModalState() {
     modalQuantitySelector.innerHTML = '';
     modalItemNote.value = '';
     modalCalendarContainer.innerHTML = '';
+    modalBreadcrumbs.innerHTML = '';
     log('Modal', 'Reset modal state.');
 }
 
@@ -47,6 +61,7 @@ export async function showDetailModal(record) {
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalCloseBtn = document.getElementById('modal-close-btn');
+    const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
     resetModalState();
@@ -91,11 +106,11 @@ export async function showDetailModal(record) {
     });
     
     modalHeaderActions.innerHTML = '';
-    const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    if (parentName) {
-         modalHeaderActions.innerHTML += `<button class="parent-link" data-parent-name="${parentName}" title="Go to ${parentName}">⬆️</button>`;
+    const breadcrumbs = getBreadcrumbs(record);
+    if (breadcrumbs.length > 0) {
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
     }
-    
+
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
