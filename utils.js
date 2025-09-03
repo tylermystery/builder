@@ -1,29 +1,21 @@
-/*
- * Version: 1.0.1
- * Last Modified: 2025-09-02
- * Changelog:
- * v1.0.1 - 2025-09-02
- *   - Restored parseOptions export and added debounce for carousel updates.
- */
 import { log } from './utils/debug.js';
 
 export function parseOptions(optionsString) {
-    if (!optionsString || typeof optionsString !== 'string') {
-        log('Utils', 'No valid options string provided, returning empty array.');
-        return [];
-    }
-    try {
-        return JSON.parse(optionsString).map(opt => ({
-            name: opt.name || '',
-            description: opt.description || '',
-            absolutePrice: opt.absolutePrice !== undefined ? parseFloat(opt.absolutePrice) : null,
-            priceChange: opt.priceChange !== undefined ? parseFloat(opt.priceChange) : null,
-        }));
-    } catch (error) {
-        console.error('Failed to parse options:', error);
-        log('Utils', `Failed to parse options: ${error.message}`);
-        return [];
-    }
+    if (!optionsString || typeof optionsString !== 'string') return [];
+    const options = [];
+    optionsString.split(',').forEach(optStr => {
+        const opt = { name: optStr.trim(), description: '', absolutePrice: null, priceChange: null };
+        const match = optStr.match(/\(([\+=]?[-\s]?\$([\d.]+))\)/);
+        if (match) {
+            const sign = match[1][0];
+            const price = parseFloat(match[2]);
+            if (sign === '=') opt.absolutePrice = price;
+            else opt.priceChange = (sign === '-' || match[1].includes('-') ? -price : price);
+            opt.name = optStr.replace(match[0], '').trim();
+        }
+        options.push(opt);
+    });
+    return options;
 }
 
 export function debounce(func, wait) {
