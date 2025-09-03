@@ -1,11 +1,3 @@
-/*
- * Version: 4.8.1
- * Last Modified: 2025-09-02
- * Changelog:
- * v4.8.1 - 2025-09-02
- *   - Debounced updateFavoritesCarousel to prevent rapid update issues.
- *   - Added date picker clear handling for availability icons.
- */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
@@ -66,8 +58,9 @@ export function updateSaveShareButton() {
             break;
         case 'SAVED':
             saveShareBtn.textContent = '🔗 Copy Link';
-            saveShareBtn.disabled = state.cart.lockedItems.size === 0;
-            saveShareBtn.dataset.tooltip = state.cart.lockedItems.size === 0 ? 'Add items to enable sharing' : '';
+            const hasContent = state.cart.items.size > 0 || state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0;
+            saveShareBtn.disabled = !hasContent;
+            saveShareBtn.dataset.tooltip = !hasContent ? 'Add items or details to enable sharing' : '';
             break;
     }
 }
@@ -302,7 +295,7 @@ export function initializeEventListeners(imageCache) {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.items.has(recordId)) {
+            if (state.cart.items.has(recordId) ) {
                 state.cart.items.delete(recordId);
             } else {
                 updateItemState(recordId, {});
