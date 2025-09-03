@@ -31,10 +31,10 @@ export async function loadSessionFromAirtable(sessionId) {
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString) {
             const savedState = JSON.parse(sessionDataString);
-            if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems));
-            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedItems));
-            if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
-            if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails));
+            state.cart.items = savedState.favoritedItems ? new Map(Object.entries(savedState.favoritedItems)) : new Map();
+            state.cart.lockedItems = savedState.lockedInItems ? new Map(Object.entries(savedState.lockedInItems)) : new Map();
+            state.session.reactions = savedState.itemReactions ? new Map(Object.entries(savedState.itemReactions)) : new Map();
+            state.eventDetails.combined = savedState.favoritedDetails ? new Map(Object.entries(savedState.favoritedDetails)) : new Map();
         }
     } catch (error) {
         console.error("Failed to load session:", error);
