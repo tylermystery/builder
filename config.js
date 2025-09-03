@@ -1,58 +1,20 @@
-/*
- * Version: 1.3.1
- * Last Modified: 2025-08-29
- *
- * Changelog:
- *
- * v1.3.1 - 2025-08-29
- * - Exported RECORDS_PER_LOAD for use in the new infinite scroll feature.
- *
- * v1.3.0 - 2025-08-28
- * - Added Stripe Publishable Key constant.
- *
- * v1.2.1 - 2025-08-26
- * - Added LEAD_TIME field name constant.
- */
-
-// ACTION REQUIRED: Replace with your actual Stripe Publishable Key
-export const STRIPE_PUBLISHABLE_KEY = 'pk_test_mK3MLvoZurxcqIQHyWB7eqlY';
-
-export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
-export const RECORDS_PER_LOAD = 10;
-export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
-export const REACTION_SCORES = {
-    '🚀': 4, '🔥': 3, '🤩': 2, '❤️': 1, '👍': 1,
-    '🤔': -1, '👎': -2, '🤢': -3
-};
 export const CONSTANTS = {
     FIELD_NAMES: {
         NAME: 'Name',
-        PRICE: 'Price',
         DESCRIPTION: 'Description',
-        OPTIONS: 'Options',
         PARENT_ITEM: 'Parent Item',
-        STATUS: 'Status',
-        DURATION: 'Duration (hours)',
-        PRICING_TYPE: 'Pricing Type',
-        HEADCOUNT_MIN: 'Headcount min',
-      
-        MEDIA_TAGS: 'Media Tags',
-        CATEGORIES: 'Categories',
-        SUBCATEGORIES: 'Subcategories',
+        OPTIONS: 'Options',
+        HEADCOUNT_MIN: 'Headcount Min',
         ICAL_URL: 'iCal URL',
-        LEAD_TIME: 'Lead Time (days)',
-    },
-  
-    PRICING_TYPES: {
-        PER_GUEST: 'per guest',
+        MEDIA_TAGS: 'Media Tags',
+        LEAD_TIME: 'Lead Time', // Added for availability
     },
     DETAIL_TYPES: {
         EVENT_NAME: 'eventName',
-        DATE: 'date',
-   
-        GUEST_COUNT: 'guestCount',
         GOALS: 'goals',
-        SPECIAL_REQUESTS: 'specialRequests',
-   
-    }
+        GUEST_COUNT: 'guestCount',
+        DATE: 'date',
+    },
 };
+
+export const CLOUDINARY_CLOUD_NAME = 'your_cloudinary_cloud_name'; // Replace with your Cloudinary cloud name
