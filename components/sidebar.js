@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js'; // This is the fix
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
