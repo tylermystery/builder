@@ -111,19 +111,41 @@ export function updateHeader() {
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
+    const saveShareBtn = document.getElementById('save-share-btn');
     if (!totalCostEl) return;
 
     let total = 0;
-    state.cart.lockedItems.forEach((itemInfo, recordId) => {
+    const allItems = state.cart.lockedItems;
+    allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
         const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
-        total += unitPrice * itemInfo.quantity;
+        if (isNaN(unitPrice)) return;
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
+ 
+       let itemCost;
+ 
+ 
+        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
+            itemCost = unitPrice * effectiveQuantity;
+        } else {
+            itemCost = unitPrice;
+        }
+        total += itemCost;
     });
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 
+    const isPlanEmpty = total === 0;
     if (checkoutBtn) {
-        checkoutBtn.disabled = total === 0;
-        checkoutBtn.dataset.tooltip = total === 0 ? 'Add items to enable checkout' : '';
+        checkoutBtn.disabled = isPlanEmpty;
+    }
+    if (saveShareBtn) {
+        if (isPlanEmpty) {
+            saveShareBtn.disabled = true;
+        } else if (state.ui.saveState === 'SAVED') {
+            saveShareBtn.disabled = false;
+        }
     }
 }
