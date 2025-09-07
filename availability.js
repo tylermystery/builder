@@ -7,12 +7,24 @@ export const AVAILABILITY_STATUS = {
     NONE: 'none',
 };
 
+// Add export to this function so it can be used by other modules
+export function parseICalDate(dateString) {
+    if (!dateString) return null;
+    const year = parseInt(dateString.substring(0, 4), 10);
+    const month = parseInt(dateString.substring(4, 6), 10) - 1;
+    const day = parseInt(dateString.substring(6, 8), 10);
+    const hour = parseInt(dateString.substring(9, 11), 10);
+    const minute = parseInt(dateString.substring(11, 13), 10);
+    const second = parseInt(dateString.substring(13, 15), 10);
+    return new Date(Date.UTC(year, month, day, hour, minute, second));
+}
+
+// Add export to this function so it can be used by other modules
 export function getDayStatus(day, busyTimes, record) {
     const leadTime = parseInt(record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0, 10);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const leadTimeDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
-
     if (day < leadTimeDate) {
         log('Availability', `Day ${day.toDateString()} unavailable due to lead time: ${leadTime} days`);
         return AVAILABILITY_STATUS.NONE;
@@ -28,13 +40,11 @@ export function getDayStatus(day, busyTimes, record) {
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(day);
     dayEnd.setHours(23, 59, 59, 999);
-
     const busyPeriods = busyTimes.filter(busy => {
         const busyStart = new Date(busy.start);
         const busyEnd = new Date(busy.end);
         return busyStart <= dayEnd && busyEnd >= dayStart;
     });
-
     if (busyPeriods.length === 0) {
         log('Availability', `Day ${day.toDateString()} fully available (no conflicts)`);
         return AVAILABILITY_STATUS.FULL;
@@ -49,7 +59,6 @@ export function getDayStatus(day, busyTimes, record) {
         const minutes = (end - start) / (1000 * 60);
         busyMinutes += minutes;
     });
-
     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
     if (availablePercentage > 50) {
         log('Availability', `Day ${day.toDateString()} partially available (${availablePercentage.toFixed(1)}%)`);
@@ -58,6 +67,18 @@ export function getDayStatus(day, busyTimes, record) {
         log('Availability', `Day ${day.toDateString()} unavailable (${availablePercentage.toFixed(1)}% available)`);
         return AVAILABILITY_STATUS.NONE;
     }
+}
+
+// Add export to this function so it can be used by other modules
+export function checkAvailability(start, end, busyTimes) {
+    for (const event of busyTimes) {
+        const eventStart = new Date(event.start);
+        const eventEnd = new Date(event.end);
+        if (start < eventEnd && end > eventStart) {
+            return false;
+        }
+    }
+    return true;
 }
 
 export function getAvailableSlotsForDay(day, busyTimes) {
@@ -86,7 +107,6 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         }
         lastEnd = end > lastEnd ? end : lastEnd;
     });
-
     if (lastEnd < dayEnd) {
         availableSlots.push({
             start: lastEnd,
