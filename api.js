@@ -102,3 +102,58 @@ null,
     }
 }
 // **THE FIX**: This closing brace was missing.
+export async function fetchImagesForRecord(record, allRecords, imageCache) {
+    const cacheKey = record.id;
+    if (imageCache.has(cacheKey)) {
+        return imageCache.get(cacheKey);
+    }
+
+    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
+    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
+    
+    let imageUrls = null;
+    
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
+    if (isGrouping) {
+        const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        imageUrls = await fetchImagesByTags(groupNameTag);
+        if (!imageUrls || imageUrls.length === 0) {
+            const firstChildOption = rawOptions.length > 0 ?
+rawOptions[0] : null;
+            if (firstChildOption) {
+                const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
+                if (firstChildRecord) {
+                    const childImageData = await fetchImagesForRecord(firstChildRecord, allRecords, imageCache);
+                    imageUrls = childImageData.imageUrls;
+                }
+            }
+        }
+    } else {
+        const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
+        if (itemName) {
+            const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            imageUrls = await fetchImagesByTags(autoTagName);
+        }
+        
+        if (!imageUrls) {
+            const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
+            if (primaryManualTag) {
+                imageUrls = await fetchImagesByTags(primaryManualTag);
+            }
+        }
+    }
+    
+    const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
+imageUrls : [ultimateFallbackUrl];
+    
+    const result = {
+        isGrouping: isGrouping,
+        imageUrls: finalImageUrls.flat()
+    };
+    imageCache.set(cacheKey, result);
+    return result;
+}
