@@ -103,6 +103,39 @@ null,
         return false;
     }
 }
+
+export async function fetchAllRecords() {
+    let records = [];
+    let offset = null;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    log('API', `Fetching records from base URL: ${baseUrl}`);
+    try {
+        do {
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            log('API', `Fetching records from: ${url}`);
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            log('API', `Records fetch response: status ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                log('API', `Records fetch error: ${JSON.stringify(errorData)}`);
+                throw new Error('Failed to fetch data from Airtable.');
+            }
+            const data = await response.json();
+            records = records.concat(data.records);
+            offset = data.offset;
+            log('API', `Fetched ${data.records.length} records, offset: ${offset}`);
+        } while (offset);
+        log('API', `Total records fetched: ${records.length}`);
+        return records.filter(record => record.fields);
+    } catch (error) {
+        console.error(error);
+        log('API', `Failed to fetch records: ${error.message}`);
+        throw error;
+    }
+}
+
 // **THE FIX**: This closing brace was missing.
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
