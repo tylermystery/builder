@@ -12,7 +12,7 @@ import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
-import { log } from './utils/debug.js';
+import { log, setDebugMode } from './utils/debug.js'; // This is the fix
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
 
