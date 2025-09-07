@@ -11,39 +11,38 @@ export function parseOptions(rawOptionsString) {
     if (!rawOptionsString || typeof rawOptionsString !== 'string') {
         return [];
     }
-
+    
+    // Split the string by line breaks first, then by commas
     const optionsArray = rawOptionsString.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
-
+    
     return optionsArray.map(option => {
-        // Use a more advanced parsing approach to handle various keywords
         let name = option;
         let price = null;
         let priceChange = null;
         let durationChange = null;
         let description = null;
 
-        const parts = option.split(',');
-        name = parts.shift().trim();
-
+        const parts = option.split(',').map(part => part.trim());
+        name = parts.shift() || '';
+        
         parts.forEach(part => {
-            const trimmedPart = part.trim();
             let match;
-            if (match = trimmedPart.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+            if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 price = parseFloat(match[1]);
-            } else if (match = trimmedPart.match(/price change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+            } else if (match = part.match(/price change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 priceChange = parseFloat(match[1]);
-            } else if (match = trimmedPart.match(/duration change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+            } else if (match = part.match(/duration change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 durationChange = parseFloat(match[1]);
-            } else if (match = trimmedPart.match(/description:\s*['"]?([^"']+)['"]?/i)) {
+            } else if (match = part.match(/description:\s*['"]?([^"']+)['"]?/i)) {
                 description = match[1];
             }
         });
 
-        // Use regex on the initial name to catch any lingering keywords
-        let nameMatch;
-        if (nameMatch = name.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
-            price = parseFloat(nameMatch[1]);
-            name = name.replace(nameMatch[0], '').trim();
+        // Use a simple check to see if the name itself contains a price, as in the raw data
+        let namePriceMatch = name.match(/\$(\d+(\.\d{1,2})?)/);
+        if (namePriceMatch) {
+            price = parseFloat(namePriceMatch[1]);
+            name = name.replace(namePriceMatch[0], '').trim();
         }
 
         return {
@@ -55,7 +54,6 @@ export function parseOptions(rawOptionsString) {
         };
     });
 }
-
 
 /**
  * A utility function to debounce a function call.
