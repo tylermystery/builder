@@ -144,10 +144,10 @@ export function initializeEventListeners(imageCache) {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
+          
             scrollTimeout = null;
         }, 100);
     });
-
     const categoryFilters = document.getElementById('category-filters');
     if (categoryFilters) {
         categoryFilters.addEventListener('click', (e) => {
@@ -168,7 +168,6 @@ export function initializeEventListeners(imageCache) {
     safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
-
     safeAddEventListener('reset-filters-btn', 'click', () => {
         document.querySelectorAll('#category-filters .category-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
@@ -179,12 +178,12 @@ export function initializeEventListeners(imageCache) {
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
+     
         document.getElementById('budget-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
         if (mainDatePicker) mainDatePicker.clear();
         applyFiltersAndSort(imageCache);
     });
-
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
         enableTime: true,
@@ -193,6 +192,7 @@ export function initializeEventListeners(imageCache) {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
+    
                 updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
@@ -201,7 +201,6 @@ export function initializeEventListeners(imageCache) {
             }
         },
     });
-
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
@@ -210,21 +209,24 @@ export function initializeEventListeners(imageCache) {
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
+     
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
-                    endDate.setDate(endDate.getDate() + 1);
+                    endDate.setDate(endDate.getDate() + 
+1);
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
+               
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
                     endDate.setDate(startDate.getDate() + 14);
-                    break;
+break;
             }
             mainDatePicker.setDate([startDate, endDate], true);
         });
@@ -238,7 +240,6 @@ export function initializeEventListeners(imageCache) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
         const { stripe, cardElement, clientSecret } = ui.getStripeContext();
@@ -246,6 +247,7 @@ export function initializeEventListeners(imageCache) {
         const { error } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
+             
                 billing_details: {
                     name: document.getElementById('customer-name').value,
                     email: document.getElementById('customer-email').value,
@@ -253,6 +255,7 @@ export function initializeEventListeners(imageCache) {
             },
         });
         const cardErrors = document.getElementById('card-errors');
+       
         if (error) cardErrors.textContent = error.message;
         else {
             cardErrors.textContent = '';
@@ -260,14 +263,12 @@ export function initializeEventListeners(imageCache) {
             ui.hideCheckoutModal();
         }
     });
-
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
             e.preventDefault();
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
-
     document.body.addEventListener('click', async (e) => {
         if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) { ui.hideDetailModal(); return; }
         if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
@@ -277,13 +278,13 @@ export function initializeEventListeners(imageCache) {
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
+    
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const editBtn = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
         const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
-
         if (saveShareBtn) {
              navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -295,7 +296,7 @@ export function initializeEventListeners(imageCache) {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.items.has(recordId) ) {
+            if (state.cart.items.has(recordId)) {
                 state.cart.items.delete(recordId);
             } else {
                 updateItemState(recordId, {});
@@ -314,9 +315,12 @@ export function initializeEventListeners(imageCache) {
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ? noteInput.value.trim() : ''
+                    quantity: quantityInput ?
+parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ?
+parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ?
+noteInput.value.trim() : ''
                 };
                 updateLockedItemState(recordId, itemInfo);
             } else {
@@ -373,7 +377,6 @@ export function initializeEventListeners(imageCache) {
             if (record) ui.showDetailModal(record);
         }
     });
-
     document.body.addEventListener('change', (e) => {
         const target = e.target;
         const modal = document.getElementById('detail-modal-overlay');
@@ -382,7 +385,8 @@ export function initializeEventListeners(imageCache) {
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
         const recordId = container.dataset.recordId;
-        let updates = {};
+        let updates = 
+{};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
@@ -390,9 +394,10 @@ export function initializeEventListeners(imageCache) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
-            if(e.detail?.selectedOptionIndex !== undefined) {
+         
+           if(e.detail?.selectedOptionIndex !== undefined) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
-            }
+}
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
