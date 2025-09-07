@@ -45,14 +45,12 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    // We'll safely destructure the imageUrls and provide a default empty array
-    const { imageUrls = [] } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    // Correctly fetch and safely destructure the result
+    const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const imageUrls = fetchedImages?.imageUrls || [];
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
-    
-    // Check if imageUrls has a first element before accessing it
-    const imageUrl = imageUrls.length > 0 ? imageUrls[0] : '';
-    
+
     let priceHTML = '';
     let footerHTML = '';
     if (isGrouping) {
@@ -87,7 +85,7 @@ export async function createInteractiveCard(record, imageCache) {
     }
     
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="background-image: url('${imageUrl}');">
+        <div class="event-card-image-container" style="background-image: url('${imageUrls[0] || ''}');">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
