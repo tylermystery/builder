@@ -31,11 +31,11 @@ export function applyFiltersAndSort(imageCache) {
     }
 
     if (statusFilter !== 'all') {
-        recordsToDisplay = recordsToDisplay.filter(record => record.fields.Status === statusFilter);
+        recordsToDisplay = recordsToDisplay.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
         console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
     }
-    
-    // **FIXED FILTER LOGIC**: This section was missing or incomplete
+
+    // This section was incomplete in the provided source, but seems to be working in your console output.
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let filterMin = 0, filterMax = Infinity;
         if (headcountFilter === 'custom') {
@@ -78,7 +78,7 @@ export function applyFiltersAndSort(imageCache) {
         };
         const range = BUDGET_RANGES[budgetFilter];
         recordsToDisplay = recordsToDisplay.filter(record => {
-             const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
+             const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
              return price >= range.min && price <= range.max;
         });
         console.log(`FILTER: After Budget filter, ${recordsToDisplay.length} records remain.`);
@@ -89,8 +89,8 @@ export function applyFiltersAndSort(imageCache) {
         recordsToDisplay.forEach(record => {
             let score = 0;
             const fields = record.fields;
-            const name = (fields.Name || '').toLowerCase();
-            const description = (fields.Description || '').toLowerCase();
+            const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
+            const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
             const tags = [...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])].map(t => t.toLowerCase().trim());
          
             if (name.includes(searchTerm)) score = 3;
@@ -104,10 +104,10 @@ export function applyFiltersAndSort(imageCache) {
     }
     
     recordsToDisplay.sort((a, b) => {
-        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields.Price || '0').replace(/[^0-9.-]+/g, ""));
-        const aName = a.fields.Name || '';
-        const bName = b.fields.Name || '';
+        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+        const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         switch (sortBy) {
             case 'price-asc': return aPrice - bPrice;
             case 'price-desc': return bPrice - aPrice;
