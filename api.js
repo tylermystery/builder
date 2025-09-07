@@ -30,7 +30,7 @@ export async function loadSessionFromAirtable(sessionId) {
         if (sessionDataString) {
             const savedState = JSON.parse(sessionDataString);
             if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems));
-            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems));
+            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedItems));
             if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
             if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails));
         }
@@ -146,7 +146,6 @@ export async function fetchAllRecords() {
     }
 }
 
-// **Missing from your source, added here**
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
@@ -179,7 +178,6 @@ export async function fetchCalendarForRecord(record) {
     }
 }
 
-// **Missing from your source, added here**
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) {
         log('API', 'No tags provided for image fetch');
