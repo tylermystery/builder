@@ -9,18 +9,6 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
-// FILE: api.js
-import { state } from './state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
-import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
-import { log } from './utils/debug.js';
-
-const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
-const BASE_ID = 'app5yTznb3R5YNUFw';
-const TABLE_ID = 'tblUA4uuS8IYlhKpD';
-const SESSIONS_TABLE_NAME = 'Sessions';
-
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -53,6 +41,7 @@ export async function loadSessionFromAirtable(sessionId) {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 }
+
 export async function saveSessionToAirtable() {
     if (state.session.id && !state.session.isOwned) {
         state.session.id = null;
