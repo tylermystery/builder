@@ -1,15 +1,3 @@
-*
- * Version: 2.8.2
- * Last Modified: 2025-08-30
- *
- * Changelog:
- *
- * v2.8.2 - 2025-08-30
- * - Fixed a syntax error (missing closing brace) in saveSessionToAirtable.
- *
- * v2.8.1 - 2025-08-30
- * - Fixed Airtable 422 Error by only including the Date field in the payload when it has a value.
- */
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
@@ -24,10 +12,17 @@ const SESSIONS_TABLE_NAME = 'Sessions';
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    log('API', `Loading session from URL: ${url}`);
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) throw new Error('Could not fetch session data.');
+        log('API', `Session load response: status ${response.status}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Session load error: ${JSON.stringify(errorData)}`);
+            throw new Error('Could not fetch session data.');
+        }
         const record = await response.json();
+        log('API', `Session loaded: ${record.fields.Name}`);
         
         state.session.isOwned = false;
         state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
@@ -41,6 +36,7 @@ export async function loadSessionFromAirtable(sessionId) {
         }
     } catch (error) {
         console.error("Failed to load session:", error);
+        log('API', `Failed to load session: ${error.message}`);
         alert("Could not load the shared session.");
         window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -51,8 +47,14 @@ export async function saveSessionToAirtable() {
         state.session.id = null;
     }
 
-    const sessionData = { favoritedItems: Object.fromEntries(state.cart.items), lockedInItems: Object.fromEntries(state.cart.lockedItems), itemReactions: Object.fromEntries(state.session.reactions), favoritedDetails: Object.fromEntries(state.eventDetails.combined) };
+    const sessionData = { 
+        favoritedItems: Object.fromEntries(state.cart.items), 
+        lockedInItems: Object.fromEntries(state.cart.lockedItems), 
+        itemReactions: Object.fromEntries(state.session.reactions), 
+        favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
+    };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
+    log('API', `Saving session: ${sessionName}`);
 
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
@@ -67,8 +69,7 @@ export async function saveSessionToAirtable() {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
         "Collaborators": state.session.collaborators.join(', '),
-        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
-null,
+        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
     if (formattedDate) {
@@ -79,14 +80,21 @@ null,
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
+    log('API', `Saving session to URL: ${url}, Method: ${method}`);
+
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
+        log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
+            log('API', `Session save error: ${JSON.stringify(errorData)}`);
             throw new Error(`Airtable API Error: ${errorData.error.message}`);
         }
         const result = await response.json();
@@ -94,12 +102,14 @@ null,
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
+            log('API', `New session created with ID: ${state.session.id}`);
         }
         
         storeSession(state.session.id, sessionName);
         return true;
     } catch (error) {
         console.error("Failed to save session:", error);
+        log('API', `Failed to save session: ${error.message}`);
         return false;
     }
 }
@@ -136,10 +146,101 @@ export async function fetchAllRecords() {
     }
 }
 
-// **THE FIX**: This closing brace was missing.
+// **Missing from your source, added here**
+export async function fetchCalendarForRecord(record) {
+    const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+    if (!icalUrl) {
+        log('API', `No iCal URL for record: ${record.fields.Name}`);
+        return [];
+    }
+    if (state.calendar.busyTimes.has(icalUrl)) {
+        log('API', `Returning cached busy times for: ${icalUrl}`);
+        return state.calendar.busyTimes.get(icalUrl);
+    }
+    try {
+        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
+        log('API', `Fetching calendar from: ${proxyUrl}`);
+        const response = await fetch(proxyUrl);
+        log('API', `Calendar fetch response: status ${response.status}`);
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Calendar fetch error: ${JSON.stringify(errorData)}`);
+            throw new Error(`Calendar API Error: ${response.statusText}`);
+        }
+        const busyTimes = await response.json();
+        state.calendar.busyTimes.set(icalUrl, busyTimes);
+        log('API', `Cached busy times for: ${icalUrl}`);
+        return busyTimes;
+    } catch (error) {
+        console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
+        log('API', `Failed to fetch calendar: ${error.message}`);
+        state.calendar.busyTimes.set(icalUrl, []);
+        return [];
+    }
+}
+
+// **Missing from your source, added here**
+export async function fetchImagesByTags(tags, retries = 2) {
+    if (!tags || tags.length === 0) {
+        log('API', 'No tags provided for image fetch');
+        return null;
+    }
+    try {
+        let payload;
+        if (Array.isArray(tags)) {
+            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
+        } else {
+            payload = { tag: tags };
+        }
+        log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        log('API', `Image fetch response: status ${response.status}`);
+        if (response.status === 420 && retries > 0) {
+            console.warn(`Cloudinary rate limit hit. Retrying in 250ms... (${retries} retries left)`);
+            log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
+            await new Promise(res => setTimeout(res, 250));
+            return fetchImagesByTags(tags, retries - 1);
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            log('API', `Image fetch error: ${JSON.stringify(errorData)}`);
+            console.warn(`Cloudinary function error: ${response.statusText}`);
+            return null;
+        }
+        
+        const data = await response.json();
+        if (!data.resources || data.resources.length === 0) {
+            log('API', 'No image resources found');
+            return null;
+        }
+        
+        const imageUrls = data.resources.map(image => {
+            let transformations;
+            if (image.format === 'gif') {
+                transformations = 'c_fit,w_600,h_520';
+            } else {
+                transformations = 'c_fill,g_auto,w_600,h_520';
+            }
+            const urlParts = image.secure_url.split('/upload/');
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+        });
+        log('API', `Fetched ${imageUrls.length} images`);
+        return imageUrls;
+    } catch (error) {
+        console.error('Failed to fetch from Cloudinary via proxy:', error);
+        log('API', `Failed to fetch images: ${error.message}`);
+        return null;
+    }
+}
+
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
+        log('API', `Returning cached images for record: ${record.id}`);
         return imageCache.get(cacheKey);
     }
 
@@ -151,44 +252,27 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
     if (isGrouping) {
-        const groupNameTag = record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        imageUrls = await fetchImagesByTags(groupNameTag);
-        if (!imageUrls || imageUrls.length === 0) {
-            const firstChildOption = rawOptions.length > 0 ?
-rawOptions[0] : null;
-            if (firstChildOption) {
-                const firstChildRecord = allRecords.find(r => r.fields.Name === firstChildOption.name);
-                if (firstChildRecord) {
-                    const childImageData = await fetchImagesForRecord(firstChildRecord, allRecords, imageCache);
-                    imageUrls = childImageData.imageUrls;
-                }
-            }
-        }
-    } else {
-        const itemName = record.fields[CONSTANTS.FIELD_NAMES.NAME];
-        if (itemName) {
-            const autoTagName = itemName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-            imageUrls = await fetchImagesByTags(autoTagName);
-        }
-        
-        if (!imageUrls) {
-            const manualTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
-            const primaryManualTag = (manualTags && manualTags.trim() !== '') ? manualTags.split(',').shift().trim() : null;
-            if (primaryManualTag) {
-                imageUrls = await fetchImagesByTags(primaryManualTag);
+        const bookableItems = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+        log('API', `Fetching images for ${bookableItems.length} child records of ${record.fields.Name}`);
+        for (const child of bookableItems) {
+            const childImages = await fetchImagesByTags(child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+            if (childImages) {
+                imageUrls = imageUrls ? [...imageUrls, ...childImages] : childImages;
             }
         }
     }
     
-    const finalImageUrls = (imageUrls && imageUrls.length > 0) ?
-imageUrls : [ultimateFallbackUrl];
+    if (!imageUrls) {
+        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+    }
     
-    const result = {
-        isGrouping: isGrouping,
-        imageUrls: finalImageUrls.flat()
-    };
-    imageCache.set(cacheKey, result);
-    return result;
+    if (!imageUrls || imageUrls.length === 0) {
+        log('API', `Using fallback image for record: ${record.id}`);
+        imageUrls = [ultimateFallbackUrl];
+    }
+    
+    imageCache.set(cacheKey, imageUrls);
+    log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
+    return { imageUrls };
 }
