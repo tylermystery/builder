@@ -1,4 +1,4 @@
-/*
+*
  * Version: 2.8.2
  * Last Modified: 2025-08-30
  *
@@ -14,6 +14,8 @@ import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
+import { log } from './utils/debug.js';
+
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
