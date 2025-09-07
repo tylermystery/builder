@@ -69,7 +69,6 @@ export async function showDetailModal(record) {
     modalOverlay.dataset.recordId = record.id;
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
-
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
@@ -85,9 +84,14 @@ export async function showDetailModal(record) {
     
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
-        modalItemPrice.textContent = range ? `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}` : 'Price Varies';
+        if (range && typeof range.min === 'number' && typeof range.max === 'number') {
+            modalItemPrice.textContent = range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+        } else {
+            modalItemPrice.textContent = 'Price Varies';
+        }
     } else {
-        modalItemPrice.textContent = `$${ui.getRecordPrice(record).toFixed(2)}`;
+        const price = ui.getRecordPrice(record, itemState.selectedOptionIndex);
+        modalItemPrice.textContent = typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A';
     }
 
     modalMainImage.style.backgroundImage = `url('${imageUrls[0]}')`;
@@ -104,7 +108,6 @@ export async function showDetailModal(record) {
         });
         modalThumbnailStrip.appendChild(thumb);
     });
-    
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
@@ -126,8 +129,8 @@ export async function showDetailModal(record) {
             optionButton.classList.add('selected');
         }
         let priceModText = '';
-        if (opt.absolutePrice !== null) {
-            priceModText = `$${opt.absolutePrice.toFixed(2)}`;
+        if (opt.price !== null) {
+            priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
@@ -136,7 +139,7 @@ export async function showDetailModal(record) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
-             optionButton.addEventListener('click', (e) => {
+            optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
@@ -146,12 +149,11 @@ export async function showDetailModal(record) {
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = ui.getRecordPrice(record, newIndex);
-                modalItemPrice.textContent = `$${newPrice.toFixed(2)}`;
+                modalItemPrice.textContent = typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A';
             });
         }
         modalOptionsContainer.appendChild(optionButton);
     });
-
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
@@ -238,7 +240,6 @@ export async function showCheckoutModal() {
     const totalPriceEl = document.getElementById('checkout-total-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
     if (!checkoutModalOverlay || !summaryList || !totalPriceEl) return;
-
     summaryList.innerHTML = '';
     let finalTotal = 0;
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
