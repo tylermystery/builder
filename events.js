@@ -1,16 +1,24 @@
+// FILE: events.js
+/*
+ * Version: 4.8.1
+ * Last Modified: 2025-09-02
+ * Changelog:
+ * v4.8.1 - 2025-09-02
+ * - Debounced updateFavoritesCarousel to prevent rapid update issues.
+ * - Added date picker clear handling for availability icons.
+ */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
-import { AVAILABILITY_STATUS } from './availability.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
-
 export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
@@ -35,7 +43,6 @@ function loadMoreRecords(imageCache) {
     const start = state.ui.recordsCurrentlyDisplayed;
     const end = start + RECORDS_PER_LOAD;
     const recordsToLoad = state.records.filtered.slice(start, end);
-
     if (recordsToLoad.length > 0) {
         state.ui.isLoadingMore = true;
         ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
@@ -104,11 +111,14 @@ async function updateAllCardAvailabilityIcons() {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon, statusText;
             if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
-                statusIcon = '❌'; statusText = 'Unavailable';
+                statusIcon = '❌';
+                statusText = 'Unavailable';
             } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
-                statusIcon = '🟠'; statusText = 'Partially Available';
+                statusIcon = '🟠';
+                statusText = 'Partially Available';
             } else {
-                statusIcon = '✅'; statusText = 'Fully Available';
+                statusIcon = '✅';
+                statusText = 'Fully Available';
             }
             const dateString = startDate.toLocaleDateString();
             const tooltipContent = `<div style="text-align: left;"><strong>${dateString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${statusText}</span></div>`;
@@ -215,8 +225,7 @@ export function initializeEventListeners(imageCache) {
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
-                    endDate.setDate(endDate.getDate() + 
-1);
+                    endDate.setDate(endDate.getDate() + 1);
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
@@ -226,7 +235,7 @@ export function initializeEventListeners(imageCache) {
                     break;
                 case 'next-2-weeks':
                     endDate.setDate(startDate.getDate() + 14);
-break;
+                break;
             }
             mainDatePicker.setDate([startDate, endDate], true);
         });
@@ -315,12 +324,9 @@ break;
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ?
-parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ?
-parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ?
-noteInput.value.trim() : ''
+                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ? noteInput.value.trim() : ''
                 };
                 updateLockedItemState(recordId, itemInfo);
             } else {
@@ -385,8 +391,7 @@ noteInput.value.trim() : ''
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
         const recordId = container.dataset.recordId;
-        let updates = 
-{};
+        let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
