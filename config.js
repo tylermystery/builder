@@ -1,3 +1,4 @@
+// FILE: config.js
 export const STRIPE_PUBLISHABLE_KEY = 'pk_test_mK3MLvoZurxcqIQHyWB7eqlY';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
@@ -23,10 +24,10 @@ export const CONSTANTS = {
         ICAL_URL: 'iCal URL',
         LEAD_TIME: 'Lead Time (days)',
     },
-    // This is the missing object that needs to be restored
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
     },
+    // This part is crucial for session loading
     DETAIL_TYPES: {
         EVENT_NAME: 'eventName',
         DATE: 'date',
