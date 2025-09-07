@@ -61,11 +61,12 @@ export function getRecordPrice(record, optionIndex = null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
         if (variation) {
-            if (variation.absolutePrice !== null) return variation.absolutePrice;
+            if (variation.price !== null) return variation.price;
             if (variation.priceChange !== null) price += variation.priceChange;
         }
     }
-    return price;
+    // Return 0 if the price is still invalid, preventing the 'toFixed' error.
+    return isNaN(price) ? 0 : price;
 }
 
 // --- CORE UI FUNCTIONS ---
@@ -116,4 +117,3 @@ export function initStateHelpers(helpers) {
 export function getMainGetItemState() {
     return mainGetItemState;
 }
-
