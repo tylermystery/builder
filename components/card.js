@@ -45,16 +45,20 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    // We'll safely destructure the imageUrls and provide a default empty array
+    const { imageUrls = [] } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
-
+    
+    // Check if imageUrls has a first element before accessing it
+    const imageUrl = imageUrls.length > 0 ? imageUrls[0] : '';
+    
     let priceHTML = '';
     let footerHTML = '';
-
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
-        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        priceHTML = range ?
+        (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
@@ -68,38 +72,40 @@ export async function createInteractiveCard(record, imageCache) {
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ?
+        'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
                     <div class="price">${priceHTML}</div>
                     ${quantitySelectorHTML}
                 </div>
-                ${addToPlanBtnHTML}
+           
+             ${addToPlanBtnHTML}
             </div>
         `;
     }
     
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="background-image: url('${imageUrls[0] || ''}');">
+        <div class="event-card-image-container" style="background-image: url('${imageUrl}');">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
             <div class="heart-icon" data-record-id="${record.id}"></div>
         </div>
         <div class="event-card-content">
+ 
             ${parentLinkHTML}
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
-            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
+            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] ||
+            'Untitled Event'}</h3>
+            <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] ||
+            ''}</p>
         </div>
         ${footerHTML}
     `;
-    
-    // Ensure heart icon is updated after DOM insertion
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
-
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
