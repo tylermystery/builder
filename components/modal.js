@@ -179,7 +179,14 @@ export async function showDetailModal(record) {
         const calendarInstance = flatpickr(modalCalendarContainer, {
             inline: true,
             showMonths: 1,
-            disable: [() => true],
+            // The disable array now includes our lead time logic
+            disable: [(date) => {
+                const leadTimeDays = record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0;
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const leadTimeCutoff = new Date(today.getTime() + leadTimeDays * 24 * 60 * 60 * 1000);
+                return date < leadTimeCutoff;
+            }],
             onDayCreate: function(dObj, dStr, fp, dayElem) {
                 const day = dayElem.dateObj;
                 const status = getDayStatus(day, busyTimes, record);
@@ -207,12 +214,12 @@ export async function showDetailModal(record) {
                     allowHTML: true,
                 });
             },
-            onClose: (selectedDates) => {
+            // This event handler updates the main header calendar
+            onChange: (selectedDates) => {
                 if (selectedDates.length > 0) {
                     const mainDatePicker = flatpickr.getInstance(document.getElementById('date-filter'));
-                    if (mainDatePicker && mainDatePicker.selectedDates.length === 2) {
-                        const newRange = [selectedDates[0], mainDatePicker.selectedDates[1]];
-                        mainDatePicker.setDate(newRange, true);
+                    if (mainDatePicker) {
+                        mainDatePicker.setDate(selectedDates, true);
                     }
                 }
             }
