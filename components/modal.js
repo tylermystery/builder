@@ -5,6 +5,7 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
+import flatpickr from "flatpickr"; // FIX: Import the library directly
 
 let stripe, elements, cardElement, clientSecret;
 
