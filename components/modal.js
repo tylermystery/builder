@@ -6,9 +6,8 @@ import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 
-// Removed: import flatpickr from "flatpickr";
-
 let stripe, elements, cardElement, clientSecret;
+
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
