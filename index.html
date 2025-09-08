@@ -62,7 +62,7 @@
  }
         .main-container {
             display: grid;
- grid-template-columns: 1fr 380px;
+ grid-template-columns: 300px 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
@@ -769,13 +769,76 @@
             </div>
             <div id="subcategory-filters" class="filter-btn-group">
                 </div>
-            <div id="date-filter-group" class="toolbar-group">
-                <label for="date-filter">Date & Time</label>
-                <input type="text" id="date-filter" placeholder="Select date and time range">
-            </div>
         </div>
     </div>
     <div class="main-container">
+        <div id="left-sidebar">
+            <div id="filter-controls" data-active-filters="0">
+                <h3>Filters</h3>
+                <div class="filter-group">
+                    <label for="name-filter">Search by Name</label>
+                    <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
+                </div>
+                <div id="date-filter-group" class="filter-group">
+                    <label for="date-filter">Date & Time</label>
+                    <input type="text" id="date-filter" placeholder="Select date and time range">
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
+                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label for="headcount-filter">Headcount</label>
+                    <select id="headcount-filter">
+                        <option value="any">Any Size</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-25">11-25</option>
+                        <option value="26-50">26-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-250">101-250</option>
+                        <option value="250-plus">250+</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    <input type="number" id="headcount-custom" placeholder="Enter
+headcount" min="1" style="display: none;" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label for="location-filter">Location</label>
+                    <select id="location-filter">
+                        <option value="any">Any Location</option>
+                        <option value="sf">San Francisco</option>
+                        <option value="oakland">Oakland</option>
+                        <option value="peninsula">Peninsula</option>
+                        <option value="south-bay">South Bay</option>
+                        <option value="north-bay">North Bay</option>
+                        <option value="east-bay">East Bay</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="budget-filter">Budget</label>
+                    <select id="budget-filter">
+                        <option value="any">Any Budget</option>
+                        <option value="budget-friendly">Budget-Friendly</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="executive">Executive</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status-filter">Status</label>
+                    <select
+id="status-filter">
+                        <option value="Available">Available</option>
+                        <option value="all">Show All</option>
+                        <option value="Coming Soon">Coming Soon</option>
+                        <option value="Sold Out">Sold Out</option>
+                    </select>
+                </div>
+                <button id="reset-filters-btn">Reset All Filters</button>
+            </div>
+        </div>
         <div id="catalog-area">
             <div id="catalog-toolbar">
                 <select id="sort-by">
@@ -792,7 +855,8 @@
                 <div id="favorites-section">
                     <h4>Your Ideas</h4>
                     <button class="carousel-nav left">◄</button>
-                    <div id="favorites-carousel"></div>
+                    <div
+id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
                 <div class="toolbar-group">
