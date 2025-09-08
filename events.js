@@ -293,23 +293,21 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
     document.body.addEventListener('click', async (e) => {
-        if (e.target.matches('#detail-modal-overlay, #modal-close-btn')) { ui.hideDetailModal(); return; }
-        if (e.target.matches('#checkout-modal-overlay, #checkout-close-btn')) { ui.hideCheckoutModal(); return; }
-        
+        // Find the closest parent with a data-record-id to identify the item
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon:not(.locked)');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
-    
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const editBtn = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
-        const optionBtn = e.target.closest('.option-btn');
+        const optionBtn = e.target.closest('.option-btn'); // Now correctly checks for the clicked button
         const parentLink = e.target.closest('.parent-link');
+        
         if (saveShareBtn) {
-             navigator.clipboard.writeText(window.location.href).then(() => {
+            navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
@@ -378,11 +376,25 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } else if (optionBtn && optionBtn.dataset.childName) {
-            const childName = optionButton.dataset.childName;
-            const childRecord = state.records.all.find(r => r.fields.Name === childName);
-            if (childRecord) ui.showDetailModal(childRecord);
-        } else if (parentLink && parentLink.dataset.parentName) {
+        } else if (optionBtn) { // The fix is here: we don't access a non-existent variable
+            const childName = optionBtn.dataset.childName;
+            if (childName) {
+                const childRecord = state.records.all.find(r => r.fields.Name === childName);
+                if (childRecord) ui.showDetailModal(childRecord);
+            } else {
+                 // For option buttons that don't open a child record, we trigger a change event
+                 const modalOptionsContainer = optionBtn.closest('#modal-options-container');
+                 if(modalOptionsContainer) {
+                     modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                     optionBtn.classList.add('selected');
+                     const newIndex = parseInt(optionBtn.dataset.optionIndex, 10);
+                     optionBtn.dispatchEvent(new CustomEvent('change', {
+                         bubbles: true,
+                         detail: { selectedOptionIndex: newIndex }
+                     }));
+                 }
+            }
+        } else if (parentLink) {
             const parentName = parentLink.dataset.parentName;
             const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
             if (parentRecord) ui.showDetailModal(parentRecord);
