@@ -30,6 +30,40 @@ import { debounce } from './utils.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
+const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+
+function getAvailableSubcategories(category) {
+    if (category === 'all') {
+        return [];
+    }
+    const filteredRecords = state.records.all.filter(record => {
+        const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim().toLowerCase()) || [];
+        return categories.includes(category);
+    });
+
+    const subcategories = new Set();
+    filteredRecords.forEach(record => {
+        const recordSubcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(s => s.trim()) || [];
+        recordSubcategories.forEach(subcat => subcategories.add(subcat));
+    });
+
+    return Array.from(subcategories).sort();
+}
+
+function updateSubcategoryButtons() {
+    subcategoryFiltersContainer.innerHTML = '';
+    const selectedCategory = categoryFilterDropdown.value;
+    const subcategories = getAvailableSubcategories(selectedCategory);
+
+    subcategories.forEach(subcat => {
+        const button = document.createElement('button');
+        button.className = 'filter-btn subcategory-filter-btn';
+        button.dataset.filter = subcat.toLowerCase();
+        button.textContent = subcat;
+        subcategoryFiltersContainer.appendChild(button);
+    });
+}
 
 export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
@@ -106,7 +140,7 @@ async function updateAllCardAvailabilityIcons() {
             icon.title = 'Select a date range to check availability';
             icon.textContent = '📅';
         });
-        return;
+    return;
     }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
@@ -171,16 +205,32 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
-    const categoryFilters = document.getElementById('category-filters');
-    if (categoryFilters) {
-        categoryFilters.addEventListener('click', (e) => {
-            if (e.target.classList.contains('category-filter-btn')) {
-                e.target.classList.toggle('active');
-                applyFiltersAndSort(imageCache);
-            }
-        });
-    }
 
+    // Populate the category dropdown on initialization
+    const categories = new Set(state.records.all.flatMap(record =>
+        record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim()) || []
+    ));
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat.toLowerCase();
+        option.textContent = cat;
+        categoryFilterDropdown.appendChild(option);
+    });
+
+    // Event listeners for the new filter layout
+    safeAddEventListener('category-filter-dropdown', 'change', () => {
+        updateSubcategoryButtons();
+        applyFiltersAndSort(imageCache);
+    });
+
+    safeAddEventListener('subcategory-filters', 'click', (e) => {
+        if (e.target.classList.contains('subcategory-filter-btn')) {
+            e.target.classList.toggle('active');
+            applyFiltersAndSort(imageCache);
+        }
+    });
+
+    // The rest of the event listeners remain unchanged
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
@@ -192,7 +242,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('reset-filters-btn', 'click', () => {
-        document.querySelectorAll('#category-filters .category-filter-btn.active').forEach(btn => {
+        document.getElementById('category-filter-dropdown').value = 'all';
+        updateSubcategoryButtons();
+        document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById('name-filter').value = '';
@@ -215,11 +267,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
+   
                 // We'll call the availability icon update from here
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
+                
                 await updateAllCardAvailabilityIcons();
             }
         },
@@ -248,7 +302,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     break;
                 case 'next-2-weeks':
                     endDate.setDate(startDate.getDate() + 14);
-                break;
+                    break;
             }
             mainDatePicker.setDate([startDate, endDate], true);
         });
@@ -300,7 +354,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-        const editBtn = e.target.closest('.edit-btn');
+        const editBtn 
+ = e.target.closest('.edit-btn');
         const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
         const optionBtn = e.target.closest('.option-btn'); // Now correctly checks for the clicked button
@@ -308,6 +363,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
+               
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
@@ -336,9 +392,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ? noteInput.value.trim() : ''
+                    quantity: quantityInput ?
+ parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ?
+ parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ?
+ noteInput.value.trim() : ''
                 };
                 updateLockedItemState(recordId, itemInfo);
             } else {
@@ -417,7 +476,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
         const recordId = container.dataset.recordId;
-        let updates = {};
+        let updates = 
+ {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
@@ -428,7 +488,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
          
            if(e.detail?.selectedOptionIndex !== undefined) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
-            }
+ }
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
