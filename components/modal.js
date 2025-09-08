@@ -173,12 +173,10 @@ export async function showDetailModal(record) {
 
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
-    
     const calendarInstance = flatpickr(modalCalendarContainer, {
         inline: true,
         showMonths: 1,
         disable: [(date) => {
-            // FIX: This logic is now handled in getDayStatus. Let's simplify and make it more reliable.
             const status = getDayStatus(date, busyTimes, record);
             return status.status === AVAILABILITY_STATUS.NONE;
         }],
@@ -186,7 +184,7 @@ export async function showDetailModal(record) {
             const day = dayElem.dateObj;
             const status = getDayStatus(day, busyTimes, record);
             let className = '';
-            let tooltip = status.reason; // Use the specific reason from getDayStatus
+            let tooltip = status.reason;
             
             if (status.status === AVAILABILITY_STATUS.FULL) {
                 className = 'available-full';
@@ -195,7 +193,6 @@ export async function showDetailModal(record) {
                 tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
                 className = 'unavailable';
-                // tooltip is already set to the specific reason
             }
             
             dayElem.classList.add(className);
@@ -209,21 +206,20 @@ export async function showDetailModal(record) {
                 allowHTML: true,
             });
         },
-        // This event handler updates the main header calendar
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
-                const mainDatePicker = flatpickr.getInstance(document.getElementById('date-filter'));
+                // Fix: Access the global flatpickr object correctly
+                const mainDatePicker = window.flatpickr.getInstance(document.getElementById('date-filter'));
                 if (mainDatePicker) {
                     mainDatePicker.setDate(selectedDates, true);
                 }
             }
         }
     });
-    
 
     modalOverlay.classList.add('active');
-    setTimeout(() => { 
-        modalOverlay.style.display = 'flex'; 
+    setTimeout(() => {
+        modalOverlay.style.display = 'flex';
         modalCloseBtn.focus();
         log('Modal', 'Detail modal shown, focused close button.');
     }, 0);
