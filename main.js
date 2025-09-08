@@ -1,7 +1,9 @@
 /*
- * Version: 4.8.6
+ * Version: 4.8.7
  * Last Modified: 2025-09-08
  * Changelog:
+ * v4.8.7 - 2025-09-08
+ * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
  * v4.8.6 - 2025-09-08
  * - Added functionality to update the header calendar based on favorited items.
  * v4.8.5 - 2025-09-02
@@ -193,7 +195,6 @@ async function initialize() {
     updateSaveShareButton();
     log('Main', '20. Filters applied, favorites and share button updated.');
 
-    // This is the new call to update the calendar after initial load
     await updateHeaderCalendarAvailability();
     log('Main', '21. Initialization complete.');
 }
