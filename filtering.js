@@ -20,21 +20,26 @@ export function applyFiltersAndSort(imageCache) {
 
     if (activeCategories.length > 0) {
         recordsToDisplay = recordsToDisplay.filter(record => {
-            const getTagsFromString = (str) => {
-                if (!str) return [];
-                return str.split(',').map(tag => tag.trim().toLowerCase());
-            };
+            const getTagsFromString = (str) => (str ? str.split(',').map(tag => tag.trim().toLowerCase()) : []);
             const recordTags = [
                 ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]),
                 ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES])
             ];
-            // Fix: Check if any active category is present in the record's tags
             return activeCategories.some(cat => recordTags.includes(cat));
         });
         console.log(`FILTER: After Category filter, ${recordsToDisplay.length} records remain.`);
     }
     
-    // This section was incomplete in the provided source, but seems to be working in your console output.
+    // Fix: Ensure the status filter correctly checks for "Available"
+    if (statusFilter !== 'all') {
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            // This is the key fix. It checks if the record's Status field
+            // is exactly the same as the selected filter value.
+            return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+        });
+        console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
+    }
+
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let filterMin = 0, filterMax = Infinity;
         if (headcountFilter === 'custom') {
