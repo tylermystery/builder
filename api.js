@@ -27,12 +27,18 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.isOwned = false;
         state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
-        if (sessionDataString) {
-            const savedState = JSON.parse(sessionDataString);
-            if (savedState.favoritedItems) state.cart.items = new Map(Object.entries(savedState.favoritedItems));
-            if (savedState.lockedInItems) state.cart.lockedItems = new Map(Object.entries(savedState.lockedItems));
-            if (savedState.itemReactions) state.session.reactions = new Map(Object.entries(savedState.itemReactions));
-            if (savedState.favoritedDetails) state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails));
+        
+        // --- FIX: Safely parse session data only if it exists
+        if (sessionDataString && sessionDataString.trim() !== '') {
+            try {
+                const savedState = JSON.parse(sessionDataString);
+                state.cart.items = new Map(Object.entries(savedState.favoritedItems || {}));
+                state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
+                state.session.reactions = new Map(Object.entries(savedState.itemReactions || {}));
+                state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails || {}));
+            } catch (jsonError) {
+                log('API', `Failed to parse session JSON: ${jsonError.message}`);
+            }
         }
     } catch (error) {
         console.error("Failed to load session:", error);
