@@ -112,7 +112,6 @@ async function updateHeaderCalendarAvailability() {
 }
 
 async function initialize() {
-    // ... (rest of the initialize function remains the same)
     log('Main', '1. Initialization started.');
     try {
         localStorage.clear();
@@ -196,7 +195,6 @@ async function initialize() {
 
     // This is the new call to update the calendar after initial load
     await updateHeaderCalendarAvailability();
-    
     log('Main', '21. Initialization complete.');
 }
 
