@@ -1,9 +1,10 @@
 Feature Specification Sheet (Final Version)
 
-**Version: 1.2.2**
-**Last Modified: 2025-08-31**
+**Version: 1.2.3**
+**Last Modified: 2025-09-08**
 
 ### Changelog
+* **v1.2.3 (2025-09-08):** Implemented dynamic calendar and availability updates. Corrected modularity issues with event handlers and global libraries. Fixed logic for `updateHeaderCalendarAvailability` to correctly display combined availability.
 * **v1.2.2 (2025-08-31):** Updated filter layout description, making Categories buttons at the top.
 * **v1.2.1 (2025-08-31):** Added "Status Filter" to the Search & Filtering section.
 * **v1.2.0 (2025-08-30):** Added "State Management Model" section to document the user flow for favorited and locked items.
@@ -17,9 +18,7 @@ This document outlines the features of an interactive event catalog. The core ap
 #### Airtable & Cloudinary Integration
 The application's data is powered by an Airtable database and the Cloudinary media library.
 * **Data Formatting**: Fields intended to hold multiple values, such as `Categories`, `Subcategories`, and `Media Tags`, are configured as `Single line text` fields in Airtable. Values are stored as a single, comma-separated string (e.g., "Activities, Outdoor"). The application is responsible for parsing these strings into individual tags for filtering and searching.
-
-#### Direct API Communication (Development)
-For development purposes, the application communicates directly with the Airtable API from the browser. This method uses a hard-coded Personal Access Token. Note: This approach poses a security risk by exposing the API key and is intended as a temporary measure. The final version should use a secure serverless proxy.
+* **Direct API Communication (Development)**: For development purposes, the application communicates directly with the Airtable API from the browser. This method uses a hard-coded Personal Access Token. Note: This approach poses a security risk by exposing the API key and is intended as a temporary measure. The final version should use a secure serverless proxy.
 
 ### State Management Model ("One-Way Street")
 To ensure a clear and predictable user experience, the application uses a "one-way street" model for managing user selections. An item progresses from a temporary favorite to a permanent part of the event plan.
