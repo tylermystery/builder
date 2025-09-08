@@ -4,8 +4,10 @@ import * as ui from './ui.js';
 
 export function applyFiltersAndSort(imageCache) {
     console.log("FILTER: Starting applyFiltersAndSort...");
-    const activeCategoryNodes = document.querySelectorAll('#category-filters .category-filter-btn.active');
-    const activeCategories = Array.from(activeCategoryNodes).map(btn => btn.dataset.filter.toLowerCase());
+    const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+    const selectedCategory = categoryFilterDropdown.value;
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter.toLowerCase());
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
@@ -13,21 +15,22 @@ export function applyFiltersAndSort(imageCache) {
     const locationFilter = document.getElementById('location-filter').value;
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
-    console.log("FILTER: Filter values read from DOM:", { statusFilter, headcountFilter, locationFilter, budgetFilter, sortBy, searchTerm });
+    console.log("FILTER: Filter values read from DOM:", { selectedCategory, activeSubcategories, statusFilter, headcountFilter, locationFilter, budgetFilter, sortBy, searchTerm });
 
     let recordsToDisplay = state.records.all;
     console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
-    if (activeCategories.length > 0) {
+    if (selectedCategory !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
-            const getTagsFromString = (str) => (str ? str.split(',').map(tag => tag.trim().toLowerCase()) : []);
-            const recordTags = [
-                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]),
-                ...getTagsFromString(record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES])
-            ];
-            return activeCategories.some(cat => recordTags.includes(cat));
+            const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(tag => tag.trim().toLowerCase()) || [];
+            return categories.includes(selectedCategory);
         });
-        console.log(`FILTER: After Category filter, ${recordsToDisplay.length} records remain.`);
+        if (activeSubcategories.length > 0) {
+            recordsToDisplay = recordsToDisplay.filter(record => {
+                const subcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(tag => tag.trim().toLowerCase()) || [];
+                return activeSubcategories.some(subcat => subcategories.includes(subcat));
+            });
+        }
     }
     
     // Fix: Ensure the status filter correctly checks for "Available"
@@ -43,21 +46,23 @@ export function applyFiltersAndSort(imageCache) {
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let filterMin = 0, filterMax = Infinity;
         if (headcountFilter === 'custom') {
-            filterMin = parseInt(customHeadcount, 10) || 0;
+            filterMin = parseInt(customHeadcount, 10) ||
+0;
             filterMax = filterMin;
         } else {
             const [minStr, maxStr] = headcountFilter.split('-');
             filterMin = parseInt(minStr, 10);
             filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
-        }
+ }
 
         const parseCapacity = (capacityStr) => {
             if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
             if (capacityStr.includes('+')) {
-                return { min: parseInt(capacityStr, 10) || 0, max: Infinity };
+                return { min: parseInt(capacityStr, 10) ||
+0, max: Infinity };
             }
             const parts = capacityStr.split('-').map(p => parseInt(p, 10));
-            return { min: parts[0] || 0, max: parts[1] || Infinity };
+ return { min: parts[0] || 0, max: parts[1] || Infinity };
         };
         recordsToDisplay = recordsToDisplay.filter(record => {
             const capacity = parseCapacity(record.fields['Capacity']);
