@@ -224,6 +224,12 @@ export async function showDetailModal(record) {
         log('Modal', 'Detail modal shown, focused close button.');
     }, 0);
     document.body.classList.add('modal-open');
+
+    // FIX: Add a dedicated event listener for the modal close button
+    const closeBtn = document.getElementById('modal-close-btn');
+    if(closeBtn) {
+        closeBtn.addEventListener('click', hideDetailModal);
+    }
 }
 
 export function hideDetailModal() {
@@ -233,6 +239,11 @@ export function hideDetailModal() {
         setTimeout(() => {
             modalOverlay.style.display = 'none';
             resetModalState();
+            const closeBtn = document.getElementById('modal-close-btn');
+            // FIX: Remove the event listener to prevent memory leaks
+            if(closeBtn) {
+                closeBtn.removeEventListener('click', hideDetailModal);
+            }
             document.querySelector('#header-title').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
         }, 300);
