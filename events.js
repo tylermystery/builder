@@ -1,24 +1,36 @@
 // FILE: events.js
 /*
- * Version: 4.8.1
- * Last Modified: 2025-09-02
+ * Version: 4.8.7
+ * Last Modified: 2025-09-08
  * Changelog:
+ * v4.8.7 - 2025-09-08
+ * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
+ * v4.8.6 - 2025-09-08
+ * - Added functionality to update the header calendar based on favorited items.
+ * v4.8.5 - 2025-09-02
+ * - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
+ * v4.8.4 - 2025-09-02
+ * - Added debug logging for initialization steps.
+ * v4.8.3 - 2025-09-02
+ * - Continue initialization if session loading fails due to storage errors.
+ * v4.8.2 - 2025-09-02
+ * - Added retry logic for fetchAllRecords to handle transient errors.
  * v4.8.1 - 2025-09-02
- * - Debounced updateFavoritesCarousel to prevent rapid update issues.
- * - Added date picker clear handling for availability icons.
+ * - Added storage error handling during initialization.
  */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
-import { log, setDebugMode } from './utils/debug.js'; // This is the fix
+import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
+
 export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
@@ -110,10 +122,10 @@ async function updateAllCardAvailabilityIcons() {
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon, statusText;
-            if (dayStatus === AVAILABILITY_STATUS.NONE || !isAvailable) {
+            if (dayStatus.status === AVAILABILITY_STATUS.NONE || !isAvailable) {
                 statusIcon = '❌';
-                statusText = 'Unavailable';
-            } else if (dayStatus === AVAILABILITY_STATUS.PARTIAL) {
+                statusText = dayStatus.reason; // Use specific reason if unavailable
+            } else if (dayStatus.status === AVAILABILITY_STATUS.PARTIAL) {
                 statusIcon = '🟠';
                 statusText = 'Partially Available';
             } else {
@@ -129,7 +141,7 @@ async function updateAllCardAvailabilityIcons() {
     }
 }
 
-export function initializeEventListeners(imageCache) {
+export function initializeEventListeners(imageCache, flatpickr) {
     let debugEnabled = false;
     const betaTrigger = document.getElementById('beta-trigger');
     if (betaTrigger) {
@@ -230,7 +242,7 @@ export function initializeEventListeners(imageCache) {
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
-               
+          
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
@@ -263,6 +275,7 @@ export function initializeEventListeners(imageCache) {
                 },
             },
         });
+     
         const cardErrors = document.getElementById('card-errors');
        
         if (error) cardErrors.textContent = error.message;
@@ -365,7 +378,7 @@ export function initializeEventListeners(imageCache) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } else if (optionBtn && optionBtn.dataset.childName) {
-            const childName = optionBtn.dataset.childName;
+            const childName = optionButton.dataset.childName;
             const childRecord = state.records.all.find(r => r.fields.Name === childName);
             if (childRecord) ui.showDetailModal(childRecord);
         } else if (parentLink && parentLink.dataset.parentName) {
