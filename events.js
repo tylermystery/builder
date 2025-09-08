@@ -124,7 +124,7 @@ async function updateAllCardAvailabilityIcons() {
             let statusIcon, statusText;
             if (dayStatus.status === AVAILABILITY_STATUS.NONE || !isAvailable) {
                 statusIcon = '❌';
-                statusText = dayStatus.reason; // Use specific reason if unavailable
+                statusText = dayStatus.reason;
             } else if (dayStatus.status === AVAILABILITY_STATUS.PARTIAL) {
                 statusIcon = '🟠';
                 statusText = 'Partially Available';
@@ -141,6 +141,7 @@ async function updateAllCardAvailabilityIcons() {
     }
 }
 
+// Fix: Accept flatpickr as a parameter
 export function initializeEventListeners(imageCache, flatpickr) {
     let debugEnabled = false;
     const betaTrigger = document.getElementById('beta-trigger');
@@ -415,7 +416,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
          
            if(e.detail?.selectedOptionIndex !== undefined) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
-}
+            }
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
