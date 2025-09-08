@@ -25,17 +25,17 @@ export function getDayStatus(day, busyTimes, record) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const leadTimeDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
-    
-    // --- FIX: Check against lead time before checking busy periods
+
+    // --- FIX: Return a specific reason for unavailability
     if (day < leadTimeDate) {
         log('Availability', `Day ${day.toDateString()} unavailable due to lead time: ${leadTime} days`);
-        return AVAILABILITY_STATUS.NONE;
+        return { status: AVAILABILITY_STATUS.NONE, reason: `Unavailable due to ${leadTime} day lead time.` };
     }
     // --- END OF FIX
 
     if (!busyTimes || busyTimes.length === 0) {
         log('Availability', `Day ${day.toDateString()} fully available (no busy times or iCal)`);
-        return AVAILABILITY_STATUS.FULL; // 100% availability if no iCal data
+        return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully Available' };
     }
 
     // Check busy times for the day
@@ -48,9 +48,10 @@ export function getDayStatus(day, busyTimes, record) {
         const busyEnd = new Date(busy.end);
         return busyStart <= dayEnd && busyEnd >= dayStart;
     });
+
     if (busyPeriods.length === 0) {
         log('Availability', `Day ${day.toDateString()} fully available (no conflicts)`);
-        return AVAILABILITY_STATUS.FULL;
+        return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully Available' };
     }
 
     // Calculate available time slots
@@ -63,12 +64,13 @@ export function getDayStatus(day, busyTimes, record) {
         busyMinutes += minutes;
     });
     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
+
     if (availablePercentage > 50) {
         log('Availability', `Day ${day.toDateString()} partially available (${availablePercentage.toFixed(1)}%)`);
-        return AVAILABILITY_STATUS.PARTIAL;
+        return { status: AVAILABILITY_STATUS.PARTIAL, reason: 'Partially Available (some times are booked).' };
     } else {
         log('Availability', `Day ${day.toDateString()} unavailable (${availablePercentage.toFixed(1)}% available)`);
-        return AVAILABILITY_STATUS.NONE;
+        return { status: AVAILABILITY_STATUS.NONE, reason: 'No availability today (all time slots are booked).' };
     }
 }
 
