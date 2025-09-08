@@ -32,7 +32,6 @@ let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
-
 function getAvailableSubcategories(category) {
     if (category === 'all') {
         return [];
@@ -41,13 +40,11 @@ function getAvailableSubcategories(category) {
         const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim().toLowerCase()) || [];
         return categories.includes(category);
     });
-
     const subcategories = new Set();
     filteredRecords.forEach(record => {
         const recordSubcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(s => s.trim()) || [];
         recordSubcategories.forEach(subcat => subcategories.add(subcat));
     });
-
     return Array.from(subcategories).sort();
 }
 
@@ -55,7 +52,6 @@ function updateSubcategoryButtons() {
     subcategoryFiltersContainer.innerHTML = '';
     const selectedCategory = categoryFilterDropdown.value;
     const subcategories = getAvailableSubcategories(selectedCategory);
-
     subcategories.forEach(subcat => {
         const button = document.createElement('button');
         button.className = 'filter-btn subcategory-filter-btn';
@@ -205,7 +201,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
-
     // Populate the category dropdown on initialization
     const categories = new Set(state.records.all.flatMap(record =>
         record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim()) || []
@@ -216,20 +211,17 @@ export function initializeEventListeners(imageCache, flatpickr) {
         option.textContent = cat;
         categoryFilterDropdown.appendChild(option);
     });
-
     // Event listeners for the new filter layout
     safeAddEventListener('category-filter-dropdown', 'change', () => {
         updateSubcategoryButtons();
         applyFiltersAndSort(imageCache);
     });
-
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
             applyFiltersAndSort(imageCache);
         }
     });
-
     // The rest of the event listeners remain unchanged
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
@@ -251,6 +243,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
+       
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
      
@@ -273,7 +266,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
-                
+             
                 await updateAllCardAvailabilityIcons();
             }
         },
@@ -363,7 +356,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
-               
+              
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
@@ -407,7 +400,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
-            await ui.updateEventPlanPanel();
+            await ui.updateEventPlanSection();
             ui.updateTotalCost();
             triggerSave();
             if (container.id === 'detail-modal-overlay') {
@@ -425,7 +418,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
              const recordId = lockedItemCard.dataset.recordId;
              state.cart.lockedItems.delete(recordId);
              ui.updateCardIcon(recordId);
-             await ui.updateEventPlanPanel();
+             await ui.updateEventPlanSection();
              ui.updateTotalCost();
              triggerSave();
         } else if (removeBtn && e.target === removeBtn) {
@@ -485,7 +478,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
-         
+        
            if(e.detail?.selectedOptionIndex !== undefined) {
                  updates.selectedOptionIndex = e.detail.selectedOptionIndex;
  }
