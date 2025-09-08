@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;" />
+    <link rel="icon" href="data:;"
+ />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -13,101 +14,101 @@
     <style>
         body {
             padding-bottom: 150px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
-        }
+ }
         body.modal-open {
             overflow: hidden;
-        }
+ }
         #sticky-header {
             position: sticky;
-            top: 0;
+ top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+ }
         #header-toolbar {
             display: flex;
-            flex-wrap: wrap;
+ flex-wrap: wrap;
             align-items: center;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
             margin: 0 auto;
-        }
+ }
         #header-title {
             font-size: 1.5em;
-            font-weight: bold;
+ font-weight: bold;
             margin: 0;
         }
         .toolbar-group {
             display: flex;
-            flex-direction: column;
+ flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-            color: #666;
+ color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+ border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
             width: 100%;
             box-sizing: border-box;
-        }
+ }
         .main-container {
             display: grid;
-            grid-template-columns: 300px 1fr 380px;
+ grid-template-columns: 1fr 380px;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
-        }
+ }
         @media (max-width: 1000px) {
             .main-container {
                 grid-template-columns: 1fr;
-                gap: 15px;
+ gap: 15px;
             }
             #left-sidebar, #right-sidebar {
                 max-width: 100%;
-            }
+ }
             #catalog-container {
                 grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            }
+ }
         }
         @media (max-width: 600px) {
             .main-container {
                 padding: 10px;
-            }
+ }
             #catalog-container {
                 grid-template-columns: 1fr;
-            }
+ }
             .event-card-image-container {
                 height: 150px;
-            }
+ }
         }
         #right-sidebar h3, #left-sidebar h3 {
             margin-top: 0;
-            border-bottom: 1px solid #dee2e6;
+ border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
         #filter-controls {
             background-color: #fff;
-            padding: 20px;
+ padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
             gap: 15px;
             position: relative;
-        }
+ }
         #filter-controls::after {
             content: attr(data-active-filters);
-            display: inline-block;
+ display: inline-block;
             background: #007bff;
             color: #fff;
             border-radius: 12px;
@@ -116,61 +117,61 @@
             margin-left: 10px;
             position: absolute;
             top: 15px;
-            right: 15px;
+ right: 15px;
         }
         .filter-group {
             display: flex;
-            flex-direction: column;
+ flex-direction: column;
             gap: 10px;
         }
         .filter-group label {
             font-size: 0.9em;
-            font-weight: 500;
+ font-weight: 500;
             color: #333;
         }
         .filter-btn-group {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+ grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
         .filter-btn {
             padding: 8px;
-            border: 1px solid #ccc;
+ border: 1px solid #ccc;
             border-radius: 4px;
             background-color: #f8f8f8;
             cursor: pointer;
             text-align: center;
             font-size: 0.85em;
-        }
+ }
         .filter-btn.active {
             background-color: #e7f3ff;
-            border-color: #007bff;
+ border-color: #007bff;
             font-weight: bold;
         }
         #name-filter:not(:placeholder-shown) {
             border-color: #007bff;
-            box-shadow: 0 0 5px rgba(0,123,255,0.3);
+ box-shadow: 0 0 5px rgba(0,123,255,0.3);
         }
         .flatpickr-day.available-full {
             background-color: #d4edda !important;
-            color: #155724 !important;
+ color: #155724 !important;
         }
         .flatpickr-day.available-partial {
             background-color: #fff3cd !important;
-            color: #856404 !important;
+ color: #856404 !important;
         }
         .flatpickr-day.unavailable {
             background-color: #f8d7da !important;
-            color: #721c24 !important;
+ color: #721c24 !important;
             text-decoration: line-through;
         }
         .flatpickr-calendar.inline {
             width: 100%;
-            box-shadow: none;
+ box-shadow: none;
         }
         #reset-filters-btn {
             width: 100%;
-            padding: 10px;
+ padding: 10px;
             font-size: 0.9em;
             font-weight: bold;
             border-radius: 5px;
@@ -178,87 +179,79 @@
             border: 1px solid #ccc;
             background-color: #f0f0f0;
             margin-top: 10px;
-        }
+ }
         #catalog-toolbar {
             display: flex;
-            justify-content: flex-end;
+ justify-content: flex-end;
             align-items: center;
             margin-bottom: 20px;
         }
         #catalog-toolbar select {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+ border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
         }
-        #cart-panel {
+        #event-plan-panel {
             background-color: #fff;
-            padding: 20px;
+ padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
-        }
+ }
         #cart-items-container {
             flex-grow: 1;
-        }
+ }
         #cart-footer {
             margin-top: 20px;
-            padding-top: 15px;
+ padding-top: 15px;
             border-top: 2px solid #dee2e6;
         }
         #cart-footer .total-row {
             display: flex;
-            justify-content: space-between;
+ justify-content: space-between;
             align-items: center;
             font-size: 1.4em;
             font-weight: bold;
             margin-bottom: 15px;
-        }
+ }
         #cart-footer button {
             width: 100%;
-            padding: 12px;
+ padding: 12px;
             font-size: 1em;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
             border: 1px solid #ccc;
-        }
+ }
         #cart-footer #checkout-btn {
             background-color: #28a745;
-            color: white;
+ color: white;
             border-color: #28a745;
         }
         #cart-footer #save-share-btn {
             background-color: #f0f0f0;
-            color: #333;
+ color: #333;
             margin-top: 10px;
         }
         #favorites-section { 
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            z-index: 998;
-            padding: 15px 20px; 
+            padding: 15px 0px; 
             box-sizing: border-box;
-            backdrop-filter: blur(5px);
             position: relative;
         }
         #favorites-carousel { 
             display: flex;
-            gap: 15px;
+ gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
             max-width: 1800px;
             margin: 0 auto;
             scroll-behavior: smooth;
-        }
+ }
         .carousel-nav {
             position: absolute;
-            top: 50%;
+ top: 50%;
             transform: translateY(-50%);
             background: rgba(0,0,0,0.5);
             color: #fff;
@@ -266,27 +259,29 @@
             padding: 10px;
             cursor: pointer;
             z-index: 10;
-        }
-        .carousel-nav.left { left: 0; }
-        .carousel-nav.right { right: 0; }
+ }
+        .carousel-nav.left { left: 0;
+ }
+        .carousel-nav.right { right: 0;
+ }
         .favorite-item {
             position: relative;
-            flex: 0 0 100px;
+ flex: 0 0 100px;
             height: 100px;
             border-radius: 8px;
             background-size: cover;
             background-position: center;
-        }
+ }
         .favorite-item .card-actions {
             position: absolute;
-            top: 5px;
+ top: 5px;
             right: 5px;
             display: flex;
             gap: 5px;
         }
         .favorite-item .action-btn {
             background-color: rgba(0,0,0,0.6);
-            color: white;
+ color: white;
             border: none;
             border-radius: 50%;
             width: 24px;
@@ -296,15 +291,15 @@
             cursor: pointer;
             padding: 0;
             font-weight: bold;
-        }
+ }
         #catalog-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+ grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
             position: relative;
-            border-radius: 10px;
+ border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             background-color: #fff;
             color: #333;
@@ -312,25 +307,25 @@
             cursor: pointer;
             display: flex;
             flex-direction: column;
-        }
+ }
         .event-card-image-container {
             position: relative;
-            width: 100%;
+ width: 100%;
             height: 200px;
             background-size: cover;
             background-position: center;
         }
         .event-card-actions {
             position: absolute;
-            top: 10px;
+ top: 10px;
             right: 10px;
             display: flex;
             gap: 5px;
             z-index: 10;
-        }
+ }
         .event-card-actions .action-btn {
             background-color: rgba(0,0,0,0.5);
-            color: white;
+ color: white;
             border: none;
             border-radius: 50%;
             width: 28px;
@@ -339,67 +334,67 @@
             line-height: 28px;
             text-align: center;
             cursor: pointer;
-        }
+ }
         .heart-icon {
             position: absolute;
-            top: 10px;
+ top: 10px;
             right: 50px;
             cursor: pointer;
             z-index: 10;
             display: block;
-        }
+ }
         .heart-icon svg {
             width: 28px;
-            height: 28px;
+ height: 28px;
             fill: rgba(255, 255, 255, 0.8);
             stroke: white;
             stroke-width: 1.5;
             transition: all 0.2s ease-in-out;
-        }
+ }
         .heart-icon.hearted svg {
             fill: #ff3b30;
-            stroke: #ff3b30;
+ stroke: #ff3b30;
         }
         .heart-icon.locked svg {
             fill: #34c759;
-            stroke: none;
+ stroke: none;
         }
         .heart-icon.locked {
             cursor: default;
-            pointer-events: none;
+ pointer-events: none;
         }
         .event-card-content {
             padding: 15px;
-            display: flex;
+ display: flex;
             flex-direction: column;
             flex-grow: 1;
         }
         .event-card-content h3 {
             margin: 0;
-            font-size: 1.2em;
+ font-size: 1.2em;
             color: #333;
         }
         .event-card-content .description {
             font-size: 0.9em;
-            color: #666;
+ color: #666;
             margin: 5px 0 10px 0;
         }
         .card-footer {
             padding: 15px;
-            border-top: 1px solid #eee;
+ border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
             background-color: #f8f8f8;
-        }
+ }
         .card-footer .price {
             font-weight: bold;
-            font-size: 1.1em;
+ font-size: 1.1em;
             color: #28a745;
         }
         .card-action-btn {
             padding: 8px 16px;
-            font-weight: bold;
+ font-weight: bold;
             background-color: #007bff;
             color: white;
             border: none;
@@ -407,16 +402,16 @@
             cursor: pointer;
             white-space: nowrap;
             position: relative;
-        }
+ }
         .card-action-btn:disabled {
             background-color: #5a6268;
-            cursor: not-allowed;
+ cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .card-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-            position: absolute;
+ position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -425,104 +420,104 @@
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-            white-space: nowrap;
+ white-space: nowrap;
             z-index: 10;
         }
         .parent-link {
             font-size: 0.8em;
-            margin: 0 0 5px 0;
+ margin: 0 0 5px 0;
             font-weight: 500;
             color: #6c757d;
             cursor: pointer;
-        }
+ }
         .locked-item-card {
             display: flex;
-            gap: 15px;
+ gap: 15px;
             align-items: flex-start;
             padding: 15px 0;
             border-bottom: 1px solid #e9ecef;
-        }
+ }
         .locked-item-card:last-child {
             border-bottom: none;
-            padding-bottom: 5px;
+ padding-bottom: 5px;
         }
         .locked-item-card:first-child {
             padding-top: 5px;
-        }
+ }
         .locked-item-thumbnail {
             width: 60px;
-            height: 60px;
+ height: 60px;
             object-fit: cover;
             border-radius: 4px;
             flex-shrink: 0;
         }
         .locked-item-details {
             flex-grow: 1;
-            min-width: 0;
+ min-width: 0;
         }
         .locked-item-details p {
             margin: 0 0 5px 0;
-            font-size: 0.9em;
+ font-size: 0.9em;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .locked-item-name {
             font-weight: bold;
-        }
+ }
         .locked-item-option, .locked-item-note {
             font-size: 0.8em;
-            color: #6c757d;
+ color: #6c757d;
         }
         .locked-item-pricing {
             font-size: 0.85em !important;
-        }
+ }
         .locked-item-actions {
             display: flex;
-            align-items: center;
+ align-items: center;
             gap: 5px;
         }
         .locked-item-actions .edit-btn {
             font-size: 0.8em;
-            padding: 4px 8px;
+ padding: 4px 8px;
             background: #f0f0f0;
             border: 1px solid #ccc;
             border-radius: 3px;
             cursor: pointer;
-        }
+ }
         .locked-item-actions .edit-btn:hover {
             background-color: #e0e0e0;
-        }
+ }
         .remove-locked-item-btn {
             background: none;
-            border: none;
+ border: none;
             color: #999;
             font-size: 1.5em;
             line-height: 1;
             padding: 0 5px;
             cursor: pointer;
-        }
+ }
         .modal-overlay {
             display: none;
-            opacity: 0;
+ opacity: 0;
             transition: opacity 0.3s ease;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
+ background-color: rgba(0, 0, 0, 0.6);
             z-index: 1000;
             justify-content: center;
             align-items: center;
-        }
+ }
         .modal-overlay.active {
             display: flex;
-            opacity: 1;
+ opacity: 1;
         }
         .modal-content {
             background: #fff;
-            border-radius: 12px;
+ border-radius: 12px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 1100px;
@@ -530,25 +525,25 @@
             max-height: 700px;
             display: flex;
             overflow: hidden;
-            position: relative;
+ position: relative;
             color: #333;
             transform: scale(0.8);
             transition: transform 0.3s ease, opacity 0.3s ease;
-        }
+ }
         .modal-overlay.active .modal-content {
             transform: scale(1);
-            opacity: 1;
+ opacity: 1;
         }
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-                height: 85vh;
+ height: 85vh;
                 max-height: 600px;
             }
         }
         .modal-close-btn {
             position: absolute;
-            top: 15px;
+ top: 15px;
             right: 15px;
             background: none;
             border: none;
@@ -556,101 +551,101 @@
             cursor: pointer;
             color: #999;
             z-index: 1010;
-        }
+ }
         .modal-main-column {
             flex: 1;
-            display: flex;
+ display: flex;
             flex-direction: column;
             min-width: 0;
         }
         #modal-main-image {
             flex-grow: 1;
-            background-size: cover;
+ background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
         }
         #modal-thumbnail-strip {
             display: flex;
-            gap: 5px;
+ gap: 5px;
             padding: 10px;
             background-color: #f8f9fa;
             border-top: 1px solid #eee;
             overflow-x: auto;
-        }
+ }
         .thumbnail-img {
             width: 80px;
-            height: 60px;
+ height: 60px;
             background-size: cover;
             background-position: center;
             border-radius: 4px;
             cursor: pointer;
             border: 2px solid transparent;
             transition: border-color 0.2s;
-        }
+ }
         .thumbnail-img.active {
             border-color: #007bff;
-        }
+ }
         .modal-sidebar-column {
             flex: 1;
-            padding: 30px;
+ padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             min-width: 0;
-        }
+ }
         #modal-header-actions {
             display: flex;
-            justify-content: flex-end;
+ justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
         }
         #modal-breadcrumbs {
             font-size: 0.9em;
-            color: #6c757d;
+ color: #6c757d;
             margin-bottom: 8px;
         }
         #modal-breadcrumbs a {
             color: #007bff;
-            text-decoration: none;
+ text-decoration: none;
         }
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
-        }
+ }
         #modal-item-name { 
             margin-top: 0;
-        }
+ }
         #modal-item-price { 
-            font-size: 1.5em; 
-            font-weight: bold; 
+            font-size: 1.5em;
+ font-weight: bold; 
             margin: 10px 0;
         }
         #modal-options-container { 
-            margin: 20px 0; 
-            display: flex; 
+            margin: 20px 0;
+ display: flex; 
             flex-wrap: wrap; 
             gap: 10px;
         }
         .option-btn {
             padding: 8px 12px;
-            border: 1px solid #ccc;
+ border: 1px solid #ccc;
             background-color: #f8f8f8;
             border-radius: 5px;
             cursor: pointer;
-        }
+ }
         .option-btn.selected {
             border-color: #007bff;
-            background-color: #e7f3ff;
+ background-color: #e7f3ff;
         }
         #modal-quantity-selector { 
             margin: 20px 0;
-        }
+ }
         #modal-notes-container { 
             margin-bottom: 20px;
-        }
+ }
         #modal-item-note {
             width: 100%;
-            height: 80px;
+ height: 80px;
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -658,15 +653,15 @@
             font-size: 0.9em;
             resize: vertical;
             box-sizing: border-box;
-        }
+ }
         #modal-actions-container {
             margin-top: auto;
-            padding-top: 20px;
+ padding-top: 20px;
             border-top: 1px solid #eee;
         }
         .primary-action-btn {
             width: 100%;
-            padding: 15px;
+ padding: 15px;
             font-size: 1.1em;
             font-weight: bold;
             color: #fff;
@@ -675,20 +670,20 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.2s;
-            position: relative;
+ position: relative;
         }
         .primary-action-btn:hover {
             background-color: #218838;
-        }
+ }
         .primary-action-btn:disabled {
             background-color: #5a6268;
-            cursor: not-allowed;
+ cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .primary-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-            position: absolute;
+ position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -697,66 +692,66 @@
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-            white-space: nowrap;
+ white-space: nowrap;
             z-index: 10;
         }
         .checkout-modal-content {
             background: #fff;
-            border-radius: 8px;
+ border-radius: 8px;
             padding: 30px;
             width: 100%;
             max-width: 500px;
             position: relative;
             color: #333;
             transform: scale(0.8);
-            transition: transform 0.3s ease, opacity 0.3s ease;
+ transition: transform 0.3s ease, opacity 0.3s ease;
         }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
-            opacity: 1;
+ opacity: 1;
         }
         @media (max-width: 600px) {
             .checkout-modal-content {
                 width: 95%;
-                padding: 20px;
+ padding: 20px;
             }
         }
         #checkout-summary-list {
             list-style: none;
-            padding: 0;
+ padding: 0;
             margin: 0 0 20px 0;
         }
         #checkout-summary-list li {
             display: flex;
-            justify-content: space-between;
+ justify-content: space-between;
             padding: 10px 0;
             border-bottom: 1px solid #eee;
         }
         .checkout-total {
             display: flex;
-            justify-content: space-between;
+ justify-content: space-between;
             font-size: 1.2em;
             margin: 20px 0;
         }
         #payment-form .form-row {
             margin-bottom: 15px;
-        }
+ }
         #payment-form label {
             display: block;
-            margin-bottom: 5px;
+ margin-bottom: 5px;
             font-size: 0.9em;
             color: #666;
         }
         #payment-form input, #card-element {
             width: 100%;
-            padding: 10px;
+ padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
-        }
+ }
         #card-errors {
             color: #fa755a;
-            font-size: 0.9em;
+ font-size: 0.9em;
             margin-top: 5px;
         }
     </style>
@@ -766,84 +761,21 @@
     <div id="sticky-header">
         <div id="header-toolbar">
             <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
+            <div class="toolbar-group">
+                <label for="category-filter-dropdown">Category</label>
+                <select id="category-filter-dropdown">
+                    <option value="all">All Categories</option>
+                    </select>
+            </div>
+            <div id="subcategory-filters" class="filter-btn-group">
+                </div>
+            <div id="date-filter-group" class="toolbar-group">
+                <label for="date-filter">Date & Time</label>
+                <input type="text" id="date-filter" placeholder="Select date and time range">
+            </div>
         </div>
     </div>
     <div class="main-container">
-        <div id="left-sidebar">
-            <div id="filter-controls" data-active-filters="0">
-                <h3>Filters</h3>
-                <div id="category-filters" class="filter-group">
-                    <label>Category</label>
-                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr;">
-                        <button class="filter-btn category-filter-btn" data-filter="Activities">Activities</button>
-                        <button class="filter-btn category-filter-btn" data-filter="Venues">Venues</button>
-                        <button class="filter-btn category-filter-btn" data-filter="Food & Drink">Food & Drink</button>
-                        <button class="filter-btn category-filter-btn" data-filter="Extras">Extras</button>
-                    </div>
-                </div>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 10px 0;">
-                <div class="filter-group">
-                    <label for="name-filter">Search by Name</label>
-                    <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
-                </div>
-                <div id="date-filter-group" class="filter-group">
-                    <label for="date-filter">Date & Time</label>
-                    <input type="text" id="date-filter" placeholder="Select date and time range">
-                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
-                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
-                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
-                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <label for="headcount-filter">Headcount</label>
-                    <select id="headcount-filter">
-                        <option value="any">Any Size</option>
-                        <option value="1-10">1-10</option>
-                        <option value="11-25">11-25</option>
-                        <option value="26-50">26-50</option>
-                        <option value="51-100">51-100</option>
-                        <option value="101-250">101-250</option>
-                        <option value="250-plus">250+</option>
-                        <option value="custom">Custom...</option>
-                    </select>
-                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
-                </div>
-                <div class="filter-group">
-                    <label for="location-filter">Location</label>
-                    <select id="location-filter">
-                        <option value="any">Any Location</option>
-                        <option value="sf">San Francisco</option>
-                        <option value="oakland">Oakland</option>
-                        <option value="peninsula">Peninsula</option>
-                        <option value="south-bay">South Bay</option>
-                        <option value="north-bay">North Bay</option>
-                        <option value="east-bay">East Bay</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="budget-filter">Budget</label>
-                    <select id="budget-filter">
-                        <option value="any">Any Budget</option>
-                        <option value="budget-friendly">Budget-Friendly</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="executive">Executive</option>
-                        <option value="luxury">Luxury</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="status-filter">Status</label>
-                    <select id="status-filter">
-                        <option value="Available">Available</option>
-                        <option value="all">Show All</option>
-                        <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
-                    </select>
-                </div>
-                <button id="reset-filters-btn">Reset All Filters</button>
-            </div>
-        </div>
         <div id="catalog-area">
             <div id="catalog-toolbar">
                 <select id="sort-by">
@@ -855,8 +787,14 @@
             <div id="catalog-container"></div>
         </div>
         <div id="right-sidebar">
-            <div id="cart-panel">
-                <h3>Event Plan</h3>
+            <div id="event-plan-panel">
+                <h3>Your Event Plan</h3>
+                <div id="favorites-section">
+                    <h4>Your Ideas</h4>
+                    <button class="carousel-nav left">◄</button>
+                    <div id="favorites-carousel"></div>
+                    <button class="carousel-nav right">►</button>
+                </div>
                 <div class="toolbar-group">
                     <label for="header-event-name">Event Name</label>
                     <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off">
@@ -865,9 +803,11 @@
                     <label for="header-goals">Goals / Notes</label>
                     <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
                 </div>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <hr style="border: none;
+border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="cart-items-container">
-                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                    <p style="font-size: 0.9em;
+color: #6c757d;">No items locked in yet.</p>
                 </div>
                 <div id="cart-footer">
                     <div class="total-row">
@@ -933,12 +873,6 @@
                 <button class="primary-action-btn" type="submit">Pay Now</button>
             </form>
         </div>
-    </div>
-    <div id="favorites-section" style="display: none;">
-        <h4>Favorites</h4>
-        <button class="carousel-nav left">◄</button>
-        <div id="favorites-carousel"></div>
-        <button class="carousel-nav right">►</button>
     </div>
     <script type="module" src="main.js"></script>
 </body>
