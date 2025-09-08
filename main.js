@@ -152,7 +152,8 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
-    mainDatePicker = initializeEventListeners(imageCache);
+    // Fix: Pass flatpickr to the event listeners
+    mainDatePicker = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
     if (sessionId) {
         try {
