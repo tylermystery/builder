@@ -40,12 +40,14 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
+             
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
+        
             if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
