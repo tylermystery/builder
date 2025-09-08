@@ -198,16 +198,16 @@ export function initializeEventListeners(imageCache) {
         mode: "range",
         enableTime: true,
         dateFormat: "M j, Y h:i K",
-        onClose: (selectedDates) => {
+        onClose: async (selectedDates) => {
             if (selectedDates.length === 2) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
-    
-                updateAllCardAvailabilityIcons();
+                // We'll call the availability icon update from here
+                await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
-                updateAllCardAvailabilityIcons();
+                await updateAllCardAvailabilityIcons();
             }
         },
     });
