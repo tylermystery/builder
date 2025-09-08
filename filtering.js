@@ -22,12 +22,12 @@ export function applyFiltersAndSort(imageCache) {
 
     if (selectedCategory !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
-            const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(tag => tag.trim().toLowerCase()) || [];
+            const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim().toLowerCase()) || [];
             return categories.includes(selectedCategory);
         });
         if (activeSubcategories.length > 0) {
             recordsToDisplay = recordsToDisplay.filter(record => {
-                const subcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(tag => tag.trim().toLowerCase()) || [];
+                const subcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(s => s.trim().toLowerCase()) || [];
                 return activeSubcategories.some(subcat => subcategories.includes(subcat));
             });
         }
