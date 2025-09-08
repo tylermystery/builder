@@ -25,10 +25,13 @@ export function getDayStatus(day, busyTimes, record) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const leadTimeDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
+    
+    // --- FIX: Check against lead time before checking busy periods
     if (day < leadTimeDate) {
         log('Availability', `Day ${day.toDateString()} unavailable due to lead time: ${leadTime} days`);
         return AVAILABILITY_STATUS.NONE;
     }
+    // --- END OF FIX
 
     if (!busyTimes || busyTimes.length === 0) {
         log('Availability', `Day ${day.toDateString()} fully available (no busy times or iCal)`);
