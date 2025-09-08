@@ -5,7 +5,8 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
-import flatpickr from "flatpickr"; // FIX: Import the library directly
+
+// Removed: import flatpickr from "flatpickr";
 
 let stripe, elements, cardElement, clientSecret;
 
@@ -174,7 +175,7 @@ export async function showDetailModal(record) {
 
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
-    const calendarInstance = flatpickr(modalCalendarContainer, {
+    const calendarInstance = window.flatpickr(modalCalendarContainer, { // FIX: Use window.flatpickr
         inline: true,
         showMonths: 1,
         disable: [(date) => {
@@ -209,8 +210,7 @@ export async function showDetailModal(record) {
         },
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
-                // Fix: Access the global flatpickr object correctly
-                const mainDatePicker = window.flatpickr.getInstance(document.getElementById('date-filter'));
+                const mainDatePicker = window.flatpickr.getInstance(document.getElementById('date-filter')); // FIX: Use window.flatpickr
                 if (mainDatePicker) {
                     mainDatePicker.setDate(selectedDates, true);
                 }
@@ -231,8 +231,8 @@ export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
-        setTimeout(() => { 
-            modalOverlay.style.display = 'none'; 
+        setTimeout(() => {
+            modalOverlay.style.display = 'none';
             resetModalState();
             document.querySelector('#header-title').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
@@ -281,7 +281,7 @@ export async function showCheckoutModal() {
 
         clientSecret = data.clientSecret;
 
-        stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+        stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY); // FIX: Use window.Stripe
         elements = stripe.elements({ clientSecret });
         const cardElementContainer = document.getElementById('card-element');
         if(cardElementContainer) cardElementContainer.innerHTML = '';
@@ -290,8 +290,8 @@ export async function showCheckoutModal() {
         cardElement.mount('#card-element');
         
         checkoutModalOverlay.classList.add('active');
-        setTimeout(() => { 
-            checkoutModalOverlay.style.display = 'flex'; 
+        setTimeout(() => {
+            checkoutModalOverlay.style.display = 'flex';
             checkoutCloseBtn.focus();
             log('Modal', 'Checkout modal shown, focused close button.');
         }, 0);
@@ -311,8 +311,8 @@ export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
         checkoutModalOverlay.classList.remove('active');
-        setTimeout(() => { 
-            checkoutModalOverlay.style.display = 'none'; 
+        setTimeout(() => {
+            checkoutModalOverlay.style.display = 'none';
             resetModalState();
             document.querySelector('#header-title').focus();
             log('Modal', 'Checkout modal hidden, focused header title.');
