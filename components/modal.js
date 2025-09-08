@@ -206,6 +206,15 @@ export async function showDetailModal(record) {
                     theme: 'light',
                     allowHTML: true,
                 });
+            },
+            onClose: (selectedDates) => {
+                if (selectedDates.length > 0) {
+                    const mainDatePicker = flatpickr.getInstance(document.getElementById('date-filter'));
+                    if (mainDatePicker && mainDatePicker.selectedDates.length === 2) {
+                        const newRange = [selectedDates[0], mainDatePicker.selectedDates[1]];
+                        mainDatePicker.setDate(newRange, true);
+                    }
+                }
             }
         });
     }
@@ -305,6 +314,7 @@ export function hideCheckoutModal() {
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => { 
             checkoutModalOverlay.style.display = 'none'; 
+            resetModalState();
             document.querySelector('#header-title').focus();
             log('Modal', 'Checkout modal hidden, focused header title.');
         }, 300);
