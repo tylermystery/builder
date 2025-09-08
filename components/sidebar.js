@@ -41,9 +41,11 @@ async function createLockedInItemElement(record, itemInfo) {
         <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
+            ${optionName ?
+`<p class="locked-item-option">${optionName}</p>` : ''}
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+            ${itemInfo.note ?
+`<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="edit-btn">Edit</button>
@@ -53,20 +55,20 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
-export async function updateEventPlanPanel() {
+export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
     container.innerHTML = '';
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
-        return;
+    return;
     }
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
+    if (record) {
             const itemElement = await createLockedInItemElement(record, itemInfo);
-            container.appendChild(itemElement);
+    container.appendChild(itemElement);
         }
     }
 }
@@ -76,23 +78,22 @@ export async function updateFavoritesCarousel() {
     const favoritesSection = document.getElementById('favorites-section');
     const favoritesCarousel = document.getElementById('favorites-carousel');
     if (!favoritesSection || !favoritesCarousel) return;
-
     if (state.cart.items.size === 0) {
         favoritesSection.style.display = 'none';
         return;
     }
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
-    const imageCache = new Map(); 
+    const imageCache = new Map();
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
+    if (record) {
             try {
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
-                if (card) favoritesCarousel.appendChild(card);
+    if (card) favoritesCarousel.appendChild(card);
             } catch (error) {
                 console.error(`Failed to create favorite card for ${record.fields.Name}:`, error);
-            }
+    }
         }
     }
     updateTotalCost();
