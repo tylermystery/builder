@@ -173,58 +173,53 @@ export async function showDetailModal(record) {
 
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
-    if (!record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
-        modalCalendarContainer.innerHTML = '<p>No availability data available.</p>';
-    } else {
-        const calendarInstance = flatpickr(modalCalendarContainer, {
-            inline: true,
-            showMonths: 1,
-            // The disable array now includes our lead time logic
-            disable: [(date) => {
-                const leadTimeDays = record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0;
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const leadTimeCutoff = new Date(today.getTime() + leadTimeDays * 24 * 60 * 60 * 1000);
-                return date < leadTimeCutoff;
-            }],
-            onDayCreate: function(dObj, dStr, fp, dayElem) {
-                const day = dayElem.dateObj;
-                const status = getDayStatus(day, busyTimes, record);
-                let className = '';
-                let tooltip = 'Fully Available';
-                
-                if (status === AVAILABILITY_STATUS.FULL) {
-                    className = 'available-full';
-                } else if (status === AVAILABILITY_STATUS.PARTIAL) {
-                    className = 'available-partial';
-                    tooltip = `Partially Available\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                } else {
-                    className = 'unavailable';
-                    tooltip = 'Unavailable';
-                }
-                
-                dayElem.classList.add(className);
-                dayElem.setAttribute('data-tippy-content', tooltip);
-            },
-            onReady: function() {
-                tippy('.flatpickr-day', {
-                    content: reference => reference.getAttribute('data-tippy-content'),
-                    placement: 'top',
-                    theme: 'light',
-                    allowHTML: true,
-                });
-            },
-            // This event handler updates the main header calendar
-            onChange: (selectedDates) => {
-                if (selectedDates.length > 0) {
-                    const mainDatePicker = flatpickr.getInstance(document.getElementById('date-filter'));
-                    if (mainDatePicker) {
-                        mainDatePicker.setDate(selectedDates, true);
-                    }
+    
+    const calendarInstance = flatpickr(modalCalendarContainer, {
+        inline: true,
+        showMonths: 1,
+        disable: [(date) => {
+            // FIX: This logic is now handled in getDayStatus. Let's simplify and make it more reliable.
+            const status = getDayStatus(date, busyTimes, record);
+            return status.status === AVAILABILITY_STATUS.NONE;
+        }],
+        onDayCreate: function(dObj, dStr, fp, dayElem) {
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, busyTimes, record);
+            let className = '';
+            let tooltip = status.reason; // Use the specific reason from getDayStatus
+            
+            if (status.status === AVAILABILITY_STATUS.FULL) {
+                className = 'available-full';
+            } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
+                className = 'available-partial';
+                tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+            } else {
+                className = 'unavailable';
+                // tooltip is already set to the specific reason
+            }
+            
+            dayElem.classList.add(className);
+            dayElem.setAttribute('data-tippy-content', tooltip);
+        },
+        onReady: function() {
+            tippy('.flatpickr-day', {
+                content: reference => reference.getAttribute('data-tippy-content'),
+                placement: 'top',
+                theme: 'light',
+                allowHTML: true,
+            });
+        },
+        // This event handler updates the main header calendar
+        onChange: (selectedDates) => {
+            if (selectedDates.length > 0) {
+                const mainDatePicker = flatpickr.getInstance(document.getElementById('date-filter'));
+                if (mainDatePicker) {
+                    mainDatePicker.setDate(selectedDates, true);
                 }
             }
-        });
-    }
+        }
+    });
+    
 
     modalOverlay.classList.add('active');
     setTimeout(() => { 
