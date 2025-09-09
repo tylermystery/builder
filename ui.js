@@ -9,6 +9,8 @@ import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
+import { getDayStatus, getCombinedPlanStatus } from './availability.js';
+import * as api from './api.js';
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
@@ -150,4 +152,138 @@ export function updateLockedItemState(recordId, updates) {
     const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
+}
+
+export function updateHeader() {
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.title = eventName || 'Event Builder';
+    
+    // Updated to handle the new editable title structure
+    const eventNameInput = document.getElementById('header-event-name');
+    if (eventNameInput) {
+        eventNameInput.value = eventName || 'My Awesome Event';
+    }
+    
+    const goalsInput = document.getElementById('header-goals');
+    if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+}
+
+export async function updateEventPlanDateDisplay() {
+    log('UI', 'Updating event plan date display.');
+    const dateInput = document.getElementById('event-date-picker');
+    if (!dateInput) return;
+
+    const selectedDates = dateInput._flatpickr.selectedDates;
+    const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
+
+    if (selectedDates.length === 0 || lockedItems.length === 0) {
+        dateInput.value = 'Select a date';
+        dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
+        return;
+    }
+
+    const selectedDate = selectedDates[0];
+    const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
+    
+    dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
+    
+    switch (overallStatus) {
+        case 'full':
+            dateInput.classList.add('available-full');
+            break;
+        case 'partial':
+            dateInput.classList.add('available-partial');
+            break;
+        case 'none':
+            dateInput.classList.add('unavailable');
+            break;
+    }
+}
+
+export async function updateLockedItemStatusIcons() {
+    log('UI', 'Updating locked-in item status icons.');
+    const eventPlanDate = document.getElementById('event-date-picker');
+    const selectedDate = eventPlanDate?._flatpickr?.selectedDates?.[0];
+
+    if (!selectedDate) {
+        document.querySelectorAll('.locked-item-status-icon').forEach(icon => {
+            icon.textContent = '';
+        });
+        return;
+    }
+
+    const lockedItems = document.querySelectorAll('.locked-item-card');
+    for (const item of lockedItems) {
+        const recordId = item.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const dayStatus = await getDayStatus(selectedDate, busyTimes, record);
+        
+        let statusIconEl = item.querySelector('.locked-item-status-icon');
+        if (!statusIconEl) {
+            statusIconEl = document.createElement('span');
+            statusIconEl.className = 'locked-item-status-icon';
+            item.querySelector('.locked-item-actions').prepend(statusIconEl);
+        }
+        
+        statusIconEl.classList.remove('available-full', 'available-partial', 'unavailable');
+        switch (dayStatus.status) {
+            case 'full':
+                statusIconEl.textContent = '✅';
+                statusIconEl.classList.add('available-full');
+                break;
+            case 'partial':
+                statusIconEl.textContent = '🟠';
+                statusIconEl.classList.add('available-partial');
+                break;
+            case 'none':
+                statusIconEl.textContent = '❌';
+                statusIconEl.classList.add('unavailable');
+                break;
+        }
+    }
+}
+
+export function updateTotalCost() {
+    const totalCostEl = document.getElementById('total-cost');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    const saveShareBtn = document.getElementById('save-share-btn');
+    if (!totalCostEl) return;
+
+    let total = 0;
+    const allItems = state.cart.lockedItems;
+    allItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) return;
+        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        if (isNaN(unitPrice)) return;
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPES.PER_GUEST] || 'default';
+ 
+        let itemCost;
+ 
+        if (pricingType === 'per guest') {
+            itemCost = unitPrice * effectiveQuantity;
+        } else {
+            itemCost = unitPrice;
+        }
+        total += itemCost;
+    });
+    totalCostEl.textContent = `$${total.toFixed(2)}`;
+
+    const isPlanEmpty = total === 0;
+    if (checkoutBtn) {
+        checkoutBtn.disabled = isPlanEmpty;
+    }
+    if (saveShareBtn) {
+        if (isPlanEmpty) {
+            saveShareBtn.disabled = true;
+        } else if (state.ui.saveState === 'SAVED') {
+            saveShareBtn.disabled = false;
+        }
+    }
 }
