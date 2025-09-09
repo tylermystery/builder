@@ -9,13 +9,11 @@ import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
-
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary };
-
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
@@ -43,14 +41,12 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-             
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-        
             if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
