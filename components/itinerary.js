@@ -5,6 +5,8 @@ import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { debounce } from '../utils.js';
 // NOTE: We no longer import Sortable. It is available globally.
+import { CONSTANTS } from '../config.js';
+import { updateAllCardAvailabilityIcons } from '../events.js'; // Assuming this is exposed
 
 let itineraryModalOverlay;
 let itineraryLockedItemsList;
@@ -18,7 +20,7 @@ function createItineraryItemCard(record, itemInfo, isLocked) {
 
     const thumbnail = document.createElement('img');
     thumbnail.className = 'locked-item-thumbnail';
-    // Use an existing function to fetch images
+    // Use an existing function to fetch images, but cache them
     api.fetchImagesForRecord(record, state.records.all, new Map()).then(images => {
         thumbnail.src = images.imageUrls?.[0] || 'https://res.cloudinary.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg';
     });
@@ -71,7 +73,7 @@ function createItineraryItemCard(record, itemInfo, isLocked) {
     return itemCard;
 }
 
-async function renderItinerary() {
+export async function renderItinerary() {
     log('Itinerary', 'Rendering itinerary view with live data.');
     itineraryLockedItemsList.innerHTML = '';
     itineraryFavoritedItemsList.innerHTML = '';
@@ -105,6 +107,20 @@ async function renderItinerary() {
 
     // Render favorited items
     await renderList(itineraryFavoritedItemsList, state.cart.items, false);
+}
+
+// NEW: Function to render the header details
+export function renderItineraryHeader() {
+    log('Itinerary', 'Rendering itinerary modal header.');
+    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    
+    const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (savedDate && savedDate.length === 2) {
+        itineraryDatePicker.setDate([savedDate[0], savedDate[1]], false);
+    } else {
+        itineraryDatePicker.clear();
+    }
 }
 
 function initializeSortable() {
@@ -142,8 +158,7 @@ function initializeSortable() {
             }
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
-            // Assuming triggerSave is exposed or imported
-            // triggerSave();
+            // triggerSave(); // We assume this function is available from events.js
         },
     });
 
@@ -169,8 +184,7 @@ function initializeSortable() {
                 ui.updateEventPlanSection();
                 ui.updateFavoritesCarousel();
                 ui.updateCardIcon(itemRecordId);
-                // Assuming triggerSave is exposed or imported
-                // triggerSave();
+                // triggerSave(); // We assume this function is available from events.js
             }
         },
     });
@@ -192,6 +206,35 @@ function initListeners() {
         // triggerSave();
     });
 
+    // Initialize Flatpickr date picker in the itinerary modal
+    itineraryDatePicker = flatpickr("#itinerary-date-picker", {
+        mode: "range",
+        enableTime: true,
+        dateFormat: "M j, Y h:i K",
+        onChange: async (selectedDates) => {
+            if (selectedDates.length > 0) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                // Sync with the main header calendar
+                const mainDatePickerInstance = document.getElementById('date-filter')._flatpickr;
+                if (mainDatePickerInstance) {
+                    mainDatePickerInstance.setDate(selectedDates, true);
+                }
+                // Update availability in the itinerary view
+                await renderItinerary();
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                // Sync with the main header calendar
+                const mainDatePickerInstance = document.getElementById('date-filter')._flatpickr;
+                if (mainDatePickerInstance) {
+                    mainDatePickerInstance.clear();
+                }
+                // Update availability in the itinerary view
+                await renderItinerary();
+            }
+            // triggerSave(); // Assuming this function is available from events.js
+        },
+    });
+    
     // Event listener for item notes and quantity
     document.getElementById('itinerary-modal-overlay').addEventListener('change', (e) => {
         const target = e.target;
@@ -257,6 +300,7 @@ function initListeners() {
 export function showItineraryModal() {
     itineraryModalOverlay.classList.add('active');
     itineraryModalOverlay.style.display = 'flex';
+    renderItineraryHeader();
     renderItinerary();
     document.body.classList.add('modal-open');
     log('Itinerary', 'Itinerary modal shown.');
