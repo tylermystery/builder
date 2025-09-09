@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js'; // This is the fix
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
@@ -64,15 +64,13 @@ async function createLockedInItemElement(record, itemInfo) {
         <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ?
-`<p class="locked-item-option">${optionName}</p>` : ''}
+            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ?
-`<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="edit-btn">Edit</button>
-            <button class="remove-locked-item-btn" title="Remove from Plan">×</button>
+            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
     return itemElement;
@@ -150,6 +148,7 @@ export function updateTotalCost() {
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
  
        let itemCost;
+ 
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
