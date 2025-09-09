@@ -1,8 +1,11 @@
 // FILE: events.js
 /*
- * Version: 4.8.7
- * Last Modified: 2025-09-08
+ * Version: 4.8.8
+ * Last Modified: 2025-09-09
  * Changelog:
+ * v4.8.8 - 2025-09-09
+ * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
+ * - Added functionality for carousel navigation buttons.
  * v4.8.7 - 2025-09-08
  * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
  * v4.8.6 - 2025-09-08
@@ -33,6 +36,7 @@ const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
+
 function getCurrentCategoryRecord() {
     const selectedCategoryName = categoryFilterDropdown.value;
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
@@ -63,12 +67,6 @@ function updateSubcategoryButtons() {
     });
 }
 
-// NOTE: These functions have been moved to ui.js
-// export function getItemState(recordId) { ... }
-// export function updateItemState(recordId, updates) { ... }
-// export function updateLockedItemState(recordId, updates) { ... }
-
-
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
@@ -89,16 +87,18 @@ export function updateSaveShareButton() {
         case 'MODIFIED':
             saveShareBtn.textContent = 'Changes pending...';
             saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes automatically...';
             break;
         case 'SAVING':
             saveShareBtn.textContent = '⚙️ Saving...';
             saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes...';
             break;
         case 'SAVED':
             saveShareBtn.textContent = '🔗 Copy Link';
             const hasContent = state.cart.items.size > 0 || state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0;
             saveShareBtn.disabled = !hasContent;
-            saveShareBtn.dataset.tooltip = !hasContent ? 'Add items or details to enable sharing' : '';
+            saveShareBtn.dataset.tooltip = !hasContent ? 'Add items or details to enable sharing' : 'Copy a shareable link to this plan';
             break;
     }
 }
@@ -189,30 +189,41 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
+
     // --- UPDATED: Logic for Store and Categories ---
-    // Find the primary store record
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
         document.getElementById('store-display').textContent = currentStore.fields.Name;
-        // Populate the category dropdown from the store's options
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         categories.forEach(cat => {
             const option = document.createElement('option');
-            // FIX: Set value to the original, case-sensitive name
             option.value = cat.name;
             option.textContent = cat.name;
             categoryFilterDropdown.appendChild(option);
         });
-        // NEW: Set the default category to the first one in the list
         if (categories.length > 0) {
             categoryFilterDropdown.value = categories[0].name;
         }
     }
 
-    // Call update functions for initial load
     updateSubcategoryButtons();
     applyFiltersAndSort(imageCache);
     // --- END OF NEW LOGIC
+
+    // NEW: Add carousel navigation listeners
+    const favoritesCarousel = document.getElementById('favorites-carousel');
+    const scrollLeftBtn = document.querySelector('.carousel-nav.left');
+    const scrollRightBtn = document.querySelector('.carousel-nav.right');
+    if (scrollLeftBtn && favoritesCarousel) {
+        scrollLeftBtn.addEventListener('click', () => {
+            favoritesCarousel.scrollBy({ left: -200, behavior: 'smooth' });
+        });
+    }
+    if (scrollRightBtn && favoritesCarousel) {
+        scrollRightBtn.addEventListener('click', () => {
+            favoritesCarousel.scrollBy({ left: 200, behavior: 'smooth' });
+        });
+    }
 
     safeAddEventListener('category-filter-dropdown', 'change', () => {
         updateSubcategoryButtons();
@@ -239,7 +250,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         if (currentStore) {
             const defaultCategory = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[0]?.name;
             if (defaultCategory) {
-                // FIX: Use case-sensitive name for reset
                 document.getElementById('category-filter-dropdown').value = defaultCategory;
                 updateSubcategoryButtons();
             }
@@ -334,6 +344,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.hideCheckoutModal();
         }
     });
+
+    // NEW: Add a dedicated listener for the checkout close button
+    safeAddEventListener('checkout-close-btn', 'click', ui.hideCheckoutModal);
+
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
             e.preventDefault();
@@ -363,24 +377,19 @@ export function initializeEventListeners(imageCache, flatpickr) {
             });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
-        } else if (closeCheckoutBtn) {
-            ui.hideCheckoutModal();
         } else if (heartIcon || heartIconModal) {
             e.stopPropagation();
             const recordId = (heartIcon || heartIconModal).closest('[data-record-id]').dataset.recordId;
             const isLocked = state.cart.lockedItems.has(recordId);
             if (isLocked) {
-                // If it's a locked item, clicking the checkmark demotes it back to favorites
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
                 state.cart.items.set(recordId, itemInfo);
                 await ui.updateEventPlanSection();
             } else {
-                // Otherwise, it's a regular favorite/un-favorite action
                 if (state.cart.items.has(recordId)) {
                     state.cart.items.delete(recordId);
                 } else {
-                    // FIX: This needs to use the updated function location
                     ui.updateItemState(recordId, {});
                 }
             }
@@ -404,10 +413,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
                     note: noteInput ? noteInput.value.trim() : ''
                 };
-                // FIX: This needs to use the updated function location
                 ui.updateLockedItemState(recordId, itemInfo);
             } else {
-                // FIX: This needs to use the updated function location
                 itemInfo = ui.getItemState(recordId);
                 state.cart.lockedItems.set(recordId, itemInfo);
                 state.cart.items.delete(recordId);
@@ -469,14 +476,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (parentRecord) ui.showDetailModal(parentRecord);
         } else if (card) {
             const interactiveElements = e.target.closest('.card-action-btn, .quantity-selector, .parent-link, .availability-btn');
-            // FIX: Add logic to open modal when a non-interactive element of the card is clicked.
             if (!interactiveElements) {
                 const recordId = card.dataset.recordId;
                 const record = state.records.all.find(r => r.id === recordId);
                 if (record) ui.showDetailModal(record);
             }
         } else if (favoriteItem) {
-            // FIX: Add logic to open modal when a favorited item card is clicked.
             const interactiveElements = e.target.closest('.add-to-plan-btn, .remove-btn');
             if (!interactiveElements) {
                 const recordId = favoriteItem.dataset.recordId;
@@ -507,10 +512,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
-                // FIX: This needs to use the updated function location
                 ui.updateLockedItemState(recordId, updates);
             } else {
-                // FIX: This needs to use the updated function location
                 ui.updateItemState(recordId, updates);
                 triggerSave();
                 debounce(ui.updateFavoritesCarousel, 300)();
