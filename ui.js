@@ -84,6 +84,7 @@ export function toggleLoading(show) {
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
+    const loadingMessage = document.getElementById('loading-message'); // NEW: Get loading message element
     if (!catalogContainer) {
         console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
@@ -91,24 +92,36 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
 
     if (!append) {
         catalogContainer.innerHTML = '';
+        if (loadingMessage) {
+            loadingMessage.style.display = 'block'; // NEW: Show loading message while rendering
+        }
     }
 
     if (recordsToRender.length === 0 && !append) {
         log('UI', "No records to render, displaying 'No items to show.'");
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
+        if (loadingMessage) {
+            loadingMessage.style.display = 'none'; // NEW: Hide loading message if no records
+        }
         return;
     }
 
+    const fragment = document.createDocumentFragment();
     const CHUNK_SIZE = 5;
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
         const cards = await Promise.all(cardPromises);
-        log('UI', `Appending a chunk of ${cards.length} card elements to the DOM.`);
         cards.forEach(card => {
-            if (card) catalogContainer.appendChild(card);
+            if (card) fragment.appendChild(card);
         });
     }
+
+    catalogContainer.appendChild(fragment);
+    if (loadingMessage) {
+        loadingMessage.style.display = 'none'; // NEW: Hide loading message after all cards are appended
+    }
+    log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
 
 let mainGetItemState;
