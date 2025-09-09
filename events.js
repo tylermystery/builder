@@ -124,7 +124,7 @@ function triggerSave() {
     }, 1500);
 }
 
-async function updateAllCardAvailabilityIcons() {
+export async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
         document.querySelectorAll('.availability-btn').forEach(icon => {
             if (icon._tippy) icon._tippy.destroy();
