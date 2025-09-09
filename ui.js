@@ -1,6 +1,6 @@
 // FILE: ui.js
 /*
- * Version: 3.0.7
+ * Version: 3.0.8
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
@@ -43,13 +43,15 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-                    if (price < minPrice) minPrice = price;
+             
+        if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price > 0) {
+        
+    if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -106,6 +108,20 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         }
         return;
     }
+
+    // FIX: Bulk fetch images before rendering cards to avoid rate limits
+    const allTags = new Set();
+    recordsToRender.forEach(record => {
+        if (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]) {
+            record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',').forEach(tag => allTags.add(tag.trim()));
+        }
+    });
+
+    const hasImagesToFetch = allTags.size > 0;
+    if (hasImagesToFetch) {
+        await api.fetchImagesByTags(Array.from(allTags), 2);
+    }
+    // END FIX
 
     const fragment = document.createDocumentFragment();
     const CHUNK_SIZE = 5;
@@ -183,10 +199,8 @@ export async function updateEventPlanDateDisplay() {
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
 
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
-    
     dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
-    
     switch (overallStatus) {
         case AVAILABILITY_STATUS.FULL:
             dateInput.classList.add('available-full');
@@ -262,7 +276,8 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() || 'default';
  
-        let itemCost;
+       
+ let itemCost;
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
