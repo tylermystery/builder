@@ -214,10 +214,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         categories.forEach(cat => {
             const option = document.createElement('option');
-            option.value = cat.name.toLowerCase();
+            // FIX: Set value and textContent to the original, case-sensitive name
+            option.value = cat.name;
             option.textContent = cat.name;
             categoryFilterDropdown.appendChild(option);
         });
+        
+        // NEW: Set the default category to the first one in the list
+        if (categories.length > 0) {
+            categoryFilterDropdown.value = categories[0].name;
+        }
     }
 
     // Call update functions for initial load
@@ -250,7 +256,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         if (currentStore) {
             const defaultCategory = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[0]?.name;
             if (defaultCategory) {
-                document.getElementById('category-filter-dropdown').value = defaultCategory.toLowerCase();
+                // FIX: Use case-sensitive name for reset
+                document.getElementById('category-filter-dropdown').value = defaultCategory;
                 updateSubcategoryButtons();
        
             }
@@ -262,6 +269,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         });
         // --- END UPDATED
         document.getElementById('name-filter').value = '';
+    
         document.getElementById('status-filter').value = 'Available';
  
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -289,6 +297,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
             }
+        
         },
    
     });
