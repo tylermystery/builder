@@ -195,7 +195,7 @@ border-radius: 4px;
         #event-plan-panel {
             background-color: #fff;
 padding: 20px;
-            border-radius: 8px;
+            border-radius: 8-px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
@@ -221,7 +221,7 @@ justify-content: space-between;
 padding: 12px;
             font-size: 1em;
             font-weight: bold;
-            border-radius: 5-px;
+            border-radius: 5px;
             cursor: pointer;
             border: 1px solid #ccc;
 }
@@ -754,6 +754,49 @@ padding: 10px;
 font-size: 0.9em;
             margin-top: 5px;
         }
+
+        /* Itinerary Modal Styles */
+        .itinerary-content {
+            max-width: 1000px;
+        }
+        .itinerary-container {
+            display: flex;
+            gap: 20px;
+        }
+        .itinerary-column {
+            flex: 1;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            min-height: 200px;
+        }
+        .itinerary-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            min-height: 100px;
+        }
+        .itinerary-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            cursor: move;
+        }
+        .itinerary-item.ghost {
+            opacity: 0.4;
+            background-color: #c8c8c8;
+        }
+        .itinerary-item .locked-item-actions {
+            margin-left: auto;
+        }
+        .itinerary-item .remove-btn {
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
@@ -804,19 +847,21 @@ margin: 0; text-align: center;"></h3>
  </div>
                 </div>
                 <div class="filter-group">
-                  
+                 
             <label for="headcount-filter">Headcount</label>
                     <select id="headcount-filter">
           
            <option value="any">Any Size</option>
                         <option value="1-10">1-10</option>
-                        <option value="11-25">11-25</option>
+                 
+        <option value="11-25">11-25</option>
    
                         <option value="26-50">26-50</option>
          
                 <option value="51-100">51-100</option>
                         <option value="101-250">101-250</option>
-                        <option value="250-plus">250+</option>
+             
+            <option value="250-plus">250+</option>
   
                         <option value="custom">Custom...</option>
          
@@ -834,7 +879,7 @@ autocomplete="off">
                         <option value="sf">San Francisco</option>
                         <option value="oakland">Oakland</option>
                         <option value="peninsula">Peninsula</option>
-                      
+                     
  <option value="south-bay">South Bay</option>
                         <option value="north-bay">North Bay</option>
                         <option value="east-bay">East Bay</option>
@@ -862,14 +907,16 @@ autocomplete="off">
                     <select
 id="status-filter">
  
-    
+  
+   
         <option value="Available">Available</option>
                         <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
                       
  <option value="Sold Out">Sold 
  Out</option>
-            
+         
+     
          </select>
                 </div>
                 <button id="reset-filters-btn">Reset All Filters</button>
@@ -879,14 +926,16 @@ id="status-filter">
           
  <div id="catalog-toolbar">
    
-             
+         
+      
   <select id="sort-by">
                     <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
          
         </select>
-           
+      
+         
   </div>
             <div id="catalog-container"></div>
         </div>
@@ -895,7 +944,8 @@ id="status-filter">
                 <h3>Your Event Plan</h3>
                 <div id="favorites-section">
   
-            <h4>Your Ideas</h4>
+            <h4>Your 
+ Ideas</h4>
       
                 <button class="carousel-nav left">◄</button>
                     <div
@@ -904,7 +954,9 @@ id="favorites-carousel"></div>
                
  </div>
          
-               <div class="toolbar-group">
+         
+              <button id="itinerary-btn" class="primary-action-btn" style="margin-bottom: 20px;">Open Itinerary Builder</button>
+                <div class="toolbar-group">
  
                     <label for="header-event-name">Event Name</label>
                     <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off">
@@ -912,7 +964,7 @@ id="favorites-carousel"></div>
           
  <div class="toolbar-group">
            
-              
+     
                  <label for="header-goals">Goals / Notes</label>
                     <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
                 </div>
@@ -940,7 +992,8 @@ color: #6c757d;">No items locked in yet.</p>
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="modal-main-column">
-                <div id="modal-main-image"></div>
+                <div 
+id="modal-main-image"></div>
             
  
             <div id="modal-thumbnail-strip"></div>
@@ -948,7 +1001,8 @@ color: #6c757d;">No items locked in yet.</p>
             <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                 </div>
-                <div id="modal-breadcrumbs"></div>
+                
+<div id="modal-breadcrumbs"></div>
                 <h2 id="modal-item-name"></h2>
   
    
@@ -956,14 +1010,16 @@ color: #6c757d;">No items locked in yet.</p>
                 <p id="modal-item-description"></p>
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
-                <div id="modal-notes-container">
+            
+     <div id="modal-notes-container">
                
      <textarea 
 id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
                 </div>
                 <div id="modal-actions-container">
                     <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
-                </div>
+       
+          </div>
          
        <div 
 id="modal-calendar-container"></div>
@@ -974,7 +1030,8 @@ id="modal-calendar-container"></div>
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Checkout Summary</h3>
-            <ul id="checkout-summary-list"></ul>
+       
+      <ul id="checkout-summary-list"></ul>
           
  <div class="checkout-total">
      
@@ -984,27 +1041,31 @@ id="modal-calendar-container"></div>
             </div>
             <hr>
             <form id="payment-form">
-                <div class="form-row">
+        
+         <div class="form-row">
          
            
             <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="off">
                 </div>
-                <div class="form-row">
+                <div 
+class="form-row">
                     <label for="customer-email">Email Address</label>
        
          
             <input type="email" id="customer-email" required autocomplete="off">
                 </div>
                 <div class="form-row">
-                    <label for="card-element">Credit or debit card</label>
+             
+        <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
     
      
             <div id="card-errors" role="alert"></div>
                 </div>
                 <button class="primary-action-btn" type="submit">Pay Now</button>
-            </form>
+          
+    </form>
         </div>
     </div>
 
@@ -1014,17 +1075,20 @@ id="modal-calendar-container"></div>
             <h2>Your Itinerary</h2>
             <div class="itinerary-container">
                 <div class="itinerary-column">
-                    <h3>Your Event Plan</h3>
+            
+            <h3>Your Event Plan</h3>
                     <p class="description">Drag items to change their order.</p>
                     <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
-                    <h3>Your Ideas</h3>
+         
+            <h3>Your Ideas</h3>
                     <p class="description">Move items here to add them to your plan.</p>
                     <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
         </div>
+ 
     </div>
 
     <script type="module" src="main.js"></script>
