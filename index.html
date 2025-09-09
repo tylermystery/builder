@@ -79,10 +79,10 @@ border: none;
             cursor: pointer;
             text-align: left;
             margin-bottom: 10px;
-}
+        }
         #itinerary-btn:hover {
             text-decoration: underline;
-}
+        }
         .main-container {
             display: grid;
 grid-template-columns: 300px 1fr 380px;
@@ -467,7 +467,7 @@ padding-bottom: 5px;
         }
         .locked-item-card:first-child {
             padding-top: 5px;
-}
+        }
         .locked-item-thumbnail {
             width: 60px;
 height: 60px;
@@ -488,14 +488,14 @@ font-size: 0.9em;
         }
         .locked-item-name {
             font-weight: bold;
-}
+        }
         .locked-item-option, .locked-item-note {
             font-size: 0.8em;
 color: #6c757d;
         }
         .locked-item-pricing {
             font-size: 0.85em !important;
-}
+        }
         .locked-item-actions {
             display: flex;
 align-items: center;
@@ -876,7 +876,7 @@ height: 60px;
                 <label for="category-filter-dropdown">Category</label>
                 <select id="category-filter-dropdown">
          
-           <option value="all">All Categories</option>
+            <option value="all">All Categories</option>
                 </select>
             </div>
             <div id="subcategory-filters" class="filter-btn-group">
@@ -886,13 +886,13 @@ height: 60px;
     <div class="main-container">
         <div id="left-sidebar">
        
-     <div id="filter-controls" data-active-filters="0">
+            <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
                     <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
              
-   </div>
+            </div>
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
@@ -909,12 +909,12 @@ height: 60px;
                     <select id="headcount-filter">
                         <option value="any">Any Size</option>
   
-                      <option value="1-10">1-10</option>
+                        <option value="1-10">1-10</option>
                         <option value="11-25">11-25</option>
                         <option value="26-50">26-50</option>
                         <option value="51-100">51-100</option>
   
-                      <option value="101-250">101-250</option>
+                        <option value="101-250">101-250</option>
                         <option value="250-plus">250+</option>
                         <option value="custom">Custom...</option>
                     </select>
@@ -967,7 +967,7 @@ Out">Sold Out</option>
         <div id="catalog-area">
             <div id="catalog-toolbar">
   
-              <select id="sort-by">
+               <select id="sort-by">
                     <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
@@ -998,7 +998,7 @@ border-top: 1px solid #eee; margin: 20px 0;">
                     <button class="carousel-nav left">◄</button>
                     <div id="favorites-carousel"></div>
               
-      <button class="carousel-nav right">►</button>
+            <button class="carousel-nav right">►</button>
                 </div>
                 <button id="itinerary-btn">Event Plan</button>
                 <div id="cart-items-container">
@@ -1009,12 +1009,12 @@ color: #6c757d;">No items locked in yet.</p>
                     <div class="total-row">
                         <span>Total:</span>
                  
-       <span id="total-cost">$0.00</span>
+        <span id="total-cost">$0.00</span>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
               
-  </div>
+   </div>
             </div>
         </div>
     </div>
@@ -1024,7 +1024,7 @@ color: #6c757d;">No items locked in yet.</p>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
               
-  <div id="modal-thumbnail-strip"></div>
+   <div id="modal-thumbnail-strip"></div>
             </div>
             <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
@@ -1032,7 +1032,7 @@ color: #6c757d;">No items locked in yet.</p>
                 <div id="modal-breadcrumbs"></div>
                 <h2 id="modal-item-name"></h2>
      
-           <p id="modal-item-price" class="price"></p>
+            <p id="modal-item-price" class="price"></p>
                 <p id="modal-item-description"></p>
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
@@ -1053,15 +1053,14 @@ color: #6c757d;">No items locked in yet.</p>
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
-                <p>This is 
-a summary of the items in your plan.</p>
+                <p>This is a summary of the items in your plan.</p>
             </div>
             <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
                     <span>Total Estimated Cost:</span>
                  
-   <span id="full-total-price">$0.00</span>
+    <span id="full-total-price">$0.00</span>
                 </div>
                 <div class="checkout-deposit">
                     <span>Deposit Due (35%):</span>
@@ -1074,29 +1073,28 @@ a summary of the items in your plan.</p>
                 <ul>
                     <li>A 35% deposit is required to reserve your event date.</li>
                  
-   <li>Your event details will be finalized in collaboration with our team.</li>
+    <li>Your event details will be finalized in collaboration with our team.</li>
                     <li>The remaining balance is due after all details are confirmed and, in some cases, after the event.</li>
-                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred.
-No refunds within 7 days of the event.</li>
+                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred. No refunds within 7 days of the event.</li>
                     <li>Your deposit includes all planning, preparation, setup, and hosting services.</li>
                 </ul>
             </div>
             <form id="payment-form">
                 <div class="form-row">
       
-              <label for="customer-name">Full Name</label>
+                <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
      
-               <input type="email" id="customer-email" required autocomplete="off">
+                <input type="email" id="customer-email" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
    
-                 <div id="card-errors" role="alert"></div>
+                  <div id="card-errors" role="alert"></div>
                 </div>
                 <button class="primary-action-btn" type="submit">Pay Now</button>
             </form>
@@ -1105,13 +1103,13 @@ No refunds within 7 days of the event.</li>
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
       
-      <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
                     <input type="text" id="itinerary-event-name" value="My Awesome Event" autocomplete="off">
              
-   </div>
+            </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-goals">Goals / Notes</label>
                     <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?"
@@ -1128,13 +1126,13 @@ autocomplete="off">
                     <h3>Event Plan</h3>
                     <p class="description">Drag items to change their order.</p>
               
-      <div id="itinerary-locked-items" class="itinerary-list"></div>
+            <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
                     <h3>Ideas</h3>
                     <p class="description">Move items here to add them to your plan.</p>
           
-          <div id="itinerary-favorited-items" class="itinerary-list"></div>
+            <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
         </div>
