@@ -18,6 +18,7 @@ export function updateCardIcon(recordId) {
         if (isLocked) {
             icon.className = 'heart-icon locked';
             icon.innerHTML = checkSVG;
+        
         } else if (isHearted) {
             icon.className = 'heart-icon hearted';
             icon.innerHTML = heartSVG;
@@ -26,6 +27,7 @@ export function updateCardIcon(recordId) {
             icon.innerHTML = heartSVG;
         }
         icon.style.display = 'block'; // Ensure visibility
+        
         log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
@@ -51,15 +53,19 @@ export async function createInteractiveCard(record, imageCache) {
 
     let priceHTML = '';
     let footerHTML = '';
+    let cardTooltip = '';
+
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
-        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        priceHTML = range ?
+(range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
                 <button class="card-action-btn view-options-btn" title="View Options">View Options</button>
             </div>
         `;
+        cardTooltip = `Explore the various items and pricing options in this category.`;
     } else {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
@@ -67,16 +73,19 @@ export async function createInteractiveCard(record, imageCache) {
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ?
+'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
                     <div class="price">${priceHTML}</div>
                     ${quantitySelectorHTML}
                 </div>
-                ${addToPlanBtnHTML}
+           
+             ${addToPlanBtnHTML}
             </div>
         `;
+        cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
     
     eventCard.innerHTML = `
@@ -84,21 +93,20 @@ export async function createInteractiveCard(record, imageCache) {
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
-            <div class="heart-icon" data-record-id="${record.id}"></div>
+            <div class="heart-icon" data-record-id="${record.id}" data-tippy-content="Add to favorites"></div>
         </div>
-        <div class="event-card-content">
+        <div class="event-card-content" data-tippy-content="${cardTooltip}">
+ 
             ${parentLinkHTML}
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
         </div>
         ${footerHTML}
     `;
-
     // FIX: The heart icon update needs to happen after the element is in the DOM
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
-
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -114,6 +122,17 @@ export async function createInteractiveCard(record, imageCache) {
             quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
         });
     }
-
+    // Initialize Tippy for the main card content and heart icon
+    tippy(eventCard.querySelector('.event-card-content'), {
+        content: cardTooltip,
+        allowHTML: true,
+        placement: 'top',
+        theme: 'light',
+    });
+    tippy(eventCard.querySelector('.heart-icon'), {
+        content: 'Add to favorites',
+        placement: 'top',
+        theme: 'light',
+    });
     return eventCard;
 }
