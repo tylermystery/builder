@@ -371,40 +371,51 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
     document.body.addEventListener('click', async (e) => {
-        // Find the closest parent with a data-record-id to identify the item
         const card = e.target.closest('.event-card');
-        const heartIcon = e.target.closest('.heart-icon:not(.locked)');
+        const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-        const editBtn 
- = e.target.closest('.edit-btn');
-        const removeLockedItemBtn = e.target.closest('.remove-locked-item-btn');
+        const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const editBtn = e.target.closest('.edit-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
-        const optionBtn = e.target.closest('.option-btn'); // Now correctly checks for the clicked button
+        const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
-        
+        const heartIconModal = e.target.closest('#modal-heart-btn');
+
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
-              
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
-        } else if (heartIcon) {
+        } else if (heartIcon || heartIconModal) {
             e.stopPropagation();
-            const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.items.has(recordId)) {
-                state.cart.items.delete(recordId);
+            const recordId = (heartIcon || heartIconModal).closest('[data-record-id]').dataset.recordId;
+            const isLocked = state.cart.lockedItems.has(recordId);
+
+            if (isLocked) {
+                // If it's a locked item, clicking the checkmark demotes it back to favorites
+                const itemInfo = state.cart.lockedItems.get(recordId);
+                state.cart.lockedItems.delete(recordId);
+                state.cart.items.set(recordId, itemInfo);
+                await ui.updateEventPlanSection();
             } else {
-                updateItemState(recordId, {});
+                // Otherwise, it's a regular favorite/un-favorite action
+                if (state.cart.items.has(recordId)) {
+                    state.cart.items.delete(recordId);
+                } else {
+                    ui.updateItemState(recordId, {});
+                }
             }
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
+            ui.updateTotalCost();
             triggerSave();
+
         } else if (addToPlanBtn) {
             e.stopPropagation();
             const container = addToPlanBtn.closest('[data-record-id]');
@@ -416,12 +427,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ?
- parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ?
- parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ?
- noteInput.value.trim() : ''
+                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ? noteInput.value.trim() : ''
                 };
                 updateLockedItemState(recordId, itemInfo);
             } else {
@@ -437,21 +445,19 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (container.id === 'detail-modal-overlay') {
                 ui.hideDetailModal();
             }
-        } else if (editBtn) {
-            const lockedItemCard = editBtn.closest('.locked-item-card');
+        } else if (demoteBtn) {
+            e.stopPropagation();
+            const lockedItemCard = demoteBtn.closest('.locked-item-card');
             if (!lockedItemCard) return;
             const recordId = lockedItemCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
-        } else if (removeLockedItemBtn) {
-             const lockedItemCard = removeLockedItemBtn.closest('.locked-item-card');
-             if (!lockedItemCard) return;
-             const recordId = lockedItemCard.dataset.recordId;
-             state.cart.lockedItems.delete(recordId);
-             ui.updateCardIcon(recordId);
-             await ui.updateEventPlanSection();
-             ui.updateTotalCost();
-             triggerSave();
+            const itemInfo = state.cart.lockedItems.get(recordId);
+            state.cart.lockedItems.delete(recordId);
+            state.cart.items.set(recordId, itemInfo);
+            ui.updateCardIcon(recordId);
+            await ui.updateEventPlanSection();
+            await debounce(ui.updateFavoritesCarousel, 300)();
+            ui.updateTotalCost();
+            triggerSave();
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
             const recordId = favoriteItem.dataset.recordId;
@@ -459,33 +465,40 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } else if (optionBtn) { // The fix is here: we don't access a non-existent variable
+        } else if (editBtn) {
+            const lockedItemCard = editBtn.closest('.locked-item-card');
+            if (!lockedItemCard) return;
+            const recordId = lockedItemCard.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
+        } else if (optionBtn) {
             const childName = optionBtn.dataset.childName;
             if (childName) {
                 const childRecord = state.records.all.find(r => r.fields.Name === childName);
                 if (childRecord) ui.showDetailModal(childRecord);
             } else {
-                 // For option buttons that don't open a child record, we trigger a change event
-                 const modalOptionsContainer = optionBtn.closest('#modal-options-container');
-                 if(modalOptionsContainer) {
-                     modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-                     optionBtn.classList.add('selected');
-                     const newIndex = parseInt(optionBtn.dataset.optionIndex, 10);
-                     optionBtn.dispatchEvent(new CustomEvent('change', {
-                         bubbles: true,
-                         detail: { selectedOptionIndex: newIndex }
-                     }));
-                 }
+                const modalOptionsContainer = optionBtn.closest('#modal-options-container');
+                if(modalOptionsContainer) {
+                    modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                    optionBtn.classList.add('selected');
+                    const newIndex = parseInt(optionBtn.dataset.optionIndex, 10);
+                    optionBtn.dispatchEvent(new CustomEvent('change', {
+                        bubbles: true,
+                        detail: { selectedOptionIndex: newIndex }
+                    }));
+                }
             }
         } else if (parentLink) {
             const parentName = parentLink.dataset.parentName;
             const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
             if (parentRecord) ui.showDetailModal(parentRecord);
         } else if (card) {
-            if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon, .add-to-plan-btn, .option-btn')) return;
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
+            const interactiveElements = e.target.closest('.card-action-btn, .quantity-selector, .parent-link');
+            if (!interactiveElements) {
+                const recordId = card.dataset.recordId;
+                const record = state.records.all.find(r => r.id === recordId);
+                if (record) ui.showDetailModal(record);
+            }
         }
     });
     document.body.addEventListener('change', (e) => {
@@ -496,8 +509,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
         const recordId = container.dataset.recordId;
-        let updates = 
- {};
+        let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
@@ -505,10 +517,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
-        
-           if(e.detail?.selectedOptionIndex !== undefined) {
-                 updates.selectedOptionIndex = e.detail.selectedOptionIndex;
- }
+            if(e.detail?.selectedOptionIndex !== undefined) {
+                updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+            }
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
