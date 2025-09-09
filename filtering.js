@@ -35,6 +35,7 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                 record.fields[CONSTANTS.FIELD_NAMES.NAME] === selectedCategory
             );
         }
+
     } else {
         // If 'All Categories' is selected, show all top-level records.
         records = topLevelItems;
