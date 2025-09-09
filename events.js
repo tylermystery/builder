@@ -256,17 +256,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
         mode: "range",
         enableTime: true,
         dateFormat: "M j, Y h:i K",
-        onClose: async (selectedDates) => {
-            if (selectedDates.length === 2) {
+        onChange: async (selectedDates) => { // CHANGED: 'onClose' to 'onChange'
+            if (selectedDates.length > 0) { // NEW: Check for at least one date
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
-   
-                // We'll call the availability icon update from here
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
-             
                 await updateAllCardAvailabilityIcons();
             }
         },
