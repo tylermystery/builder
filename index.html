@@ -68,6 +68,21 @@ border-radius: 4px;
             background: none;
             padding: 0;
         }
+        /* New styling for the Event Plan button title */
+        #itinerary-btn {
+            background: none;
+            border: none;
+            color: #333;
+            font-size: 1.5em;
+            font-weight: bold;
+            padding: 0;
+            cursor: pointer;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+        #itinerary-btn:hover {
+            text-decoration: underline;
+        }
         .main-container {
             display: grid;
 grid-template-columns: 300px 1fr 380px;
@@ -576,7 +591,7 @@ display: flex;
 background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
-        }
+}
         #modal-thumbnail-strip {
             display: flex;
 gap: 5px;
@@ -612,12 +627,12 @@ justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
-        }
+}
         #modal-breadcrumbs {
             font-size: 0.9em;
 color: #6c757d;
             margin-bottom: 8px;
-        }
+}
         #modal-breadcrumbs a {
             color: #007bff;
 text-decoration: none;
@@ -962,10 +977,7 @@ height: 60px;
                     <div id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3>Event Plan</h3>
-                    <button id="itinerary-btn" class="primary-action-btn" style="padding: 8px 16px; font-size: 0.9em;">Planner^beta</button>
-                </div>
+                <button id="itinerary-btn">Event Plan</button>
                 <div id="cart-items-container">
                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
@@ -974,7 +986,7 @@ height: 60px;
                         <span>Total:</span>
                         <span id="total-cost">$0.00</span>
                     </div>
-                    <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Checkout</button>
+                    <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
                 </div>
             </div>
