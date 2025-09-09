@@ -797,6 +797,46 @@ background-color: #c8c8c8;
         .itinerary-item .remove-btn {
             font-size: 1.2em;
 }
+        .itinerary-modal-header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .itinerary-header-item {
+            flex: 1;
+        }
+        .itinerary-header-item label {
+            font-size: 0.8em;
+            color: #666;
+            display: block;
+        }
+        .itinerary-header-item input {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 5px;
+            width: 100%;
+        }
+        .itinerary-item .quantity-selector {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .itinerary-item .quantity-input {
+            width: 40px;
+            text-align: center;
+        }
+        .itinerary-item-note {
+            width: 100%;
+            height: 60px;
+            font-size: 0.8em;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-top: 5px;
+            padding: 5px;
+            resize: vertical;
+        }
     </style>
 </head>
 <body>
@@ -1071,7 +1111,20 @@ class="form-row">
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
             <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
-            <h2>Your Itinerary</h2>
+            <div class="itinerary-modal-header">
+                <div class="itinerary-header-item">
+                    <label for="itinerary-event-name">Event Name</label>
+                    <input type="text" id="itinerary-event-name" value="My Awesome Event" autocomplete="off">
+                </div>
+                <div class="itinerary-header-item">
+                    <label for="itinerary-goals">Goals / Notes</label>
+                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
+                </div>
+                <div class="itinerary-header-item">
+                    <label for="itinerary-date-picker">Date & Time</label>
+                    <input type="text" id="itinerary-date-picker" placeholder="Select date range">
+                </div>
+            </div>
             <div class="itinerary-container">
                 <div class="itinerary-column">
             
