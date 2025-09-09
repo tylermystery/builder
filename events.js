@@ -33,8 +33,6 @@ const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
-
-// NEW: Get the current selected category record based on the dropdown value
 function getCurrentCategoryRecord() {
     const selectedCategoryName = categoryFilterDropdown.value;
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
@@ -258,6 +256,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (defaultCategory) {
                 // FIX: Use case-sensitive name for reset
                 document.getElementById('category-filter-dropdown').value = defaultCategory;
+ 
                 updateSubcategoryButtons();
        
             }
@@ -267,6 +266,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
         });
+   
         // --- END UPDATED
         document.getElementById('name-filter').value = '';
     
@@ -481,10 +481,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const parentName = parentLink.dataset.parentName;
             const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
             if (parentRecord) ui.showDetailModal(parentRecord);
-        } else if (favoriteItem) {
-            const recordId = favoriteItem.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
         } else if (card) {
             if (e.target.closest('.options-selector, .quantity-selector, .parent-link, .item-note, .heart-icon, .add-to-plan-btn, .option-btn')) return;
             const recordId = card.dataset.recordId;
