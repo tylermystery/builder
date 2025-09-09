@@ -1,3 +1,4 @@
+// FILE: ui.js
 /*
  * Version: 3.0.3 (Repaired)
  * Last Modified: 2025-09-02
@@ -12,7 +13,8 @@ import { createInteractiveCard } from './components/card.js';
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-export { parseOptions }; // NEW: Re-export parseOptions for other modules to use
+export { parseOptions };
+// NEW: Re-export parseOptions for other modules to use
 
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
@@ -41,14 +43,12 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-             
                     if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-        
             if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
@@ -132,4 +132,24 @@ export function initStateHelpers(helpers) {
 
 export function getMainGetItemState() {
     return mainGetItemState;
+}
+
+// NEW: Exported state management functions
+export function getItemState(recordId) {
+    if (state.cart.items.has(recordId)) {
+        return state.cart.items.get(recordId);
+    }
+    return { quantity: 1, selectedOptionIndex: 0, note: '' };
+}
+
+export function updateItemState(recordId, updates) {
+    const existing = getItemState(recordId);
+    const newState = { ...existing, ...updates };
+    state.cart.items.set(recordId, newState);
+}
+
+export function updateLockedItemState(recordId, updates) {
+    const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
+    const newState = { ...existing, ...updates };
+    state.cart.lockedItems.set(recordId, newState);
 }
