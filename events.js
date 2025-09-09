@@ -42,7 +42,6 @@ const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
-
 function getCurrentCategoryRecord() {
     const selectedCategoryName = categoryFilterDropdown.value;
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
@@ -269,7 +268,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (defaultCategory) {
                 document.getElementById('category-filter-dropdown').value = defaultCategory;
                 updateSubcategoryButtons();
-       
             }
         } else {
             document.getElementById('category-filter-dropdown').value = 'all';
@@ -279,9 +277,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         });
         // --- END UPDATED
         document.getElementById('name-filter').value = '';
-    
         document.getElementById('status-filter').value = 'Available';
- 
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
@@ -299,7 +295,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
-   
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
@@ -307,7 +302,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 await updateAllCardAvailabilityIcons();
             }
         },
-   
     });
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
@@ -317,19 +311,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
-   
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
-                    
                     endDate.setDate(endDate.getDate() + 1);
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
-             
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
@@ -355,7 +346,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const { error } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
-             
                 billing_details: {
                     name: document.getElementById('customer-name').value,
                     email: document.getElementById('customer-email').value,
@@ -363,7 +353,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             },
         });
         const cardErrors = document.getElementById('card-errors');
-       
         if (error) cardErrors.textContent = error.message;
         else {
             cardErrors.textContent = '';
@@ -388,7 +377,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const editBtn = e.target.closest('.edit-btn');
-       
         const checkoutBtn = e.target.closest('#checkout-btn');
         const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
