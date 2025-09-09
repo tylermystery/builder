@@ -1,8 +1,11 @@
 // FILE: events.js
 /*
- * Version: 4.9.2
+ * Version: 4.9.3
  * Last Modified: 2025-09-09
  * Changelog:
+ * v4.9.3 - 2025-09-09
+ * - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
+ * - `itinerary-btn` now correctly shows the full-screen itinerary modal.
  * v4.9.2 - 2025-09-09
  * - Fixed bug where Airtable 'Date' field would not accept date range array.
 * - Corrected a TypeError in `updateTotalCost` by fixing the property access.
