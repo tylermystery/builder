@@ -32,19 +32,25 @@ let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
-function getAvailableSubcategories(category) {
-    if (category === 'all') {
+let currentStore = null;
+
+function getAvailableSubcategories(categoryName) {
+    if (categoryName === 'all' || !currentStore) {
         return [];
     }
-    const filteredRecords = state.records.all.filter(record => {
-        const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim().toLowerCase()) || [];
-        return categories.includes(category);
-    });
+
+    const categoryRecord = state.records.all.find(record =>
+        record.fields.Name === categoryName
+    );
+
+    if (!categoryRecord) {
+        return [];
+    }
+
     const subcategories = new Set();
-    filteredRecords.forEach(record => {
-        const recordSubcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(s => s.trim()) || [];
-        recordSubcategories.forEach(subcat => subcategories.add(subcat));
-    });
+    const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    subcategoryOptions.forEach(subcat => subcategories.add(subcat.name));
+
     return Array.from(subcategories).sort();
 }
 
@@ -52,6 +58,7 @@ function updateSubcategoryButtons() {
     subcategoryFiltersContainer.innerHTML = '';
     const selectedCategory = categoryFilterDropdown.value;
     const subcategories = getAvailableSubcategories(selectedCategory);
+
     subcategories.forEach(subcat => {
         const button = document.createElement('button');
         button.className = 'filter-btn subcategory-filter-btn';
@@ -201,28 +208,35 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
-    // Populate the category dropdown on initialization
-    const categories = new Set(state.records.all.flatMap(record =>
-        record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim()) || []
-    ));
-    categories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat.toLowerCase();
-        option.textContent = cat;
-        categoryFilterDropdown.appendChild(option);
-    });
-    // Event listeners for the new filter layout
+
+    // --- NEW: Logic for Store and Categories ---
+    // Find the primary store record
+    currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+    if (currentStore) {
+        document.getElementById('store-display').textContent = currentStore.fields.Name;
+        // Populate the category dropdown from the store's options
+        const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        categories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.name.toLowerCase();
+            option.textContent = cat.name;
+            categoryFilterDropdown.appendChild(option);
+        });
+    }
+    // --- END OF NEW LOGIC
+
     safeAddEventListener('category-filter-dropdown', 'change', () => {
         updateSubcategoryButtons();
         applyFiltersAndSort(imageCache);
     });
+
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
             applyFiltersAndSort(imageCache);
         }
     });
-    // The rest of the event listeners remain unchanged
+
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
@@ -234,11 +248,20 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('reset-filters-btn', 'click', () => {
-        document.getElementById('category-filter-dropdown').value = 'all';
-        updateSubcategoryButtons();
+        // --- UPDATED: Reset logic for new category/subcategory structure
+        if (currentStore) {
+            const defaultCategory = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[0]?.name;
+            if (defaultCategory) {
+                document.getElementById('category-filter-dropdown').value = defaultCategory.toLowerCase();
+                updateSubcategoryButtons();
+            }
+        } else {
+            document.getElementById('category-filter-dropdown').value = 'all';
+        }
         document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
         });
+        // --- END UPDATED
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -256,8 +279,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         mode: "range",
         enableTime: true,
         dateFormat: "M j, Y h:i K",
-        onChange: async (selectedDates) => { // CHANGED: 'onClose' to 'onChange'
-            if (selectedDates.length > 0) { // NEW: Check for at least one date
+        onChange: async (selectedDates) => {
+            if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
