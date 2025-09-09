@@ -1,10 +1,8 @@
+// FILE: main.js
 /*
- * Version: 4.9.1
+ * Version: 4.9.0
  * Last Modified: 2025-09-09
  * Changelog:
- * v4.9.1 - 2025-09-09
- * - Added itinerary modal open/close event listeners and population via updateItineraryModal.
- * - Added support for inline editing, drag-and-drop, and availability display in itinerary modal.
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
@@ -37,8 +35,6 @@ import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from './availability.js';
 import { debounce } from './utils.js';
-import { updateItineraryModal } from './components/sidebar.js';
-
 const imageCache = new Map();
 let mainDatePicker = null;
 
@@ -96,7 +92,7 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                        busyMinutes += minutes;
+                      busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -170,6 +166,7 @@ async function initialize() {
             await api.loadSessionFromAirtable(sessionId);
             log('Main', '10. Session loaded successfully.');
             ui.updateHeader();
+            // FIX: Corrected function name
             ui.updateEventPlanSection();
             ui.updateTotalCost();
             log('Main', '11. Updated header, event plan, and total cost.');
@@ -177,108 +174,37 @@ async function initialize() {
             if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
                 if (mainDatePicker) {
                     mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
-                    log('Main', '12. Set saved date in main date picker.');
+                    log('Main', '12. Set saved date in date picker.');
                 }
             }
         } catch (error) {
             console.error("Failed to load session:", error);
-            log('Main', `10. Failed to load session: ${error.message}`);
+            log('Main', `13. Failed to load session: ${error.message}`);
+            if (error.message.includes('FILE_ERROR_NO_SPACE')) {
+                console.warn('Clearing local storage due to storage error.');
+                log('Main', '14. Clearing local storage due to storage error.');
+                localStorage.clear();
+            }
+            state.session.isOwned = true;
+            log('Main', '15. Set session as owned due to load failure.');
         }
+    } else {
+        state.session.isOwned = true;
+        log('Main', '16. No session ID, set session as owned.');
     }
+    ui.toggleLoading(false);
+    log('Main', '17. Loading UI toggled off.');
+    document.getElementById('status-filter').value = 'Available';
+    log('Main', '18. Set status filter to Available.');
 
-    // Add itinerary modal event listeners
-    document.getElementById('itinerary-btn').addEventListener('click', () => {
-        updateItineraryModal();
-        document.getElementById('itinerary-modal-overlay').classList.add('active');
-        document.body.classList.add('modal-open');
-        log('Main', 'Itinerary modal opened.');
-    });
-
-    document.getElementById('itinerary-close-btn').addEventListener('click', () => {
-        document.getElementById('itinerary-modal-overlay').classList.remove('active');
-        document.body.classList.remove('modal-open');
-        log('Main', 'Itinerary modal closed.');
-    });
-
-    // Existing event listeners
-    document.body.addEventListener('click', (e) => {
-        const favoriteItem = e.target.closest('.favorite-item');
-        const eventCard = e.target.closest('.event-card');
-        const actionBtn = e.target.closest('.action-btn');
-        if (actionBtn) {
-            const recordId = actionBtn.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId) return;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (!record) return;
-            if (actionBtn.classList.contains('add-to-plan-btn')) {
-                if (!state.cart.lockedItems.has(recordId)) {
-                    const itemState = ui.getItemState(recordId);
-                    state.cart.lockedItems.set(recordId, itemState);
-                    state.cart.items.delete(recordId);
-                    ui.updateCardIcon(recordId);
-                    ui.updateFavoritesCarousel();
-                    ui.updateEventPlanSection();
-                    ui.updateTotalCost();
-                    triggerSave();
-                }
-            } else if (actionBtn.classList.contains('remove-btn')) {
-                state.cart.items.delete(recordId);
-                ui.updateCardIcon(recordId);
-                ui.updateFavoritesCarousel();
-                triggerSave();
-            } else if (actionBtn.classList.contains('availability-btn')) {
-                ui.showDetailModal(record);
-            }
-        } else if (eventCard) {
-            const recordId = eventCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
-        } else if (favoriteItem) {
-            const interactiveElements = e.target.closest('.add-to-plan-btn, .remove-btn');
-            if (!interactiveElements) {
-                const recordId = favoriteItem.dataset.recordId;
-                const record = state.records.all.find(r => r.id === recordId);
-                if (record) ui.showDetailModal(record);
-            }
-        }
-    });
-
-    document.body.addEventListener('change', (e) => {
-        const target = e.target;
-        const modal = document.getElementById('detail-modal-overlay');
-        const container = target.closest('[data-record-id]');
-        const isInModal = modal && modal.style.display === 'flex' && modal.contains(target);
-        const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
-        if (!container) return;
-        const recordId = container.dataset.recordId;
-        let updates = {};
-        if (target.matches('.quantity-input')) {
-            updates.quantity = parseInt(target.value, 10);
-        } else if (target.matches('.configure-options')) {
-            updates.selectedOptionIndex = parseInt(target.value, 10);
-        } else if (target.matches('.item-note, #modal-item-note')) {
-            updates.note = target.value;
-        } else if (target.matches('.option-btn')) {
-            if (e.detail?.selectedOptionIndex !== undefined) {
-                updates.selectedOptionIndex = e.detail.selectedOptionIndex;
-            }
-        }
-        if (Object.keys(updates).length > 0) {
-            if (isEditLockedMode) {
-                ui.updateLockedItemState(recordId, updates);
-            } else {
-                ui.updateItemState(recordId, updates);
-                triggerSave();
-                debounce(ui.updateFavoritesCarousel, 300)();
-            }
-        }
-    });
-
-    return mainDatePicker;
-}
-
-// Placeholder for triggerSave (assuming it exists elsewhere)
-function triggerSave() {
-    log('Main', 'Triggering save (placeholder).');
+    log('Main', '19. Applying initial filters and rendering...');
+    applyFiltersAndSort(imageCache);
+    ui.updateFavoritesCarousel();
     updateSaveShareButton();
+    log('Main', '20. Filters applied, favorites and share button updated.');
+
+    await updateHeaderCalendarAvailability();
+    log('Main', '21. Initialization complete.');
 }
+
+initialize();
