@@ -267,64 +267,71 @@ document.body.classList.remove('modal-open');
 export async function showCheckoutModal() {
     log('Modal', 'Showing checkout modal.');
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-const summaryList = document.getElementById('checkout-summary-list');
-    const totalPriceEl = document.getElementById('checkout-total-price');
+    const summaryList = document.getElementById('checkout-summary-list');
+    const fullTotalEl = document.getElementById('full-total-price');
+    const depositEl = document.getElementById('deposit-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
-    if (!checkoutModalOverlay || !summaryList || !totalPriceEl) return;
-summaryList.innerHTML = '';
+
+    if (!checkoutModalOverlay || !summaryList || !fullTotalEl || !depositEl) return;
+
+    summaryList.innerHTML = '';
     let finalTotal = 0;
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-if (!record) continue;
+        if (!record) continue;
 
         const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
-const listItem = document.createElement('li');
+        const listItem = document.createElement('li');
         listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
         summaryList.appendChild(listItem);
     }
     
-    const finalTotalInCents = Math.round(finalTotal * 100);
-totalPriceEl.textContent = `$${finalTotal.toFixed(2)}`;
+    // Calculate the 35% deposit
+    const depositAmount = finalTotal * 0.35;
+    const depositInCents = Math.round(depositAmount * 100);
+
+    fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
+    depositEl.textContent = `$${depositAmount.toFixed(2)}`;
     
     try {
         const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: finalTotalInCents }),
+            body: JSON.stringify({ amount: depositInCents }),
         });
-if (!response.ok) {
+        if (!response.ok) {
             throw new Error('Network error: Could not connect to payment server.');
-}
+        }
         const data = await response.json();
-if (data.error) {
+        if (data.error) {
             throw new Error(data.error);
-}
+        }
 
         clientSecret = data.clientSecret;
 
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
         elements = stripe.elements({ clientSecret });
-const cardElementContainer = document.getElementById('card-element');
+        const cardElementContainer = document.getElementById('card-element');
         if(cardElementContainer) cardElementContainer.innerHTML = '';
         
         cardElement = elements.create('card');
         cardElement.mount('#card-element');
         
-checkoutModalOverlay.classList.add('active');
-setTimeout(() => {
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             checkoutCloseBtn.focus();
             log('Modal', 'Checkout modal shown, focused close button.');
         }, 0);
-document.body.classList.add('modal-open');
+        document.body.classList.add('modal-open');
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
-log('Modal', `Failed to initialize payment form: ${err.message}`);
+        log('Modal', `Failed to initialize payment form: ${err.message}`);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
-}
+    }
 }
 
 export function getStripeContext() {
