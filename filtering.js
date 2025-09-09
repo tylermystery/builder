@@ -20,40 +20,34 @@ export function applyFiltersAndSort(imageCache) {
     let recordsToDisplay = state.records.all;
     console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
-    // **NEW LOGIC: Filter by selected category and subcategories**
-    // The top-level items are those with no Parent Item.
-    let topLevelRecords = recordsToDisplay.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    // NEW LOGIC: Filter by selected category and subcategories
+    const topLevelItems = recordsToDisplay.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     
-    // Find the record for the selected main category (e.g., 'Activities').
-    const selectedCategoryRecord = topLevelRecords.find(record => record.fields.Name === selectedCategory);
-    
-    if (selectedCategoryRecord) {
-        // If a main category is selected, start with its children.
-        recordsToDisplay = recordsToDisplay.filter(record => 
-            record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
-        );
+    if (selectedCategory !== 'all') {
+        const selectedCategoryRecord = topLevelItems.find(record => record.fields.Name === selectedCategory);
         
-        // If specific subcategories are active, filter further.
-        if (activeSubcategories.length > 0) {
-            recordsToDisplay = recordsToDisplay.filter(record => {
-                // Check if the record itself matches an active subcategory name
-                const isMatchingSubcategory = activeSubcategories.some(subcatName => 
-                    record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase() === subcatName
-                );
-                
-                // Also check if the record is a child of an active subcategory
-                const isChildOfSubcategory = activeSubcategories.some(subcatName => 
-                    record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM].toLowerCase() === subcatName
-                );
-                
-                return isMatchingSubcategory || isChildOfSubcategory;
-            });
+        if (selectedCategoryRecord && activeSubcategories.length === 0) {
+            // If a main category is selected and no subcategories are, show its immediate children
+            recordsToDisplay = recordsToDisplay.filter(record => 
+                record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
+            );
+        } else if (activeSubcategories.length > 0) {
+            // If subcategories are selected, find all items whose parent is one of the active subcategories
+            recordsToDisplay = recordsToDisplay.filter(record => 
+                activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase())
+            );
+        } else {
+            // If a single item is a top-level item with no children, just show that item
+            recordsToDisplay = recordsToDisplay.filter(record => 
+                record.fields[CONSTANTS.FIELD_NAMES.NAME] === selectedCategory
+            );
         }
-    } else if (selectedCategory === 'all') {
-        // If 'All Categories' is selected, display all top-level records initially
-        recordsToDisplay = topLevelRecords;
-    }
 
+    } else {
+        // If 'All Categories' is selected, show all top-level records.
+        recordsToDisplay = topLevelItems;
+    }
+    
     console.log(`FILTER: After Category/Subcategory filter, ${recordsToDisplay.length} records remain.`);
     
     // Filter by 'Status' field
