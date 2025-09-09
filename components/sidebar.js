@@ -1,3 +1,4 @@
+// FILE: components/sidebar.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -12,7 +13,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
-    
     // NEW: Add overlay for name and tooltip
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -22,7 +22,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <br>
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
-
     itemCard.innerHTML = `
         <div class="card-actions">
             <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
@@ -83,13 +82,13 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
-    return;
+        return;
     }
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-    if (record) {
+        if (record) {
             const itemElement = await createLockedInItemElement(record, itemInfo);
-    container.appendChild(itemElement);
+            container.appendChild(itemElement);
         }
     }
 }
@@ -108,13 +107,13 @@ export async function updateFavoritesCarousel() {
     const imageCache = new Map();
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-    if (record) {
+        if (record) {
             try {
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
-    if (card) favoritesCarousel.appendChild(card);
+                if (card) favoritesCarousel.appendChild(card);
             } catch (error) {
                 console.error(`Failed to create favorite card for ${record.fields.Name}:`, error);
-    }
+            }
         }
     }
     updateTotalCost();
@@ -148,7 +147,6 @@ export function updateTotalCost() {
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
  
        let itemCost;
- 
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
