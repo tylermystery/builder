@@ -341,7 +341,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
     });
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
-        // ... get stripe context
         const { stripe, cardElement, clientSecret } = ui.getStripeContext();
         if (!stripe || !cardElement || !clientSecret) return;
         const { error } = await stripe.confirmCardPayment(clientSecret, {
@@ -353,7 +352,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 },
             },
         });
-        // ... error handling
+        const cardErrors = document.getElementById('card-errors');
         if (error) cardErrors.textContent = error.message;
         else {
             cardErrors.textContent = '';
@@ -361,7 +360,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.hideCheckoutModal();
         }
     });
-
+    safeAddEventListener('checkout-close-btn', 'click', ui.hideCheckoutModal);
+    safeAddEventListener('checkout-modal-overlay', 'click', (e) => {
+        if (e.target.id === 'checkout-modal-overlay') {
+            ui.hideCheckoutModal();
+        }
+    });
 
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
