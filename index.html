@@ -992,11 +992,20 @@
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Checkout Summary</h3>
-            <ul id="checkout-summary-list">
-                <li><span>Total Estimated Cost:</span><span id="full-total-price">$0.00</span></li>
-                <li class="deposit-row"><span>Deposit Due (35%):</span><span id="deposit-price">$0.00</span></li>
-            </ul>
+            <div id="checkout-summary-details">
+                <p>This is a summary of the items in your plan.</p>
+            </div>
             <hr>
+            <div class="checkout-total-deposit-section">
+                <div class="checkout-total">
+                    <span>Total Estimated Cost:</span>
+                    <span id="full-total-price">$0.00</span>
+                </div>
+                <div class="checkout-deposit">
+                    <span>Deposit Due (35%):</span>
+                    <span id="deposit-price">$0.00</span>
+                </div>
+            </div>
             <div class="terms-and-conditions">
                 <h4>Simplified Terms</h4>
                 <ul>
