@@ -12,6 +12,7 @@ import { createInteractiveCard } from './components/card.js';
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
+export { parseOptions }; // NEW: Re-export parseOptions for other modules to use
 
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
@@ -93,7 +94,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     if (!append) {
         catalogContainer.innerHTML = '';
         if (loadingMessage) {
-            loadingMessage.style.display = 'block'; // NEW: Show loading message while rendering
+            loadingMessage.style.display = 'block';
         }
     }
 
@@ -101,7 +102,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         log('UI', "No records to render, displaying 'No items to show.'");
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
         if (loadingMessage) {
-            loadingMessage.style.display = 'none'; // NEW: Hide loading message if no records
+            loadingMessage.style.display = 'none';
         }
         return;
     }
@@ -119,7 +120,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
 
     catalogContainer.appendChild(fragment);
     if (loadingMessage) {
-        loadingMessage.style.display = 'none'; // NEW: Hide loading message after all cards are appended
+        loadingMessage.style.display = 'none';
     }
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
