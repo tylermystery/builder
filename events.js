@@ -366,7 +366,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.hideCheckoutModal();
         }
     });
-
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
             e.preventDefault();
@@ -538,6 +537,45 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         }
     });
+
+    const eventNameInput = document.getElementById('header-event-name');
+
+    if (eventNameInput) {
+        const handleEventNameChange = () => {
+            const newName = eventNameInput.value.trim();
+            if (newName === '') {
+                eventNameInput.value = 'Event Name';
+            }
+            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, newName);
+            triggerSave();
+        };
+
+        eventNameInput.addEventListener('blur', handleEventNameChange);
+        eventNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleEventNameChange();
+            }
+        });
+    }
+
+    // New event listener for the event-plan-picker
+    const eventPlanDatePicker = flatpickr("#event-date-picker", {
+        dateFormat: "M j, Y",
+        onChange: async (selectedDates) => {
+            if (selectedDates.length > 0) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+                ui.updateEventPlanDateDisplay();
+                ui.updateLockedItemStatusIcons();
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                ui.updateEventPlanDateDisplay();
+                ui.updateLockedItemStatusIcons();
+            }
+            triggerSave();
+        }
+    });
+
 
     return mainDatePicker;
 }
