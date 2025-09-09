@@ -29,6 +29,8 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
+// NEW: Import the itinerary module functions
+import { initItinerary, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -209,6 +211,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
     updateSubcategoryButtons();
     applyFiltersAndSort(imageCache);
     // --- END OF NEW LOGIC
+    
+    // NEW: Initialize the itinerary module after the DOM is ready
+    initItinerary();
 
     // NEW: Add carousel navigation listeners
     const favoritesCarousel = document.getElementById('favorites-carousel');
@@ -223,6 +228,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
         scrollRightBtn.addEventListener('click', () => {
             favoritesCarousel.scrollBy({ left: 200, behavior: 'smooth' });
         });
+    }
+    
+    // NEW: Add event listener for the new itinerary button
+    const itineraryBtn = document.getElementById('itinerary-btn');
+    if (itineraryBtn) {
+        itineraryBtn.addEventListener('click', showItineraryModal);
     }
 
     safeAddEventListener('category-filter-dropdown', 'change', () => {
@@ -345,7 +356,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
 
-    // NEW: Add a dedicated listener for the checkout close button
     safeAddEventListener('checkout-close-btn', 'click', ui.hideCheckoutModal);
 
     window.addEventListener('beforeunload', (e) => {
@@ -367,7 +377,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
         const heartIconModal = e.target.closest('#modal-heart-btn');
-        const closeCheckoutBtn = e.target.closest('#checkout-close-btn');
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
