@@ -7,7 +7,6 @@ export const AVAILABILITY_STATUS = {
     PARTIAL: 'partial',
     NONE: 'none',
 };
-
 export function parseICalDate(dateString) {
     if (!dateString) return null;
     const year = parseInt(dateString.substring(0, 4), 10);
@@ -127,7 +126,6 @@ export function getAvailableSlotsForDay(day, busyTimes) {
 
 export async function getCombinedPlanStatus(date, lockedItems) {
     let overallStatus = AVAILABILITY_STATUS.FULL;
-
     for (const record of lockedItems) {
         if (record && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
             const busyTimes = await api.fetchCalendarForRecord(record);
