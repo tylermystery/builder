@@ -13,12 +13,35 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
     
+    // NEW: Add overlay for name and tooltip
+    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const tooltipContent = `
+        <strong>${fields.Name || 'Untitled'}</strong>
+        <br>
+        <small>${fields.Description || 'No description.'}</small>
+        <br>
+        <strong>Price: $${price.toFixed(2)}</strong>
+    `;
+
     itemCard.innerHTML = `
         <div class="card-actions">
             <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
             <button class="action-btn remove-btn" title="Remove">×</button>
         </div>
+        <div class="favorite-item-overlay"
+            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
+        >
+            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
+        </div>
     `;
+
+    // Initialize Tippy.js for the tooltip
+    tippy(itemCard.querySelector('.favorite-item-overlay'), {
+        content: tooltipContent,
+        allowHTML: true,
+        placement: 'top',
+        theme: 'light',
+    });
     return itemCard;
 }
 
@@ -127,7 +150,6 @@ export function updateTotalCost() {
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
  
        let itemCost;
- 
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
