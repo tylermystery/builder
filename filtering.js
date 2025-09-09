@@ -20,44 +20,51 @@ export function applyFiltersAndSort(imageCache) {
     let recordsToDisplay = state.records.all;
     console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
-    // Filter by the main selected category
-    if (selectedCategory !== 'all') {
-        const selectedCategoryRecord = state.records.all.find(record => record.fields.Name === selectedCategory);
-        if (selectedCategoryRecord) {
-            const childrenOfCategory = state.records.all.filter(record => 
-                record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
-            );
-            recordsToDisplay = childrenOfCategory;
-        } else {
-            // If the selected category itself is not found, treat it as a subcategory.
-            // This handles cases where a user navigates to a subcategory directly.
-            recordsToDisplay = recordsToDisplay.filter(record => 
-                record.fields[CONSTANTS.FIELD_NAMES.NAME] === selectedCategory ||
-                (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] && 
-                 record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES].split(',').map(c => c.trim()).includes(selectedCategory))
-            );
-        }
-
-        // Filter further by active subcategories if any are selected
+    // **NEW LOGIC: Filter by selected category and subcategories**
+    // The top-level items are those with no Parent Item.
+    let topLevelRecords = recordsToDisplay.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    
+    // Find the record for the selected main category (e.g., 'Activities').
+    const selectedCategoryRecord = topLevelRecords.find(record => record.fields.Name === selectedCategory);
+    
+    if (selectedCategoryRecord) {
+        // If a main category is selected, start with its children.
+        recordsToDisplay = recordsToDisplay.filter(record => 
+            record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
+        );
+        
+        // If specific subcategories are active, filter further.
         if (activeSubcategories.length > 0) {
             recordsToDisplay = recordsToDisplay.filter(record => {
-                const subcategoriesForRecord = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',').map(s => s.trim().toLowerCase()) || [];
-                return activeSubcategories.some(subcat => subcategoriesForRecord.includes(subcat));
+                // Check if the record itself matches an active subcategory name
+                const isMatchingSubcategory = activeSubcategories.some(subcatName => 
+                    record.fields[CONSTANTS.FIELD_NAMES.NAME].toLowerCase() === subcatName
+                );
+                
+                // Also check if the record is a child of an active subcategory
+                const isChildOfSubcategory = activeSubcategories.some(subcatName => 
+                    record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM].toLowerCase() === subcatName
+                );
+                
+                return isMatchingSubcategory || isChildOfSubcategory;
             });
         }
+    } else if (selectedCategory === 'all') {
+        // If 'All Categories' is selected, display all top-level records initially
+        recordsToDisplay = topLevelRecords;
     }
+
     console.log(`FILTER: After Category/Subcategory filter, ${recordsToDisplay.length} records remain.`);
     
-    // Fix: Ensure the status filter correctly checks for "Available"
+    // Filter by 'Status' field
     if (statusFilter !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
-            // This is the key fix. It checks if the record's Status field
-            // is exactly the same as the selected filter value.
             return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
         });
         console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
     }
 
+    // Filter by 'Headcount'
     if (headcountFilter !== 'any' || (headcountFilter === 'custom' && customHeadcount)) {
         let filterMin = 0, filterMax = Infinity;
         if (headcountFilter === 'custom') {
@@ -84,6 +91,7 @@ export function applyFiltersAndSort(imageCache) {
         console.log(`FILTER: After Headcount filter, ${recordsToDisplay.length} records remain.`);
     }
 
+    // Filter by 'Location'
     if (locationFilter !== 'any') {
         recordsToDisplay = recordsToDisplay.filter(record => {
             return record.fields['Location']?.toLowerCase().replace(/\s+/g, '-') === locationFilter;
@@ -91,6 +99,7 @@ export function applyFiltersAndSort(imageCache) {
         console.log(`FILTER: After Location filter, ${recordsToDisplay.length} records remain.`);
     }
 
+    // Filter by 'Budget'
     if (budgetFilter !== 'any') {
         const BUDGET_RANGES = {
             'budget-friendly': { min: 0, max: 50 },
@@ -106,6 +115,7 @@ export function applyFiltersAndSort(imageCache) {
         console.log(`FILTER: After Budget filter, ${recordsToDisplay.length} records remain.`);
     }
     
+    // Filter by 'Search Term'
     if (searchTerm) {
         const scoredRecords = [];
         recordsToDisplay.forEach(record => {
@@ -125,6 +135,7 @@ export function applyFiltersAndSort(imageCache) {
         console.log(`FILTER: After Search filter, ${recordsToDisplay.length} records remain.`);
     }
     
+    // Apply sorting
     recordsToDisplay.sort((a, b) => {
         const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
