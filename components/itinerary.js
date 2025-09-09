@@ -2,325 +2,275 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { log } from '../utils/debug.js';
+import { getDayStatus, AVAILABILITY_STATUS } from '../availability.js';
 import { debounce } from '../utils.js';
-// NOTE: We no longer import Sortable. It is available globally.
-import { CONSTANTS } from '../config.js';
-import { updateAllCardAvailabilityIcons } from '../events.js'; // Assuming this is exposed
 
-let itineraryModalOverlay;
-let itineraryLockedItemsList;
-let itineraryFavoritedItemsList;
-let itineraryDatePicker;
+let itineraryModal = null;
+let lockedItemsList = null;
+let favoritedItemsList = null;
 
-function createItineraryItemCard(record, itemInfo, isLocked) {
-    const itemCard = document.createElement('div');
-    itemCard.className = isLocked ? 'itinerary-item locked-item-card' : 'itinerary-item favorite-item-card';
-    itemCard.dataset.recordId = record.id;
+export function initItinerary() {
+    log('Itinerary', 'Initializing itinerary module.');
+    itineraryModal = document.getElementById('itinerary-modal-overlay');
+    lockedItemsList = document.getElementById('itinerary-locked-items');
+    favoritedItemsList = document.getElementById('itinerary-favorited-items');
+    const itineraryCloseBtn = document.getElementById('itinerary-close-btn');
 
-    const thumbnail = document.createElement('img');
-    thumbnail.className = 'locked-item-thumbnail';
-    // Use an existing function to fetch images, but cache them
-    api.fetchImagesForRecord(record, state.records.all, new Map()).then(images => {
-        thumbnail.src = images.imageUrls?.[0] || 'https://res.cloudinary.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg';
-    });
-
-    const details = document.createElement('div');
-    details.className = 'locked-item-details';
-    details.innerHTML = `<p class="locked-item-name">${record.fields.Name}</p>`;
-    
-    // Add notes from state if they exist
-    if (itemInfo.note) {
-        details.innerHTML += `<textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>`;
-    } else if (isLocked) {
-        details.innerHTML += `<textarea class="itinerary-item-note" placeholder="Add a note..."></textarea>`;
+    if (itineraryCloseBtn) {
+        itineraryCloseBtn.addEventListener('click', hideItineraryModal);
     }
     
-    // Add quantity selector and availability icon
-    const actions = document.createElement('div');
-    actions.className = 'locked-item-actions';
-    const quantitySelector = `
-        <div class="quantity-selector">
-            <button class="quantity-btn minus">-</button>
-            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
-            <button class="quantity-btn plus">+</button>
-        </div>`;
-    actions.innerHTML += quantitySelector;
-    
-    // Add edit/remove buttons based on item type
-    if (isLocked) {
-        actions.innerHTML += `
-            <div class="itinerary-actions">
-                <span class="availability-icon">📅</span>
-                <button class="edit-btn">Edit</button>
-                <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
-            </div>
-        `;
-    } else {
-        actions.innerHTML += `
-            <div class="itinerary-actions">
-                <span class="availability-icon">📅</span>
-                <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-                <button class="action-btn remove-btn" title="Remove">×</button>
-            </div>
-        `;
+    // Listen for changes in the header date picker
+    const eventDatePicker = document.getElementById('event-date-picker');
+    if (eventDatePicker && eventDatePicker._flatpickr) {
+        eventDatePicker._flatpickr.config.onChange.push(() => {
+            if (itineraryModal.classList.contains('active')) {
+                renderItinerary();
+            }
+        });
     }
 
-    itemCard.appendChild(thumbnail);
-    itemCard.appendChild(details);
-    itemCard.appendChild(actions);
-
-    return itemCard;
-}
-
-export async function renderItinerary() {
-    log('Itinerary', 'Rendering itinerary view with live data.');
-    itineraryLockedItemsList.innerHTML = '';
-    itineraryFavoritedItemsList.innerHTML = '';
-    
-    const selectedDateRange = state.eventDetails.combined.get('date');
-    const hasDateRange = selectedDateRange && selectedDateRange.length === 2;
-    
-    // Helper function to render a list of items
-    const renderList = async (listElement, itemMap, isLocked) => {
-        for (const [id, itemInfo] of itemMap.entries()) {
-            const record = state.records.all.find(r => r.id === id);
-            if (!record) continue;
-            
-            const itemCard = createItineraryItemCard(record, itemInfo, isLocked);
-            listElement.appendChild(itemCard);
-            
-            // Check and update availability icon
-            if (hasDateRange) {
-                const availabilityIcon = itemCard.querySelector('.availability-icon');
-                if (availabilityIcon) {
-                    const busyTimes = await api.fetchCalendarForRecord(record);
-                    const isAvailable = ui.checkAvailability(new Date(selectedDateRange[0]), new Date(selectedDateRange[1]), busyTimes);
-                    availabilityIcon.textContent = isAvailable ? '✅' : '❌';
-                }
-            }
-        }
-    };
-
-    // Render locked items
-    await renderList(itineraryLockedItemsList, state.cart.lockedItems, true);
-
-    // Render favorited items
-    await renderList(itineraryFavoritedItemsList, state.cart.items, false);
-}
-
-// NEW: Function to render the header details
-export function renderItineraryHeader() {
-    log('Itinerary', 'Rendering itinerary modal header.');
-    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
-    document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
-    
-    const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    if (savedDate && savedDate.length === 2) {
-        itineraryDatePicker.setDate([savedDate[0], savedDate[1]], false);
-    } else {
-        itineraryDatePicker.clear();
-    }
-}
-
-function initializeSortable() {
-    log('Itinerary', 'Initializing SortableJS for drag-and-drop.');
-    
-    // Sortable for the "Your Event Plan" column
-    new Sortable(itineraryLockedItemsList, {
-        group: {
-            name: 'shared',
-            put: ['shared']
-        },
-        animation: 150,
-        onEnd: function (evt) {
-            log('Itinerary', 'Drag-and-drop ended on locked items list.');
-            const fromList = evt.from.id;
-            const toList = evt.to.id;
-            const itemRecordId = evt.item.dataset.recordId;
-            const oldIndex = evt.oldIndex;
-            const newIndex = evt.newIndex;
-            
-            // Handle reordering within the locked items list
-            if (fromList === toList) {
-                const newLockedItems = Array.from(state.cart.lockedItems.entries());
-                const [removed] = newLockedItems.splice(oldIndex, 1);
-                newLockedItems.splice(newIndex, 0, removed);
-                state.cart.lockedItems = new Map(newLockedItems);
-            }
-            // Handle moving an item from "Ideas" to "Plan"
-            else if (fromList === 'itinerary-favorited-items' && toList === 'itinerary-locked-items') {
-                const itemInfo = state.cart.items.get(itemRecordId);
-                state.cart.items.delete(itemRecordId);
-                const newLockedItems = Array.from(state.cart.lockedItems.entries());
-                newLockedItems.splice(newIndex, 0, [itemRecordId, itemInfo]);
-                state.cart.lockedItems = new Map(newLockedItems);
-            }
-            ui.updateEventPlanSection();
-            ui.updateFavoritesCarousel();
-            // triggerSave(); // We assume this function is available from events.js
-        },
-    });
-
-    // Sortable for the "Your Ideas" column
-    new Sortable(itineraryFavoritedItemsList, {
-        group: {
-            name: 'shared',
-            put: ['shared']
-        },
-        animation: 150,
-        onEnd: function (evt) {
-            log('Itinerary', 'Drag-and-drop ended on favorited items list.');
-            const fromList = evt.from.id;
-            const toList = evt.to.id;
-            const itemRecordId = evt.item.dataset.recordId;
-            const oldIndex = evt.oldIndex;
-
-            // Handle moving an item from "Plan" to "Ideas"
-            if (fromList === 'itinerary-locked-items' && toList === 'itinerary-favorited-items') {
-                const itemInfo = state.cart.lockedItems.get(itemRecordId);
-                state.cart.lockedItems.delete(itemRecordId);
-                state.cart.items.set(itemRecordId, itemInfo);
-                ui.updateEventPlanSection();
-                ui.updateFavoritesCarousel();
-                ui.updateCardIcon(itemRecordId);
-                // triggerSave(); // We assume this function is available from events.js
-            }
-        },
-    });
-}
-
-function initListeners() {
-    document.getElementById('itinerary-close-btn').addEventListener('click', hideItineraryModal);
-    
-    // Event listeners for the header inputs
-    document.getElementById('itinerary-event-name').addEventListener('change', (e) => {
-        state.eventDetails.combined.set('eventName', e.target.value);
-        ui.updateHeader();
-        // triggerSave();
-    });
-    
-    document.getElementById('itinerary-goals').addEventListener('change', (e) => {
-        state.eventDetails.combined.set('goals', e.target.value);
-        ui.updateHeader();
-        // triggerSave();
-    });
-
-    // Initialize Flatpickr date picker in the itinerary modal
-    itineraryDatePicker = flatpickr("#itinerary-date-picker", {
-        mode: "range",
-        enableTime: true,
-        dateFormat: "M j, Y h:i K",
-        onChange: async (selectedDates) => {
-            if (selectedDates.length > 0) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                // Sync with the main header calendar
-                const mainDatePickerInstance = document.getElementById('date-filter')._flatpickr;
-                if (mainDatePickerInstance) {
-                    mainDatePickerInstance.setDate(selectedDates, true);
-                }
-                // Update availability in the itinerary view
-                await renderItinerary();
-            } else {
-                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-                // Sync with the main header calendar
-                const mainDatePickerInstance = document.getElementById('date-filter')._flatpickr;
-                if (mainDatePickerInstance) {
-                    mainDatePickerInstance.clear();
-                }
-                // Update availability in the itinerary view
-                await renderItinerary();
-            }
-            // triggerSave(); // Assuming this function is available from events.js
-        },
-    });
-    
-    // Event listener for item notes and quantity
-    document.getElementById('itinerary-modal-overlay').addEventListener('change', (e) => {
-        const target = e.target;
-        const itemCard = target.closest('.itinerary-item');
-        if (!itemCard) return;
-        const recordId = itemCard.dataset.recordId;
-        
-        let updates = {};
-        if (target.matches('.quantity-input')) {
-            updates.quantity = parseInt(target.value, 10);
-        } else if (target.matches('.itinerary-item-note')) {
-            updates.note = target.value;
-        }
-
-        if (Object.keys(updates).length > 0) {
-            if (itemCard.classList.contains('locked-item-card')) {
-                ui.updateLockedItemState(recordId, updates);
-            } else {
-                ui.updateItemState(recordId, updates);
-            }
-            // triggerSave();
-        }
-    });
-
-    // Handle clicks on item action buttons
-    document.getElementById('itinerary-modal-overlay').addEventListener('click', (e) => {
-        const target = e.target;
-        const itemCard = target.closest('.itinerary-item');
-        if (!itemCard) return;
-        const recordId = itemCard.dataset.recordId;
-        const record = state.records.all.find(r => r.id === recordId);
-        
-        if (target.matches('.edit-btn')) {
-            ui.showDetailModal(record);
-        } else if (target.matches('.demote-locked-item-btn')) {
-            const itemInfo = state.cart.lockedItems.get(recordId);
-            state.cart.lockedItems.delete(recordId);
-            state.cart.items.set(recordId, itemInfo);
-            ui.updateEventPlanSection();
-            ui.updateFavoritesCarousel();
-            ui.updateCardIcon(recordId);
-            renderItinerary();
-            // triggerSave();
-        } else if (target.matches('.add-to-plan-btn')) {
-            const itemInfo = state.cart.items.get(recordId);
-            state.cart.lockedItems.set(recordId, itemInfo);
-            state.cart.items.delete(recordId);
-            ui.updateEventPlanSection();
-            ui.updateFavoritesCarousel();
-            ui.updateCardIcon(recordId);
-            renderItinerary();
-            // triggerSave();
-        } else if (target.matches('.remove-btn')) {
-            state.cart.items.delete(recordId);
-            ui.updateCardIcon(recordId);
-            ui.updateFavoritesCarousel();
-            renderItinerary();
-            // triggerSave();
-        }
-    });
+    setupDragAndDrop();
 }
 
 export function showItineraryModal() {
-    itineraryModalOverlay.classList.add('active');
-    itineraryModalOverlay.style.display = 'flex';
-    renderItineraryHeader();
-    renderItinerary();
+    log('Itinerary', 'Showing itinerary modal.');
+    itineraryModal.classList.add('active');
+    itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    log('Itinerary', 'Itinerary modal shown.');
+    renderItinerary();
 }
 
 export function hideItineraryModal() {
-    itineraryModalOverlay.classList.remove('active');
+    log('Itinerary', 'Hiding itinerary modal.');
+    itineraryModal.classList.remove('active');
     setTimeout(() => {
-        itineraryModalOverlay.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        log('Itinerary', 'Itinerary modal hidden.');
+        itineraryModal.style.display = 'none';
     }, 300);
+    document.body.classList.remove('modal-open');
 }
 
-export function initItinerary() {
-    itineraryModalOverlay = document.getElementById('itinerary-modal-overlay');
-    itineraryLockedItemsList = document.getElementById('itinerary-locked-items');
-    itineraryFavoritedItemsList = document.getElementById('itinerary-favorited-items');
+export async function renderItinerary() {
+    if (!lockedItemsList || !favoritedItemsList) return;
     
-    initListeners();
-    initializeSortable();
-    log('Itinerary', 'Itinerary module initialized.');
+    log('Itinerary', 'Rendering itinerary items.');
+    lockedItemsList.innerHTML = '';
+    favoritedItemsList.innerHTML = '';
+
+    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const selectedDate = selectedDateISO ? new Date(selectedDateISO) : null;
+    
+    // Render locked items
+    if (state.cart.lockedItems.size === 0) {
+        lockedItemsList.innerHTML = `<p class="description">No items in your plan yet. Drag items from the Ideas list to add them.</p>`;
+    } else {
+        const lockedItemIds = Array.from(state.cart.lockedItems.keys());
+        for (const recordId of lockedItemIds) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const itemInfo = state.cart.lockedItems.get(recordId);
+                const itemElement = await createItineraryItemElement(record, itemInfo, selectedDate);
+                lockedItemsList.appendChild(itemElement);
+            }
+        }
+    }
+    
+    // Render favorited items
+    if (state.cart.items.size === 0) {
+        favoritedItemsList.innerHTML = `<p class="description">No ideas yet. Find items in the catalog and click the heart icon to add them here!</p>`;
+    } else {
+        const favoritedItemIds = Array.from(state.cart.items.keys());
+        for (const recordId of favoritedItemIds) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const itemInfo = state.cart.items.get(recordId);
+                const itemElement = await createItineraryItemElement(record, itemInfo, selectedDate, false);
+                favoritedItemsList.appendChild(itemElement);
+            }
+        }
+    }
+}
+
+export function renderItineraryHeader() {
+    const eventNameInput = document.getElementById('itinerary-event-name');
+    const goalsInput = document.getElementById('itinerary-goals');
+    const datePickerInput = document.getElementById('itinerary-date-picker');
+
+    if (eventNameInput) {
+        eventNameInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
+    }
+    if (goalsInput) {
+        goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    }
+    const date = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (date && datePickerInput && datePickerInput._flatpickr) {
+        datePickerInput._flatpickr.setDate(new Date(date), true);
+    }
+
+    eventNameInput.addEventListener('change', debounce((e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        ui.updateHeader();
+    }, 500));
+    goalsInput.addEventListener('change', debounce((e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+    }, 500));
+}
+
+async function createItineraryItemElement(record, itemInfo, selectedDate, isLocked = true) {
+    const fields = record.fields;
+    const itemElement = document.createElement('div');
+    itemElement.className = 'itinerary-item';
+    itemElement.dataset.recordId = record.id;
+    itemElement.draggable = true;
+
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+    const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    let optionName = '';
+    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
+        optionName = options[itemInfo.selectedOptionIndex].name;
+    }
+    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const total = price * itemInfo.quantity;
+    
+    let statusIconHTML = '';
+    if (selectedDate && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const dayStatus = await getDayStatus(selectedDate, busyTimes, record);
+        let iconChar = '';
+        let iconClass = '';
+        switch (dayStatus.status) {
+            case AVAILABILITY_STATUS.FULL:
+                iconChar = '✅';
+                iconClass = 'available-full';
+                break;
+            case AVAILABILITY_STATUS.PARTIAL:
+                iconChar = '🟠';
+                iconClass = 'available-partial';
+                break;
+            case AVAILABILITY_STATUS.NONE:
+                iconChar = '❌';
+                iconClass = 'unavailable';
+                break;
+        }
+        statusIconHTML = `<span class="locked-item-status-icon ${iconClass}" title="${dayStatus.reason}">${iconChar}</span>`;
+    }
+
+    let actionsHTML = '';
+    if (isLocked) {
+        actionsHTML = `
+            <div class="locked-item-actions">
+                ${statusIconHTML}
+                <button class="demote-locked-item-btn" title="Return to Ideas">💡</button>
+            </div>
+        `;
+    } else {
+         actionsHTML = `
+            <div class="locked-item-actions">
+                <button class="add-to-plan-btn" title="Add to Plan">+</button>
+                <button class="remove-btn" title="Remove">×</button>
+            </div>
+        `;
+    }
+    
+
+    itemElement.innerHTML = `
+        <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <div class="locked-item-details">
+            <p class="locked-item-name">${fields.Name}</p>
+            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
+            ${isLocked ? `<p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>` : ''}
+            ${isLocked ? `<textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note || ''}</textarea>` : ''}
+        </div>
+        ${actionsHTML}
+    `;
+
+    if(isLocked) {
+        const quantityInput = itemElement.querySelector('.quantity-input');
+        if(quantityInput) {
+            quantityInput.addEventListener('change', debounce((e) => {
+                ui.updateLockedItemState(record.id, { quantity: parseInt(e.target.value, 10) });
+                ui.updateTotalCost();
+            }, 500));
+        }
+
+        const noteInput = itemElement.querySelector('.itinerary-item-note');
+        if(noteInput) {
+            noteInput.addEventListener('change', debounce((e) => {
+                ui.updateLockedItemState(record.id, { note: e.target.value });
+            }, 500));
+        }
+    }
+
+
+    return itemElement;
+}
+
+
+function setupDragAndDrop() {
+    if (!window.Sortable) {
+        console.error("Sortable.js is not loaded.");
+        return;
+    }
+    
+    // Sortable list for the Event Plan
+    new Sortable(lockedItemsList, {
+        group: 'shared',
+        animation: 150,
+        ghostClass: 'ghost',
+        onEnd: function (evt) {
+            const item = evt.item;
+            const recordId = item.dataset.recordId;
+            const itemInfo = state.cart.items.get(recordId) || state.cart.lockedItems.get(recordId);
+
+            // Item moved from Ideas to Event Plan
+            if (evt.to === lockedItemsList && evt.from === favoritedItemsList) {
+                state.cart.items.delete(recordId);
+                state.cart.lockedItems.set(recordId, itemInfo);
+                ui.updateCardIcon(recordId);
+                ui.updateTotalCost();
+                ui.updateEventPlanDateDisplay();
+                ui.updateLockedItemStatusIcons();
+            }
+            
+            // Reordering items within the Event Plan
+            const newOrder = Array.from(lockedItemsList.children).map(child => child.dataset.recordId);
+            const newLockedItems = new Map(newOrder.map(id => [id, state.cart.lockedItems.get(id)]));
+            state.cart.lockedItems = newLockedItems;
+        }
+    });
+
+    // Sortable list for Ideas
+    new Sortable(favoritedItemsList, {
+        group: 'shared',
+        animation: 150,
+        ghostClass: 'ghost',
+        onAdd: function (evt) {
+            const item = evt.item;
+            const recordId = item.dataset.recordId;
+            const itemInfo = state.cart.lockedItems.get(recordId);
+
+            // Item moved from Event Plan to Ideas
+            if (evt.to === favoritedItemsList) {
+                state.cart.lockedItems.delete(recordId);
+                state.cart.items.set(recordId, itemInfo);
+                ui.updateCardIcon(recordId);
+                ui.updateTotalCost();
+                ui.updateEventPlanDateDisplay();
+                ui.updateLockedItemStatusIcons();
+            }
+        }
+    });
+
+    lockedItemsList.addEventListener('click', (e) => {
+        const card = e.target.closest('.itinerary-item');
+        if (card) {
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if(record) {
+                ui.showDetailModal(record);
+            }
+        }
+    });
 }
