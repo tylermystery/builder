@@ -20,6 +20,7 @@ export function applyFiltersAndSort(imageCache) {
     let recordsToDisplay = state.records.all;
     console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
+    // NEW LOGIC: Filter by the selected store/category and subcategories
     if (selectedCategory !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
             const categories = record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',').map(c => c.trim().toLowerCase()) || [];
@@ -32,13 +33,15 @@ export function applyFiltersAndSort(imageCache) {
             });
         }
     }
+    // END NEW LOGIC
     
     // Fix: Ensure the status filter correctly checks for "Available"
     if (statusFilter !== 'all') {
         recordsToDisplay = recordsToDisplay.filter(record => {
             // This is the key fix. It checks if the record's Status field
             // is exactly the same as the selected filter value.
-            return record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+            return record.fields[CONSTANTS.FIELD_NAMES.STATUS] 
+ === statusFilter;
         });
         console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
     }
@@ -47,7 +50,7 @@ export function applyFiltersAndSort(imageCache) {
         let filterMin = 0, filterMax = Infinity;
         if (headcountFilter === 'custom') {
             filterMin = parseInt(customHeadcount, 10) ||
-0;
+ 0;
             filterMax = filterMin;
         } else {
             const [minStr, maxStr] = headcountFilter.split('-');
@@ -59,7 +62,7 @@ export function applyFiltersAndSort(imageCache) {
             if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
             if (capacityStr.includes('+')) {
                 return { min: parseInt(capacityStr, 10) ||
-0, max: Infinity };
+ 0, max: Infinity };
             }
             const parts = capacityStr.split('-').map(p => parseInt(p, 10));
  return { min: parts[0] || 0, max: parts[1] || Infinity };
@@ -84,6 +87,7 @@ export function applyFiltersAndSort(imageCache) {
             'moderate': { min: 51, max: 100 },
             'executive': { min: 101, max: 250 },
             'luxury': { min: 251, max: Infinity }
+  
         };
         const range = BUDGET_RANGES[budgetFilter];
         recordsToDisplay = recordsToDisplay.filter(record => {
@@ -119,6 +123,7 @@ export function applyFiltersAndSort(imageCache) {
         const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         switch (sortBy) {
             case 'price-asc': return aPrice - bPrice;
+    
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
             default: return 0;
