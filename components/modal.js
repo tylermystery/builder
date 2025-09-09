@@ -208,14 +208,19 @@ export async function showDetailModal(record) {
         },
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
-                // FIX: Get the flatpickr instance correctly
-                const mainDatePickerInstance = document.getElementById('date-filter')._flatpickr;
-                if (mainDatePickerInstance) {
-                    mainDatePickerInstance.setDate(selectedDates, true);
+                const eventDateInput = document.getElementById('event-date-picker');
+                if (eventDateInput && eventDateInput._flatpickr) {
+                    eventDateInput._flatpickr.setDate(selectedDates[0], true);
                 }
             }
         }
     });
+
+    const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (eventDate) {
+        calendarInstance.setDate(new Date(eventDate), true);
+    }
+
     modalOverlay.classList.add('active');
     setTimeout(() => {
         modalOverlay.style.display = 'flex';
@@ -257,7 +262,6 @@ export async function showCheckoutModal() {
     const depositEl = document.getElementById('deposit-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
     const summaryDetailsEl = document.getElementById('checkout-summary-details');
-
     if (!checkoutModalOverlay || !fullTotalEl || !depositEl || !summaryDetailsEl) {
         log('Modal', 'Error: Missing elements for checkout modal.');
         return;
@@ -270,7 +274,6 @@ export async function showCheckoutModal() {
 
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
-
     // Sum up the total cost from locked items
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
@@ -285,15 +288,12 @@ export async function showCheckoutModal() {
     }
 
     summaryDetailsEl.appendChild(summaryList);
-
     // Calculate the 35% deposit
     const depositAmount = finalTotal * 0.35;
     const depositInCents = Math.round(depositAmount * 100);
-
     // Update the display
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     depositEl.textContent = `$${depositAmount.toFixed(2)}`;
-    
     try {
         const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
