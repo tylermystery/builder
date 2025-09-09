@@ -992,12 +992,21 @@
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Checkout Summary</h3>
-            <ul id="checkout-summary-list"></ul>
-            <div class="checkout-total">
-                <strong>Total:</strong>
-                <strong id="checkout-total-price">$0.00</strong>
-            </div>
+            <ul id="checkout-summary-list">
+                <li><span>Total Estimated Cost:</span><span id="full-total-price">$0.00</span></li>
+                <li class="deposit-row"><span>Deposit Due (35%):</span><span id="deposit-price">$0.00</span></li>
+            </ul>
             <hr>
+            <div class="terms-and-conditions">
+                <h4>Simplified Terms</h4>
+                <ul>
+                    <li>A 35% deposit is required to reserve your event date.</li>
+                    <li>Your event details will be finalized in collaboration with our team.</li>
+                    <li>The remaining balance is due after all details are confirmed and, in some cases, after the event.</li>
+                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred. No refunds within 7 days of the event.</li>
+                    <li>Your deposit includes all planning, preparation, setup, and hosting services.</li>
+                </ul>
+            </div>
             <form id="payment-form">
                 <div class="form-row">
                     <label for="customer-name">Full Name</label>
