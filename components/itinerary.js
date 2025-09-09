@@ -4,12 +4,12 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { debounce } from '../utils.js';
-import Sortable from 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/modular/sortable.core.esm.js';
+// NOTE: We no longer import Sortable. It is available globally.
 
 let itineraryModalOverlay;
 let itineraryLockedItemsList;
 let itineraryFavoritedItemsList;
-let mainDatePicker;
+let itineraryDatePicker;
 
 function createItineraryItemCard(record, itemInfo, isLocked) {
     const itemCard = document.createElement('div');
