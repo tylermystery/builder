@@ -5,6 +5,7 @@
  * Changelog:
  * v4.8.8 - 2025-09-09
  * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
+ * - Added functionality for carousel navigation buttons.
  * v4.8.7 - 2025-09-08
  * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
  * v4.8.6 - 2025-09-08
@@ -166,7 +167,7 @@ async function initialize() {
             ui.updateEventPlanSection();
             ui.updateTotalCost();
             log('Main', '11. Updated header, event plan, and total cost.');
- const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+            const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
             if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
                 if (mainDatePicker) {
                     mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
