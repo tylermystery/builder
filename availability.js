@@ -1,13 +1,13 @@
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
-
+import * as api from './api.js';
+import { state } from './state.js';
 export const AVAILABILITY_STATUS = {
     FULL: 'full',
     PARTIAL: 'partial',
     NONE: 'none',
 };
 
-// Add export to this function so it can be used by other modules
 export function parseICalDate(dateString) {
     if (!dateString) return null;
     const year = parseInt(dateString.substring(0, 4), 10);
@@ -25,7 +25,6 @@ export function getDayStatus(day, busyTimes, record) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const leadTimeDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
-
     // --- FIX: Return a specific reason for unavailability
     if (day < leadTimeDate) {
         log('Availability', `Day ${day.toDateString()} unavailable due to lead time: ${leadTime} days`);
@@ -48,14 +47,14 @@ export function getDayStatus(day, busyTimes, record) {
         const busyEnd = new Date(busy.end);
         return busyStart <= dayEnd && busyEnd >= dayStart;
     });
-
     if (busyPeriods.length === 0) {
         log('Availability', `Day ${day.toDateString()} fully available (no conflicts)`);
         return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully Available' };
     }
 
     // Calculate available time slots
-    const totalMinutes = 24 * 60; // 24 hours in minutes
+    const totalMinutes = 24 * 60;
+    // 24 hours in minutes
     let busyMinutes = 0;
     busyPeriods.forEach(busy => {
         const start = new Date(Math.max(busy.start, dayStart));
@@ -64,7 +63,6 @@ export function getDayStatus(day, busyTimes, record) {
         busyMinutes += minutes;
     });
     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
-
     if (availablePercentage > 50) {
         log('Availability', `Day ${day.toDateString()} partially available (${availablePercentage.toFixed(1)}%)`);
         return { status: AVAILABILITY_STATUS.PARTIAL, reason: 'Partially Available (some times are booked).' };
@@ -88,7 +86,8 @@ export function checkAvailability(start, end, busyTimes) {
 
 export function getAvailableSlotsForDay(day, busyTimes) {
     if (!busyTimes || busyTimes.length === 0) {
-        return '8:00 AM - 5:00 PM'; // Default availability if no data
+        return '8:00 AM - 5:00 PM';
+        // Default availability if no data
     }
 
     const dayStart = new Date(day);
@@ -124,4 +123,24 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         const endTime = new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return `${startTime} - ${endTime}`;
     }).join('\n') || 'No available slots';
+}
+
+export async function getCombinedPlanStatus(date, lockedItems) {
+    let overallStatus = AVAILABILITY_STATUS.FULL;
+
+    for (const record of lockedItems) {
+        if (record && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
+            const busyTimes = await api.fetchCalendarForRecord(record);
+            const status = getDayStatus(date, busyTimes, record).status;
+
+            if (status === AVAILABILITY_STATUS.NONE) {
+                return AVAILABILITY_STATUS.NONE; // If any item is unavailable, the whole plan is unavailable
+            }
+            if (status === AVAILABILITY_STATUS.PARTIAL) {
+                overallStatus = AVAILABILITY_STATUS.PARTIAL; // If at least one is partial, the plan is partial
+            }
+        }
+    }
+
+    return overallStatus;
 }
