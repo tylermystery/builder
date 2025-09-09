@@ -141,6 +141,7 @@ export async function showDetailModal(record) {
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
+        
         } else {
          
             optionButton.addEventListener('click', (e) => {
@@ -217,9 +218,10 @@ export async function showDetailModal(record) {
         },
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
-                const mainDatePicker = window.flatpickr.getInstance(document.getElementById('date-filter'));
-                if (mainDatePicker) {
-                    mainDatePicker.setDate(selectedDates, true);
+                // FIX: Use the local variable to get the instance
+                const mainDatePickerInstance = window.flatpickr.getInstance(document.getElementById('date-filter'));
+                if (mainDatePickerInstance) {
+                    mainDatePickerInstance.setDate(selectedDates, true);
                 }
             }
         }
@@ -319,23 +321,6 @@ export async function showCheckoutModal() {
         log('Modal', `Failed to initialize payment form: ${err.message}`);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
-    }
-}
-
-export function hideCheckoutModal() {
-    if (cardElement) {
-        cardElement.unmount();
-    }
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    if (checkoutModalOverlay) {
-        checkoutModalOverlay.classList.remove('active');
-        setTimeout(() => {
-            checkoutModalOverlay.style.display = 'none';
-            resetModalState();
-            document.querySelector('#header-title').focus();
-            log('Modal', 'Checkout modal hidden, focused header title.');
-        }, 300);
-        document.body.classList.remove('modal-open');
     }
 }
 
