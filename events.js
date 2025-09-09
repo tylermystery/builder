@@ -413,6 +413,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             ui.updateTotalCost();
+            // Re-evaluate plan availability after change
+            if (state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)) {
+                await ui.updateLockedItemStatusIcons();
+            }
             triggerSave();
 
         } else if (addToPlanBtn) {
@@ -440,6 +444,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
+            // Re-evaluate plan availability after change
+            if (state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)) {
+                await ui.updateEventPlanDateDisplay();
+                await ui.updateLockedItemStatusIcons();
+            }
             triggerSave();
             if (container.id === 'detail-modal-overlay') {
                 ui.hideDetailModal();
@@ -456,6 +465,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await ui.updateEventPlanSection();
             await debounce(ui.updateFavoritesCarousel, 300)();
             ui.updateTotalCost();
+            // Re-evaluate plan availability after change
+            if (state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)) {
+                await ui.updateEventPlanDateDisplay();
+                await ui.updateLockedItemStatusIcons();
+            }
             triggerSave();
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
@@ -463,6 +477,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
             state.cart.items.delete(recordId);
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
+            if (state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)) {
+                await ui.updateEventPlanDateDisplay();
+            }
             triggerSave();
         } else if (editBtn) {
             const lockedItemCard = editBtn.closest('.locked-item-card');
@@ -530,6 +547,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
                 ui.updateLockedItemState(recordId, updates);
+                // Re-evaluate plan availability after change
+                if (state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)) {
+                    ui.updateEventPlanDateDisplay();
+                    ui.updateLockedItemStatusIcons();
+                }
             } else {
                 ui.updateItemState(recordId, updates);
                 triggerSave();
