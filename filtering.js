@@ -15,10 +15,8 @@ function parseCapacity(capacityStr) {
 // Filter records based on selected category and subcategories
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     const topLevelItems = records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-
     if (selectedCategory !== 'all') {
         const selectedCategoryRecord = topLevelItems.find(record => record.fields.Name === selectedCategory);
-        
         if (selectedCategoryRecord && activeSubcategories.length === 0) {
             // If a main category is selected and no subcategories are, show its immediate children
             records = records.filter(record => 
@@ -164,7 +162,6 @@ export function applyFiltersAndSort(imageCache) {
 
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     console.log(`FILTER: After Category/Subcategory filter, ${recordsToDisplay.length} records remain.`);
-    
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
 
@@ -173,7 +170,6 @@ export function applyFiltersAndSort(imageCache) {
 
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     console.log(`FILTER: After Location filter, ${recordsToDisplay.length} records remain.`);
-
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     console.log(`FILTER: After Budget filter, ${recordsToDisplay.length} records remain.`);
     
@@ -185,7 +181,6 @@ export function applyFiltersAndSort(imageCache) {
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
-
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
     console.log(`FILTER: Passing ${initialRecords.length} records to ui.renderRecords.`);
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
