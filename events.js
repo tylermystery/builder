@@ -1,8 +1,13 @@
 // FILE: events.js
 /*
- * Version: 4.9.1
+ * Version: 4.9.2
  * Last Modified: 2025-09-09
  * Changelog:
+ * v4.9.2 - 2025-09-09
+ * - Fixed bug where Airtable 'Date' field would not accept date range array.
+ * - Corrected a TypeError in `updateTotalCost` by fixing the property access.
+ * - Ensured page title updates correctly with the event name.
+ * - Fixed `ui.checkAvailability is not a function` error in the itinerary module.
  * v4.9.1 - 2025-09-09
  * - Implemented dynamic availability for locked-in items and the event plan date.
  * - Synced the detail modal calendar with the event plan date.
