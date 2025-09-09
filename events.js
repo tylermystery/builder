@@ -30,7 +30,9 @@ import { debounce } from './utils.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
-
+const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+let currentStore = null;
 function getCurrentCategoryRecord() {
     const selectedCategoryName = categoryFilterDropdown.value;
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
