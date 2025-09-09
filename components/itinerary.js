@@ -10,6 +10,7 @@ import { debounce } from '../utils.js';
 let itineraryModal = null;
 let lockedItemsList = null;
 let favoritedItemsList = null;
+let itemNotes = {};
 
 export function initItinerary() {
     log('Itinerary', 'Initializing itinerary module.');
