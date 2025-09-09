@@ -2,7 +2,7 @@
 /*
  * Version: 4.9.0
  * Last Modified: 2025-09-09
- * Changelog:
+ * * Changelog:
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
@@ -92,7 +92,7 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                      busyMinutes += minutes;
+                        busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
