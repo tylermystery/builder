@@ -63,10 +63,10 @@ const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT
 let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDate = new Date(dateRange[0]);
-        // NEW: Check if the date is valid before formatting and sending
+// NEW: Check if the date is valid before formatting and sending
         if (!isNaN(startDate.getTime())) {
              formattedDate = startDate.toISOString();
-        }
+}
     }
 
     const fields = {
@@ -204,9 +204,9 @@ log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
         });
 log('API', `Image fetch response: status ${response.status}`);
         if (response.status === 420 && retries > 0) {
-            console.warn(`Cloudinary rate limit hit. Retrying in 250ms... (${retries} retries left)`);
+            console.warn(`Cloudinary rate limit hit. Retrying in 500ms... (${retries} retries left)`);
 log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
-            await new Promise(res => setTimeout(res, 250));
+            await new Promise(res => setTimeout(res, 500)); // FIX: Increased delay to 500ms
             return fetchImagesByTags(tags, retries - 1);
 }
 
