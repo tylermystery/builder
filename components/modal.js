@@ -256,14 +256,20 @@ export async function showCheckoutModal() {
     const fullTotalEl = document.getElementById('full-total-price');
     const depositEl = document.getElementById('deposit-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+    const summaryDetailsEl = document.getElementById('checkout-summary-details');
 
-    if (!checkoutModalOverlay || !fullTotalEl || !depositEl) {
+    if (!checkoutModalOverlay || !fullTotalEl || !depositEl || !summaryDetailsEl) {
         log('Modal', 'Error: Missing elements for checkout modal.');
         return;
     }
 
+    // Clear previous summary and totals
+    summaryDetailsEl.innerHTML = '';
+    fullTotalEl.textContent = '$0.00';
+    depositEl.textContent = '$0.00';
+
     let finalTotal = 0;
-    const summaryItems = [];
+    const summaryList = document.createElement('ul');
 
     // Sum up the total cost from locked items
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
@@ -273,8 +279,12 @@ export async function showCheckoutModal() {
         const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
-        summaryItems.push(`<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`);
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
+        summaryList.appendChild(listItem);
     }
+
+    summaryDetailsEl.appendChild(summaryList);
 
     // Calculate the 35% deposit
     const depositAmount = finalTotal * 0.35;
