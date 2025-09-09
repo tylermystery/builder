@@ -74,7 +74,7 @@ let formattedDate = null;
         "Items with Variations": JSON.stringify(sessionData),
         "Collaborators": state.session.collaborators.join(', '),
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
- null,
+null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
 if (formattedDate) {
@@ -95,6 +95,7 @@ log('API', `Saving session to URL: ${url}, Method: ${method}`);
                 'Content-Type': 'application/json' 
             },
    
+
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
 log('API', `Session save response: status ${response.status}`);
@@ -168,7 +169,7 @@ return state.calendar.busyTimes.get(icalUrl);
 log('API', `Fetching calendar from: ${proxyUrl}`);
         const response = await fetch(proxyUrl);
 log('API', `Calendar fetch response: status ${response.status}`);
-        if (!response.ok) {
+if (!response.ok) {
             const errorData = await response.json();
 log('API', `Calendar fetch error: ${JSON.stringify(errorData)}`);
             throw new Error(`Calendar API Error: ${response.statusText}`);
@@ -206,7 +207,8 @@ log('API', `Image fetch response: status ${response.status}`);
         if (response.status === 420 && retries > 0) {
             console.warn(`Cloudinary rate limit hit. Retrying in 500ms... (${retries} retries left)`);
 log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
-            await new Promise(res => setTimeout(res, 500)); // FIX: Increased delay to 500ms
+            await new Promise(res => setTimeout(res, 500));
+// FIX: Increased delay to 500ms
             return fetchImagesByTags(tags, retries - 1);
 }
 
@@ -229,6 +231,7 @@ return null;
                 transformations = 'c_fit,w_600,h_520';
             } else {
                 
+
 transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
