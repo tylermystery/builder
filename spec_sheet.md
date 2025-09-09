@@ -4,9 +4,13 @@ Feature Specification Sheet (Final Version)
 **Last Modified: 2025-09-09**
 
 ### Changelog
-* **v1.2.4 (2025-09-09):** Finalized UI polishes. Renamed the main header title to "Tyler's Mystery Tours Shop." Reorganized the event plan sidebar to use a clickable "Event Plan" title that opens the itinerary builder. Changed the checkout button text to "Reserve." Implemented dynamic availability displays for individual plan items and the overall event date.
+* **v1.2.4 (2025-09-09):** Finalized UI polishes.
+Renamed the main header title to "Tyler's Mystery Tours Shop."
+Reorganized the event plan sidebar to use a clickable "Event Plan" title that opens the itinerary builder.
+Changed the checkout button text to "Reserve." Implemented dynamic availability displays for individual plan items and the overall event date.
 * **v1.2.3 (2025-09-08):** Implemented dynamic calendar and availability updates.
-Corrected modularity issues with event handlers and global libraries. Fixed logic for `updateHeaderCalendarAvailability` to correctly display combined availability.
+Corrected modularity issues with event handlers and global libraries.
+Fixed logic for `updateHeaderCalendarAvailability` to correctly display combined availability.
 * **v1.2.2 (2025-08-31):** Updated filter layout description, making Categories buttons at the top.
 * **v1.2.1 (2025-08-31):** Added "Status Filter" to the Search & Filtering section.
 * **v1.2.0 (2025-08-30):** Added "State Management Model" section to document the user flow for favorited and locked items.
