@@ -41,6 +41,13 @@ flex-wrap: wrap;
 font-weight: bold;
             margin: 0;
         }
+        #header-event-name {
+            font-size: 1.5em; /* Matches other main titles */
+            font-weight: bold;
+            border: none;
+            background: none;
+            padding: 0;
+        }
         .toolbar-group {
             display: flex;
 flex-direction: column;
@@ -931,10 +938,9 @@ height: 60px;
         </div>
         <div id="right-sidebar">
             <div id="event-plan-panel">
-                <div class="toolbar-group event-name-group">
-                    <h2 id="header-event-name-display" style="cursor: pointer;">Event Name</h2>
-                    <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off" style="display: none;">
-                </div>
+                    <div class="event-name-group">
+                        <input type="text" id="header-event-name" value="Our Awesome Event" autocomplete="off">
+                    </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
                     <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
