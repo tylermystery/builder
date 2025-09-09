@@ -63,24 +63,11 @@ function updateSubcategoryButtons() {
     });
 }
 
-export function getItemState(recordId) {
-    if (state.cart.items.has(recordId)) {
-        return state.cart.items.get(recordId);
-    }
-    return { quantity: 1, selectedOptionIndex: 0, note: '' };
-}
+// NOTE: These functions have been moved to ui.js
+// export function getItemState(recordId) { ... }
+// export function updateItemState(recordId, updates) { ... }
+// export function updateLockedItemState(recordId, updates) { ... }
 
-export function updateItemState(recordId, updates) {
-    const existing = getItemState(recordId);
-    const newState = { ...existing, ...updates };
-    state.cart.items.set(recordId, newState);
-}
-
-export function updateLockedItemState(recordId, updates) {
-    const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
-    const newState = { ...existing, ...updates };
-    state.cart.lockedItems.set(recordId, newState);
-}
 
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
@@ -138,7 +125,7 @@ async function updateAllCardAvailabilityIcons() {
             icon.title = 'Select a date range to check availability';
             icon.textContent = '📅';
         });
-    return;
+        return;
     }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
@@ -199,7 +186,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
-          
             scrollTimeout = null;
         }, 100);
     });
@@ -217,7 +203,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             option.textContent = cat.name;
             categoryFilterDropdown.appendChild(option);
         });
-        
         // NEW: Set the default category to the first one in the list
         if (categories.length > 0) {
             categoryFilterDropdown.value = categories[0].name;
@@ -256,9 +241,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (defaultCategory) {
                 // FIX: Use case-sensitive name for reset
                 document.getElementById('category-filter-dropdown').value = defaultCategory;
- 
                 updateSubcategoryButtons();
-       
             }
         } else {
             document.getElementById('category-filter-dropdown').value = 'all';
@@ -266,17 +249,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
         document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
         });
-   
         // --- END UPDATED
         document.getElementById('name-filter').value = '';
-    
         document.getElementById('status-filter').value = 'Available';
- 
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
-     
         document.getElementById('budget-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
         if (mainDatePicker) mainDatePicker.clear();
@@ -290,16 +269,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
-   
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
             }
-        
         },
-   
     });
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
@@ -309,19 +285,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
-   
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
-               
                     endDate.setDate(endDate.getDate() + 1);
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
-        
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
@@ -347,16 +320,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const { error } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
-             
                 billing_details: {
                     name: document.getElementById('customer-name').value,
                     email: document.getElementById('customer-email').value,
                 },
             },
         });
-     
         const cardErrors = document.getElementById('card-errors');
-       
         if (error) cardErrors.textContent = error.message;
         else {
             cardErrors.textContent = '';
@@ -383,6 +353,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
         const heartIconModal = e.target.closest('#modal-heart-btn');
+        const closeCheckoutBtn = e.target.closest('#checkout-close-btn');
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -392,11 +363,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
+        } else if (closeCheckoutBtn) {
+            ui.hideCheckoutModal();
         } else if (heartIcon || heartIconModal) {
             e.stopPropagation();
             const recordId = (heartIcon || heartIconModal).closest('[data-record-id]').dataset.recordId;
             const isLocked = state.cart.lockedItems.has(recordId);
-
             if (isLocked) {
                 // If it's a locked item, clicking the checkmark demotes it back to favorites
                 const itemInfo = state.cart.lockedItems.get(recordId);
@@ -408,6 +380,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 if (state.cart.items.has(recordId)) {
                     state.cart.items.delete(recordId);
                 } else {
+                    // FIX: This needs to use the updated function location
                     ui.updateItemState(recordId, {});
                 }
             }
@@ -431,9 +404,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
                     note: noteInput ? noteInput.value.trim() : ''
                 };
-                updateLockedItemState(recordId, itemInfo);
+                // FIX: This needs to use the updated function location
+                ui.updateLockedItemState(recordId, itemInfo);
             } else {
-                itemInfo = getItemState(recordId);
+                // FIX: This needs to use the updated function location
+                itemInfo = ui.getItemState(recordId);
                 state.cart.lockedItems.set(recordId, itemInfo);
                 state.cart.items.delete(recordId);
             }
@@ -493,9 +468,18 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
             if (parentRecord) ui.showDetailModal(parentRecord);
         } else if (card) {
-            const interactiveElements = e.target.closest('.card-action-btn, .quantity-selector, .parent-link');
+            const interactiveElements = e.target.closest('.card-action-btn, .quantity-selector, .parent-link, .availability-btn');
+            // FIX: Add logic to open modal when a non-interactive element of the card is clicked.
             if (!interactiveElements) {
                 const recordId = card.dataset.recordId;
+                const record = state.records.all.find(r => r.id === recordId);
+                if (record) ui.showDetailModal(record);
+            }
+        } else if (favoriteItem) {
+            // FIX: Add logic to open modal when a favorited item card is clicked.
+            const interactiveElements = e.target.closest('.add-to-plan-btn, .remove-btn');
+            if (!interactiveElements) {
+                const recordId = favoriteItem.dataset.recordId;
                 const record = state.records.all.find(r => r.id === recordId);
                 if (record) ui.showDetailModal(record);
             }
@@ -523,9 +507,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
         if (Object.keys(updates).length > 0) {
             if (isEditLockedMode) {
-                updateLockedItemState(recordId, updates);
+                // FIX: This needs to use the updated function location
+                ui.updateLockedItemState(recordId, updates);
             } else {
-                updateItemState(recordId, updates);
+                // FIX: This needs to use the updated function location
+                ui.updateItemState(recordId, updates);
                 triggerSave();
                 debounce(ui.updateFavoritesCarousel, 300)();
             }
