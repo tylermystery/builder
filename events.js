@@ -4,7 +4,7 @@
 * Last Modified: 2025-09-09
 * Changelog:
 * v4.9.4 - 2025-09-09
-* - Fixed category/subcategory bug by correctly parsing child records.
+* - Fixed category/subcategory bug by correctly parsing options from the category record.
 * - Ensured search functionality operates on the correct data set.
 * v4.9.3 - 2025-09-09
 * - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
@@ -61,23 +61,13 @@ function getCurrentCategoryRecord() {
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
 }
 
-// FIX: This function now correctly finds subcategories based on the parent item.
+// FIX: This function now correctly finds subcategories by parsing the options field of the category record.
 function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
     }
-    const subcategories = new Set();
-    const childRecords = state.records.all.filter(record => 
-        record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === categoryRecord.fields.Name);
-    
-    childRecords.forEach(child => {
-        const rawSubcategories = child.fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
-        if (rawSubcategories) {
-            rawSubcategories.split(',').forEach(subcat => subcategories.add(subcat.trim()));
-        }
-    });
-
-    return Array.from(subcategories).sort();
+    const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    return subcategoryOptions.map(option => option.name).sort();
 }
 
 // FIX: This function now correctly displays the buttons for the subcategories
