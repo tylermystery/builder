@@ -1,8 +1,12 @@
 // FILE: events.js
 /*
- * Version: 4.9.0
+ * Version: 4.9.1
  * Last Modified: 2025-09-09
  * Changelog:
+ * v4.9.1 - 2025-09-09
+ * - Implemented dynamic availability for locked-in items and the event plan date.
+ * - Synced the detail modal calendar with the event plan date.
+ * - Updated event handlers for adding/removing items to trigger an availability refresh.
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
