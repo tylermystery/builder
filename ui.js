@@ -9,7 +9,7 @@ import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
-import { getDayStatus, getCombinedPlanStatus } from './availability.js';
+import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS } from './availability.js';
 import * as api from './api.js';
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
@@ -173,29 +173,28 @@ export async function updateEventPlanDateDisplay() {
     const dateInput = document.getElementById('event-date-picker');
     if (!dateInput) return;
 
-    const selectedDates = dateInput._flatpickr.selectedDates;
-    const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
-
-    if (selectedDates.length === 0 || lockedItems.length === 0) {
+    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (!selectedDateISO) {
         dateInput.value = 'Select a date';
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
         return;
     }
+    const selectedDate = new Date(selectedDateISO);
+    const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
 
-    const selectedDate = selectedDates[0];
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
     
     dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
     
     switch (overallStatus) {
-        case 'full':
+        case AVAILABILITY_STATUS.FULL:
             dateInput.classList.add('available-full');
             break;
-        case 'partial':
+        case AVAILABILITY_STATUS.PARTIAL:
             dateInput.classList.add('available-partial');
             break;
-        case 'none':
+        case AVAILABILITY_STATUS.NONE:
             dateInput.classList.add('unavailable');
             break;
     }
@@ -203,16 +202,15 @@ export async function updateEventPlanDateDisplay() {
 
 export async function updateLockedItemStatusIcons() {
     log('UI', 'Updating locked-in item status icons.');
-    const eventPlanDate = document.getElementById('event-date-picker');
-    const selectedDate = eventPlanDate?._flatpickr?.selectedDates?.[0];
-
-    if (!selectedDate) {
+    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (!selectedDateISO) {
         document.querySelectorAll('.locked-item-status-icon').forEach(icon => {
             icon.textContent = '';
         });
         return;
     }
 
+    const selectedDate = new Date(selectedDateISO);
     const lockedItems = document.querySelectorAll('.locked-item-card');
     for (const item of lockedItems) {
         const recordId = item.dataset.recordId;
@@ -231,15 +229,15 @@ export async function updateLockedItemStatusIcons() {
         
         statusIconEl.classList.remove('available-full', 'available-partial', 'unavailable');
         switch (dayStatus.status) {
-            case 'full':
+            case AVAILABILITY_STATUS.FULL:
                 statusIconEl.textContent = '✅';
                 statusIconEl.classList.add('available-full');
                 break;
-            case 'partial':
+            case AVAILABILITY_STATUS.PARTIAL:
                 statusIconEl.textContent = '🟠';
                 statusIconEl.classList.add('available-partial');
                 break;
-            case 'none':
+            case AVAILABILITY_STATUS.NONE:
                 statusIconEl.textContent = '❌';
                 statusIconEl.classList.add('unavailable');
                 break;
