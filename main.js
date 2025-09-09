@@ -33,7 +33,7 @@ import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, updateSaveShareButton } from './events.js';
 import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
 const imageCache = new Map();
 let mainDatePicker = null;
