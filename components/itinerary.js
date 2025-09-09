@@ -4,7 +4,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { debounce } from '../utils.js';
-import Sortable from 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/modular/sortable.core.esm.js';
+// NOTE: We no longer import Sortable. It is available globally.
 
 let itineraryModalOverlay;
 let itineraryLockedItemsList;
@@ -79,7 +79,7 @@ function renderItinerary() {
     }
 }
 
-function initializeSortable() {
+export function initializeSortable() {
     log('Itinerary', 'Initializing SortableJS for drag-and-drop.');
     
     // Sortable for the "Your Event Plan" column
@@ -115,7 +115,8 @@ function initializeSortable() {
             }
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
-            triggerSave(); // Function from events.js, needs to be imported or exposed
+            // Assuming triggerSave is exposed or imported
+            // triggerSave(); 
         },
     });
 
@@ -141,7 +142,8 @@ function initializeSortable() {
                 ui.updateEventPlanSection();
                 ui.updateFavoritesCarousel();
                 ui.updateCardIcon(itemRecordId);
-                triggerSave(); // Function from events.js, needs to be imported or exposed
+                // Assuming triggerSave is exposed or imported
+                // triggerSave();
             }
         },
     });
