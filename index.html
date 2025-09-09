@@ -236,8 +236,8 @@
             margin-top: 10px;
         }
         #favorites-section { 
-            padding: 15px 0px; 
-            box-sizing: border-box;
+            padding: 15px 0px;
+ box-sizing: border-box;
             position: relative;
         }
         #favorites-carousel { 
@@ -761,9 +761,11 @@
     <div id="sticky-header">
         <div id="header-toolbar">
             <h2 id="header-title">Event Builder <sup id="beta-trigger" style="cursor: pointer; font-size: 0.5em; top: -1em;">beta</sup></h2>
+            <span id="store-display" style="font-size: 1.1em; font-weight: bold;"></span>
             <div class="toolbar-group">
                 <label for="category-filter-dropdown">Category</label>
-                <select id="category-filter-dropdown">
+                
+<select id="category-filter-dropdown">
                     <option value="all">All Categories</option>
                     </select>
             </div>
@@ -771,69 +773,84 @@
                 </div>
         </div>
     </div>
-    <div class="main-container">
+   
+ <div class="main-container">
         <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
-                    <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
+                   
+ <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
                 </div>
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
-                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+           
+ <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
                         <button class="filter-btn" data-date-quick="this-week">This Week</button>
                         <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
-                    </div>
+     
+ </div>
                 </div>
                 <div class="filter-group">
                     <label for="headcount-filter">Headcount</label>
                     <select id="headcount-filter">
-                        <option value="any">Any Size</option>
+          
+               <option value="any">Any Size</option>
                         <option value="1-10">1-10</option>
                         <option value="11-25">11-25</option>
                         <option value="26-50">26-50</option>
-                        <option value="51-100">51-100</option>
+         
+                <option value="51-100">51-100</option>
                         <option value="101-250">101-250</option>
                         <option value="250-plus">250+</option>
                         <option value="custom">Custom...</option>
-                    </select>
+         
+            </select>
                     <input type="number" id="headcount-custom" placeholder="Enter
-headcount" min="1" style="display: none;" autocomplete="off">
+headcount" min="1" style="display: none;"
+ autocomplete="off">
                 </div>
                 <div class="filter-group">
                     <label for="location-filter">Location</label>
                     <select id="location-filter">
-                        <option value="any">Any Location</option>
+                        <option 
+ value="any">Any Location</option>
                         <option value="sf">San Francisco</option>
                         <option value="oakland">Oakland</option>
                         <option value="peninsula">Peninsula</option>
-                        <option value="south-bay">South Bay</option>
+                       
+ <option value="south-bay">South Bay</option>
                         <option value="north-bay">North Bay</option>
                         <option value="east-bay">East Bay</option>
                         <option value="other">Other</option>
-                    </select>
+                    
+ </select>
                 </div>
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
                     <select id="budget-filter">
-                        <option value="any">Any Budget</option>
+                        <option 
+ value="any">Any Budget</option>
                         <option value="budget-friendly">Budget-Friendly</option>
                         <option value="moderate">Moderate</option>
                         <option value="executive">Executive</option>
-                        <option value="luxury">Luxury</option>
+                        
+ <option value="luxury">Luxury</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label for="status-filter">Status</label>
                     <select
 id="status-filter">
-                        <option value="Available">Available</option>
+     
+                    <option value="Available">Available</option>
                         <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
+                        <option value="Sold Out">Sold 
+ Out</option>
                     </select>
                 </div>
                 <button id="reset-filters-btn">Reset All Filters</button>
@@ -841,11 +858,13 @@ id="status-filter">
         </div>
         <div id="catalog-area">
             <div id="catalog-toolbar">
-                <select id="sort-by">
+   
+              <select id="sort-by">
                     <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
-                </select>
+                
+ </select>
             </div>
             <div id="catalog-container"></div>
         </div>
@@ -853,34 +872,39 @@ id="status-filter">
             <div id="event-plan-panel">
                 <h3>Your Event Plan</h3>
                 <div id="favorites-section">
-                    <h4>Your Ideas</h4>
+          
+            <h4>Your Ideas</h4>
                     <button class="carousel-nav left">◄</button>
                     <div
 id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
-                <div class="toolbar-group">
+         
+               <div class="toolbar-group">
                     <label for="header-event-name">Event Name</label>
                     <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off">
                 </div>
                 <div class="toolbar-group">
-                    <label for="header-goals">Goals / Notes</label>
+           
+                  <label for="header-goals">Goals / Notes</label>
                     <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
                 </div>
                 <hr style="border: none;
-border-top: 1px solid #eee; margin: 20px 0;">
+ border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="cart-items-container">
                     <p style="font-size: 0.9em;
-color: #6c757d;">No items locked in yet.</p>
+ color: #6c757d;">No items locked in yet.</p>
                 </div>
                 <div id="cart-footer">
                     <div class="total-row">
                         <span>Total:</span>
-                        <span id="total-cost">$0.00</span>
+                 
+        <span id="total-cost">$0.00</span>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Checkout</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
-                </div>
+              
+   </div>
             </div>
         </div>
     </div>
@@ -889,24 +913,28 @@ color: #6c757d;">No items locked in yet.</p>
             <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
-                <div id="modal-thumbnail-strip"></div>
+              
+   <div id="modal-thumbnail-strip"></div>
             </div>
             <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                 </div>
                 <div id="modal-breadcrumbs"></div>
                 <h2 id="modal-item-name"></h2>
-                <p id="modal-item-price" class="price"></p>
+     
+            <p id="modal-item-price" class="price"></p>
                 <p id="modal-item-description"></p>
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
                 <div id="modal-notes-container">
-                    <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
+                   
+   <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
                 </div>
                 <div id="modal-actions-container">
                     <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
                 </div>
-                <div id="modal-calendar-container"></div>
+               
+   <div id="modal-calendar-container"></div>
             </div>
         </div>
     </div>
@@ -916,23 +944,27 @@ color: #6c757d;">No items locked in yet.</p>
             <h3>Checkout Summary</h3>
             <ul id="checkout-summary-list"></ul>
             <div class="checkout-total">
-                <strong>Total:</strong>
+     
+            <strong>Total:</strong>
                 <strong id="checkout-total-price">$0.00</strong>
             </div>
             <hr>
             <form id="payment-form">
                 <div class="form-row">
-                    <label for="customer-name">Full Name</label>
+                  
+   <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
-                    <input type="email" id="customer-email" required autocomplete="off">
+                 
+    <input type="email" id="customer-email" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
-                    <div id="card-errors" role="alert"></div>
+               
+      <div id="card-errors" role="alert"></div>
                 </div>
                 <button class="primary-action-btn" type="submit">Pay Now</button>
             </form>
