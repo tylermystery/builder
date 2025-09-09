@@ -1,42 +1,45 @@
 // FILE: events.js
 /*
- * Version: 4.9.3
- * Last Modified: 2025-09-09
- * Changelog:
- * v4.9.3 - 2025-09-09
- * - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
- * - `itinerary-btn` now correctly shows the full-screen itinerary modal.
- * v4.9.2 - 2025-09-09
- * - Fixed bug where Airtable 'Date' field would not accept date range array.
- * - Corrected a TypeError in `updateTotalCost` by fixing the property access.
- * - Ensured page title updates correctly with the event name.
- * - Fixed `ui.checkAvailability is not a function` error in the itinerary module.
- * v4.9.1 - 2025-09-09
- * - Implemented dynamic availability for locked-in items and the event plan date.
- * - Synced the detail modal calendar with the event plan date.
- * - Updated event handlers for adding/removing items to trigger an availability refresh.
- * v4.9.0 - 2025-09-09
- * - Finalized itinerary builder functionality with live editing and date sync.
- * v4.8.9 - 2025-09-09
- * - Added functionality to open the new itinerary builder modal.
- * v4.8.8 - 2025-09-09
- * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
- * - Added functionality for carousel navigation buttons.
- * v4.8.7 - 2025-09-08
- * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
- * v4.8.6 - 2025-09-08
- * - Added functionality to update the header calendar based on favorited items.
- * v4.8.5 - 2025-09-02
- * - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
- * v4.8.4 - 2025-09-02
- * - Added debug logging for initialization steps.
- * v4.8.3 - 2025-09-02
- * - Continue initialization if session loading fails due to storage errors.
- * v4.8.2 - 2025-09-02
- * - Added retry logic for fetchAllRecords to handle transient errors.
- * v4.8.1 - 2025-09-02
- * - Added storage error handling during initialization.
- */
+* Version: 4.9.4
+* Last Modified: 2025-09-09
+* Changelog:
+* v4.9.4 - 2025-09-09
+* - Fixed category/subcategory bug by correctly parsing child records.
+* - Ensured search functionality operates on the correct data set.
+* v4.9.3 - 2025-09-09
+* - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
+* - `itinerary-btn` now correctly shows the full-screen itinerary modal.
+* v4.9.2 - 2025-09-09
+* - Fixed bug where Airtable 'Date' field would not accept date range array.
+* - Corrected a TypeError in `updateTotalCost` by fixing the property access.
+* - Ensured page title updates correctly with the event name.
+* - Fixed `ui.checkAvailability is not a function` error in the itinerary module.
+* v4.9.1 - 2025-09-09
+* - Implemented dynamic availability for locked-in items and the event plan date.
+* - Synced the detail modal calendar with the event plan date.
+* - Updated event handlers for adding/removing items to trigger an availability refresh.
+* v4.9.0 - 2025-09-09
+* - Finalized itinerary builder functionality with live editing and date sync.
+* v4.8.9 - 2025-09-09
+* - Added functionality to open the new itinerary builder modal.
+* v4.8.8 - 2025-09-09
+* - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
+* - Added functionality for carousel navigation buttons.
+* v4.8.7 - 2025-09-08
+* - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
+* v4.8.6 - 2025-09-08
+* - Added functionality to update the header calendar based on favorited items.
+* v4.8.5 - 2025-09-02
+* - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
+* v4.8.4 - 2025-09-02
+* - Added debug logging for initialization steps.
+* v4.8.3 - 2025-09-02
+* - Continue initialization if session loading fails due to storage errors.
+* v4.8.2 - 2025-09-02
+* - Added retry logic for fetchAllRecords to handle transient errors.
+* v4.8.1 - 2025-09-02
+* - Added storage error handling during initialization.
+*/
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
@@ -58,18 +61,26 @@ function getCurrentCategoryRecord() {
     return state.records.all.find(record => record.fields.Name === selectedCategoryName);
 }
 
+// FIX: This function now correctly finds subcategories based on the parent item.
 function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
     }
-
     const subcategories = new Set();
-    const subcategoryOptions = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    subcategoryOptions.forEach(subcat => subcategories.add(subcat.name));
+    const childRecords = state.records.all.filter(record => 
+        record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === categoryRecord.fields.Name);
+    
+    childRecords.forEach(child => {
+        const rawSubcategories = child.fields[CONSTANTS.FIELD_NAMES.CATEGORIES];
+        if (rawSubcategories) {
+            rawSubcategories.split(',').forEach(subcat => subcategories.add(subcat.trim()));
+        }
+    });
 
     return Array.from(subcategories).sort();
 }
 
+// FIX: This function now correctly displays the buttons for the subcategories
 function updateSubcategoryButtons() {
     subcategoryFiltersContainer.innerHTML = '';
     const categoryRecord = getCurrentCategoryRecord();
