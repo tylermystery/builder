@@ -1,6 +1,6 @@
 // FILE: ui.js
 /*
- * Version: 3.0.5
+ * Version: 3.0.6
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
@@ -9,13 +9,13 @@ import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
-import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS } from './availability.js';
+import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-export { parseOptions, initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary };
+export { parseOptions, initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
@@ -260,11 +260,11 @@ export function updateTotalCost() {
         if (isNaN(unitPrice)) return;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPES.PER_GUEST] || 'default';
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() || 'default';
  
         let itemCost;
  
-        if (pricingType === 'per guest') {
+        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
         } else {
             itemCost = unitPrice;
