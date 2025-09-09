@@ -1,8 +1,10 @@
 // FILE: events.js
 /*
- * Version: 4.8.9
+ * Version: 4.9.0
  * Last Modified: 2025-09-09
  * Changelog:
+ * v4.9.0 - 2025-09-09
+ * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
  * - Added functionality to open the new itinerary builder modal.
  * v4.8.8 - 2025-09-09
@@ -32,7 +34,7 @@ import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
 // NEW: Import the itinerary module functions
-import { initItinerary, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
+import { initItinerary, showItineraryModal } from './components/itinerary.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -214,7 +216,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     // --- END OF NEW LOGIC
     
     // NEW: Initialize the itinerary module after the DOM is ready
-    initItinerary();
+    ui.initItinerary();
     // NEW: Add carousel navigation listeners
     const favoritesCarousel = document.getElementById('favorites-carousel');
     const scrollLeftBtn = document.querySelector('.carousel-nav.left');
@@ -233,7 +235,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
     // NEW: Add event listener for the new itinerary button
     const itineraryBtn = document.getElementById('itinerary-btn');
     if (itineraryBtn) {
-        itineraryBtn.addEventListener('click', showItineraryModal);
+        itineraryBtn.addEventListener('click', () => {
+            ui.showItineraryModal();
+            // sync itinerary header when modal opens
+            ui.renderItineraryHeader();
+        });
     }
 
     safeAddEventListener('category-filter-dropdown', 'change', () => {
@@ -273,6 +279,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         });
         // --- END UPDATED
         document.getElementById('name-filter').value = '';
+    
         document.getElementById('status-filter').value = 'Available';
  
         document.getElementById('headcount-filter').selectedIndex = 0;
