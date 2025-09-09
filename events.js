@@ -33,14 +33,14 @@ const saveShareBtn = document.getElementById('save-share-btn');
 const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
-function getAvailableSubcategories(categoryName) {
-    if (categoryName === 'all' || !currentStore) {
-        return [];
-    }
 
-    const categoryRecord = state.records.all.find(record =>
-        record.fields.Name === categoryName
-    );
+// NEW: Get the current selected category record based on the dropdown value
+function getCurrentCategoryRecord() {
+    const selectedCategoryName = categoryFilterDropdown.value;
+    return state.records.all.find(record => record.fields.Name === selectedCategoryName);
+}
+
+function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
     }
@@ -54,8 +54,8 @@ function getAvailableSubcategories(categoryName) {
 
 function updateSubcategoryButtons() {
     subcategoryFiltersContainer.innerHTML = '';
-    const selectedCategory = categoryFilterDropdown.value;
-    const subcategories = getAvailableSubcategories(selectedCategory);
+    const categoryRecord = getCurrentCategoryRecord();
+    const subcategories = getAvailableSubcategories(categoryRecord);
     subcategories.forEach(subcat => {
         const button = document.createElement('button');
         button.className = 'filter-btn subcategory-filter-btn';
@@ -214,7 +214,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         categories.forEach(cat => {
             const option = document.createElement('option');
-            // FIX: Set value and textContent to the original, case-sensitive name
+            // FIX: Set value to the original, case-sensitive name
             option.value = cat.name;
             option.textContent = cat.name;
             categoryFilterDropdown.appendChild(option);
