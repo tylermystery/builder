@@ -245,6 +245,7 @@ log('API', `Failed to fetch images: ${error.message}`);
     }
 }
 
+// FIX: This function is now async so we can perform the bulk fetch before rendering
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
