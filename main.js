@@ -1,8 +1,12 @@
 // FILE: main.js
 /*
- * Version: 4.8.8
+ * Version: 4.9.0
  * Last Modified: 2025-09-09
  * Changelog:
+ * v4.9.0 - 2025-09-09
+ * - Finalized itinerary builder functionality with live editing and date sync.
+ * v4.8.9 - 2025-09-09
+ * - Added functionality to open the new itinerary builder modal.
  * v4.8.8 - 2025-09-09
  * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
  * - Added functionality for carousel navigation buttons.
@@ -26,7 +30,6 @@ import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
-// FIX: Changed import to get getItemState from ui.js
 import { initializeEventListeners, updateSaveShareButton } from './events.js';
 import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
