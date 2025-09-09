@@ -1,6 +1,6 @@
 // FILE: ui.js
 /*
- * Version: 3.0.4 (Itinerary Support)
+ * Version: 3.0.5
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
