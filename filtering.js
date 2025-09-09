@@ -1,3 +1,4 @@
+// FILE: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
@@ -117,6 +118,7 @@ function filterBySearchTerm(records, searchTerm) {
         const tags = [...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])].map(t => t.toLowerCase().trim());
      
         if (name.includes(searchTerm)) score = 3;
+    
         else if (description.includes(searchTerm)) score = 2;
         else if (tags.some(tag => tag.includes(searchTerm))) score = 1;
         if (score > 0) { scoredRecords.push({ record, score }); }
