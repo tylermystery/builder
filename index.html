@@ -931,9 +931,9 @@ height: 60px;
         </div>
         <div id="right-sidebar">
             <div id="event-plan-panel">
-                <div class="toolbar-group">
-                    <label for="header-event-name">Event Name</label>
-                    <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off">
+                <div class="toolbar-group event-name-group">
+                    <h2 id="header-event-name-display" style="cursor: pointer;">Event Name</h2>
+                    <input type="text" id="header-event-name" value="My Awesome Event" autocomplete="off" style="display: none;">
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
@@ -941,13 +941,13 @@ height: 60px;
                 </div>
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="favorites-section">
-                    <h4>Your Ideas</h4>
+                    <h4>Ideas</h4>
                     <button class="carousel-nav left">◄</button>
                     <div id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h3>Your Event Plan</h3>
+                    <h3>Event Plan</h3>
                     <button id="itinerary-btn" class="primary-action-btn" style="padding: 8px 16px; font-size: 0.9em;">Planner^beta</button>
                 </div>
                 <div id="cart-items-container">
@@ -1055,12 +1055,12 @@ height: 60px;
             </div>
             <div class="itinerary-container">
                 <div class="itinerary-column">
-                    <h3>Your Event Plan</h3>
+                    <h3>Event Plan</h3>
                     <p class="description">Drag items to change their order.</p>
                     <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
-                    <h3>Your Ideas</h3>
+                    <h3>Ideas</h3>
                     <p class="description">Move items here to add them to your plan.</p>
                     <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
