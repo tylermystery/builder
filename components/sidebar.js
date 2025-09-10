@@ -75,22 +75,27 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
+// In the updateEventPlanSection function:
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
-    container.innerHTML = '';
-    if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
-        return;
-    }
-    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            const itemElement = await createLockedInItemElement(record, itemInfo);
-            container.appendChild(itemElement);
-        }
-    }
+
+    // We no longer render items directly here, but a list that opens the modal
+    // So we just need to update the content to reflect the new design
+    container.innerHTML = `
+        <button id="itinerary-btn">Event Plan</button>
+        <div id="cart-items-container">
+            <p style="font-size: 0.9em; color: #6c757d;">
+                ${state.cart.lockedItems.size > 0 ? 'Items are locked in. Click "Event Plan" to manage.' : 'No items locked in yet.'}
+            </p>
+        </div>
+    `;
+    
+    // Re-bind the event listener for the button here as it gets re-rendered
+    document.getElementById('itinerary-btn').addEventListener('click', () => {
+        ui.showItineraryModal();
+    });
 }
 
 export async function updateFavoritesCarousel() {
