@@ -162,9 +162,14 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
+
     // Fix: Pass flatpickr to the event listeners
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
+    
+    // FIX: Call the new setup function for the itinerary modal's event listeners
+    setupItineraryEventListeners();
+ 
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
