@@ -41,6 +41,8 @@ import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
+
 
 const imageCache = new Map();
 let mainDatePicker = null;
@@ -214,5 +216,11 @@ async function initialize() {
     await updateHeaderCalendarAvailability();
     log('Main', '21. Initialization complete.');
 }
+
+    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
+    initializeChatEventListeners(); // <-- Add this line here
+
+    log('Main', '9. Event listeners initialized.');
+
 
 initialize();
