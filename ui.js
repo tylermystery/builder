@@ -7,11 +7,12 @@ import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
+
+// Import specific functions from component files to avoid conflicts
 import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import { showCheckoutModal, hideCheckoutModal, getStripeContext } from './components/modal.js';
-// FIX: We need to import the sidebar functions individually to avoid naming conflicts.
 import { updateEventPlanSection, updateFavoritesCarousel } from './components/sidebar.js';
 import * as api from './api.js';
 
