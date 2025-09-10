@@ -16,43 +16,30 @@ const closeBtn = document.getElementById('itinerary-close-btn');
 
 let lockedSortable, favoritedSortable;
 
-// FILE: components/itinerary.js
-import { state } from '../state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import * as ui from '../ui.js';
-import * as api from '../api.js';
-import { log } from '../utils/debug.js';
-import { triggerSave } from '../events.js';
-
-const Sortable = window.Sortable;
-
-const itineraryModal = document.getElementById('itinerary-modal-overlay');
-const lockedItemsContainer = document.getElementById('itinerary-locked-items');
-const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
-const closeBtn = document.getElementById('itinerary-close-btn');
-
-let lockedSortable, favoritedSortable;
-
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
 
+    // Initialize SortableJS for the locked-in items column
     lockedSortable = new Sortable(lockedItemsContainer, {
-        group: 'shared',
+        group: 'shared', // Allows items to be moved between lists
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
-
-            const newOrder = lockedSortable.toArray();
-            const newLockedItems = new Map();
-            newOrder.forEach(recordId => {
-                if (state.cart.lockedItems.has(recordId)) {
-                    newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
-                }
-            });
-            state.cart.lockedItems = newLockedItems;
-
-            if (evt.from.id !== evt.to.id) {
+            // FIX: This section now correctly updates the state after an item is dropped.
+            if (evt.from.id === evt.to.id) {
+                // Reorder locked items if moved within the same list
+                const newOrder = lockedSortable.toArray();
+                const newLockedItems = new Map();
+                newOrder.forEach(recordId => {
+                    if (state.cart.lockedItems.has(recordId)) {
+                        newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
+                    }
+                });
+                state.cart.lockedItems = newLockedItems;
+            } else {
+                // Item moved from favorites to locked
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.items.has(recordId)) {
                     const itemInfo = state.cart.items.get(recordId);
@@ -60,23 +47,26 @@ export function setupItineraryEventListeners() {
                     state.cart.lockedItems.set(recordId, itemInfo);
                 }
             }
-
             ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
             ui.updateFavoritesCarousel();
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
 
+    // Initialize SortableJS for the favorited items column
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
+            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
@@ -91,6 +81,7 @@ export function setupItineraryEventListeners() {
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
