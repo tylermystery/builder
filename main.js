@@ -4,7 +4,7 @@
  * Last Modified: 2025-09-09
  * * Changelog:
  * v4.9.1 - 2025-09-09
- * - Implemented dynamic availability for locked-in items and the 
+ * - Implemented dynamic availability for locked-in items and the
  event plan date.
  * - Synced the detail modal calendar with the event plan date.
  * - Updated event handlers for adding/removing items to trigger an availability refresh.
@@ -33,12 +33,12 @@
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
-// FIX: Import the new setupItineraryEventListeners function from ui.js
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, updateSaveShareButton } from './events.js';
 import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
+// FIX: This is the correct import statement.
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
 
@@ -49,7 +49,7 @@ async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
     const favoriteItems = state.cart.items;
-    
+
     for (const [recordId] of favoriteItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record && record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]) {
@@ -57,7 +57,7 @@ async function updateHeaderCalendarAvailability() {
             allBusyTimes.push(...busyTimes);
         }
     }
-    
+
     if (mainDatePicker) {
         // Clear previous date highlighting
         mainDatePicker.clear();
@@ -65,7 +65,7 @@ async function updateHeaderCalendarAvailability() {
         mainDatePicker.config.onDayCreate = (dObj, dStr, fp, dayElem) => {
             const day = dayElem.dateObj;
             let status = AVAILABILITY_STATUS.FULL;
-            
+
             // Check against lead time first for all items
             let hasLeadTimeConflict = false;
             for (const [recordId] of favoriteItems.entries()) {
@@ -108,7 +108,7 @@ async function updateHeaderCalendarAvailability() {
                     }
                 }
             }
-            
+
             // Apply classes based on the calculated status
             if (status === AVAILABILITY_STATUS.FULL) {
                 dayElem.classList.add('available-full');
@@ -167,10 +167,9 @@ async function initialize() {
     // FIX: Removed the redundant call to initializeEventListeners
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
-    
+
     // FIX: Call the new setup function for the itinerary modal's event listeners from ui.js
     ui.setupItineraryEventListeners();
-    
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
