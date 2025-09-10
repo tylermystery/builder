@@ -7,12 +7,14 @@ import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
+
+// Import specific functions from component files
 import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import { showCheckoutModal, hideCheckoutModal, getStripeContext } from './components/modal.js';
-// FIX: We need to remove the import of updateHeader and updateTotalCost from sidebar.js
-import { updateEventPlanSection, updateFavoritesCarousel } from './components/sidebar.js';
+// FIX: Import specific sidebar functions to avoid duplicating imports
+import { updateEventPlanSection, updateFavoritesCarousel, updateHeader, updateTotalCost } from './components/sidebar.js';
 import * as api from './api.js';
 
 // --- SHARED HELPER FUNCTIONS ---
@@ -286,7 +288,6 @@ export {
     getStripeContext,
     updateEventPlanSection,
     updateFavoritesCarousel,
-    // FIX: Removed the re-exports to avoid conflicts
     parseOptions,
     checkAvailability
 };
