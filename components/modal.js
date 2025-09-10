@@ -212,11 +212,11 @@ export async function showDetailModal(record) {
     setTimeout(() => {
         modalOverlay.style.display = 'flex';
         // FIX: Add a null check before trying to focus the button
+        const modalCloseBtn = document.getElementById('modal-close-btn');
         if (modalCloseBtn) modalCloseBtn.focus();
         log('Modal', 'Detail modal shown, focused close button.');
     }, 0);
     document.body.classList.add('modal-open');
-    // FIX: Add a dedicated event listener for the modal close button
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
         closeBtn.addEventListener('click', hideDetailModal);
