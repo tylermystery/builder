@@ -5,34 +5,35 @@
  * * Changelog:
  * v4.9.1 - 2025-09-09
  * - Implemented dynamic availability for locked-in items and the 
- [cite_start]event plan date.[cite: 350]
- * - [cite_start]Synced the detail modal calendar with the event plan date.[cite: 351]
- * - [cite_start]Updated event handlers for adding/removing items to trigger an availability refresh.[cite: 352]
+ event plan date.
+ * - Synced the detail modal calendar with the event plan date.
+ * - Updated event handlers for adding/removing items to trigger an availability refresh.
  * v4.9.0 - 2025-09-09
- * - [cite_start]Finalized itinerary builder functionality with live editing and date sync.[cite: 353]
+ * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
- * - [cite_start]Added functionality to open the new itinerary builder modal.[cite: 354]
+ * - Added functionality to open the new itinerary builder modal.
  * v4.8.8 - 2025-09-09
- * - [cite_start]Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.[cite: 355]
- * - [cite_start]Added functionality for carousel navigation buttons.[cite: 355]
+ * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
+ * - Added functionality for carousel navigation buttons.
  * v4.8.7 - 2025-09-08
- * - [cite_start]Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.[cite: 356]
+ * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
  * v4.8.6 - 2025-09-08
- * - [cite_start]Added functionality to update the header calendar based on favorited items.[cite: 357]
+ * - Added functionality to update the header calendar based on favorited items.
  * v4.8.5 - 2025-09-02
- * - [cite_start]Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.[cite: 358]
+ * - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
  * v4.8.4 - 2025-09-02
- * - [cite_start]Added debug logging for initialization steps.[cite: 359]
+ * - Added debug logging for initialization steps.
  * v4.8.3 - 2025-09-02
- * - [cite_start]Continue initialization if session loading fails due to storage errors.[cite: 360]
+ * - Continue initialization if session loading fails due to storage errors.
  * v4.8.2 - 2025-09-02
- * - [cite_start]Added retry logic for fetchAllRecords to handle transient errors.[cite: 361]
+ * - Added retry logic for fetchAllRecords to handle transient errors.
  * v4.8.1 - 2025-09-02
- * - [cite_start]Added storage error handling during initialization.[cite: 362]
+ * - Added storage error handling during initialization.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
+// FIX: Import the new setupItineraryEventListeners function from ui.js
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, updateSaveShareButton } from './events.js';
@@ -43,7 +44,7 @@ import { debounce } from './utils.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
-
+// New function to handle the header calendar's availability display
 async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
@@ -58,11 +59,14 @@ async function updateHeaderCalendarAvailability() {
     }
     
     if (mainDatePicker) {
+        // Clear previous date highlighting
         mainDatePicker.clear();
+        // Use the combined busy times to highlight dates on the main calendar
         mainDatePicker.config.onDayCreate = (dObj, dStr, fp, dayElem) => {
             const day = dayElem.dateObj;
             let status = AVAILABILITY_STATUS.FULL;
             
+            // Check against lead time first for all items
             let hasLeadTimeConflict = false;
             for (const [recordId] of favoriteItems.entries()) {
                 const record = state.records.all.find(r => r.id === recordId);
@@ -105,6 +109,7 @@ async function updateHeaderCalendarAvailability() {
                 }
             }
             
+            // Apply classes based on the calculated status
             if (status === AVAILABILITY_STATUS.FULL) {
                 dayElem.classList.add('available-full');
             } else if (status === AVAILABILITY_STATUS.PARTIAL) {
@@ -114,6 +119,7 @@ async function updateHeaderCalendarAvailability() {
             }
         };
 
+        // Redraw the calendar to apply the new highlights
         mainDatePicker.redraw();
     }
 }
@@ -127,6 +133,7 @@ async function initialize() {
         log('Main', `2. Failed to clear localStorage: ${e.message}`);
     }
 
+    // FIX: Passing the correct function from ui.js
     ui.initStateHelpers({ getItemState: ui.getItemState });
     log('Main', '3. State helpers initialized.');
 
@@ -157,15 +164,19 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
+    // FIX: Removed the redundant call to initializeEventListeners
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
     
+    // FIX: Call the new setup function for the itinerary modal's event listeners from ui.js
     ui.setupItineraryEventListeners();
+    
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
             log('Main', '10. Session loaded successfully.');
             ui.updateHeader();
+            // FIX: Corrected function name
             ui.updateEventPlanSection();
             ui.updateTotalCost();
             log('Main', '11. Updated header, event plan, and total cost.');
