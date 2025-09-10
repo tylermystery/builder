@@ -20,13 +20,73 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
         body.modal-open {
             overflow: hidden;
         }
-        /* FIX: Re-architected CSS to use a loading class instead of inline styles */
-        .main-content.is-loading {
-            display: none;
+        #sticky-header {
+            position: sticky;
+top: 0;
+            background-color: white;
+            z-index: 999;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        #header-toolbar {
+            display: flex;
+flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            padding: 15px 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        #header-title {
+            font-size: 1.5em;
+font-weight: bold;
+            margin: 0;
+        }
+        .toolbar-group {
+            display: flex;
+flex-direction: column;
+            gap: 5px;
+        }
+        .toolbar-group label {
+            font-size: 0.75em;
+color: #666;
+            text-transform: uppercase;
+            font-weight: 500;
+        }
+        .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
+            border: 1px solid #ced4da;
+border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.9em;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        /* New CSS for the editable event name */
+        #header-event-name {
+            font-size: 1.5em;
+font-weight: bold;
+            border: none;
+            background: none;
+            padding: 0;
+        }
+        /* New styling for the Event Plan button title */
+        #itinerary-btn {
+            background: none;
+border: none;
+            color: #333;
+            font-size: 1.5em;
+            font-weight: bold;
+            padding: 0;
+            cursor: pointer;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+        #itinerary-btn:hover {
+            text-decoration: underline;
+        }
+        /* FIX: New responsive layout for main content */
         .main-content {
             display: flex;
-            flex-direction: column;
+flex-direction: column;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
@@ -35,7 +95,7 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
         @media (min-width: 1000px) {
             .main-content {
                 display: grid;
-                grid-template-columns: 300px 1fr 380px;
+grid-template-columns: 300px 1fr 380px;
                 gap: 25px;
             }
             #left-sidebar { order: 1;
@@ -519,181 +579,6 @@ opacity: 1;
                 width: 95%;
 height: 85vh;
                 max-height: 600px;
-            }
-        }
-        .modal-close-btn {
-            position: absolute;
-top: 15px;
-            right: 15px;
-            background: none;
-            border: none;
-            font-size: 2em;
-            cursor: pointer;
-            color: #999;
-            z-index: 1010;
-        }
-        .modal-main-column {
-            flex: 1;
-display: flex;
-            flex-direction: column;
-            min-width: 0;
-}
-        #modal-main-image {
-            flex-grow: 1;
-background-size: cover;
-            background-position: center;
-            border-right: 1px solid #eee;
-}
-        #modal-thumbnail-strip {
-            display: flex;
-gap: 5px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-top: 1px solid #eee;
-            overflow-x: auto;
-        }
-        .thumbnail-img {
-            width: 80px;
-height: 60px;
-            background-size: cover;
-            background-position: center;
-            border-radius: 4px;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: border-color 0.2s;
-        }
-        .thumbnail-img.active {
-            border-color: #007bff;
-        }
-        .modal-sidebar-column {
-            flex: 1;
-padding: 30px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-        #modal-header-actions {
-            display: flex;
-justify-content: flex-end;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 10px;
-}
-        #modal-breadcrumbs {
-            font-size: 0.9em;
-color: #6c757d;
-            margin-bottom: 8px;
-}
-        #modal-breadcrumbs a {
-            color: #007bff;
-text-decoration: none;
-        }
-        #modal-breadcrumbs a:hover {
-            text-decoration: underline;
-        }
-        #modal-item-name { 
-            margin-top: 0;
-        }
-        #modal-item-price { 
-            font-size: 1.5em;
-font-weight: bold; 
-            margin: 10px 0;
-        }
-        #modal-options-container { 
-            margin: 20px 0;
-display: flex; 
-            flex-wrap: wrap; 
-            gap: 10px;
-        }
-        .option-btn {
-            padding: 8px 12px;
-border: 1px solid #ccc;
-            background-color: #f8f8f8;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .option-btn.selected {
-            border-color: #007bff;
-background-color: #e7f3ff;
-        }
-        #modal-quantity-selector { 
-            margin: 20px 0;
-        }
-        #modal-notes-container { 
-            margin-bottom: 20px;
-        }
-        #modal-item-note {
-            width: 100%;
-height: 60px;
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 0.9em;
-            resize: vertical;
-            box-sizing: border-box;
-        }
-        #modal-actions-container {
-            margin-top: auto;
-padding-top: 20px;
-            border-top: 1px solid #eee;
-        }
-        .primary-action-btn {
-            width: 100%;
-padding: 15px;
-            font-size: 1.1em;
-            font-weight: bold;
-            color: #fff;
-            background-color: #28a745;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-position: relative;
-        }
-        .primary-action-btn:hover {
-            background-color: #218838;
-        }
-        .primary-action-btn:disabled {
-            background-color: #5a6268;
-cursor: not-allowed;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
-        }
-        .primary-action-btn:disabled:hover::after {
-            content: attr(data-tooltip);
-position: absolute;
-            background: #333;
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            top: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-white-space: nowrap;
-            z-index: 10;
-        }
-        .checkout-modal-content {
-            background: #fff;
-border-radius: 8px;
-            padding: 30px;
-            width: 100%;
-            max-width: 500px;
-            position: relative;
-            color: #333;
-            transform: scale(0.8);
-transition: transform 0.3s ease, opacity 0.3s ease;
-}
-        .modal-overlay.active .checkout-modal-content {
-            transform: scale(1);
-opacity: 1;
-        }
-        @media (max-width: 600px) {
-            .modal-content {
-                width: 95%;
-padding: 20px;
             }
         }
         #checkout-summary-list {
