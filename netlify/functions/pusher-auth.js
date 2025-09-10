@@ -1,8 +1,8 @@
+// In netlify/functions/pusher-auth.js
+
 const Pusher = require("pusher");
 
-// Make sure to set these as environment variables in your Netlify project settings
 const pusher = new Pusher({
-    // 👇 REMOVE VITE_ PREFIX FROM THESE FOUR LINES
     appId: process.env.PUSHER_APP_ID,
     key: process.env.PUSHER_KEY,
     secret: process.env.PUSHER_SECRET,
@@ -11,21 +11,20 @@ const pusher = new Pusher({
 });
 
 exports.handler = async (event) => {
-    // We only want to handle POST requests
     if (event.httpMethod !== 'POST') {
-        return {
-            statusCode: 405,
-            body: 'Method Not Allowed',
-        };
+        return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    const data = JSON.parse(event.body);
-    const socketId = data.socket_id;
-    const channel = data.channel_name;
+    // Use URLSearchParams to parse the form data from the event body
+    const params = new URLSearchParams(event.body);
+    const socketId = params.get('socket_id');
+    const channel = params.get('channel_name');
+
+    // The user data is passed directly from the client's auth config
     const presenceData = {
-        user_id: data.user_id,
+        user_id: params.get('user_id'),
         user_info: {
-            name: data.user_name,
+            name: params.get('user_name'),
         },
     };
 
@@ -39,7 +38,7 @@ exports.handler = async (event) => {
         console.error(error);
         return {
             statusCode: 500,
-            body: 'Pusher authentication failed',
+            body: JSON.stringify({ msg: 'Pusher authentication failed' }),
         };
     }
 };
