@@ -84,9 +84,13 @@ border: none;
             text-decoration: underline;
         }
         /* FIX: New responsive layout for main content */
+        /* FIX: Initial state hides the content, to be shown via class toggle */
+        .main-content.is-loading {
+            display: none !important;
+        }
         .main-content {
             display: flex;
-flex-direction: column;
+            flex-direction: column;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
@@ -95,7 +99,7 @@ flex-direction: column;
         @media (min-width: 1000px) {
             .main-content {
                 display: grid;
-grid-template-columns: 300px 1fr 380px;
+                grid-template-columns: 300px 1fr 380px;
                 gap: 25px;
             }
             #left-sidebar { order: 1;
