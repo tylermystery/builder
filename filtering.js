@@ -16,6 +16,14 @@ Infinity };
 
 // Filter records based on selected category and subcategories
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
+    // FIX: Only apply category filtering if a specific category is selected
+    if (selectedCategory === 'all' && activeSubcategories.length === 0) {
+        // When no specific category is selected, simply return all top-level items.
+        // This prevents the search from being filtered out.
+        return records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    }
+    
+    // Original logic for when a category is selected
     const topLevelItems = records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
 if (selectedCategory !== 'all') {
         const selectedCategoryRecord = topLevelItems.find(record => record.fields.Name === selectedCategory);
