@@ -46,7 +46,7 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const fetchedImages = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     const imageUrls = fetchedImages?.imageUrls || [];
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
