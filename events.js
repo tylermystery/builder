@@ -209,7 +209,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
     // --- UPDATED: Logic for Store and Categories ---
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
-        document.getElementById('store-display').textContent = currentStore.fields.Name;
+        // FIX: The line below is no longer needed as the store title is now static HTML
+        // document.getElementById('store-display').textContent = currentStore.fields.Name;
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         categories.forEach(cat => {
             const option = document.createElement('option');
@@ -539,7 +540,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const isInModal = modal && modal.style.display === 'flex' && modal.contains(target);
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
-        const recordId = container.dataset.recordId;
+        const recordId = container.dataset.datasetrecordId;
         let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
