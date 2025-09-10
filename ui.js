@@ -8,14 +8,16 @@ import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-import { initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
+// FIX: We need to update this import to reflect the name change
+import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-export { parseOptions, initItinerary, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
+// FIX: Export the new function instead of the old one
+export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
