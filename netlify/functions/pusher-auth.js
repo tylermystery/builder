@@ -1,11 +1,12 @@
 const Pusher = require("pusher");
 
-// Make sure to set these as environment variables in your Netlify/Vercel project settings
+// Make sure to set these as environment variables in your Netlify project settings
 const pusher = new Pusher({
-    appId: process.env.VITE_PUSHER_APP_ID,
-    key: process.env.VITE_PUSHER_KEY,
-    secret: process.env.VITE_PUSHER_SECRET,
-    cluster: process.env.VITE_PUSHER_CLUSTER,
+    // 👇 REMOVE VITE_ PREFIX FROM THESE FOUR LINES
+    appId: process.env.PUSHER_APP_ID,
+    key: process.env.PUSHER_KEY,
+    secret: process.env.PUSHER_SECRET,
+    cluster: process.env.PUSHER_CLUSTER,
     useTLS: true,
 });
 
