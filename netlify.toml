@@ -30,3 +30,8 @@
   from = "/api/airtable/*"
   to = "/.netlify/functions/airtable"
   status = 200
+
+[[redirects]]
+  from = "/api/pusher-auth"
+  to = "/.netlify/functions/pusher-auth"
+  status = 200
