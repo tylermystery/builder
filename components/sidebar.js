@@ -12,7 +12,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
     // NEW: Add overlay for name and tooltip
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -60,7 +60,7 @@ async function createLockedInItemElement(record, itemInfo) {
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
-        <img src="${imageUrls[0] || `https://res.cloudinary.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -79,13 +79,10 @@ export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
-
+    
     // FIX: Clear the container before adding new elements to avoid duplicates.
     container.innerHTML = '';
-    
-    // FIX: We need to recreate the locked items list directly here, as this function
-    // is responsible for rendering the sidebar. The previous change incorrectly
-    // replaced the entire sidebar content with a new button.
+
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         return;
