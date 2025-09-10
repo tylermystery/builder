@@ -36,7 +36,6 @@ import * as api from './api.js';
 // FIX: Import the new setupItineraryEventListeners function from ui.js
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
-import { initializeEventListeners, updateSaveShareButton } from './events.js';
 import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
@@ -221,11 +220,5 @@ async function initialize() {
     log('Main', '9. Event listeners initialized.');
  
 }
-
-    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
-    initializeChatEventListeners(); // <-- Add this line here
-
-    log('Main', '9. Event listeners initialized.');
-
 
 initialize();
