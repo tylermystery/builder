@@ -1,6 +1,6 @@
 // FILE: ui.js
 /*
- * Version: 3.0.7
+ * Version: 3.0.10
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
@@ -81,7 +81,8 @@ export function toggleLoading(show) {
 const loadingMessage = document.getElementById('loading-message');
     const mainContent = document.querySelector('.main-content');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
+// FIX: Toggle a CSS class instead of setting an inline style
+if (mainContent) mainContent.classList.toggle('is-loading', show);
 }
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
