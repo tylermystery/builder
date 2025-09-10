@@ -257,21 +257,30 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
-    
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+    
+    // Check if the current record is a grouping and get a single image from each child.
     if (isGrouping) {
         const bookableItems = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
         log('API', `Fetching images for ${bookableItems.length} child records of ${record.fields.Name}`);
-        // FIX: Bulk fetch images for all child records at once
+
+        // FIX: Collect only the *first* image from each child and return those as a list.
         const allChildTags = new Set();
         bookableItems.forEach(child => {
             if (child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]) {
-                child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',').forEach(tag => allChildTags.add(tag.trim()));
+                const firstTag = child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',')[0]?.trim();
+                if (firstTag) {
+                    allChildTags.add(firstTag);
+                }
             }
         });
         imageUrls = await fetchImagesByTags(Array.from(allChildTags));
+
+    } else {
+        // Otherwise, fetch all images for the single record.
+        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
     }
     
     if (!imageUrls) {
