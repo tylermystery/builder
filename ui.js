@@ -7,15 +7,17 @@ import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
-
-// Import specific functions from component files to avoid conflicts
-import { createInteractiveCard, updateCardIcon } from './components/card.js';
+import { createInteractiveCard } from './components/card.js';
+// FIX: We need to update this import to reflect the name change
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
-import { showCheckoutModal, hideCheckoutModal, getStripeContext } from './components/modal.js';
-import { updateEventPlanSection, updateFavoritesCarousel } from './components/sidebar.js';
 import * as api from './api.js';
-
+// Re-export functions from the new component modules so other files can use them
+export * from './components/card.js';
+export * from './components/modal.js';
+export * from './components/sidebar.js';
+// FIX: Export the new function instead of the old one
+export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
@@ -152,8 +154,6 @@ export function updateLockedItemState(recordId, updates) {
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
 }
-
-// FIX: This function is now correctly placed in ui.js to avoid re-exporting
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) ||
         '';
@@ -166,7 +166,6 @@ export function updateHeader() {
     const goalsInput = document.getElementById('header-goals');
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
-
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -234,8 +233,6 @@ export async function updateLockedItemStatusIcons() {
         }
     }
 }
-
-// FIX: This function is now correctly placed in ui.js to avoid re-exporting
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
@@ -272,21 +269,3 @@ export function updateTotalCost() {
         }
     }
 }
-
-// FIX: This list now explicitly exports functions from other modules without duplicating local functions
-export {
-    createInteractiveCard,
-    updateCardIcon,
-    setupItineraryEventListeners,
-    showItineraryModal,
-    hideItineraryModal,
-    renderItineraryHeader,
-    renderItinerary,
-    showCheckoutModal,
-    hideCheckoutModal,
-    getStripeContext,
-    updateEventPlanSection,
-    updateFavoritesCarousel,
-    parseOptions,
-    checkAvailability
-};
