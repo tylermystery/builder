@@ -83,11 +83,7 @@ border: none;
         #itinerary-btn:hover {
             text-decoration: underline;
         }
-        /* FIX: New responsive layout for main content */
-        /* FIX: Initial state hides the content, to be shown via class toggle */
-        .main-content.is-loading {
-            display: none !important;
-        }
+        /* FIX: Corrected CSS to properly use a loading class and media queries */
         .main-content {
             display: flex;
             flex-direction: column;
@@ -95,6 +91,9 @@ border: none;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
+        }
+        .main-content.is-loading {
+            display: none !important;
         }
         @media (min-width: 1000px) {
             .main-content {
@@ -573,7 +572,8 @@ opacity: 1;
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-padding: 20px;
+height: 85vh;
+                max-height: 600px;
             }
         }
         #checkout-summary-list {
