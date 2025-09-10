@@ -6,7 +6,7 @@
  * v4.9.1 - 2025-09-09
  * - Implemented dynamic availability for locked-in items and the 
  event plan date.
-* - Synced the detail modal calendar with the event plan date.
+ * - Synced the detail modal calendar with the event plan date.
  * - Updated event handlers for adding/removing items to trigger an availability refresh.
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
@@ -33,6 +33,7 @@
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
+// FIX: Import the new setupItineraryEventListeners function from ui.js
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { initializeEventListeners, updateSaveShareButton } from './events.js';
@@ -40,6 +41,7 @@ import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
+
 const imageCache = new Map();
 let mainDatePicker = null;
 // New function to handle the header calendar's availability display
@@ -162,14 +164,13 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
-
-    // Fix: Pass flatpickr to the event listeners
+    // FIX: Removed the redundant call to initializeEventListeners
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
     
-    // FIX: Call the new setup function for the itinerary modal's event listeners
-    setupItineraryEventListeners();
- 
+    // FIX: Call the new setup function for the itinerary modal's event listeners from ui.js
+    ui.setupItineraryEventListeners();
+    
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
