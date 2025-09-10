@@ -1,7 +1,8 @@
+// FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
@@ -55,7 +56,9 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.dataset.recordId = recordId;
 
     // Call the API function to fetch images based on whether it's a grouping or bookable item
-    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    // FIX: Ensure imageUrls is an array before attempting to access its elements.
+    const imageUrls = fetchedImages?.imageUrls || [];
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
@@ -63,12 +66,12 @@ export async function createInteractiveCard(record, imageCache) {
     let priceHTML = '';
     let footerHTML = '';
     let cardTooltip = '';
-    let cardImageStyle = `background-image: url('${imageUrls[0] || ''}');`;
+    
+    // FIX: Access the first image safely
+    let cardImageStyle = `background-image: url('${imageUrls.length > 0 ? imageUrls[0] : ''}');`;
 
     if (isGrouping) {
-        // Log that we're using a placeholder for the grouping.
         log('Card', `Card for "${record.fields.Name}" is a grouping. Using a placeholder image.`);
-        // Pass the fetched images (which will be just the placeholder) to the getPlaceholderImage function.
         cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
         
         const range = ui.getGroupPriceRange(record);
@@ -117,6 +120,7 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         ${footerHTML}
     `;
+    
     // FIX: The heart icon update needs to happen after the element is in the DOM
     setTimeout(() => {
         updateCardIcon(recordId);
