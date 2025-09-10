@@ -4,20 +4,16 @@
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
-import { createInteractiveCard } from './components/card.js';
-// FIX: We need to update this import to reflect the name change
-import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
+import { createInteractiveCard, updateCardIcon } from './components/card.js';
+import { showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, setupItineraryEventListeners } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
+import { showCheckoutModal, hideCheckoutModal, getStripeContext } from './components/modal.js';
+import { updateEventPlanSection, updateFavoritesCarousel, updateHeader, updateTotalCost } from './components/sidebar.js';
 import * as api from './api.js';
-// Re-export functions from the new component modules so other files can use them
-export * from './components/card.js';
-export * from './components/modal.js';
-export * from './components/sidebar.js';
-// FIX: Export the new function instead of the old one
-export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
+
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
@@ -269,3 +265,23 @@ export function updateTotalCost() {
         }
     }
 }
+
+// Re-exporting functions from other modules
+export {
+    createInteractiveCard,
+    updateCardIcon,
+    setupItineraryEventListeners,
+    showItineraryModal,
+    hideItineraryModal,
+    renderItineraryHeader,
+    renderItinerary,
+    showCheckoutModal,
+    hideCheckoutModal,
+    getStripeContext,
+    updateEventPlanSection,
+    updateFavoritesCarousel,
+    updateHeader,
+    updateTotalCost,
+    parseOptions,
+    checkAvailability
+};
