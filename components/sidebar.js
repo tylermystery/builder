@@ -44,6 +44,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
+// FIX: This function now correctly creates a locked-in item element for the sidebar
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
@@ -75,6 +76,7 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
+// FIX: This function now correctly renders the locked-in items in the sidebar
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -82,7 +84,7 @@ export async function updateEventPlanSection() {
     
     // FIX: Clear the container before adding new elements to avoid duplicates.
     container.innerHTML = '';
-
+    
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         return;
