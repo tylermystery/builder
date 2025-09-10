@@ -42,7 +42,7 @@ import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
-
+import { initializeChat } from './chat.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
@@ -215,6 +215,11 @@ async function initialize() {
 
     await updateHeaderCalendarAvailability();
     log('Main', '21. Initialization complete.');
+
+    initializeChatEventListeners();
+    initializeChat(); // <-- ADD THIS LINE
+    log('Main', '9. Event listeners initialized.');
+ 
 }
 
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
