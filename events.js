@@ -53,12 +53,14 @@ import { initItinerary, showItineraryModal } from './components/itinerary.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
-const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+// FIX: Changed categoryFilterDropdown to categoryFiltersContainer to match new HTML structure
+const categoryFiltersContainer = document.getElementById('category-filters');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
 function getCurrentCategoryRecord() {
-    const selectedCategoryName = categoryFilterDropdown.value;
-    return state.records.all.find(record => record.fields.Name === selectedCategoryName);
+    // FIX: Get the selected category name from the active button's dataset
+    const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
+    return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
 
 // FIX: This function now correctly finds subcategories by parsing the options field of the category record.
@@ -212,52 +214,36 @@ export function initializeEventListeners(imageCache, flatpickr) {
         // FIX: The line below is no longer needed as the store title is now static HTML
         // document.getElementById('store-display').textContent = currentStore.fields.Name;
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        categories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.name;
-            option.textContent = cat.name;
-            categoryFilterDropdown.appendChild(option);
+        // FIX: Create buttons instead of dropdown options
+        categories.forEach((cat, index) => {
+            const button = document.createElement('button');
+            button.className = 'filter-btn category-filter-btn';
+            button.dataset.filter = cat.name.toLowerCase();
+            button.textContent = cat.name;
+            if (index === 0) {
+                button.classList.add('active'); // Select the first category by default
+            }
+            categoryFiltersContainer.appendChild(button);
         });
-        if (categories.length > 0) {
-            categoryFilterDropdown.value = categories[0].name;
-        }
-    }
-
-    updateSubcategoryButtons();
-    applyFiltersAndSort(imageCache);
-    // --- END OF NEW LOGIC
-    
-    // NEW: Initialize the itinerary module after the DOM is ready
-    ui.initItinerary();
-    // NEW: Add carousel navigation listeners
-    const favoritesCarousel = document.getElementById('favorites-carousel');
-    const scrollLeftBtn = document.querySelector('.carousel-nav.left');
-    const scrollRightBtn = document.querySelector('.carousel-nav.right');
-    if (scrollLeftBtn && favoritesCarousel) {
-        scrollLeftBtn.addEventListener('click', () => {
-            favoritesCarousel.scrollBy({ left: -200, behavior: 'smooth' });
-        });
-    }
-    if (scrollRightBtn && favoritesCarousel) {
-        scrollRightBtn.addEventListener('click', () => {
-            favoritesCarousel.scrollBy({ left: 200, behavior: 'smooth' });
-        });
-    }
-    
-    // NEW: Add event listener for the new itinerary button
-    const itineraryBtn = document.getElementById('itinerary-btn');
-    if (itineraryBtn) {
-        itineraryBtn.addEventListener('click', () => {
-            ui.showItineraryModal();
-            // sync itinerary header when modal opens
-            ui.renderItineraryHeader();
-        });
-    }
-
-    safeAddEventListener('category-filter-dropdown', 'change', () => {
+        // Call to update subcategories based on the default selected category
         updateSubcategoryButtons();
-        applyFiltersAndSort(imageCache);
+    }
+
+    // FIX: Remove the old dropdown event listener and add a new one for buttons
+    // safeAddEventListener('category-filter-dropdown', 'change', () => {
+    //     updateSubcategoryButtons();
+    //     applyFiltersAndSort(imageCache);
+    // });
+    safeAddEventListener('category-filters', 'click', (e) => {
+        if (e.target.classList.contains('category-filter-btn')) {
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            updateSubcategoryButtons();
+            applyFiltersAndSort(imageCache);
+        }
     });
+    // END FIX
+
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
@@ -277,13 +263,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('reset-filters-btn', 'click', () => {
         // --- UPDATED: Reset logic for new category/subcategory structure
         if (currentStore) {
-            const defaultCategory = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS])[0]?.name;
-            if (defaultCategory) {
-                document.getElementById('category-filter-dropdown').value = defaultCategory;
-                updateSubcategoryButtons();
+            const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+            const firstCategoryBtn = categoryFiltersContainer.querySelector(`.category-filter-btn[data-filter="${categories[0]?.name.toLowerCase()}"]`);
+            if (firstCategoryBtn) {
+                categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+                firstCategoryBtn.classList.add('active');
             }
-        } else {
-            document.getElementById('category-filter-dropdown').value = 'all';
+            updateSubcategoryButtons();
         }
         document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
             btn.classList.remove('active');
