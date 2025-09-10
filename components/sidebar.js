@@ -50,14 +50,12 @@ async function createLockedInItemElement(record, itemInfo) {
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
     if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
-
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
@@ -76,7 +74,6 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
-// FIX: This function now correctly renders the locked-in items in the sidebar
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -123,57 +120,9 @@ export async function updateFavoritesCarousel() {
             }
         }
     }
-    updateTotalCost();
+    ui.updateTotalCost();
 }
 
-export function updateHeader() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
-    document.title = eventName || 'Event Builder';
-    
-    const eventNameInput = document.getElementById('header-event-name');
-    if (eventNameInput) eventNameInput.value = eventName;
-    
-    const goalsInput = document.getElementById('header-goals');
-    if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
-}
-
-export function updateTotalCost() {
-    const totalCostEl = document.getElementById('total-cost');
-    const checkoutBtn = document.getElementById('checkout-btn');
-    const saveShareBtn = document.getElementById('save-share-btn');
-    if (!totalCostEl) return;
-
-    let total = 0;
-    const allItems = state.cart.lockedItems;
-    allItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record) return;
-        const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
-        if (isNaN(unitPrice)) return;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
- 
-        let itemCost;
- 
-        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            itemCost = unitPrice * effectiveQuantity;
-        } else {
-            itemCost = unitPrice;
-        }
-        total += itemCost;
-    });
-    totalCostEl.textContent = `$${total.toFixed(2)}`;
-
-    const isPlanEmpty = total === 0;
-    if (checkoutBtn) {
-        checkoutBtn.disabled = isPlanEmpty;
-    }
-    if (saveShareBtn) {
-        if (isPlanEmpty) {
-            saveShareBtn.disabled = true;
-        } else if (state.ui.saveState === 'SAVED') {
-            saveShareBtn.disabled = false;
-        }
-    }
-}
+// FIX: Removed redundant function definitions.
+// export function updateHeader() { ... }
+// export function updateTotalCost() { ... }
