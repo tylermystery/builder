@@ -1057,6 +1057,38 @@ height: 60px;
             padding: 5px;
             resize: vertical;
         }
+
+        #messages-container {
+            background-color: #e9eaed;
+        }
+        
+        .chat-message {
+            padding: 8px 12px;
+            border-radius: 18px;
+            margin-bottom: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        
+        .chat-message.sent {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+        }
+        
+        .chat-message.received {
+            background-color: #f1f1f1;
+            color: #333;
+            align-self: flex-start;
+        }
+        
+        .chat-message .sender {
+            font-size: 0.75em;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
     </style>
 </head>
 <body>
