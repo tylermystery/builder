@@ -1289,6 +1289,31 @@ height: 60px;
             </div>
         </div>
     </div>
+    <div id="chat-widget-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
+        <button id="chat-toggle-button" style="background-color: #007bff; color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">
+            💬
+            <span id="presence-counter" style="position: absolute; top: -5px; right: -5px; background-color: red; color: white; border-radius: 50%; width: 25px; height: 25px; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">0</span>
+        </button>
+    
+        <div id="chat-window" style="display: none; width: 350px; height: 500px; background-color: #ffffff; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;">
+            <div id="chat-header" style="background-color: #f1f1f1; padding: 10px; font-weight: bold; text-align: center; border-bottom: 1px solid #ddd;">
+                <p style="margin: 0;">Session Chat (<span id="whos-here-count">0</span>)</p>
+            </div>
+    
+            <div id="whos-here-list" style="padding: 10px; border-bottom: 1px solid #ddd; max-height: 100px; overflow-y: auto;">
+                </div>
+    
+            <div id="messages-container" style="flex-grow: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column-reverse;">
+                <div id="messages-list">
+                    </div>
+            </div>
+    
+            <form id="message-form" style="border-top: 1px solid #ddd; padding: 10px; display: flex; gap: 10px;">
+                <input type="text" id="message-input" placeholder="Type a message..." style="flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 10px;" autocomplete="off">
+                <button type="submit" style="background-color: #007bff; color: white; border: none; border-radius: 20px; padding: 10px 15px; cursor: pointer;">Send</button>
+            </form>
+        </div>
+    </div>
     <script type="module" src="main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
