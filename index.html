@@ -86,7 +86,7 @@ border: none;
         /* FIX: New responsive layout for main content */
         .main-content {
             display: flex;
-            flex-direction: column;
+flex-direction: column;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
@@ -95,12 +95,15 @@ border: none;
         @media (min-width: 1000px) {
             .main-content {
                 display: grid;
-                grid-template-columns: 300px 1fr 380px;
+grid-template-columns: 300px 1fr 380px;
                 gap: 25px;
             }
-            #left-sidebar { order: 1; }
-            #catalog-area { order: 2; }
-            #right-sidebar { order: 3; }
+            #left-sidebar { order: 1;
+            }
+            #catalog-area { order: 2;
+            }
+            #right-sidebar { order: 3;
+            }
         }
         @media (max-width: 1000px) {
             #left-sidebar, #right-sidebar {
@@ -880,17 +883,6 @@ height: 60px;
 
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
-    <div id="header-toolbar">
-        <div class="toolbar-group">
-            <label for="category-filter-dropdown">Category</label>
-            <select id="category-filter-dropdown">
-                <option value="all">All Categories</option>
-            </select>
-        </div>
-        <div id="subcategory-filters" class="filter-btn-group">
-        </div>
-    </div>
-
     <div class="main-content">
         <div id="right-sidebar">
             <div id="event-plan-panel">
@@ -930,6 +922,11 @@ height: 60px;
         <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
+                <div class="filter-group">
+                    <label>Categories</label>
+                    <div id="category-filters" class="filter-btn-group"></div>
+                </div>
+                <div id="subcategory-filters" class="filter-btn-group"></div>
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
                     <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
