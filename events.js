@@ -191,6 +191,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
         });
     }
 
+    // Add event listener for the Itinerary button
+    safeAddEventListener('itinerary-btn', 'click', () => {
+        log('Events', 'Itinerary button clicked, showing modal.');
+        showItineraryModal();
+    });
+    
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
