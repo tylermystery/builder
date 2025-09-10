@@ -281,6 +281,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
         document.getElementById('budget-filter').selectedIndex = 0;
+        document.getElementById('sort-by').selectedIndex = 0;
         if (mainDatePicker) mainDatePicker.clear();
         applyFiltersAndSort(imageCache);
     });
