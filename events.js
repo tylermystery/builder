@@ -53,17 +53,15 @@ import { initItinerary, showItineraryModal } from './components/itinerary.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 const saveShareBtn = document.getElementById('save-share-btn');
-// FIX: Changed categoryFilterDropdown to categoryFiltersContainer to match new HTML structure
 const categoryFiltersContainer = document.getElementById('category-filters');
 const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
+
 function getCurrentCategoryRecord() {
-    // FIX: Get the selected category name from the active button's dataset
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
     return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
 
-// FIX: This function now correctly finds subcategories by parsing the options field of the category record.
 function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
@@ -72,7 +70,6 @@ function getAvailableSubcategories(categoryRecord) {
     return subcategoryOptions.map(option => option.name).sort();
 }
 
-// FIX: This function now correctly displays the buttons for the subcategories
 function updateSubcategoryButtons() {
     subcategoryFiltersContainer.innerHTML = '';
     const categoryRecord = getCurrentCategoryRecord();
@@ -182,6 +179,12 @@ export async function updateAllCardAvailabilityIcons() {
 // Fix: Accept flatpickr as a parameter
 export function initializeEventListeners(imageCache, flatpickr) {
     let debugEnabled = false;
+    const safeAddEventListener = (selector, event, handler) => {
+        const element = document.getElementById(selector);
+        if (element) element.addEventListener(event, handler);
+        else console.warn(`Element with ID "${selector}" not found.`);
+    };
+
     const betaTrigger = document.getElementById('beta-trigger');
     if (betaTrigger) {
         betaTrigger.addEventListener('click', () => {
@@ -190,18 +193,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
         });
     }
-
-    // Add event listener for the Itinerary button
-    safeAddEventListener('itinerary-btn', 'click', () => {
-        log('Events', 'Itinerary button clicked, showing modal.');
-        showItineraryModal();
-    });
-    
-    const safeAddEventListener = (selector, event, handler) => {
-        const element = document.getElementById(selector);
-        if (element) element.addEventListener(event, handler);
-        else console.warn(`Element with ID "${selector}" not found.`);
-    };
 
     let scrollTimeout;
     window.addEventListener('scroll', () => {
@@ -214,6 +205,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
+    
     // --- UPDATED: Logic for Store and Categories ---
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
@@ -234,7 +226,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         // Call to update subcategories based on the default selected category
         updateSubcategoryButtons();
     }
-
+    
     // FIX: Remove the old dropdown event listener and add a new one for buttons
     // safeAddEventListener('category-filter-dropdown', 'change', () => {
     //     updateSubcategoryButtons();
@@ -435,9 +427,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ? noteInput.value.trim() : ''
+                    quantity: quantityInput ?
+                        parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ?
+                        parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ?
+                        noteInput.value.trim() : ''
                 };
                 ui.updateLockedItemState(recordId, itemInfo);
             } else {
@@ -495,7 +490,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 if (childRecord) ui.showDetailModal(childRecord);
             } else {
                 const modalOptionsContainer = optionBtn.closest('#modal-options-container');
-                if(modalOptionsContainer) {
+                if (modalOptionsContainer) {
                     modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                     optionBtn.classList.add('selected');
                     const newIndex = parseInt(optionBtn.dataset.optionIndex, 10);
@@ -541,7 +536,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
-            if(e.detail?.selectedOptionIndex !== undefined) {
+            if (e.detail?.selectedOptionIndex !== undefined) {
                 updates.selectedOptionIndex = e.detail.selectedOptionIndex;
             }
         }
@@ -596,5 +591,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
+    
+    // Add event listener for the Itinerary button
+    safeAddEventListener('itinerary-btn', 'click', () => {
+        log('Events', 'Itinerary button clicked, showing modal.');
+        showItineraryModal();
+    });
+
     return { mainDatePicker, eventPlanDatePicker };
 }
