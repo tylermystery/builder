@@ -15,7 +15,6 @@ const closeBtn = document.getElementById('itinerary-close-btn');
 
 let lockedSortable, favoritedSortable;
 
-// FIX: Renamed function to be more descriptive and avoid re-initialization issues.
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
 
@@ -23,7 +22,6 @@ export function setupItineraryEventListeners() {
     lockedSortable = new Sortable(lockedItemsContainer, {
         group: 'shared', // Allows items to be moved between lists
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
@@ -59,7 +57,6 @@ export function setupItineraryEventListeners() {
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
@@ -81,7 +78,6 @@ export function setupItineraryEventListeners() {
         }
     });
 
-    // FIX: This event listener is now a permanent part of the setup
     closeBtn.addEventListener('click', hideItineraryModal);
     itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
@@ -92,10 +88,8 @@ export function setupItineraryEventListeners() {
 
 export function showItineraryModal() {
     log('Itinerary', 'Showing itinerary modal.');
-    // FIX: Render the itinerary content here, before showing the modal.
     renderItinerary();
     renderItineraryHeader();
-
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
@@ -155,7 +149,9 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { quantity: newQuantity });
             }
+            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
+            ui.updateEventPlanSection();
         });
     });
 
@@ -168,6 +164,8 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { note: newNote });
             }
+            // FIX: Call the sidebar update function here to sync the main view
+            ui.updateEventPlanSection();
         });
     });
 
@@ -175,6 +173,7 @@ export async function renderItinerary() {
         btn.addEventListener('click', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
             state.cart.lockedItems.delete(recordId);
+            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
