@@ -5,6 +5,15 @@ import { CONSTANTS } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
+function getPlaceholderImage(imageUrls) {
+    // Return a random image from the provided list, or a default if none exist.
+    if (!imageUrls || imageUrls.length === 0) {
+        return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+    }
+    const randomIndex = Math.floor(Math.random() * imageUrls.length);
+    return imageUrls[randomIndex];
+}
+
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
     const isHearted = state.cart.items.has(recordId);
@@ -18,7 +27,6 @@ export function updateCardIcon(recordId) {
         if (isLocked) {
             icon.className = 'heart-icon locked';
             icon.innerHTML = checkSVG;
-        
         } else if (isHearted) {
             icon.className = 'heart-icon hearted';
             icon.innerHTML = heartSVG;
@@ -27,7 +35,7 @@ export function updateCardIcon(recordId) {
             icon.innerHTML = heartSVG;
         }
         icon.style.display = 'block'; // Ensure visibility
-        
+
         log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
@@ -46,19 +54,26 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    const fetchedImages = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    const imageUrls = fetchedImages?.imageUrls || [];
+    // Call the API function to fetch images based on whether it's a grouping or bookable item
+    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
     let priceHTML = '';
     let footerHTML = '';
     let cardTooltip = '';
+    let cardImageStyle = `background-image: url('${imageUrls[0] || ''}');`;
 
     if (isGrouping) {
+        // Log that we're using a placeholder for the grouping.
+        log('Card', `Card for "${record.fields.Name}" is a grouping. Using a placeholder image.`);
+        // Pass the fetched images (which will be just the placeholder) to the getPlaceholderImage function.
+        cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
+        
         const range = ui.getGroupPriceRange(record);
         priceHTML = range ?
-(range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+            (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
@@ -67,6 +82,7 @@ export async function createInteractiveCard(record, imageCache) {
         `;
         cardTooltip = `Explore the various items and pricing options in this category.`;
     } else {
+        log('Card', `Card for "${record.fields.Name}" is a bookable item. Using the first fetched image.`);
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
@@ -74,29 +90,27 @@ export async function createInteractiveCard(record, imageCache) {
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
         const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ?
-'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+            'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
                     <div class="price">${priceHTML}</div>
                     ${quantitySelectorHTML}
                 </div>
-           
-             ${addToPlanBtnHTML}
+                ${addToPlanBtnHTML}
             </div>
         `;
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
-    
+
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="background-image: url('${imageUrls[0] || ''}');">
+        <div class="event-card-image-container" style="${cardImageStyle}">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
             <div class="heart-icon" data-record-id="${record.id}" data-tippy-content="Add to favorites"></div>
         </div>
         <div class="event-card-content" data-tippy-content="${cardTooltip}">
- 
             ${parentLinkHTML}
             <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
@@ -111,15 +125,15 @@ export async function createInteractiveCard(record, imageCache) {
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
     if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            quantityInput.stepUp(); 
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
+        plusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quantityInput.stepUp();
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
-        minusBtn.addEventListener('click', (e) => { 
-            e.stopPropagation(); 
-            quantityInput.stepDown(); 
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true })); 
+        minusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quantityInput.stepDown();
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
     }
     // Initialize Tippy for the main card content and heart icon
