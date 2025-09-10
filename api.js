@@ -247,6 +247,7 @@ log('API', `Failed to fetch images: ${error.message}`);
 
 // FIX: This function is now async so we can perform the bulk fetch before rendering
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
+    // Check cache first
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         log('API', `Returning cached images for record: ${record.id}`);
@@ -257,42 +258,30 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
+    
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-    
-    // Check if the current record is a grouping and get a single image from each child.
+
+    // FIX: If it's a grouping, return a single placeholder image immediately.
+    // This is the key change to prevent rate limiting.
     if (isGrouping) {
-        const bookableItems = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
-        log('API', `Fetching images for ${bookableItems.length} child records of ${record.fields.Name}`);
-
-        // FIX: Collect only the *first* image from each child and return those as a list.
-        const allChildTags = new Set();
-        bookableItems.forEach(child => {
-            if (child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]) {
-                const firstTag = child.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',')[0]?.trim();
-                if (firstTag) {
-                    allChildTags.add(firstTag);
-                }
-            }
-        });
-        imageUrls = await fetchImagesByTags(Array.from(allChildTags));
-
+        log('API', `Record is a grouping item. Using a placeholder image to avoid multiple API calls.`);
+        imageUrls = [ultimateFallbackUrl];
     } else {
         // Otherwise, fetch all images for the single record.
+        log('API', `Record is a bookable item. Attempting to fetch images by tags.`);
         imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
     }
-    
-    if (!imageUrls) {
-        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
-    }
-    
+
+    // Use fallback if no images were found
     if (!imageUrls || imageUrls.length === 0) {
         log('API', `Using fallback image for record: ${record.id}`);
         imageUrls = [ultimateFallbackUrl];
     }
-    
+
+    // Cache and return the images
     imageCache.set(cacheKey, imageUrls);
-log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
+    log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
     return { imageUrls };
 }
