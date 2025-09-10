@@ -23,7 +23,8 @@ export function setupItineraryEventListeners() {
     lockedSortable = new Sortable(lockedItemsContainer, {
         group: 'shared', // Allows items to be moved between lists
         animation: 150,
-        ghostClass: 'itinerary-item ghost',
+        // FIX: Provide a single class name to avoid InvalidCharacterError
+        ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
             if (evt.from.id === evt.to.id) {
@@ -58,7 +59,8 @@ export function setupItineraryEventListeners() {
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
-        ghostClass: 'itinerary-item ghost',
+        // FIX: Provide a single class name to avoid InvalidCharacterError
+        ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
             // Item moved from locked to favorites
@@ -185,7 +187,7 @@ export async function renderItinerary() {
 async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
-    itemElement.className = 'itinerary-item';
+    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
     itemElement.dataset.recordId = record.id;
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
