@@ -1,12 +1,13 @@
 // FILE: main.js
 /*
- * Version: 4.9.1
+ * Version: 4.9.2
  * Last Modified: 2025-09-09
  * * Changelog:
+ * v4.9.2 - 2025-09-09
+ * - Fixed a `TypeError` in `events.js` by correctly referencing `category-filters`.
  * v4.9.1 - 2025-09-09
- * - Implemented dynamic availability for locked-in items and the 
- event plan date.
-* - Synced the detail modal calendar with the event plan date.
+ * - Implemented dynamic availability for locked-in items and the event plan date.
+ * - Synced the detail modal calendar with the event plan date.
  * - Updated event handlers for adding/removing items to trigger an availability refresh.
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
@@ -164,7 +165,7 @@ log('Main', `7. Failed to load initial data: ${error.message}`);
     const sessionId = urlParams.get('session');
 log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
     // Fix: Pass flatpickr to the event listeners
-    mainDatePicker = initializeEventListeners(imageCache, window.flatpickr);
+    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
 log('Main', '9. Event listeners initialized.');
     if (sessionId) {
         try {
@@ -176,11 +177,9 @@ log('Main', '10. Session loaded successfully.');
 ui.updateTotalCost();
             log('Main', '11. Updated header, event plan, and total cost.');
             const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-if (savedDate && Array.isArray(savedDate) && savedDate.length === 2) {
-                if (mainDatePicker) {
-                    mainDatePicker.setDate([savedDate[0], savedDate[1]], true);
-log('Main', '12. Set saved date in date picker.');
-                }
+if (savedDate && eventPlanDatePicker) {
+                eventPlanDatePicker.setDate(new Date(savedDate), true);
+log('Main', '12. Set saved date in event plan date picker.');
             }
         } catch (error) {
             console.error("Failed to load session:", error);
