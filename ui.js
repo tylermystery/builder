@@ -1,6 +1,6 @@
 // FILE: ui.js
 /*
- * Version: 3.0.9
+ * Version: 3.0.7
  * Last Modified: 2025-09-09
  */
 import { state } from './state.js';
@@ -50,7 +50,7 @@ let minPrice = Infinity, maxPrice = -Infinity;
             });
         } else {
             const price = getRecordPrice(item);
-       
+        
     if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
@@ -81,7 +81,7 @@ export function toggleLoading(show) {
 const loadingMessage = document.getElementById('loading-message');
     const mainContent = document.querySelector('.main-content');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-if (mainContent) mainContent.style.display = show ? 'none' : 'flex';
+if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
@@ -109,22 +109,9 @@ catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</
         return;
     }
 
-    // FIX: Bulk fetch images before rendering cards to avoid rate limits
-    const allTags = new Set();
-recordsToRender.forEach(record => {
-        if (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]) {
-            record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',').forEach(tag => allTags.add(tag.trim()));
-        }
-    });
-const hasImagesToFetch = allTags.size > 0;
-    if (hasImagesToFetch) {
-        await api.fetchImagesByTags(Array.from(allTags), 2);
-    }
-    // END FIX
-
     const fragment = document.createDocumentFragment();
-    const CHUNK_SIZE = 5;
-for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
+const CHUNK_SIZE = 5;
+    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
 const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
         const cards = await Promise.all(cardPromises);
@@ -304,34 +291,33 @@ totalCostEl.textContent = `$${total.toFixed(2)}`;
 // FIX: New function to build and render the catalog header with breadcrumbs
 function getBreadcrumbs(selectedCategory) {
     const crumbs = [];
-    if (selectedCategory && selectedCategory !== 'all') {
+if (selectedCategory && selectedCategory !== 'all') {
         let currentRecord = state.records.all.find(r => r.fields.Name === selectedCategory);
-        while (currentRecord) {
+while (currentRecord) {
             crumbs.unshift({
                 name: currentRecord.fields[CONSTANTS.FIELD_NAMES.NAME],
                 id: currentRecord.id
             });
-            const parentName = currentRecord.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+const parentName = currentRecord.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
             if (parentName) {
                 currentRecord = state.records.all.find(r => r.fields.Name === parentName);
-            } else {
+} else {
                 currentRecord = null;
             }
         }
         crumbs.unshift({ name: 'All Categories', id: 'all' });
-    }
+}
     return crumbs;
 }
 
 export function renderCatalogHeader() {
     const catalogHeaderEl = document.getElementById('catalog-header');
     if (!catalogHeaderEl) return;
-
-    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
+const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
     const selectedCategoryName = activeCategoryButton ? activeCategoryButton.textContent : 'All Categories';
     
     let breadcrumbsHtml = '';
-    const breadcrumbs = getBreadcrumbs(selectedCategoryName);
+const breadcrumbs = getBreadcrumbs(selectedCategoryName);
     
     if (breadcrumbs.length > 0) {
         breadcrumbsHtml = `<div id="breadcrumbs">` +
@@ -339,24 +325,25 @@ export function renderCatalogHeader() {
                 if (index === breadcrumbs.length - 1) {
                     return `<span>${crumb.name}</span>`;
                 }
-                return `<a href="#" class="parent-link" data-parent-name="${crumb.name}">${crumb.name}</a>`;
+      
+            return `<a href="#" class="parent-link" data-parent-name="${crumb.name}">${crumb.name}</a>`;
             }).join(' > ') +
             `</div>`;
-    }
+}
 
     catalogHeaderEl.innerHTML = `
         ${breadcrumbsHtml}
         <h2 id="catalog-title">${selectedCategoryName}</h2>
     `;
-    
-    // Add event listeners to the new breadcrumb links
+// Add event listeners to the new breadcrumb links
     catalogHeaderEl.querySelectorAll('.parent-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const parentName = e.target.dataset.parentName;
             // Find the corresponding category button and click it
             const categoryBtn = document.querySelector(`.category-filter-btn[data-filter="${parentName.toLowerCase()}"]`);
-            if (categoryBtn) {
+            if 
+(categoryBtn) {
                 categoryBtn.click();
             }
         });
