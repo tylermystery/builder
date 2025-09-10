@@ -19,7 +19,7 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
     // FIX: Only apply category filtering if a specific category is selected
     if (selectedCategory === 'all' && activeSubcategories.length === 0) {
         // When no specific category is selected, simply return all top-level items.
-        // This prevents the search from being filtered out.
+// This prevents the search from being filtered out.
         return records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
     
@@ -155,13 +155,15 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     console.log("FILTER: Starting applyFiltersAndSort...");
-    const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
-    const selectedCategory = categoryFilterDropdown.value;
-const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    // FIX: Get the selected category name from the active button's text content
+    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
+    const selectedCategory = activeCategoryButton ? activeCategoryButton.textContent : 'all';
+    
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
-const headcountFilter = document.getElementById('headcount-filter').value;
+    const headcountFilter = document.getElementById('headcount-filter').value;
     const customHeadcount = document.getElementById('headcount-custom').value;
     const locationFilter = document.getElementById('location-filter').value;
     const budgetFilter = document.getElementById('budget-filter').value;
@@ -173,27 +175,26 @@ console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
     // FIX: Apply the search filter first to the entire list of records
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-    console.log(`FILTER: After Search filter, ${recordsToDisplay.length} records remain.`);
+console.log(`FILTER: After Search filter, ${recordsToDisplay.length} records remain.`);
     
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     console.log(`FILTER: After Category/Subcategory filter, ${recordsToDisplay.length} records remain.`);
-    recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
 
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-    console.log(`FILTER: After Headcount filter, ${recordsToDisplay.length} records remain.`);
+console.log(`FILTER: After Headcount filter, ${recordsToDisplay.length} records remain.`);
 
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     console.log(`FILTER: After Location filter, ${recordsToDisplay.length} records remain.`);
-    recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     console.log(`FILTER: After Budget filter, ${recordsToDisplay.length} records remain.`);
-    
-    // FIX: Sort the final filtered list
+// FIX: Sort the final filtered list
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
     console.log("FILTER: Sorting complete.");
 
     state.records.filtered = recordsToDisplay;
-    state.ui.recordsCurrentlyDisplayed = 0;
+state.ui.recordsCurrentlyDisplayed = 0;
 const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
 console.log(`FILTER: Passing ${initialRecords.length} records to ui.renderRecords.`);
 ui.renderRecords(initialRecords, imageCache, false).then(() => {
