@@ -601,3 +601,26 @@ export function initializeEventListeners(imageCache, flatpickr) {
 
     return { mainDatePicker, eventPlanDatePicker };
 }
+
+export function initializeChatEventListeners() {
+    const chatToggleButton = document.getElementById('chat-toggle-button');
+    const chatWindow = document.getElementById('chat-window');
+
+    function toggleChatWindow() {
+        const isHidden = chatWindow.style.display === 'none' || chatWindow.style.display === '';
+        chatWindow.style.display = isHidden ? 'flex' : 'none';
+    }
+
+    if (chatToggleButton) {
+        chatToggleButton.addEventListener('click', toggleChatWindow);
+    }
+
+    // This logic needs a slight adjustment to work with the toggle button
+    document.addEventListener('click', (event) => {
+        const chatWidget = document.getElementById('chat-widget-container');
+        if (!chatWidget.contains(event.target) && chatWindow.style.display === 'flex') {
+            chatWindow.style.display = 'none';
+        }
+    });
+}
+
