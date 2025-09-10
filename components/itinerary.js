@@ -4,6 +4,7 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
+import { triggerSave } from '../events.js';
 
 // Get the SortableJS library from the global scope
 const Sortable = window.Sortable;
@@ -22,9 +23,11 @@ export function setupItineraryEventListeners() {
     lockedSortable = new Sortable(lockedItemsContainer, {
         group: 'shared', // Allows items to be moved between lists
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
+            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id === evt.to.id) {
                 // Reorder locked items if moved within the same list
                 const newOrder = lockedSortable.toArray();
@@ -50,6 +53,8 @@ export function setupItineraryEventListeners() {
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
+            triggerSave();
         }
     });
 
@@ -57,10 +62,11 @@ export function setupItineraryEventListeners() {
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
-            // Item moved from locked to favorites
+            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
@@ -75,6 +81,8 @@ export function setupItineraryEventListeners() {
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
+            triggerSave();
         }
     });
 
@@ -152,6 +160,7 @@ export async function renderItinerary() {
             // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
+            triggerSave();
         });
     });
 
@@ -166,6 +175,7 @@ export async function renderItinerary() {
             }
             // FIX: Call the sidebar update function here to sync the main view
             ui.updateEventPlanSection();
+            triggerSave();
         });
     });
 
@@ -178,6 +188,7 @@ export async function renderItinerary() {
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
             e.target.closest('.itinerary-item').remove();
+            triggerSave();
         });
     });
 }
