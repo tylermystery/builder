@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "dependencies": {
     "node-fetch": "^2.6.7",
+    "pusher": "^5.2.0",
     "stripe": "^13.2.0"
   },
   "scripts": {
