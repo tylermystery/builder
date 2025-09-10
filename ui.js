@@ -8,10 +8,11 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard, updateCardIcon } from './components/card.js';
-import { showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, setupItineraryEventListeners } from './components/itinerary.js';
+import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import { showCheckoutModal, hideCheckoutModal, getStripeContext } from './components/modal.js';
-import { updateEventPlanSection, updateFavoritesCarousel, updateHeader, updateTotalCost } from './components/sidebar.js';
+// FIX: We need to remove the import of updateHeader and updateTotalCost from sidebar.js
+import { updateEventPlanSection, updateFavoritesCarousel } from './components/sidebar.js';
 import * as api from './api.js';
 
 // --- SHARED HELPER FUNCTIONS ---
@@ -150,6 +151,8 @@ export function updateLockedItemState(recordId, updates) {
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
 }
+
+// FIX: This function is now correctly placed in ui.js to avoid re-exporting
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) ||
         '';
@@ -162,6 +165,7 @@ export function updateHeader() {
     const goalsInput = document.getElementById('header-goals');
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
+
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -229,6 +233,8 @@ export async function updateLockedItemStatusIcons() {
         }
     }
 }
+
+// FIX: This function is now correctly placed in ui.js to avoid re-exporting
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
@@ -280,8 +286,7 @@ export {
     getStripeContext,
     updateEventPlanSection,
     updateFavoritesCarousel,
-    updateHeader,
-    updateTotalCost,
+    // FIX: Removed the re-exports to avoid conflicts
     parseOptions,
     checkAvailability
 };
