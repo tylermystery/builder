@@ -49,6 +49,8 @@ import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
+import { sendMessage } from './chat.js';
+
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -603,6 +605,21 @@ export function initializeEventListeners(imageCache, flatpickr) {
 }
 
 export function initializeChatEventListeners() {
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    
+    if (messageForm) {
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value;
+            if (message.trim() === '') return;
+    
+            sendMessage(message); // <-- THIS IS THE UPDATED LINE
+    
+            messageInput.value = '';
+        });
+    }
+    
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWindow = document.getElementById('chat-window');
 
