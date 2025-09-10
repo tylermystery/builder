@@ -4,41 +4,41 @@
 * Last Modified: 2025-09-09
 * Changelog:
 * v4.9.4 - 2025-09-09
-* - Fixed category/subcategory bug by correctly parsing options from the category record.
-* - Ensured search functionality operates on the correct data set.
+* - [cite_start]Fixed category/subcategory bug by correctly parsing options from the category record[cite: 1564].
+* - [cite_start]Ensured search functionality operates on the correct data set[cite: 1565].
 * v4.9.3 - 2025-09-09
-* - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
-* - `itinerary-btn` now correctly shows the full-screen itinerary modal.
+* - [cite_start]Updated `events.js` to integrate with the new `itinerary.js` modal logic[cite: 1566].
+* - [cite_start]`itinerary-btn` now correctly shows the full-screen itinerary modal[cite: 1567].
 * v4.9.2 - 2025-09-09
-* - Fixed bug where Airtable 'Date' field would not accept date range array.
-* - Corrected a TypeError in `updateTotalCost` by fixing the property access.
-* - Ensured page title updates correctly with the event name.
-* - Fixed `ui.checkAvailability is not a function` error in the itinerary module.
+* - [cite_start]Fixed bug where Airtable 'Date' field would not accept date range array[cite: 1568].
+* - [cite_start]Corrected a TypeError in `updateTotalCost` by fixing the property access[cite: 1569].
+* - [cite_start]Ensured page title updates correctly with the event name[cite: 1570].
+* - [cite_start]Fixed `ui.checkAvailability is not a function` error in the itinerary module[cite: 1571].
 * v4.9.1 - 2025-09-09
-* - Implemented dynamic availability for locked-in items and the event plan date.
-* - Synced the detail modal calendar with the event plan date.
-* - Updated event handlers for adding/removing items to trigger an availability refresh.
+* - [cite_start]Implemented dynamic availability for locked-in items and the event plan date[cite: 1572].
+* - [cite_start]Synced the detail modal calendar with the event plan date[cite: 1573].
+* - [cite_start]Updated event handlers for adding/removing items to trigger an availability refresh[cite: 1574].
 * v4.9.0 - 2025-09-09
-* - Finalized itinerary builder functionality with live editing and date sync.
+* - [cite_start]Finalized itinerary builder functionality with live editing and date sync[cite: 1575].
 * v4.8.9 - 2025-09-09
-* - Added functionality to open the new itinerary builder modal.
+* - [cite_start]Added functionality to open the new itinerary builder modal[cite: 1576].
 * v4.8.8 - 2025-09-09
-* - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
-* - Added functionality for carousel navigation buttons.
+* - [cite_start]Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js[cite: 1577].
+* - [cite_start]Added functionality for carousel navigation buttons[cite: 1577].
 * v4.8.7 - 2025-09-08
-* - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
+* - [cite_start]Corrected a ReferenceError by providing flatpickr as a global object to the event listeners[cite: 1578].
 * v4.8.6 - 2025-09-08
-* - Added functionality to update the header calendar based on favorited items.
+* - [cite_start]Added functionality to update the header calendar based on favorited items[cite: 1579].
 * v4.8.5 - 2025-09-02
-* - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
+* - [cite_start]Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE[cite: 1580].
 * v4.8.4 - 2025-09-02
-* - Added debug logging for initialization steps.
+* - [cite_start]Added debug logging for initialization steps[cite: 1581].
 * v4.8.3 - 2025-09-02
-* - Continue initialization if session loading fails due to storage errors.
+* - [cite_start]Continue initialization if session loading fails due to storage errors[cite: 1582].
 * v4.8.2 - 2025-09-02
-* - Added retry logic for fetchAllRecords to handle transient errors.
+* - [cite_start]Added retry logic for fetchAllRecords to handle transient errors[cite: 1583].
 * v4.8.1 - 2025-09-02
-* - Added storage error handling during initialization.
+* - [cite_start]Added storage error handling during initialization[cite: 1584].
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -48,7 +48,9 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
-import { initItinerary, showItineraryModal } from './components/itinerary.js';
+// FIX: The initItinerary function has been refactored, so we need to remove the import here.
+// import { initItinerary, showItineraryModal } from './components/itinerary.js';
+import { showItineraryModal } from './components/itinerary.js'; // The other functions are still available in ui.js
 
 let mainDatePicker = null;
 let saveTimeout = null;
