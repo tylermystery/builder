@@ -119,7 +119,8 @@ export function updateSaveShareButton() {
     }
 }
 
-function triggerSave() {
+// FIX: Add the 'export' keyword to make this function available to other modules
+export function triggerSave() {
     clearTimeout(saveTimeout);
     state.ui.saveState = 'MODIFIED';
     updateSaveShareButton();
