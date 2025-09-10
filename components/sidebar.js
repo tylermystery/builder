@@ -12,7 +12,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
+    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
     // NEW: Add overlay for name and tooltip
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -60,7 +60,7 @@ async function createLockedInItemElement(record, itemInfo) {
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
-        <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img src="${imageUrls[0] || `https://res.cloudinary.com/daedqizre/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -75,28 +75,31 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
-// In the updateEventPlanSection function:
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
 
-    // We no longer render items directly here, but a list that opens the modal
-    // So we just need to update the content to reflect the new design
-    container.innerHTML = `
-        <button id="itinerary-btn">Event Plan</button>
-        <div id="cart-items-container">
-            <p style="font-size: 0.9em; color: #6c757d;">
-                ${state.cart.lockedItems.size > 0 ? 'Items are locked in. Click "Event Plan" to manage.' : 'No items locked in yet.'}
-            </p>
-        </div>
-    `;
+    // FIX: Clear the container before adding new elements to avoid duplicates.
+    container.innerHTML = '';
     
-    // Re-bind the event listener for the button here as it gets re-rendered
-    document.getElementById('itinerary-btn').addEventListener('click', () => {
-        ui.showItineraryModal();
-    });
+    // FIX: We need to recreate the locked items list directly here, as this function
+    // is responsible for rendering the sidebar. The previous change incorrectly
+    // replaced the entire sidebar content with a new button.
+    if (state.cart.lockedItems.size === 0) {
+        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        return;
+    }
+
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createLockedInItemElement(record, itemInfo);
+            container.appendChild(itemElement);
+        }
+    }
 }
+
 
 export async function updateFavoritesCarousel() {
     log('Sidebar', `Updating favorites carousel with ${state.cart.items.size} items.`);
@@ -127,6 +130,7 @@ export async function updateFavoritesCarousel() {
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
+    
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
@@ -151,7 +155,7 @@ export function updateTotalCost() {
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
  
-       let itemCost;
+        let itemCost;
  
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
