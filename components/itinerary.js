@@ -15,9 +15,10 @@ const closeBtn = document.getElementById('itinerary-close-btn');
 
 let lockedSortable, favoritedSortable;
 
-export function initItinerary() {
+// FIX: Renamed function to be more descriptive and avoid re-initialization issues.
+export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
-    
+
     // Initialize SortableJS for the locked-in items column
     lockedSortable = new Sortable(lockedItemsContainer, {
         group: 'shared', // Allows items to be moved between lists
@@ -78,7 +79,7 @@ export function initItinerary() {
         }
     });
 
-    // Close modal event listeners
+    // FIX: This event listener is now a permanent part of the setup
     closeBtn.addEventListener('click', hideItineraryModal);
     itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
@@ -89,11 +90,13 @@ export function initItinerary() {
 
 export function showItineraryModal() {
     log('Itinerary', 'Showing itinerary modal.');
+    // FIX: Render the itinerary content here, before showing the modal.
+    renderItinerary();
+    renderItineraryHeader();
+
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    renderItinerary();
-    renderItineraryHeader();
 }
 
 export function hideItineraryModal() {
