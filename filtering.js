@@ -155,18 +155,18 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     console.log("FILTER: Starting applyFiltersAndSort...");
-    // FIX: Get the selected category name from the active button's text content
+// FIX: Get the selected category name from the active button's text content
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? activeCategoryButton.textContent : 'all';
+const selectedCategory = activeCategoryButton ? activeCategoryButton.textContent : 'all';
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
-    const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
-    const headcountFilter = document.getElementById('headcount-filter').value;
+const headcountFilter = document.getElementById('headcount-filter').value;
     const customHeadcount = document.getElementById('headcount-custom').value;
     const locationFilter = document.getElementById('location-filter').value;
-    const budgetFilter = document.getElementById('budget-filter').value;
+const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 console.log("FILTER: Filter values read from DOM:", { selectedCategory, activeSubcategories, statusFilter, headcountFilter, locationFilter, budgetFilter, sortBy, searchTerm });
 
