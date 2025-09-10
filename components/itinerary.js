@@ -1,5 +1,4 @@
 // FILE: components/itinerary.js
-import Sortable from 'sortablejs';
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import * as ui from '../ui.js';
