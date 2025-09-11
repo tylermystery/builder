@@ -1,8 +1,10 @@
 // FILE: events.js
 /*
-* Version: 4.9.5
+* Version: 4.9.6
 * Last Modified: 2025-09-10
 * Changelog:
+* v4.9.6 - 2025-09-10
+* - Added 'isInitializing' guards to event handlers to prevent "Fork on Load" bug.
 * v4.9.5 - 2025-09-10
 * - Fixed chat window visibility bug. Replaced direct style manipulation 
 * with class-based toggling to align with CSS animations.
@@ -125,6 +127,9 @@ export function updateSaveShareButton() {
 
 // FIX: Add the 'export' keyword to make this function available to other modules
 export function triggerSave() {
+    // --- ADDED: Guard clause to prevent saving during initialization ---
+    if (state.ui.isInitializing) return;
+
     clearTimeout(saveTimeout);
     state.ui.saveState = 'MODIFIED';
     updateSaveShareButton();
@@ -297,10 +302,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
         enableTime: true,
         dateFormat: "M j, Y h:i K",
         onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
            
-   
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
@@ -315,6 +320,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
+            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
             const button = e.target.closest('[data-date-quick]');
             if (!button || !mainDatePicker) return;
             const quickAction = button.dataset.dateQuick;
@@ -346,10 +352,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
     }
 
     safeAddEventListener('header-event-name', 'change', (e) => {
+        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
     safeAddEventListener('header-goals', 'change', (e) => {
+        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
@@ -390,6 +398,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
     document.body.addEventListener('click', async (e) => {
+        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
@@ -542,6 +551,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
     document.body.addEventListener('change', (e) => {
+        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
         const target = e.target;
         const modal = document.getElementById('detail-modal-overlay');
         const container = target.closest('[data-record-id]');
@@ -582,6 +592,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) {
         const handleEventNameChange = () => {
+            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
             const newName = eventNameInput.value.trim();
             if (newName === '') {
                 eventNameInput.value = 'Event Name';
@@ -603,6 +614,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
                 ui.updateEventPlanDateDisplay();
