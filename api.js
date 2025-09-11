@@ -1,12 +1,15 @@
+// FILE: api.js
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
+
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -47,7 +50,7 @@ export async function loadSessionFromAirtable(sessionId) {
 export async function saveSessionToAirtable() {
     //if (state.session.id && !state.session.isOwned) {
     //    state.session.id = null;
-    }
+    //} // --- FIX: The closing brace '}' that was here has been moved to the end of the function.
 
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
@@ -91,7 +94,7 @@ export async function saveSessionToAirtable() {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json' 
             },
-             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
+            body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
@@ -114,6 +117,7 @@ export async function saveSessionToAirtable() {
         log('API', `Failed to save session: ${error.message}`);
         return false;
     }
+// --- FIX: This closing brace was moved from above to correctly close the function ---
 }
 
 export async function fetchAllRecords() {
@@ -254,7 +258,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-    
     if (isGrouping) {
         log('API', `Record is a grouping item. Using a placeholder image to avoid multiple API calls.`);
         imageUrls = [ultimateFallbackUrl];
@@ -302,7 +305,8 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
-            }
+       
+           }
         }]
     };
     try {
