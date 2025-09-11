@@ -44,13 +44,11 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
-// FIX: This function now correctly creates a locked-in item element for the sidebar
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
@@ -60,29 +58,28 @@ async function createLockedInItemElement(record, itemInfo) {
 
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
+    
+    // --- FIX: Removed Edit button, changed Unsave button to "-" ---
     itemElement.innerHTML = `
         <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+            ${itemInfo.note ? `<p class="locked-item-note"><em>${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
-            <button class="edit-btn">Edit</button>
-            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
+            <button class="demote-locked-item-btn" title="Move back to Ideas">-</button>
         </div>
     `;
     return itemElement;
 }
 
-// FIX: This function now correctly renders the locked-in items in the sidebar
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
     
-    // FIX: Clear the container before adding new elements to avoid duplicates.
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
@@ -129,7 +126,6 @@ export async function updateFavoritesCarousel() {
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
@@ -187,9 +183,9 @@ export function displayReservedStatus() {
         totalRow.innerHTML = '<span style="color: #28a745; font-weight: bold;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'none'; // Hide the button
+        checkoutBtn.style.display = 'none';
     }
     if (saveShareBtn) {
-        saveShareBtn.disabled = false; // Ensure the share link is enabled
+        saveShareBtn.disabled = false;
     }
 }
