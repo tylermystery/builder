@@ -1,5 +1,5 @@
 // FILE: config.js
-export const STRIPE_PUBLISHABLE_KEY = 'pk_test_mK3MLvoZurxcqIQHyWB7eqlY';
+export const STRIPE_PUBLISHABLE_KEY = 'pk_live_opXi3umu9588LiitWvYhdk9H';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 export const RECORDS_PER_LOAD = 10;
 export const EMOJI_REACTIONS = ['🚀', '🔥', '🤩', '❤️', '👍', '🤔', '👎', '🤢'];
