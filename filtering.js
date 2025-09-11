@@ -166,7 +166,8 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? activeCategoryButton.textContent : 'all';
+    // --- MODIFIED: Handle the new "All" button ---
+    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
@@ -180,18 +181,20 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay = state.records.all;
 
-    // Filter by category, status, and other attributes first.
+    // --- REORDERED LOGIC ---
+    // 1. Apply the global search term filter FIRST.
+    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+
+    // 2. Filter by category, status, and other attributes on the search results.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
-
-    // Apply the search term filter to the already-filtered list.
-    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
     
-    // Sort the final results.
+    // 3. Sort the final results.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
+    // --- END REORDERED LOGIC ---
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
