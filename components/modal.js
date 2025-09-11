@@ -1,5 +1,4 @@
 // FILE: components/modal.js
-// FILE: components/modal.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -7,7 +6,9 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
+
 let stripe, elements, cardElement, clientSecret;
+
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
     let current = record;
@@ -19,6 +20,7 @@ function getBreadcrumbs(record) {
     }
     return breadcrumbs;
 }
+
 function resetModalState() {
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -42,6 +44,7 @@ function resetModalState() {
     modalBreadcrumbs.innerHTML = '';
     log('Modal', 'Reset modal state.');
 }
+
 export async function showDetailModal(record) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
@@ -132,6 +135,7 @@ export async function showDetailModal(record) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
+ 
          
            optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
@@ -182,16 +186,17 @@ export async function showDetailModal(record) {
             let tooltip = status.reason;
             if (status.status === AVAILABILITY_STATUS.FULL) {
                 className = 'available-full';
-            } else if (status.status === 
+     
+               } else if (status.status === 
             AVAILABILITY_STATUS.PARTIAL) {
                 className = 'available-partial';
                 tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
                 className = 'unavailable';
-            }
-            dayElem.classList.add(className);
   
-                      dayElem.setAttribute('data-tippy-content', tooltip);
+                  }
+            dayElem.classList.add(className);
+            dayElem.setAttribute('data-tippy-content', tooltip);
         },
         onReady: function () {
             tippy('.flatpickr-day', {
@@ -199,7 +204,7 @@ export async function showDetailModal(record) {
                 placement: 'top',
                 theme: 'light',
                 allowHTML: true,
-      
+    
               });
         },
         onChange: (selectedDates) => {
@@ -229,6 +234,7 @@ export async function showDetailModal(record) {
         closeBtn.addEventListener('click', hideDetailModal);
     }
 }
+
 export function hideDetailModal() {
     const modalOverlay = document.getElementById('detail-modal-overlay');
     if (modalOverlay) {
@@ -248,6 +254,7 @@ export function hideDetailModal() {
         document.body.classList.remove('modal-open');
     }
 }
+
 export async function showCheckoutModal() {
     log('Modal', 'Showing checkout modal.');
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
@@ -259,6 +266,12 @@ export async function showCheckoutModal() {
         log('Modal', 'Error: Missing elements for checkout modal.');
         return;
     }
+
+    // --- FIX: Add event listener for the close button ---
+    if (checkoutCloseBtn) {
+        checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
+    }
+
     // Clear previous summary and totals
     summaryDetailsEl.innerHTML = '';
     fullTotalEl.textContent = '$0.00';
@@ -317,17 +330,24 @@ export async function showCheckoutModal() {
         hideCheckoutModal();
     }
 }
+
 export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
+            // --- FIX: Remove the event listener to prevent memory leaks ---
+            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+            if (checkoutCloseBtn) {
+                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
+            }
             checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
         }, 300);
         document.body.classList.remove('modal-open');
     }
 }
+
 export function getStripeContext() {
     return { stripe, elements, cardElement, clientSecret };
 }
