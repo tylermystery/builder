@@ -7,7 +7,8 @@
  * - Implemented dynamic availability for locked-in items and the 
  event plan date.
  * - Synced the detail modal calendar with the event plan date.
- * - Updated event handlers for adding/removing items to trigger an availability refresh.
+ * - Updated event handlers for adding/removing items to trigger 
+ an availability refresh.
  * v4.9.0 - 2025-09-09
  * - Finalized itinerary builder functionality with live editing and date sync.
  * v4.8.9 - 2025-09-09
@@ -99,7 +100,8 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                        busyMinutes += minutes;
+   
+                         busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -170,7 +172,6 @@ async function initialize() {
     
     // FIX: Call the new setup function for the itinerary modal's event listeners from ui.js
     ui.setupItineraryEventListeners();
-    
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
@@ -215,7 +216,8 @@ async function initialize() {
     log('Main', '21. Initialization complete.');
 
     initializeChatEventListeners();
-    initializeChat(); // <-- ADD THIS LINE
+    initializeChat();
+    // <-- ADD THIS LINE
     log('Main', '9. Event listeners initialized.');
  
 }
