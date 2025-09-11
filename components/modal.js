@@ -67,7 +67,7 @@ export async function showDetailModal(record) {
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ?
-            'Update Plan' : 'Add to Plan';
+        'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -80,7 +80,7 @@ export async function showDetailModal(record) {
         const range = ui.getGroupPriceRange(record);
         if (range && typeof range.min === 'number' && typeof range.max === 'number') {
             modalItemPrice.textContent = range.min === range.max ?
-                `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
             modalItemPrice.textContent = 'Price Varies';
         }
@@ -99,7 +99,8 @@ export async function showDetailModal(record) {
             modalMainImage.style.backgroundImage = `url('${url}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
-        });
+     
+           });
         modalThumbnailStrip.appendChild(thumb);
     });
     modalHeaderActions.innerHTML = '';
@@ -122,7 +123,8 @@ export async function showDetailModal(record) {
         }
         let priceModText = '';
         if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
+           
+         priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
@@ -130,7 +132,8 @@ export async function showDetailModal(record) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
-            optionButton.addEventListener('click', (e) => {
+         
+           optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
@@ -141,7 +144,7 @@ export async function showDetailModal(record) {
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = ui.getRecordPrice(record, newIndex);
                 modalItemPrice.textContent = typeof newPrice === 'number' ?
-                    `$${newPrice.toFixed(2)}` : 'N/A';
+                `$${newPrice.toFixed(2)}` : 'N/A';
             });
         }
         modalOptionsContainer.appendChild(optionButton);
@@ -172,20 +175,23 @@ export async function showDetailModal(record) {
             return status.status === AVAILABILITY_STATUS.NONE;
         }],
         onDayCreate: function (dObj, dStr, fp, dayElem) {
-            const day = dayElem.dateObj;
+            const 
+            day = dayElem.dateObj;
             const status = getDayStatus(day, busyTimes, record);
             let className = '';
             let tooltip = status.reason;
             if (status.status === AVAILABILITY_STATUS.FULL) {
                 className = 'available-full';
-            } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
+            } else if (status.status === 
+            AVAILABILITY_STATUS.PARTIAL) {
                 className = 'available-partial';
                 tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
                 className = 'unavailable';
             }
             dayElem.classList.add(className);
-            dayElem.setAttribute('data-tippy-content', tooltip);
+  
+                      dayElem.setAttribute('data-tippy-content', tooltip);
         },
         onReady: function () {
             tippy('.flatpickr-day', {
@@ -193,7 +199,8 @@ export async function showDetailModal(record) {
                 placement: 'top',
                 theme: 'light',
                 allowHTML: true,
-            });
+      
+              });
         },
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
@@ -233,7 +240,8 @@ export function hideDetailModal() {
             // FIX: Remove the event listener to prevent memory leaks
             if (closeBtn) {
                 closeBtn.removeEventListener('click', hideDetailModal);
-            }
+     
+           }
             document.getElementById('header-event-name').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
         }, 300);
