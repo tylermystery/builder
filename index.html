@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;"
-/>
+    <link rel="icon" href="data:;" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -15,7 +14,7 @@
     <style>
         body {
             padding-bottom: 150px;
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
         }
         body.modal-open {
@@ -23,14 +22,14 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, A
         }
         #sticky-header {
             position: sticky;
-top: 0;
+            top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         #header-toolbar {
             display: flex;
-flex-wrap: wrap;
+            flex-wrap: wrap;
             align-items: center;
             gap: 20px;
             padding: 15px 20px;
@@ -39,23 +38,23 @@ flex-wrap: wrap;
         }
         #header-title {
             font-size: 1.5em;
-font-weight: bold;
+            font-weight: bold;
             margin: 0;
         }
         .toolbar-group {
             display: flex;
-flex-direction: column;
+            flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-color: #666;
+            color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
             border: 1px solid #ced4da;
-border-radius: 4px;
+            border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
             width: 100%;
@@ -64,7 +63,7 @@ border-radius: 4px;
         /* New CSS for the editable event name */
         #header-event-name {
             font-size: 1.5em;
-font-weight: bold;
+            font-weight: bold;
             border: none;
             background: none;
             padding: 0;
@@ -72,7 +71,7 @@ font-weight: bold;
         /* New styling for the Event Plan button title */
         #itinerary-btn {
             background: none;
-border: none;
+            border: none;
             color: #333;
             font-size: 1.5em;
             font-weight: bold;
@@ -87,7 +86,7 @@ border: none;
         /* FIX: New responsive layout for main content */
         .main-content {
             display: flex;
-flex-direction: column;
+            flex-direction: column;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
@@ -96,15 +95,12 @@ flex-direction: column;
         @media (min-width: 1000px) {
             .main-content {
                 display: grid;
-grid-template-columns: 300px 1fr 380px;
+                grid-template-columns: 300px 1fr 380px;
                 gap: 25px;
             }
-            #left-sidebar { order: 1;
-            }
-            #catalog-area { order: 2;
-            }
-            #right-sidebar { order: 3;
-            }
+            #left-sidebar { order: 1; }
+            #catalog-area { order: 2; }
+            #right-sidebar { order: 3; }
         }
         @media (max-width: 1000px) {
             #left-sidebar, #right-sidebar {
@@ -128,12 +124,12 @@ grid-template-columns: 300px 1fr 380px;
         /* END FIX */
         #right-sidebar h3, #left-sidebar h3 {
             margin-top: 0;
-border-bottom: 1px solid #dee2e6;
+            border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
         #filter-controls {
             background-color: #fff;
-padding: 20px;
+            padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
@@ -143,7 +139,7 @@ padding: 20px;
         }
         #filter-controls::after {
             content: attr(data-active-filters);
-display: inline-block;
+            display: inline-block;
             background: #007bff;
             color: #fff;
             border-radius: 12px;
@@ -152,26 +148,26 @@ display: inline-block;
             margin-left: 10px;
             position: absolute;
             top: 15px;
-right: 15px;
+            right: 15px;
         }
         .filter-group {
             display: flex;
-flex-direction: column;
+            flex-direction: column;
             gap: 10px;
         }
         .filter-group label {
             font-size: 0.9em;
-font-weight: 500;
+            font-weight: 500;
             color: #333;
         }
         .filter-btn-group {
             display: flex;
-flex-wrap: wrap;
+            flex-wrap: wrap;
             gap: 8px;
         }
         .filter-btn {
             padding: 8px;
-border: 1px solid #ccc;
+            border: 1px solid #ccc;
             border-radius: 4px;
             background-color: #f8f8f8;
             cursor: pointer;
@@ -180,7 +176,7 @@ border: 1px solid #ccc;
         }
         .filter-btn.active {
             background-color: #e7f3ff;
-border-color: #007bff;
+            border-color: #007bff;
             font-weight: bold;
         }
        /* ...existing styles... */
@@ -190,28 +186,28 @@ border-color: #007bff;
         }
         #name-filter:not(:placeholder-shown) {
             border-color: #007bff;
-box-shadow: 0 0 5px rgba(0,123,255,0.3);
+            box-shadow: 0 0 5px rgba(0,123,255,0.3);
         }
         .flatpickr-day.available-full {
             background-color: #d4edda !important;
-color: #155724 !important;
+            color: #155724 !important;
         }
         .flatpickr-day.available-partial {
             background-color: #fff3cd !important;
-color: #856404 !important;
+            color: #856404 !important;
         }
         .flatpickr-day.unavailable {
             background-color: #f8d7da !important;
-color: #721c24 !important;
+            color: #721c24 !important;
             text-decoration: line-through;
         }
         .flatpickr-calendar.inline {
             width: 100%;
-box-shadow: none;
+            box-shadow: none;
         }
         #reset-filters-btn {
             width: 100%;
-padding: 10px;
+            padding: 10px;
             font-size: 0.9em;
             font-weight: bold;
             border-radius: 5px;
@@ -222,19 +218,19 @@ padding: 10px;
         }
         #catalog-toolbar {
             display: flex;
-justify-content: flex-end;
+            justify-content: flex-end;
             align-items: center;
             margin-bottom: 20px;
         }
         #catalog-toolbar select {
             border: 1px solid #ced4da;
-border-radius: 4px;
+            border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
         }
         #event-plan-panel {
             background-color: #fff;
-padding: 20px;
+            padding: 20px;
             border-radius: 8-px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
@@ -245,12 +241,12 @@ padding: 20px;
         }
         #cart-footer {
             margin-top: 20px;
-padding-top: 15px;
+            padding-top: 15px;
             border-top: 2px solid #dee2e6;
         }
         #cart-footer .total-row {
             display: flex;
-justify-content: space-between;
+            justify-content: space-between;
             align-items: center;
             font-size: 1.4em;
             font-weight: bold;
@@ -258,7 +254,7 @@ justify-content: space-between;
         }
         #cart-footer button {
             width: 100%;
-padding: 12px;
+            padding: 12px;
             font-size: 1em;
             font-weight: bold;
             border-radius: 5px;
@@ -267,22 +263,22 @@ padding: 12px;
         }
         #cart-footer #checkout-btn {
             background-color: #28a745;
-color: white;
+            color: white;
             border-color: #28a745;
         }
         #cart-footer #save-share-btn {
             background-color: #f0f0f0;
-color: #333;
+            color: #333;
             margin-top: 10px;
         }
         #favorites-section { 
             padding: 15px 0px;
-box-sizing: border-box;
+            box-sizing: border-box;
             position: relative;
 }
         #favorites-carousel { 
             display: flex;
-gap: 15px;
+            gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
             max-width: 1800px;
@@ -291,7 +287,7 @@ gap: 15px;
         }
         .carousel-nav {
             position: absolute;
-top: 50%;
+            top: 50%;
             transform: translateY(-50%);
             background: rgba(0,0,0,0.5);
             color: #fff;
@@ -300,13 +296,11 @@ top: 50%;
             cursor: pointer;
             z-index: 10;
         }
-        .carousel-nav.left { left: 0;
-        }
-        .carousel-nav.right { right: 0;
-        }
+        .carousel-nav.left { left: 0; }
+        .carousel-nav.right { right: 0; }
         .favorite-item {
             position: relative;
-flex: 0 0 100px;
+            flex: 0 0 100px;
             height: 100px;
             border-radius: 8px;
             background-size: cover;
@@ -314,14 +308,14 @@ flex: 0 0 100px;
         }
         .favorite-item .card-actions {
             position: absolute;
-top: 5px;
+            top: 5px;
             right: 5px;
             display: flex;
             gap: 5px;
         }
         .favorite-item .action-btn {
             background-color: rgba(0,0,0,0.6);
-color: white;
+            color: white;
             border: none;
             border-radius: 50%;
             width: 24px;
@@ -334,12 +328,12 @@ color: white;
         }
         #catalog-container {
             display: grid;
-grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
             position: relative;
-border-radius: 10-px;
+            border-radius: 10-px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             background-color: #fff;
             color: #333;
@@ -350,14 +344,14 @@ border-radius: 10-px;
         }
         .event-card-image-container {
             position: relative;
-width: 100%;
+            width: 100%;
             height: 200px;
             background-size: cover;
             background-position: center;
         }
         .event-card-actions {
             position: absolute;
-top: 10px;
+            top: 10px;
             right: 10px;
             display: flex;
             gap: 5px;
@@ -365,7 +359,7 @@ top: 10px;
         }
         .event-card-actions .action-btn {
             background-color: rgba(0,0,0,0.5);
-color: white;
+            color: white;
             border: none;
             border-radius: 50%;
             width: 28px;
@@ -377,7 +371,7 @@ color: white;
         }
         .heart-icon {
             position: absolute;
-top: 10px;
+            top: 10px;
             right: 50px;
             cursor: pointer;
             z-index: 10;
@@ -385,7 +379,7 @@ top: 10px;
         }
         .heart-icon svg {
             width: 28px;
-height: 28px;
+            height: 28px;
             fill: rgba(255, 255, 255, 0.8);
             stroke: white;
             stroke-width: 1.5;
@@ -393,35 +387,35 @@ height: 28px;
         }
         .heart-icon.hearted svg {
             fill: #ff3b30;
-stroke: #ff3b30;
+            stroke: #ff3b30;
         }
         .heart-icon.locked svg {
             fill: #34c759;
-stroke: none;
+            stroke: none;
         }
         .heart-icon.locked {
             cursor: default;
-pointer-events: none;
+            pointer-events: none;
         }
         .event-card-content {
             padding: 15px;
-display: flex;
+            display: flex;
             flex-direction: column;
             flex-grow: 1;
         }
         .event-card-content h3 {
             margin: 0;
-font-size: 1.2em;
+            font-size: 1.2em;
             color: #333;
         }
         .event-card-content .description {
             font-size: 0.9em;
-color: #666;
+            color: #666;
             margin: 5px 0 10px 0;
         }
         .card-footer {
             padding: 15px;
-border-top: 1px solid #eee;
+            border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -429,12 +423,12 @@ border-top: 1px solid #eee;
         }
         .card-footer .price {
             font-weight: bold;
-font-size: 1.1em;
+            font-size: 1.1em;
             color: #28a745;
         }
         .card-action-btn {
             padding: 8px 16px;
-font-weight: bold;
+            font-weight: bold;
             background-color: #007bff;
             color: white;
             border: none;
@@ -445,13 +439,13 @@ font-weight: bold;
         }
         .card-action-btn:disabled {
             background-color: #5a6268;
-cursor: not-allowed;
+            cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .card-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-position: absolute;
+            position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -460,19 +454,19 @@ position: absolute;
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-white-space: nowrap;
+            white-space: nowrap;
             z-index: 10;
         }
         .parent-link {
             font-size: 0.8em;
-margin: 0 0 5px 0;
+            margin: 0 0 5px 0;
             font-weight: 500;
             color: #6c757d;
             cursor: pointer;
         }
         .locked-item-card {
             display: flex;
-gap: 15px;
+            gap: 15px;
             align-items: flex-start;
             padding: 15px 0;
             border-bottom: 1px solid #e9ecef;
@@ -480,25 +474,25 @@ gap: 15px;
         }
         .locked-item-card:last-child {
             border-bottom: none;
-padding-bottom: 5px;
+            padding-bottom: 5px;
         }
         .locked-item-card:first-child {
             padding-top: 5px;
         }
         .locked-item-thumbnail {
             width: 60px;
-height: 60px;
+            height: 60px;
             object-fit: cover;
             border-radius: 4px;
             flex-shrink: 0;
         }
         .locked-item-details {
             flex-grow: 1;
-min-width: 0;
+            min-width: 0;
         }
         .locked-item-details p {
             margin: 0 0 5px 0;
-font-size: 0.9em;
+            font-size: 0.9em;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -508,19 +502,19 @@ font-size: 0.9em;
         }
         .locked-item-option, .locked-item-note {
             font-size: 0.8em;
-color: #6c757d;
+            color: #6c757d;
         }
         .locked-item-pricing {
             font-size: 0.85em !important;
         }
         .locked-item-actions {
             display: flex;
-align-items: center;
+            align-items: center;
             gap: 5px;
         }
         .locked-item-actions .edit-btn {
             font-size: 0.8em;
-padding: 4px 8px;
+            padding: 4px 8px;
             background: #f0f0f0;
             border: 1px solid #ccc;
             border-radius: 3px;
@@ -531,12 +525,12 @@ padding: 4px 8px;
         }
         .locked-item-status-icon {
             display: flex;
-align-items: center;
+            align-items: center;
             font-size: 1.2em;
         }
         .remove-locked-item-btn {
             background: none;
-border: none;
+            border: none;
             color: #999;
             font-size: 1.5em;
             line-height: 1;
@@ -545,25 +539,25 @@ border: none;
         }
         .modal-overlay {
             display: none;
-opacity: 0;
+            opacity: 0;
             transition: opacity 0.3s ease;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-background-color: rgba(0, 0, 0, 0.6);
+            background-color: rgba(0, 0, 0, 0.6);
             z-index: 1000;
             justify-content: center;
             align-items: center;
         }
         .modal-overlay.active {
             display: flex;
-opacity: 1;
+            opacity: 1;
         }
         .modal-content {
             background: #fff;
-border-radius: 12px;
+            border-radius: 12px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 1100px;
@@ -571,25 +565,25 @@ border-radius: 12px;
             max-height: 700px;
             display: flex;
             overflow: hidden;
-position: relative;
+            position: relative;
             color: #333;
             transform: scale(0.8);
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
         .modal-overlay.active .modal-content {
             transform: scale(1);
-opacity: 1;
+            opacity: 1;
         }
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-height: 85vh;
+                height: 85vh;
                 max-height: 600px;
             }
         }
         .modal-close-btn {
             position: absolute;
-top: 15px;
+            top: 15px;
             right: 15px;
             background: none;
             border: none;
@@ -600,19 +594,19 @@ top: 15px;
         }
         .modal-main-column {
             flex: 1;
-display: flex;
+            display: flex;
             flex-direction: column;
             min-width: 0;
 }
         #modal-main-image {
             flex-grow: 1;
-background-size: cover;
+            background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
 }
         #modal-thumbnail-strip {
             display: flex;
-gap: 5px;
+            gap: 5px;
             padding: 10px;
             background-color: #f8f9fa;
             border-top: 1px solid #eee;
@@ -620,7 +614,7 @@ gap: 5px;
         }
         .thumbnail-img {
             width: 80px;
-height: 60px;
+            height: 60px;
             background-size: cover;
             background-position: center;
             border-radius: 4px;
@@ -633,7 +627,7 @@ height: 60px;
         }
         .modal-sidebar-column {
             flex: 1;
-padding: 30px;
+            padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -641,19 +635,19 @@ padding: 30px;
         }
         #modal-header-actions {
             display: flex;
-justify-content: flex-end;
+            justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
 }
         #modal-breadcrumbs {
             font-size: 0.9em;
-color: #6c757d;
+            color: #6c757d;
             margin-bottom: 8px;
 }
         #modal-breadcrumbs a {
             color: #007bff;
-text-decoration: none;
+            text-decoration: none;
         }
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
@@ -663,25 +657,25 @@ text-decoration: none;
         }
         #modal-item-price { 
             font-size: 1.5em;
-font-weight: bold; 
+            font-weight: bold; 
             margin: 10px 0;
         }
         #modal-options-container { 
             margin: 20px 0;
-display: flex; 
+            display: flex; 
             flex-wrap: wrap; 
             gap: 10px;
         }
         .option-btn {
             padding: 8px 12px;
-border: 1px solid #ccc;
+            border: 1px solid #ccc;
             background-color: #f8f8f8;
             border-radius: 5px;
             cursor: pointer;
         }
         .option-btn.selected {
             border-color: #007bff;
-background-color: #e7f3ff;
+            background-color: #e7f3ff;
         }
         #modal-quantity-selector { 
             margin: 20px 0;
@@ -691,7 +685,7 @@ background-color: #e7f3ff;
         }
         #modal-item-note {
             width: 100%;
-height: 80px;
+            height: 80px;
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -702,12 +696,12 @@ height: 80px;
         }
         #modal-actions-container {
             margin-top: auto;
-padding-top: 20px;
+            padding-top: 20px;
             border-top: 1px solid #eee;
         }
         .primary-action-btn {
             width: 100%;
-padding: 15px;
+            padding: 15px;
             font-size: 1.1em;
             font-weight: bold;
             color: #fff;
@@ -716,20 +710,20 @@ padding: 15px;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.2s;
-position: relative;
+            position: relative;
         }
         .primary-action-btn:hover {
             background-color: #218838;
         }
         .primary-action-btn:disabled {
             background-color: #5a6268;
-cursor: not-allowed;
+            cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .primary-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-position: absolute;
+            position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -738,34 +732,34 @@ position: absolute;
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-white-space: nowrap;
+            white-space: nowrap;
             z-index: 10;
         }
         .checkout-modal-content {
             background: #fff;
-border-radius: 8px;
+            border-radius: 8px;
             padding: 30px;
             width: 100%;
             max-width: 500px;
             position: relative;
             color: #333;
             transform: scale(0.8);
-transition: transform 0.3s ease, opacity 0.3s ease;
+            transition: transform 0.3s ease, opacity 0.3s ease;
 }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
-opacity: 1;
+            opacity: 1;
         }
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-height: 85vh;
+                height: 85vh;
                 max-height: 600px;
             }
         }
         .modal-close-btn {
             position: absolute;
-top: 15px;
+            top: 15px;
             right: 15px;
             background: none;
             border: none;
@@ -776,19 +770,19 @@ top: 15px;
         }
         .modal-main-column {
             flex: 1;
-display: flex;
+            display: flex;
             flex-direction: column;
             min-width: 0;
 }
         #modal-main-image {
             flex-grow: 1;
-background-size: cover;
+            background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
 }
         #modal-thumbnail-strip {
             display: flex;
-gap: 5px;
+            gap: 5px;
             padding: 10px;
             background-color: #f8f9fa;
             border-top: 1px solid #eee;
@@ -796,7 +790,7 @@ gap: 5px;
         }
         .thumbnail-img {
             width: 80px;
-height: 60px;
+            height: 60px;
             background-size: cover;
             background-position: center;
             border-radius: 4px;
@@ -809,7 +803,7 @@ height: 60px;
         }
         .modal-sidebar-column {
             flex: 1;
-padding: 30px;
+            padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -817,19 +811,19 @@ padding: 30px;
         }
         #modal-header-actions {
             display: flex;
-justify-content: flex-end;
+            justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
 }
         #modal-breadcrumbs {
             font-size: 0.9em;
-color: #6c757d;
+            color: #6c757d;
             margin-bottom: 8px;
 }
         #modal-breadcrumbs a {
             color: #007bff;
-text-decoration: none;
+            text-decoration: none;
         }
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
@@ -839,25 +833,25 @@ text-decoration: none;
         }
         #modal-item-price { 
             font-size: 1.5em;
-font-weight: bold; 
+            font-weight: bold; 
             margin: 10px 0;
         }
         #modal-options-container { 
             margin: 20px 0;
-display: flex; 
+            display: flex; 
             flex-wrap: wrap; 
             gap: 10px;
         }
         .option-btn {
             padding: 8px 12px;
-border: 1px solid #ccc;
+            border: 1px solid #ccc;
             background-color: #f8f8f8;
             border-radius: 5px;
             cursor: pointer;
         }
         .option-btn.selected {
             border-color: #007bff;
-background-color: #e7f3ff;
+            background-color: #e7f3ff;
         }
         #modal-quantity-selector { 
             margin: 20px 0;
@@ -867,7 +861,7 @@ background-color: #e7f3ff;
         }
         #modal-item-note {
             width: 100%;
-height: 60px;
+            height: 60px;
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -878,12 +872,12 @@ height: 60px;
         }
         #modal-actions-container {
             margin-top: auto;
-padding-top: 20px;
+            padding-top: 20px;
             border-top: 1px solid #eee;
         }
         .primary-action-btn {
             width: 100%;
-padding: 15px;
+            padding: 15px;
             font-size: 1.1em;
             font-weight: bold;
             color: #fff;
@@ -892,20 +886,20 @@ padding: 15px;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.2s;
-position: relative;
+            position: relative;
         }
         .primary-action-btn:hover {
             background-color: #218838;
         }
         .primary-action-btn:disabled {
             background-color: #5a6268;
-cursor: not-allowed;
+            cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .primary-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-position: absolute;
+            position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -914,44 +908,44 @@ position: absolute;
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-white-space: nowrap;
+            white-space: nowrap;
             z-index: 10;
         }
         .checkout-modal-content {
             background: #fff;
-border-radius: 8px;
+            border-radius: 8px;
             padding: 30px;
             width: 100%;
             max-width: 500px;
             position: relative;
             color: #333;
             transform: scale(0.8);
-transition: transform 0.3s ease, opacity 0.3s ease;
+            transition: transform 0.3s ease, opacity 0.3s ease;
 }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
-opacity: 1;
+            opacity: 1;
         }
         @media (max-width: 600px) {
             .checkout-modal-content {
                 width: 95%;
-padding: 20px;
+                padding: 20px;
             }
         }
         #checkout-summary-list {
             list-style: none;
-padding: 0;
+            padding: 0;
             margin: 0 0 20px 0;
         }
         #checkout-summary-list li {
             display: flex;
-justify-content: space-between;
+            justify-content: space-between;
             padding: 10px 0;
             border-bottom: 1px solid #eee;
         }
         .checkout-total {
             display: flex;
-justify-content: space-between;
+            justify-content: space-between;
             font-size: 1.2em;
             margin: 20px 0;
         }
@@ -960,20 +954,20 @@ justify-content: space-between;
         }
         #payment-form label {
             display: block;
-margin-bottom: 5px;
+            margin-bottom: 5px;
             font-size: 0.9em;
             color: #666;
         }
         #payment-form input, #card-element {
             width: 100%;
-padding: 10px;
+            padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
         }
         #card-errors {
             color: #fa755a;
-font-size: 0.9em;
+            font-size: 0.9em;
             margin-top: 5px;
         }
         /* Itinerary Modal Styles */
@@ -982,24 +976,24 @@ font-size: 0.9em;
         }
         .itinerary-container {
             display: flex;
-gap: 20px;
+            gap: 20px;
         }
         .itinerary-column {
             flex: 1;
-padding: 10px;
+            padding: 10px;
             background-color: #f8f9fa;
             border-radius: 8px;
             min-height: 200px;
         }
         .itinerary-list {
             list-style-type: none;
-padding: 0;
+            padding: 0;
             margin: 0;
             min-height: 100px;
         }
         .itinerary-item {
             display: flex;
-align-items: center;
+            align-items: center;
             gap: 10px;
             padding: 10px;
             background-color: #fff;
@@ -1010,7 +1004,7 @@ align-items: center;
         }
         .itinerary-item.ghost {
             opacity: 0.4;
-background-color: #c8c8c8;
+            background-color: #c8c8c8;
         }
         .itinerary-item .locked-item-actions {
             margin-left: auto;
@@ -1020,7 +1014,7 @@ background-color: #c8c8c8;
         }
         .itinerary-modal-header {
             display: flex;
-flex-wrap: wrap;
+            flex-wrap: wrap;
             gap: 10px;
             align-items: center;
             margin-bottom: 20px;
@@ -1030,33 +1024,199 @@ flex-wrap: wrap;
         }
         .itinerary-header-item label {
             font-size: 0.8em;
-color: #666;
+            color: #666;
             display: block;
         }
         .itinerary-header-item input {
             border: 1px solid #ccc;
-border-radius: 4px;
+            border-radius: 4px;
             padding: 5px;
             width: 100%;
         }
         .itinerary-item .quantity-selector {
             display: flex;
-align-items: center;
+            align-items: center;
             gap: 5px;
         }
         .itinerary-item .quantity-input {
             width: 40px;
-text-align: center;
+            text-align: center;
         }
         .itinerary-item-note {
             width: 100%;
-height: 60px;
+            height: 60px;
             font-size: 0.8em;
             border: 1px solid #eee;
             border-radius: 4px;
             margin-top: 5px;
             padding: 5px;
             resize: vertical;
+        }
+
+        /* CHAT WIDGET STYLES */
+        #chat-widget-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        #chat-toggle-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #presence-counter {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+        }
+
+        #chat-window {
+            width: 350px;
+            height: 500px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* Styles for animation */
+            visibility: hidden;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+        }
+
+        #chat-window.visible {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #chat-header {
+            background-color: #f1f1f1;
+            padding: 10px;
+            font-weight: bold;
+            text-align: center;
+            border-bottom: 1px solid #ddd;
+            flex-shrink: 0;
+        }
+        #chat-header p { margin: 0; }
+
+        #whos-here-list {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+
+        #messages-container {
+            flex-grow: 1;
+            padding: 10px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #messages-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        #typing-indicator {
+            padding: 5px 10px;
+            font-style: italic;
+            color: #888;
+            height: 24px; /* Reserve space to prevent layout shifts */
+            font-size: 0.85em;
+        }
+
+        #message-form {
+            border-top: 1px solid #ddd;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        #message-input {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            padding: 10px;
+        }
+
+        #message-form button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 15px;
+            cursor: pointer;
+        }
+
+        .message-wrapper {
+            display: flex;
+            flex-direction: column;
+            max-width: 85%;
+        }
+
+        .message-wrapper.sent { align-self: flex-end; }
+        .message-wrapper.received { align-self: flex-start; }
+
+        .chat-message {
+            padding: 8px 12px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .chat-message.sent {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .chat-message.received {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+
+        .chat-message .sender {
+            font-size: 0.75em;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .timestamp {
+            font-size: 0.7em;
+            color: #999;
+            text-align: right;
+            margin-top: 4px;
+            margin-right: 5px;
         }
     </style>
 </head>
@@ -1079,6 +1239,7 @@ height: 60px;
                     <label for="event-date-picker">Event Date</label>
                     <input type="text" id="event-date-picker" placeholder="Select date">
                 </div>
+     
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="favorites-section">
                     <h4>Ideas</h4>
@@ -1093,12 +1254,14 @@ height: 60px;
                 <div id="cart-footer">
                     <div class="total-row">
                         <span>Total:</span>
-                        <span id="total-cost">$0.00</span>
+                     
+   <span id="total-cost">$0.00</span>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
                 </div>
-            </div>
+  
+           </div>
         </div>
 
         <div id="left-sidebar">
@@ -1106,25 +1269,30 @@ height: 60px;
                 <h3>Filters</h3>
                 <div class="filter-group">
                     <label>Categories</label>
-                    <div id="category-filters" class="filter-btn-group"></div>
+      
+               <div id="category-filters" class="filter-btn-group"></div>
                 </div>
                 <div id="subcategory-filters" class="filter-btn-group"></div>
                 <div class="filter-group">
                     <label for="name-filter">Search by Name</label>
-                    <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
+          
+           <input type="text" id="name-filter" placeholder="Search..." autocomplete="off">
                 </div>
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
-                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+  
+                   <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
                         <button class="filter-btn" data-date-quick="this-week">This Week</button>
-                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
+                        
+ <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
                     </div>
                 </div>
                 <div class="filter-group">
                     <label for="headcount-filter">Headcount</label>
                     <select id="headcount-filter">
+ 
                         <option value="any">Any Size</option>
                         <option value="1-10">1-10</option>
                         <option value="11-25">11-25</option>
@@ -1143,11 +1311,13 @@ height: 60px;
                         <option value="sf">San Francisco</option>
                         <option value="oakland">Oakland</option>
                         <option value="peninsula">Peninsula</option>
-                        <option value="south-bay">South Bay</option>
+                       
+  <option value="south-bay">South Bay</option>
                         <option value="north-bay">North Bay</option>
                         <option value="east-bay">East Bay</option>
                         <option value="other">Other</option>
-                    </select>
+                    
+ </select>
                 </div>
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
@@ -1156,16 +1326,19 @@ height: 60px;
                         <option value="budget-friendly">Budget-Friendly</option>
                         <option value="moderate">Moderate</option>
                         <option value="executive">Executive</option>
-                        <option value="luxury">Luxury</option>
+                        
+ <option value="luxury">Luxury</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label for="status-filter">Status</label>
                     <select id="status-filter">
-                        <option value="Available">Available</option>
+    
+                     <option value="Available">Available</option>
                         <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
+                        <option value="Sold 
+ Out">Sold Out</option>
                     </select>
                 </div>
                 <button id="reset-filters-btn">Reset All Filters</button>
@@ -1173,19 +1346,22 @@ height: 60px;
         </div>
         
         <div id="catalog-area">
-            <div id="catalog-header">
+       
+      <div id="catalog-header">
                 <div id="breadcrumbs"></div>
                 <h2 id="catalog-title"></h2>
             </div>
             <div id="catalog-toolbar">
                 <select id="sort-by">
-                    <option value="price-asc">Price (Low to High</option>
+                  
+   <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
             </div>
             <div id="catalog-container"></div>
-        </div>
+       
+  </div>
     </div>
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
@@ -1194,24 +1370,28 @@ height: 60px;
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
             </div>
-            <div class="modal-sidebar-column">
+      
+       <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                 </div>
                 <div id="modal-breadcrumbs"></div>
                 <h2 id="modal-item-name"></h2>
                 <p id="modal-item-price" class="price"></p>
-                <p id="modal-item-description"></p>
+        
+         <p id="modal-item-description"></p>
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
                 <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
-                </div>
+               
+  </div>
                 <div id="modal-actions-container">
                     <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
                 </div>
                 <div id="modal-calendar-container"></div>
             </div>
-        </div>
+       
+  </div>
     </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
@@ -1220,12 +1400,14 @@ height: 60px;
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
-            <hr>
+  
+           <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
                     <span>Total Estimated Cost:</span>
                     <span id="full-total-price">$0.00</span>
                 </div>
+ 
                 <div class="checkout-deposit">
                     <span>Deposit Due (35%):</span>
                     <span id="deposit-price">$0.00</span>
@@ -1236,24 +1418,29 @@ height: 60px;
                 <ul>
                     <li>A 35% deposit is required to reserve your event date.</li>
                     <li>Your event details will be finalized in collaboration with our team.</li>
-                    <li>The remaining balance is due after all details are confirmed and, in some cases, after the event.</li>
-                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred. No refunds within 7 days of the event.</li>
+        
+             <li>The remaining balance is due after all details are confirmed and, in some cases, after the event.</li>
+                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred.
+ No refunds within 7 days of the event.</li>
                     <li>Your deposit includes all planning, preparation, setup, and hosting services.</li>
                 </ul>
             </div>
             <form id="payment-form">
                 <div class="form-row">
-                    <label for="customer-name">Full Name</label>
+      
+               <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
-                    <input type="email" id="customer-email" required autocomplete="off">
+     
+                <input type="email" id="customer-email" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
-                    <div id="card-errors" role="alert"></div>
+   
+                  <div id="card-errors" role="alert"></div>
                 </div>
                 <button class="primary-action-btn" type="submit">Pay Now</button>
             </form>
@@ -1261,12 +1448,14 @@ height: 60px;
     </div>
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
-            <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+      
+       <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
                     <input type="text" id="itinerary-event-name" value="My Awesome Event" autocomplete="off">
-                </div>
+             
+    </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-goals">Goals / Notes</label>
                     <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
@@ -1275,43 +1464,47 @@ height: 60px;
                     <label for="itinerary-date-picker">Date & Time</label>
                     <input type="text" id="itinerary-date-picker" placeholder="Select date range">
                 </div>
-            </div>
+   
+          </div>
             <div class="itinerary-container">
                 <div class="itinerary-column">
                     <h3>Event Plan</h3>
                     <p class="description">Drag items to change their order.</p>
-                    <div id="itinerary-locked-items" class="itinerary-list"></div>
+              
+       <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
                     <h3>Ideas</h3>
                     <p class="description">Move items here to add them to your plan.</p>
-                    <div id="itinerary-favorited-items" class="itinerary-list"></div>
+          
+           <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
         </div>
     </div>
-    <div id="chat-widget-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-        <button id="chat-toggle-button" style="background-color: #007bff; color: white; border: none; width: 60px; height: 60px; border-radius: 50%; font-size: 24px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center;">
+    <div id="chat-widget-container">
+        <button id="chat-toggle-button">
             💬
-            <span id="presence-counter" style="position: absolute; top: -5px; right: -5px; background-color: red; color: white; border-radius: 50%; width: 25px; height: 25px; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">0</span>
+            <span id="presence-counter">0</span>
         </button>
     
-        <div id="chat-window" style="display: none; width: 350px; height: 500px; background-color: #ffffff; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden;">
-            <div id="chat-header" style="background-color: #f1f1f1; padding: 10px; font-weight: bold; text-align: center; border-bottom: 1px solid #ddd;">
-                <p style="margin: 0;">Session Chat (<span id="whos-here-count">0</span>)</p>
+        <div id="chat-window">
+            <div id="chat-header">
+                <p>Session Chat (<span id="whos-here-count">0</span>)</p>
             </div>
     
-            <div id="whos-here-list" style="padding: 10px; border-bottom: 1px solid #ddd; max-height: 100px; overflow-y: auto;">
-                </div>
+            <div id="whos-here-list"></div>
     
-            <div id="messages-container" style="flex-grow: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column-reverse;">
+            <div id="messages-container">
                 <div id="messages-list">
-                    </div>
+                </div>
             </div>
+            
+            <div id="typing-indicator"></div>
     
-            <form id="message-form" style="border-top: 1px solid #ddd; padding: 10px; display: flex; gap: 10px;">
-                <input type="text" id="message-input" placeholder="Type a message..." style="flex-grow: 1; border: 1px solid #ccc; border-radius: 20px; padding: 10px;" autocomplete="off">
-                <button type="submit" style="background-color: #007bff; color: white; border: none; border-radius: 20px; padding: 10px 15px; cursor: pointer;">Send</button>
+            <form id="message-form">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <button type="submit">Send</button>
             </form>
         </div>
     </div>
