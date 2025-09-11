@@ -1,13 +1,6 @@
-/*
- * Version: 1.1.0
- * Last Modified: 2025-08-30
- * - Added explicit check for the STRIPE_SECRET_KEY environment variable.
- * - Added more specific error handling for JSON parsing.
- */
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 exports.handler = async (event) => {
-  // Ensure the Stripe key is configured on the server
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error('Stripe secret key is not configured.');
     return {
@@ -29,7 +22,6 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
   }
   
-  // Stripe requires a minimum charge, typically $0.50 (50 cents)
   if (typeof amount !== 'number' || amount < 50) {
     return {
       statusCode: 400,
@@ -41,9 +33,8 @@ exports.handler = async (event) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount,
       currency: 'usd',
-      automatic_payment_methods: {
-        enabled: true,
-      },
+      // --- THIS IS THE CORRECTED LINE ---
+      payment_method_types: ['card'], 
     });
 
     return {
