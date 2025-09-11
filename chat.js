@@ -88,7 +88,7 @@ async function loadChatHistory(sessionId) {
 
     const records = await api.fetchChatMessages(sessionId);
     // Reverse the records so the oldest messages are first, ensuring correct order
-    records.reverse().forEach(record => {
+    records.forEach(record => {
         const { SenderID, SenderName, Content } = record.fields;
         const isSent = SenderID === currentUser.id;
         addMessageToUI(SenderName, Content, isSent);
