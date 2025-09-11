@@ -1054,6 +1054,9 @@
             bottom: 20px;
             right: 20px;
             z-index: 1000;
+            width: 350px;
+            height: 500px;
+            pointer-events: none;
         }
 
         #chat-toggle-button {
@@ -1070,8 +1073,11 @@
             align-items: center;
             justify-content: center;
             transition: opacity 0.3s ease, transform 0.3s ease;
-            position: relative;
-            z-index: 2;
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            z-index: 1001;
+            pointer-events: auto;
         }
 
         #chat-widget-container.chat-open #chat-toggle-button {
@@ -1094,28 +1100,34 @@
             align-items: center;
             justify-content: center;
             border: 2px solid white;
+            pointer-events: auto;
         }
 
         #chat-window {
-            width: 350px;
-            height: 500px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background-color: #ffffff;
             border-radius: 10px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* Styles for animation */
             visibility: hidden;
             opacity: 0;
             transform: translateY(20px);
             transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+            pointer-events: auto;
+            z-index: 1000;
         }
 
         #chat-widget-container.chat-open #chat-window {
             visibility: visible;
             opacity: 1;
             transform: translateY(0);
+            z-index: 1002;
         }
 
         #chat-header {
