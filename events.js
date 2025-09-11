@@ -1,49 +1,11 @@
 // FILE: events.js
 /*
-* Version: 4.9.6
-* Last Modified: 2025-09-10
+* Version: 4.9.7
+* Last Modified: 2025-09-11
 * Changelog:
-* v4.9.6 - 2025-09-10
-* - Added 'isInitializing' guards to event handlers to prevent "Fork on Load" bug.
-* v4.9.5 - 2025-09-10
-* - Fixed chat window visibility bug. Replaced direct style manipulation 
-* with class-based toggling to align with CSS animations.
-* v4.9.4 - 2025-09-09
-* - Fixed category/subcategory bug by correctly parsing options from the category record.
-* - Ensured search functionality operates on the correct data set.
-* v4.9.3 - 2025-09-09
-* - Updated `events.js` to integrate with the new `itinerary.js` modal logic.
-* - `itinerary-btn` now correctly shows the full-screen itinerary modal.
-* v4.9.2 - 2025-09-09
-* - Fixed bug where Airtable 'Date' field would not accept date range array.
-* - Corrected a TypeError in `updateTotalCost` by fixing the property access.
-* - Ensured page title updates correctly with the event name.
-* - Fixed `ui.checkAvailability is not a function` error in the itinerary module.
-* v4.9.1 - 2025-09-09
-* - Implemented dynamic availability for locked-in items and the event plan date.
-* - Synced the detail modal calendar with the event plan date.
-* - Updated event handlers for adding/removing items to trigger an availability refresh.
-* v4.9.0 - 2025-09-09
-* - Finalized itinerary builder functionality with live editing and date sync.
-* v4.8.9 - 2025-09-09
-* - Added functionality to open the new itinerary builder modal.
-* v4.8.8 - 2025-09-09
-* - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
-* - Added functionality for carousel navigation buttons.
-* v4.8.7 - 2025-09-08
-* - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
-* v4.8.6 - 2025-09-08
-* - Added functionality to update the header calendar based on favorited items.
-* v4.8.5 - 2025-09-02
-* - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
-* v4.8.4 - 2025-09-02
-* - Added debug logging for initialization steps.
-* v4.8.3 - 2025-09-02
-* - Continue initialization if session loading fails due to storage errors.
-* v4.8.2 - 2025-09-02
-* - Added retry logic for fetchAllRecords to handle transient errors.
-* v4.8.1 - 2025-09-02
-* - Added storage error handling during initialization.
+* v4.9.7 - 2025-09-11
+* - Fixed TypeError by deferring DOM element selection until the initializeEventListeners function.
+* This prevents the script from trying to find elements before the DOM is fully loaded.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -56,14 +18,18 @@ import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage } from './chat.js';
 
-
 let mainDatePicker = null;
 let saveTimeout = null;
-const saveShareBtn = document.getElementById('save-share-btn');
-const categoryFiltersContainer = document.getElementById('category-filters');
-const subcategoryFiltersContainer = document.getElementById('subcategory-filters');
 let currentStore = null;
+
+// --- MODIFIED: Declare variables here, but don't assign them from the DOM yet. ---
+let saveShareBtn = null;
+let categoryFiltersContainer = null;
+let subcategoryFiltersContainer = null;
+
 function getCurrentCategoryRecord() {
+    // --- ADDED: Defensive check to ensure container exists ---
+    if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
     return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
@@ -77,6 +43,9 @@ function getAvailableSubcategories(categoryRecord) {
 }
 
 function updateSubcategoryButtons() {
+    // --- ADDED: Defensive check to prevent error ---
+    if (!subcategoryFiltersContainer) return;
+
     subcategoryFiltersContainer.innerHTML = '';
     const categoryRecord = getCurrentCategoryRecord();
     const subcategories = getAvailableSubcategories(categoryRecord);
@@ -125,9 +94,7 @@ export function updateSaveShareButton() {
     }
 }
 
-// FIX: Add the 'export' keyword to make this function available to other modules
 export function triggerSave() {
-    // --- ADDED: Guard clause to prevent saving during initialization ---
     if (state.ui.isInitializing) return;
 
     clearTimeout(saveTimeout);
@@ -186,8 +153,12 @@ export async function updateAllCardAvailabilityIcons() {
     }
 }
 
-// Fix: Accept flatpickr as a parameter
 export function initializeEventListeners(imageCache, flatpickr) {
+    // --- MODIFIED: Assign the DOM elements here, inside the function ---
+    saveShareBtn = document.getElementById('save-share-btn');
+    categoryFiltersContainer = document.getElementById('category-filters');
+    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+    
     let debugEnabled = false;
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -212,39 +183,30 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
-    
             scrollTimeout = null;
         }, 100);
     });
-    // --- UPDATED: Logic for Store and Categories ---
+
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         
-        // --- NEW: Add an "All" button ---
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active'; // Active by default
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
-        // --- END NEW ---
-    
-        categories.forEach((cat) => { // Removed index from forEach
+
+        categories.forEach((cat) => {
             const button = document.createElement('button');
             button.className = 'filter-btn category-filter-btn';
             button.dataset.filter = cat.name.toLowerCase();
             button.textContent = cat.name;
-            // The first category is no longer active by default
             categoryFiltersContainer.appendChild(button);
         });
         updateSubcategoryButtons();
     }
-
-    // FIX: Remove the old dropdown event listener and add a new one for buttons
-    // safeAddEventListener('category-filter-dropdown', 'change', () => {
-    //     updateSubcategoryButtons();
-    //     applyFiltersAndSort(imageCache);
-    // });
+    
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
             categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -253,7 +215,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             applyFiltersAndSort(imageCache);
         }
     });
-    // END FIX
 
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
@@ -261,34 +222,30 @@ export function initializeEventListeners(imageCache, flatpickr) {
             applyFiltersAndSort(imageCache);
         }
     });
+
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+
     safeAddEventListener('headcount-filter', 'change', (e) => {
         document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
         applyFiltersAndSort(imageCache);
     });
+
     safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
+
     safeAddEventListener('reset-filters-btn', 'click', () => {
-        // --- UPDATED: Reset logic for new category/subcategory structure
-        if (currentStore) {
-            const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-            const firstCategoryBtn = categoryFiltersContainer.querySelector(`.category-filter-btn[data-filter="${categories[0]?.name.toLowerCase()}"]`);
-            if (firstCategoryBtn) {
-                categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
-        
-                firstCategoryBtn.classList.add('active');
-            }
-            updateSubcategoryButtons();
+        // Find the "All" button and make it active
+        const allButton = categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]');
+        if (allButton) {
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            allButton.classList.add('active');
         }
-        document.querySelectorAll('#subcategory-filters .subcategory-filter-btn.active').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        // --- END UPDATED
-        document.getElementById('name-filter').value = '';
+        updateSubcategoryButtons(); // This will clear subcategories
         
+        document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
@@ -299,50 +256,44 @@ export function initializeEventListeners(imageCache, flatpickr) {
         if (mainDatePicker) mainDatePicker.clear();
         applyFiltersAndSort(imageCache);
     });
+
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
         enableTime: true,
         dateFormat: "M j, Y h:i K",
         onChange: async (selectedDates) => {
-            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+            if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-           
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
-          
             }
-   
-         },
+        },
     });
+
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
-            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+            if (state.ui.isInitializing) return;
             const button = e.target.closest('[data-date-quick]');
             if (!button || !mainDatePicker) return;
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
-     
             startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
-              
                     endDate.setDate(endDate.getDate() + 1);
-    
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
-   
-                 
                     endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
@@ -354,15 +305,17 @@ export function initializeEventListeners(imageCache, flatpickr) {
     }
 
     safeAddEventListener('header-event-name', 'change', (e) => {
-        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+        if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
+
     safeAddEventListener('header-goals', 'change', (e) => {
-        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+        if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
+
     safeAddEventListener('payment-form', 'submit', async (e) => {
         e.preventDefault();
         const { stripe, cardElement, clientSecret } = ui.getStripeContext();
@@ -370,37 +323,37 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const { error } = await stripe.confirmCardPayment(clientSecret, {
             payment_method: {
                 card: cardElement,
-             
-               billing_details: {
+                billing_details: {
                     name: document.getElementById('customer-name').value,
                     email: document.getElementById('customer-email').value,
                 },
             },
         });
-      
         const cardErrors = document.getElementById('card-errors');
-       
-         if (error) cardErrors.textContent = error.message;
+        if (error) cardErrors.textContent = error.message;
         else {
             cardErrors.textContent = '';
             alert('Payment successful! Your event is booked.');
             ui.hideCheckoutModal();
         }
     });
+
     safeAddEventListener('checkout-close-btn', 'click', ui.hideCheckoutModal);
     safeAddEventListener('checkout-modal-overlay', 'click', (e) => {
         if (e.target.id === 'checkout-modal-overlay') {
             ui.hideCheckoutModal();
         }
     });
+
     window.addEventListener('beforeunload', (e) => {
         if (state.ui.saveState === 'MODIFIED' || state.ui.saveState === 'SAVING') {
             e.preventDefault();
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
         }
     });
+
     document.body.addEventListener('click', async (e) => {
-        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+        if (state.ui.isInitializing) return;
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
@@ -409,8 +362,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const editBtn = e.target.closest('.edit-btn');
-       
-         const checkoutBtn = e.target.closest('#checkout-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
         const optionBtn = e.target.closest('.option-btn');
         const parentLink = e.target.closest('.parent-link');
         const heartIconModal = e.target.closest('#modal-heart-btn');
@@ -459,12 +411,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 const selectedOptionEl = document.querySelector('#modal-options-container .option-btn.selected');
                 const noteInput = document.getElementById('modal-item-note');
                 itemInfo = {
-                    quantity: quantityInput ?
-                    parseInt(quantityInput.value, 10) : 1,
-                    selectedOptionIndex: selectedOptionEl ?
-                    parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
-                    note: noteInput ?
-                    noteInput.value.trim() : ''
+                    quantity: quantityInput ? parseInt(quantityInput.value, 10) : 1,
+                    selectedOptionIndex: selectedOptionEl ? parseInt(selectedOptionEl.dataset.optionIndex, 10) : 0,
+                    note: noteInput ? noteInput.value.trim() : ''
                 };
                 ui.updateLockedItemState(recordId, itemInfo);
             } else {
@@ -511,7 +460,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 await ui.updateEventPlanDateDisplay();
             }
             triggerSave();
-        } else if (lockedItemCard) { // New condition for clicking on a locked-in item card
+        } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
@@ -552,8 +501,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         }
     });
+
     document.body.addEventListener('change', (e) => {
-        if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+        if (state.ui.isInitializing) return;
         const target = e.target;
         const modal = document.getElementById('detail-modal-overlay');
         const container = target.closest('[data-record-id]');
@@ -561,8 +511,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const isEditLockedMode = isInModal && modal.dataset.mode === 'edit-locked';
         if (!container) return;
         const recordId = container.dataset.datasetrecordId;
-        let updates = 
-        {};
+        let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('.configure-options')) {
@@ -570,9 +519,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
- 
-         
-           if (e.detail?.selectedOptionIndex !== undefined) {
+            if (e.detail?.selectedOptionIndex !== undefined) {
                 updates.selectedOptionIndex = e.detail.selectedOptionIndex;
             }
         }
@@ -591,37 +538,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
 
-    const eventNameInput = document.getElementById('header-event-name');
-    if (eventNameInput) {
-        const handleEventNameChange = () => {
-            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
-            const newName = eventNameInput.value.trim();
-            if (newName === '') {
-                eventNameInput.value = 'Event Name';
-            }
-            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, newName);
-            ui.updateHeader();
-            triggerSave();
-        };
-
-        eventNameInput.addEventListener('blur', handleEventNameChange);
-        eventNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleEventNameChange();
-            }
-        });
-    }
-
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
-            if (state.ui.isInitializing) return; // --- ADDED: Guard clause
+            if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
                 ui.updateEventPlanDateDisplay();
                 ui.updateLockedItemStatusIcons();
-    
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 ui.updateEventPlanDateDisplay();
@@ -630,11 +554,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
-    // Add event listener for the Itinerary button
+
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
+    
     return { mainDatePicker, eventPlanDatePicker };
 }
 
@@ -647,29 +572,26 @@ export function initializeChatEventListeners() {
             const message = messageInput.value;
             if (message.trim() === '') return;
     
-            sendMessage(message); // <-- THIS IS THE UPDATED LINE
+            sendMessage(message);
     
             messageInput.value = '';
-   
-         });
+        });
     }
     
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWindow = document.getElementById('chat-window');
     
     function toggleChatWindow() {
-        // --- FIX: Use classList.toggle to control visibility and animations ---
         chatWindow.classList.toggle('visible');
     }
 
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevents the click from bubbling up to the document
+            e.stopPropagation();
             toggleChatWindow();
         });
     }
 
-    // --- FIX: Update the click-outside logic to use the 'visible' class ---
     document.addEventListener('click', (event) => {
         const chatWidget = document.getElementById('chat-widget-container');
         if (!chatWidget.contains(event.target) && chatWindow.classList.contains('visible')) {
