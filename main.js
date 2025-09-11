@@ -128,7 +128,6 @@ async function updateHeaderCalendarAvailability() {
 async function initialize() {
     log('Main', '1. Initialization started.');
     try {
-        localStorage.clear();
         log('Main', '2. Cleared localStorage to prevent storage errors.');
     } catch (e) {
         log('Main', `2. Failed to clear localStorage: ${e.message}`);
