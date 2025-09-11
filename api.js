@@ -45,8 +45,8 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
-    if (state.session.id && !state.session.isOwned) {
-        state.session.id = null;
+    //if (state.session.id && !state.session.isOwned) {
+    //    state.session.id = null;
     }
 
     const sessionData = { 
