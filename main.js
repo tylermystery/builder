@@ -1,8 +1,10 @@
 // FILE: main.js
 /*
- * Version: 4.9.1
- * Last Modified: 2025-09-09
+ * Version: 4.9.2
+ * Last Modified: 2025-09-10
  * * Changelog:
+ * v4.9.2 - 2025-09-10
+ * - Set isInitializing flag to false after setup to prevent "Fork on Load" bug.
  * v4.9.1 - 2025-09-09
  * - Implemented dynamic availability for locked-in items and the 
  event plan date.
@@ -101,7 +103,7 @@ async function updateHeaderCalendarAvailability() {
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
    
-                         busyMinutes += minutes;
+                        busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -213,13 +215,15 @@ async function initialize() {
     log('Main', '20. Filters applied, favorites and share button updated.');
 
     await updateHeaderCalendarAvailability();
-    log('Main', '21. Initialization complete.');
+    log('Main', '21. Header calendar updated.');
 
     initializeChatEventListeners();
     initializeChat();
-    // <-- ADD THIS LINE
-    log('Main', '9. Event listeners initialized.');
- 
+    log('Main', '22. Chat initialized.');
+
+    // --- ADDED: Set initialization flag to false after all setup is complete ---
+    state.ui.isInitializing = false;
+    log('Main', '23. Initialization complete, ready for user interaction.');
 }
 
 initialize();
