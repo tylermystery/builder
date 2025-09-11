@@ -102,7 +102,7 @@ function filterByBudget(records, budgetFilter) {
     });
 }
 
-// --- MODIFIED: Expanded the search logic ---
+// Filter records by the text search term
 function filterBySearchTerm(records, searchTerm) {
     if (!searchTerm) {
         return records;
@@ -113,11 +113,9 @@ function filterBySearchTerm(records, searchTerm) {
         let score = 0;
         const fields = record.fields;
         
-        // Gather all searchable text fields into simple variables
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         
-        // Combine all tags, options, and other metadata into a single searchable string
         const optionNames = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ');
         const allOtherText = [
             fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
@@ -128,13 +126,12 @@ function filterBySearchTerm(records, searchTerm) {
             optionNames
         ].join(' ').toLowerCase();
 
-        // Apply scoring based on where the match was found
         if (name.includes(searchTerm)) {
-            score = 3; // Highest priority for matches in the name
+            score = 3;
         } else if (description.includes(searchTerm)) {
-            score = 2; // Second priority for matches in the description
+            score = 2;
         } else if (allOtherText.includes(searchTerm)) {
-            score = 1; // Lowest priority for matches in any other metadata
+            score = 1;
         }
 
         if (score > 0) {
@@ -145,7 +142,6 @@ function filterBySearchTerm(records, searchTerm) {
     scoredRecords.sort((a, b) => b.score - a.score);
     return scoredRecords.map(item => item.record);
 }
-// --- END MODIFICATION ---
 
 // Sort the final filtered records
 function sortRecords(records, sortBy) {
@@ -166,7 +162,6 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    // --- MODIFIED: Handle the new "All" button ---
     const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
@@ -181,25 +176,24 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay = state.records.all;
 
-    // --- REORDERED LOGIC ---
-    // 1. Apply the global search term filter FIRST.
-    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-
-    // 2. Filter by category, status, and other attributes on the search results.
+    // --- FIX: Reordered the filtering logic for a more intuitive user experience ---
+    // 1. Apply broad category and attribute filters first.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     
-    // 3. Sort the final results.
+    // 2. Apply the text search term LAST to refine the filtered results.
+    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+
+    // 3. Sort the final list.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
-    // --- END REORDERED LOGIC ---
+    // --- END OF FIX ---
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
-    
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
