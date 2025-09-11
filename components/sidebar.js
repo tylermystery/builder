@@ -177,3 +177,19 @@ export function updateTotalCost() {
         }
     }
 }
+
+export function displayReservedStatus() {
+    const checkoutBtn = document.getElementById('checkout-btn');
+    const saveShareBtn = document.getElementById('save-share-btn');
+    const totalRow = document.querySelector('#cart-footer .total-row');
+
+    if (totalRow) {
+        totalRow.innerHTML = '<span style="color: #28a745; font-weight: bold;">✅ Event Reserved</span>';
+    }
+    if (checkoutBtn) {
+        checkoutBtn.style.display = 'none'; // Hide the button
+    }
+    if (saveShareBtn) {
+        saveShareBtn.disabled = false; // Ensure the share link is enabled
+    }
+}
