@@ -219,25 +219,27 @@ export function initializeEventListeners(imageCache, flatpickr) {
     // --- UPDATED: Logic for Store and Categories ---
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
-        // FIX: The line below is no longer needed as the store title is now static HTML
-        // document.getElementById('store-display').textContent = currentStore.fields.Name;
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        // FIX: Create buttons instead of dropdown options
-        categories.forEach((cat, index) => {
+        
+        // --- NEW: Add an "All" button ---
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn active'; // Active by default
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
+        categoryFiltersContainer.appendChild(allButton);
+        // --- END NEW ---
+    
+        categories.forEach((cat) => { // Removed index from forEach
             const button = document.createElement('button');
             button.className = 'filter-btn category-filter-btn';
             button.dataset.filter = cat.name.toLowerCase();
             button.textContent = cat.name;
-            if (index === 0) {
-    
-                button.classList.add('active'); // Select the first category by default
-            }
+            // The first category is no longer active by default
             categoryFiltersContainer.appendChild(button);
         });
-        // Call to update subcategories based on the default selected category
         updateSubcategoryButtons();
     }
-    
+
     // FIX: Remove the old dropdown event listener and add a new one for buttons
     // safeAddEventListener('category-filter-dropdown', 'change', () => {
     //     updateSubcategoryButtons();
