@@ -1,13 +1,14 @@
-// FILE: api.js
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
+
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -26,7 +27,6 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.isOwned = false;
         state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
         const sessionDataString = record.fields['Items with Variations'];
-        // --- FIX: Safely parse session data only if it exists
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
@@ -64,7 +64,6 @@ export async function saveSessionToAirtable() {
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDate = new Date(dateRange[0]);
-        // NEW: Check if the date is valid before formatting and sending
         if (!isNaN(startDate.getTime())) {
              formattedDate = startDate.toISOString();
         }
@@ -74,8 +73,7 @@ export async function saveSessionToAirtable() {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
         "Collaborators": state.session.collaborators.join(', '),
-        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
-null,
+        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
     if (formattedDate) {
@@ -95,8 +93,6 @@ null,
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json' 
             },
-   
-
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
@@ -110,7 +106,7 @@ null,
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
-log('API', `New session created with ID: ${state.session.id}`);
+            log('API', `New session created with ID: ${state.session.id}`);
         }
         
         storeSession(state.session.id, sessionName);
@@ -129,8 +125,7 @@ export async function fetchAllRecords() {
     log('API', `Fetching records from base URL: ${baseUrl}`);
     try {
         do {
-            const url = offset ?
-`${baseUrl}&offset=${offset}` : baseUrl;
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
             log('API', `Fetching records from: ${url}`);
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
@@ -169,7 +164,7 @@ export async function fetchCalendarForRecord(record) {
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
         log('API', `Fetching calendar from: ${proxyUrl}`);
         const response = await fetch(proxyUrl);
-log('API', `Calendar fetch response: status ${response.status}`);
+        log('API', `Calendar fetch response: status ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
             log('API', `Calendar fetch error: ${JSON.stringify(errorData)}`);
@@ -199,15 +194,15 @@ export async function fetchImagesByTags(tags, retries = 2) {
         } else {
             payload = { tag: tags };
         }
-log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
+        log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-log('API', `Image fetch response: status ${response.status}`);
+        log('API', `Image fetch response: status ${response.status}`);
         if (response.status === 420 && retries > 0) {
             console.warn(`Cloudinary rate limit hit. Retrying in 500ms... (${retries} retries left)`);
-log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
+            log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
             await new Promise(res => setTimeout(res, 500));
             return fetchImagesByTags(tags, retries - 1);
         }
@@ -230,24 +225,21 @@ log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
             if (image.format === 'gif') {
                 transformations = 'c_fit,w_600,h_520';
             } else {
-                
-transformations = 'c_fill,g_auto,w_600,h_520';
+                transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
         });
-log('API', `Fetched ${imageUrls.length} images`);
+        log('API', `Fetched ${imageUrls.length} images`);
         return imageUrls;
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
-log('API', `Failed to fetch images: ${error.message}`);
+        log('API', `Failed to fetch images: ${error.message}`);
         return null;
     }
 }
 
-// FIX: This function is now async so we can perform the bulk fetch before rendering
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    // Check cache first
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         log('API', `Returning cached images for record: ${record.id}`);
@@ -262,52 +254,46 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
-    // FIX: If it's a grouping, return a single placeholder image immediately.
-    // This is the key change to prevent rate limiting.
+    
     if (isGrouping) {
         log('API', `Record is a grouping item. Using a placeholder image to avoid multiple API calls.`);
         imageUrls = [ultimateFallbackUrl];
     } else {
-        // Otherwise, fetch all images for the single record.
         log('API', `Record is a bookable item. Attempting to fetch images by tags.`);
         imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
     }
 
-    // Use fallback if no images were found
     if (!imageUrls || imageUrls.length === 0) {
         log('API', `Using fallback image for record: ${record.id}`);
         imageUrls = [ultimateFallbackUrl];
     }
 
-    // Cache and return the images
     imageCache.set(cacheKey, imageUrls);
     log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
     return { imageUrls };
+}
 
-    export async function fetchChatMessages(sessionId) {
-        const messages = [];
-        let offset = null;
-        const formula = `({SessionID} = '${sessionId}')`;
-        const encodedFormula = encodeURIComponent(formula);
-        const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=desc`;
-    
-        try {
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch chat messages from Airtable.');
-            }
-            const data = await response.json();
-            return data.records;
-        } catch (error) {
-            console.error("Error fetching chat history:", error);
-            return []; // Return an empty array on error
+export async function fetchChatMessages(sessionId) {
+    const formula = `({SessionID} = '${sessionId}')`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch chat messages from Airtable.');
         }
+        const data = await response.json();
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching chat history:", error);
+        return [];
     }
+}
 
-    export async function postChatMessage(sessionId, senderId, senderName, content) {
+export async function postChatMessage(sessionId, senderId, senderName, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
     const payload = {
         records: [{
@@ -321,7 +307,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     };
 
     try {
-        await fetch(url, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
@@ -329,10 +315,10 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
             },
             body: JSON.stringify(payload)
         });
+        if (!response.ok) {
+             throw new Error('Failed to post chat message to Airtable.');
+        }
     } catch (error) {
         console.error("Error posting chat message:", error);
     }
-}
-
-    
 }
