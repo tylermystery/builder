@@ -1,8 +1,11 @@
 // FILE: events.js
 /*
-* Version: 4.9.8
+* Version: 4.9.9
 * Last Modified: 2025-09-11
 * Changelog:
+* v4.9.9 - 2025-09-11
+* - Fixed bug where "Update Plan" button in the modal reset changes.
+* - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
 * v4.9.8 - 2025-09-11
 * - Fixed bug where 'View Options' button on grouping cards was unclickable.
 * Refined the card click listener to correctly open the modal.
@@ -176,7 +179,6 @@ async function handlePaymentFormSubmit(event) {
 
     const customerName = document.getElementById('customer-name').value;
     const customerEmail = document.getElementById('customer-email').value;
-
     const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
             card: cardElement,
@@ -185,7 +187,7 @@ async function handlePaymentFormSubmit(event) {
                 email: customerEmail,
             },
         },
-    });
+     });
 
     if (error) {
         cardErrors.textContent = error.message;
@@ -196,7 +198,6 @@ async function handlePaymentFormSubmit(event) {
         spinner.style.display = 'none';
     } else if (paymentIntent.status === 'succeeded') {
         log('Events', 'Payment succeeded.');
-
         // Show success UI in modal
         document.getElementById('payment-form').style.display = 'none';
         document.getElementById('checkout-summary-details').style.display = 'none';
@@ -206,7 +207,6 @@ async function handlePaymentFormSubmit(event) {
 
         // Update main application UI
         ui.displayReservedStatus();
-
         // Close modal after a delay
         setTimeout(() => {
             ui.hideCheckoutModal();
@@ -318,14 +318,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-   
                  triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
-       
          }
         },
     });
@@ -348,16 +346,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-        const checkoutBtn = 
-        e.target.closest('#checkout-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
         const lockedItemCard = e.target.closest('.locked-item-card');
+        // --- NEW: Target for the demote button ---
+        const demoteBtn = e.target.closest('.demote-locked-item-btn');
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
-     
            });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
@@ -378,6 +376,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
+            const isLocked = state.cart.lockedItems.has(recordId);
+            
+            // --- FIX: If item is already locked, this button just closes the modal. ---
+            if (isLocked) {
+                ui.hideDetailModal();
+                return;
+            }
+
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -386,6 +392,22 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
             triggerSave();
+        // --- NEW: Handler for the demote button ---
+        } else if (demoteBtn) {
+            e.stopPropagation();
+            const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
+            if (state.cart.lockedItems.has(recordId)) {
+                const itemInfo = state.cart.lockedItems.get(recordId);
+                state.cart.lockedItems.delete(recordId);
+                state.cart.items.set(recordId, itemInfo); // Move it back to favorites
+                
+                // Update all relevant UI components
+                ui.updateCardIcon(recordId);
+                await ui.updateEventPlanSection();
+                await ui.updateFavoritesCarousel();
+                ui.updateTotalCost();
+                triggerSave();
+            }
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
             const recordId = favoriteItem.dataset.recordId;
@@ -394,10 +416,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } 
-        // --- MODIFIED: Refined card click logic ---
         else if (card) {
-            // Clicks on quantity buttons are the only action on a card that should NOT open the modal.
-            // The heart icon is handled by its own "if" block above.
             const isQuantityClick = e.target.closest('.quantity-selector');
             if (!isQuantityClick) {
                 const recordId = card.dataset.recordId;
@@ -405,7 +424,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 if (record) ui.showDetailModal(record);
             }
         } 
-        // --- END MODIFICATION ---
         else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -430,7 +448,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         let updates = {};
 
         if (target.matches('.quantity-input')) {
-    
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
@@ -439,7 +456,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
 
         if (Object.keys(updates).length > 0) {
-            if (isLocked) 
+              if (isLocked) 
             {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
@@ -469,7 +486,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
-
     // Add event listener for the payment form
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
@@ -491,7 +507,6 @@ export function initializeChatEventListeners() {
     
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWidgetContainer = document.getElementById('chat-widget-container');
-    // --- FIX: Toggles a class on the parent container to control visibility of children ---
     function toggleChatWindow(forceClose = false) {
         if (chatWidgetContainer) {
             if (forceClose) {
