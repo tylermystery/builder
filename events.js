@@ -426,10 +426,9 @@ export function initializeChatEventListeners() {
     }
     
     const chatToggleButton = document.getElementById('chat-toggle-button');
-    const chatWindow = document.getElementById('chat-window');
     const chatWidgetContainer = document.getElementById('chat-widget-container');
 
-    // --- FIX: The chat widget is now toggled by adding/removing a class from the parent container ---
+    // --- FIX: Toggles a class on the parent container to control visibility of children ---
     function toggleChatWindow(forceClose = false) {
         if (chatWidgetContainer) {
             if (forceClose) {
@@ -440,6 +439,7 @@ export function initializeChatEventListeners() {
         }
     }
 
+
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -448,9 +448,8 @@ export function initializeChatEventListeners() {
     }
 
     document.addEventListener('click', (event) => {
-        const chatWidget = document.getElementById('chat-widget-container');
-        if (!chatWidget.contains(event.target) && chatWindow.classList.contains('visible')) {
-            chatWindow.classList.remove('visible');
+        if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
+            toggleChatWindow(true);
         }
     });
 }
