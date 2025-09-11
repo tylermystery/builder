@@ -427,9 +427,17 @@ export function initializeChatEventListeners() {
     
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWindow = document.getElementById('chat-window');
-    
-    function toggleChatWindow() {
-        chatWindow.classList.toggle('visible');
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+
+    // --- FIX: The chat widget is now toggled by adding/removing a class from the parent container ---
+    function toggleChatWindow(forceClose = false) {
+        if (chatWidgetContainer) {
+            if (forceClose) {
+                chatWidgetContainer.classList.remove('chat-open');
+            } else {
+                chatWidgetContainer.classList.toggle('chat-open');
+            }
+        }
     }
 
     if (chatToggleButton) {
