@@ -1,14 +1,17 @@
 // FILE: events.js
 /*
-* Version: 4.9.9
+* Version: 5.0.0
 * Last Modified: 2025-09-11
 * Changelog:
+* v5.0.0 - 2025-09-11
+* - Corrected the "Update Plan" button logic in the detail modal to prevent it from resetting real-time changes. The button now correctly closes the modal.
+* - Added a new event handler for the ".demote-locked-item-btn" to correctly move items from the event plan back to the "Ideas" (favorites) carousel.
 * v4.9.9 - 2025-09-11
 * - Fixed bug where "Update Plan" button in the modal reset changes.
 * - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
 * v4.9.8 - 2025-09-11
 * - Fixed bug where 'View Options' button on grouping cards was unclickable.
-* Refined the card click listener to correctly open the modal.
+* - Refined the card click listener to correctly open the modal.
 * v4.9.7 - 2025-09-11
 * - Fixed TypeError by deferring DOM element selection until the initializeEventListeners function.
 */
@@ -152,6 +155,11 @@ export async function updateAllCardAvailabilityIcons() {
     }
 }
 
+/**
+ * Handles the submission of the Stripe payment form.
+ * It confirms the card payment and provides UI feedback for success or failure.
+ * @param {Event} event The form submission event.
+ */
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -348,7 +356,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
         const lockedItemCard = e.target.closest('.locked-item-card');
-        // --- NEW: Target for the demote button ---
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
 
         if (saveShareBtn) {
@@ -378,12 +385,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             const isLocked = state.cart.lockedItems.has(recordId);
             
-            // --- FIX: If item is already locked, this button just closes the modal. ---
+            // If item is already locked, this button just closes the modal,
+            // as changes are saved in real-time via other event listeners.
             if (isLocked) {
                 ui.hideDetailModal();
                 return;
             }
 
+            // If the item is not locked, add it to the plan.
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -392,16 +401,15 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
             triggerSave();
-        // --- NEW: Handler for the demote button ---
         } else if (demoteBtn) {
-            e.stopPropagation();
+            e.stopPropagation(); // Prevent the modal from opening.
             const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
-                state.cart.items.set(recordId, itemInfo); // Move it back to favorites
+                state.cart.items.set(recordId, itemInfo); // Move it back to favorites (Ideas).
                 
-                // Update all relevant UI components
+                // Update all relevant UI components.
                 ui.updateCardIcon(recordId);
                 await ui.updateEventPlanSection();
                 await ui.updateFavoritesCarousel();
