@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;" />
+    <link rel="icon" href="data:;"
+[cite_start][cite: 543] />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -14,62 +15,62 @@
     <style>
         body {
             padding-bottom: 150px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+[cite_start][cite: 544] font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #f8f9fa;
-        }
+[cite_start][cite: 545] }
         body.modal-open {
             overflow: hidden;
-        }
+[cite_start][cite: 546] }
         #sticky-header {
             position: sticky;
-            top: 0;
+[cite_start][cite: 547] top: 0;
             background-color: white;
             z-index: 999;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+[cite_start][cite: 548] }
         #header-toolbar {
             display: flex;
-            flex-wrap: wrap;
+[cite_start][cite: 549] flex-wrap: wrap;
             align-items: center;
             gap: 20px;
             padding: 15px 20px;
             max-width: 1800px;
             margin: 0 auto;
-        }
+[cite_start][cite: 550] }
         #header-title {
             font-size: 1.5em;
-            font-weight: bold;
+[cite_start][cite: 551] font-weight: bold;
             margin: 0;
         }
         .toolbar-group {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 552] flex-direction: column;
             gap: 5px;
         }
         .toolbar-group label {
             font-size: 0.75em;
-            color: #666;
+[cite_start][cite: 553] color: #666;
             text-transform: uppercase;
             font-weight: 500;
         }
         .toolbar-group input, .toolbar-group textarea, .filter-group select, .filter-group input {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+[cite_start][cite: 554] border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
             width: 100%;
             box-sizing: border-box;
-        }
+[cite_start][cite: 555] }
         #header-event-name {
             font-size: 1.5em;
-            font-weight: bold;
+[cite_start][cite: 556] font-weight: bold;
             border: none;
             background: none;
             padding: 0;
         }
         #itinerary-btn {
             background: none;
-            border: none;
+[cite_start][cite: 557] border: none;
             color: #333;
             font-size: 1.5em;
             font-weight: bold;
@@ -77,65 +78,68 @@
             cursor: pointer;
             text-align: left;
             margin-bottom: 10px;
-        }
+[cite_start][cite: 558] }
         #itinerary-btn:hover {
             text-decoration: underline;
-        }
+[cite_start][cite: 559] }
         .main-content {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 560] flex-direction: column;
             gap: 25px;
             max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
-        }
+[cite_start][cite: 561] }
         @media (min-width: 1000px) {
             .main-content {
                 display: grid;
-                grid-template-columns: 300px 1fr 380px;
+[cite_start][cite: 562] grid-template-columns: 300px 1fr 380px;
                 gap: 25px;
             }
-            #left-sidebar { order: 1; }
-            #catalog-area { order: 2; }
-            #right-sidebar { order: 3; }
+            #left-sidebar { order: 1;
+[cite_start][cite: 563] }
+            #catalog-area { order: 2;
+[cite_start][cite: 564] }
+            #right-sidebar { order: 3;
+[cite_start][cite: 565] }
         }
         @media (max-width: 1000px) {
             #left-sidebar, #right-sidebar {
                 max-width: 100%;
-            }
+[cite_start][cite: 566] }
             #catalog-container {
                 grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            }
+[cite_start][cite: 567] }
         }
         @media (max-width: 600px) {
             .main-content {
                 padding: 10px;
-            }
+[cite_start][cite: 568] }
             #catalog-container {
                 grid-template-columns: 1fr;
-            }
+[cite_start][cite: 569] }
             .event-card-image-container {
                 height: 150px;
-            }
+[cite_start][cite: 570] }
         }
         #right-sidebar h3, #left-sidebar h3 {
             margin-top: 0;
-            border-bottom: 1px solid #dee2e6;
+[cite_start][cite: 571] border-bottom: 1px solid #dee2e6;
             padding-bottom: 10px;
         }
         #filter-controls {
             background-color: #fff;
-            padding: 20px;
+[cite_start][cite: 572] padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
             gap: 15px;
             position: relative;
-        }
+[cite_start][cite: 573] }
         #filter-controls::after {
             content: attr(data-active-filters);
-            display: inline-block;
+[cite_start][cite: 574] display: inline-block;
             background: #007bff;
             color: #fff;
             border-radius: 12px;
@@ -144,65 +148,65 @@
             margin-left: 10px;
             position: absolute;
             top: 15px;
-            right: 15px;
+[cite_start][cite: 575] right: 15px;
         }
         .filter-group {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 576] flex-direction: column;
             gap: 10px;
         }
         .filter-group label {
             font-size: 0.9em;
-            font-weight: 500;
+[cite_start][cite: 577] font-weight: 500;
             color: #333;
         }
         .filter-btn-group {
             display: flex;
-            flex-wrap: wrap;
+[cite_start][cite: 578] flex-wrap: wrap;
             gap: 8px;
         }
         .filter-btn {
             padding: 8px;
-            border: 1px solid #ccc;
+[cite_start][cite: 579] border: 1px solid #ccc;
             border-radius: 4px;
             background-color: #f8f8f8;
             cursor: pointer;
             text-align: center;
             font-size: 0.85em;
-        }
+[cite_start][cite: 580] }
         .filter-btn.active {
             background-color: #e7f3ff;
-            border-color: #007bff;
+[cite_start][cite: 581] border-color: #007bff;
             font-weight: bold;
         }
         .itinerary-item.ghost, .itinerary-item-ghost {
             opacity: 0.4;
-            background-color: #c8c8c8;
+[cite_start][cite: 582] background-color: #c8c8c8;
         }
         #name-filter:not(:placeholder-shown) {
             border-color: #007bff;
-            box-shadow: 0 0 5px rgba(0,123,255,0.3);
+[cite_start][cite: 583] box-shadow: 0 0 5px rgba(0,123,255,0.3);
         }
         .flatpickr-day.available-full {
             background-color: #d4edda !important;
-            color: #155724 !important;
+[cite_start][cite: 584] color: #155724 !important;
         }
         .flatpickr-day.available-partial {
             background-color: #fff3cd !important;
-            color: #856404 !important;
+[cite_start][cite: 585] color: #856404 !important;
         }
         .flatpickr-day.unavailable {
             background-color: #f8d7da !important;
-            color: #721c24 !important;
+[cite_start][cite: 586] color: #721c24 !important;
             text-decoration: line-through;
         }
         .flatpickr-calendar.inline {
             width: 100%;
-            box-shadow: none;
+[cite_start][cite: 587] box-shadow: none;
         }
         #reset-filters-btn {
             width: 100%;
-            padding: 10px;
+[cite_start][cite: 588] padding: 10px;
             font-size: 0.9em;
             font-weight: bold;
             border-radius: 5px;
@@ -210,79 +214,79 @@
             border: 1px solid #ccc;
             background-color: #f0f0f0;
             margin-top: 10px;
-        }
+[cite_start][cite: 589] }
         #catalog-toolbar {
             display: flex;
-            justify-content: flex-end;
+[cite_start][cite: 590] justify-content: flex-end;
             align-items: center;
             margin-bottom: 20px;
         }
         #catalog-toolbar select {
             border: 1px solid #ced4da;
-            border-radius: 4px;
+[cite_start][cite: 591] border-radius: 4px;
             padding: 8px 10px;
             font-size: 0.9em;
         }
         #event-plan-panel {
             background-color: #fff;
-            padding: 20px;
+[cite_start][cite: 592] padding: 20px;
             border-radius: 8-px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
-        }
+[cite_start][cite: 593] }
         #cart-items-container {
             flex-grow: 1;
-        }
+[cite_start][cite: 594] }
         #cart-footer {
             margin-top: 20px;
-            padding-top: 15px;
+[cite_start][cite: 595] padding-top: 15px;
             border-top: 2px solid #dee2e6;
         }
         #cart-footer .total-row {
             display: flex;
-            justify-content: space-between;
+[cite_start][cite: 596] justify-content: space-between;
             align-items: center;
             font-size: 1.4em;
             font-weight: bold;
             margin-bottom: 15px;
-        }
+[cite_start][cite: 597] }
         #cart-footer button {
             width: 100%;
-            padding: 12px;
+[cite_start][cite: 598] padding: 12px;
             font-size: 1em;
             font-weight: bold;
             border-radius: 5px;
             cursor: pointer;
             border: 1px solid #ccc;
-        }
+[cite_start][cite: 599] }
         #cart-footer #checkout-btn {
             background-color: #28a745;
-            color: white;
+[cite_start][cite: 600] color: white;
             border-color: #28a745;
         }
         #cart-footer #save-share-btn {
             background-color: #f0f0f0;
-            color: #333;
+[cite_start][cite: 601] color: #333;
             margin-top: 10px;
         }
         #favorites-section { 
             padding: 15px 0px;
-            box-sizing: border-box;
+[cite_start][cite: 602] box-sizing: border-box;
             position: relative;
         }
         #favorites-carousel { 
             display: flex;
-            gap: 15px;
+[cite_start][cite: 603] gap: 15px;
             overflow-x: auto; 
             padding-bottom: 5px; 
             max-width: 1800px;
             margin: 0 auto;
             scroll-behavior: smooth;
-        }
+[cite_start][cite: 604] }
         .carousel-nav {
             position: absolute;
-            top: 50%;
+[cite_start][cite: 605] top: 50%;
             transform: translateY(-50%);
             background: rgba(0,0,0,0.5);
             color: #fff;
@@ -290,27 +294,29 @@
             padding: 10px;
             cursor: pointer;
             z-index: 10;
-        }
-        .carousel-nav.left { left: 0; }
-        .carousel-nav.right { right: 0; }
+[cite_start][cite: 606] }
+        .carousel-nav.left { left: 0;
+[cite_start][cite: 607] }
+        .carousel-nav.right { right: 0;
+[cite_start][cite: 608] }
         .favorite-item {
             position: relative;
-            flex: 0 0 100px;
+[cite_start][cite: 609] flex: 0 0 100px;
             height: 100px;
             border-radius: 8px;
             background-size: cover;
             background-position: center;
-        }
+[cite_start][cite: 610] }
         .favorite-item .card-actions {
             position: absolute;
-            top: 5px;
+[cite_start][cite: 611] top: 5px;
             right: 5px;
             display: flex;
             gap: 5px;
         }
         .favorite-item .action-btn {
             background-color: rgba(0,0,0,0.6);
-            color: white;
+[cite_start][cite: 612] color: white;
             border: none;
             border-radius: 50%;
             width: 24px;
@@ -320,15 +326,15 @@
             cursor: pointer;
             padding: 0;
             font-weight: bold;
-        }
+[cite_start][cite: 613] }
         #catalog-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+[cite_start][cite: 614] grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 25px;
         }
         .event-card {
             position: relative;
-            border-radius: 10-px;
+[cite_start][cite: 615] border-radius: 10-px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             background-color: #fff;
             color: #333;
@@ -336,25 +342,25 @@
             cursor: pointer;
             display: flex;
             flex-direction: column;
-        }
+[cite_start][cite: 616] }
         .event-card-image-container {
             position: relative;
-            width: 100%;
+[cite_start][cite: 617] width: 100%;
             height: 200px;
             background-size: cover;
             background-position: center;
         }
         .event-card-actions {
             position: absolute;
-            top: 10px;
+[cite_start][cite: 618] top: 10px;
             right: 10px;
             display: flex;
             gap: 5px;
             z-index: 10;
-        }
+[cite_start][cite: 619] }
         .event-card-actions .action-btn {
             background-color: rgba(0,0,0,0.5);
-            color: white;
+[cite_start][cite: 620] color: white;
             border: none;
             border-radius: 50%;
             width: 28px;
@@ -363,67 +369,67 @@
             line-height: 28px;
             text-align: center;
             cursor: pointer;
-        }
+[cite_start][cite: 621] }
         .heart-icon {
             position: absolute;
-            top: 10px;
+[cite_start][cite: 622] top: 10px;
             right: 50px;
             cursor: pointer;
             z-index: 10;
             display: block;
-        }
+[cite_start][cite: 623] }
         .heart-icon svg {
             width: 28px;
-            height: 28px;
+[cite_start][cite: 624] height: 28px;
             fill: rgba(255, 255, 255, 0.8);
             stroke: white;
             stroke-width: 1.5;
             transition: all 0.2s ease-in-out;
-        }
+[cite_start][cite: 625] }
         .heart-icon.hearted svg {
             fill: #ff3b30;
-            stroke: #ff3b30;
+[cite_start][cite: 626] stroke: #ff3b30;
         }
         .heart-icon.locked svg {
             fill: #34c759;
-            stroke: none;
+[cite_start][cite: 627] stroke: none;
         }
         .heart-icon.locked {
             cursor: default;
-            pointer-events: none;
+[cite_start][cite: 628] pointer-events: none;
         }
         .event-card-content {
             padding: 15px;
-            display: flex;
+[cite_start][cite: 629] display: flex;
             flex-direction: column;
             flex-grow: 1;
         }
         .event-card-content h3 {
             margin: 0;
-            font-size: 1.2em;
+[cite_start][cite: 630] font-size: 1.2em;
             color: #333;
         }
         .event-card-content .description {
             font-size: 0.9em;
-            color: #666;
+[cite_start][cite: 631] color: #666;
             margin: 5px 0 10px 0;
         }
         .card-footer {
             padding: 15px;
-            border-top: 1px solid #eee;
+[cite_start][cite: 632] border-top: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
             background-color: #f8f8f8;
-        }
+[cite_start][cite: 633] }
         .card-footer .price {
             font-weight: bold;
-            font-size: 1.1em;
+[cite_start][cite: 634] font-size: 1.1em;
             color: #28a745;
         }
         .card-action-btn {
             padding: 8px 16px;
-            font-weight: bold;
+[cite_start][cite: 635] font-weight: bold;
             background-color: #007bff;
             color: white;
             border: none;
@@ -431,16 +437,16 @@
             cursor: pointer;
             white-space: nowrap;
             position: relative;
-        }
+[cite_start][cite: 636] }
         .card-action-btn:disabled {
             background-color: #5a6268;
-            cursor: not-allowed;
+[cite_start][cite: 637] cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .card-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-            position: absolute;
+[cite_start][cite: 638] position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -449,110 +455,110 @@
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-            white-space: nowrap;
+[cite_start][cite: 639] white-space: nowrap;
             z-index: 10;
         }
         .parent-link {
             font-size: 0.8em;
-            margin: 0 0 5px 0;
+[cite_start][cite: 640] margin: 0 0 5px 0;
             font-weight: 500;
             color: #6c757d;
             cursor: pointer;
-        }
+[cite_start][cite: 641] }
         .locked-item-card {
             display: flex;
-            gap: 15px;
+[cite_start][cite: 642] gap: 15px;
             align-items: flex-start;
             padding: 15px 0;
             border-bottom: 1px solid #e9ecef;
             cursor: pointer;
-        }
+[cite_start][cite: 643] }
         .locked-item-card:last-child {
             border-bottom: none;
-            padding-bottom: 5px;
+[cite_start][cite: 644] padding-bottom: 5px;
         }
         .locked-item-card:first-child {
             padding-top: 5px;
-        }
+[cite_start][cite: 645] }
         .locked-item-thumbnail {
             width: 60px;
-            height: 60px;
+[cite_start][cite: 646] height: 60px;
             object-fit: cover;
             border-radius: 4px;
             flex-shrink: 0;
         }
         .locked-item-details {
             flex-grow: 1;
-            min-width: 0;
+[cite_start][cite: 647] min-width: 0;
         }
         .locked-item-details p {
             margin: 0 0 5px 0;
-            font-size: 0.9em;
+[cite_start][cite: 648] font-size: 0.9em;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .locked-item-name {
             font-weight: bold;
-        }
+[cite_start][cite: 649] }
         .locked-item-option, .locked-item-note {
             font-size: 0.8em;
-            color: #6c757d;
+[cite_start][cite: 650] color: #6c757d;
         }
         .locked-item-pricing {
             font-size: 0.85em !important;
-        }
+[cite_start][cite: 651] }
         .locked-item-actions {
             display: flex;
-            align-items: center;
+[cite_start][cite: 652] align-items: center;
             gap: 5px;
         }
         .locked-item-actions .edit-btn {
             font-size: 0.8em;
-            padding: 4px 8px;
+[cite_start][cite: 653] padding: 4px 8px;
             background: #f0f0f0;
             border: 1px solid #ccc;
             border-radius: 3px;
             cursor: pointer;
-        }
+[cite_start][cite: 654] }
         .locked-item-actions .edit-btn:hover {
             background-color: #e0e0e0;
-        }
+[cite_start][cite: 655] }
         .locked-item-status-icon {
             display: flex;
-            align-items: center;
+[cite_start][cite: 656] align-items: center;
             font-size: 1.2em;
         }
         .remove-locked-item-btn {
             background: none;
-            border: none;
+[cite_start][cite: 657] border: none;
             color: #999;
             font-size: 1.5em;
             line-height: 1;
             padding: 0 5px;
             cursor: pointer;
-        }
+[cite_start][cite: 658] }
         .modal-overlay {
             display: none;
-            opacity: 0;
+[cite_start][cite: 659] opacity: 0;
             transition: opacity 0.3s ease;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
+[cite_start][cite: 660] background-color: rgba(0, 0, 0, 0.6);
             z-index: 1000;
             justify-content: center;
             align-items: center;
-        }
+[cite_start][cite: 661] }
         .modal-overlay.active {
             display: flex;
-            opacity: 1;
+[cite_start][cite: 662] opacity: 1;
         }
         .modal-content {
             background: #fff;
-            border-radius: 12px;
+[cite_start][cite: 663] border-radius: 12px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 1100px;
@@ -560,25 +566,25 @@
             max-height: 700px;
             display: flex;
             overflow: hidden;
-            position: relative;
+[cite_start][cite: 664] position: relative;
             color: #333;
             transform: scale(0.8);
             transition: transform 0.3s ease, opacity 0.3s ease;
-        }
+[cite_start][cite: 665] }
         .modal-overlay.active .modal-content {
             transform: scale(1);
-            opacity: 1;
+[cite_start][cite: 666] opacity: 1;
         }
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-                height: 85vh;
+[cite_start][cite: 667] height: 85vh;
                 max-height: 600px;
             }
         }
         .modal-close-btn {
             position: absolute;
-            top: 15px;
+[cite_start][cite: 668] top: 15px;
             right: 15px;
             background: none;
             border: none;
@@ -586,101 +592,101 @@
             cursor: pointer;
             color: #999;
             z-index: 1010;
-        }
+[cite_start][cite: 669] }
         .modal-main-column {
             flex: 1;
-            display: flex;
+[cite_start][cite: 670] display: flex;
             flex-direction: column;
             min-width: 0;
 }
         #modal-main-image {
             flex-grow: 1;
-            background-size: cover;
+[cite_start][cite: 671] background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
 }
         #modal-thumbnail-strip {
             display: flex;
-            gap: 5px;
+[cite_start][cite: 672] gap: 5px;
             padding: 10px;
             background-color: #f8f9fa;
             border-top: 1px solid #eee;
             overflow-x: auto;
-        }
+[cite_start][cite: 673] }
         .thumbnail-img {
             width: 80px;
-            height: 60px;
+[cite_start][cite: 674] height: 60px;
             background-size: cover;
             background-position: center;
             border-radius: 4px;
             cursor: pointer;
             border: 2px solid transparent;
             transition: border-color 0.2s;
-        }
+[cite_start][cite: 675] }
         .thumbnail-img.active {
             border-color: #007bff;
-        }
+[cite_start][cite: 676] }
         .modal-sidebar-column {
             flex: 1;
-            padding: 30px;
+[cite_start][cite: 677] padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             min-width: 0;
-        }
+[cite_start][cite: 678] }
         #modal-header-actions {
             display: flex;
-            justify-content: flex-end;
+[cite_start][cite: 679] justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
 }
         #modal-breadcrumbs {
             font-size: 0.9em;
-            color: #6c757d;
+[cite_start][cite: 680] color: #6c757d;
             margin-bottom: 8px;
 }
         #modal-breadcrumbs a {
             color: #007bff;
-            text-decoration: none;
+[cite_start][cite: 681] text-decoration: none;
         }
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
-        }
+[cite_start][cite: 682] }
         #modal-item-name { 
             margin-top: 0;
-        }
+[cite_start][cite: 683] }
         #modal-item-price { 
             font-size: 1.5em;
-            font-weight: bold; 
+[cite_start][cite: 684] font-weight: bold; 
             margin: 10px 0;
         }
         #modal-options-container { 
             margin: 20px 0;
-            display: flex; 
+[cite_start][cite: 685] display: flex; 
             flex-wrap: wrap; 
             gap: 10px;
         }
         .option-btn {
             padding: 8px 12px;
-            border: 1px solid #ccc;
+[cite_start][cite: 686] border: 1px solid #ccc;
             background-color: #f8f8f8;
             border-radius: 5px;
             cursor: pointer;
-        }
+[cite_start][cite: 687] }
         .option-btn.selected {
             border-color: #007bff;
-            background-color: #e7f3ff;
+[cite_start][cite: 688] background-color: #e7f3ff;
         }
         #modal-quantity-selector { 
             margin: 20px 0;
-        }
+[cite_start][cite: 689] }
         #modal-notes-container { 
             margin-bottom: 20px;
-        }
+[cite_start][cite: 690] }
         #modal-item-note {
             width: 100%;
-            height: 80px;
+[cite_start][cite: 691] height: 80px;
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -688,15 +694,15 @@
             font-size: 0.9em;
             resize: vertical;
             box-sizing: border-box;
-        }
+[cite_start][cite: 692] }
         #modal-actions-container {
             margin-top: auto;
-            padding-top: 20px;
+[cite_start][cite: 693] padding-top: 20px;
             border-top: 1px solid #eee;
         }
         .primary-action-btn {
             width: 100%;
-            padding: 15px;
+[cite_start][cite: 694] padding: 15px;
             font-size: 1.1em;
             font-weight: bold;
             color: #fff;
@@ -705,20 +711,20 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.2s;
-            position: relative;
+[cite_start][cite: 695] position: relative;
         }
         .primary-action-btn:hover {
             background-color: #218838;
-        }
+[cite_start][cite: 696] }
         .primary-action-btn:disabled {
             background-color: #5a6268;
-            cursor: not-allowed;
+[cite_start][cite: 697] cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .primary-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-            position: absolute;
+[cite_start][cite: 698] position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -727,34 +733,34 @@
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-            white-space: nowrap;
+[cite_start][cite: 699] white-space: nowrap;
             z-index: 10;
         }
         .checkout-modal-content {
             background: #fff;
-            border-radius: 8px;
+[cite_start][cite: 700] border-radius: 8px;
             padding: 30px;
             width: 100%;
             max-width: 500px;
             position: relative;
             color: #333;
             transform: scale(0.8);
-            transition: transform 0.3s ease, opacity 0.3s ease;
+[cite_start][cite: 701] transition: transform 0.3s ease, opacity 0.3s ease;
 }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
-            opacity: 1;
+[cite_start][cite: 702] opacity: 1;
         }
         @media (max-width: 600px) {
             .modal-content {
                 width: 95%;
-                height: 85vh;
+[cite_start][cite: 703] height: 85vh;
                 max-height: 600px;
             }
         }
         .modal-close-btn {
             position: absolute;
-            top: 15px;
+[cite_start][cite: 704] top: 15px;
             right: 15px;
             background: none;
             border: none;
@@ -762,101 +768,101 @@
             cursor: pointer;
             color: #999;
             z-index: 1010;
-        }
+[cite_start][cite: 705] }
         .modal-main-column {
             flex: 1;
-            display: flex;
+[cite_start][cite: 706] display: flex;
             flex-direction: column;
             min-width: 0;
 }
         #modal-main-image {
             flex-grow: 1;
-            background-size: cover;
+[cite_start][cite: 707] background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
 }
         #modal-thumbnail-strip {
             display: flex;
-            gap: 5px;
+[cite_start][cite: 708] gap: 5px;
             padding: 10px;
             background-color: #f8f9fa;
             border-top: 1px solid #eee;
             overflow-x: auto;
-        }
+[cite_start][cite: 709] }
         .thumbnail-img {
             width: 80px;
-            height: 60px;
+[cite_start][cite: 710] height: 60px;
             background-size: cover;
             background-position: center;
             border-radius: 4px;
             cursor: pointer;
             border: 2px solid transparent;
             transition: border-color 0.2s;
-        }
+[cite_start][cite: 711] }
         .thumbnail-img.active {
             border-color: #007bff;
-        }
+[cite_start][cite: 712] }
         .modal-sidebar-column {
             flex: 1;
-            padding: 30px;
+[cite_start][cite: 713] padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             min-width: 0;
-        }
+[cite_start][cite: 714] }
         #modal-header-actions {
             display: flex;
-            justify-content: flex-end;
+[cite_start][cite: 715] justify-content: flex-end;
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
 }
         #modal-breadcrumbs {
             font-size: 0.9em;
-            color: #6c757d;
+[cite_start][cite: 716] color: #6c757d;
             margin-bottom: 8px;
 }
         #modal-breadcrumbs a {
             color: #007bff;
-            text-decoration: none;
+[cite_start][cite: 717] text-decoration: none;
         }
         #modal-breadcrumbs a:hover {
             text-decoration: underline;
-        }
+[cite_start][cite: 718] }
         #modal-item-name { 
             margin-top: 0;
-        }
+[cite_start][cite: 719] }
         #modal-item-price { 
             font-size: 1.5em;
-            font-weight: bold; 
+[cite_start][cite: 720] font-weight: bold; 
             margin: 10px 0;
         }
         #modal-options-container { 
             margin: 20px 0;
-            display: flex; 
+[cite_start][cite: 721] display: flex; 
             flex-wrap: wrap; 
             gap: 10px;
         }
         .option-btn {
             padding: 8px 12px;
-            border: 1px solid #ccc;
+[cite_start][cite: 722] border: 1px solid #ccc;
             background-color: #f8f8f8;
             border-radius: 5px;
             cursor: pointer;
-        }
+[cite_start][cite: 723] }
         .option-btn.selected {
             border-color: #007bff;
-            background-color: #e7f3ff;
+[cite_start][cite: 724] background-color: #e7f3ff;
         }
         #modal-quantity-selector { 
             margin: 20px 0;
-        }
+[cite_start][cite: 725] }
         #modal-notes-container { 
             margin-bottom: 20px;
-        }
+[cite_start][cite: 726] }
         #modal-item-note {
             width: 100%;
-            height: 60px;
+[cite_start][cite: 727] height: 60px;
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -864,15 +870,15 @@
             font-size: 0.9em;
             resize: vertical;
             box-sizing: border-box;
-        }
+[cite_start][cite: 728] }
         #modal-actions-container {
             margin-top: auto;
-            padding-top: 20px;
+[cite_start][cite: 729] padding-top: 20px;
             border-top: 1px solid #eee;
         }
         .primary-action-btn {
             width: 100%;
-            padding: 15px;
+[cite_start][cite: 730] padding: 15px;
             font-size: 1.1em;
             font-weight: bold;
             color: #fff;
@@ -881,20 +887,20 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.2s;
-            position: relative;
+[cite_start][cite: 731] position: relative;
         }
         .primary-action-btn:hover {
             background-color: #218838;
-        }
+[cite_start][cite: 732] }
         .primary-action-btn:disabled {
             background-color: #5a6268;
-            cursor: not-allowed;
+[cite_start][cite: 733] cursor: not-allowed;
             opacity: 0.7;
             transition: opacity 0.2s ease;
         }
         .primary-action-btn:disabled:hover::after {
             content: attr(data-tooltip);
-            position: absolute;
+[cite_start][cite: 734] position: absolute;
             background: #333;
             color: #fff;
             padding: 5px 10px;
@@ -903,92 +909,92 @@
             top: -30px;
             left: 50%;
             transform: translateX(-50%);
-            white-space: nowrap;
+[cite_start][cite: 735] white-space: nowrap;
             z-index: 10;
         }
         .checkout-modal-content {
             background: #fff;
-            border-radius: 8px;
+[cite_start][cite: 736] border-radius: 8px;
             padding: 30px;
             width: 100%;
             max-width: 500px;
             position: relative;
             color: #333;
             transform: scale(0.8);
-            transition: transform 0.3s ease, opacity 0.3s ease;
+[cite_start][cite: 737] transition: transform 0.3s ease, opacity 0.3s ease;
 }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
-            opacity: 1;
+[cite_start][cite: 738] opacity: 1;
         }
         @media (max-width: 600px) {
             .checkout-modal-content {
                 width: 95%;
-                padding: 20px;
+[cite_start][cite: 739] padding: 20px;
             }
         }
         #checkout-summary-list {
             list-style: none;
-            padding: 0;
+[cite_start][cite: 740] padding: 0;
             margin: 0 0 20px 0;
         }
         #checkout-summary-list li {
             display: flex;
-            justify-content: space-between;
+[cite_start][cite: 741] justify-content: space-between;
             padding: 10px 0;
             border-bottom: 1px solid #eee;
         }
         .checkout-total {
             display: flex;
-            justify-content: space-between;
+[cite_start][cite: 742] justify-content: space-between;
             font-size: 1.2em;
             margin: 20px 0;
         }
         #payment-form .form-row {
             margin-bottom: 15px;
-        }
+[cite_start][cite: 743] }
         #payment-form label {
             display: block;
-            margin-bottom: 5px;
+[cite_start][cite: 744] margin-bottom: 5px;
             font-size: 0.9em;
             color: #666;
         }
         #payment-form input, #card-element {
             width: 100%;
-            padding: 10px;
+[cite_start][cite: 745] padding: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
-        }
+[cite_start][cite: 746] }
         #card-errors {
             color: #fa755a;
-            font-size: 0.9em;
+[cite_start][cite: 747] font-size: 0.9em;
             margin-top: 5px;
         }
         /* Itinerary Modal Styles */
         .itinerary-content {
             max-width: 1000px;
-        }
+[cite_start][cite: 748] }
         .itinerary-container {
             display: flex;
-            gap: 20px;
+[cite_start][cite: 749] gap: 20px;
         }
         .itinerary-column {
             flex: 1;
-            padding: 10px;
+[cite_start][cite: 750] padding: 10px;
             background-color: #f8f9fa;
             border-radius: 8px;
             min-height: 200px;
         }
         .itinerary-list {
             list-style-type: none;
-            padding: 0;
+[cite_start][cite: 751] padding: 0;
             margin: 0;
             min-height: 100px;
         }
         .itinerary-item {
             display: flex;
-            align-items: center;
+[cite_start][cite: 752] align-items: center;
             gap: 10px;
             padding: 10px;
             background-color: #fff;
@@ -996,69 +1002,69 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 10px;
             cursor: move;
-        }
+[cite_start][cite: 753] }
         .itinerary-item.ghost {
             opacity: 0.4;
-            background-color: #c8c8c8;
+[cite_start][cite: 754] background-color: #c8c8c8;
         }
         .itinerary-item .locked-item-actions {
             margin-left: auto;
-        }
+[cite_start][cite: 755] }
         .itinerary-item .remove-btn {
             font-size: 1.2em;
-        }
+[cite_start][cite: 756] }
         .itinerary-modal-header {
             display: flex;
-            flex-wrap: wrap;
+[cite_start][cite: 757] flex-wrap: wrap;
             gap: 10px;
             align-items: center;
             margin-bottom: 20px;
         }
         .itinerary-header-item {
             flex: 1;
-        }
+[cite_start][cite: 758] }
         .itinerary-header-item label {
             font-size: 0.8em;
-            color: #666;
+[cite_start][cite: 759] color: #666;
             display: block;
         }
         .itinerary-header-item input {
             border: 1px solid #ccc;
-            border-radius: 4px;
+[cite_start][cite: 760] border-radius: 4px;
             padding: 5px;
             width: 100%;
         }
         .itinerary-item .quantity-selector {
             display: flex;
-            align-items: center;
+[cite_start][cite: 761] align-items: center;
             gap: 5px;
         }
         .itinerary-item .quantity-input {
             width: 40px;
-            text-align: center;
+[cite_start][cite: 762] text-align: center;
         }
         .itinerary-item-note {
             width: 100%;
-            height: 60px;
+[cite_start][cite: 763] height: 60px;
             font-size: 0.8em;
             border: 1px solid #eee;
             border-radius: 4px;
             margin-top: 5px;
             padding: 5px;
             resize: vertical;
-        }
+[cite_start][cite: 764] }
 
         /* CHAT WIDGET STYLES */
         #chat-widget-container {
             position: fixed;
-            bottom: 20px;
+[cite_start][cite: 765] bottom: 20px;
             right: 20px;
             z-index: 1000;
         }
 
         #chat-toggle-button {
             background-color: #007bff;
-            color: white;
+[cite_start][cite: 766] color: white;
             border: none;
             width: 60px;
             height: 60px;
@@ -1066,25 +1072,25 @@
             font-size: 24px;
             cursor: pointer;
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            display: flex;
+[cite_start][cite: 767] display: flex;
             align-items: center;
             justify-content: center;
             transition: opacity 0.3s ease, transform 0.3s ease;
             position: absolute;
             bottom: 0;
             right: 0;
-            z-index: 1001;
+[cite_start][cite: 768] z-index: 1001;
         }
 
         #chat-widget-container.chat-open #chat-toggle-button {
             opacity: 0;
-            transform: scale(0.5);
+[cite_start][cite: 769] transform: scale(0.5);
             pointer-events: none;
         }
 
         #presence-counter {
             position: absolute;
-            top: -5px;
+[cite_start][cite: 770] top: -5px;
             right: -5px;
             background-color: red;
             color: white;
@@ -1094,60 +1100,61 @@
             font-size: 14px;
             display: flex;
             align-items: center;
-            justify-content: center;
+[cite_start][cite: 771] justify-content: center;
             border: 2px solid white;
         }
 
         #chat-window {
             width: 350px;
-            height: 500px;
+[cite_start][cite: 772] height: 500px;
             background-color: #ffffff;
             border-radius: 10px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* --- FIX: Position absolutely and manage layer order --- */
+[cite_start][cite: 773] /* --- FIX: Position absolutely and manage layer order --- */
             position: absolute;
-            bottom: 0;
+[cite_start][cite: 774] bottom: 0;
             right: 0;
             z-index: 1000;
             /* --- Animation styles --- */
             visibility: hidden;
-            opacity: 0;
+[cite_start][cite: 775] opacity: 0;
             transform: translateY(20px);
             transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
-        }
+[cite_start][cite: 776] }
 
         #chat-widget-container.chat-open #chat-window {
             visibility: visible;
-            opacity: 1;
+[cite_start][cite: 777] opacity: 1;
             transform: translateY(0);
             z-index: 1002;
         }
 
         #chat-header {
             background-color: #f1f1f1;
-            padding: 10px;
+[cite_start][cite: 778] padding: 10px;
             font-weight: bold;
             text-align: center;
             border-bottom: 1px solid #ddd;
             flex-shrink: 0;
-        }
-        #chat-header p { margin: 0; }
+[cite_start][cite: 779] }
+        #chat-header p { margin: 0;
+[cite_start][cite: 780] }
 
         #whos-here-list {
             padding: 10px;
-            border-bottom: 1px solid #ddd;
+[cite_start][cite: 781] border-bottom: 1px solid #ddd;
             max-height: 100px;
             overflow-y: auto;
             font-size: 0.9em;
             flex-shrink: 0;
-        }
+[cite_start][cite: 782] }
 
         #messages-container {
             flex-grow: 1;
-            padding: 10px;
+[cite_start][cite: 783] padding: 10px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -1155,21 +1162,21 @@
 
         #messages-list {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 784] flex-direction: column;
             gap: 2px;
         }
 
         #typing-indicator {
             padding: 5px 10px;
-            font-style: italic;
+[cite_start][cite: 785] font-style: italic;
             color: #888;
             height: 24px; /* Reserve space to prevent layout shifts */
             font-size: 0.85em;
-        }
+[cite_start][cite: 786] }
 
         #message-form {
             border-top: 1px solid #ddd;
-            padding: 10px;
+[cite_start][cite: 787] padding: 10px;
             display: flex;
             gap: 10px;
             flex-shrink: 0;
@@ -1177,55 +1184,57 @@
 
         #message-input {
             flex-grow: 1;
-            border: 1px solid #ccc;
+[cite_start][cite: 788] border: 1px solid #ccc;
             border-radius: 20px;
             padding: 10px;
         }
 
         #message-form button {
             background-color: #007bff;
-            color: white;
+[cite_start][cite: 789] color: white;
             border: none;
             border-radius: 20px;
             padding: 10px 15px;
             cursor: pointer;
-        }
+[cite_start][cite: 790] }
 
         .message-wrapper {
             display: flex;
-            flex-direction: column;
+[cite_start][cite: 791] flex-direction: column;
             max-width: 85%;
         }
 
-        .message-wrapper.sent { align-self: flex-end; }
-        .message-wrapper.received { align-self: flex-start; }
+        .message-wrapper.sent { align-self: flex-end;
+[cite_start][cite: 792] }
+        .message-wrapper.received { align-self: flex-start;
+[cite_start][cite: 793] }
 
         .chat-message {
             padding: 8px 12px;
-            border-radius: 18px;
+[cite_start][cite: 794] border-radius: 18px;
             word-wrap: break-word;
         }
 
         .chat-message.sent {
             background-color: #007bff;
-            color: white;
+[cite_start][cite: 795] color: white;
         }
 
         .chat-message.received {
             background-color: #f1f1f1;
-            color: #333;
+[cite_start][cite: 796] color: #333;
         }
 
         .chat-message .sender {
             font-size: 0.75em;
-            font-weight: bold;
+[cite_start][cite: 797] font-weight: bold;
             display: block;
             margin-bottom: 4px;
         }
 
         .timestamp {
             font-size: 0.7em;
-            color: #999;
+[cite_start][cite: 798] color: #999;
             text-align: right;
             margin-top: 4px;
             margin-right: 5px;
@@ -1242,37 +1251,44 @@
             <div id="event-plan-panel">
                 <div class="event-name-group">
                     <input type="text" id="header-event-name" value="My 
+[cite_start][cite: 799] 
                     Awesome Event" autocomplete="off">
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
-                    <input type="text" id="header-goals" placeholder="What are the goals for your event?"
+                    <input type="text" 
+[cite_start][cite: 800] id="header-goals" placeholder="What are the goals for your event?"
                     autocomplete="off">
                 </div>
                 <div class="toolbar-group">
                     <label for="event-date-picker">Event Date</label>
                     <input type="text" id="event-date-picker" placeholder="Select date">
-                </div>
+             
+[cite_start][cite: 801]    </div>
      
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="favorites-section">
                     <h4>Ideas</h4>
                     <button class="carousel-nav left">◄</button>
-                    <div id="favorites-carousel"></div>
+        
+[cite_start][cite: 802]             <div id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
                 <button id="itinerary-btn">Event Plan</button>
                 <div id="cart-items-container">
-                    <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+              
+[cite_start][cite: 803]       <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
                 <div id="cart-footer">
                     <div class="total-row">
                         <span>Total:</span>
-                        <span id="total-cost">$0.00</span>
+        
+[cite_start][cite: 804]                 <span id="total-cost">$0.00</span>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
-                </div>
+     
+[cite_start][cite: 805]            </div>
   
            </div>
         </div>
@@ -1283,72 +1299,87 @@
             <h3>Filters</h3>
             <div class="filter-group">
                 <label for="name-filter">Search Catalog</label>
-                <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+    
+[cite_start][cite: 806]             <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
             </div>
      
             <div class="filter-group">
                 <label>Categories</label>
                 <div id="category-filters" class="filter-btn-group"></div>
             </div>
-            <div class="filter-group">
+     
+[cite_start][cite: 807]        <div class="filter-group">
                 <label>Subcategories</label>
                 <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
             </div>
                 <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
-                    <input type="text" id="date-filter" placeholder="Select date and time range">
+   
+[cite_start][cite: 808]                  <input type="text" id="date-filter" placeholder="Select date and time range">
   
                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
-                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                        
+[cite_start][cite: 809] <button class="filter-btn" data-date-quick="this-week">This Week</button>
                         <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
                     </div>
                 </div>
                 <div class="filter-group">
-                    <label for="headcount-filter">Headcount</label>
+                
+[cite_start][cite: 810]     <label for="headcount-filter">Headcount</label>
             
                      <select id="headcount-filter">
                         <option value="any">Any Size</option>
                         <option value="1-10">1-10</option>
-                        <option value="11-25">11-25</option>
+          
+[cite_start][cite: 811]               <option value="11-25">11-25</option>
                         <option value="26-50">26-50</option>
                         <option value="51-100">51-100</option>
                         <option value="101-250">101-250</option>
-                        <option value="250-plus">250+</option>
+          
+[cite_start][cite: 812]               <option value="250-plus">250+</option>
                         <option value="custom">Custom...</option>
                     </select>
-                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
+                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;"
+[cite_start][cite: 813] autocomplete="off">
                 </div>
                 <div class="filter-group">
                     <label for="location-filter">Location</label>
                     <select id="location-filter">
-                        <option value="any">Any Location</option>
+                        <option 
+[cite_start][cite: 814] value="any">Any Location</option>
                         <option value="sf">San Francisco</option>
                         <option value="oakland">Oakland</option>
                         <option value="peninsula">Peninsula</option>
-                        <option value="south-bay">South Bay</option>
+                       
+[cite_start][cite: 815]  <option value="south-bay">South Bay</option>
                         <option value="north-bay">North Bay</option>
                         <option value="east-bay">East Bay</option>
                         <option value="other">Other</option>
-                    </select>
+                    
+[cite_start][cite: 816] </select>
                 </div>
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
                     <select id="budget-filter">
-                        <option value="any">Any Budget</option>
+                        <option 
+[cite_start][cite: 817] value="any">Any Budget</option>
                         <option value="budget-friendly">Budget-Friendly</option>
                         <option value="moderate">Moderate</option>
                         <option value="executive">Executive</option>
-                        <option value="luxury">Luxury</option>
+                        
+[cite_start][cite: 818] <option value="luxury">Luxury</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label for="status-filter">Status</label>
                     <select id="status-filter">
-                        <option value="Available">Available</option>
+    
+[cite_start][cite: 819]                     <option value="Available">Available</option>
                         <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
+                        <option value="Sold 
+[cite_start][cite: 820] Out">Sold Out</option>
                     </select>
                 </div>
                 <button id="reset-filters-btn">Reset All Filters</button>
@@ -1358,6 +1389,7 @@
      
         <div id="catalog-area">
   
+[cite_start][cite: 821] 
              
       <div id="catalog-header">
                 <div id="breadcrumbs"></div>
@@ -1365,12 +1397,14 @@
             </div>
             <div id="catalog-toolbar">
                 <select id="sort-by">
-                    <option value="price-asc">Price (Low to High</option>
+    
+[cite_start][cite: 822]                 <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                 </select>
             </div>
-            <div id="catalog-container"></div>
+      
+[cite_start][cite: 823]       <div id="catalog-container"></div>
        
   </div>
     </div>
@@ -1380,27 +1414,31 @@
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
-             </div>
+   
+[cite_start][cite: 824]           </div>
       
        <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
               
                </div>
                 <div id="modal-breadcrumbs"></div>
-                <h2 id="modal-item-name"></h2>
+             
+[cite_start][cite: 825]    <h2 id="modal-item-name"></h2>
                 <p id="modal-item-price" class="price"></p>
         
          <p id="modal-item-description"></p>
             
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
-                <div id="modal-notes-container">
+              
+[cite_start][cite: 826]   <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
                 </div>
   
                 <div id="modal-actions-container">
                     <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
-                </div>
+       
+[cite_start][cite: 827]          </div>
                 <div id="modal-calendar-container"></div>
         
              </div>
@@ -1410,7 +1448,8 @@
     <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
-            <h3>Checkout Summary</h3>
+          
+[cite_start][cite: 828]   <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
@@ -1418,75 +1457,96 @@
            <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
-                    <span>Total Estimated Cost:</span>
+    
+[cite_start][cite: 829]                 <span>Total Estimated Cost:</span>
                     <span id="full-total-price">$0.00</span>
                 </div>
  
                 <div class="checkout-deposit">
                     <span>Deposit Due (35%):</span>
-                    <span id="deposit-price">$0.00</span>
+     
+[cite_start][cite: 830]                <span id="deposit-price">$0.00</span>
                 </div>
            
-                 </div>
+            </div>
             <div class="terms-and-conditions">
                 <h4>Simplified Terms</h4>
-                <ul>
+          
+[cite_start][cite: 831]       <ul>
                     <li>A 35% deposit is required to reserve your event date.</li>
                     <li>Your event details will be finalized in collaboration with our team.</li>
-                    <li>The remaining balance is due after all details are confirmed and, in some cases, after the event.</li>
-                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred. No refunds within 7 days of the event.</li>
+                    <li>The remaining balance is due after all details are confirmed and, in some cases, after 
+[cite_start][cite: 832] the event.</li>
+                    <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred.
+[cite_start][cite: 833] No refunds within 7 days of the event.</li>
                     <li>Your deposit includes all planning, preparation, setup, and hosting services.</li>
                 </ul>
             </div>
             <form id="payment-form">
                 <div class="form-row">
-               <label for="customer-name">Full Name</label>
+      
+[cite_start][cite: 834]          <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
-                    <input type="email" id="customer-email" required autocomplete="off">
+          
+[cite_start][cite: 835]           <input type="email" id="customer-email" required autocomplete="off">
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
-                    <div id="card-errors" role="alert"></div>
+        
+[cite_start][cite: 836]             <div id="card-errors" role="alert"></div>
                 </div>
-                <button class="primary-action-btn" type="submit">Pay Now</button>
+                <button id="payment-submit-btn" class="primary-action-btn" type="submit">
+                    <span class="button-text">Pay Now</span>
+                    <span class="spinner" style="display: none;">Processing...</span>
+                </button>
             </form>
+            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
+                <h3 style="color: #28a745;">✅ Payment Successful!</h3>
+                <p>Your event is reserved. This window will close shortly.</p>
+            </div>
         </div>
     </div>
  
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
    
-           
+       
+[cite_start][cite: 837]     
        <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
                     <input type="text" id="itinerary-event-name" value="My Awesome Event" autocomplete="off">
-                </div>
+        
+[cite_start][cite: 838]         </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-goals">Goals / Notes</label>
-                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
+                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?"
+[cite_start][cite: 839] autocomplete="off">
                 </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-date-picker">Date & Time</label>
                     <input type="text" id="itinerary-date-picker" placeholder="Select date range">
                 </div>
    
+[cite_start][cite: 840] 
             </div>
             <div class="itinerary-container">
                 <div class="itinerary-column">
                     <h3>Event Plan</h3>
                     <p class="description">Drag items to change their order.</p>
-                    <div id="itinerary-locked-items" class="itinerary-list"></div>
+           
+[cite_start][cite: 841]          <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
                     <h3>Ideas</h3>
                     <p class="description">Move items here to add them to your plan.</p>
-                    <div id="itinerary-favorited-items" class="itinerary-list"></div>
+       
+[cite_start][cite: 842]              <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
         </div>
@@ -1495,7 +1555,8 @@
         <button id="chat-toggle-button">
             💬
             <span id="presence-counter">0</span>
-         </button>
+      
+[cite_start][cite: 843]    </button>
     
         <div id="chat-window">
             <div id="chat-header">
@@ -1505,14 +1566,16 @@
             <div id="whos-here-list"></div>
     
             <div id="messages-container">
-                 <div id="messages-list">
+      
+[cite_start][cite: 844]            <div id="messages-list">
                 </div>
             </div>
             
             <div id="typing-indicator"></div>
     
             <form id="message-form">
-                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <input type="text" 
+[cite_start][cite: 845] id="message-input" placeholder="Type a message..." autocomplete="off">
                 <button type="submit">Send</button>
             </form>
         </div>
