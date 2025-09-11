@@ -1,8 +1,12 @@
+// FILE: state.js
 /*
- * Version: 1.8.1
- * Last Modified: 2025-08-26
+ * Version: 1.8.2
+ * Last Modified: 2025-09-10
  *
  * Changelog:
+ *
+ * v1.8.2 - 2025-09-10
+ * - Added ui.isInitializing flag to prevent "Fork on Load" bug.
  *
  * v1.8.1 - 2025-08-26
  * - Added ui.saveState to track autosave status.
@@ -44,6 +48,7 @@ export const state = {
         currentSort: 'reactions-desc',
         cardImageIndexes: new Map(), // Tracks current image index for each card
         saveState: 'SAVED', // Can be 'SAVED', 'MODIFIED', 'SAVING'
+        isInitializing: true, // --- ADDED: Flag to prevent actions during initial load
     },
     history: {
         undoStack: [],
