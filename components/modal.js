@@ -234,7 +234,7 @@ export function hideDetailModal() {
             if (closeBtn) {
                 closeBtn.removeEventListener('click', hideDetailModal);
             }
-            document.querySelector('#header-title').focus();
+            document.getElementById('header-event-name').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
         }, 300);
         document.body.classList.remove('modal-open');
