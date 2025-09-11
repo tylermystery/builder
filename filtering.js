@@ -3,6 +3,33 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 
+// --- NEW HELPER FUNCTIONS to get all nested items ---
+
+function getDescendantBookableItems(record, allRecords, allRecordNames) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    for (const child of children) {
+        if (isGrouping(child, allRecordNames)) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords, allRecordNames));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
+function isGrouping(record, allRecordNames) {
+    const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    return rawOptions.some(opt => allRecordNames.has(opt.name));
+}
+
+function getAllBookableItems(records) {
+    const allRecordNames = new Set(records.map(r => r.fields.Name));
+    return records.filter(record => !isGrouping(record, allRecordNames) && record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+}
+// --- END HELPER FUNCTIONS ---
+
+
 // Helper function to parse capacity strings
 function parseCapacity(capacityStr) {
     if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
@@ -13,33 +40,34 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-// Filter records based on selected category and subcategories
+// --- MODIFIED: This function is now recursive and more accurate ---
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
-    if (selectedCategory === 'all' && activeSubcategories.length === 0) {
-        return records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    const allRecordNames = new Set(records.map(r => r.fields.Name));
+
+    if (selectedCategory === 'all') {
+        // If "All" is selected, return all bookable items.
+        return activeSubcategories.length === 0 ? getAllBookableItems(records) : records.filter(record => activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase()));
+    }
+
+    // Find the record for the selected main category (e.g., "Activities")
+    const categoryRecord = records.find(r => r.fields.Name === selectedCategory && !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+
+    if (!categoryRecord) {
+        return [];
     }
     
-    const topLevelItems = records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-    if (selectedCategory !== 'all') {
-        const selectedCategoryRecord = topLevelItems.find(record => record.fields.Name === selectedCategory);
-        if (selectedCategoryRecord && activeSubcategories.length === 0) {
-            records = records.filter(record => 
-                record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
-            );
-        } else if (activeSubcategories.length > 0) {
-            records = records.filter(record => 
-                activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase())
-            );
-        } else {
-            records = records.filter(record => 
-                record.fields[CONSTANTS.FIELD_NAMES.NAME] === selectedCategory
-            );
-        }
+    // If subcategories are selected, filter by them directly.
+    if (activeSubcategories.length > 0) {
+        let items = [];
+        const subcategoryRecords = records.filter(r => activeSubcategories.includes(r.fields.Name.toLowerCase()));
+        subcategoryRecords.forEach(subcatRecord => {
+            items = items.concat(getDescendantBookableItems(subcatRecord, records, allRecordNames));
+        });
+        return items;
     } else {
-        records = topLevelItems;
+        // If only a main category is selected, get all its descendants.
+        return getDescendantBookableItems(categoryRecord, records, allRecordNames);
     }
-    
-    return records;
 }
 
 // Filter records by status
@@ -176,20 +204,18 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay = state.records.all;
 
-    // --- FIX: Reordered the filtering logic for a more intuitive user experience ---
-    // 1. Apply broad category and attribute filters first.
+    // Apply broad category and attribute filters first.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     
-    // 2. Apply the text search term LAST to refine the filtered results.
+    // Apply the text search term LAST to refine the filtered results.
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
 
-    // 3. Sort the final list.
+    // Sort the final list.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
-    // --- END OF FIX ---
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
