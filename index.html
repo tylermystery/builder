@@ -375,7 +375,6 @@
         .heart-icon svg {
             width: 28px;
             height: 28px;
-            /* --- FIX: Changed default fill/stroke to a visible gray --- */
             fill: #ccc;
             stroke: #aaa;
             stroke-width: 1.5;
@@ -496,34 +495,50 @@
         .locked-item-name {
             font-weight: bold;
         }
-        .locked-item-option, .locked-item-note {
+        .locked-item-option {
             font-size: 0.8em;
             color: #6c757d;
         }
         .locked-item-pricing {
             font-size: 0.85em !important;
         }
+
+        /* --- FIX: Allow notes to wrap and be fully visible --- */
+        .locked-item-note {
+            font-size: 0.8em !important;
+            color: #6c757d;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-wrap: break-word;
+        }
+        
         .locked-item-actions {
             display: flex;
             align-items: center;
             gap: 5px;
         }
-        .locked-item-actions .edit-btn {
-            font-size: 0.8em;
-            padding: 4px 8px;
-            background: #f0f0f0;
-            border: 1px solid #ccc;
-            border-radius: 3px;
+
+        /* --- FIX: Style for the new "-" button --- */
+        .demote-locked-item-btn {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 16px;
+            line-height: 1;
+            font-weight: bold;
             cursor: pointer;
+            padding: 0;
+            text-align: center;
         }
-        .locked-item-actions .edit-btn:hover {
-            background-color: #e0e0e0;
+        .demote-locked-item-btn:hover {
+            background-color: #e2e6ea;
+            border-color: #ced4da;
         }
-        .locked-item-status-icon {
-            display: flex;
-            align-items: center;
-            font-size: 1.2em;
-        }
+
         .remove-locked-item-btn {
             background: none;
             border: none;
@@ -960,7 +975,6 @@
             margin: 0;
             font-weight: bold;
         }
-
         #chat-header .user-identity {
             display: flex;
             align-items: center;
@@ -1012,7 +1026,7 @@
             padding: 5px 10px;
             font-style: italic;
             color: #888;
-            height: 24px; /* Reserve space to prevent layout shifts */
+            height: 24px;
             font-size: 0.85em;
         }
 
