@@ -44,13 +44,15 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-                    if (price < minPrice) minPrice = price;
+             
+               if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-            if (price > 0) {
+        
+         if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -156,7 +158,7 @@ export function updateLockedItemState(recordId, updates) {
 }
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) ||
-        '';
+    '';
     document.title = eventName || 'Event Builder';
     // Updated to handle the new editable title structure
     const eventNameInput = document.getElementById('header-event-name');
@@ -248,6 +250,7 @@ export function updateTotalCost() {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() || 'default';
+        
         let itemCost;
         if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
             itemCost = unitPrice * effectiveQuantity;
