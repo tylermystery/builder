@@ -1,52 +1,42 @@
 // FILE: filtering.js
-// FILE: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
+
 // Helper function to parse capacity strings
 function parseCapacity(capacityStr) {
     if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
-if (capacityStr.includes('+')) {
+    if (capacityStr.includes('+')) {
         return { min: parseInt(capacityStr, 10) || 0, max: Infinity };
     }
     const parts = capacityStr.split('-').map(p => parseInt(p, 10));
-    return { min: parts[0] || 0, max: parts[1] ||
-Infinity };
+    return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
 // Filter records based on selected category and subcategories
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
-    // FIX: Only apply category filtering if a specific category is selected
     if (selectedCategory === 'all' && activeSubcategories.length === 0) {
-        // When no specific category is selected, simply return all top-level items.
-// This prevents the search from being filtered out.
         return records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
     
-    // Original logic for when a category is selected
     const topLevelItems = records.filter(record => !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-if (selectedCategory !== 'all') {
+    if (selectedCategory !== 'all') {
         const selectedCategoryRecord = topLevelItems.find(record => record.fields.Name === selectedCategory);
-if (selectedCategoryRecord && activeSubcategories.length === 0) {
-            // If a main category is selected and no subcategories are, show its immediate children
+        if (selectedCategoryRecord && activeSubcategories.length === 0) {
             records = records.filter(record => 
                 record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === selectedCategoryRecord.fields.Name
             );
         } else if (activeSubcategories.length > 0) {
-            // If subcategories are selected, find all items whose parent is one of the active subcategories
             records = records.filter(record => 
                 activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase())
             );
         } else {
-            // If a single item is a top-level item with no children, just show that item
             records = records.filter(record => 
                 record.fields[CONSTANTS.FIELD_NAMES.NAME] === selectedCategory
             );
         }
-
     } else {
-        // If 'All Categories' is selected, show all top-level records.
-records = topLevelItems;
+        records = topLevelItems;
     }
     
     return records;
@@ -67,12 +57,12 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     }
 
     let filterMin = 0, filterMax = Infinity;
-if (headcountFilter === 'custom') {
+    if (headcountFilter === 'custom') {
         filterMin = parseInt(customHeadcount, 10) || 0;
         filterMax = filterMin;
     } else {
         const [minStr, maxStr] = headcountFilter.split('-');
-filterMin = parseInt(minStr, 10);
+        filterMin = parseInt(minStr, 10);
         filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
     }
     
@@ -104,7 +94,7 @@ function filterByBudget(records, budgetFilter) {
         'executive': { min: 101, max: 250 },
         'luxury': { min: 251, max: Infinity }
     };
-const range = BUDGET_RANGES[budgetFilter];
+    const range = BUDGET_RANGES[budgetFilter];
 
     return records.filter(record => {
         const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
@@ -112,7 +102,7 @@ const range = BUDGET_RANGES[budgetFilter];
     });
 }
 
-// Filter records by search term
+// --- MODIFIED: Expanded the search logic ---
 function filterBySearchTerm(records, searchTerm) {
     if (!searchTerm) {
         return records;
@@ -122,19 +112,40 @@ function filterBySearchTerm(records, searchTerm) {
     records.forEach(record => {
         let score = 0;
         const fields = record.fields;
+        
+        // Gather all searchable text fields into simple variables
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
-        const tags = [...(fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES]?.split(',') || []), ...(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',') || [])].map(t => t.toLowerCase().trim());
-     
-        if (name.includes(searchTerm)) score = 3;
-    
-        else if (description.includes(searchTerm)) score = 2;
-        else if (tags.some(tag => tag.includes(searchTerm))) score = 1;
-        if (score > 0) { scoredRecords.push({ record, score }); }
+        
+        // Combine all tags, options, and other metadata into a single searchable string
+        const optionNames = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ');
+        const allOtherText = [
+            fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
+            fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || '',
+            fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '',
+            fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '',
+            fields['Location'] || '',
+            optionNames
+        ].join(' ').toLowerCase();
+
+        // Apply scoring based on where the match was found
+        if (name.includes(searchTerm)) {
+            score = 3; // Highest priority for matches in the name
+        } else if (description.includes(searchTerm)) {
+            score = 2; // Second priority for matches in the description
+        } else if (allOtherText.includes(searchTerm)) {
+            score = 1; // Lowest priority for matches in any other metadata
+        }
+
+        if (score > 0) {
+            scoredRecords.push({ record, score });
+        }
     });
-scoredRecords.sort((a, b) => b.score - a.score);
+
+    scoredRecords.sort((a, b) => b.score - a.score);
     return scoredRecords.map(item => item.record);
 }
+// --- END MODIFICATION ---
 
 // Sort the final filtered records
 function sortRecords(records, sortBy) {
@@ -154,8 +165,6 @@ function sortRecords(records, sortBy) {
 
 
 export function applyFiltersAndSort(imageCache) {
-    console.log("FILTER: Starting applyFiltersAndSort...");
-    // FIX: Get the selected category name from the active button's text content
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
     const selectedCategory = activeCategoryButton ? activeCategoryButton.textContent : 'all';
     
@@ -168,36 +177,27 @@ export function applyFiltersAndSort(imageCache) {
     const locationFilter = document.getElementById('location-filter').value;
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
-console.log("FILTER: Filter values read from DOM:", { selectedCategory, activeSubcategories, statusFilter, headcountFilter, locationFilter, budgetFilter, sortBy, searchTerm });
 
     let recordsToDisplay = state.records.all;
-console.log(`FILTER: Starting with ${recordsToDisplay.length} total records.`);
 
-    // FIX: Apply the search filter first to the entire list of records
-    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-console.log(`FILTER: After Search filter, ${recordsToDisplay.length} records remain.`);
-    
+    // Filter by category, status, and other attributes first.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
-    console.log(`FILTER: After Category/Subcategory filter, ${recordsToDisplay.length} records remain.`);
-recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-    console.log(`FILTER: After Status filter, ${recordsToDisplay.length} records remain.`);
-
+    recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-console.log(`FILTER: After Headcount filter, ${recordsToDisplay.length} records remain.`);
-
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
-    console.log(`FILTER: After Location filter, ${recordsToDisplay.length} records remain.`);
-recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
-    console.log(`FILTER: After Budget filter, ${recordsToDisplay.length} records remain.`);
-// FIX: Sort the final filtered list
+    recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+
+    // Apply the search term filter to the already-filtered list.
+    recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+    
+    // Sort the final results.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
-    console.log("FILTER: Sorting complete.");
 
     state.records.filtered = recordsToDisplay;
-state.ui.recordsCurrentlyDisplayed = 0;
-const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
-console.log(`FILTER: Passing ${initialRecords.length} records to ui.renderRecords.`);
-ui.renderRecords(initialRecords, imageCache, false).then(() => {
+    state.ui.recordsCurrentlyDisplayed = 0;
+    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+    
+    ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 }
