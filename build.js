@@ -1,70 +1,90 @@
+// FILE: build.js
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
-const outputFile = 'project_source.txt';
-const checksumFile = 'checksum.txt';
-
-// Define ALL directories and files to include in the build
-const sources = [
-    { type: 'file', path: 'spec_sheet.md' },
-    { type: 'file', path: 'ARCHITECTURE.md' },
-    { type: 'file', path: 'index.html' },
-    { type: 'directory', path: './', files: ['main.js', 'ui.js', 'api.js', 'events.js', 'filtering.js', 'state.js', 'config.js', 'session.js', 'availability.js'] },
-    { type: 'directory', path: 'utils', files: ['debug.js', 'utils.js'] },
-    { type: 'directory', path: 'components', files: ['card.js', 'modal.js', 'sidebar.js'] },
-    { type: 'file', path: 'netlify.toml' },
-    { type: 'file', path: 'package.json' },
-    // NOTE: Add any new files or directories here in the future
+// --- Configuration ---
+// Directories and files to exclude from the export.
+const IGNORE_LIST = [
+    'node_modules',
+    '.git',
+    'build.js' // Excludes this script itself.
 ];
+const STARTING_DIRECTORY = '.'; // Start from the current directory.
 
-let fullContent = `Project Export - ${new Date().toISOString()}\n\n`;
+/**
+ * Recursively walks a directory to find all file paths.
+ * @param {string} dirPath - The directory to start from.
+ * @param {Array<string>} [arrayOfFiles] - Used for recursion.
+ * @returns {Array<string>} A list of all file paths.
+ */
+function getAllFiles(dirPath, arrayOfFiles = []) {
+    const files = fs.readdirSync(dirPath);
 
-console.log('Starting project source build...');
+    files.forEach(file => {
+        const fullPath = path.join(dirPath, file);
 
-sources.forEach(source => {
-    const sourcePath = source.path === './' ? '' : source.path;
-    if (source.type === 'file') {
-        const filePath = path.join(__dirname, source.path);
-        if (fs.existsSync(filePath)) {
-            console.log(`Adding file: ${source.path}`);
-            const content = fs.readFileSync(filePath, 'utf8');
-            fullContent += `============================================================\n`;
-            fullContent += `// FILE: ${source.path}\n`;
-            fullContent += `============================================================\n`;
-            fullContent += content + '\n\n';
-        } else {
-            console.warn(`WARN: File not found, skipping: ${source.path}`);
+        // Check if the current path is in our ignore list.
+        if (IGNORE_LIST.includes(file)) {
+            return;
         }
-    } else if (source.type === 'directory') {
-        source.files.forEach(fileName => {
-            const filePath = path.join(__dirname, sourcePath, fileName);
-            if (fs.existsSync(filePath)) {
-                const relativePath = path.join(sourcePath, fileName).replace(/\\/g, '/');
-                console.log(`Adding file: ${relativePath}`);
-                const content = fs.readFileSync(filePath, 'utf8');
-                fullContent += `============================================================\n`;
-                fullContent += `// FILE: ${relativePath}\n`;
-                fullContent += `============================================================\n`;
-                fullContent += content + '\n\n';
-            } else {
-                console.warn(`WARN: File not found, skipping: ${filePath}`);
+
+        // If it's a directory, recurse into it. If it's a file, add it to the list.
+        if (fs.statSync(fullPath).isDirectory()) {
+            arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
+        } else {
+            // Check to ensure we don't include previous build outputs.
+            if (!file.startsWith('project_source')) {
+                arrayOfFiles.push(fullPath);
             }
-        });
-    }
-});
+        }
+    });
 
-// Write the combined content to the output file
-fs.writeFileSync(outputFile, fullContent);
-console.log(`\nSuccessfully created ${outputFile}`);
+    return arrayOfFiles;
+}
 
-// Calculate and save the checksum
-const fileBuffer = fs.readFileSync(outputFile);
-const hashSum = crypto.createHash('sha256');
-hashSum.update(fileBuffer);
-const hex = hashSum.digest('hex');
 
-fs.writeFileSync(checksumFile, `SHA256 Checksum for ${outputFile}:\n${hex}\n`);
-console.log(`Successfully created ${checksumFile} with SHA256 hash.`);
-console.log(`\nBuild complete!`);
+// --- Main function to build the source file ---
+function buildSourceFile() {
+    console.log('🚀 Starting build process with automatic file discovery...');
+    const outputParts = [];
+    const timestamp = new Date().toISOString();
+    
+    // Get the dynamic list of all files in the project.
+    const filePaths = getAllFiles(STARTING_DIRECTORY);
+    console.log(`Found ${filePaths.length} files to include.`);
 
+    // Add a header to the export file
+    outputParts.push(`Project Export - ${timestamp}\n`);
+
+    // Loop through each file path
+    filePaths.forEach(filePath => {
+        try {
+            console.log(`   - Adding file: ${filePath}`);
+
+            // Add a separator and file header (use relative path for cleaner output)
+            const relativePath = path.relative(STARTING_DIRECTORY, filePath);
+            outputParts.push('============================================================');
+            outputParts.push(`// FILE: ${relativePath.replace(/\\/g, '/')}`);
+            outputParts.push('============================================================');
+
+            // Read the file content
+            const content = fs.readFileSync(filePath, 'utf8');
+            outputParts.push(content);
+            outputParts.push('\n'); // Add a newline for spacing
+
+        } catch (error) {
+            console.error(`❌ Error reading file ${filePath}:`, error.message);
+            outputParts.push(`// ERROR: Could not read file: ${filePath}`);
+        }
+    });
+
+    const outputContent = outputParts.join('\n');
+    const outputFileName = `project_source - ${timestamp}.txt`;
+    
+    // Write the combined content to the output file
+    fs.writeFileSync(outputFileName, outputContent);
+    console.log(`\n✅ Build complete! Exported to: ${outputFileName}`);
+}
+
+// Run the build process
+buildSourceFile();
