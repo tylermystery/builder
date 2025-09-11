@@ -1,8 +1,11 @@
 // FILE: events.js
 /*
-* Version: 4.9.4
-* Last Modified: 2025-09-09
+* Version: 4.9.5
+* Last Modified: 2025-09-10
 * Changelog:
+* v4.9.5 - 2025-09-10
+* - Fixed chat window visibility bug. Replaced direct style manipulation 
+* with class-based toggling to align with CSS animations.
 * v4.9.4 - 2025-09-09
 * - Fixed category/subcategory bug by correctly parsing options from the category record.
 * - Ensured search functionality operates on the correct data set.
@@ -297,12 +300,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
            
-             triggerSave();
+   
+                triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
+          
             }
    
          },
@@ -315,24 +320,26 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const quickAction = button.dataset.dateQuick;
             let startDate = new Date();
             let endDate = new Date();
-         
-           startDate.setHours(0, 0, 0, 0);
+     
+            startDate.setHours(0, 0, 0, 0);
             endDate.setHours(23, 59, 59, 999);
             switch (quickAction) {
                 case 'tomorrow':
                     startDate.setDate(startDate.getDate() + 1);
+              
                     endDate.setDate(endDate.getDate() + 1);
     
                     break;
                 case 'this-week':
                     const dayOfWeek = startDate.getDay();
                     const daysUntilSaturday = 6 - dayOfWeek;
-                   
-                 endDate.setDate(startDate.getDate() + daysUntilSaturday);
+   
+                 
+                    endDate.setDate(startDate.getDate() + daysUntilSaturday);
                     break;
                 case 'next-2-weeks':
                     endDate.setDate(startDate.getDate() + 14);
-                break;
+                    break;
             }
             mainDatePicker.setDate([startDate, endDate], true);
         });
@@ -360,6 +367,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 },
             },
         });
+      
         const cardErrors = document.getElementById('card-errors');
        
          if (error) cardErrors.textContent = error.message;
@@ -550,6 +558,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (target.matches('.item-note, #modal-item-note')) {
             updates.note = target.value;
         } else if (target.matches('.option-btn')) {
+ 
          
            if (e.detail?.selectedOptionIndex !== undefined) {
                 updates.selectedOptionIndex = e.detail.selectedOptionIndex;
@@ -633,22 +642,24 @@ export function initializeChatEventListeners() {
     
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWindow = document.getElementById('chat-window');
-
+    
     function toggleChatWindow() {
-        const isHidden = chatWindow.style.display === 'none' ||
-        chatWindow.style.display === '';
-        chatWindow.style.display = isHidden ? 'flex' : 'none';
+        // --- FIX: Use classList.toggle to control visibility and animations ---
+        chatWindow.classList.toggle('visible');
     }
 
     if (chatToggleButton) {
-        chatToggleButton.addEventListener('click', toggleChatWindow);
+        chatToggleButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevents the click from bubbling up to the document
+            toggleChatWindow();
+        });
     }
 
-    // This logic needs a slight adjustment to work with the toggle button
+    // --- FIX: Update the click-outside logic to use the 'visible' class ---
     document.addEventListener('click', (event) => {
         const chatWidget = document.getElementById('chat-widget-container');
-        if (!chatWidget.contains(event.target) && chatWindow.style.display === 'flex') {
-            chatWindow.style.display = 'none';
+        if (!chatWidget.contains(event.target) && chatWindow.classList.contains('visible')) {
+            chatWindow.classList.remove('visible');
         }
     });
 }
