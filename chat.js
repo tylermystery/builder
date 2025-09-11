@@ -1,12 +1,25 @@
+// FILE: chat.js
 import { state } from './state.js';
 import * as api from './api.js';
+import { log } from './utils/debug.js';
 
 let currentUser = null;
 let channel = null;
 
+// --- NEW: Arrays for generating fun names ---
+const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
+const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
+
+// --- NEW: Function to generate a random name ---
+function generateFunName() {
+    const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
+    const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
+    return `${adj} ${noun}`;
+}
+
 /**
  * Establishes a simple user identity for the chat session by checking local storage
- * or prompting the user for their name.
+ * or generating a new fun name.
  */
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
@@ -18,9 +31,9 @@ function getSimpleUserIdentity() {
     }
 
     let userName = localStorage.getItem('chatUserName');
+    // --- FIX: Replaced prompt with fun name generator ---
     if (!userName) {
-        userName = prompt("Please enter your name for the chat:", "Guest");
-        if (!userName) userName = "Guest"; // Default if the user cancels
+        userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
     
@@ -36,16 +49,16 @@ function updatePresenceUI(members) {
     const presenceCounter = document.getElementById('presence-counter');
     const whosHereCount = document.getElementById('whos-here-count');
     const whosHereList = document.getElementById('whos-here-list');
-
     const count = members.count;
     if (presenceCounter) presenceCounter.innerText = count;
     if (whosHereCount) whosHereCount.innerText = count;
-    
     if (whosHereList) {
         whosHereList.innerHTML = ''; // Clear the current list
         members.each((member) => {
             const userElement = document.createElement('div');
-            userElement.innerText = `🟢 ${member.info.name} ${member.id === currentUser.id ? '(You)' : ''}`;
+            // Use the most current name for the local user
+            const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+            userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
         });
     }
@@ -95,7 +108,6 @@ async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
     messagesList.innerHTML = '';
-
     const records = await api.fetchChatMessages(sessionId);
     // Airtable API returns records sorted oldest to newest (asc), so we don't need to reverse.
     records.forEach(record => {
@@ -123,11 +135,9 @@ function bindPresenceEvents() {
     channel.bind('pusher:subscription_succeeded', (members) => {
         updatePresenceUI(members);
     });
-
     channel.bind('pusher:member_added', (member) => {
         updatePresenceUI(channel.members);
     });
-
     channel.bind('pusher:member_removed', (member) => {
         updatePresenceUI(channel.members);
     });
@@ -140,14 +150,34 @@ export async function initializeChat() {
     currentUser = getSimpleUserIdentity();
     const sessionId = state.session.id || 'default-session';
 
-    await loadChatHistory(sessionId);
+    // --- NEW: Set up the user name input and its event listener ---
+    const chatUserNameInput = document.getElementById('chat-user-name');
+    if (chatUserNameInput) {
+        chatUserNameInput.value = currentUser.name;
+        chatUserNameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName && newName !== currentUser.name) {
+                currentUser.name = newName;
+                localStorage.setItem('chatUserName', newName);
+                log('Chat', `User name changed to: ${newName}`);
+                // Refresh the presence list to show the new name immediately.
+                updatePresenceUI(channel.members);
+                // Note: Other users will see the new name on the next message sent or after a refresh.
+            } else {
+                // Revert to the current name if the input is empty
+                e.target.value = currentUser.name;
+            }
+        });
+    }
 
+    await loadChatHistory(sessionId);
     const pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
         auth: {
             params: { 
                 user_id: currentUser.id,
+                // Pass the most current name during authentication
                 user_name: currentUser.name
             }
         }
@@ -173,7 +203,6 @@ export async function sendMessage(message) {
     addMessageToUI(currentUser.name, message, true, timestamp);
     
     await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
-
     channel.trigger('client-new-message', {
         content: message,
         senderId: currentUser.id,
