@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import * as api from './api.js'; // Import the api module
+import * as api from './api.js';
 
 let currentUser = null;
 let channel = null;
@@ -56,13 +56,17 @@ function updatePresenceUI(members) {
  * @param {string} sender - The name of the message sender.
  * @param {string} message - The content of the message.
  * @param {boolean} isSent - True if the message was sent by the current user.
+ * @param {string|Date} timestamp - The timestamp of the message.
  */
-function addMessageToUI(sender, message, isSent) {
+function addMessageToUI(sender, message, isSent, timestamp) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
 
+    const wrapper = document.createElement('div');
+    wrapper.className = isSent ? 'message-wrapper sent' : 'message-wrapper received';
+
     const messageElement = document.createElement('div');
-    messageElement.className = isSent ? 'chat-message sent' : 'chat-message received';
+    messageElement.className = 'chat-message';
     
     const senderElement = document.createElement('div');
     senderElement.className = 'sender';
@@ -71,9 +75,15 @@ function addMessageToUI(sender, message, isSent) {
     messageElement.appendChild(senderElement);
     messageElement.append(document.createTextNode(message));
     
-    // This appends the new message to the BOTTOM of the list
-    messagesList.appendChild(messageElement);
-    // Scroll to the bottom to see the new message
+    const timestampElement = document.createElement('div');
+    timestampElement.className = 'timestamp';
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    wrapper.appendChild(messageElement);
+    wrapper.appendChild(timestampElement);
+    messagesList.appendChild(wrapper);
+
     messagesList.parentElement.scrollTop = messagesList.parentElement.scrollHeight;
 }
 
@@ -84,14 +94,14 @@ function addMessageToUI(sender, message, isSent) {
 async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
-    messagesList.innerHTML = ''; // Clear previous messages
+    messagesList.innerHTML = '';
 
     const records = await api.fetchChatMessages(sessionId);
-    // Reverse the records so the oldest messages are first, ensuring correct order
+    // Airtable API returns records sorted oldest to newest (asc), so we don't need to reverse.
     records.forEach(record => {
-        const { SenderID, SenderName, Content } = record.fields;
+        const { SenderID, SenderName, Content, Timestamp } = record.fields;
         const isSent = SenderID === currentUser.id;
-        addMessageToUI(SenderName, Content, isSent);
+        addMessageToUI(SenderName, Content, isSent, Timestamp);
     });
 }
 
@@ -100,9 +110,8 @@ async function loadChatHistory(sessionId) {
  */
 function bindMessageEvents() {
     channel.bind('client-new-message', (data) => {
-        // Ensure we don't display our own message twice (since we add it instantly on send)
         if (data.senderId !== currentUser.id) {
-            addMessageToUI(data.senderName, data.content, false);
+            addMessageToUI(data.senderName, data.content, false, data.timestamp);
         }
     });
 }
@@ -131,7 +140,6 @@ export async function initializeChat() {
     currentUser = getSimpleUserIdentity();
     const sessionId = state.session.id || 'default-session';
 
-    // Load existing messages from Airtable first
     await loadChatHistory(sessionId);
 
     const pusher = new Pusher('236f480714e5001590b5', {
@@ -160,17 +168,16 @@ export async function sendMessage(message) {
     if (!channel || !currentUser) return;
 
     const sessionId = state.session.id || 'default-session';
+    const timestamp = new Date().toISOString();
     
-    // 1. Add our own message to our UI immediately for a snappy feel
-    addMessageToUI(currentUser.name, message, true);
+    addMessageToUI(currentUser.name, message, true, timestamp);
     
-    // 2. Persist the message to Airtable
     await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
 
-    // 3. Trigger the event for other clients
     channel.trigger('client-new-message', {
         content: message,
         senderId: currentUser.id,
-        senderName: currentUser.name
+        senderName: currentUser.name,
+        timestamp: timestamp
     });
 }
