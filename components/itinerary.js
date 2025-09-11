@@ -1,35 +1,34 @@
 // FILE: components/itinerary.js
 import { state } from '../state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
+import { debounce } from '../utils.js';
 
-// Get the SortableJS library from the global scope
 const Sortable = window.Sortable;
-
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
 const lockedItemsContainer = document.getElementById('itinerary-locked-items');
 const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
 const closeBtn = document.getElementById('itinerary-close-btn');
 
-let lockedSortable, favoritedSortable;
+let lockedSortable, favoritedSortable, itineraryDatePicker;
 
+/**
+ * Initializes all event listeners for the itinerary modal, including SortableJS and header inputs.
+ */
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
-
-    // Initialize SortableJS for the locked-in items column
+    
+    // SortableJS for the "Event Plan" (locked) items column
     lockedSortable = new Sortable(lockedItemsContainer, {
-        group: 'shared', // Allows items to be moved between lists
+        group: 'shared',
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
-            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id === evt.to.id) {
-                // Reorder locked items if moved within the same list
                 const newOrder = lockedSortable.toArray();
                 const newLockedItems = new Map();
                 newOrder.forEach(recordId => {
@@ -39,7 +38,6 @@ export function setupItineraryEventListeners() {
                 });
                 state.cart.lockedItems = newLockedItems;
             } else {
-                // Item moved from favorites to locked
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.items.has(recordId)) {
                     const itemInfo = state.cart.items.get(recordId);
@@ -47,26 +45,18 @@ export function setupItineraryEventListeners() {
                     state.cart.lockedItems.set(recordId, itemInfo);
                 }
             }
-            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateFavoritesCarousel();
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateEventPlanDateDisplay();
-            ui.updateLockedItemStatusIcons();
-            // FIX: Trigger a save after reordering is complete
+            ui.updateAllUI();
             triggerSave();
         }
     });
 
-    // Initialize SortableJS for the favorited items column
+    // SortableJS for the "Ideas" (favorited) items column
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
-            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
@@ -75,21 +65,51 @@ export function setupItineraryEventListeners() {
                     state.cart.items.set(recordId, itemInfo);
                 }
             }
-            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateFavoritesCarousel();
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateEventPlanDateDisplay();
-            ui.updateLockedItemStatusIcons();
-            // FIX: Trigger a save after reordering is complete
+            ui.updateAllUI();
             triggerSave();
         }
     });
 
+    // Listeners for the modal itself and the close button
     closeBtn.addEventListener('click', hideItineraryModal);
     itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
             hideItineraryModal();
+        }
+    });
+
+    // --- NEW: Event listeners for header inputs to sync changes ---
+    const debouncedSave = debounce(triggerSave, 500);
+
+    document.getElementById('itinerary-event-name').addEventListener('input', (e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        ui.updateHeader();
+        debouncedSave();
+    });
+
+    document.getElementById('itinerary-goals').addEventListener('input', (e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        ui.updateHeader();
+        debouncedSave();
+    });
+
+    document.getElementById('itinerary-guest-count').addEventListener('input', (e) => {
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
+        ui.updateTotalCost(); // Recalculate cost based on new headcount
+        debouncedSave();
+    });
+
+    itineraryDatePicker = flatpickr("#itinerary-date-picker", {
+        enableTime: true,
+        dateFormat: "M j, Y h:i K",
+        onChange: (selectedDates) => {
+            if (selectedDates.length > 0) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            ui.updateEventPlanDateDisplay(); // Syncs the main sidebar date
+            triggerSave();
         }
     });
 }
@@ -112,21 +132,32 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
+/**
+ * Renders the data in the header of the itinerary modal from the global state.
+ */
 export function renderItineraryHeader() {
-    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
+    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    document.getElementById('itinerary-guest-count').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || '';
+    
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (dateValue && itineraryDatePicker) {
+        itineraryDatePicker.setDate(dateValue.map(d => new Date(d)), false);
+    } else if (itineraryDatePicker) {
+        itineraryDatePicker.clear();
+    }
 }
 
 export async function renderItinerary() {
     log('Itinerary', 'Rendering itinerary items.');
     lockedItemsContainer.innerHTML = '';
     favoritedItemsContainer.innerHTML = '';
-
+    
     if (state.cart.lockedItems.size === 0) {
         lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
     }
     if (state.cart.items.size === 0) {
-        favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
+        favoritedItemsContainer.innerHTML = `<p class="description">Drag items from the Event Plan here to unsave them.</p>`;
     }
 
     // Render locked items
@@ -147,7 +178,7 @@ export async function renderItinerary() {
         }
     }
 
-    // Add event listeners for live editing
+    // Add event listeners for live editing of item details within the modal
     document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -157,15 +188,13 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { quantity: newQuantity });
             }
-            // FIX: Call the sidebar update functions here to sync the main view
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
+            ui.updateAllUI();
             triggerSave();
         });
     });
 
     document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
-        textarea.addEventListener('input', (e) => {
+        textarea.addEventListener('input', debounce((e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
             const newNote = e.target.value;
             if (e.target.closest('#itinerary-locked-items')) {
@@ -173,68 +202,70 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { note: newNote });
             }
-            // FIX: Call the sidebar update function here to sync the main view
-            ui.updateEventPlanSection();
+            ui.updateEventPlanSection(); // Only sidebar needs this update
             triggerSave();
-        });
+        }, 500));
     });
 
     document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            state.cart.lockedItems.delete(recordId);
-            // FIX: Call the sidebar update functions here to sync the main view
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateFavoritesCarousel();
+            if (state.cart.lockedItems.has(recordId)) {
+                state.cart.lockedItems.delete(recordId);
+            } else if (state.cart.items.has(recordId)) {
+                state.cart.items.delete(recordId);
+            }
             e.target.closest('.itinerary-item').remove();
+            ui.updateAllUI();
             triggerSave();
         });
     });
 }
 
-// Helper function to create an individual itinerary item element
+/**
+ * Creates an individual item element for the itinerary/ideas columns.
+ * @param {object} record The Airtable record object.
+ * @param {object} itemInfo The state information for the item.
+ * @param {string} type 'locked' or 'favorite'.
+ * @returns {Promise<HTMLElement>} The created DOM element.
+ */
 async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
-    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
+    itemElement.className = `itinerary-item ${type}`;
     itemElement.dataset.recordId = record.id;
-    
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
-    
     const quantitySelector = `
         <div class="quantity-selector">
             <label>Qty:</label>
             <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
         </div>
     `;
-    
+
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
-            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
+            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note || ''}</textarea>
         </div>
         ${quantitySelector}
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
-    
-    // Add edit button only for locked items
-    if (type === 'locked') {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'edit-btn';
-        editBtn.textContent = 'Edit';
-        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
-        editBtn.addEventListener('click', () => {
-            ui.showDetailModal(record);
-        });
-    }
+
+    // Add an edit button that opens the detail modal
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-btn';
+    editBtn.textContent = 'Edit';
+    itemElement.querySelector('.locked-item-actions').prepend(editBtn);
+    editBtn.addEventListener('click', () => {
+        ui.showDetailModal(record);
+    });
 
     return itemElement;
 }
