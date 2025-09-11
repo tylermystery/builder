@@ -284,4 +284,55 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     imageCache.set(cacheKey, imageUrls);
     log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
     return { imageUrls };
+
+    export async function fetchChatMessages(sessionId) {
+        const messages = [];
+        let offset = null;
+        const formula = `({SessionID} = '${sessionId}')`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=desc`;
+    
+        try {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch chat messages from Airtable.');
+            }
+            const data = await response.json();
+            return data.records;
+        } catch (error) {
+            console.error("Error fetching chat history:", error);
+            return []; // Return an empty array on error
+        }
+    }
+
+    export async function postChatMessage(sessionId, senderId, senderName, content) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: sessionId,
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content,
+            }
+        }]
+    };
+
+    try {
+        await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+    } catch (error) {
+        console.error("Error posting chat message:", error);
+    }
+}
+
+    
 }
