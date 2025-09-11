@@ -1069,25 +1069,23 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            /* --- FIX: Add position and z-index to ensure the button is on top and clickable --- */
+            position: relative;
+            z-index: 1001;
         }
-
-        #presence-counter {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background-color: red;
-            color: white;
-            border-radius: 50%;
-            width: 25px;
-            height: 25px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid white;
+        
+        #chat-widget-container.chat-open #chat-toggle-button {
+            opacity: 0;
+            transform: scale(0.5);
+            pointer-events: none;
         }
 
         #chat-window {
+            /* --- FIX: Position the window absolutely to layer it correctly behind the button --- */
+            position: absolute;
+            bottom: 0;
+            right: 0;
             width: 350px;
             height: 500px;
             background-color: #ffffff;
