@@ -1,16 +1,12 @@
 // FILE: events.js
 /*
-* Version: 5.0.5
+* Version: 5.0.6
 * Last Modified: 2025-09-12
 * Changelog:
-* v5.0.5 - 2025-09-12
-* - Corrected a major logic flaw in the main body click listener's if/else structure.
-* - Re-architected the click handler to correctly process both action clicks (buttons) and navigation clicks (cards/items).
-* - This fixes bugs where the detail modal would not open and date quick-filters were unresponsive.
-* - Implemented event listeners for the date range quick-filter buttons.
-* v5.0.4 - 2025-09-12
-* - Refactored the main body click listener to be more robust and handle clicks within the new Itinerary Canvas.
-* - Fixed bug where clicking itinerary items would not open the detail modal.
+* v5.0.6 - 2025-09-12
+* - Reverted the main body click listener to the last known-good architecture from v5.0.3 to restore core functionality.
+* - Added a new 'else if' condition to the restored listener to specifically handle clicks on '.itinerary-item' elements, fixing the modal bug.
+* - Re-implemented the date-quick-filter button functionality.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -31,6 +27,7 @@ let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
 let scrollTimeout = null;
 
+// --- (All functions from getCurrentCategoryRecord to handlePaymentFormSubmit remain unchanged) ---
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
@@ -156,17 +153,14 @@ export async function updateAllCardAvailabilityIcons() {
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
-
     const submitBtn = document.getElementById('payment-submit-btn');
     const buttonText = submitBtn.querySelector('.button-text');
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
-    cardErrors.textContent = ''; 
-
+    cardErrors.textContent = '';
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
-
     const { stripe, elements, cardElement, clientSecret } = ui.getStripeContext();
     if (!stripe || !elements || !cardElement || !clientSecret) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
@@ -175,19 +169,14 @@ async function handlePaymentFormSubmit(event) {
         spinner.style.display = 'none';
         return;
     }
-
     const customerName = document.getElementById('customer-name').value;
     const customerEmail = document.getElementById('customer-email').value;
     const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
             card: cardElement,
-            billing_details: {
-                name: customerName,
-                email: customerEmail,
-            },
+            billing_details: { name: customerName, email: customerEmail },
         },
     });
-
     if (error) {
         cardErrors.textContent = error.message;
         log('Events', `Stripe payment error: ${error.message}`);
@@ -208,6 +197,7 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
+
 export function initializeEventListeners(imageCache, flatpickr) {
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
@@ -219,6 +209,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
+    // ... (keep betaTrigger, window.scroll, category setup, and all filter listeners the same) ...
     const betaTrigger = document.getElementById('beta-trigger');
     if (betaTrigger) {
         betaTrigger.addEventListener('click', () => {
@@ -238,6 +229,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
+    
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -287,7 +279,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
-        
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -319,7 +310,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         },
     });
 
-    // --- FIX: Event listener for date quick-filter buttons ---
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
@@ -330,25 +320,21 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 let startDate = new Date(today);
                 let endDate = new Date(today);
                 endDate.setHours(17, 0, 0, 0); // End events at 5pm
-
                 switch (quickButton.dataset.dateQuick) {
                     case 'tomorrow':
                         startDate.setDate(today.getDate() + 1);
                         endDate.setDate(today.getDate() + 1);
                         break;
                     case 'this-week':
-                        // Start from tomorrow, end 7 days from now
                         startDate.setDate(today.getDate() + 1);
                         endDate.setDate(today.getDate() + 7);
                         break;
                     case 'next-2-weeks':
-                        // Start from tomorrow, end 14 days from now
                         startDate.setDate(today.getDate() + 1);
                         endDate.setDate(today.getDate() + 14);
                         break;
                 }
-                
-                mainDatePicker.setDate([startDate, endDate], true); // true triggers onChange
+                mainDatePicker.setDate([startDate, endDate], true);
             }
         });
     }
@@ -366,32 +352,34 @@ export function initializeEventListeners(imageCache, flatpickr) {
         ui.updateItineraryModalHeader();
     });
 
-    // --- FIX: This is the fully rewritten, corrected body click listener ---
+    // --- FIX: Reverted to the last known-good click handler architecture and extended it ---
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
-    
-        // --- 1. Handle specific ACTION buttons first ---
-        // Each of these should stop further processing if matched.
-    
-        if (e.target.closest('#save-share-btn')) {
+        
+        const card = e.target.closest('.event-card');
+        const heartIcon = e.target.closest('.heart-icon');
+        const saveShareBtn = e.target.closest('#save-share-btn');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const removeBtnInFavorite = favoriteItem?.querySelector('.remove-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
+        const lockedItemCard = e.target.closest('.locked-item-card');
+        const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const itineraryItem = e.target.closest('.itinerary-item'); // New target
+
+        if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
-                const btn = e.target.closest('#save-share-btn');
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => { btn.textContent = originalText; }, 1500);
+                const originalText = saveShareBtn.textContent;
+                saveShareBtn.textContent = 'Copied!';
+                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
-            return;
-        }
-    
-        if (e.target.closest('#checkout-btn')) {
+        } else if (checkoutBtn) {
             ui.showCheckoutModal();
-            return;
-        }
-    
-        if (e.target.closest('.heart-icon')) {
+        } else if (heartIcon) {
             e.stopPropagation();
-            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
-            if (!state.cart.lockedItems.has(recordId)) {
+            const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
+            const isLocked = state.cart.lockedItems.has(recordId);
+            if (!isLocked) {
                 if (state.cart.items.has(recordId)) {
                     state.cart.items.delete(recordId);
                 } else {
@@ -400,14 +388,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.updateAllUI(recordId);
                 triggerSave();
             }
-            return;
-        }
-    
-        if (e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn')) {
+        } else if (addToPlanBtn) {
             e.stopPropagation();
-            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.lockedItems.has(recordId)) {
-                ui.hideDetailModal(); // Case for "Update Plan" in modal
+            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
+            const isLocked = state.cart.lockedItems.has(recordId);
+            if (isLocked) {
+                ui.hideDetailModal();
                 return;
             }
             const itemInfo = ui.getItemState(recordId);
@@ -415,12 +401,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
             state.cart.items.delete(recordId);
             ui.updateAllUI(recordId);
             triggerSave();
-            return;
-        }
-    
-        if (e.target.closest('.demote-locked-item-btn')) {
+        } else if (demoteBtn) {
             e.stopPropagation();
-            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
+            const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
@@ -428,18 +411,38 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.updateAllUI(recordId);
                 triggerSave();
             }
-            return;
-        }
-
-        // --- 2. Handle clicks on containers to open the detail modal ---
-        // This runs only if no action button was clicked.
-    
-        const itemContainer = e.target.closest('.event-card, .favorite-item, .locked-item-card, .itinerary-item');
-        if (itemContainer) {
-            const recordId = itemContainer.dataset.recordId;
+        } else if (removeBtnInFavorite && e.target === removeBtnInFavorite) {
+            e.stopPropagation();
+            const recordId = favoriteItem.dataset.recordId;
+            state.cart.items.delete(recordId);
+            ui.updateAllUI(recordId);
+            triggerSave();
+        } 
+        else if (card) {
+            const isQuantityClick = e.target.closest('.quantity-selector');
+            if (!isQuantityClick) {
+                const recordId = card.dataset.recordId;
+                const record = state.records.all.find(r => r.id === recordId);
+                if (record) ui.showDetailModal(record);
+            }
+        } 
+        else if (lockedItemCard) {
+            const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                ui.showDetailModal(record);
+            if (record) ui.showDetailModal(record);
+        }
+        // --- NEW: Add handler for itinerary items, checking it wasn't a remove button click ---
+        else if (itineraryItem && !e.target.closest('.remove-btn')) {
+             const recordId = itineraryItem.dataset.recordId;
+             const record = state.records.all.find(r => r.id === recordId);
+             if (record) ui.showDetailModal(record);
+        }
+        else if (favoriteItem) {
+            const interactiveElements = e.target.closest('.add-to-plan-btn, .remove-btn');
+            if (!interactiveElements) {
+                const recordId = favoriteItem.dataset.recordId;
+                const record = state.records.all.find(r => r.id === recordId);
+                if (record) ui.showDetailModal(record);
             }
         }
     });
@@ -450,10 +453,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const container = target.closest('[data-record-id]');
         if (!container) return;
         const recordId = container.dataset.recordId;
-        
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
-
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
@@ -461,7 +462,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
         }
-
         if (Object.keys(updates).length > 0) {
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
@@ -499,6 +499,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
 }
 
 export function initializeChatEventListeners() {
+    // ... (This function is unchanged) ...
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
     if (messageForm) {
@@ -510,7 +511,6 @@ export function initializeChatEventListeners() {
             messageInput.value = '';
         });
     }
-    
     const chatToggleButton = document.getElementById('chat-toggle-button');
     const chatWidgetContainer = document.getElementById('chat-widget-container');
     function toggleChatWindow(forceClose = false) {
@@ -522,14 +522,12 @@ export function initializeChatEventListeners() {
             }
         }
     }
-
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleChatWindow();
         });
     }
-
     document.addEventListener('click', (event) => {
         if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
             toggleChatWindow(true);
