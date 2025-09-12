@@ -20,7 +20,7 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
-// --- FIX: Removed `updateLockedItemStatusIcons` from this import as it lives in this file. ---
+// --- FIX: Explicitly import functions needed within this module ---
 import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updateHeader } from './components/sidebar.js';
 
 
@@ -121,6 +121,7 @@ export function updateItineraryModalHeader() {
     }
 }
 
+// --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
