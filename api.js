@@ -4,12 +4,10 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
-
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
-
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -56,12 +54,12 @@ export async function saveSessionToAirtable() {
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
-
     // --- FIX: Standardize date format to YYYY-MM-DD for Airtable compatibility ---
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (dateValue) {
-        const dateString = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        const dateString = Array.isArray(dateValue) ?
+ dateValue[0] : dateValue;
         const dateObj = new Date(dateString);
         if (!isNaN(dateObj.getTime())) {
             // Format as YYYY-MM-DD string, the most compatible format for Airtable.
@@ -74,7 +72,8 @@ export async function saveSessionToAirtable() {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
         "Collaborators": state.session.collaborators.join(', '),
-        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
+        "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) ||
+ null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
     if (formattedDate) {
@@ -94,7 +93,8 @@ export async function saveSessionToAirtable() {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json' 
             },
-            body: JSON.stringify(isUpdate ? payload : { records: [payload] })
+   
+          body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
@@ -126,7 +126,8 @@ export async function fetchAllRecords() {
     log('API', `Fetching records from base URL: ${baseUrl}`);
     try {
         do {
-            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            const url = offset ?
+ `${baseUrl}&offset=${offset}` : baseUrl;
             log('API', `Fetching records from: ${url}`);
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
@@ -227,6 +228,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
                 transformations = 'c_fit,w_600,h_520';
             } else {
                 
+
             transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
@@ -304,6 +306,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 SenderName: senderName,
                 Content: content,
        
+
            }
         }]
     };
@@ -315,6 +318,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 'Content-Type': 'application/json'
             },
             body: 
+
             JSON.stringify(payload)
         });
         if (!response.ok) {
