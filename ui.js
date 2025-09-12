@@ -1,16 +1,13 @@
 // FILE: ui.js
 /*
- * Version: 3.1.2
+ * Version: 3.2.0
  * Last Modified: 2025-09-11
  * Changelog:
+ * v3.2.0 - 2025-09-11
+ * - Refactored pricing helpers out to utils.js to break a circular dependency.
  * v3.1.2 - 2025-09-11
  * - Fixed SyntaxError by restoring the missing updateLockedItemStatusIcons function.
  * - Corrected a faulty import statement that was causing the module to fail.
- * v3.1.1 - 2025-09-11
- * - Added missing function imports from sidebar.js to resolve reference errors.
- * v3.1.0 - 2025-09-11
- * - Fixed critical ReferenceError in updateAllUI by calling functions directly.
- * - Restored the updateEventPlanDateDisplay function which was missing.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -20,9 +17,7 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
-// --- FIX: Explicitly import functions needed within this module ---
 import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updateHeader } from './components/sidebar.js';
-
 
 // Re-export functions from the component modules
 export * from './components/card.js';
@@ -30,7 +25,6 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 
-// --- FIX: Restored the missing function to this file. ---
 export async function updateLockedItemStatusIcons() {
     log('UI', 'Updating locked-in item status icons.');
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
@@ -119,61 +113,6 @@ export function updateItineraryModalHeader() {
     if (itineraryModal && itineraryModal.classList.contains('active')) {
         renderItineraryHeader();
     }
-}
-
-// --- SHARED HELPER FUNCTIONS ---
-function getDescendantBookableItems(record, allRecords) {
-    let bookableItems = [];
-    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
-    for (const child of children) {
-        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-        if (isGrouping) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
-        } else {
-            bookableItems.push(child);
-        }
-    }
-    return bookableItems;
-}
-
-export function getGroupPriceRange(record) {
-    const descendants = getDescendantBookableItems(record, state.records.all);
-    if (descendants.length === 0) return null;
-    let minPrice = Infinity, maxPrice = -Infinity;
-    descendants.forEach(item => {
-        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        if (options.length > 0) {
-            options.forEach((opt, index) => {
-                const price = getRecordPrice(item, index);
-                if (price > 0) {
-                    if (price < minPrice) minPrice = price;
-                    if (price > maxPrice) maxPrice = price;
-                }
-            });
-        } else {
-            const price = getRecordPrice(item);
-            if (price > 0) {
-                if (price < minPrice) minPrice = price;
-                if (price > maxPrice) maxPrice = price;
-            }
-        }
-    });
-    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
-}
-
-export function getRecordPrice(record, optionIndex = null) {
-    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-    if (optionIndex !== null) {
-        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const variation = options[optionIndex];
-        if (variation) {
-            if (variation.price !== null) return variation.price;
-            if (variation.priceChange !== null) price += variation.priceChange;
-        }
-    }
-    return isNaN(price) ? 0 : price;
 }
 
 export function toggleLoading(show) {
