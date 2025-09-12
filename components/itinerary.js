@@ -46,7 +46,7 @@ export function setupItineraryEventListeners() {
             });
             state.cart.lockedItems = newLockedItems;
             
-            ui.renderItinerary();
+            renderItinerary();
             ui.updateAllUI();
             triggerSave();
         }
@@ -67,7 +67,7 @@ export function setupItineraryEventListeners() {
                 }
             }
             
-            ui.renderItinerary();
+            renderItinerary();
             ui.updateAllUI();
             triggerSave();
         }
@@ -105,7 +105,7 @@ export function setupItineraryEventListeners() {
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
-            ui.renderItinerary();
+            renderItinerary();
             ui.updateEventPlanDateDisplay();
             triggerSave();
         }
@@ -236,6 +236,7 @@ async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
         timeHTML = `<p class="itinerary-item-time">${formatTime(timeInfo.startTime)} - ${formatTime(timeInfo.endTime)}</p>`;
     }
     
+    // --- FIX: Removed the scoped click listener. This is now handled by events.js ---
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -248,8 +249,5 @@ async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
         </div>
     `;
     
-    // --- REMOVED: Specific event listener is no longer needed here ---
-    // The main listener in events.js now handles all clicks.
-
     return itemElement;
 }
