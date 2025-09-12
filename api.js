@@ -57,15 +57,15 @@ export async function saveSessionToAirtable() {
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
 
-    // --- FIX: This logic is now more robust to handle inconsistent date formats ---
+    // --- FIX: Standardize date format to YYYY-MM-DD for Airtable compatibility ---
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (dateValue) {
-        // Use the first date if it's an array, otherwise use the value directly
         const dateString = Array.isArray(dateValue) ? dateValue[0] : dateValue;
         const dateObj = new Date(dateString);
         if (!isNaN(dateObj.getTime())) {
-            formattedDate = dateObj.toISOString();
+            // Format as YYYY-MM-DD string, the most compatible format for Airtable.
+            formattedDate = dateObj.toISOString().slice(0, 10);
         }
     }
     // --- END FIX ---
