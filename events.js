@@ -1,14 +1,12 @@
 // FILE: events.js
 /*
-* Version: 5.0.3
-* Last Modified: 2025-09-11
+* Version: 5.0.4
+* Last Modified: 2025-09-12
 * Changelog:
-* v5.0.3 - 2025-09-11
-* - Fixed ReferenceError by moving scrollTimeout to the module scope.
-* v5.0.2 - 2025-09-11
-* - Standardized the date format saved from the sidebar date picker to prevent Airtable errors.
-* v5.0.1 - 2025-09-11
-* - Added calls to ui.updateItineraryModalHeader to complete two-way data sync.
+* v5.0.4 - 2025-09-12
+* - Refactored the main body click listener to be more robust and handle clicks within the new Itinerary Canvas.
+* - Fixed bug where clicking itinerary items would not open the detail modal.
+* - Implemented event listeners for the date range quick-filter buttons.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -27,7 +25,7 @@ let currentStore = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
-let scrollTimeout = null; // --- FIX: Moved to module scope ---
+let scrollTimeout = null;
 
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
@@ -184,7 +182,7 @@ async function handlePaymentFormSubmit(event) {
                 email: customerEmail,
             },
         },
-     });
+    });
 
     if (error) {
         cardErrors.textContent = error.message;
@@ -210,7 +208,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
-    
     let debugEnabled = false;
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -237,7 +234,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
-    
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -308,7 +304,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                 triggerSave();
+                triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
@@ -318,6 +314,37 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.updateItineraryModalHeader();
         },
     });
+
+    // --- NEW: Event listener for date quick-filter buttons ---
+    const dateFilterGroup = document.getElementById('date-filter-group');
+    if (dateFilterGroup) {
+        dateFilterGroup.addEventListener('click', (e) => {
+            if (e.target.matches('.filter-btn[data-date-quick]')) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                let startDate = new Date(today);
+                let endDate;
+
+                switch (e.target.dataset.dateQuick) {
+                    case 'tomorrow':
+                        startDate.setDate(today.getDate() + 1);
+                        endDate = new Date(startDate);
+                        break;
+                    case 'this-week':
+                        endDate = new Date(today.setDate(today.getDate() + 7));
+                        break;
+                    case 'next-2-weeks':
+                        endDate = new Date(today.setDate(today.getDate() + 14));
+                        break;
+                }
+                
+                if (endDate) {
+                    mainDatePicker.setDate([startDate, endDate], true); // true triggers onChange
+                }
+            }
+        });
+    }
+
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -330,19 +357,26 @@ export function initializeEventListeners(imageCache, flatpickr) {
         triggerSave();
         ui.updateItineraryModalHeader();
     });
+
+    // --- MODIFIED: Refactored and corrected the main click handler ---
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
         
-        const card = e.target.closest('.event-card');
-        const heartIcon = e.target.closest('.heart-icon');
+        // --- Define potential ACTION targets first ---
         const saveShareBtn = e.target.closest('#save-share-btn');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
-        const favoriteItem = e.target.closest('.favorite-item');
-        const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
-        const lockedItemCard = e.target.closest('.locked-item-card');
+        const heartIcon = e.target.closest('.heart-icon');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const removeBtn = e.target.closest('.remove-btn'); // More generic remove button selector
 
+        // --- Define potential NAVIGATION targets second ---
+        const card = e.target.closest('.event-card');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const lockedItemCard = e.target.closest('.locked-item-card');
+        const itineraryItem = e.target.closest('.itinerary-item');
+
+        // --- Handle ACTION clicks ---
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -354,8 +388,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            const isLocked = state.cart.lockedItems.has(recordId);
-            if (!isLocked) {
+            if (!state.cart.lockedItems.has(recordId)) {
                 if (state.cart.items.has(recordId)) {
                     state.cart.items.delete(recordId);
                 } else {
@@ -367,13 +400,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
-            const isLocked = state.cart.lockedItems.has(recordId);
-            
-            if (isLocked) {
-                ui.hideDetailModal();
+            if (state.cart.lockedItems.has(recordId)) {
+                ui.hideDetailModal(); // This is the "Update Plan" case in the modal
                 return;
             }
-
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -389,34 +419,32 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.updateAllUI(recordId);
                 triggerSave();
             }
-        } else if (removeBtn && e.target === removeBtn) {
+        } else if (removeBtn) {
             e.stopPropagation();
-            const recordId = favoriteItem.dataset.recordId;
-            state.cart.items.delete(recordId);
-            ui.updateAllUI(recordId);
-            triggerSave();
-        } 
-        else if (card) {
-            const isQuantityClick = e.target.closest('.quantity-selector');
-            if (!isQuantityClick) {
-                const recordId = card.dataset.recordId;
-                const record = state.records.all.find(r => r.id === recordId);
-                if (record) ui.showDetailModal(record);
+            const itemToRemove = removeBtn.closest('[data-record-id]');
+            if (itemToRemove) {
+                const recordId = itemToRemove.dataset.recordId;
+                state.cart.items.delete(recordId); // Works for both, as locked items aren't in carousel
+                ui.updateAllUI(recordId);
+                triggerSave();
             }
         } 
-        else if (lockedItemCard) {
-            const recordId = lockedItemCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
-        } else if (favoriteItem) {
-            const interactiveElements = e.target.closest('.add-to-plan-btn, .remove-btn');
-            if (!interactiveElements) {
-                const recordId = favoriteItem.dataset.recordId;
+        
+        // --- Handle NAVIGATION clicks (opening the modal) ---
+        else {
+            const itemContainer = card || favoriteItem || lockedItemCard || itineraryItem;
+            if (itemContainer) {
+                // Ensure the click was not on an interactive element within the container
+                if (e.target.closest('.quantity-selector, .action-btn, .remove-btn, .demote-locked-item-btn, .heart-icon')) {
+                    return;
+                }
+                const recordId = itemContainer.dataset.recordId;
                 const record = state.records.all.find(r => r.id === recordId);
                 if (record) ui.showDetailModal(record);
             }
         }
     });
+
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
         const target = e.target;
@@ -436,7 +464,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
 
         if (Object.keys(updates).length > 0) {
-              if (isLocked) {
+            if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
@@ -446,12 +474,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
+
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
-                // --- FIX: Standardize date format to an array of ISO strings ---
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, [selectedDates[0].toISOString()]);
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
@@ -495,7 +523,6 @@ export function initializeChatEventListeners() {
             }
         }
     }
-
 
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
