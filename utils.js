@@ -1,4 +1,7 @@
+// FILE: utils.js
 import { log } from './utils/debug.js';
+import { state } from './state.js';
+import { CONSTANTS } from './config.js';
 
 /**
  * Parses the raw string from Airtable's 'Options' field into a structured array of objects.
@@ -12,9 +15,7 @@ export function parseOptions(rawOptionsString) {
         return [];
     }
     
-    // Split the string by line breaks first, then by commas
     const optionsArray = rawOptionsString.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
-    
     return optionsArray.map(option => {
         let name = option;
         let price = null;
@@ -38,7 +39,6 @@ export function parseOptions(rawOptionsString) {
             }
         });
 
-        // Use a simple check to see if the name itself contains a price, as in the raw data
         let namePriceMatch = name.match(/\$(\d+(\.\d{1,2})?)/);
         if (namePriceMatch) {
             price = parseFloat(namePriceMatch[1]);
@@ -69,4 +69,60 @@ export function debounce(func, delay = 300) {
             func.apply(this, args);
         }, delay);
     };
+}
+
+// --- NEWLY MOVED HELPER FUNCTIONS ---
+
+function getDescendantBookableItems(record, allRecords) {
+    let bookableItems = [];
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    for (const child of children) {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
+        } else {
+            bookableItems.push(child);
+        }
+    }
+    return bookableItems;
+}
+
+export function getGroupPriceRange(record) {
+    const descendants = getDescendantBookableItems(record, state.records.all);
+    if (descendants.length === 0) return null;
+    let minPrice = Infinity, maxPrice = -Infinity;
+    descendants.forEach(item => {
+        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (options.length > 0) {
+            options.forEach((opt, index) => {
+                const price = getRecordPrice(item, index);
+                if (price > 0) {
+                    if (price < minPrice) minPrice = price;
+                    if (price > maxPrice) maxPrice = price;
+                }
+            });
+        } else {
+            const price = getRecordPrice(item);
+            if (price > 0) {
+                if (price < minPrice) minPrice = price;
+                if (price > maxPrice) maxPrice = price;
+            }
+        }
+    });
+    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
+}
+
+export function getRecordPrice(record, optionIndex = null) {
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            if (variation.price !== null) return variation.price;
+            if (variation.priceChange !== null) price += variation.priceChange;
+        }
+    }
+    return isNaN(price) ? 0 : price;
 }
