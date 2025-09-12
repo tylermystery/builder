@@ -48,10 +48,6 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
-    //if (state.session.id && !state.session.isOwned) {
-    //    state.session.id = null;
-    //} // --- FIX: The closing brace '}' that was here has been moved to the end of the function.
-
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
         lockedInItems: Object.fromEntries(state.cart.lockedItems), 
@@ -61,14 +57,18 @@ export async function saveSessionToAirtable() {
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
 
-    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    // --- FIX: This logic is now more robust to handle inconsistent date formats ---
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
-    if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDate = new Date(dateRange[0]);
-        if (!isNaN(startDate.getTime())) {
-             formattedDate = startDate.toISOString();
+    if (dateValue) {
+        // Use the first date if it's an array, otherwise use the value directly
+        const dateString = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        const dateObj = new Date(dateString);
+        if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString();
         }
     }
+    // --- END FIX ---
 
     const fields = {
         "Name": sessionName,
@@ -117,7 +117,6 @@ export async function saveSessionToAirtable() {
         log('API', `Failed to save session: ${error.message}`);
         return false;
     }
-// --- FIX: This closing brace was moved from above to correctly close the function ---
 }
 
 export async function fetchAllRecords() {
@@ -127,8 +126,7 @@ export async function fetchAllRecords() {
     log('API', `Fetching records from base URL: ${baseUrl}`);
     try {
         do {
-            const url = offset ?
-            `${baseUrl}&offset=${offset}` : baseUrl;
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
             log('API', `Fetching records from: ${url}`);
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
