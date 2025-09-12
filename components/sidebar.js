@@ -2,7 +2,7 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { parseOptions, getRecordPrice } from '../utils.js';
+import { parseOptions, getRecordPrice, calculateTotalCost } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { showDetailModal } from './modal.js';
 
@@ -137,26 +137,8 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     if (!totalCostEl) return;
 
-    let total = 0;
-    const allItems = state.cart.lockedItems;
-    allItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record) return;
-        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        if (isNaN(unitPrice)) return;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
- 
-        let itemCost;
- 
-        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            itemCost = unitPrice * effectiveQuantity;
-        } else {
-            itemCost = unitPrice;
-        }
-        total += itemCost;
-    });
+    // --- FIX: Use the centralized cost calculation function ---
+    const total = calculateTotalCost(state.cart.lockedItems);
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 
     const isPlanEmpty = total === 0;
