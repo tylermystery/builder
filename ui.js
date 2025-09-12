@@ -1,8 +1,10 @@
 // FILE: ui.js
 /*
- * Version: 3.1.0
+ * Version: 3.1.1
  * Last Modified: 2025-09-11
  * Changelog:
+ * v3.1.1 - 2025-09-11
+ * - Added missing function imports from sidebar.js to resolve reference errors.
  * v3.1.0 - 2025-09-11
  * - Fixed critical ReferenceError in updateAllUI by calling functions directly.
  * - Restored the updateEventPlanDateDisplay function which was missing.
@@ -18,6 +20,9 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
+// --- FIX: Explicitly import functions needed within this module ---
+import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updateLockedItemStatusIcons, updateHeader } from './components/sidebar.js';
+
 
 // Re-export functions from the component modules
 export * from './components/card.js';
@@ -25,7 +30,7 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 
-// --- FIX: Restored missing function ---
+// Restored missing function
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -36,7 +41,6 @@ export async function updateEventPlanDateDisplay() {
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
         return;
     }
-    // Handle both string and array formats for robustness
     const selectedDate = new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue);
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
@@ -55,7 +59,7 @@ export async function updateEventPlanDateDisplay() {
     }
 }
 
-// --- FIX: Removed "ui." self-references to prevent ReferenceError ---
+// Fixed "ui." self-references to prevent ReferenceError
 export function updateAllUI(recordId) {
     if (recordId) {
         updateCardIcon(recordId);
