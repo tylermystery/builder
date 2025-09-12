@@ -1,16 +1,15 @@
 // FILE: events.js
 /*
-* Version: 5.0.1
+* Version: 5.0.2
 * Last Modified: 2025-09-11
 * Changelog:
+* v5.0.2 - 2025-09-11
+* - Standardized the date format saved from the sidebar date picker to prevent Airtable errors.
 * v5.0.1 - 2025-09-11
 * - Added calls to ui.updateItineraryModalHeader to complete two-way data sync.
 * v5.0.0 - 2025-09-11
 * - Corrected the "Update Plan" button logic in the detail modal to prevent it from resetting real-time changes. The button now correctly closes the modal.
 * - Added a new event handler for the ".demote-locked-item-btn" to correctly move items from the event plan back to the "Ideas" (favorites) carousel.
-* v4.9.9 - 2025-09-11
-* - Fixed bug where "Update Plan" button in the modal reset changes.
-* - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -160,7 +159,7 @@ async function handlePaymentFormSubmit(event) {
     const buttonText = submitBtn.querySelector('.button-text');
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
-    cardErrors.textContent = ''; // Clear previous errors
+    cardErrors.textContent = ''; 
 
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
@@ -284,7 +283,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('reset-filters-btn', 'click', () => {
         const allButton = categoryFiltersContainer.querySelector('.filter-btn[data-filter="all"]');
         if (allButton) {
-            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
@@ -316,7 +315,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
             }
-            // --- SYNC WITH ITINERARY MODAL ---
             ui.updateItineraryModalHeader();
         },
     });
@@ -324,14 +322,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
-        // --- SYNC WITH ITINERARY MODAL ---
         ui.updateItineraryModalHeader();
     });
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
-        // --- SYNC WITH ITINERARY MODAL ---
         ui.updateItineraryModalHeader();
     });
     document.body.addEventListener('click', async (e) => {
@@ -454,15 +450,15 @@ export function initializeEventListeners(imageCache, flatpickr) {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
+            // --- FIX: Standardize date format to an array of ISO strings ---
             if (selectedDates.length > 0) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d=>d.toISOString()));
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, [selectedDates[0].toISOString()]);
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
             await ui.updateEventPlanDateDisplay();
             await ui.updateLockedItemStatusIcons();
             triggerSave();
-            // --- SYNC WITH ITINERARY MODAL ---
             ui.updateItineraryModalHeader();
         }
     });
