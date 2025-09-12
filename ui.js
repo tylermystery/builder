@@ -1,12 +1,14 @@
 // FILE: ui.js
 /*
- * Version: 3.0.9
+ * Version: 3.1.0
  * Last Modified: 2025-09-11
  * Changelog:
+ * v3.1.0 - 2025-09-11
+ * - Fixed critical ReferenceError in updateAllUI by calling functions directly.
+ * - Restored the updateEventPlanDateDisplay function which was missing.
  * v3.0.9 - 2025-09-11
  * - Added updateItineraryModalHeader to enable two-way data sync.
  * - Added updateAllUI helper to simplify UI refresh calls.
- * v3.0.8 - 2025-09-09
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -23,28 +25,55 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 
-// --- NEW: Helper function to refresh all UI components at once ---
+// --- FIX: Restored missing function ---
+export async function updateEventPlanDateDisplay() {
+    log('UI', 'Updating event plan date display.');
+    const dateInput = document.getElementById('event-date-picker');
+    if (!dateInput) return;
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (!dateValue) {
+        dateInput.value = 'Select a date';
+        dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
+        return;
+    }
+    // Handle both string and array formats for robustness
+    const selectedDate = new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue);
+    const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
+    const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
+    dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
+    switch (overallStatus) {
+        case AVAILABILITY_STATUS.FULL:
+            dateInput.classList.add('available-full');
+            break;
+        case AVAILABILITY_STATUS.PARTIAL:
+            dateInput.classList.add('available-partial');
+            break;
+        case AVAILABILITY_STATUS.NONE:
+            dateInput.classList.add('unavailable');
+            break;
+    }
+}
+
+// --- FIX: Removed "ui." self-references to prevent ReferenceError ---
 export function updateAllUI(recordId) {
     if (recordId) {
         updateCardIcon(recordId);
     }
-    // This function can be expanded to update more UI elements if needed
-    // For now, it calls the most critical update functions after a state change.
-    ui.updateFavoritesCarousel();
-    ui.updateEventPlanSection();
-    ui.updateTotalCost();
-    ui.updateEventPlanDateDisplay();
-    ui.updateLockedItemStatusIcons();
+    updateFavoritesCarousel();
+    updateEventPlanSection();
+    updateTotalCost();
+    updateEventPlanDateDisplay();
+    updateLockedItemStatusIcons();
 }
 
-// --- NEW: Helper to sync main UI changes to the itinerary modal header ---
+// Helper to sync main UI changes to the itinerary modal header
 export function updateItineraryModalHeader() {
     const itineraryModal = document.getElementById('itinerary-modal-overlay');
     if (itineraryModal && itineraryModal.classList.contains('active')) {
         renderItineraryHeader();
     }
 }
-
 
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
@@ -62,6 +91,7 @@ function getDescendantBookableItems(record, allRecords) {
     }
     return bookableItems;
 }
+
 export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
@@ -72,15 +102,13 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-             
-               if (price < minPrice) minPrice = price;
+                    if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-        
-         if (price > 0) {
+            if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -88,6 +116,7 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -101,7 +130,6 @@ export function getRecordPrice(record, optionIndex = null) {
     return isNaN(price) ? 0 : price;
 }
 
-// --- CORE UI FUNCTIONS ---
 export function toggleLoading(show) {
     log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);
     const loadingMessage = document.getElementById('loading-message');
@@ -109,6 +137,7 @@ export function toggleLoading(show) {
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
@@ -148,6 +177,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
+
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
