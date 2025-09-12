@@ -1,25 +1,54 @@
 // FILE: components/card.js
 /*
-* Version: 4.0.0
+* Version: 4.0.1
 * Last Modified: 2025-09-11
 * Changelog:
+* v4.0.1 - 2025-09-11
+* - Fixed a circular dependency by removing an unnecessary self-import of updateCardIcon.
 * v4.0.0 - 2025-09-11
-* - Refactored to import helper functions from utils.js instead of ui.js to fix a circular dependency.
+* - Refactored to import helper functions from utils.js instead of ui.js.
 */
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions, getGroupPriceRange, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getMainGetItemState, updateCardIcon } from '../ui.js';
+// --- FIX: Removed updateCardIcon from this import as it's defined in this file ---
+import { getMainGetItemState } from '../ui.js';
 
 function getPlaceholderImage(imageUrls) {
-    // Return a random image from the provided list, or a default if none exist.
     if (!imageUrls || imageUrls.length === 0) {
         return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
     }
     const randomIndex = Math.floor(Math.random() * imageUrls.length);
     return imageUrls[randomIndex];
+}
+
+export function updateCardIcon(recordId) {
+    const isLocked = state.cart.lockedItems.has(recordId);
+    const isHearted = state.cart.items.has(recordId);
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+    document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
+        if (!icon) {
+            log('Card', `No heart icon found for record: ${recordId}`);
+            return;
+        }
+        if (isLocked) {
+            icon.className = 'heart-icon locked';
+            icon.innerHTML = checkSVG;
+        
+        } else if (isHearted) {
+            icon.className = 'heart-icon hearted';
+            icon.innerHTML = heartSVG;
+        } else {
+            icon.className = 'heart-icon';
+            icon.innerHTML = heartSVG;
+        }
+        icon.style.display = 'block';
+        
+        log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
+    });
 }
 
 export async function createInteractiveCard(record, imageCache) {
