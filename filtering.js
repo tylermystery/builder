@@ -1,10 +1,39 @@
 // FILE: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
-import { getGroupPriceRange, parseOptions } from './utils.js';
+import { getGroupPriceRange, parseOptions, getRecordPrice } from './utils.js';
 import { renderRecords } from './ui.js';
 
-// --- HELPER FUNCTIONS to get all nested items ---
+// --- NEW: Location mapping logic ---
+const REGION_MAP = {
+    'sf': ['san francisco'],
+    'oakland': ['oakland'],
+    'peninsula': ['menlo park', 'palo alto', 'redwood city', 'san mateo'],
+    'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'mountain view'],
+    'north-bay': ['sausalito', 'marin', 'san rafael'],
+    'east-bay': ['berkeley', 'hayward', 'fremont', 'walnut creek']
+};
+
+/**
+ * Parses a raw location string and returns its corresponding region identifier.
+ * @param {string} locationString The string from the 'Location' field.
+ * @returns {string|null} The region identifier (e.g., 'sf', 'south-bay') or null.
+ */
+function getRegionFromLocationString(locationString) {
+    if (!locationString || typeof locationString !== 'string' || locationString.toLowerCase() === 'all') {
+        return null;
+    }
+    const lowerCaseLocation = locationString.toLowerCase();
+    for (const region in REGION_MAP) {
+        if (REGION_MAP[region].some(city => lowerCaseLocation.includes(city))) {
+            return region;
+        }
+    }
+    return 'other'; // Default for addresses that don't match a defined region
+}
+// --- END: Location mapping logic ---
+
+// --- HELPER FUNCTIONS from previous refactor ---
 function isGrouping(record, allRecordNames) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     return rawOptions.some(opt => allRecordNames.has(opt.name));
@@ -39,7 +68,6 @@ function parseCapacity(capacityStr) {
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
-
     if (selectedCategory === 'all') {
         return activeSubcategories.length === 0 ? getAllBookableItems(records) : records.filter(record => activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase()));
     }
@@ -89,12 +117,19 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
+// --- UPDATED: This function is now much smarter ---
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
     }
     return records.filter(record => {
-        return record.fields['Location']?.toLowerCase().replace(/\s+/g, '-') === locationFilter;
+        const locationString = record.fields['Location'];
+        // Items marked as "All" should not appear in specific region searches.
+        if (!locationString || locationString.toLowerCase() === 'all') {
+            return false;
+        }
+        const region = getRegionFromLocationString(locationString);
+        return region === locationFilter;
     });
 }
 
