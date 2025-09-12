@@ -5,58 +5,68 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
-import { debounce } from '../utils.js';
+import { debounce, getRecordPrice } from '../utils.js';
 
 const Sortable = window.Sortable;
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
-const lockedItemsContainer = document.getElementById('itinerary-locked-items');
-const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
+// --- MODIFIED: Use new timeline and palette IDs ---
+const timelineContainer = document.getElementById('event-timeline-column');
+const paletteContainer = document.getElementById('event-palette-column');
 const closeBtn = document.getElementById('itinerary-close-btn');
 
-let lockedSortable, favoritedSortable, itineraryDatePicker;
+let timelineSortable, paletteSortable, itineraryDatePicker;
 
 /**
  * Initializes all event listeners for the itinerary modal, including SortableJS and header inputs.
  */
 export function setupItineraryEventListeners() {
-    log('Itinerary', 'Initializing Itinerary with SortableJS.');
-    
-    // SortableJS for the "Event Plan" (locked) items column
-    lockedSortable = new Sortable(lockedItemsContainer, {
+    log('Itinerary', 'Initializing Itinerary with SortableJS for Canvas view.');
+
+    // --- MODIFIED: SortableJS for the "Event Timeline" (locked) items column ---
+    timelineSortable = new Sortable(timelineContainer, {
         group: 'shared',
         animation: 150,
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
-            log('Itinerary', 'Drag ended in locked items list.');
-            if (evt.from.id === evt.to.id) {
-                const newOrder = lockedSortable.toArray();
-                const newLockedItems = new Map();
-                newOrder.forEach(recordId => {
-                    if (state.cart.lockedItems.has(recordId)) {
-                        newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
-                    }
-                });
-                state.cart.lockedItems = newLockedItems;
-            } else {
-                const recordId = evt.item.dataset.recordId;
+            log('Itinerary', 'Drag ended in timeline.');
+            const recordId = evt.item.dataset.recordId;
+
+            // An item was moved from the palette to the timeline
+            if (evt.from.id !== evt.to.id) {
                 if (state.cart.items.has(recordId)) {
                     const itemInfo = state.cart.items.get(recordId);
                     state.cart.items.delete(recordId);
+                    // Add to lockedItems - we'll re-order it next
                     state.cart.lockedItems.set(recordId, itemInfo);
                 }
             }
-            ui.updateAllUI();
+
+            // Re-order the state based on the new DOM order
+            const newOrder = timelineSortable.toArray();
+            const newLockedItems = new Map();
+            newOrder.forEach(id => {
+                if (state.cart.lockedItems.has(id)) {
+                    newLockedItems.set(id, state.cart.lockedItems.get(id));
+                }
+            });
+            state.cart.lockedItems = newLockedItems;
+
+            // --- MODIFIED: A re-render of the timeline is now required to update times ---
+            renderItinerary();
+            ui.updateFavoritesCarousel();
+            ui.updateTotalCost();
             triggerSave();
         }
     });
 
-    // SortableJS for the "Ideas" (favorited) items column
-    favoritedSortable = new Sortable(favoritedItemsContainer, {
+    // --- MODIFIED: SortableJS for the "Ideas" (palette) items column ---
+    paletteSortable = new Sortable(paletteContainer, {
         group: 'shared',
         animation: 150,
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
-            log('Itinerary', 'Drag ended in favorites items list.');
+            log('Itinerary', 'Drag ended in palette.');
+            // An item was moved from the timeline back to the palette
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
@@ -65,7 +75,11 @@ export function setupItineraryEventListeners() {
                     state.cart.items.set(recordId, itemInfo);
                 }
             }
-            ui.updateAllUI();
+            
+            // Re-rendering the timeline isn't required, but updating other UI is
+            renderItinerary(); // Re-render both columns to be safe
+            ui.updateFavoritesCarousel();
+            ui.updateTotalCost();
             triggerSave();
         }
     });
@@ -78,27 +92,23 @@ export function setupItineraryEventListeners() {
         }
     });
 
-    // --- NEW: Event listeners for header inputs to sync changes ---
+    // Event listeners for header inputs to sync changes
     const debouncedSave = debounce(triggerSave, 500);
-
     document.getElementById('itinerary-event-name').addEventListener('input', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         ui.updateHeader();
         debouncedSave();
     });
-
     document.getElementById('itinerary-goals').addEventListener('input', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         ui.updateHeader();
         debouncedSave();
     });
-
     document.getElementById('itinerary-guest-count').addEventListener('input', (e) => {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
-        ui.updateTotalCost(); // Recalculate cost based on new headcount
+        ui.updateTotalCost();
         debouncedSave();
     });
-
     itineraryDatePicker = flatpickr("#itinerary-date-picker", {
         enableTime: true,
         dateFormat: "M j, Y h:i K",
@@ -108,16 +118,18 @@ export function setupItineraryEventListeners() {
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
-            ui.updateEventPlanDateDisplay(); // Syncs the main sidebar date
+            renderItinerary(); // Re-render the timeline with the new start time
+            ui.updateEventPlanDateDisplay();
             triggerSave();
         }
     });
 }
 
+
 export function showItineraryModal() {
     log('Itinerary', 'Showing itinerary modal.');
-    renderItinerary();
     renderItineraryHeader();
+    renderItinerary(); // Render after header to ensure date is set
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
@@ -132,9 +144,6 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
-/**
- * Renders the data in the header of the itinerary modal from the global state.
- */
 export function renderItineraryHeader() {
     document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
@@ -148,78 +157,86 @@ export function renderItineraryHeader() {
     }
 }
 
+// --- MODIFIED: This is the core new rendering logic for the canvas view ---
 export async function renderItinerary() {
-    log('Itinerary', 'Rendering itinerary items.');
-    lockedItemsContainer.innerHTML = '';
-    favoritedItemsContainer.innerHTML = '';
+    log('Itinerary', 'Rendering itinerary canvas and palette.');
+    timelineContainer.innerHTML = '';
+    paletteContainer.innerHTML = '';
     
-    if (state.cart.lockedItems.size === 0) {
-        lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
-    }
+    // --- Render Palette (Ideas) ---
     if (state.cart.items.size === 0) {
-        favoritedItemsContainer.innerHTML = `<p class="description">Drag items from the Event Plan here to unsave them.</p>`;
-    }
-
-    // Render locked items
-    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            const itemElement = await createItineraryItem(record, itemInfo, 'locked');
-            if (itemElement) lockedItemsContainer.appendChild(itemElement);
+        paletteContainer.innerHTML = `<p class="description">Drag items from the Event Plan here to unsave them.</p>`;
+    } else {
+        for (const [recordId, itemInfo] of state.cart.items.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const itemElement = await createItineraryItem(record, itemInfo, 'favorite');
+                paletteContainer.appendChild(itemElement);
+            }
         }
     }
 
-    // Render favorited items
-    for (const [recordId, itemInfo] of state.cart.items.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            const itemElement = await createItineraryItem(record, itemInfo, 'favorite');
-            if (itemElement) favoritedItemsContainer.appendChild(itemElement);
+    // --- Render Timeline (Canvas) ---
+    if (state.cart.lockedItems.size === 0) {
+        timelineContainer.innerHTML = `<p class="description">Drag items from Ideas here to build your timeline.</p>`;
+    } else {
+        const lockedItemsArray = Array.from(state.cart.lockedItems.entries());
+        let currentTime;
+        const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+        
+        // Default to today at 9am if no date is set
+        if (eventDate) {
+            currentTime = new Date(eventDate[0]);
+        } else {
+            currentTime = new Date();
+            currentTime.setHours(9, 0, 0, 0);
+        }
+
+        for (let i = 0; i < lockedItemsArray.length; i++) {
+            const [recordId, itemInfo] = lockedItemsArray[i];
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) continue;
+
+            // --- Calculate and Render Travel Segment ---
+            if (i > 0) {
+                const prevRecord = state.records.all.find(r => r.id === lockedItemsArray[i-1][0]);
+                if (prevRecord) {
+                    const origin = prevRecord.fields['Location'];
+                    const destination = record.fields['Location'];
+                    
+                    const travelInfo = await api.fetchTravelTime(origin, destination);
+                    if (travelInfo.duration > 0) {
+                        const travelElement = createTravelSegmentElement(travelInfo);
+                        timelineContainer.appendChild(travelElement);
+                        currentTime.setMinutes(currentTime.getMinutes() + travelInfo.duration);
+                    }
+                }
+            }
+
+            // --- Render Timeline Item with calculated times ---
+            const startTime = new Date(currentTime);
+            const durationHours = record.fields[CONSTANTS.FIELD_NAMES.DURATION] || 1;
+            const durationMinutes = durationHours * 60;
+            currentTime.setMinutes(currentTime.getMinutes() + durationMinutes);
+            const endTime = new Date(currentTime);
+
+            const itemElement = await createItineraryItem(record, itemInfo, 'locked', { startTime, endTime });
+            timelineContainer.appendChild(itemElement);
         }
     }
+}
 
-    // Add event listeners for live editing of item details within the modal
-    document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            const newQuantity = parseInt(e.target.value, 10);
-            if (e.target.closest('#itinerary-locked-items')) {
-                ui.updateLockedItemState(recordId, { quantity: newQuantity });
-            } else {
-                ui.updateItemState(recordId, { quantity: newQuantity });
-            }
-            ui.updateAllUI();
-            triggerSave();
-        });
-    });
-
-    document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
-        textarea.addEventListener('input', debounce((e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            const newNote = e.target.value;
-            if (e.target.closest('#itinerary-locked-items')) {
-                ui.updateLockedItemState(recordId, { note: newNote });
-            } else {
-                ui.updateItemState(recordId, { note: newNote });
-            }
-            ui.updateEventPlanSection(); // Only sidebar needs this update
-            triggerSave();
-        }, 500));
-    });
-
-    document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            if (state.cart.lockedItems.has(recordId)) {
-                state.cart.lockedItems.delete(recordId);
-            } else if (state.cart.items.has(recordId)) {
-                state.cart.items.delete(recordId);
-            }
-            e.target.closest('.itinerary-item').remove();
-            ui.updateAllUI();
-            triggerSave();
-        });
-    });
+// --- NEW: Helper to create the travel segment element ---
+function createTravelSegmentElement(travelInfo) {
+    const element = document.createElement('div');
+    element.className = 'travel-segment';
+    const travelEmoji = travelInfo.mode === 'car' ? '🚗' : '🚶';
+    element.innerHTML = `
+        <div class="travel-line"></div>
+        <div class="travel-details">${travelEmoji} Travel: ~${travelInfo.duration} min (${travelInfo.distance} miles)</div>
+        <div class="travel-line"></div>
+    `;
+    return element;
 }
 
 /**
@@ -227,9 +244,10 @@ export async function renderItinerary() {
  * @param {object} record The Airtable record object.
  * @param {object} itemInfo The state information for the item.
  * @param {string} type 'locked' or 'favorite'.
+ * @param {object} [timeInfo] Optional object with {startTime, endTime} for timeline items.
  * @returns {Promise<HTMLElement>} The created DOM element.
  */
-async function createItineraryItem(record, itemInfo, type) {
+async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
     itemElement.className = `itinerary-item ${type}`;
@@ -238,33 +256,38 @@ async function createItineraryItem(record, itemInfo, type) {
     
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
-    const quantitySelector = `
-        <div class="quantity-selector">
-            <label>Qty:</label>
-            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
-        </div>
-    `;
 
+    // --- MODIFIED: Add time display for timeline items ---
+    let timeHTML = '';
+    if (type === 'locked' && timeInfo) {
+        const formatTime = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        timeHTML = `<p class="itinerary-item-time">${formatTime(timeInfo.startTime)} - ${formatTime(timeInfo.endTime)}</p>`;
+    }
+    
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
+            ${timeHTML}
             <p class="locked-item-name">${fields.Name}</p>
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
-            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note || ''}</textarea>
         </div>
-        ${quantitySelector}
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
 
-    // Add an edit button that opens the detail modal
-    const editBtn = document.createElement('button');
-    editBtn.className = 'edit-btn';
-    editBtn.textContent = 'Edit';
-    itemElement.querySelector('.locked-item-actions').prepend(editBtn);
-    editBtn.addEventListener('click', () => {
-        ui.showDetailModal(record);
+    // --- Add event listeners for removing items ---
+    itemElement.querySelector('.remove-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+        if (state.cart.lockedItems.has(recordId)) {
+            state.cart.lockedItems.delete(recordId);
+        } else if (state.cart.items.has(recordId)) {
+            state.cart.items.delete(recordId);
+        }
+        renderItinerary(); // Re-render everything after removal
+        ui.updateAllUI();
+        triggerSave();
     });
 
     return itemElement;
