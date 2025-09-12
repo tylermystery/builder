@@ -1,15 +1,14 @@
 // FILE: events.js
 /*
-* Version: 5.0.2
+* Version: 5.0.3
 * Last Modified: 2025-09-11
 * Changelog:
+* v5.0.3 - 2025-09-11
+* - Fixed ReferenceError by moving scrollTimeout to the module scope.
 * v5.0.2 - 2025-09-11
 * - Standardized the date format saved from the sidebar date picker to prevent Airtable errors.
 * v5.0.1 - 2025-09-11
 * - Added calls to ui.updateItineraryModalHeader to complete two-way data sync.
-* v5.0.0 - 2025-09-11
-* - Corrected the "Update Plan" button logic in the detail modal to prevent it from resetting real-time changes. The button now correctly closes the modal.
-* - Added a new event handler for the ".demote-locked-item-btn" to correctly move items from the event plan back to the "Ideas" (favorites) carousel.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -28,6 +27,7 @@ let currentStore = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
+let scrollTimeout = null; // --- FIX: Moved to module scope ---
 
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
@@ -283,7 +283,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('reset-filters-btn', 'click', () => {
         const allButton = categoryFiltersContainer.querySelector('.filter-btn[data-filter="all"]');
         if (allButton) {
-            categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
@@ -450,8 +450,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
-            // --- FIX: Standardize date format to an array of ISO strings ---
             if (selectedDates.length > 0) {
+                // --- FIX: Standardize date format to an array of ISO strings ---
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, [selectedDates[0].toISOString()]);
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
