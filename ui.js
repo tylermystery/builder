@@ -1,16 +1,16 @@
 // FILE: ui.js
 /*
- * Version: 3.1.1
+ * Version: 3.1.2
  * Last Modified: 2025-09-11
  * Changelog:
+ * v3.1.2 - 2025-09-11
+ * - Fixed SyntaxError by restoring the missing updateLockedItemStatusIcons function.
+ * - Corrected a faulty import statement that was causing the module to fail.
  * v3.1.1 - 2025-09-11
  * - Added missing function imports from sidebar.js to resolve reference errors.
  * v3.1.0 - 2025-09-11
  * - Fixed critical ReferenceError in updateAllUI by calling functions directly.
  * - Restored the updateEventPlanDateDisplay function which was missing.
- * v3.0.9 - 2025-09-11
- * - Added updateItineraryModalHeader to enable two-way data sync.
- * - Added updateAllUI helper to simplify UI refresh calls.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -20,8 +20,8 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
-// --- FIX: Explicitly import functions needed within this module ---
-import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updateLockedItemStatusIcons, updateHeader } from './components/sidebar.js';
+// --- FIX: Removed `updateLockedItemStatusIcons` from this import as it lives in this file. ---
+import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updateHeader } from './components/sidebar.js';
 
 
 // Re-export functions from the component modules
@@ -30,7 +30,51 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 
-// Restored missing function
+// --- FIX: Restored the missing function to this file. ---
+export async function updateLockedItemStatusIcons() {
+    log('UI', 'Updating locked-in item status icons.');
+    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (!selectedDateISO) {
+        document.querySelectorAll('.locked-item-status-icon').forEach(icon => {
+            icon.textContent = '';
+        });
+        return;
+    }
+    const selectedDate = new Date(Array.isArray(selectedDateISO) ? selectedDateISO[0] : selectedDateISO);
+    const lockedItems = document.querySelectorAll('.locked-item-card');
+    for (const item of lockedItems) {
+        const recordId = item.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const dayStatus = await getDayStatus(selectedDate, busyTimes, record);
+        let statusIconEl = item.querySelector('.locked-item-status-icon');
+        if (!statusIconEl) {
+            statusIconEl = document.createElement('span');
+            statusIconEl.className = 'locked-item-status-icon';
+            const actionsContainer = item.querySelector('.locked-item-actions');
+            if (actionsContainer) {
+                actionsContainer.prepend(statusIconEl);
+            }
+        }
+        statusIconEl.classList.remove('available-full', 'available-partial', 'unavailable');
+        switch (dayStatus.status) {
+            case AVAILABILITY_STATUS.FULL:
+                statusIconEl.textContent = '✅';
+                statusIconEl.classList.add('available-full');
+                break;
+            case AVAILABILITY_STATUS.PARTIAL:
+                statusIconEl.textContent = '🟠';
+                statusIconEl.classList.add('available-partial');
+                break;
+            case AVAILABILITY_STATUS.NONE:
+                statusIconEl.textContent = '❌';
+                statusIconEl.classList.add('unavailable');
+                break;
+        }
+    }
+}
+
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -59,7 +103,6 @@ export async function updateEventPlanDateDisplay() {
     }
 }
 
-// Fixed "ui." self-references to prevent ReferenceError
 export function updateAllUI(recordId) {
     if (recordId) {
         updateCardIcon(recordId);
@@ -71,7 +114,6 @@ export function updateAllUI(recordId) {
     updateLockedItemStatusIcons();
 }
 
-// Helper to sync main UI changes to the itinerary modal header
 export function updateItineraryModalHeader() {
     const itineraryModal = document.getElementById('itinerary-modal-overlay');
     if (itineraryModal && itineraryModal.classList.contains('active')) {
@@ -79,7 +121,6 @@ export function updateItineraryModalHeader() {
     }
 }
 
-// --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
