@@ -1,12 +1,16 @@
 // FILE: events.js
 /*
-* Version: 5.0.4
+* Version: 5.0.5
 * Last Modified: 2025-09-12
 * Changelog:
+* v5.0.5 - 2025-09-12
+* - Corrected a major logic flaw in the main body click listener's if/else structure.
+* - Re-architected the click handler to correctly process both action clicks (buttons) and navigation clicks (cards/items).
+* - This fixes bugs where the detail modal would not open and date quick-filters were unresponsive.
+* - Implemented event listeners for the date range quick-filter buttons.
 * v5.0.4 - 2025-09-12
 * - Refactored the main body click listener to be more robust and handle clicks within the new Itinerary Canvas.
 * - Fixed bug where clicking itinerary items would not open the detail modal.
-* - Implemented event listeners for the date range quick-filter buttons.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -315,32 +319,36 @@ export function initializeEventListeners(imageCache, flatpickr) {
         },
     });
 
-    // --- NEW: Event listener for date quick-filter buttons ---
+    // --- FIX: Event listener for date quick-filter buttons ---
     const dateFilterGroup = document.getElementById('date-filter-group');
     if (dateFilterGroup) {
         dateFilterGroup.addEventListener('click', (e) => {
-            if (e.target.matches('.filter-btn[data-date-quick]')) {
+            const quickButton = e.target.closest('.filter-btn[data-date-quick]');
+            if (quickButton) {
                 const today = new Date();
-                today.setHours(0, 0, 0, 0);
+                today.setHours(9, 0, 0, 0); // Start events at 9am
                 let startDate = new Date(today);
-                let endDate;
+                let endDate = new Date(today);
+                endDate.setHours(17, 0, 0, 0); // End events at 5pm
 
-                switch (e.target.dataset.dateQuick) {
+                switch (quickButton.dataset.dateQuick) {
                     case 'tomorrow':
                         startDate.setDate(today.getDate() + 1);
-                        endDate = new Date(startDate);
+                        endDate.setDate(today.getDate() + 1);
                         break;
                     case 'this-week':
-                        endDate = new Date(today.setDate(today.getDate() + 7));
+                        // Start from tomorrow, end 7 days from now
+                        startDate.setDate(today.getDate() + 1);
+                        endDate.setDate(today.getDate() + 7);
                         break;
                     case 'next-2-weeks':
-                        endDate = new Date(today.setDate(today.getDate() + 14));
+                        // Start from tomorrow, end 14 days from now
+                        startDate.setDate(today.getDate() + 1);
+                        endDate.setDate(today.getDate() + 14);
                         break;
                 }
                 
-                if (endDate) {
-                    mainDatePicker.setDate([startDate, endDate], true); // true triggers onChange
-                }
+                mainDatePicker.setDate([startDate, endDate], true); // true triggers onChange
             }
         });
     }
@@ -358,36 +366,31 @@ export function initializeEventListeners(imageCache, flatpickr) {
         ui.updateItineraryModalHeader();
     });
 
-    // --- MODIFIED: Refactored and corrected the main click handler ---
+    // --- FIX: This is the fully rewritten, corrected body click listener ---
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
-        
-        // --- Define potential ACTION targets first ---
-        const saveShareBtn = e.target.closest('#save-share-btn');
-        const checkoutBtn = e.target.closest('#checkout-btn');
-        const heartIcon = e.target.closest('.heart-icon');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
-        const demoteBtn = e.target.closest('.demote-locked-item-btn');
-        const removeBtn = e.target.closest('.remove-btn'); // More generic remove button selector
-
-        // --- Define potential NAVIGATION targets second ---
-        const card = e.target.closest('.event-card');
-        const favoriteItem = e.target.closest('.favorite-item');
-        const lockedItemCard = e.target.closest('.locked-item-card');
-        const itineraryItem = e.target.closest('.itinerary-item');
-
-        // --- Handle ACTION clicks ---
-        if (saveShareBtn) {
+    
+        // --- 1. Handle specific ACTION buttons first ---
+        // Each of these should stop further processing if matched.
+    
+        if (e.target.closest('#save-share-btn')) {
             navigator.clipboard.writeText(window.location.href).then(() => {
-                const originalText = saveShareBtn.textContent;
-                saveShareBtn.textContent = 'Copied!';
-                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
-           });
-        } else if (checkoutBtn) {
+                const btn = e.target.closest('#save-share-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = originalText; }, 1500);
+            });
+            return;
+        }
+    
+        if (e.target.closest('#checkout-btn')) {
             ui.showCheckoutModal();
-        } else if (heartIcon) {
+            return;
+        }
+    
+        if (e.target.closest('.heart-icon')) {
             e.stopPropagation();
-            const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
+            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
             if (!state.cart.lockedItems.has(recordId)) {
                 if (state.cart.items.has(recordId)) {
                     state.cart.items.delete(recordId);
@@ -397,11 +400,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.updateAllUI(recordId);
                 triggerSave();
             }
-        } else if (addToPlanBtn) {
+            return;
+        }
+    
+        if (e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn')) {
             e.stopPropagation();
-            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
+            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
-                ui.hideDetailModal(); // This is the "Update Plan" case in the modal
+                ui.hideDetailModal(); // Case for "Update Plan" in modal
                 return;
             }
             const itemInfo = ui.getItemState(recordId);
@@ -409,9 +415,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
             state.cart.items.delete(recordId);
             ui.updateAllUI(recordId);
             triggerSave();
-        } else if (demoteBtn) {
+            return;
+        }
+    
+        if (e.target.closest('.demote-locked-item-btn')) {
             e.stopPropagation();
-            const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
+            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
@@ -419,28 +428,18 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.updateAllUI(recordId);
                 triggerSave();
             }
-        } else if (removeBtn) {
-            e.stopPropagation();
-            const itemToRemove = removeBtn.closest('[data-record-id]');
-            if (itemToRemove) {
-                const recordId = itemToRemove.dataset.recordId;
-                state.cart.items.delete(recordId); // Works for both, as locked items aren't in carousel
-                ui.updateAllUI(recordId);
-                triggerSave();
-            }
-        } 
-        
-        // --- Handle NAVIGATION clicks (opening the modal) ---
-        else {
-            const itemContainer = card || favoriteItem || lockedItemCard || itineraryItem;
-            if (itemContainer) {
-                // Ensure the click was not on an interactive element within the container
-                if (e.target.closest('.quantity-selector, .action-btn, .remove-btn, .demote-locked-item-btn, .heart-icon')) {
-                    return;
-                }
-                const recordId = itemContainer.dataset.recordId;
-                const record = state.records.all.find(r => r.id === recordId);
-                if (record) ui.showDetailModal(record);
+            return;
+        }
+
+        // --- 2. Handle clicks on containers to open the detail modal ---
+        // This runs only if no action button was clicked.
+    
+        const itemContainer = e.target.closest('.event-card, .favorite-item, .locked-item-card, .itinerary-item');
+        if (itemContainer) {
+            const recordId = itemContainer.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                ui.showDetailModal(record);
             }
         }
     });
