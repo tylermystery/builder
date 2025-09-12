@@ -1,10 +1,10 @@
 // FILE: components/sidebar.js
 import { state } from '../state.js';
-import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { parseOptions } from '../utils.js';
+import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { showDetailModal } from './modal.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -13,8 +13,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
-    // NEW: Add overlay for name and tooltip
-    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
         <strong>${fields.Name || 'Untitled'}</strong>
         <br>
@@ -34,7 +34,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         </div>
     `;
 
-    // Initialize Tippy.js for the tooltip
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -56,10 +55,9 @@ async function createLockedInItemElement(record, itemInfo) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
 
-    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     
-    // --- FIX: Removed Edit button, changed Unsave button to "-" ---
     itemElement.innerHTML = `
         <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -144,7 +142,7 @@ export function updateTotalCost() {
     allItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
