@@ -490,8 +490,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
     safeAddEventListener('itinerary-btn', 'click', () => {
-        log('Events', 'Itinerary button clicked, showing modal.');
-        showItineraryModal();
+        log('Events', 'Event Plan button clicked, showing Canvas page.');
+        ui.showCanvasPage(); // Use the new full-page canvas function
     });
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
