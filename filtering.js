@@ -1,43 +1,9 @@
 // FILE: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
-import { getGroupPriceRange, parseOptions, getRecordPrice } from './utils.js';
-import { renderRecords } from './ui.js';
+import * as ui from './ui.js';
 
-// --- NEW: Location mapping logic ---
-const REGION_MAP = {
-    'sf': ['san francisco'],
-    'oakland': ['oakland'],
-    'peninsula': ['menlo park', 'palo alto', 'redwood city', 'san mateo'],
-    'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'mountain view'],
-    'north-bay': ['sausalito', 'marin', 'san rafael'],
-    'east-bay': ['berkeley', 'hayward', 'fremont', 'walnut creek']
-};
-
-/**
- * Parses a raw location string and returns its corresponding region identifier.
- * @param {string} locationString The string from the 'Location' field.
- * @returns {string|null} The region identifier (e.g., 'sf', 'south-bay') or null.
- */
-function getRegionFromLocationString(locationString) {
-    if (!locationString || typeof locationString !== 'string' || locationString.toLowerCase() === 'all') {
-        return null;
-    }
-    const lowerCaseLocation = locationString.toLowerCase();
-    for (const region in REGION_MAP) {
-        if (REGION_MAP[region].some(city => lowerCaseLocation.includes(city))) {
-            return region;
-        }
-    }
-    return 'other'; // Default for addresses that don't match a defined region
-}
-// --- END: Location mapping logic ---
-
-// --- HELPER FUNCTIONS from previous refactor ---
-function isGrouping(record, allRecordNames) {
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    return rawOptions.some(opt => allRecordNames.has(opt.name));
-}
+// --- NEW HELPER FUNCTIONS to get all nested items ---
 
 function getDescendantBookableItems(record, allRecords, allRecordNames) {
     let bookableItems = [];
@@ -52,11 +18,19 @@ function getDescendantBookableItems(record, allRecords, allRecordNames) {
     return bookableItems;
 }
 
+function isGrouping(record, allRecordNames) {
+    const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    return rawOptions.some(opt => allRecordNames.has(opt.name));
+}
+
 function getAllBookableItems(records) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
     return records.filter(record => !isGrouping(record, allRecordNames) && record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
 }
+// --- END HELPER FUNCTIONS ---
 
+
+// Helper function to parse capacity strings
 function parseCapacity(capacityStr) {
     if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
     if (capacityStr.includes('+')) {
@@ -66,17 +40,23 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
+// --- MODIFIED: This function is now recursive and more accurate ---
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
+
     if (selectedCategory === 'all') {
+        // If "All" is selected, return all bookable items.
         return activeSubcategories.length === 0 ? getAllBookableItems(records) : records.filter(record => activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase()));
     }
 
+    // Find the record for the selected main category (e.g., "Activities")
     const categoryRecord = records.find(r => r.fields.Name === selectedCategory && !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+
     if (!categoryRecord) {
         return [];
     }
     
+    // If subcategories are selected, filter by them directly.
     if (activeSubcategories.length > 0) {
         let items = [];
         const subcategoryRecords = records.filter(r => activeSubcategories.includes(r.fields.Name.toLowerCase()));
@@ -85,10 +65,12 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         });
         return items;
     } else {
+        // If only a main category is selected, get all its descendants.
         return getDescendantBookableItems(categoryRecord, records, allRecordNames);
     }
 }
 
+// Filter records by status
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') {
         return records;
@@ -96,6 +78,7 @@ function filterByStatus(records, statusFilter) {
     return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
 }
 
+// Filter records by headcount
 function filterByHeadcount(records, headcountFilter, customHeadcount) {
     if (headcountFilter === 'any' && !customHeadcount) {
         return records;
@@ -117,22 +100,17 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
-// --- UPDATED: This function is now much smarter ---
+// Filter records by location
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
     }
     return records.filter(record => {
-        const locationString = record.fields['Location'];
-        // Items marked as "All" should not appear in specific region searches.
-        if (!locationString || locationString.toLowerCase() === 'all') {
-            return false;
-        }
-        const region = getRegionFromLocationString(locationString);
-        return region === locationFilter;
+        return record.fields['Location']?.toLowerCase().replace(/\s+/g, '-') === locationFilter;
     });
 }
 
+// Filter records by budget
 function filterByBudget(records, budgetFilter) {
     if (budgetFilter === 'any') {
         return records;
@@ -147,11 +125,12 @@ function filterByBudget(records, budgetFilter) {
     const range = BUDGET_RANGES[budgetFilter];
 
     return records.filter(record => {
-        const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         return price >= range.min && price <= range.max;
     });
 }
 
+// Filter records by the text search term
 function filterBySearchTerm(records, searchTerm) {
     if (!searchTerm) {
         return records;
@@ -165,7 +144,7 @@ function filterBySearchTerm(records, searchTerm) {
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         
-        const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ');
+        const optionNames = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ');
         const allOtherText = [
             fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
             fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || '',
@@ -192,10 +171,11 @@ function filterBySearchTerm(records, searchTerm) {
     return scoredRecords.map(item => item.record);
 }
 
+// Sort the final filtered records
 function sortRecords(records, sortBy) {
     return records.sort((a, b) => {
-        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         switch (sortBy) {
@@ -206,6 +186,7 @@ function sortRecords(records, sortBy) {
         }
     });
 }
+
 
 export function applyFiltersAndSort(imageCache) {
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
@@ -223,20 +204,23 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay = state.records.all;
 
+    // Apply broad category and attribute filters first.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     
+    // Apply the text search term LAST to refine the filtered results.
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
 
+    // Sort the final list.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
-    renderRecords(initialRecords, imageCache, false).then(() => {
+    ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 }
