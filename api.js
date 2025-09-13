@@ -326,3 +326,4 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         console.error("Error posting chat message:", error);
     }
 }
+
