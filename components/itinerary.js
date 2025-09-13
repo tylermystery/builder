@@ -11,7 +11,7 @@ const Sortable = window.Sortable;
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
 const timelineContainer = document.getElementById('event-timeline-column');
 const paletteContainer = document.getElementById('event-palette-column');
-const closeBtn = document.getElementById('itinerary-close-btn');
+const closeBtn = document.getElementById('canvas-close-btn');
 
 let timelineSortable, paletteSortable, itineraryDatePicker;
 
