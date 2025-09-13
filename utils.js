@@ -1,44 +1,38 @@
-import { log } from './utils/debug.js';
+/**
+ * utils.js
+ * A collection of utility functions used across the application.
+ */
+import { CONSTANTS } from './config.js';
 
 /**
- * Parses the raw string from Airtable's 'Options' field into a structured array of objects.
- * This function handles various formats, including price changes, absolute prices,
- * durations, and descriptions.
- * @param {string} rawOptionsString The comma-separated string from the Airtable field.
- * @returns {Array<Object>} An array of option objects, each with standardized properties.
+ * Parses a string of options from a record's fields.
+ * @param {string} optionsStr
+ * @returns {Array<object>}
  */
-export function parseOptions(rawOptionsString) {
-    if (!rawOptionsString || typeof rawOptionsString !== 'string') {
-        return [];
-    }
-    
-    // Split the string by line breaks first, then by commas
-    const optionsArray = rawOptionsString.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
-    
-    return optionsArray.map(option => {
-        let name = option;
+export function parseOptions(optionsStr) {
+    if (!optionsStr) return [];
+    return optionsStr.split(';').map(optionPart => {
+        let name = '';
         let price = null;
         let priceChange = null;
         let durationChange = null;
-        let description = null;
+        let description = '';
 
-        const parts = option.split(',').map(part => part.trim());
-        name = parts.shift() || '';
-        
-        parts.forEach(part => {
+        optionPart.trim().split(',').forEach(part => {
             let match;
-            if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+            if (match = part.match(/name:\s*['"]?([^\"']+)['"]?/i)) {
+                name = match[1];
+            } else if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 price = parseFloat(match[1]);
             } else if (match = part.match(/price change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 priceChange = parseFloat(match[1]);
             } else if (match = part.match(/duration change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
                 durationChange = parseFloat(match[1]);
-            } else if (match = part.match(/description:\s*['"]?([^"']+)['"]?/i)) {
+            } else if (match = part.match(/description:\s*['"]?([^\"']+)['"]?/i)) {
                 description = match[1];
             }
         });
 
-        // Use a simple check to see if the name itself contains a price, as in the raw data
         let namePriceMatch = name.match(/\$(\d+(\.\d{1,2})?)/);
         if (namePriceMatch) {
             price = parseFloat(namePriceMatch[1]);
@@ -66,7 +60,37 @@ export function debounce(func, delay = 300) {
     return (...args) => {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
-            func.apply(this, args);
+            func(...args);
         }, delay);
     };
+}
+
+/**
+ * Calculates the price of a record, accounting for a selected option.
+ * @param {object} record The Airtable record object.
+ * @param {number|null} optionIndex The index of the selected option.
+ * @returns {number} The final calculated price.
+ */
+export function calculatePrice(record, optionIndex = null) {
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (optionIndex !== null) {
+        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const variation = options[optionIndex];
+        if (variation) {
+            if (variation.price !== null) return variation.price;
+            if (variation.priceChange !== null) price += variation.priceChange;
+        }
+    }
+    return isNaN(price) ? 0 : price;
+}
+
+/**
+ * Placeholder function for calculating duration.
+ * @param {object} record The Airtable record object.
+ * @param {number|null} optionIndex The index of the selected option.
+ * @returns {number} The duration in hours.
+ */
+export function calculateDuration(record, optionIndex = null) {
+    // Placeholder for now, will be updated in a later phase
+    return 0;
 }
