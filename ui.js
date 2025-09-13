@@ -23,7 +23,6 @@ import { updateFavoritesCarousel, updateEventPlanSection, updateTotalCost, updat
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 
 export async function updateLockedItemStatusIcons() {
     log('UI', 'Updating locked-in item status icons.');
