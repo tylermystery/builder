@@ -16,7 +16,6 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
 import { debounce } from './utils.js';
-import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage } from './chat.js';
 
 let mainDatePicker = null;
