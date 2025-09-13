@@ -1,226 +1,240 @@
 // FILE: components/itinerary.js
 import { state } from '../state.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
-import { debounce } from '../utils.js';
 
+// Get the SortableJS library from the global scope
 const Sortable = window.Sortable;
+
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
-const timelineContainer = document.getElementById('event-timeline-column');
-const paletteContainer = document.getElementById('event-palette-column');
+const lockedItemsContainer = document.getElementById('itinerary-locked-items');
+const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
 const closeBtn = document.getElementById('itinerary-close-btn');
 
-let timelineSortable, paletteSortable, itineraryDatePicker;
+let lockedSortable, favoritedSortable;
 
-/**
- * Initializes all event listeners for the itinerary modal, including SortableJS and header inputs.
- */
 export function setupItineraryEventListeners() {
-    log('Itinerary', 'Initializing Itinerary with SortableJS for Canvas view.');
-    
-    const canvasPage = document.getElementById('canvas-page-container');
-    const timelineContainer = document.getElementById('event-timeline-column');
-    const paletteContainer = document.getElementById('event-palette-column');
-    const closeBtn = document.getElementById('canvas-close-btn');
-    if (!canvasPage || !timelineContainer || !paletteContainer || !closeBtn) {
-        console.error('Itinerary page elements could not be found in the DOM.');
-        return;
-    }
+    log('Itinerary', 'Initializing Itinerary with SortableJS.');
 
-    new Sortable(timelineContainer, {
-        group: 'shared',
+    // Initialize SortableJS for the locked-in items column
+    lockedSortable = new Sortable(lockedItemsContainer, {
+        group: 'shared', // Allows items to be moved between lists
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
-            const recordId = evt.item.dataset.recordId;
-            if (evt.from.id !== evt.to.id) {
+            log('Itinerary', 'Drag ended in locked items list.');
+            // FIX: This section now correctly updates the state after an item is dropped.
+            if (evt.from.id === evt.to.id) {
+                // Reorder locked items if moved within the same list
+                const newOrder = lockedSortable.toArray();
+                const newLockedItems = new Map();
+                newOrder.forEach(recordId => {
+                    if (state.cart.lockedItems.has(recordId)) {
+                        newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
+                    }
+                });
+                state.cart.lockedItems = newLockedItems;
+            } else {
+                // Item moved from favorites to locked
+                const recordId = evt.item.dataset.recordId;
                 if (state.cart.items.has(recordId)) {
-       
-             const itemInfo = state.cart.items.get(recordId);
+                    const itemInfo = state.cart.items.get(recordId);
                     state.cart.items.delete(recordId);
                     state.cart.lockedItems.set(recordId, itemInfo);
                 }
             }
-            const newOrder = 
- Array.from(timelineContainer.children).map(child => child.dataset.recordId).filter(Boolean);
-            const newLockedItems = new Map();
-            newOrder.forEach(id => {
-                if (state.cart.lockedItems.has(id)) {
-                    newLockedItems.set(id, state.cart.lockedItems.get(id));
-                }
-            });
- 
-            state.cart.lockedItems = newLockedItems;
-            renderItinerary();
+            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
+            ui.updateFavoritesCarousel();
+            ui.updateTotalCost();
+            ui.updateEventPlanSection();
+            ui.updateEventPlanDateDisplay();
+            ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
 
-    new Sortable(paletteContainer, {
+    // Initialize SortableJS for the favorited items column
+    favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
+        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
+            log('Itinerary', 'Drag ended in favorites items list.');
+            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
-   
-                 const itemInfo = state.cart.lockedItems.get(recordId);
+                    const itemInfo = state.cart.lockedItems.get(recordId);
                     state.cart.lockedItems.delete(recordId);
                     state.cart.items.set(recordId, itemInfo);
                 }
             }
-           
- renderItinerary();
+            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
+            ui.updateFavoritesCarousel();
+            ui.updateTotalCost();
+            ui.updateEventPlanSection();
+            ui.updateEventPlanDateDisplay();
+            ui.updateLockedItemStatusIcons();
+            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
-    closeBtn.addEventListener('click', ui.hideCanvasPage);
-    
-    const debouncedSave = debounce(triggerSave, 500);
-    document.getElementById('itinerary-event-name').addEventListener('input', (e) => {
-        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
-        debouncedSave();
-    });
-    document.getElementById('itinerary-goals').addEventListener('input', (e) => {
-        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
-        debouncedSave();
-    });
-    document.getElementById('itinerary-guest-count').addEventListener('input', (e) => {
-        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, e.target.value);
-        renderItinerary(); // Recalculate costs
-        debouncedSave();
-    });
-    flatpickr("#itinerary-date-picker", {
-        enableTime: true,
-        dateFormat: "M j, Y h:i K",
-        onChange: (selectedDates) => {
-            if (selectedDates.length > 0) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-            } else {
-                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
- 
-            }
-            renderItinerary();
-            triggerSave();
+
+    closeBtn.addEventListener('click', hideItineraryModal);
+    itineraryModal.addEventListener('click', (e) => {
+        if (e.target === itineraryModal) {
+            hideItineraryModal();
         }
     });
+}
+
+export function showItineraryModal() {
+    log('Itinerary', 'Showing itinerary modal.');
+    renderItinerary();
+    renderItineraryHeader();
+    itineraryModal.classList.add('active');
+    itineraryModal.style.display = 'flex';
+    document.body.classList.add('modal-open');
+}
+
+export function hideItineraryModal() {
+    log('Itinerary', 'Hiding itinerary modal.');
+    itineraryModal.classList.remove('active');
+    setTimeout(() => {
+        itineraryModal.style.display = 'none';
+    }, 300);
+    document.body.classList.remove('modal-open');
 }
 
 export function renderItineraryHeader() {
-    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
-    document.getElementById('itinerary-guest-count').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT) || '';
-    
-    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    const datePicker = document.getElementById('itinerary-date-picker')._flatpickr;
-    if (datePicker) {
-        if (dateValue) {
-            datePicker.setDate(dateValue.map(d => new Date(d)), false);
-        } else {
-            datePicker.clear();
-        }
-    }
 }
 
 export async function renderItinerary() {
-    const timelineContainer = document.getElementById('event-timeline-column');
-    const paletteContainer = document.getElementById('event-palette-column');
-    if (!timelineContainer || !paletteContainer) return;
+    log('Itinerary', 'Rendering itinerary items.');
+    lockedItemsContainer.innerHTML = '';
+    favoritedItemsContainer.innerHTML = '';
 
-    timelineContainer.innerHTML = '';
-    paletteContainer.innerHTML = '';
-    // Render Palette
-    if (state.cart.items.size === 0) {
-        paletteContainer.innerHTML = `<p class="description">Your saved ideas will appear here.</p>`;
-    } else {
-        for (const [recordId, itemInfo] of state.cart.items.entries()) {
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) paletteContainer.appendChild(await createItineraryItem(record, itemInfo, 'favorite'));
-        }
-    }
-
-    // Render Timeline
     if (state.cart.lockedItems.size === 0) {
-        timelineContainer.innerHTML = `<p class="description">Drag ideas here to build your timeline.</p>`;
-    } else {
-        const lockedItemsArray = Array.from(state.cart.lockedItems.entries());
-        let currentTime;
-        const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (eventDate) {
-            currentTime = new Date(eventDate[0]);
-        } else {
-            currentTime = new Date();
-            currentTime.setHours(9, 0, 0, 0);
-        }
+        lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
+    }
+    if (state.cart.items.size === 0) {
+        favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
+    }
 
-        for (let i = 0; i < lockedItemsArray.length; i++) {
-            const [recordId, itemInfo] = lockedItemsArray[i];
-            const record = state.records.all.find(r => r.id === recordId);
-            if (!record) continue;
-            if (i > 0) {
-                const prevRecord = state.records.all.find(r => r.id === lockedItemsArray[i-1][0]);
-                if (prevRecord) {
-                    const origin = prevRecord.fields['Location'];
-                    const destination = record.fields['Location'];
-                    const travelInfo = await api.fetchTravelTime(origin, destination);
-                    if (travelInfo.duration > 0) {
-                        timelineContainer.appendChild(createTravelSegmentElement(travelInfo));
-                        currentTime.setMinutes(currentTime.getMinutes() + travelInfo.duration);
-                    }
-                }
-            }
-            const startTime = new Date(currentTime);
-            const durationHours = record.fields[CONSTANTS.FIELD_NAMES.DURATION] || 1;
-            currentTime.setMinutes(currentTime.getMinutes() + (durationHours * 60));
-            const endTime = new Date(currentTime);
-            timelineContainer.appendChild(await createItineraryItem(record, itemInfo, 'locked', { startTime, endTime }));
+    // Render locked items
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createItineraryItem(record, itemInfo, 'locked');
+            if (itemElement) lockedItemsContainer.appendChild(itemElement);
         }
     }
+
+    // Render favorited items
+    for (const [recordId, itemInfo] of state.cart.items.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createItineraryItem(record, itemInfo, 'favorite');
+            if (itemElement) favoritedItemsContainer.appendChild(itemElement);
+        }
+    }
+
+    // Add event listeners for live editing
+    document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newQuantity = parseInt(e.target.value, 10);
+            if (e.target.closest('#itinerary-locked-items')) {
+                ui.updateLockedItemState(recordId, { quantity: newQuantity });
+            } else {
+                ui.updateItemState(recordId, { quantity: newQuantity });
+            }
+            // FIX: Call the sidebar update functions here to sync the main view
+            ui.updateTotalCost();
+            ui.updateEventPlanSection();
+            triggerSave();
+        });
+    });
+
+    document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
+        textarea.addEventListener('input', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newNote = e.target.value;
+            if (e.target.closest('#itinerary-locked-items')) {
+                ui.updateLockedItemState(recordId, { note: newNote });
+            } else {
+                ui.updateItemState(recordId, { note: newNote });
+            }
+            // FIX: Call the sidebar update function here to sync the main view
+            ui.updateEventPlanSection();
+            triggerSave();
+        });
+    });
+
+    document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            state.cart.lockedItems.delete(recordId);
+            // FIX: Call the sidebar update functions here to sync the main view
+            ui.updateTotalCost();
+            ui.updateEventPlanSection();
+            ui.updateFavoritesCarousel();
+            e.target.closest('.itinerary-item').remove();
+            triggerSave();
+        });
+    });
 }
 
-function createTravelSegmentElement(travelInfo) {
-    const element = document.createElement('div');
-    element.className = 'travel-segment';
-    const travelEmoji = travelInfo.mode === 'car' ? '🚗' : '🚶';
-    element.innerHTML = `
-        <div class="travel-line"></div>
-        <div class="travel-details">${travelEmoji} Travel: ~${travelInfo.duration} min (${travelInfo.distance} miles)</div>
-        <div class="travel-line"></div>
-    `;
-    return element;
-}
-
-// --- FIX: Corrected the function definition syntax ---
-async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
+// Helper function to create an individual itinerary item element
+async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
-    itemElement.className = `itinerary-item ${type}`;
+    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
     itemElement.dataset.recordId = record.id;
+    
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
-    let timeHTML = '';
-    if (type === 'locked' && timeInfo) {
-        const formatTime = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        timeHTML = `<p class="itinerary-item-time">${formatTime(timeInfo.startTime)} - ${formatTime(timeInfo.endTime)}</p>`;
-    }
+    
+    const quantitySelector = `
+        <div class="quantity-selector">
+            <label>Qty:</label>
+            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
+        </div>
+    `;
     
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
-            ${timeHTML}
             <p class="locked-item-name">${fields.Name}</p>
-            ${selectedOption ?
-`<p class="locked-item-option">${selectedOption.name}</p>` : ''}
+            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
+            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
         </div>
+        ${quantitySelector}
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
+    
+    // Add edit button only for locked items
+    if (type === 'locked') {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = 'Edit';
+        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
+        editBtn.addEventListener('click', () => {
+            ui.showDetailModal(record);
+        });
+    }
+
     return itemElement;
 }
