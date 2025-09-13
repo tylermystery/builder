@@ -8,6 +8,12 @@ import { triggerSave } from '../events.js';
 import { debounce } from '../utils.js';
 
 const Sortable = window.Sortable;
+const itineraryModal = document.getElementById('itinerary-modal-overlay');
+const timelineContainer = document.getElementById('event-timeline-column');
+const paletteContainer = document.getElementById('event-palette-column');
+const closeBtn = document.getElementById('itinerary-close-btn');
+
+let timelineSortable, paletteSortable, itineraryDatePicker;
 
 /**
  * Initializes all event listeners for the itinerary modal, including SortableJS and header inputs.
@@ -19,7 +25,6 @@ export function setupItineraryEventListeners() {
     const timelineContainer = document.getElementById('event-timeline-column');
     const paletteContainer = document.getElementById('event-palette-column');
     const closeBtn = document.getElementById('canvas-close-btn');
-
     if (!canvasPage || !timelineContainer || !paletteContainer || !closeBtn) {
         console.error('Itinerary page elements could not be found in the DOM.');
         return;
@@ -33,18 +38,21 @@ export function setupItineraryEventListeners() {
             const recordId = evt.item.dataset.recordId;
             if (evt.from.id !== evt.to.id) {
                 if (state.cart.items.has(recordId)) {
-                    const itemInfo = state.cart.items.get(recordId);
+       
+             const itemInfo = state.cart.items.get(recordId);
                     state.cart.items.delete(recordId);
                     state.cart.lockedItems.set(recordId, itemInfo);
                 }
             }
-            const newOrder = Array.from(timelineContainer.children).map(child => child.dataset.recordId).filter(Boolean);
+            const newOrder = 
+ Array.from(timelineContainer.children).map(child => child.dataset.recordId).filter(Boolean);
             const newLockedItems = new Map();
             newOrder.forEach(id => {
                 if (state.cart.lockedItems.has(id)) {
                     newLockedItems.set(id, state.cart.lockedItems.get(id));
                 }
             });
+ 
             state.cart.lockedItems = newLockedItems;
             renderItinerary();
             triggerSave();
@@ -59,16 +67,17 @@ export function setupItineraryEventListeners() {
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
-                    const itemInfo = state.cart.lockedItems.get(recordId);
+   
+                 const itemInfo = state.cart.lockedItems.get(recordId);
                     state.cart.lockedItems.delete(recordId);
                     state.cart.items.set(recordId, itemInfo);
                 }
             }
-            renderItinerary();
+           
+ renderItinerary();
             triggerSave();
         }
     });
-
     closeBtn.addEventListener('click', ui.hideCanvasPage);
     
     const debouncedSave = debounce(triggerSave, 500);
@@ -93,6 +102,7 @@ export function setupItineraryEventListeners() {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+ 
             }
             renderItinerary();
             triggerSave();
@@ -123,7 +133,6 @@ export async function renderItinerary() {
 
     timelineContainer.innerHTML = '';
     paletteContainer.innerHTML = '';
-    
     // Render Palette
     if (state.cart.items.size === 0) {
         paletteContainer.innerHTML = `<p class="description">Your saved ideas will appear here.</p>`;
@@ -141,7 +150,6 @@ export async function renderItinerary() {
         const lockedItemsArray = Array.from(state.cart.lockedItems.entries());
         let currentTime;
         const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        
         if (eventDate) {
             currentTime = new Date(eventDate[0]);
         } else {
@@ -153,7 +161,6 @@ export async function renderItinerary() {
             const [recordId, itemInfo] = lockedItemsArray[i];
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) continue;
-
             if (i > 0) {
                 const prevRecord = state.records.all.find(r => r.id === lockedItemsArray[i-1][0]);
                 if (prevRecord) {
@@ -197,7 +204,6 @@ async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
     
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
-
     let timeHTML = '';
     if (type === 'locked' && timeInfo) {
         const formatTime = (date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -209,12 +215,12 @@ async function createItineraryItem(record, itemInfo, type, timeInfo = null) {
         <div class="locked-item-details">
             ${timeHTML}
             <p class="locked-item-name">${fields.Name}</p>
-            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
+            ${selectedOption ?
+`<p class="locked-item-option">${selectedOption.name}</p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
-    
     return itemElement;
 }
