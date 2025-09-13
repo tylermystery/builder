@@ -1,10 +1,10 @@
 // FILE: components/sidebar.js
 import { state } from '../state.js';
+import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { parseOptions, getRecordPrice, calculateTotalCost } from '../utils.js';
+import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { showDetailModal } from './modal.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -13,8 +13,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
-    
-    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+    // NEW: Add overlay for name and tooltip
+    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
         <strong>${fields.Name || 'Untitled'}</strong>
         <br>
@@ -34,6 +34,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         </div>
     `;
 
+    // Initialize Tippy.js for the tooltip
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -43,11 +44,13 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
+// FIX: This function now correctly creates a locked-in item element for the sidebar
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
+
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
@@ -55,29 +58,31 @@ async function createLockedInItemElement(record, itemInfo) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
 
-    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
-    
     itemElement.innerHTML = `
         <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
             <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>${itemInfo.note}</em></p>` : ''}
+            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
-            <button class="demote-locked-item-btn" title="Move back to Ideas">-</button>
+            <button class="edit-btn">Edit</button>
+            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
     return itemElement;
 }
 
+// FIX: This function now correctly renders the locked-in items in the sidebar
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
     
+    // FIX: Clear the container before adding new elements to avoid duplicates.
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
@@ -124,6 +129,7 @@ export async function updateFavoritesCarousel() {
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
+    
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
@@ -137,8 +143,26 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     if (!totalCostEl) return;
 
-    // --- FIX: Use the centralized cost calculation function ---
-    const total = calculateTotalCost(state.cart.lockedItems);
+    let total = 0;
+    const allItems = state.cart.lockedItems;
+    allItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) return;
+        const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+        if (isNaN(unitPrice)) return;
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
+ 
+        let itemCost;
+ 
+        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
+            itemCost = unitPrice * effectiveQuantity;
+        } else {
+            itemCost = unitPrice;
+        }
+        total += itemCost;
+    });
     totalCostEl.textContent = `$${total.toFixed(2)}`;
 
     const isPlanEmpty = total === 0;
@@ -163,9 +187,9 @@ export function displayReservedStatus() {
         totalRow.innerHTML = '<span style="color: #28a745; font-weight: bold;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'none';
+        checkoutBtn.style.display = 'none'; // Hide the button
     }
     if (saveShareBtn) {
-        saveShareBtn.disabled = false;
+        saveShareBtn.disabled = false; // Ensure the share link is enabled
     }
 }
