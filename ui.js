@@ -186,3 +186,23 @@ export function updateLockedItemState(recordId, updates) {
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
 }
+export function showCanvasPage() {
+    log('UI', 'Showing Event Canvas page.');
+    document.querySelector('.main-content').classList.add('main-content-blurred');
+    const canvasPage = document.getElementById('canvas-page-container');
+    canvasPage.classList.remove('canvas-hidden');
+    
+    // Populate the canvas with the latest data
+    renderItineraryHeader();
+    renderItinerary();
+}
+
+export function hideCanvasPage() {
+    log('UI', 'Hiding Event Canvas page and updating main UI.');
+    const canvasPage = document.getElementById('canvas-page-container');
+    canvasPage.classList.add('canvas-hidden');
+    document.querySelector('.main-content').classList.remove('main-content-blurred');
+
+    // This is the key: update the main UI only AFTER closing.
+    updateAllUI();
+}
