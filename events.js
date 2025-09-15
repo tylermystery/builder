@@ -310,6 +310,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         applyFiltersAndSort(imageCache);
     });
 
+    
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
         enableTime: false, // Changed from true
@@ -330,6 +331,38 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 await updateAllCardAvailabilityIcons();
             }
         },
+    });
+
+    safeAddEventListener('date-filter-group', 'click', (e) => {
+        const quickButton = e.target.closest('[data-date-quick]');
+        if (!quickButton || !mainDatePicker) return;
+    
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to the start of today
+    
+        let startDate = new Date(today);
+        let endDate = new Date(today);
+    
+        const quickFilterType = quickButton.dataset.dateQuick;
+    
+        switch (quickFilterType) {
+            case 'tomorrow':
+                startDate.setDate(today.getDate() + 1);
+                endDate.setDate(today.getDate() + 1);
+                break;
+            case 'this-week':
+                // Sets the range from today to the upcoming Sunday
+                endDate.setDate(today.getDate() + (6 - today.getDay())); // 6 is Sunday
+                break;
+            case 'next-2-weeks':
+                endDate.setDate(today.getDate() + 14);
+                break;
+        }
+    
+        // Programmatically set the date picker's value.
+        // The 'true' at the end triggers the onChange event,
+        // which runs all the necessary availability checks automatically.
+        mainDatePicker.setDate([startDate, endDate], true);
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
