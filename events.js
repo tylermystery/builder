@@ -387,6 +387,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const lockedItemCard = e.target.closest('.locked-item-card');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
+        const presentBtn = e.target.closest('.present-btn'); // Add this new variable
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -396,6 +397,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
            });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
+        } else if (presentBtn) {
+            const listType = presentBtn.dataset.listType;
+            ui.showPresentationView(listType);
         } else if (parentLink) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
