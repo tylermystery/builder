@@ -19,6 +19,22 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 // FIX: Export the new function instead of the old one
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
+
+// Create the observer outside the function so it's only created once.
+const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const imageContainer = entry.target;
+            const imageUrl = imageContainer.dataset.bgImage;
+            if (imageUrl) {
+                imageContainer.style.backgroundImage = `url('${imageUrl}')`;
+            }
+            imageContainer.classList.remove('lazy-load');
+            observer.unobserve(imageContainer);
+        }
+    });
+}, { rootMargin: "0px 0px 200px 0px" }); // Start loading when image is 200px away from viewport
+
 // --- SHARED HELPER FUNCTIONS ---
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
@@ -85,7 +101,7 @@ export function toggleLoading(show) {
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
-    const loadingMessage = document.getElementById('loading-message'); // NEW: Get loading message element
+    const loadingMessage = document.getElementById('loading-message');
     if (!catalogContainer) {
         console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
@@ -104,19 +120,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         }
         return;
     }
-    // FIX: Bulk fetch images before rendering cards to avoid rate limits
-    // NO LONGER NEEDED, THE IMAGES ARE NOW FETCHED ONE-BY-ONE
-    // const allTags = new Set();
-    // recordsToRender.forEach(record => {
-    //     if (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]) {
-    //         record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS].split(',').forEach(tag => allTags.add(tag.trim()));
-    //     }
-    // });
-    // const hasImagesToFetch = allTags.size > 0;
-    // if (hasImagesToFetch) {
-    //     await api.fetchImagesByTags(Array.from(allTags), 2);
-    // }
-    // END FIX
+
     const fragment = document.createDocumentFragment();
     const CHUNK_SIZE = 5;
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
@@ -128,6 +132,11 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         });
     }
     catalogContainer.appendChild(fragment);
+    
+    // After adding cards to the DOM, tell the observer to watch the new lazy-load elements.
+    const lazyImages = catalogContainer.querySelectorAll('.lazy-load');
+    lazyImages.forEach(img => lazyLoadObserver.observe(img));
+
     if (loadingMessage) {
         loadingMessage.style.display = 'none';
     }
@@ -158,8 +167,7 @@ export function updateLockedItemState(recordId, updates) {
     state.cart.lockedItems.set(recordId, newState);
 }
 export function updateHeader() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) ||
-    '';
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
     // Updated to handle the new editable title structure
     const eventNameInput = document.getElementById('header-event-name');
