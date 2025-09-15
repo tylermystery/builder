@@ -1,41 +1,50 @@
 // FILE: ui.js
 /*
- * Version: 3.0.8
- * Last Modified: 2025-09-09
+ * Version: 3.0.9
+ * Last Modified: 2025-09-15
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-// FIX: We need to update this import to reflect the name change
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
+
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-// FIX: Export the new function instead of the old one
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
+export { showPresentationView, setupPresentationEventListeners };
 
-// Create the observer outside the function so it's only created once.
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            const imageContainer = entry.target;
-            const imageUrl = imageContainer.dataset.bgImage;
-            if (imageUrl) {
-                imageContainer.style.backgroundImage = `url('${imageUrl}')`;
+            const element = entry.target;
+            // Handle background images for divs
+            if (element.dataset.bgImage) {
+                element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
             }
-            imageContainer.classList.remove('lazy-load');
-            observer.unobserve(imageContainer);
+            // Handle src for img tags
+            if (element.dataset.src) {
+                element.src = element.dataset.src;
+            }
+            element.classList.remove('lazy-load');
+            observer.unobserve(element);
         }
     });
-}, { rootMargin: "0px 0px 200px 0px" }); // Start loading when image is 200px away from viewport
+}, { rootMargin: "0px 0px 200px 0px" });
 
-// --- SHARED HELPER FUNCTIONS ---
+// Export a helper function to allow other modules to use the observer
+export function observeLazyImages(container) {
+    const lazyElements = container.querySelectorAll('.lazy-load');
+    lazyElements.forEach(el => lazyLoadObserver.observe(el));
+}
+
+// ... (rest of the file is unchanged) ...
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -51,6 +60,7 @@ function getDescendantBookableItems(record, allRecords) {
     }
     return bookableItems;
 }
+
 export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
@@ -61,15 +71,13 @@ export function getGroupPriceRange(record) {
             options.forEach((opt, index) => {
                 const price = getRecordPrice(item, index);
                 if (price > 0) {
-             
-               if (price < minPrice) minPrice = price;
+                    if (price < minPrice) minPrice = price;
                     if (price > maxPrice) maxPrice = price;
                 }
             });
         } else {
             const price = getRecordPrice(item);
-        
-         if (price > 0) {
+            if (price > 0) {
                 if (price < minPrice) minPrice = price;
                 if (price > maxPrice) maxPrice = price;
             }
@@ -77,6 +85,7 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -87,10 +96,9 @@ export function getRecordPrice(record, optionIndex = null) {
             if (variation.priceChange !== null) price += variation.priceChange;
         }
     }
-    // Return 0 if the price is still invalid, preventing the 'toFixed' error.
     return isNaN(price) ? 0 : price;
 }
-// --- CORE UI FUNCTIONS ---
+
 export function toggleLoading(show) {
     log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);
     const loadingMessage = document.getElementById('loading-message');
@@ -98,6 +106,7 @@ export function toggleLoading(show) {
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
@@ -133,43 +142,45 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
     catalogContainer.appendChild(fragment);
     
-    // After adding cards to the DOM, tell the observer to watch the new lazy-load elements.
-    const lazyImages = catalogContainer.querySelectorAll('.lazy-load');
-    lazyImages.forEach(img => lazyLoadObserver.observe(img));
+    observeLazyImages(catalogContainer);
 
     if (loadingMessage) {
         loadingMessage.style.display = 'none';
     }
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
+
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
 }
+
 export function getMainGetItemState() {
     return mainGetItemState;
 }
-// NEW: Exported state management functions
+
 export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
     }
     return { quantity: 1, selectedOptionIndex: 0, note: '' };
 }
+
 export function updateItemState(recordId, updates) {
     const existing = getItemState(recordId);
     const newState = { ...existing, ...updates };
     state.cart.items.set(recordId, newState);
 }
+
 export function updateLockedItemState(recordId, updates) {
     const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
 }
+
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    // Updated to handle the new editable title structure
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) {
         eventNameInput.value = eventName || 'My Awesome Event';
@@ -177,6 +188,7 @@ export function updateHeader() {
     const goalsInput = document.getElementById('header-goals');
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
+
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -204,6 +216,7 @@ export async function updateEventPlanDateDisplay() {
             break;
     }
 }
+
 export async function updateLockedItemStatusIcons() {
     log('UI', 'Updating locked-in item status icons.');
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
@@ -244,6 +257,7 @@ export async function updateLockedItemStatusIcons() {
         }
     }
 }
+
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
@@ -281,5 +295,3 @@ export function updateTotalCost() {
         }
     }
 }
-
-export { showPresentationView, setupPresentationEventListeners };
