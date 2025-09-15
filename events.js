@@ -1,4 +1,3 @@
-// FILE: events.js
 /*
 * Version: 4.9.9
 * Last Modified: 2025-09-11
@@ -18,7 +17,7 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability } from './availability.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage } from './chat.js';
@@ -126,27 +125,34 @@ export async function updateAllCardAvailabilityIcons() {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
+        
         const busyTimes = await api.fetchCalendarForRecord(record);
-        const dayStatus = getDayStatus(startDate, busyTimes, record);
-        const isAvailable = checkAvailability(startDate, requestedEnd, busyTimes);
+        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
+
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
-            let statusIcon, statusText;
-            if (dayStatus.status === AVAILABILITY_STATUS.NONE || !isAvailable) {
-                statusIcon = '❌';
-                statusText = dayStatus.reason;
-            } else if (dayStatus.status === AVAILABILITY_STATUS.PARTIAL) {
-                statusIcon = '🟠';
-                statusText = 'Partially Available';
-            } else {
-                statusIcon = '✅';
-                statusText = 'Fully Available';
+            let statusIcon;
+            
+            switch (rangeStatus.status) {
+                case AVAILABILITY_STATUS.FULL:
+                    statusIcon = '✅';
+                    break;
+                case AVAILABILITY_STATUS.PARTIAL:
+                    statusIcon = '🟠';
+                    break;
+                case AVAILABILITY_STATUS.NONE:
+                    statusIcon = '❌';
+                    break;
+                default:
+                    statusIcon = '📅';
             }
-            const dateString = startDate.toLocaleDateString();
-            const tooltipContent = `<div style="text-align: left;"><strong>${dateString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${statusText}</span></div>`;
+            
+            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
+            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
-            icon.title = statusText;
+            icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
         }
     }
@@ -160,7 +166,8 @@ async function handlePaymentFormSubmit(event) {
     const buttonText = submitBtn.querySelector('.button-text');
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
-    cardErrors.textContent = ''; // Clear previous errors
+    cardErrors.textContent = '';
+    // Clear previous errors
 
     // Show loading state
     submitBtn.disabled = true;
@@ -187,7 +194,7 @@ async function handlePaymentFormSubmit(event) {
                 email: customerEmail,
             },
         },
-     });
+    });
 
     if (error) {
         cardErrors.textContent = error.message;
@@ -218,7 +225,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
-    
     let debugEnabled = false;
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -300,7 +306,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
      
-       document.getElementById('headcount-filter').selectedIndex = 0;
+        document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
         document.getElementById('location-filter').selectedIndex = 0;
@@ -312,12 +318,11 @@ export function initializeEventListeners(imageCache, flatpickr) {
 
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
-        enableTime: false, // Changed from true
-        dateFormat: "M j, Y", // Changed from "M j, Y h:i K"
+        enableTime: false,
+        dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
-                // Ensure the range ends at the end of the selected day
                 if (selectedDates.length === 2) {
                     selectedDates[1].setHours(23, 59, 59, 999);
                 }
@@ -335,36 +340,30 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton || !mainDatePicker) return;
-    
+
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Normalize to the start of today
-    
+        today.setHours(0, 0, 0, 0);
+
         let startDate = new Date(today);
         let endDate = new Date(today);
-    
+
         const quickFilterType = quickButton.dataset.dateQuick;
-    
+
         switch (quickFilterType) {
             case 'tomorrow':
                 startDate.setDate(today.getDate() + 1);
                 endDate.setDate(today.getDate() + 1);
                 break;
             case 'this-week':
-                // Sets the range from today to the upcoming Sunday
-                endDate.setDate(today.getDate() + (6 - today.getDay())); // 6 is Sunday
+                endDate.setDate(today.getDate() + (6 - today.getDay()));
                 break;
             case 'next-2-weeks':
                 endDate.setDate(today.getDate() + 14);
                 break;
         }
-    
-        // Programmatically set the date picker's value.
-        // The 'true' at the end triggers the onChange event,
-        // which runs all the necessary availability checks automatically.
         mainDatePicker.setDate([startDate, endDate], true);
     });
 
-    
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -386,7 +385,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
         const lockedItemCard = e.target.closest('.locked-item-card');
-        // --- NEW: Target for the demote button ---
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
 
         if (saveShareBtn) {
@@ -416,7 +414,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             const isLocked = state.cart.lockedItems.has(recordId);
             
-            // --- FIX: If item is already locked, this button just closes the modal. ---
             if (isLocked) {
                 ui.hideDetailModal();
                 return;
@@ -430,16 +427,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
             triggerSave();
-        // --- NEW: Handler for the demote button ---
         } else if (demoteBtn) {
             e.stopPropagation();
             const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
-                state.cart.items.set(recordId, itemInfo); // Move it back to favorites
+                state.cart.items.set(recordId, itemInfo);
                 
-                // Update all relevant UI components
                 ui.updateCardIcon(recordId);
                 await ui.updateEventPlanSection();
                 await ui.updateFavoritesCarousel();
@@ -486,6 +481,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         let updates = {};
 
         if (target.matches('.quantity-input')) {
+    
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
@@ -494,7 +490,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
 
         if (Object.keys(updates).length > 0) {
-              if (isLocked) 
+              
+            if (isLocked) 
             {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
@@ -524,7 +521,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
-    // Add event listener for the payment form
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
@@ -569,4 +565,3 @@ export function initializeChatEventListeners() {
         }
     });
 }
-
