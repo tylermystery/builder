@@ -400,6 +400,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
+       } else if (carouselNav) {
+            const carousel = document.getElementById('favorites-carousel');
+            if (carousel) {
+                const scrollAmount = 300; // Amount to scroll in pixels
+                const direction = carouselNav.classList.contains('right') ? 1 : -1;
+                carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+            }
         } else if (parentLink) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
