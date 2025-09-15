@@ -63,7 +63,11 @@ function renderSummaryHeader() {
 
 function renderReactions(recordId) {
     const currentUser = getCurrentUser();
-    const allReactions = state.session.reactions.get(recordId) || new Map();
+    let allReactions = state.session.reactions.get(recordId);
+    // Failsafe: Ensure allReactions is always a Map, even if state is malformed.
+    if (!(allReactions instanceof Map)) {
+        allReactions = new Map();
+    }
     const currentUserReaction = allReactions.get(currentUser.id);
 
     reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
