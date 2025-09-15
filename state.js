@@ -32,10 +32,10 @@ export const state = {
     },
     session: {
         id: null,
-       
         isOwned: false, // true if the user created this session, false if loaded from a shared URL
         user: '',
-        collaborators: [],
+        collaborators: [], // This will be deprecated but kept for now
+        userProfiles: new Map(), // Stores userId -> name mapping
         reactions: new Map(),
     },
     calendar: {
