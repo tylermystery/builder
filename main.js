@@ -224,6 +224,21 @@ async function initialize() {
     // --- ADDED: Set initialization flag to false after all setup is complete ---
     state.ui.isInitializing = false;
     log('Main', '23. Initialization complete, ready for user interaction.');
+
+      // Check for presentation view parameter in URL
+    const finalUrlParams = new URLSearchParams(window.location.search);
+    if (finalUrlParams.get('view') === 'present') {
+        log('Main', 'URL indicates to start in presentation view.');
+        const listToShow = state.cart.items.size > 0 ? 'favorites' : 'locked';
+        if (state.cart.items.size > 0 || state.cart.lockedItems.size > 0) {
+            // Use a small timeout to ensure the UI is fully ready
+            setTimeout(() => ui.showPresentationView(listToShow), 100);
+        }
+    }
+
+    state.ui.isInitializing = false;
+    log('Main', '23. Initialization complete, ready for user interaction.');
+ 
 }
 
 initialize();
