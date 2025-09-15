@@ -1,25 +1,22 @@
 // FILE: components/sidebar.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
-import * as api from '../api.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getImagesForTags } from '../imageManager.js'; // <-- ADD THIS IMPORT
+import { getImagesForTags } from '../imageManager.js';
+
+const defaultImageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
 async function createFavoriteCardElement(record, itemInfo) {
     const fields = record.fields;
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
-    
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS])
+
+    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
         .then(imageUrls => {
-            if (imageUrls.length > 0) {
-                itemCard.style.backgroundImage = `url('${imageUrls[0]}')`;
-            } else {
-                itemCard.style.backgroundImage = `url('https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg')`;
-            }
+            itemCard.style.backgroundImage = `url('${imageUrls[0] || defaultImageUrl}')`;
         });
 
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
@@ -42,9 +39,9 @@ async function createLockedInItemElement(record, itemInfo) {
     }
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
-
+    
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail" src="" alt="${fields.Name}">
+        <img class="locked-item-thumbnail" src="${defaultImageUrl}" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -57,18 +54,18 @@ async function createLockedInItemElement(record, itemInfo) {
         </div>
     `;
 
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS])
+    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
         .then(imageUrls => {
             const imgEl = itemElement.querySelector('.locked-item-thumbnail');
             if (imgEl) {
-                imgEl.src = imageUrls.length > 0 ? imageUrls[0] : `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+                imgEl.src = imageUrls[0] || defaultImageUrl;
             }
         });
 
     return itemElement;
 }
 
-// ... (The functions updateEventPlanSection, updateFavoritesCarousel, and others remain the same)
+// ... (rest of the file remains the same)
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
