@@ -76,7 +76,6 @@
             padding: 0;
             cursor: pointer;
             text-align: left;
-            margin-bottom: 10px;
         }
         #itinerary-btn:hover {
             text-decoration: underline;
@@ -375,7 +374,6 @@
         .heart-icon svg {
             width: 28px;
             height: 28px;
-            /* --- FIX: Changed default fill/stroke to a visible gray --- */
             fill: #ccc;
             stroke: #aaa;
             stroke-width: 1.5;
@@ -593,13 +591,13 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
-}
+        }
         #modal-main-image {
             flex-grow: 1;
             background-size: cover;
             background-position: center;
             border-right: 1px solid #eee;
-}
+        }
         #modal-thumbnail-strip {
             display: flex;
             gap: 5px;
@@ -635,12 +633,12 @@
             gap: 10px;
             align-items: center;
             margin-bottom: 10px;
-}
+        }
         #modal-breadcrumbs {
             font-size: 0.9em;
             color: #6c757d;
             margin-bottom: 8px;
-}
+        }
         #modal-breadcrumbs a {
             color: #007bff;
             text-decoration: none;
@@ -741,7 +739,7 @@
             color: #333;
             transform: scale(0.8);
             transition: transform 0.3s ease, opacity 0.3s ease;
-}
+        }
         .modal-overlay.active .checkout-modal-content {
             transform: scale(1);
             opacity: 1;
@@ -1079,6 +1077,111 @@
             margin-top: 4px;
             margin-right: 5px;
         }
+        .sidebar-header-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .sidebar-header-group h4 {
+            margin: 0;
+        }
+        .present-btn {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .present-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .presentation-content {
+            background: #fff;
+            border-radius: 8px;
+            width: 95vw;
+            height: 90vh;
+            max-width: 1600px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            position: relative;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .presentation-header {
+            padding: 15px 30px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .presentation-header h2 {
+            margin: 0;
+        }
+        .presentation-body {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 20px;
+            padding: 20px;
+            overflow: hidden;
+        }
+        #presentation-gallery-column {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #presentation-main-image {
+            flex-grow: 1;
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        #presentation-thumbnail-strip {
+            display: flex;
+            gap: 10px;
+            padding-top: 10px;
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+        #presentation-details-column {
+            overflow-y: auto;
+            padding-right: 15px;
+        }
+        #presentation-item-note-container {
+            margin-top: 20px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        #presentation-item-note {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .presentation-nav-arrow {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1011;
+        }
+        .presentation-nav-arrow.up { top: 15px; }
+        .presentation-nav-arrow.down { bottom: 15px; }
     </style>
 </head>
 <body>
@@ -1103,23 +1206,29 @@
      
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <div id="favorites-section">
-                    <h4>Ideas</h4>
+                    <div class="sidebar-header-group">
+                        <h4>Ideas</h4>
+                        <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
+                    </div>
                     <button class="carousel-nav left">◄</button>
                     <div id="favorites-carousel"></div>
                     <button class="carousel-nav right">►</button>
                 </div>
-                <button id="itinerary-btn">Event Plan</button>
+                <div class="sidebar-header-group">
+                    <button id="itinerary-btn">Event Plan</button>
+                    <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
+                </div>
                  <div id="cart-items-container">
                      <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
                 <div id="cart-footer">
                     <div class="total-row">
                         <span>Total:</span>
-                         <span id="total-cost">$0.00</span>
+                        <span id="total-cost">$0.00</span>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
-                   </div>
+                </div>
            </div>
         </div>
 
@@ -1128,79 +1237,91 @@
             <h3>Filters</h3>
             <div class="filter-group">
                 <label for="name-filter">Search Catalog</label>
-                     <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+                <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
             </div>
      
                <div class="filter-group">
                 <label>Categories</label>
                 <div id="category-filters" class="filter-btn-group"></div>
             </div>
-     
+   
+      
                <div class="filter-group">
                 <label>Subcategories</label>
                    <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
             </div>
                 <div id="date-filter-group" class="filter-group">
-                     <label for="date-filter">Date & Time</label>
+             
+                <label for="date-filter">Date & Time</label>
                          <input type="text" id="date-filter" placeholder="Select date and time range">
   
                                      <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
-                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
+             
+                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
                         <button class="filter-btn" data-date-quick="this-week">This Week</button>
                                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
-                    </div>
+                
+                     </div>
                 </div>
                 <div class="filter-group">
                 
                                  <label for="headcount-filter">Headcount</label>
             
+ 
                                  <select id="headcount-filter">
                         <option value="any">Any Size</option>
                         <option value="1-10">1-10</option>
-                                      <option value="11-25">11-25</option>
+                
+                       <option value="11-25">11-25</option>
                         <option value="26-50">26-50</option>
                         <option value="51-100">51-100</option>
-                                     <option value="101-250">101-250</option>
+                           
+                      <option value="101-250">101-250</option>
                                                                      <option value="250-plus">250+</option>
-                        <option value="custom">Custom...</option>
+                   
+                         <option value="custom">Custom...</option>
                        </select>
                      <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
                 </div>
                 <div class="filter-group">
                     <label for="location-filter">Location</label>
                     <select id="location-filter">
-                        <option 
-                        value="any">Any Location</option>
+                        <option value="any">Any Location</option>
                         <option value="sf">San Francisco</option>
                         <option value="oakland">Oakland</option>
+                        
                         <option value="peninsula">Peninsula</option>
                         <option value="south-bay">South Bay</option>
                         <option value="north-bay">North Bay</option>
                         <option value="east-bay">East Bay</option>
-                           <option value="other">Other</option>
+                     
+                          <option value="other">Other</option>
                     </select>
                 </div>
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
-                    <select id="budget-filter">
-                        <option 
-                        value="any">Any Budget</option>
+                   
+                     <select id="budget-filter">
+                        <option value="any">Any Budget</option>
                                      <option value="budget-friendly">Budget-Friendly</option>
-                         <option value="moderate">Moderate</option>
+          
+                       <option value="moderate">Moderate</option>
                         <option value="executive">Executive</option>
                                        <option value="luxury">Luxury</option>
-                    </select>
+                   
+                     </select>
                              </div>
                 <div class="filter-group">
                     <label for="status-filter">Status</label>
                            <select id="status-filter">
-                                                 <option value="Available">Available</option>
+    
+                                              <option value="Available">Available</option>
                         <option value="all">Show All</option>
                          <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold 
-                                             Out">Sold Out</option>
+                        <option value="Sold                                             Out">Sold Out</option>
                     </select>
-                </div>
+        
+                 </div>
                      <button id="reset-filters-btn">Reset All Filters</button>
             </div>
          </div>
@@ -1209,19 +1330,22 @@
         <div id="catalog-area">
   
       <div id="catalog-header">
+                
                 <div id="breadcrumbs"></div>
                  <h2 id="catalog-title"></h2>
             </div>
             <div id="catalog-toolbar">
                      <select id="sort-by">
     
-                                <option value="price-asc">Price (Low to High</option>
+                              
+                       <option value="price-asc">Price (Low to High</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
                      </select>
             </div>
       
-              <div id="catalog-container"></div>
+         
+           <div id="catalog-container"></div>
        
   </div>
     </div>
@@ -1231,20 +1355,23 @@
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
-                  </div>
+    
+               </div>
       
        <div class="modal-sidebar-column">
                 <div id="modal-header-actions">
                </div>
                  <div id="modal-breadcrumbs"></div>
-                       <h2 id="modal-item-name"></h2>
+                      
+                <h2 id="modal-item-name"></h2>
                 <p id="modal-item-price" class="price"></p>
          <p id="modal-item-description"></p>
             
                 <div id="modal-options-container"></div>
                      <div id="modal-quantity-selector"></div>
               
-                  <div id="modal-notes-container">
+     
+                   <div id="modal-notes-container">
                     <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
                 </div>
   
@@ -1259,64 +1386,72 @@
        </div>
     <div id="checkout-modal-overlay" class="modal-overlay">
          <div class="checkout-modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+     
+               <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
           
           <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
                    </div>
   
-           <hr>
+          
+             <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
     
                                 <span>Total Estimated Cost:</span>
                      <span id="full-total-price">$0.00</span>
-               </div>
+         
+              </div>
  
                 <div class="checkout-deposit">
                     <span>Deposit Due (35%):</span>
      
                                <span id="deposit-price">$0.00</span>
                 
-                </div>
+ 
+                               </div>
            
                  </div>
             <div class="terms-and-conditions">
                 <h4>Simplified Terms</h4>
           
               <ul>
-                  
+   
+                               
                    <li>A 35% deposit is required to reserve your event date.</li>
                     <li>Your event details will be finalized in collaboration with our team.</li>
                      <li>The remaining balance is due after all details are confirmed and, in some cases, after 
                     the event.</li>
    
-                                     <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred.
-                    No refunds within 7 days of the event.</li>
+                                     <li>The deposit is fully refundable for 30 days, minus any non-refundable expenses already incurred. No refunds within 7 days of the event.</li>
                     <li>Your deposit includes all planning, preparation, setup, and hosting services.</li>
                 </ul>
             </div>
             <form id="payment-form">
                 <div class="form-row">
       
+ 
                  <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="cc-name">
                 </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
   
+ 
                   <input type="email" id="customer-email" required autocomplete="email">
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
              
+        
                                    <div id="card-element"></div>
         
                     <div id="card-errors" role="alert"></div>
                 </div>
                 <button id="payment-submit-btn" class="primary-action-btn" type="submit">
-                     <span class="button-text">Pay Now</span>
+       
+                          <span class="button-text">Pay Now</span>
      
                                    <span class="spinner" style="display: none;">Processing...</span>
                 </button>
@@ -1331,22 +1466,26 @@
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
    
-              <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+      
+               <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
                     <input type="text" id="itinerary-event-name" value="Enter Event Name" autocomplete="off">
   
-                   </div>
+         
+                  </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-goals">Goals / Notes</label>
                     <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?"
          
-                                       autocomplete="off">
+            
+                                           autocomplete="off">
                 </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-date-picker">Date & Time</label>
-                    <input type="text" id="itinerary-date-picker" placeholder="Select date range">
+                 
+               <input type="text" id="itinerary-date-picker" placeholder="Select date range">
         
                          </div>
    
@@ -1354,7 +1493,8 @@
             </div>
             <div class="itinerary-container">
                 <div class="itinerary-column">
-                    <h3>Event Plan</h3>
+             
+                   <h3>Event Plan</h3>
                     <p class="description">Drag 
  items to change 
  their order.</p>
@@ -1362,12 +1502,14 @@
                  <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
                 <div class="itinerary-column">
-                    <h3>Ideas</h3>
+ 
+                                   <h3>Ideas</h3>
             
                      
                      <p class="description">Move items here to add them to your plan.</p>
        
-                           <div id="itinerary-favorited-items" class="itinerary-list"></div>
+           
+                                <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
   
@@ -1376,7 +1518,8 @@
     <div id="chat-widget-container">
          <button id="chat-toggle-button">
             💬
-            <span id="presence-counter">0</span>
+        
+             <span id="presence-counter">0</span>
            </button>
     
         <div id="chat-window">
@@ -1384,7 +1527,8 @@
              
                <p>Session Chat (<span id="whos-here-count">0</span>)</p>
                 <div class="user-identity">
-                    <label for="chat-user-name">Your Name:</label>
+          
+                     <label for="chat-user-name">Your Name:</label>
                     <input type="text" id="chat-user-name" autocomplete="off">
                 </div>
             </div>
@@ -1392,7 +1536,8 @@
             <div id="whos-here-list"></div>
     
             <div id="messages-container">
-      
+   
+       
                    <div id="messages-list">
                 </div>
             </div>
@@ -1400,7 +1545,8 @@
                    <div id="typing-indicator"></div>
     
             <form id="message-form">
-                <input type="text" 
+  
+                             <input type="text" 
                 id="message-input" placeholder="Type a message..." autocomplete="off">
                 <button type="submit">Send</button>
             </form>
@@ -1408,7 +1554,39 @@
                    </div>
     </div>
     
+    <div id="presentation-modal-overlay" class="modal-overlay">
+        <div class="presentation-content">
+            <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
+            
+            <div class="presentation-header">
+                <h2 id="presentation-title"></h2>
+                <span id="presentation-counter"></span>
+            </div>
+    
+            <div class="presentation-body">
+                <div id="presentation-gallery-column">
+                    <div id="presentation-main-image"></div>
+                    <div id="presentation-thumbnail-strip"></div>
+                </div>
+                <div id="presentation-details-column">
+                    <h3 id="presentation-item-name"></h3>
+                    <p id="presentation-item-price"></p>
+                    <p id="presentation-item-description"></p>
+                    <div id="presentation-item-options"></div>
+                    <div id="presentation-item-note-container">
+                        <h4>Note:</h4>
+                        <p id="presentation-item-note"></p>
+                    </div>
+                </div>
+            </div>
+    
+            <button class="presentation-nav-arrow up" id="presentation-prev-item-btn" title="Previous Item (Up Arrow)">▲</button>
+            <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
+        </div>
+    </div>
+
     <script type="module" src="main.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+ 
+       <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
 </html>
