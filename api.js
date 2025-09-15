@@ -33,7 +33,12 @@ export async function loadSessionFromAirtable(sessionId) {
                 const savedState = JSON.parse(sessionDataString);
                 state.cart.items = new Map(Object.entries(savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
-                state.session.reactions = new Map(Object.entries(savedState.itemReactions || {}));
+                // Correctly reconstruct the nested Map for reactions
+                const reactionsObject = savedState.itemReactions || {};
+                state.session.reactions = new Map();
+                for (const recordId in reactionsObject) {
+                    state.session.reactions.set(recordId, new Map(Object.entries(reactionsObject[recordId])));
+                }
                 state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails || {}));
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON: ${jsonError.message}`);
