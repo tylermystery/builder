@@ -19,17 +19,28 @@ const itemNoteEl = document.getElementById('presentation-item-note');
 const prevItemBtn = document.getElementById('presentation-prev-item-btn');
 const nextItemBtn = document.getElementById('presentation-next-item-btn');
 
-// New summary header elements
 const summaryEventNameEl = document.getElementById('summary-event-name');
 const summaryEventNotesEl = document.getElementById('summary-event-notes');
 const summaryEventDateEl = document.getElementById('summary-event-date');
 const summaryIdeasLink = document.getElementById('summary-ideas-link');
 const summaryLockedLink = document.getElementById('summary-locked-link');
+const shareBtn = document.getElementById('presentation-share-btn');
 
-let currentList = [];
-let currentIndex = 0;
+let combinedList = [];
+let globalCurrentIndex = 0;
 let currentImages = [];
 let currentImageIndex = 0;
+
+function updateHeader(currentItem) {
+    const listType = currentItem.type;
+    titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
+    counterEl.textContent = `Item ${globalCurrentIndex + 1} of ${combinedList.length}`;
+    
+    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
+    summaryLockedLink.classList.toggle('active', listType === 'locked');
+    summaryIdeasLink.disabled = listType === 'favorites';
+    summaryLockedLink.disabled = listType === 'locked';
+}
 
 function renderSummaryHeader() {
     summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
@@ -43,30 +54,26 @@ function renderSummaryHeader() {
         summaryEventDateEl.textContent = 'N/A';
     }
 
-    const ideasCount = state.cart.items.size;
-    const lockedCount = state.cart.lockedItems.size;
-
-    summaryIdeasLink.textContent = `${ideasCount} Ideas`;
-    summaryLockedLink.textContent = `${lockedCount} Locked In`;
+    summaryIdeasLink.textContent = `${state.cart.items.size} Ideas`;
+    summaryLockedLink.textContent = `${state.cart.lockedItems.size} Locked In`;
 }
 
 async function renderCurrentSlide() {
-    if (currentList.length === 0) {
+    if (combinedList.length === 0) {
         hidePresentationView();
         return;
     }
-    const recordId = currentList[currentIndex];
+    const currentItem = combinedList[globalCurrentIndex];
+    const recordId = currentItem.recordId;
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) {
         log('Presentation', `Record not found for ID: ${recordId}`);
         return;
     }
     
-    // Update header
-    counterEl.textContent = `Item ${currentIndex + 1} of ${currentList.length}`;
+    updateHeader(currentItem);
 
-    // Update details
-    const itemInfo = state.cart.items.get(recordId) || state.cart.lockedItems.get(recordId);
+    const itemInfo = currentItem.type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     itemNameEl.textContent = record.fields.Name || 'Untitled';
     const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
     itemPriceEl.textContent = `$${price.toFixed(2)}`;
@@ -79,7 +86,6 @@ async function renderCurrentSlide() {
         itemNoteContainerEl.style.display = 'none';
     }
 
-    // Fetch and render images
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     currentImages = imageUrls || [];
     currentImageIndex = 0;
@@ -111,11 +117,16 @@ function renderCurrentImage() {
 }
 
 function navigateToSlide(direction) {
-    const newIndex = currentIndex + direction;
-    if (newIndex >= 0 && newIndex < currentList.length) {
-        currentIndex = newIndex;
-        renderCurrentSlide();
+    if (combinedList.length === 0) return;
+    globalCurrentIndex += direction;
+    
+    if (globalCurrentIndex >= combinedList.length) {
+        globalCurrentIndex = 0; // Loop to the beginning
+    } else if (globalCurrentIndex < 0) {
+        globalCurrentIndex = combinedList.length - 1; // Loop to the end
     }
+    
+    renderCurrentSlide();
 }
 
 function cycleImage(direction) {
@@ -146,26 +157,27 @@ function handleKeyDown(e) {
     }
 }
 
-export function showPresentationView(listType) {
+export function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing presentation for: ${listType}`);
-    const listMap = listType === 'favorites' ? state.cart.items : state.cart.lockedItems;
-    currentList = Array.from(listMap.keys());
     
-    if (currentList.length === 0) {
-        alert(`There are no items in your "${listType === 'favorites' ? 'Ideas' : 'Event Plan'}" list to present.`);
+    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
+    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
+    combinedList = [...favorites, ...locked];
+    
+    if (combinedList.length === 0) {
+        alert(`There are no items in your lists to present.`);
         return;
     }
 
-    // Update summary header and link states
+    if (startRecordId) {
+        globalCurrentIndex = combinedList.findIndex(item => item.recordId === startRecordId);
+    } else {
+        const firstItemOfList = combinedList.find(item => item.type === listType);
+        globalCurrentIndex = firstItemOfList ? combinedList.indexOf(firstItemOfList) : 0;
+    }
+
     renderSummaryHeader();
-    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
-    summaryLockedLink.classList.toggle('active', listType === 'locked');
-    summaryIdeasLink.disabled = listType === 'favorites';
-    summaryLockedLink.disabled = listType === 'locked';
-
-    titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
-    currentIndex = 0;
-
+    
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
@@ -187,6 +199,29 @@ export function setupPresentationEventListeners() {
     closeBtn.addEventListener('click', hidePresentationView);
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
-    summaryIdeasLink.addEventListener('click', () => showPresentationView('favorites'));
-    summaryLockedLink.addEventListener('click', () => showPresentationView('locked'));
+    
+    summaryIdeasLink.addEventListener('click', () => {
+        if (state.cart.items.size > 0) {
+            showPresentationView('favorites');
+        }
+    });
+    summaryLockedLink.addEventListener('click', () => {
+        if (state.cart.lockedItems.size > 0) {
+            showPresentationView('locked');
+        }
+    });
+
+    shareBtn.addEventListener('click', (e) => {
+        const baseURL = window.location.origin + window.location.pathname;
+        const sessionID = state.session.id;
+        const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+        
+        navigator.clipboard.writeText(shareURL).then(() => {
+            const originalText = e.target.textContent;
+            e.target.textContent = 'Copied!';
+            setTimeout(() => {
+                e.target.textContent = originalText;
+            }, 1500);
+        });
+    });
 }
