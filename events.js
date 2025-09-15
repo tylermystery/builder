@@ -374,6 +374,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
+
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
         
@@ -387,8 +388,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const lockedItemCard = e.target.closest('.locked-item-card');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
-        const presentBtn = e.target.closest('.present-btn'); // Add this new variable
-
+        const presentBtn = e.target.closest('.present-btn');
+        const carouselNav = e.target.closest('.carousel-nav'); // Correctly declared here
+    
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -400,7 +402,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
-       } else if (carouselNav) {
+        } else if (carouselNav) {
             const carousel = document.getElementById('favorites-carousel');
             if (carousel) {
                 const scrollAmount = 300; // Amount to scroll in pixels
@@ -444,7 +446,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.hideDetailModal();
                 return;
             }
-
+    
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -496,6 +498,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         }
     });
+    
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
         const target = e.target;
