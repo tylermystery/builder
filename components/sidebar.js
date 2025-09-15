@@ -9,17 +9,17 @@ import { log } from '../utils/debug.js';
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
     const itemCard = document.createElement('div');
-    itemCard.className = `favorite-item`;
+    itemCard.className = `favorite-item lazy-load`; // Add lazy-load class
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    itemCard.style.backgroundImage = `url('${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}')`;
-    // NEW: Add overlay for name and tooltip
+    
+    // Set the image URL in a data attribute instead of the background style
+    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
-        <strong>${fields.Name || 'Untitled'}</strong>
-        <br>
-        <small>${fields.Description || 'No description.'}</small>
-        <br>
+        <strong>${fields.Name || 'Untitled'}</strong><br>
+        <small>${fields.Description || 'No description.'}</small><br>
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
@@ -33,8 +33,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
             <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
         </div>
     `;
-
-    // Initialize Tippy.js for the tooltip
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -44,13 +42,11 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
-// FIX: This function now correctly creates a locked-in item element for the sidebar
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     let optionName = '';
@@ -60,8 +56,10 @@ async function createLockedInItemElement(record, itemInfo) {
 
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
+
+    // Use data-src for the img tag and add the lazy-load class
     itemElement.innerHTML = `
-        <img src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -76,13 +74,11 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
-// FIX: This function now correctly renders the locked-in items in the sidebar
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
     if (!container) return;
     
-    // FIX: Clear the container before adding new elements to avoid duplicates.
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
@@ -97,14 +93,16 @@ export async function updateEventPlanSection() {
             container.appendChild(itemElement);
         }
     }
+    // Tell the UI module to observe the new lazy-load images
+    ui.observeLazyImages(container);
 }
-
 
 export async function updateFavoritesCarousel() {
     log('Sidebar', `Updating favorites carousel with ${state.cart.items.size} items.`);
     const favoritesSection = document.getElementById('favorites-section');
     const favoritesCarousel = document.getElementById('favorites-carousel');
     if (!favoritesSection || !favoritesCarousel) return;
+
     if (state.cart.items.size === 0) {
         favoritesSection.style.display = 'none';
         return;
@@ -123,13 +121,14 @@ export async function updateFavoritesCarousel() {
             }
         }
     }
+    // Tell the UI module to observe the new lazy-load images
+    ui.observeLazyImages(favoritesCarousel);
     updateTotalCost();
 }
-
+// ... (rest of the file remains the same)
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
-    
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
@@ -187,9 +186,9 @@ export function displayReservedStatus() {
         totalRow.innerHTML = '<span style="color: #28a745; font-weight: bold;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'none'; // Hide the button
+        checkoutBtn.style.display = 'none';
     }
     if (saveShareBtn) {
-        saveShareBtn.disabled = false; // Ensure the share link is enabled
+        saveShareBtn.disabled = false;
     }
 }
