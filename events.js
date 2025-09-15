@@ -540,6 +540,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
+    ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
