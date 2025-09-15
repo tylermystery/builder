@@ -1231,6 +1231,41 @@
         }
         .presentation-nav-arrow.up { top: 15px; }
         .presentation-nav-arrow.down { bottom: 15px; }
+
+        #presentation-reactions {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .reaction-bar-buttons {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        .reaction-bar-buttons button {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            font-size: 20px;
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .reaction-bar-buttons button:hover {
+            transform: scale(1.1);
+            border-color: #999;
+        }
+        .reaction-bar-buttons button.selected {
+            background-color: #e7f3ff;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0,123,255,0.3);
+        }
+        .reaction-summary-display {
+            font-size: 0.85em;
+            color: #6c757d;
+            min-height: 20px;
+        }
+        
     </style>
 </head>
 <body>
@@ -1633,6 +1668,12 @@
                     <p id="presentation-item-price"></p>
                     <p id="presentation-item-description"></p>
                     <div id="presentation-item-options"></div>
+                    
+                    <div id="presentation-reactions">
+                        <div id="reaction-buttons" class="reaction-bar-buttons"></div>
+                        <div id="reaction-summary" class="reaction-summary-display"></div>
+                    </div>
+                
                     <div id="presentation-item-note-container">
                         <h4>Note:</h4>
                         <p id="presentation-item-note"></p>
