@@ -100,13 +100,34 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
-// Filter records by location
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
     }
+
+    // Map filter values to an array of searchable keywords
+    const locationKeywords = {
+        'sf': ['san francisco', 'sf'],
+        'oakland': ['oakland'],
+        'peninsula': ['menlo park', 'palo alto', 'san mateo', 'redwood city', 'daly city', 'atherton', 'san carlos'],
+        'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'campbell', 'milpitas', 'los gatos'],
+        'north-bay': ['sausalito', 'san rafael', 'novato', 'mill valley', 'tiburon', 'marin'],
+        'east-bay': ['oakland', 'berkeley', 'hayward', 'fremont', 'walnut creek', 'pleasanton', 'danville', 'livermore', 'alameda'],
+        'other': ['other'] // Use 'other' for explicit matches if needed
+    };
+
+    const keywords = locationKeywords[locationFilter] || [];
+
     return records.filter(record => {
-        return record.fields['Location']?.toLowerCase().replace(/\s+/g, '-') === locationFilter;
+        const recordLocation = record.fields['Location']?.toLowerCase() || '';
+
+        // If location is "All", it should match any region filter.
+        if (recordLocation.includes('all')) {
+            return true;
+        }
+
+        // Check if the record's location string contains any of the keywords for the selected region.
+        return keywords.some(keyword => recordLocation.includes(keyword));
     });
 }
 
