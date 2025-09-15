@@ -386,6 +386,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const checkoutBtn = e.target.closest('#checkout-btn');
         const lockedItemCard = e.target.closest('.locked-item-card');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const parentLink = e.target.closest('.parent-link');
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -395,6 +396,20 @@ export function initializeEventListeners(imageCache, flatpickr) {
            });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
+        } else if (parentLink) {
+            e.stopPropagation();
+            const parentName = parentLink.dataset.parentName;
+            if (parentName) {
+                const categoryButtons = document.querySelectorAll('#category-filters .filter-btn');
+                const targetButton = Array.from(categoryButtons).find(btn => btn.textContent === parentName);
+                
+                if (targetButton) {
+                    targetButton.click();
+                    if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
+                        ui.hideDetailModal();
+                    }
+                }
+            }
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
