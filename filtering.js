@@ -100,6 +100,7 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
+// Located in filtering.js
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
@@ -113,7 +114,7 @@ function filterByLocation(records, locationFilter) {
         'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'campbell', 'milpitas', 'los gatos'],
         'north-bay': ['sausalito', 'san rafael', 'novato', 'mill valley', 'tiburon', 'marin'],
         'east-bay': ['oakland', 'berkeley', 'hayward', 'fremont', 'walnut creek', 'pleasanton', 'danville', 'livermore', 'alameda'],
-        'other': ['other'] // Use 'other' for explicit matches if needed
+        'other': ['other']
     };
 
     const keywords = locationKeywords[locationFilter] || [];
