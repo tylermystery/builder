@@ -25,6 +25,7 @@ function isGrouping(record, allRecordNames) {
 
 function getAllBookableItems(records) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
+    // Correctly defines a bookable item as any item that is not a grouping.
     return records.filter(record => !isGrouping(record, allRecordNames));
 }
 // --- END HELPER FUNCTIONS ---
@@ -43,7 +44,6 @@ function parseCapacity(capacityStr) {
 // --- MODIFIED: This function is now recursive and more accurate ---
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
-
     if (selectedCategory === 'all') {
         // If "All" is selected, return all bookable items.
         return activeSubcategories.length === 0 ? getAllBookableItems(records) : records.filter(record => activeSubcategories.includes(record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]?.toLowerCase()));
@@ -51,7 +51,6 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
 
     // Find the record for the selected main category (e.g., "Activities")
     const categoryRecord = records.find(r => r.fields.Name === selectedCategory && !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-
     if (!categoryRecord) {
         return [];
     }
@@ -70,13 +69,14 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
     }
 }
 
-// Filter records by status
+// Filter records by status (Reverted to original, simple logic)
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') {
         return records;
     }
     return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
 }
+
 
 // Filter records by headcount
 function filterByHeadcount(records, headcountFilter, customHeadcount) {
@@ -100,7 +100,7 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
-// Located in filtering.js
+// Filter records by location (Keeps the flexible, keyword-based logic)
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
@@ -131,6 +131,7 @@ function filterByLocation(records, locationFilter) {
         return keywords.some(keyword => recordLocation.includes(keyword));
     });
 }
+
 
 // Filter records by budget
 function filterByBudget(records, budgetFilter) {
@@ -212,7 +213,8 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
+    const selectedCategory = activeCategoryButton ?
+ (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
@@ -235,7 +237,6 @@ export function applyFiltersAndSort(imageCache) {
     
     // Apply the text search term LAST to refine the filtered results.
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-
     // Sort the final list.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
