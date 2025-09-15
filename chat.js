@@ -210,3 +210,8 @@ export async function sendMessage(message) {
         timestamp: timestamp
     });
 }
+
+export function getCurrentUser() {
+    return currentUser || getSimpleUserIdentity();
+}
+
