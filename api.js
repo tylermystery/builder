@@ -53,16 +53,18 @@ export async function loadSessionFromAirtable(sessionId) {
 }
 
 export async function saveSessionToAirtable() {
-    //if (state.session.id && !state.session.isOwned) {
-    //    state.session.id = null;
-    //} // --- FIX: The closing brace '}' that was here has been moved to the end of the function.
-
+    const reactionsForSaving = {};
+    for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
+        reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
+    }
+    
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
         lockedInItems: Object.fromEntries(state.cart.lockedItems), 
-        itemReactions: Object.fromEntries(state.session.reactions), 
+        itemReactions: reactionsForSaving, // Use the correctly formatted object
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
+
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
 
