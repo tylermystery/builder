@@ -105,42 +105,31 @@ function filterByLocation(records, locationFilter) {
         return records;
     }
 
-    // Define keywords for all possible regions to identify them.
-    const allLocationKeywords = {
-        'sf': ['san francisco', 'sf'],
-        'oakland': ['oakland'],
-        'peninsula': ['menlo park', 'palo alto', 'san mateo', 'redwood city', 'daly city', 'atherton', 'san carlos'],
-        'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'campbell', 'milpitas', 'los gatos'],
-        'north-bay': ['sausalito', 'san rafael', 'novato', 'mill valley', 'tiburon', 'marin'],
-        'east-bay': ['oakland', 'berkeley', 'hayward', 'fremont', 'walnut creek', 'pleasanton', 'danville', 'livermore', 'alameda']
+    // This map translates the dropdown value (e.g., "sf") to the exact text used in Airtable.
+    const filterValueToRegion = {
+        'sf': 'San Francisco',
+        'oakland': 'Oakland',
+        'peninsula': 'Peninsula',
+        'south-bay': 'South Bay',
+        'north-bay': 'North Bay',
+        'east-bay': 'East Bay',
+        'other': 'Other'
     };
 
+    const targetRegion = filterValueToRegion[locationFilter];
+
     return records.filter(record => {
-        const recordLocation = record.fields['Location']?.toLowerCase() || '';
+        // Assumes your new Airtable field is named "Region".
+        const recordRegions = record.fields['Region'] || [];
 
-        // ALWAYS INCLUDE items that are blank or marked as "All".
-        if (recordLocation === '' || recordLocation.includes('all')) {
-            return true;
+        // If the item has regions defined, check them.
+        if (recordRegions.length > 0) {
+            // Include if it's marked "All" or if it includes the specific region we're filtering for.
+            return recordRegions.includes('All') || recordRegions.includes(targetRegion);
         }
 
-        // Check if the item's location matches a region OTHER THAN the selected one.
-        let belongsToAnotherRegion = false;
-        for (const regionKey in allLocationKeywords) {
-            // Skip the check if the region is the one we're currently filtering for.
-            if (regionKey === locationFilter) {
-                continue;
-            }
-
-            const otherRegionKeywords = allLocationKeywords[regionKey];
-            if (otherRegionKeywords.some(keyword => recordLocation.includes(keyword))) {
-                belongsToAnotherRegion = true;
-                break; // Found a definitive match in another region.
-            }
-        }
-
-        // Exclude the item ONLY if it was matched to a different region.
-        // Otherwise, include it by default.
-        return !belongsToAnotherRegion;
+        // If an item has no region tagged, we exclude it from specific filters.
+        return false;
     });
 }
 
