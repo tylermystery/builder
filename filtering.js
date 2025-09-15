@@ -100,38 +100,49 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
-// Filter records by location (Keeps the flexible, keyword-based logic)
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
     }
 
-    // Map filter values to an array of searchable keywords
-    const locationKeywords = {
+    // Define keywords for all possible regions to identify them.
+    const allLocationKeywords = {
         'sf': ['san francisco', 'sf'],
         'oakland': ['oakland'],
         'peninsula': ['menlo park', 'palo alto', 'san mateo', 'redwood city', 'daly city', 'atherton', 'san carlos'],
         'south-bay': ['sunnyvale', 'san jose', 'santa clara', 'cupertino', 'campbell', 'milpitas', 'los gatos'],
         'north-bay': ['sausalito', 'san rafael', 'novato', 'mill valley', 'tiburon', 'marin'],
-        'east-bay': ['oakland', 'berkeley', 'hayward', 'fremont', 'walnut creek', 'pleasanton', 'danville', 'livermore', 'alameda'],
-        'other': ['other']
+        'east-bay': ['oakland', 'berkeley', 'hayward', 'fremont', 'walnut creek', 'pleasanton', 'danville', 'livermore', 'alameda']
     };
-
-    const keywords = locationKeywords[locationFilter] || [];
 
     return records.filter(record => {
         const recordLocation = record.fields['Location']?.toLowerCase() || '';
 
-        // If location is "All", it should match any region filter.
-        if (recordLocation.includes('all')) {
+        // ALWAYS INCLUDE items that are blank or marked as "All".
+        if (recordLocation === '' || recordLocation.includes('all')) {
             return true;
         }
 
-        // Check if the record's location string contains any of the keywords for the selected region.
-        return keywords.some(keyword => recordLocation.includes(keyword));
+        // Check if the item's location matches a region OTHER THAN the selected one.
+        let belongsToAnotherRegion = false;
+        for (const regionKey in allLocationKeywords) {
+            // Skip the check if the region is the one we're currently filtering for.
+            if (regionKey === locationFilter) {
+                continue;
+            }
+
+            const otherRegionKeywords = allLocationKeywords[regionKey];
+            if (otherRegionKeywords.some(keyword => recordLocation.includes(keyword))) {
+                belongsToAnotherRegion = true;
+                break; // Found a definitive match in another region.
+            }
+        }
+
+        // Exclude the item ONLY if it was matched to a different region.
+        // Otherwise, include it by default.
+        return !belongsToAnotherRegion;
     });
 }
-
 
 // Filter records by budget
 function filterByBudget(records, budgetFilter) {
