@@ -1,20 +1,12 @@
 // FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
-import * as api from '../api.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getImagesForTags } from '../imageManager.js'; 
+import { getImagesForTags } from '../imageManager.js';
 
-function getPlaceholderImage(imageUrls) {
-    // Return a random image from the provided list, or a default if none exist.
-    if (!imageUrls || imageUrls.length === 0) {
-        return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
-    }
-    const randomIndex = Math.floor(Math.random() * imageUrls.length);
-    return imageUrls[randomIndex];
-}
+const defaultImageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
@@ -36,50 +28,32 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.innerHTML = heartSVG;
         }
-        icon.style.display = 'block'; // Ensure visibility
-
+        icon.style.display = 'block';
         log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
 
-export async function createInteractiveCard(record, imageCache) {
+export function createInteractiveCard(record) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
-    
-    // ... (rest of the variable declarations up to eventCard) ...
-    const allRecords = state.records.all;
     const itemState = ui.getMainGetItemState()(recordId);
-    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
+    
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    // --- START OF NEW LOGIC ---
-    // The image URL is now fetched asynchronously AFTER the card is created.
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS])
-        .then(imageUrls => {
-            const imageContainer = eventCard.querySelector('.event-card-image-container');
-            if (imageContainer && imageUrls.length > 0) {
-                imageContainer.style.backgroundImage = `url('${imageUrls[0]}')`;
-            }
-        })
-        .catch(err => console.error(`Failed to load images for ${fields.Name}`, err));
-    // --- END OF NEW LOGIC ---
-
+    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+    
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
-    let priceHTML = '';
-    let footerHTML = '';
-    let cardTooltip = '';
+    let priceHTML = '', footerHTML = '', cardTooltip = '';
 
-    // No longer need to set cardImageStyle here, it will be set asynchronously.
-    let cardImageStyle = `background-image: url('${getPlaceholderImage([])}');`; // Use placeholder initially
+    // Use a placeholder initially
+    let cardImageStyle = `background-image: url('${defaultImageUrl}');`;
 
-    // ... (The rest of the function logic for isGrouping, etc., remains the same as your current version) ...
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
@@ -111,8 +85,17 @@ export async function createInteractiveCard(record, imageCache) {
         ${footerHTML}
     `;
 
-    // ... (The rest of the function, including setTimeout, event listeners, and tippy, remains the same)
+    const imageContainer = eventCard.querySelector('.event-card-image-container');
+    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
+        .then(imageUrls => {
+            if (imageUrls && imageUrls.length > 0) {
+                imageContainer.style.backgroundImage = `url('${imageUrls[0]}')`;
+            }
+        })
+        .catch(err => console.error(`Failed to load images for ${fields.Name}`, err));
+
     setTimeout(() => { updateCardIcon(recordId); }, 0);
+    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -120,6 +103,7 @@ export async function createInteractiveCard(record, imageCache) {
         plusBtn.addEventListener('click', (e) => { e.stopPropagation(); quantityInput.stepUp(); quantityInput.dispatchEvent(new Event('change', { bubbles: true })); });
         minusBtn.addEventListener('click', (e) => { e.stopPropagation(); quantityInput.stepDown(); quantityInput.dispatchEvent(new Event('change', { bubbles: true })); });
     }
+    
     tippy(eventCard.querySelector('.event-card-content'), { content: cardTooltip, allowHTML: true, placement: 'top', theme: 'light' });
     tippy(eventCard.querySelector('.heart-icon'), { content: 'Add to favorites', placement: 'top', theme: 'light' });
     
