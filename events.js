@@ -312,21 +312,59 @@ export function initializeEventListeners(imageCache, flatpickr) {
 
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
-        enableTime: true,
-        dateFormat: "M j, Y h:i K",
+        enableTime: false, // Changed from true
+        dateFormat: "M j, Y", // Changed from "M j, Y h:i K"
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
+                // Ensure the range ends at the end of the selected day
+                if (selectedDates.length === 2) {
+                    selectedDates[1].setHours(23, 59, 59, 999);
+                }
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                 triggerSave();
+                triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
-         }
+            }
         },
     });
+
+    safeAddEventListener('date-filter-group', 'click', (e) => {
+        const quickButton = e.target.closest('[data-date-quick]');
+        if (!quickButton || !mainDatePicker) return;
+    
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to the start of today
+    
+        let startDate = new Date(today);
+        let endDate = new Date(today);
+    
+        const quickFilterType = quickButton.dataset.dateQuick;
+    
+        switch (quickFilterType) {
+            case 'tomorrow':
+                startDate.setDate(today.getDate() + 1);
+                endDate.setDate(today.getDate() + 1);
+                break;
+            case 'this-week':
+                // Sets the range from today to the upcoming Sunday
+                endDate.setDate(today.getDate() + (6 - today.getDay())); // 6 is Sunday
+                break;
+            case 'next-2-weeks':
+                endDate.setDate(today.getDate() + 14);
+                break;
+        }
+    
+        // Programmatically set the date picker's value.
+        // The 'true' at the end triggers the onChange event,
+        // which runs all the necessary availability checks automatically.
+        mainDatePicker.setDate([startDate, endDate], true);
+    });
+
+    
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
