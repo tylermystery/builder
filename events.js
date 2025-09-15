@@ -539,6 +539,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
+
+    ui.setupPresentationEventListeners();
+
 }
 
 export function initializeChatEventListeners() {
