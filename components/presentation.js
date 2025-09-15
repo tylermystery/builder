@@ -2,6 +2,7 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
+import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
 const modal = document.getElementById('presentation-modal-overlay');
@@ -18,11 +19,36 @@ const itemNoteEl = document.getElementById('presentation-item-note');
 const prevItemBtn = document.getElementById('presentation-prev-item-btn');
 const nextItemBtn = document.getElementById('presentation-next-item-btn');
 
+// New summary header elements
+const summaryEventNameEl = document.getElementById('summary-event-name');
+const summaryEventNotesEl = document.getElementById('summary-event-notes');
+const summaryEventDateEl = document.getElementById('summary-event-date');
+const summaryIdeasLink = document.getElementById('summary-ideas-link');
+const summaryLockedLink = document.getElementById('summary-locked-link');
 
 let currentList = [];
 let currentIndex = 0;
 let currentImages = [];
 let currentImageIndex = 0;
+
+function renderSummaryHeader() {
+    summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
+    summaryEventNotesEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || 'N/A';
+    
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (dateValue) {
+        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
+        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } else {
+        summaryEventDateEl.textContent = 'N/A';
+    }
+
+    const ideasCount = state.cart.items.size;
+    const lockedCount = state.cart.lockedItems.size;
+
+    summaryIdeasLink.textContent = `${ideasCount} Ideas`;
+    summaryLockedLink.textContent = `${lockedCount} Locked In`;
+}
 
 async function renderCurrentSlide() {
     if (currentList.length === 0) {
@@ -130,6 +156,13 @@ export function showPresentationView(listType) {
         return;
     }
 
+    // Update summary header and link states
+    renderSummaryHeader();
+    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
+    summaryLockedLink.classList.toggle('active', listType === 'locked');
+    summaryIdeasLink.disabled = listType === 'favorites';
+    summaryLockedLink.disabled = listType === 'locked';
+
     titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
     currentIndex = 0;
 
@@ -154,4 +187,6 @@ export function setupPresentationEventListeners() {
     closeBtn.addEventListener('click', hidePresentationView);
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
+    summaryIdeasLink.addEventListener('click', () => showPresentationView('favorites'));
+    summaryLockedLink.addEventListener('click', () => showPresentationView('locked'));
 }
