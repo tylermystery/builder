@@ -247,9 +247,10 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         log('API', `Returning cached images for record: ${record.id}`);
-        return imageCache.get(cacheKey);
+        // This is the fix: Wrap the cached array in the expected object format.
+        return { imageUrls: imageCache.get(cacheKey) };
     }
-
+    
     const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
