@@ -871,6 +871,46 @@
             resize: vertical;
         }
 
+        .presentation-summary-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            padding: 10px 30px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        .summary-item {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .summary-item strong {
+            color: #212529;
+        }
+        .summary-links {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+        .summary-link-btn {
+            background: none;
+            border: none;
+            color: #007bff;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.9em;
+            padding: 0;
+        }
+        .summary-link-btn.active {
+            color: #333;
+            text-decoration: none;
+            font-weight: bold;
+            cursor: default;
+        }
+
         /* CHAT WIDGET STYLES */
         #chat-widget-container {
             position: fixed;
