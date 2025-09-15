@@ -55,10 +55,12 @@ export async function createInteractiveCard(record, imageCache) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    // Call the API function to fetch images based on whether it's a grouping or bookable item
+    // --- START OF LAZY LOAD CHANGE ---
+    // We fetch the image URL info but DON'T apply it immediately.
     const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
-    // FIX: Ensure imageUrls is an array before attempting to access its elements.
     const imageUrls = fetchedImages?.imageUrls || [];
+    const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
+    // --- END OF LAZY LOAD CHANGE ---
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
@@ -67,10 +69,11 @@ export async function createInteractiveCard(record, imageCache) {
     let footerHTML = '';
     let cardTooltip = '';
     
-    // FIX: Access the first image safely
-    let cardImageStyle = `background-image: url('${imageUrls.length > 0 ? imageUrls[0] : ''}');`;
-
+    // --- LAZY LOAD CHANGE: This line is now empty by default ---
+    let cardImageStyle = '';
+    
     if (isGrouping) {
+        // ... (rest of the isGrouping block is unchanged)
         log('Card', `Card for "${record.fields.Name}" is a grouping. Using a placeholder image.`);
         cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
         
@@ -85,6 +88,7 @@ export async function createInteractiveCard(record, imageCache) {
         `;
         cardTooltip = `Explore the various items and pricing options in this category.`;
     } else {
+        // ... (rest of the 'else' block is unchanged)
         log('Card', `Card for "${record.fields.Name}" is a bookable item. Using the first fetched image.`);
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
@@ -106,8 +110,10 @@ export async function createInteractiveCard(record, imageCache) {
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
 
+    // --- START OF LAZY LOAD CHANGE ---
+    // Note the added class 'lazy-load' and the 'data-bg-image' attribute
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="${cardImageStyle}">
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
@@ -120,8 +126,8 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         ${footerHTML}
     `;
-    
-    // FIX: The heart icon update needs to happen after the element is in the DOM
+    // --- END OF LAZY LOAD CHANGE ---
+
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
@@ -140,7 +146,6 @@ export async function createInteractiveCard(record, imageCache) {
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
     }
-    // Initialize Tippy for the main card content and heart icon
     tippy(eventCard.querySelector('.event-card-content'), {
         content: cardTooltip,
         allowHTML: true,
