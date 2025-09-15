@@ -25,7 +25,7 @@ function isGrouping(record, allRecordNames) {
 
 function getAllBookableItems(records) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
-    return records.filter(record => !isGrouping(record, allRecordNames) && record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    return records.filter(record => !isGrouping(record, allRecordNames));
 }
 // --- END HELPER FUNCTIONS ---
 
