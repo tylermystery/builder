@@ -64,7 +64,6 @@ function renderSummaryHeader() {
 function renderReactions(recordId) {
     const currentUser = getCurrentUser();
     let allReactions = state.session.reactions.get(recordId);
-    // Failsafe: Ensure allReactions is always a Map, even if state is malformed.
     if (!(allReactions instanceof Map)) {
         allReactions = new Map();
     }
@@ -77,8 +76,9 @@ function renderReactions(recordId) {
     let summaryHTML = 'Reactions: ';
     if (allReactions.size > 0) {
         summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
-            const user = state.session.collaborators.find(c => c.id === userId) || (userId === currentUser.id ? currentUser : { name: 'User' });
-            return `<span>${user.name}: ${reaction}</span>`;
+            // Use the new userProfiles map for a reliable name lookup
+            const name = state.session.userProfiles.get(userId) || 'A User';
+            return `<span>${name}: ${reaction}</span>`;
         }).join(' | ');
     } else {
         summaryHTML += 'None yet.';
