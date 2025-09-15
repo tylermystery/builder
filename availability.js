@@ -2,11 +2,13 @@ import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js';
 import { state } from './state.js';
+
 export const AVAILABILITY_STATUS = {
     FULL: 'full',
     PARTIAL: 'partial',
     NONE: 'none',
 };
+
 export function parseICalDate(dateString) {
     if (!dateString) return null;
     const year = parseInt(dateString.substring(0, 4), 10);
@@ -71,6 +73,53 @@ export function getDayStatus(day, busyTimes, record) {
     }
 }
 
+export function getRangeStatus(start, end, record, busyTimes) {
+    const leadTime = parseInt(record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0, 10);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const leadTimeCutoffDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
+
+    // Case 1: The entire selected range is within the lead time.
+    if (end < leadTimeCutoffDate) {
+        return { status: AVAILABILITY_STATUS.NONE, reason: `Unavailable due to ${leadTime} day lead time.` };
+    }
+
+    // Case 2: The range starts within the lead time but ends after it.
+    if (start < leadTimeCutoffDate) {
+        const availableDate = leadTimeCutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return { status: AVAILABILITY_STATUS.PARTIAL, reason: `Partially available due to lead time. Becomes available on ${availableDate}.` };
+    }
+
+    // Case 3: The range is clear of the lead time; now check for booking conflicts.
+    let isFullyBooked = true;
+    let hasAnyAvailability = false;
+    
+    // Check every day in the range for availability.
+    for (let day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
+        const dailyStatus = getDayStatus(new Date(day), busyTimes, record).status;
+        if (dailyStatus !== AVAILABILITY_STATUS.NONE) {
+            isFullyBooked = false; // Found at least one day with some availability.
+        }
+        if (dailyStatus === AVAILABILITY_STATUS.FULL || dailyStatus === AVAILABILITY_STATUS.PARTIAL) {
+            hasAnyAvailability = true;
+        }
+    }
+    
+    // If every single day was fully booked solid.
+    if (isFullyBooked && !hasAnyAvailability) {
+        return { status: AVAILABILITY_STATUS.NONE, reason: 'No availability. All time slots are booked during this period.' };
+    }
+    
+    // If there were conflicts, but not every day was fully booked.
+    if (checkAvailability(start, end, busyTimes) === false) {
+        return { status: AVAILABILITY_STATUS.PARTIAL, reason: 'Partially available. Some days or times within this period are booked.' };
+    }
+
+    // If no lead time issues and no booking conflicts were found.
+    return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully available during this period.' };
+}
+
+
 // Add export to this function so it can be used by other modules
 export function checkAvailability(start, end, busyTimes) {
     for (const event of busyTimes) {
@@ -121,7 +170,8 @@ export function getAvailableSlotsForDay(day, busyTimes) {
         const startTime = new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const endTime = new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return `${startTime} - ${endTime}`;
-    }).join('\n') || 'No available slots';
+    }).join('\n') ||
+        'No available slots';
 }
 
 export async function getCombinedPlanStatus(date, lockedItems) {
@@ -132,10 +182,12 @@ export async function getCombinedPlanStatus(date, lockedItems) {
             const status = getDayStatus(date, busyTimes, record).status;
 
             if (status === AVAILABILITY_STATUS.NONE) {
-                return AVAILABILITY_STATUS.NONE; // If any item is unavailable, the whole plan is unavailable
+                return AVAILABILITY_STATUS.NONE;
+                // If any item is unavailable, the whole plan is unavailable
             }
             if (status === AVAILABILITY_STATUS.PARTIAL) {
-                overallStatus = AVAILABILITY_STATUS.PARTIAL; // If at least one is partial, the plan is partial
+                overallStatus = AVAILABILITY_STATUS.PARTIAL;
+                // If at least one is partial, the plan is partial
             }
         }
     }
