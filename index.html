@@ -1166,6 +1166,15 @@
         .presentation-header h2 {
             margin: 0;
         }
+        .presentation-title-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        #presentation-share-btn {
+            font-size: 1em;
+        }
+
         .presentation-body {
             flex-grow: 1;
             display: grid;
@@ -1610,6 +1619,7 @@
             
             <div class="presentation-header">
                 <h2 id="presentation-title"></h2>
+                <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
                 <span id="presentation-counter"></span>
             </div>
     
