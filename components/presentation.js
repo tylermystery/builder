@@ -63,6 +63,13 @@ async function renderCurrentSlide() {
         hidePresentationView();
         return;
     }
+
+    // --- Start of Fix ---
+    // Show a loading state for the images first
+    mainImageEl.style.backgroundImage = '';
+    thumbStripEl.innerHTML = '<p>Loading images...</p>';
+    // --- End of Fix ---
+
     const currentItem = combinedList[globalCurrentIndex];
     const recordId = currentItem.recordId;
     const record = state.records.all.find(r => r.id === recordId);
@@ -86,10 +93,14 @@ async function renderCurrentSlide() {
         itemNoteContainerEl.style.display = 'none';
     }
 
+    // --- Start of Fix ---
+    // Fetch images ONLY for the current slide. The "new Map()" ensures we don't use the main app's cache
+    // in a conflicting way, forcing a fresh fetch for the presentation if needed.
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     currentImages = imageUrls || [];
     currentImageIndex = 0;
     renderCurrentImage();
+    // --- End of Fix ---
 }
 
 function renderCurrentImage() {
