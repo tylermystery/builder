@@ -26,19 +26,21 @@ export async function loadSessionFromAirtable(sessionId) {
         log('API', `Session loaded: ${record.fields.Name}`);
         
         state.session.isOwned = false;
-        state.session.collaborators = record.fields.Collaborators ? record.fields.Collaborators.split(',').map(name => name.trim()) : [];
+        
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
                 state.cart.items = new Map(Object.entries(savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
-                // Correctly reconstruct the nested Map for reactions
+                
                 const reactionsObject = savedState.itemReactions || {};
                 state.session.reactions = new Map();
                 for (const recordId in reactionsObject) {
                     state.session.reactions.set(recordId, new Map(Object.entries(reactionsObject[recordId])));
                 }
+                
+                state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
                 state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails || {}));
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON: ${jsonError.message}`);
@@ -61,10 +63,10 @@ export async function saveSessionToAirtable() {
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
         lockedInItems: Object.fromEntries(state.cart.lockedItems), 
-        itemReactions: reactionsForSaving, // Use the correctly formatted object
+        itemReactions: reactionsForSaving,
+        userProfiles: Object.fromEntries(state.session.userProfiles),
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
-
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
 
@@ -80,7 +82,7 @@ export async function saveSessionToAirtable() {
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
-        "Collaborators": state.session.collaborators.join(', '),
+        "Collaborators": Array.from(state.session.userProfiles.values()).join(', '),
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
@@ -124,9 +126,9 @@ export async function saveSessionToAirtable() {
         log('API', `Failed to save session: ${error.message}`);
         return false;
     }
-// --- FIX: This closing brace was moved from above to correctly close the function ---
 }
 
+// ... (rest of the file remains the same) ...
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
@@ -134,8 +136,7 @@ export async function fetchAllRecords() {
     log('API', `Fetching records from base URL: ${baseUrl}`);
     try {
         do {
-            const url = offset ?
-            `${baseUrl}&offset=${offset}` : baseUrl;
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
             log('API', `Fetching records from: ${url}`);
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
@@ -235,8 +236,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
             if (image.format === 'gif') {
                 transformations = 'c_fit,w_600,h_520';
             } else {
-                
-            transformations = 'c_fill,g_auto,w_600,h_520';
+                transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
             return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
@@ -254,7 +254,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
         log('API', `Returning cached images for record: ${record.id}`);
-        // This is the fix: Wrap the cached array in the expected object format.
         return { imageUrls: imageCache.get(cacheKey) };
     }
     
@@ -262,7 +261,6 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
     let imageUrls = null;
-    
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -313,7 +311,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
-       
            }
         }]
     };
@@ -324,8 +321,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: 
-            JSON.stringify(payload)
+            body: JSON.stringify(payload)
         });
         if (!response.ok) {
              throw new Error('Failed to post chat message to Airtable.');
@@ -334,4 +330,3 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         console.error("Error posting chat message:", error);
     }
 }
-
