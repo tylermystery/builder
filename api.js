@@ -10,6 +10,7 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
+// ... (loadSessionFromAirtable and saveSessionToAirtable remain the same) ...
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -128,7 +129,6 @@ export async function saveSessionToAirtable() {
     }
 }
 
-// ... (rest of the file remains the same) ...
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
@@ -196,15 +196,10 @@ export async function fetchCalendarForRecord(record) {
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) {
         log('API', 'No tags provided for image fetch');
-        return null;
+        return new Map();
     }
     try {
-        let payload;
-        if (Array.isArray(tags)) {
-            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
-        } else {
-            payload = { tag: tags };
-        }
+        const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
         log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
@@ -212,7 +207,6 @@ export async function fetchImagesByTags(tags, retries = 2) {
         });
         log('API', `Image fetch response: status ${response.status}`);
         if (response.status === 420 && retries > 0) {
-            console.warn(`Cloudinary rate limit hit. Retrying in 500ms... (${retries} retries left)`);
             log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
             await new Promise(res => setTimeout(res, 500));
             return fetchImagesByTags(tags, retries - 1);
@@ -221,65 +215,40 @@ export async function fetchImagesByTags(tags, retries = 2) {
         if (!response.ok) {
             const errorData = await response.json();
             log('API', `Image fetch error: ${JSON.stringify(errorData)}`);
-            console.warn(`Cloudinary function error: ${response.statusText}`);
-            return null;
+            return new Map();
         }
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) {
             log('API', 'No image resources found');
-            return null;
+            return new Map();
         }
-        
-        const imageUrls = data.resources.map(image => {
-            let transformations;
+
+        const imagesByTag = new Map();
+        tags.forEach(tag => imagesByTag.set(tag, []));
+
+        data.resources.forEach(image => {
+            let transformations = 'c_fill,g_auto,w_600,h_520';
             if (image.format === 'gif') {
                 transformations = 'c_fit,w_600,h_520';
-            } else {
-                transformations = 'c_fill,g_auto,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+            const finalUrl = `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+            
+            image.tags.forEach(tag => {
+                if (imagesByTag.has(tag)) {
+                    imagesByTag.get(tag).push(finalUrl);
+                }
+            });
         });
-        log('API', `Fetched ${imageUrls.length} images`);
-        return imageUrls;
+
+        log('API', `Fetched and mapped images for ${imagesByTag.size} tags`);
+        return imagesByTag;
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
         log('API', `Failed to fetch images: ${error.message}`);
-        return null;
+        return new Map();
     }
-}
-
-export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    const cacheKey = record.id;
-    if (imageCache.has(cacheKey)) {
-        log('API', `Returning cached images for record: ${record.id}`);
-        return { imageUrls: imageCache.get(cacheKey) };
-    }
-    
-    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
-    
-    let imageUrls = null;
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-    if (isGrouping) {
-        log('API', `Record is a grouping item. Using a placeholder image to avoid multiple API calls.`);
-        imageUrls = [ultimateFallbackUrl];
-    } else {
-        log('API', `Record is a bookable item. Attempting to fetch images by tags.`);
-        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
-    }
-
-    if (!imageUrls || imageUrls.length === 0) {
-        log('API', `Using fallback image for record: ${record.id}`);
-        imageUrls = [ultimateFallbackUrl];
-    }
-
-    imageCache.set(cacheKey, imageUrls);
-    log('API', `Cached ${imageUrls.length} images for record: ${record.id}`);
-    return { imageUrls };
 }
 
 export async function fetchChatMessages(sessionId) {
