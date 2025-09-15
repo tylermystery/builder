@@ -2,8 +2,10 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
 import { log } from '../utils/debug.js';
+import { getCurrentUser } from '../chat.js';
+import { triggerSave } from '../events.js';
 
 const modal = document.getElementById('presentation-modal-overlay');
 const closeBtn = document.getElementById('presentation-close-btn');
@@ -18,7 +20,8 @@ const itemNoteContainerEl = document.getElementById('presentation-item-note-cont
 const itemNoteEl = document.getElementById('presentation-item-note');
 const prevItemBtn = document.getElementById('presentation-prev-item-btn');
 const nextItemBtn = document.getElementById('presentation-next-item-btn');
-
+const reactionButtonsEl = document.getElementById('reaction-buttons');
+const reactionSummaryEl = document.getElementById('reaction-summary');
 const summaryEventNameEl = document.getElementById('summary-event-name');
 const summaryEventNotesEl = document.getElementById('summary-event-notes');
 const summaryEventDateEl = document.getElementById('summary-event-date');
@@ -58,20 +61,37 @@ function renderSummaryHeader() {
     summaryLockedLink.textContent = `${state.cart.lockedItems.size} Locked In`;
 }
 
+function renderReactions(recordId) {
+    const currentUser = getCurrentUser();
+    const allReactions = state.session.reactions.get(recordId) || new Map();
+    const currentUserReaction = allReactions.get(currentUser.id);
+
+    reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
+        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}">${emoji}</button>`
+    ).join('');
+
+    let summaryHTML = 'Reactions: ';
+    if (allReactions.size > 0) {
+        summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
+            const user = state.session.collaborators.find(c => c.id === userId) || (userId === currentUser.id ? currentUser : { name: 'User' });
+            return `<span>${user.name}: ${reaction}</span>`;
+        }).join(' | ');
+    } else {
+        summaryHTML += 'None yet.';
+    }
+    reactionSummaryEl.innerHTML = summaryHTML;
+}
+
 async function renderCurrentSlide() {
     if (combinedList.length === 0) {
         hidePresentationView();
         return;
     }
-
-    // --- Start of Fix ---
-    // Show a loading state for the images first
     mainImageEl.style.backgroundImage = '';
     thumbStripEl.innerHTML = '<p>Loading images...</p>';
-    // --- End of Fix ---
 
     const currentItem = combinedList[globalCurrentIndex];
-    const recordId = currentItem.recordId;
+    const { recordId, type } = currentItem;
     const record = state.records.all.find(r => r.id === recordId);
     if (!record) {
         log('Presentation', `Record not found for ID: ${recordId}`);
@@ -79,8 +99,9 @@ async function renderCurrentSlide() {
     }
     
     updateHeader(currentItem);
+    renderReactions(recordId);
 
-    const itemInfo = currentItem.type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
+    const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     itemNameEl.textContent = record.fields.Name || 'Untitled';
     const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
     itemPriceEl.textContent = `$${price.toFixed(2)}`;
@@ -93,14 +114,10 @@ async function renderCurrentSlide() {
         itemNoteContainerEl.style.display = 'none';
     }
 
-    // --- Start of Fix ---
-    // Fetch images ONLY for the current slide. The "new Map()" ensures we don't use the main app's cache
-    // in a conflicting way, forcing a fresh fetch for the presentation if needed.
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     currentImages = imageUrls || [];
     currentImageIndex = 0;
     renderCurrentImage();
-    // --- End of Fix ---
 }
 
 function renderCurrentImage() {
@@ -129,20 +146,13 @@ function renderCurrentImage() {
 
 function navigateToSlide(direction) {
     if (combinedList.length === 0) return;
-    globalCurrentIndex += direction;
-    
-    if (globalCurrentIndex >= combinedList.length) {
-        globalCurrentIndex = 0; // Loop to the beginning
-    } else if (globalCurrentIndex < 0) {
-        globalCurrentIndex = combinedList.length - 1; // Loop to the end
-    }
-    
+    globalCurrentIndex = (globalCurrentIndex + direction + combinedList.length) % combinedList.length;
     renderCurrentSlide();
 }
 
 function cycleImage(direction) {
-    const newIndex = currentImageIndex + direction;
-    if (newIndex >= 0 && newIndex < currentImages.length) {
+    const newIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
+    if (currentImages.length > 0) {
         currentImageIndex = newIndex;
         renderCurrentImage();
     }
@@ -150,22 +160,37 @@ function cycleImage(direction) {
 
 function handleKeyDown(e) {
     switch (e.key) {
-        case 'ArrowDown':
-            navigateToSlide(1);
-            break;
-        case 'ArrowUp':
-            navigateToSlide(-1);
-            break;
-        case 'ArrowRight':
-            cycleImage(1);
-            break;
-        case 'ArrowLeft':
-            cycleImage(-1);
-            break;
-        case 'Escape':
-            hidePresentationView();
-            break;
+        case 'ArrowDown': navigateToSlide(1); break;
+        case 'ArrowUp': navigateToSlide(-1); break;
+        case 'ArrowRight': cycleImage(1); break;
+        case 'ArrowLeft': cycleImage(-1); break;
+        case 'Escape': hidePresentationView(); break;
     }
+}
+
+function handleReactionClick(e) {
+    const button = e.target.closest('.reaction-btn');
+    if (!button) return;
+
+    const emoji = button.dataset.emoji;
+    const currentUser = getCurrentUser();
+    const recordId = combinedList[globalCurrentIndex].recordId;
+
+    if (!state.session.reactions.has(recordId)) {
+        state.session.reactions.set(recordId, new Map());
+    }
+
+    const itemReactions = state.session.reactions.get(recordId);
+    
+    // Toggle reaction off if the same one is clicked again
+    if (itemReactions.get(currentUser.id) === emoji) {
+        itemReactions.delete(currentUser.id);
+    } else {
+        itemReactions.set(currentUser.id, emoji);
+    }
+    
+    renderReactions(recordId);
+    triggerSave();
 }
 
 export function showPresentationView(listType, startRecordId = null) {
@@ -210,16 +235,13 @@ export function setupPresentationEventListeners() {
     closeBtn.addEventListener('click', hidePresentationView);
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
+    reactionButtonsEl.addEventListener('click', handleReactionClick);
     
     summaryIdeasLink.addEventListener('click', () => {
-        if (state.cart.items.size > 0) {
-            showPresentationView('favorites');
-        }
+        if (state.cart.items.size > 0) showPresentationView('favorites');
     });
     summaryLockedLink.addEventListener('click', () => {
-        if (state.cart.lockedItems.size > 0) {
-            showPresentationView('locked');
-        }
+        if (state.cart.lockedItems.size > 0) showPresentationView('locked');
     });
 
     shareBtn.addEventListener('click', (e) => {
