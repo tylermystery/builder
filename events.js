@@ -312,21 +312,26 @@ export function initializeEventListeners(imageCache, flatpickr) {
 
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
-        enableTime: true,
-        dateFormat: "M j, Y h:i K",
+        enableTime: false, // Changed from true
+        dateFormat: "M j, Y", // Changed from "M j, Y h:i K"
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
+                // Ensure the range ends at the end of the selected day
+                if (selectedDates.length === 2) {
+                    selectedDates[1].setHours(23, 59, 59, 999);
+                }
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                 triggerSave();
+                triggerSave();
                 await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
-         }
+            }
         },
     });
+
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
