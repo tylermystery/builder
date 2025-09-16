@@ -1,12 +1,13 @@
 // FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
-import { getImagesForRecord } from '../imageManager.js';
+import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 function getPlaceholderImage(imageUrls) {
+    // Return a random image from the provided list, or a default if none exist.
     if (!imageUrls || imageUrls.length === 0) {
         return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
     }
@@ -34,27 +35,32 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.innerHTML = heartSVG;
         }
-        icon.style.display = 'block';
+        icon.style.display = 'block'; // Ensure visibility
+
         log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
 
-export async function createInteractiveCard(record) {
+export async function createInteractiveCard(record, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
+    const allRecords = state.records.all;
     const itemState = ui.getMainGetItemState()(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    const imageUrls = await getImagesForRecord(record);
+    // --- START OF LAZY LOAD CHANGE ---
+    // We fetch the image URL info but DON'T apply it immediately.
+    const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const imageUrls = fetchedImages?.imageUrls || [];
     const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
-    let cardImageStyle = '';
+    // --- END OF LAZY LOAD CHANGE ---
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
@@ -63,12 +69,17 @@ export async function createInteractiveCard(record) {
     let footerHTML = '';
     let cardTooltip = '';
     
+    // --- LAZY LOAD CHANGE: This line is now empty by default ---
+    let cardImageStyle = '';
+    
     if (isGrouping) {
+        // ... (rest of the isGrouping block is unchanged)
         log('Card', `Card for "${record.fields.Name}" is a grouping. Using a placeholder image.`);
         cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
         
         const range = ui.getGroupPriceRange(record);
-        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        priceHTML = range ?
+            (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
@@ -77,6 +88,7 @@ export async function createInteractiveCard(record) {
         `;
         cardTooltip = `Explore the various items and pricing options in this category.`;
     } else {
+        // ... (rest of the 'else' block is unchanged)
         log('Card', `Card for "${record.fields.Name}" is a bookable item. Using the first fetched image.`);
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
@@ -84,7 +96,8 @@ export async function createInteractiveCard(record) {
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
 
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ?
+            'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
@@ -97,6 +110,8 @@ export async function createInteractiveCard(record) {
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
 
+    // --- START OF LAZY LOAD CHANGE ---
+    // Note the added class 'lazy-load' and the 'data-bg-image' attribute
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
             <div class="event-card-actions">
@@ -111,11 +126,11 @@ export async function createInteractiveCard(record) {
         </div>
         ${footerHTML}
     `;
+    // --- END OF LAZY LOAD CHANGE ---
 
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
-
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
