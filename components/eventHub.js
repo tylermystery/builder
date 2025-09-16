@@ -1,7 +1,4 @@
 // FILE: components/eventHub.js
-import { state } from '../state.js';
-import * as ui from '../ui.js';
-import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 
 const modal = document.getElementById('event-hub-modal-overlay');
@@ -22,7 +19,7 @@ function hideEventHub() {
 export async function showEventHub(eventId) {
     log('EventHub', `Showing hub for Event ID: ${eventId}`);
     
-    // In a real implementation, we would fetch event details from Airtable here.
+    // In a real implementation, we would fetch event details and RSVPs from Airtable here.
     // For now, we'll use placeholder data.
     const eventName = "Community Meetup";
     const eventDate = new Date().toLocaleDateString();
@@ -30,19 +27,15 @@ export async function showEventHub(eventId) {
     titleEl.textContent = eventName;
     dateEl.textContent = `Date: ${eventDate}`;
     
-    // Placeholder for attendee list
     attendeeListEl.innerHTML = '<div class="attendee-avatar">TU</div><div class="attendee-avatar">G</div>';
 
-    // Embed the Presentation and Chat components
-    // This is a conceptual example of how you would merge the views.
-    // A full implementation would require refactoring the presentation and chat
-    // components to be embeddable.
+    // This is a conceptual placeholder showing where the merged views will go.
     mainContentEl.innerHTML = `
-        <div style="padding:20px; border-right: 1px solid #eee;">
+        <div style="padding:20px; border-right: 1px solid #eee; overflow-y: auto;">
             <h3>Event Content (Presentation View)</h3>
             <p>The presentation/carousel component for the event's catalog items would be embedded here.</p>
         </div>
-        <div style="padding:20px;">
+        <div style="padding:20px; display: flex; flex-direction: column;">
             <h3>Event Chat</h3>
             <p>The chat widget, connected to a channel for Event ID ${eventId}, would be embedded here.</p>
         </div>
@@ -55,4 +48,9 @@ export async function showEventHub(eventId) {
 
 export function setupEventHubEventListeners() {
     closeBtn.addEventListener('click', hideEventHub);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideEventHub();
+        }
+    });
 }
