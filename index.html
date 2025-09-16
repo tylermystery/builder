@@ -225,10 +225,11 @@
         #event-plan-panel {
             background-color: #fff;
             padding: 20px;
-            border-radius: 8-px;
+            border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
+            position: relative;
         }
         #cart-items-container {
             flex-grow: 1;
@@ -299,6 +300,7 @@
             border-radius: 8px;
             background-size: cover;
             background-position: center;
+            background-color: #eee;
         }
         .favorite-item .card-actions {
             position: absolute;
@@ -327,7 +329,7 @@
         }
         .event-card {
             position: relative;
-            border-radius: 10-px;
+            border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             background-color: #fff;
             color: #333;
@@ -342,6 +344,7 @@
             height: 200px;
             background-size: cover;
             background-position: center;
+            background-color: #eee;
         }
         .event-card-actions {
             position: absolute;
@@ -479,6 +482,7 @@
             object-fit: cover;
             border-radius: 4px;
             flex-shrink: 0;
+            background-color: #eee;
         }
         .locked-item-details {
             flex-grow: 1;
@@ -1276,6 +1280,7 @@
     <div class="main-content">
         <div id="right-sidebar">
             <div id="event-plan-panel">
+                <button id="user-profile-button" title="Profile & Sign In">👤</button>
                 <div class="event-name-group">
                     <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
                 </div>
@@ -1650,20 +1655,22 @@
                     <button id="summary-ideas-link" class="summary-link-btn"></button>
                     <button id="summary-locked-link" class="summary-link-btn"></button>
                 </div>
-            </div>
+             </div>
             
             <div class="presentation-header">
-                <h2 id="presentation-title"></h2>
-                <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
+                <div class="presentation-title-group">
+                    <h2 id="presentation-title"></h2>
+                    <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
+                </div>
                 <span id="presentation-counter"></span>
-            </div>
+             </div>
     
             <div class="presentation-body">
                 <div id="presentation-gallery-column">
                     <div id="presentation-main-image"></div>
                     <div id="presentation-thumbnail-strip"></div>
                 </div>
-                <div id="presentation-details-column">
+                 <div id="presentation-details-column">
                     <h3 id="presentation-item-name"></h3>
                     <p id="presentation-item-price"></p>
                     <p id="presentation-item-description"></p>
@@ -1672,17 +1679,44 @@
                     <div id="presentation-reactions">
                         <div id="reaction-buttons" class="reaction-bar-buttons"></div>
                         <div id="reaction-summary" class="reaction-summary-display"></div>
-                    </div>
+                     </div>
                 
                     <div id="presentation-item-note-container">
                         <h4>Note:</h4>
                         <p id="presentation-item-note"></p>
-                    </div>
+                     </div>
                 </div>
             </div>
     
             <button class="presentation-nav-arrow up" id="presentation-prev-item-btn" title="Previous Item (Up Arrow)">▲</button>
             <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
+        </div>
+    </div>
+    <div id="user-modal-overlay" class="modal-overlay">
+        <div class="user-modal-content">
+            <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            
+            <div id="signin-view">
+                <h2>Sign In or Create Account</h2>
+                <p>Enter your email to receive a secure sign-in link.</p>
+                <form id="signin-form">
+                    <input type="email" id="signin-email" placeholder="you@example.com" required>
+                    <button type="submit">Send Magic Link</button>
+                </form>
+                <p id="signin-message" class="feedback-message"></p>
+            </div>
+    
+            <div id="profile-view" style="display: none;">
+                <h2>Your Profile</h2>
+                <div class="profile-details">
+                    <div id="profile-avatar"></div>
+                    <input type="text" id="profile-name">
+                </div>
+                <div id="my-events-list">
+                    <h3>My Events</h3>
+                    </div>
+                <button id="signout-btn">Sign Out</button>
+            </div>
         </div>
     </div>
 
