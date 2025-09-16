@@ -75,3 +75,11 @@ export function setupAuthEventListeners() {
     signinForm.addEventListener('submit', handleSignIn);
     signoutBtn.addEventListener('click', handleSignOut);
 }
+
+// This function will eventually check for a valid session token.
+// For now, it simulates a logged-out user.
+export function isAuthenticated() {
+    // In a real implementation, you would check for a valid session token in localStorage.
+    // e.g., return !!localStorage.getItem('sessionToken');
+    return false; 
+}
