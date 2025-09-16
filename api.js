@@ -330,3 +330,77 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         console.error("Error posting chat message:", error);
     }
 }
+
+export async function findOrCreateEvent(catalogRecordId, eventDate) {
+    log('API', `findOrCreateEvent called for catalog item: ${catalogRecordId}`);
+    const date = new Date(eventDate);
+    const dateString = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD for Airtable query
+
+    // Formula to find an event for this item on this specific day
+    const filterFormula = `AND({Related Catalog Item} = '${catalogRecordId}', DATETIME_DIFF({Date}, '${dateString}', 'days') = 0)`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Events?filterByFormula=${encodeURIComponent(filterFormula)}`;
+
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        const data = await response.json();
+
+        if (data.records && data.records.length > 0) {
+            log('API', 'Found existing event.');
+            return data.records[0].id; // Return the ID of the existing event
+        } else {
+            log('API', 'No existing event found, creating a new one.');
+            // If no event exists, create one
+            const catalogRecord = state.records.all.find(r => r.id === catalogRecordId);
+            const createUrl = `https://api.airtable.com/v0/${BASE_ID}/Events`;
+            const payload = {
+                fields: {
+                    "Event Name": catalogRecord.fields.Name,
+                    "Date": dateString,
+                    "Related Catalog Item": [catalogRecordId]
+                }
+            };
+            const createResponse = await fetch(createUrl, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ records: [payload] })
+            });
+            const createData = await createResponse.json();
+            return createData.records[0].id;
+        }
+    } catch (error) {
+        log('API', `Error in findOrCreateEvent: ${error.message}`);
+        throw error;
+    }
+}
+
+export async function createRsvp(eventId, userId) {
+    log('API', `Creating RSVP for Event: ${eventId}, User: ${userId}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/RSVPs`;
+    const payload = {
+        fields: {
+            "Event": [eventId],
+            "User": [userId] // Assuming UserID is the primary field in the Users table
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ records: [payload] })
+        });
+        if (!response.ok) {
+            throw new Error('Failed to create RSVP in Airtable.');
+        }
+        return await response.json();
+    } catch (error) {
+        log('API', `Error in createRsvp: ${error.message}`);
+        throw error;
+    }
+}
