@@ -45,6 +45,7 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombined
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
 import { initializeChat } from './chat.js';
+import { setupAuthEventListeners } from './auth.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
