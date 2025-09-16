@@ -551,6 +551,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         showItineraryModal();
     });
     ui.setupPresentationEventListeners();
+    ui.setupAuthEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
