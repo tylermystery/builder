@@ -1269,6 +1269,67 @@
             color: #6c757d;
             min-height: 20px;
         }
+
+        .event-hub-content {
+            background: #fff;
+            border-radius: 8px;
+            width: 95vw;
+            height: 90vh;
+            max-width: 1800px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            position: relative;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .event-hub-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 30px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            flex-shrink: 0;
+        }
+        #event-hub-details h2 {
+            margin: 0 0 5px 0;
+        }
+        #event-hub-details p {
+            margin: 0;
+            color: #6c757d;
+        }
+        #event-hub-attendees {
+            text-align: right;
+        }
+        #event-hub-attendees h4 {
+            margin: 0 0 5px 0;
+        }
+        #attendee-list {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .attendee-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            border: 2px solid white;
+            margin-left: -10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .event-hub-main {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 3fr 1fr; /* 3 parts for presentation, 1 part for chat */
+            overflow: hidden;
+        }
         
     </style>
 </head>
@@ -1723,5 +1784,26 @@
     <script type="module" src="main.js"></script>
  
        <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+    <div id="event-hub-modal-overlay" class="modal-overlay">
+    <div class="event-hub-content">
+            <button id="event-hub-close-btn" class="modal-close-btn" title="Close">×</button>
+            
+            <div class="event-hub-header">
+                <div id="event-hub-details">
+                    <h2 id="event-hub-title"></h2>
+                    <p id="event-hub-date"></p>
+                </div>
+                <div id="event-hub-attendees">
+                    <h4>Attendees</h4>
+                    <div id="attendee-list"></div>
+                </div>
+            </div>
+    
+            <div class="event-hub-main">
+                </div>
+        </div>
+    </div>
+    
 </body>
 </html>
