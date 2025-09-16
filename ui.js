@@ -13,6 +13,7 @@ import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailabi
 import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { setupAuthEventListeners } from './auth.js';
+import { showEventHub, setupEventHubEventListeners } from './components/eventHub.js';
 
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
@@ -298,3 +299,4 @@ export function updateTotalCost() {
 }
 
 export { setupAuthEventListeners };
+export { showEventHub, setupEventHubEventListeners };
