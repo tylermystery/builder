@@ -1,27 +1,14 @@
-/*
-* Version: 4.9.9
-* Last Modified: 2025-09-11
-* Changelog:
-* v4.9.9 - 2025-09-11
-* - Fixed bug where "Update Plan" button in the modal reset changes.
-* - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
-* v4.9.8 - 2025-09-11
-* - Fixed bug where 'View Options' button on grouping cards was unclickable.
-* Refined the card click listener to correctly open the modal.
-* v4.9.7 - 2025-09-11
-* - Fixed TypeError by deferring DOM element selection until the initializeEventListeners function.
-*/
+// FILE: events.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
+import { AVAILABILITY_STATUS, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage } from './chat.js';
-import { isAuthenticated, showUserModal } from '../auth.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -35,7 +22,6 @@ function getCurrentCategoryRecord() {
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
     return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
-
 function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
@@ -43,7 +29,6 @@ function getAvailableSubcategories(categoryRecord) {
     const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     return subcategoryOptions.map(option => option.name).sort();
 }
-
 function updateSubcategoryButtons() {
     if (!subcategoryFiltersContainer) return;
     subcategoryFiltersContainer.innerHTML = '';
@@ -57,7 +42,6 @@ function updateSubcategoryButtons() {
         subcategoryFiltersContainer.appendChild(button);
     });
 }
-
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
@@ -71,7 +55,6 @@ function loadMoreRecords(imageCache) {
         });
     }
 }
-
 export function updateSaveShareButton() {
     if (!saveShareBtn) return;
     switch (state.ui.saveState) {
@@ -93,7 +76,6 @@ export function updateSaveShareButton() {
             break;
     }
 }
-
 export function triggerSave() {
     if (state.ui.isInitializing) return;
     clearTimeout(saveTimeout);
@@ -109,7 +91,6 @@ export function triggerSave() {
         }
     }, 1500);
 }
-
 export async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
         document.querySelectorAll('.availability-btn').forEach(icon => {
@@ -158,7 +139,6 @@ export async function updateAllCardAvailabilityIcons() {
         }
     }
 }
-
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -168,9 +148,7 @@ async function handlePaymentFormSubmit(event) {
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
     cardErrors.textContent = '';
-    // Clear previous errors
 
-    // Show loading state
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
@@ -178,7 +156,6 @@ async function handlePaymentFormSubmit(event) {
     const { stripe, elements, cardElement, clientSecret } = ui.getStripeContext();
     if (!stripe || !elements || !cardElement || !clientSecret) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
-        // Hide loading state
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
@@ -200,22 +177,18 @@ async function handlePaymentFormSubmit(event) {
     if (error) {
         cardErrors.textContent = error.message;
         log('Events', `Stripe payment error: ${error.message}`);
-        // Hide loading state
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
     } else if (paymentIntent.status === 'succeeded') {
         log('Events', 'Payment succeeded.');
-        // Show success UI in modal
         document.getElementById('payment-form').style.display = 'none';
         document.getElementById('checkout-summary-details').style.display = 'none';
         document.querySelector('.checkout-total-deposit-section').style.display = 'none';
         document.querySelector('.terms-and-conditions').style.display = 'none';
         document.getElementById('payment-success-message').style.display = 'block';
 
-        // Update main application UI
         ui.displayReservedStatus();
-        // Close modal after a delay
         setTimeout(() => {
             ui.hideCheckoutModal();
         }, 4000);
@@ -223,7 +196,6 @@ async function handlePaymentFormSubmit(event) {
 }
 
 export function initializeEventListeners(imageCache, flatpickr) {
-    ui.setupEventHubEventListeners();
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -251,7 +223,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
-    
             scrollTimeout = null;
         }, 100);
     });
@@ -307,7 +278,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
-     
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
@@ -338,19 +308,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         },
     });
-
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton || !mainDatePicker) return;
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         let startDate = new Date(today);
         let endDate = new Date(today);
-
         const quickFilterType = quickButton.dataset.dateQuick;
-
         switch (quickFilterType) {
             case 'tomorrow':
                 startDate.setDate(today.getDate() + 1);
@@ -365,7 +330,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
         mainDatePicker.setDate([startDate, endDate], true);
     });
-
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -376,7 +340,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-
+    
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
         
@@ -391,26 +355,23 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
-        const carouselNav = e.target.closest('.carousel-nav'); // Correctly declared here
-        const joinEventBtn = e.target.closest('.join-event-btn'); 
-        
+        const carouselNav = e.target.closest('.carousel-nav');
+        const joinEventBtn = e.target.closest('.join-event-btn');
+        const viewEventBtn = e.target.closest('.view-event-btn');
+    
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
            });
-         } else if (viewEventBtn) {
+        } else if (viewEventBtn) {
             e.stopPropagation();
             const recordId = viewEventBtn.closest('[data-record-id]').dataset.recordId;
-            // In a real app, you'd look up the EventID associated with this recordId and date.
-            // For now, we'll pass a placeholder ID.
             ui.showEventHub('evt_12345');
-        } else if (checkoutBtn) {
-            ui.showCheckoutModal();
         } else if (joinEventBtn) {
             e.stopPropagation();
-            if (!isAuthenticated()) {
+            if (!ui.isAuthenticated()) {
                 log('Events', 'User not authenticated. Prompting to sign in.');
                 ui.showUserModal('signin');
             } else {
@@ -423,34 +384,27 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     return;
                 }
     
-                // --- START OF NEW LOGIC ---
                 try {
-                    // For now, we simulate a user ID. In a real scenario, this would come from the auth state.
-                    const simulatedUserId = 'user_12345'; // We'll create this user in Airtable manually for now.
-                    
+                    const simulatedUserId = 'user_12345';
                     const eventId = await api.findOrCreateEvent(recordId, selectedDate[0]);
                     await api.createRsvp(eventId, simulatedUserId);
-                    
                     alert('You have successfully RSVPd for the event!');
-                    
-                    // Update the button to show the user has joined
                     joinEventBtn.textContent = 'View Event Hub';
                     joinEventBtn.classList.remove('join-event-btn');
                     joinEventBtn.classList.add('view-event-btn');
-    
                 } catch (error) {
                     alert('There was an error joining the event. Please try again.');
                     console.error("Failed to join event:", error);
                 }
-                // --- END OF NEW LOGIC ---
             }
-        } else if (presentBtn) {
+        }
+        else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
         } else if (carouselNav) {
             const carousel = document.getElementById('favorites-carousel');
             if (carousel) {
-                const scrollAmount = 300; // Amount to scroll in pixels
+                const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
                 carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
             }
@@ -491,7 +445,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 ui.hideDetailModal();
                 return;
             }
-    
+
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -543,30 +497,24 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         }
     });
-    
+
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
         const target = e.target;
         const container = target.closest('[data-record-id]');
         if (!container) return;
         const recordId = container.dataset.recordId;
-        
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
-
         if (target.matches('.quantity-input')) {
-    
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
         }
-
         if (Object.keys(updates).length > 0) {
-              
-            if (isLocked) 
-            {
+            if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
@@ -576,6 +524,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
+
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
@@ -583,7 +532,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
             } else {
-            
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
             await ui.updateEventPlanDateDisplay();
@@ -591,18 +539,18 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
+    
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
+    
     ui.setupPresentationEventListeners();
     ui.setupAuthEventListeners();
+    ui.setupEventHubEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
-
-    ui.setupPresentationEventListeners();
-
 }
 
 export function initializeChatEventListeners() {
@@ -629,7 +577,6 @@ export function initializeChatEventListeners() {
             }
         }
     }
-
 
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
