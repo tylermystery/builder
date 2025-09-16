@@ -4,7 +4,7 @@ import { CONSTANTS } from '../config.js';
 import * as ui from '../ui.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
-import { getImagesForTags } from '../imageManager.js';
+import { getImagesForRecord } from '../imageManager.js'; // FIX: Import the correct function
 
 const Sortable = window.Sortable;
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
@@ -30,7 +30,7 @@ export function setupItineraryEventListeners() {
                     if (state.cart.lockedItems.has(recordId)) {
                         newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
                     }
-                 });
+                });
                 state.cart.lockedItems = newLockedItems;
             } else {
                 const recordId = evt.item.dataset.recordId;
@@ -178,6 +178,10 @@ async function createItineraryItem(record, itemInfo, type) {
     itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
     itemElement.dataset.recordId = record.id;
     
+    // FIX: Use the new, correct function from imageManager
+    const imageUrls = await getImagesForRecord(record);
+    const imageUrl = imageUrls[0] || defaultImageUrl;
+    
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
     const quantitySelector = `
@@ -187,25 +191,17 @@ async function createItineraryItem(record, itemInfo, type) {
         </div>
     `;
     itemElement.innerHTML = `
-        <img src="${defaultImageUrl}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img src="${imageUrl}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
-            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
+            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note || ''}</textarea>
         </div>
         ${quantitySelector}
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
-
-    const imgEl = itemElement.querySelector('.locked-item-thumbnail');
-    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
-    getImagesForTags(mediaTags).then(imageUrls => {
-        if (imgEl && imageUrls.length > 0) {
-            imgEl.src = imageUrls[0];
-        }
-    });
     
     if (type === 'locked') {
         const editBtn = document.createElement('button');
