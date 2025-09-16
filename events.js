@@ -223,6 +223,7 @@ async function handlePaymentFormSubmit(event) {
 }
 
 export function initializeEventListeners(imageCache, flatpickr) {
+    ui.setupEventHubEventListeners();
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -399,6 +400,12 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
            });
+         } else if (viewEventBtn) {
+            e.stopPropagation();
+            const recordId = viewEventBtn.closest('[data-record-id]').dataset.recordId;
+            // In a real app, you'd look up the EventID associated with this recordId and date.
+            // For now, we'll pass a placeholder ID.
+            ui.showEventHub('evt_12345');
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
         } else if (joinEventBtn) {
