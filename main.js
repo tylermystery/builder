@@ -219,6 +219,7 @@ async function initialize() {
     log('Main', '21. Header calendar updated.');
 
     initializeChatEventListeners();
+    setupAuthEventListeners();
     initializeChat();
     log('Main', '22. Chat initialized.');
 
