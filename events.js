@@ -21,6 +21,7 @@ import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } 
 import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage } from './chat.js';
+import { isAuthenticated, showUserModal } from '../auth.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -390,7 +391,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
         const carouselNav = e.target.closest('.carousel-nav'); // Correctly declared here
-    
+        const joinEventBtn = e.target.closest('.join-event-btn'); 
+        
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -399,6 +401,18 @@ export function initializeEventListeners(imageCache, flatpickr) {
            });
         } else if (checkoutBtn) {
             ui.showCheckoutModal();
+        } else if (joinEventBtn) {
+            e.stopPropagation();
+            if (!isAuthenticated()) {
+                log('Events', 'User not authenticated. Prompting to sign in.');
+                showUserModal('signin');
+            } else {
+                // This is where we will add the RSVP logic in the next step.
+                log('Events', 'User is authenticated. Proceeding to join event...');
+                const recordId = joinEventBtn.closest('[data-record-id]').dataset.recordId;
+                // Placeholder for joining logic
+                alert('You have joined the event! (Placeholder)');
+            }
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
