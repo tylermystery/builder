@@ -13,8 +13,9 @@ async function createFavoriteCardElement(record, itemInfo) {
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
-
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
+    
+    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
+    getImagesForTags(mediaTags)
         .then(imageUrls => {
             itemCard.style.backgroundImage = `url('${imageUrls[0] || defaultImageUrl}')`;
         });
@@ -53,10 +54,11 @@ async function createLockedInItemElement(record, itemInfo) {
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
-
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
+    
+    const imgEl = itemElement.querySelector('.locked-item-thumbnail');
+    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
+    getImagesForTags(mediaTags)
         .then(imageUrls => {
-            const imgEl = itemElement.querySelector('.locked-item-thumbnail');
             if (imgEl) {
                 imgEl.src = imageUrls[0] || defaultImageUrl;
             }
@@ -65,7 +67,6 @@ async function createLockedInItemElement(record, itemInfo) {
     return itemElement;
 }
 
-// ... (rest of the file remains the same)
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
