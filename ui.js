@@ -12,6 +12,7 @@ import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, r
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
+import { setupAuthEventListeners } from './auth.js';
 
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
@@ -295,3 +296,5 @@ export function updateTotalCost() {
         }
     }
 }
+
+export { setupAuthEventListeners };
