@@ -404,7 +404,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     console.error("Failed to join event:", error);
                 }
                 // --- END OF NEW LOGIC ---
-        else if (presentBtn) {
+            }
+        } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
         } else if (carouselNav) {
