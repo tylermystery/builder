@@ -1,45 +1,38 @@
 // FILE: components/itinerary.js
 import { state } from '../state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import * as ui from '../ui.js';
-import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
+import { getImagesForTags } from '../imageManager.js';
 
-// Get the SortableJS library from the global scope
 const Sortable = window.Sortable;
-
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
 const lockedItemsContainer = document.getElementById('itinerary-locked-items');
 const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
 const closeBtn = document.getElementById('itinerary-close-btn');
+const defaultImageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
 let lockedSortable, favoritedSortable;
 
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
-
-    // Initialize SortableJS for the locked-in items column
     lockedSortable = new Sortable(lockedItemsContainer, {
-        group: 'shared', // Allows items to be moved between lists
+        group: 'shared',
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in locked items list.');
-            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id === evt.to.id) {
-                // Reorder locked items if moved within the same list
                 const newOrder = lockedSortable.toArray();
                 const newLockedItems = new Map();
                 newOrder.forEach(recordId => {
                     if (state.cart.lockedItems.has(recordId)) {
                         newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
                     }
-                });
+                 });
                 state.cart.lockedItems = newLockedItems;
             } else {
-                // Item moved from favorites to locked
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.items.has(recordId)) {
                     const itemInfo = state.cart.items.get(recordId);
@@ -53,20 +46,16 @@ export function setupItineraryEventListeners() {
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
-            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
 
-    // Initialize SortableJS for the favorited items column
     favoritedSortable = new Sortable(favoritedItemsContainer, {
         group: 'shared',
         animation: 150,
-        // FIX: Provide a single class name to avoid InvalidCharacterError
         ghostClass: 'itinerary-item-ghost',
         onEnd: function(evt) {
             log('Itinerary', 'Drag ended in favorites items list.');
-            // FIX: This section now correctly updates the state after an item is dropped.
             if (evt.from.id !== evt.to.id) {
                 const recordId = evt.item.dataset.recordId;
                 if (state.cart.lockedItems.has(recordId)) {
@@ -81,7 +70,6 @@ export function setupItineraryEventListeners() {
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
             ui.updateLockedItemStatusIcons();
-            // FIX: Trigger a save after reordering is complete
             triggerSave();
         }
     });
@@ -121,7 +109,6 @@ export async function renderItinerary() {
     log('Itinerary', 'Rendering itinerary items.');
     lockedItemsContainer.innerHTML = '';
     favoritedItemsContainer.innerHTML = '';
-
     if (state.cart.lockedItems.size === 0) {
         lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
     }
@@ -129,7 +116,6 @@ export async function renderItinerary() {
         favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
     }
 
-    // Render locked items
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -138,7 +124,6 @@ export async function renderItinerary() {
         }
     }
 
-    // Render favorited items
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -147,7 +132,6 @@ export async function renderItinerary() {
         }
     }
 
-    // Add event listeners for live editing
     document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -157,13 +141,11 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { quantity: newQuantity });
             }
-            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             triggerSave();
         });
     });
-
     document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
         textarea.addEventListener('input', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -173,17 +155,14 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { note: newNote });
             }
-            // FIX: Call the sidebar update function here to sync the main view
             ui.updateEventPlanSection();
             triggerSave();
         });
     });
-
     document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
             state.cart.lockedItems.delete(recordId);
-            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
@@ -193,27 +172,22 @@ export async function renderItinerary() {
     });
 }
 
-// Helper function to create an individual itinerary item element
 async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
     itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
     itemElement.dataset.recordId = record.id;
     
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
-    
     const quantitySelector = `
         <div class="quantity-selector">
             <label>Qty:</label>
             <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
         </div>
     `;
-    
     itemElement.innerHTML = `
-        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <img src="${defaultImageUrl}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
@@ -224,8 +198,15 @@ async function createItineraryItem(record, itemInfo, type) {
             <button class="remove-btn" title="Remove">×</button>
         </div>
     `;
+
+    const imgEl = itemElement.querySelector('.locked-item-thumbnail');
+    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
+    getImagesForTags(mediaTags).then(imageUrls => {
+        if (imgEl && imageUrls.length > 0) {
+            imgEl.src = imageUrls[0];
+        }
+    });
     
-    // Add edit button only for locked items
     if (type === 'locked') {
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
