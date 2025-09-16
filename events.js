@@ -405,13 +405,37 @@ export function initializeEventListeners(imageCache, flatpickr) {
             e.stopPropagation();
             if (!isAuthenticated()) {
                 log('Events', 'User not authenticated. Prompting to sign in.');
-                showUserModal('signin');
+                ui.showUserModal('signin');
             } else {
-                // This is where we will add the RSVP logic in the next step.
                 log('Events', 'User is authenticated. Proceeding to join event...');
                 const recordId = joinEventBtn.closest('[data-record-id]').dataset.recordId;
-                // Placeholder for joining logic
-                alert('You have joined the event! (Placeholder)');
+                const selectedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    
+                if (!selectedDate) {
+                    alert("Please select an event date before joining.");
+                    return;
+                }
+    
+                // --- START OF NEW LOGIC ---
+                try {
+                    // For now, we simulate a user ID. In a real scenario, this would come from the auth state.
+                    const simulatedUserId = 'user_12345'; // We'll create this user in Airtable manually for now.
+                    
+                    const eventId = await api.findOrCreateEvent(recordId, selectedDate[0]);
+                    await api.createRsvp(eventId, simulatedUserId);
+                    
+                    alert('You have successfully RSVPd for the event!');
+                    
+                    // Update the button to show the user has joined
+                    joinEventBtn.textContent = 'View Event Hub';
+                    joinEventBtn.classList.remove('join-event-btn');
+                    joinEventBtn.classList.add('view-event-btn');
+    
+                } catch (error) {
+                    alert('There was an error joining the event. Please try again.');
+                    console.error("Failed to join event:", error);
+                }
+                // --- END OF NEW LOGIC ---
             }
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
