@@ -1,25 +1,12 @@
-/*
-* Version: 4.9.9
-* Last Modified: 2025-09-11
-* Changelog:
-* v4.9.9 - 2025-09-11
-* - Fixed bug where "Update Plan" button in the modal reset changes.
-* - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
-* v4.9.8 - 2025-09-11
-* - Fixed bug where 'View Options' button on grouping cards was unclickable.
-* Refined the card click listener to correctly open the modal.
-* v4.9.7 - 2025-09-11
-* - Fixed TypeError by deferring DOM element selection until the initializeEventListeners function.
-*/
+// FILE: events.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
+import { AVAILABILITY_STATUS, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
-// FIX: Import from the central UI hub, not the component file directly.
 import { showItineraryModal } from './ui.js';
 import { sendMessage } from './chat.js';
 
@@ -134,17 +121,10 @@ export async function updateAllCardAvailabilityIcons() {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
             switch (rangeStatus.status) {
-                case AVAILABILITY_STATUS.FULL:
-                    statusIcon = '✅';
-                    break;
-                case AVAILABILITY_STATUS.PARTIAL:
-                    statusIcon = '🟠';
-                    break;
-                case AVAILABILITY_STATUS.NONE:
-                    statusIcon = '❌';
-                    break;
-                default:
-                    statusIcon = '📅';
+                case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
+                case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
+                case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
+                default: statusIcon = '📅';
             }
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
@@ -184,10 +164,7 @@ async function handlePaymentFormSubmit(event) {
     const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
             card: cardElement,
-            billing_details: {
-                name: customerName,
-                email: customerEmail,
-            },
+            billing_details: { name: customerName, email: customerEmail },
         },
     });
 
