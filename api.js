@@ -2,7 +2,6 @@
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
@@ -10,7 +9,6 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
 
-// ... (loadSessionFromAirtable and saveSessionToAirtable remain the same) ...
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
@@ -164,30 +162,22 @@ export async function fetchAllRecords() {
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
-        log('API', `No iCal URL for record: ${record.fields.Name}`);
         return [];
     }
     if (state.calendar.busyTimes.has(icalUrl)) {
-        log('API', `Returning cached busy times for: ${icalUrl}`);
         return state.calendar.busyTimes.get(icalUrl);
     }
     try {
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
-        log('API', `Fetching calendar from: ${proxyUrl}`);
         const response = await fetch(proxyUrl);
-        log('API', `Calendar fetch response: status ${response.status}`);
         if (!response.ok) {
-            const errorData = await response.json();
-            log('API', `Calendar fetch error: ${JSON.stringify(errorData)}`);
             throw new Error(`Calendar API Error: ${response.statusText}`);
         }
         const busyTimes = await response.json();
         state.calendar.busyTimes.set(icalUrl, busyTimes);
-        log('API', `Cached busy times for: ${icalUrl}`);
         return busyTimes;
     } catch (error) {
         console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
-        log('API', `Failed to fetch calendar: ${error.message}`);
         state.calendar.busyTimes.set(icalUrl, []);
         return [];
     }
@@ -195,17 +185,15 @@ export async function fetchCalendarForRecord(record) {
 
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) {
-        log('API', 'No tags provided for image fetch');
         return new Map();
     }
     try {
         const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
-        log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        log('API', `Image fetch response: status ${response.status}`);
+        
         if (response.status === 420 && retries > 0) {
             log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
             await new Promise(res => setTimeout(res, 500));
@@ -213,14 +201,12 @@ export async function fetchImagesByTags(tags, retries = 2) {
         }
 
         if (!response.ok) {
-            const errorData = await response.json();
-            log('API', `Image fetch error: ${JSON.stringify(errorData)}`);
+            log('API', `Image fetch error: ${await response.text()}`);
             return new Map();
         }
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) {
-            log('API', 'No image resources found');
             return new Map();
         }
 
@@ -228,10 +214,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
         tags.forEach(tag => imagesByTag.set(tag, []));
 
         data.resources.forEach(image => {
-            let transformations = 'c_fill,g_auto,w_600,h_520';
-            if (image.format === 'gif') {
-                transformations = 'c_fit,w_600,h_520';
-            }
+            const transformations = image.format === 'gif' ? 'c_fit,w_600,h_520' : 'c_fill,g_auto,w_600,h_520';
             const urlParts = image.secure_url.split('/upload/');
             const finalUrl = `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
             
@@ -241,11 +224,8 @@ export async function fetchImagesByTags(tags, retries = 2) {
                 }
             });
         });
-
-        log('API', `Fetched and mapped images for ${imagesByTag.size} tags`);
         return imagesByTag;
     } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
         log('API', `Failed to fetch images: ${error.message}`);
         return new Map();
     }
@@ -257,9 +237,7 @@ export async function fetchChatMessages(sessionId) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
         if (!response.ok) {
             throw new Error('Failed to fetch chat messages from Airtable.');
         }
@@ -280,7 +258,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
-           }
+            }
         }]
     };
     try {
