@@ -404,3 +404,4 @@ export async function createRsvp(eventId, userId) {
         throw error;
     }
 }
+
