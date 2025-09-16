@@ -1,4 +1,4 @@
-// FILE: imageManager.js (NEW AND IMPROVED)
+// FILE: imageManager.js
 import { debounce } from './utils.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
@@ -11,7 +11,6 @@ const imageCache = new Map();
 const pendingRequests = new Map();
 const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
-// This internal function processes the queue, just like in our previous attempt.
 const processRequestQueue = debounce(async () => {
     if (requestQueue.size === 0) return;
 
@@ -20,7 +19,7 @@ const processRequestQueue = debounce(async () => {
     log('ImageManager', `Processing batch request for tags: ${tagsToFetch.join(', ')}`);
 
     try {
-        const imageUrlsMap = await api.fetchImagesByTags(tagsToFetch); // Assumes fetchImagesByTags returns a Map
+        const imageUrlsMap = await api.fetchImagesByTags(tagsToFetch);
         
         tagsToFetch.forEach(tag => {
             const resultUrls = imageUrlsMap.get(tag) || [];
@@ -40,9 +39,8 @@ const processRequestQueue = debounce(async () => {
             }
         });
     }
-}, 50); // 50ms debounce window
+}, 50);
 
-// This internal function fetches images for a set of tags using the batching system.
 function fetchAndCacheTags(tags) {
     const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : []);
     if (tagArray.length === 0) {
@@ -85,13 +83,11 @@ export async function getImagesForRecord(record) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
 
-    // Logic from the old "working" code: If it's a category, just return the fallback.
     if (isGrouping) {
         log('ImageManager', `Record "${record.fields.Name}" is a grouping. Returning fallback.`);
         return [ultimateFallbackUrl];
     }
 
-    // It's a bookable item, so fetch images using our efficient batching system.
     log('ImageManager', `Record "${record.fields.Name}" is bookable. Fetching tags.`);
     let imageUrls = await fetchAndCacheTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
 
