@@ -14,10 +14,7 @@ export function updateCardIcon(recordId) {
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
-        if (!icon) {
-            log('Card', `No heart icon found for record: ${recordId}`);
-            return;
-        }
+        if (!icon) return;
         if (isLocked) {
             icon.className = 'heart-icon locked';
             icon.innerHTML = checkSVG;
@@ -29,12 +26,10 @@ export function updateCardIcon(recordId) {
             icon.innerHTML = heartSVG;
         }
         icon.style.display = 'block';
-        log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
     });
 }
 
 export function createInteractiveCard(record) {
-    log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
     const itemState = ui.getMainGetItemState()(recordId);
@@ -50,9 +45,6 @@ export function createInteractiveCard(record) {
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
     let priceHTML = '', footerHTML = '', cardTooltip = '';
-
-    // Use a placeholder initially
-    let cardImageStyle = `background-image: url('${defaultImageUrl}');`;
 
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
@@ -71,7 +63,7 @@ export function createInteractiveCard(record) {
     }
 
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="${cardImageStyle}">
+        <div class="event-card-image-container" style="background-image: url('${defaultImageUrl}');">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
@@ -86,13 +78,14 @@ export function createInteractiveCard(record) {
     `;
 
     const imageContainer = eventCard.querySelector('.event-card-image-container');
-    getImagesForTags(fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()))
+    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
+    
+    getImagesForTags(mediaTags)
         .then(imageUrls => {
             if (imageUrls && imageUrls.length > 0) {
                 imageContainer.style.backgroundImage = `url('${imageUrls[0]}')`;
             }
-        })
-        .catch(err => console.error(`Failed to load images for ${fields.Name}`, err));
+        });
 
     setTimeout(() => { updateCardIcon(recordId); }, 0);
     
