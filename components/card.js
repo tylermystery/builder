@@ -1,12 +1,12 @@
 // FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getImagesForTags } from '../imageManager.js';
 
-const defaultImageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+const defaultImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
