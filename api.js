@@ -1,8 +1,7 @@
 // FILE: api.js
 import { state } from './state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
+import { CONSTANTS } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
@@ -162,30 +161,22 @@ export async function fetchAllRecords() {
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
-        log('API', `No iCal URL for record: ${record.fields.Name}`);
         return [];
     }
     if (state.calendar.busyTimes.has(icalUrl)) {
-        log('API', `Returning cached busy times for: ${icalUrl}`);
         return state.calendar.busyTimes.get(icalUrl);
     }
     try {
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
-        log('API', `Fetching calendar from: ${proxyUrl}`);
         const response = await fetch(proxyUrl);
-        log('API', `Calendar fetch response: status ${response.status}`);
         if (!response.ok) {
-            const errorData = await response.json();
-            log('API', `Calendar fetch error: ${JSON.stringify(errorData)}`);
             throw new Error(`Calendar API Error: ${response.statusText}`);
         }
         const busyTimes = await response.json();
         state.calendar.busyTimes.set(icalUrl, busyTimes);
-        log('API', `Cached busy times for: ${icalUrl}`);
         return busyTimes;
     } catch (error) {
         console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
-        log('API', `Failed to fetch calendar: ${error.message}`);
         state.calendar.busyTimes.set(icalUrl, []);
         return [];
     }
@@ -245,9 +236,7 @@ export async function fetchChatMessages(sessionId) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
         if (!response.ok) {
             throw new Error('Failed to fetch chat messages from Airtable.');
         }
