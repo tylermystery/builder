@@ -19,7 +19,8 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
-import { showItineraryModal } from './components/itinerary.js';
+// FIX: Import from the central UI hub, not the component file directly.
+import { showItineraryModal } from './ui.js';
 import { sendMessage } from './chat.js';
 
 let mainDatePicker = null;
@@ -129,11 +130,9 @@ export async function updateAllCardAvailabilityIcons() {
         const busyTimes = await api.fetchCalendarForRecord(record);
         const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
-
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
-            
             switch (rangeStatus.status) {
                 case AVAILABILITY_STATUS.FULL:
                     statusIcon = '✅';
@@ -150,7 +149,6 @@ export async function updateAllCardAvailabilityIcons() {
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
             const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
-
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
@@ -167,9 +165,7 @@ async function handlePaymentFormSubmit(event) {
     const spinner = submitBtn.querySelector('.spinner');
     const cardErrors = document.getElementById('card-errors');
     cardErrors.textContent = '';
-    // Clear previous errors
 
-    // Show loading state
     submitBtn.disabled = true;
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
@@ -177,7 +173,6 @@ async function handlePaymentFormSubmit(event) {
     const { stripe, elements, cardElement, clientSecret } = ui.getStripeContext();
     if (!stripe || !elements || !cardElement || !clientSecret) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
-        // Hide loading state
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
@@ -199,22 +194,18 @@ async function handlePaymentFormSubmit(event) {
     if (error) {
         cardErrors.textContent = error.message;
         log('Events', `Stripe payment error: ${error.message}`);
-        // Hide loading state
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
     } else if (paymentIntent.status === 'succeeded') {
         log('Events', 'Payment succeeded.');
-        // Show success UI in modal
         document.getElementById('payment-form').style.display = 'none';
         document.getElementById('checkout-summary-details').style.display = 'none';
         document.querySelector('.checkout-total-deposit-section').style.display = 'none';
         document.querySelector('.terms-and-conditions').style.display = 'none';
         document.getElementById('payment-success-message').style.display = 'block';
 
-        // Update main application UI
         ui.displayReservedStatus();
-        // Close modal after a delay
         setTimeout(() => {
             ui.hideCheckoutModal();
         }, 4000);
@@ -249,10 +240,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
                 loadMoreRecords(imageCache);
             }
-    
             scrollTimeout = null;
         }, 100);
     });
+    
     currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     if (currentStore) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -302,10 +293,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
-        
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
-     
         document.getElementById('headcount-filter').selectedIndex = 0;
         document.getElementById('headcount-custom').value = '';
         document.getElementById('headcount-custom').style.display = 'none';
@@ -336,19 +325,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         },
     });
-
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton || !mainDatePicker) return;
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         let startDate = new Date(today);
         let endDate = new Date(today);
-
         const quickFilterType = quickButton.dataset.dateQuick;
-
         switch (quickFilterType) {
             case 'tomorrow':
                 startDate.setDate(today.getDate() + 1);
@@ -363,7 +347,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
         mainDatePicker.setDate([startDate, endDate], true);
     });
-
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -374,7 +357,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
         
@@ -389,7 +371,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
-        const carouselNav = e.target.closest('.carousel-nav'); // Correctly declared here
+        const carouselNav = e.target.closest('.carousel-nav');
     
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -405,7 +387,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (carouselNav) {
             const carousel = document.getElementById('favorites-carousel');
             if (carousel) {
-                const scrollAmount = 300; // Amount to scroll in pixels
+                const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
                 carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
             }
@@ -415,7 +397,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (parentName) {
                 const categoryButtons = document.querySelectorAll('#category-filters .filter-btn');
                 const targetButton = Array.from(categoryButtons).find(btn => btn.textContent === parentName);
-                
                 if (targetButton) {
                     targetButton.click();
                     if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
@@ -441,12 +422,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             const isLocked = state.cart.lockedItems.has(recordId);
-            
             if (isLocked) {
                 ui.hideDetailModal();
                 return;
             }
-    
             const itemInfo = ui.getItemState(recordId);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -462,7 +441,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 const itemInfo = state.cart.lockedItems.get(recordId);
                 state.cart.lockedItems.delete(recordId);
                 state.cart.items.set(recordId, itemInfo);
-                
                 ui.updateCardIcon(recordId);
                 await ui.updateEventPlanSection();
                 await ui.updateFavoritesCarousel();
@@ -476,16 +454,14 @@ export function initializeEventListeners(imageCache, flatpickr) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } 
-        else if (card) {
+        } else if (card) {
             const isQuantityClick = e.target.closest('.quantity-selector');
             if (!isQuantityClick) {
                 const recordId = card.dataset.recordId;
                 const record = state.records.all.find(r => r.id === recordId);
                 if (record) ui.showDetailModal(record);
             }
-        } 
-        else if (lockedItemCard) {
+        } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
@@ -498,19 +474,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         }
     });
-    
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
         const target = e.target;
         const container = target.closest('[data-record-id]');
         if (!container) return;
         const recordId = container.dataset.recordId;
-        
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
 
         if (target.matches('.quantity-input')) {
-    
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
@@ -519,9 +492,7 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
 
         if (Object.keys(updates).length > 0) {
-              
-            if (isLocked) 
-            {
+            if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
@@ -538,7 +509,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
             } else {
-            
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
             await ui.updateEventPlanDateDisplay();
@@ -554,9 +524,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     return { mainDatePicker, eventPlanDatePicker };
-
-    ui.setupPresentationEventListeners();
-
 }
 
 export function initializeChatEventListeners() {
@@ -583,7 +550,6 @@ export function initializeChatEventListeners() {
             }
         }
     }
-
 
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
