@@ -20,8 +20,7 @@ const processRequestQueue = debounce(async () => {
         
         tagsToFetch.forEach(tag => {
             const resultUrls = imageUrlsMap.get(tag) || [];
-            // Cache the result for this specific tag combination
-            imageCache.set(tag, resultUrls);
+            imageCache.set(tag, resultUrls); // Cache results for individual tags
             if (pendingRequests.has(tag)) {
                 pendingRequests.get(tag).forEach(handler => handler.resolve(resultUrls));
                 pendingRequests.delete(tag);
@@ -37,7 +36,7 @@ const processRequestQueue = debounce(async () => {
             }
         });
     }
-}, 50);
+}, 50); // Wait 50ms to collect simultaneous requests into a single batch.
 
 export function getImagesForTags(tags) {
     if (!tags || tags.length === 0) {
@@ -45,22 +44,45 @@ export function getImagesForTags(tags) {
     }
     
     const tagArray = Array.isArray(tags) ? tags : [tags];
-    // A single tag is the simplest cache key
-    const cacheKey = tagArray.join(',');
+    
+    // Check cache for each tag individually
+    const cachedResults = [];
+    let allTagsCached = true;
+    for (const tag of tagArray) {
+        if (imageCache.has(tag)) {
+            cachedResults.push(...imageCache.get(tag));
+        } else {
+            allTagsCached = false;
+            break;
+        }
+    }
 
-    if (imageCache.has(cacheKey)) {
-        return Promise.resolve(imageCache.get(cacheKey));
+    if (allTagsCached) {
+        return Promise.resolve(Array.from(new Set(cachedResults))); // Return unique URLs
     }
 
     return new Promise((resolve, reject) => {
-        tagArray.forEach(tag => {
-            // Even if multiple components request the same tag, we only need to handle it once
-            if (!pendingRequests.has(tag)) {
-                pendingRequests.set(tag, []);
-            }
-            pendingRequests.get(tag).push({ resolve, reject });
-            requestQueue.add(tag);
+        const promises = tagArray.map(tag => {
+            return new Promise((res, rej) => {
+                if (imageCache.has(tag)) {
+                    res(imageCache.get(tag));
+                } else {
+                    if (!pendingRequests.has(tag)) {
+                        pendingRequests.set(tag, []);
+                    }
+                    pendingRequests.get(tag).push({ resolve: res, reject: rej });
+                    requestQueue.add(tag);
+                }
+            });
         });
+        
         processRequestQueue();
+
+        Promise.all(promises)
+            .then(results => {
+                const flattenedResults = results.flat();
+                resolve(Array.from(new Set(flattenedResults)));
+            })
+            .catch(reject);
     });
 }
