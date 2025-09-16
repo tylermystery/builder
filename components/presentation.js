@@ -1,11 +1,11 @@
 // FILE: components/presentation.js
 import { state } from '../state.js';
+import * as api from '../api.js';
 import * as ui from '../ui.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
-import { getImagesForTags } from '../imageManager.js';
 
 const modal = document.getElementById('presentation-modal-overlay');
 const closeBtn = document.getElementById('presentation-close-btn');
@@ -76,6 +76,7 @@ function renderReactions(recordId) {
     let summaryHTML = 'Reactions: ';
     if (allReactions.size > 0) {
         summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
+            // Use the new userProfiles map for a reliable name lookup
             const name = state.session.userProfiles.get(userId) || 'A User';
             return `<span>${name}: ${reaction}</span>`;
         }).join(' | ');
@@ -109,6 +110,7 @@ async function renderCurrentSlide() {
     const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
     itemPriceEl.textContent = `$${price.toFixed(2)}`;
     itemDescEl.textContent = record.fields.Description || '';
+
     if (itemInfo?.note) {
         itemNoteContainerEl.style.display = 'block';
         itemNoteEl.textContent = itemInfo.note;
@@ -116,12 +118,10 @@ async function renderCurrentSlide() {
         itemNoteContainerEl.style.display = 'none';
     }
 
-    const mediaTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
-    getImagesForTags(mediaTags).then(imageUrls => {
-        currentImages = imageUrls || [];
-        currentImageIndex = 0;
-        renderCurrentImage();
-    });
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+    currentImages = imageUrls || [];
+    currentImageIndex = 0;
+    renderCurrentImage();
 }
 
 function renderCurrentImage() {
@@ -155,8 +155,9 @@ function navigateToSlide(direction) {
 }
 
 function cycleImage(direction) {
+    const newIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
     if (currentImages.length > 0) {
-        currentImageIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
+        currentImageIndex = newIndex;
         renderCurrentImage();
     }
 }
@@ -185,6 +186,7 @@ function handleReactionClick(e) {
 
     const itemReactions = state.session.reactions.get(recordId);
     
+    // Toggle reaction off if the same one is clicked again
     if (itemReactions.get(currentUser.id) === emoji) {
         itemReactions.delete(currentUser.id);
     } else {
