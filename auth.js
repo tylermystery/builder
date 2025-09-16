@@ -12,7 +12,7 @@ const signinMessage = document.getElementById('signin-message');
 const signoutBtn = document.getElementById('signout-btn');
 const profileBtn = document.getElementById('user-profile-button');
 
-function showUserModal(view = 'signin') {
+export function showUserModal(view = 'signin') {
     signinView.style.display = view === 'signin' ? 'block' : 'none';
     profileView.style.display = view === 'profile' ? 'block' : 'none';
     userModalOverlay.classList.add('active');
@@ -31,55 +31,40 @@ function hideUserModal() {
 async function handleSignIn(e) {
     e.preventDefault();
     const email = signinEmailInput.value;
-    log('Auth', `Attempting sign-in for: ${email}`);
+    log('Auth', `Sign-in initiated for: ${email}`);
+    signinMessage.style.color = '#28a745';
+    signinMessage.textContent = `Sending magic link...`;
 
-    // This is where we will call our new serverless function.
-    // For now, we'll simulate the "email sent" message.
-    signinMessage.textContent = `A sign-in link has been sent to ${email}. Please check your inbox.`;
-    signinEmailInput.value = '';
-
-    // In a real implementation, you would make a fetch call here:
-    /*
-    try {
-        const response = await fetch('/api/auth-start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-        });
-        if (!response.ok) {
-            throw new Error('Failed to send magic link.');
-        }
+    // For now, we simulate the success message.
+    setTimeout(() => {
         signinMessage.textContent = `A sign-in link has been sent to ${email}. Please check your inbox.`;
-    } catch (error) {
-        signinMessage.textContent = 'Error sending link. Please try again.';
-        signinMessage.style.color = 'red';
-    }
-    */
+        signinEmailInput.value = '';
+    }, 1000);
 }
 
 function handleSignOut() {
     log('Auth', 'User signed out.');
-    // Clear user from state and local storage in a real implementation
-    hideUserModal();
+    state.session.user = null;
     profileBtn.classList.remove('signed-in');
+    hideUserModal();
 }
 
 export function setupAuthEventListeners() {
     profileBtn.addEventListener('click', () => {
-        // In a real implementation, you would check auth status here
-        // For now, we just open the sign-in view.
-        showUserModal('signin');
+        showUserModal('signin'); 
     });
     
     userModalCloseBtn.addEventListener('click', hideUserModal);
     signinForm.addEventListener('submit', handleSignIn);
     signoutBtn.addEventListener('click', handleSignOut);
+    
+    userModalOverlay.addEventListener('click', (e) => {
+        if (e.target === userModalOverlay) {
+            hideUserModal();
+        }
+    });
 }
 
-// This function will eventually check for a valid session token.
-// For now, it simulates a logged-out user.
 export function isAuthenticated() {
-    // In a real implementation, you would check for a valid session token in localStorage.
-    // e.g., return !!localStorage.getItem('sessionToken');
     return false; 
 }
