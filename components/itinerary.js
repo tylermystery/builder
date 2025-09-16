@@ -1,258 +1,233 @@
-// FILE: components/presentation.js
+// FILE: components/itinerary.js
 import { state } from '../state.js';
-import * as ui from '../ui.js';
-import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
-import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
-import { getImagesForRecord } from '../imageManager.js'; // FIX: Import the correct function
+import { getImagesForRecord } from '../imageManager.js';
+// FIX: Import directly from component files to break the circular dependency with ui.js
+import { parseOptions } from '../utils.js';
+import { updateCardIcon } from './card.js';
+import { showDetailModal } from './modal.js';
+import { 
+    updateFavoritesCarousel, 
+    updateTotalCost, 
+    updateEventPlanSection, 
+    updateLockedItemStatusIcons 
+} from './sidebar.js';
+import { updateEventPlanDateDisplay } from '../ui.js';
 
-const modal = document.getElementById('presentation-modal-overlay');
-const closeBtn = document.getElementById('presentation-close-btn');
-const titleEl = document.getElementById('presentation-title');
-const counterEl = document.getElementById('presentation-counter');
-const mainImageEl = document.getElementById('presentation-main-image');
-const thumbStripEl = document.getElementById('presentation-thumbnail-strip');
-const itemNameEl = document.getElementById('presentation-item-name');
-const itemPriceEl = document.getElementById('presentation-item-price');
-const itemDescEl = document.getElementById('presentation-item-description');
-const itemNoteContainerEl = document.getElementById('presentation-item-note-container');
-const itemNoteEl = document.getElementById('presentation-item-note');
-const prevItemBtn = document.getElementById('presentation-prev-item-btn');
-const nextItemBtn = document.getElementById('presentation-next-item-btn');
-const reactionButtonsEl = document.getElementById('reaction-buttons');
-const reactionSummaryEl = document.getElementById('reaction-summary');
-const summaryEventNameEl = document.getElementById('summary-event-name');
-const summaryEventNotesEl = document.getElementById('summary-event-notes');
-const summaryEventDateEl = document.getElementById('summary-event-date');
-const summaryIdeasLink = document.getElementById('summary-ideas-link');
-const summaryLockedLink = document.getElementById('summary-locked-link');
-const shareBtn = document.getElementById('presentation-share-btn');
 
-let combinedList = [];
-let globalCurrentIndex = 0;
-let currentImages = [];
-let currentImageIndex = 0;
+const Sortable = window.Sortable;
+const itineraryModal = document.getElementById('itinerary-modal-overlay');
+const lockedItemsContainer = document.getElementById('itinerary-locked-items');
+const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
+const closeBtn = document.getElementById('itinerary-close-btn');
+const defaultImageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
-function updateHeader(currentItem) {
-    const listType = currentItem.type;
-    titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
-    counterEl.textContent = `Item ${globalCurrentIndex + 1} of ${combinedList.length}`;
-    
-    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
-    summaryLockedLink.classList.toggle('active', listType === 'locked');
-    summaryIdeasLink.disabled = listType === 'favorites';
-    summaryLockedLink.disabled = listType === 'locked';
-}
+let lockedSortable, favoritedSortable;
 
-function renderSummaryHeader() {
-    summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
-    summaryEventNotesEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || 'N/A';
-    
-    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    if (dateValue) {
-        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
-        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } else {
-        summaryEventDateEl.textContent = 'N/A';
-    }
-
-    summaryIdeasLink.textContent = `${state.cart.items.size} Ideas`;
-    summaryLockedLink.textContent = `${state.cart.lockedItems.size} Locked In`;
-}
-
-function renderReactions(recordId) {
-    const currentUser = getCurrentUser();
-    let allReactions = state.session.reactions.get(recordId);
-    if (!(allReactions instanceof Map)) {
-        allReactions = new Map();
-    }
-    const currentUserReaction = allReactions.get(currentUser.id);
-
-    reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
-        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}">${emoji}</button>`
-    ).join('');
-
-    let summaryHTML = 'Reactions: ';
-    if (allReactions.size > 0) {
-        summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
-            const name = state.session.userProfiles.get(userId) || 'A User';
-            return `<span>${name}: ${reaction}</span>`;
-        }).join(' | ');
-    } else {
-        summaryHTML += 'None yet.';
-    }
-    reactionSummaryEl.innerHTML = summaryHTML;
-}
-
-async function renderCurrentSlide() {
-    if (combinedList.length === 0) {
-        hidePresentationView();
-        return;
-    }
-    mainImageEl.style.backgroundImage = '';
-    thumbStripEl.innerHTML = '<p>Loading images...</p>';
-
-    const currentItem = combinedList[globalCurrentIndex];
-    const { recordId, type } = currentItem;
-    const record = state.records.all.find(r => r.id === recordId);
-    if (!record) {
-        log('Presentation', `Record not found for ID: ${recordId}`);
-        return;
-    }
-    
-    updateHeader(currentItem);
-    renderReactions(recordId);
-
-    const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
-    itemNameEl.textContent = record.fields.Name || 'Untitled';
-    const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
-    itemPriceEl.textContent = `$${price.toFixed(2)}`;
-    itemDescEl.textContent = record.fields.Description || '';
-    if (itemInfo?.note) {
-        itemNoteContainerEl.style.display = 'block';
-        itemNoteEl.textContent = itemInfo.note;
-    } else {
-        itemNoteContainerEl.style.display = 'none';
-    }
-
-    // FIX: Use the new, correct function from imageManager
-    const imageUrls = await getImagesForRecord(record);
-    currentImages = imageUrls || [];
-    currentImageIndex = 0;
-    renderCurrentImage();
-}
-
-function renderCurrentImage() {
-    if (currentImages.length === 0) {
-        mainImageEl.style.backgroundImage = '';
-        thumbStripEl.innerHTML = '<p>No images available.</p>';
-        return;
-    }
-    mainImageEl.style.backgroundImage = `url('${currentImages[currentImageIndex]}')`;
-
-    thumbStripEl.innerHTML = '';
-    currentImages.forEach((url, index) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url}')`;
-        if (index === currentImageIndex) {
-            thumb.classList.add('active');
+export function setupItineraryEventListeners() {
+    log('Itinerary', 'Initializing Itinerary with SortableJS.');
+    lockedSortable = new Sortable(lockedItemsContainer, {
+        group: 'shared',
+        animation: 150,
+        ghostClass: 'itinerary-item-ghost',
+        onEnd: function(evt) {
+            log('Itinerary', 'Drag ended in locked items list.');
+            if (evt.from.id === evt.to.id) {
+                const newOrder = lockedSortable.toArray();
+                const newLockedItems = new Map();
+                newOrder.forEach(recordId => {
+                    if (state.cart.lockedItems.has(recordId)) {
+                        newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
+                    }
+                });
+                state.cart.lockedItems = newLockedItems;
+            } else {
+                const recordId = evt.item.dataset.recordId;
+                if (state.cart.items.has(recordId)) {
+                    const itemInfo = state.cart.items.get(recordId);
+                    state.cart.items.delete(recordId);
+                    state.cart.lockedItems.set(recordId, itemInfo);
+                }
+            }
+            // FIX: Remove 'ui.' prefix
+            updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
+            updateFavoritesCarousel();
+            updateTotalCost();
+            updateEventPlanSection();
+            updateEventPlanDateDisplay();
+            updateLockedItemStatusIcons();
+            triggerSave();
         }
-        thumb.addEventListener('click', () => {
-            currentImageIndex = index;
-            renderCurrentImage();
-        });
-        thumbStripEl.appendChild(thumb);
+    });
+
+    favoritedSortable = new Sortable(favoritedItemsContainer, {
+        group: 'shared',
+        animation: 150,
+        ghostClass: 'itinerary-item-ghost',
+        onEnd: function(evt) {
+            log('Itinerary', 'Drag ended in favorites items list.');
+            if (evt.from.id !== evt.to.id) {
+                const recordId = evt.item.dataset.recordId;
+                if (state.cart.lockedItems.has(recordId)) {
+                    const itemInfo = state.cart.lockedItems.get(recordId);
+                    state.cart.lockedItems.delete(recordId);
+                    state.cart.items.set(recordId, itemInfo);
+                }
+            }
+            // FIX: Remove 'ui.' prefix
+            updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
+            updateFavoritesCarousel();
+            updateTotalCost();
+            updateEventPlanSection();
+            updateEventPlanDateDisplay();
+            updateLockedItemStatusIcons();
+            triggerSave();
+        }
+    });
+
+    closeBtn.addEventListener('click', hideItineraryModal);
+    itineraryModal.addEventListener('click', (e) => {
+        if (e.target === itineraryModal) {
+            hideItineraryModal();
+        }
     });
 }
 
-function navigateToSlide(direction) {
-    if (combinedList.length === 0) return;
-    globalCurrentIndex = (globalCurrentIndex + direction + combinedList.length) % combinedList.length;
-    renderCurrentSlide();
-}
-
-function cycleImage(direction) {
-    if (currentImages.length > 0) {
-        currentImageIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
-        renderCurrentImage();
-    }
-}
-
-function handleKeyDown(e) {
-    switch (e.key) {
-        case 'ArrowDown': navigateToSlide(1); break;
-        case 'ArrowUp': navigateToSlide(-1); break;
-        case 'ArrowRight': cycleImage(1); break;
-        case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape': hidePresentationView(); break;
-    }
-}
-
-function handleReactionClick(e) {
-    const button = e.target.closest('.reaction-btn');
-    if (!button) return;
-
-    const emoji = button.dataset.emoji;
-    const currentUser = getCurrentUser();
-    const recordId = combinedList[globalCurrentIndex].recordId;
-
-    if (!state.session.reactions.has(recordId)) {
-        state.session.reactions.set(recordId, new Map());
-    }
-
-    const itemReactions = state.session.reactions.get(recordId);
-    
-    if (itemReactions.get(currentUser.id) === emoji) {
-        itemReactions.delete(currentUser.id);
-    } else {
-        itemReactions.set(currentUser.id, emoji);
-    }
-    
-    renderReactions(recordId);
-    triggerSave();
-}
-
-export function showPresentationView(listType, startRecordId = null) {
-    log('Presentation', `Showing presentation for: ${listType}`);
-    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
-    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
-    combinedList = [...favorites, ...locked];
-    if (combinedList.length === 0) {
-        alert(`There are no items in your lists to present.`);
-        return;
-    }
-
-    if (startRecordId) {
-        globalCurrentIndex = combinedList.findIndex(item => item.recordId === startRecordId);
-    } else {
-        const firstItemOfList = combinedList.find(item => item.type === listType);
-        globalCurrentIndex = firstItemOfList ? combinedList.indexOf(firstItemOfList) : 0;
-    }
-
-    renderSummaryHeader();
-    
-    modal.classList.add('active');
-    modal.style.display = 'flex';
+export function showItineraryModal() {
+    log('Itinerary', 'Showing itinerary modal.');
+    renderItinerary();
+    renderItineraryHeader();
+    itineraryModal.classList.add('active');
+    itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    document.addEventListener('keydown', handleKeyDown);
-    
-    renderCurrentSlide();
 }
 
-function hidePresentationView() {
-    modal.classList.remove('active');
+export function hideItineraryModal() {
+    log('Itinerary', 'Hiding itinerary modal.');
+    itineraryModal.classList.remove('active');
     setTimeout(() => {
-        modal.style.display = 'none';
+        itineraryModal.style.display = 'none';
     }, 300);
     document.body.classList.remove('modal-open');
-    document.removeEventListener('keydown', handleKeyDown);
 }
 
-export function setupPresentationEventListeners() {
-    closeBtn.addEventListener('click', hidePresentationView);
-    prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
-    nextItemBtn.addEventListener('click', () => navigateToSlide(1));
-    reactionButtonsEl.addEventListener('click', handleReactionClick);
-    
-    summaryIdeasLink.addEventListener('click', () => {
-        if (state.cart.items.size > 0) showPresentationView('favorites');
-    });
-    summaryLockedLink.addEventListener('click', () => {
-        if (state.cart.lockedItems.size > 0) showPresentationView('locked');
-    });
-    shareBtn.addEventListener('click', (e) => {
-        const baseURL = window.location.origin + window.location.pathname;
-        const sessionID = state.session.id;
-        const shareURL = `${baseURL}?session=${sessionID}&view=present`;
-        
-        navigator.clipboard.writeText(shareURL).then(() => {
-            const originalText = e.target.textContent;
-            e.target.textContent = 'Copied!';
-            setTimeout(() => {
-                e.target.textContent = originalText;
-            }, 1500);
+export function renderItineraryHeader() {
+    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
+    document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+}
+
+export async function renderItinerary() {
+    log('Itinerary', 'Rendering itinerary items.');
+    lockedItemsContainer.innerHTML = '';
+    favoritedItemsContainer.innerHTML = '';
+    if (state.cart.lockedItems.size === 0) {
+        lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
+    }
+    if (state.cart.items.size === 0) {
+        favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
+    }
+
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createItineraryItem(record, itemInfo, 'locked');
+            if (itemElement) lockedItemsContainer.appendChild(itemElement);
+        }
+    }
+
+    for (const [recordId, itemInfo] of state.cart.items.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const itemElement = await createItineraryItem(record, itemInfo, 'favorite');
+            if (itemElement) favoritedItemsContainer.appendChild(itemElement);
+        }
+    }
+
+    document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newQuantity = parseInt(e.target.value, 10);
+            if (e.target.closest('#itinerary-locked-items')) {
+                ui.updateLockedItemState(recordId, { quantity: newQuantity });
+            } else {
+                ui.updateItemState(recordId, { quantity: newQuantity });
+            }
+            // FIX: Remove 'ui.' prefix
+            updateTotalCost();
+            updateEventPlanSection();
+            triggerSave();
         });
     });
+    document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
+        textarea.addEventListener('input', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newNote = e.target.value;
+            if (e.target.closest('#itinerary-locked-items')) {
+                ui.updateLockedItemState(recordId, { note: newNote });
+            } else {
+                ui.updateItemState(recordId, { note: newNote });
+            }
+            // FIX: Remove 'ui.' prefix
+            updateEventPlanSection();
+            triggerSave();
+        });
+    });
+    document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            state.cart.lockedItems.delete(recordId);
+            // FIX: Remove 'ui.' prefix
+            updateTotalCost();
+            updateEventPlanSection();
+            updateFavoritesCarousel();
+            e.target.closest('.itinerary-item').remove();
+            triggerSave();
+        });
+    });
+}
+
+async function createItineraryItem(record, itemInfo, type) {
+    const fields = record.fields;
+    const itemElement = document.createElement('div');
+    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
+    itemElement.dataset.recordId = record.id;
+    
+    const imageUrls = await getImagesForRecord(record);
+    const imageUrl = imageUrls[0] || defaultImageUrl;
+    
+    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const selectedOption = options[itemInfo.selectedOptionIndex];
+    const quantitySelector = `
+        <div class="quantity-selector">
+            <label>Qty:</label>
+            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
+        </div>
+    `;
+    itemElement.innerHTML = `
+        <img src="${imageUrl}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <div class="locked-item-details">
+            <p class="locked-item-name">${fields.Name}</p>
+            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
+            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note || ''}</textarea>
+        </div>
+        ${quantitySelector}
+        <div class="locked-item-actions">
+            <button class="remove-btn" title="Remove">×</button>
+        </div>
+    `;
+    
+    if (type === 'locked') {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = 'Edit';
+        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
+        editBtn.addEventListener('click', () => {
+            // FIX: Remove 'ui.' prefix
+            showDetailModal(record);
+        });
+    }
+
+    return itemElement;
 }
