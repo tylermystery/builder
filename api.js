@@ -1,4 +1,4 @@
-// FILE: api.js
+// PASTE THIS ENTIRE CODE INTO: api.js
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
@@ -93,16 +93,38 @@ export async function saveSessionToAirtable() {
     }
 }
 
-export async function fetchAllRecords() { /* This function should remain as it was in the older working version */ }
+export async function fetchAllRecords() {
+    let records = [];
+    let offset = null;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
+    try {
+        do {
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch data from Airtable.');
+            }
+            const data = await response.json();
+            records = records.concat(data.records);
+            offset = data.offset;
+        } while (offset);
+        return records.filter(record => record.fields);
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
+}
+
 export async function fetchCalendarForRecord(record) { /* This function should remain as it was in the older working version */ }
 export async function fetchChatMessages(sessionId) { /* This function should remain as it was in the newer version */ }
 export async function postChatMessage(sessionId, senderId, senderName, content) { /* This function should remain as it was in the newer version */ }
 
-// === START: CORRECTED IMAGE FUNCTIONS ===
 async function fetchImagesByTags(tags, retries = 2) {
     const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
     if (tagArray.length === 0) {
-        return []; // Return empty array instead of null
+        return [];
     }
 
     try {
@@ -117,12 +139,12 @@ async function fetchImagesByTags(tags, retries = 2) {
             return fetchImagesByTags(tags, retries - 1);
         }
         if (!response.ok) {
-            return []; // Return empty array instead of null
+            return [];
         }
 
         const data = await response.json();
         if (!data.resources) {
-            return []; // Return empty array instead of null
+            return [];
         }
         
         return data.resources.map(image => {
@@ -132,7 +154,7 @@ async function fetchImagesByTags(tags, retries = 2) {
         });
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return []; // Return empty array instead of null
+        return [];
     }
 }
 
@@ -164,4 +186,3 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     imageCache.set(cacheKey, imageUrls);
     return { imageUrls };
 }
-// === END: CORRECTED IMAGE FUNCTIONS ===
