@@ -53,9 +53,19 @@ export async function saveSessionToAirtable() {
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
+    
+    // === START: MODIFIED DATE LOGIC ===
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    let formattedDate = dateValue ?
-        new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue).toISOString() : null;
+    let formattedDate = null;
+    if (dateValue) {
+        // Handle both a single date string and an array from a date range
+        const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        const dateObj = new Date(dateToFormat);
+        if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString();
+        }
+    }
+    // === END: MODIFIED DATE LOGIC ===
 
     const fields = {
         "Name": sessionName,
@@ -63,8 +73,12 @@ export async function saveSessionToAirtable() {
         "Collaborators": Array.from(state.session.userProfiles.values()).join(', '),
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
-        ...(formattedDate && { "Date": formattedDate })
     };
+
+    if (formattedDate) {
+        fields["Date"] = formattedDate;
+    }
+
     const payload = { fields };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
@@ -77,6 +91,7 @@ export async function saveSessionToAirtable() {
         });
         if (!response.ok) {
             const errorData = await response.json();
+            log('API', `Session save error: ${JSON.stringify(errorData)}`);
             throw new Error(`Airtable API Error: ${errorData.error.message}`);
         }
         const result = await response.json();
@@ -89,6 +104,7 @@ export async function saveSessionToAirtable() {
         return true;
     } catch (error) {
         console.error("Failed to save session:", error);
+        log('API', `Failed to save session: ${error.message}`);
         return false;
     }
 }
@@ -117,9 +133,77 @@ export async function fetchAllRecords() {
     }
 }
 
-export async function fetchCalendarForRecord(record) { /* This function should remain as it was in the older working version */ }
-export async function fetchChatMessages(sessionId) { /* This function should remain as it was in the newer version */ }
-export async function postChatMessage(sessionId, senderId, senderName, content) { /* This function should remain as it was in the newer version */ }
+export async function fetchCalendarForRecord(record) {
+    const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
+    if (!icalUrl) {
+        return [];
+    }
+    if (state.calendar.busyTimes.has(icalUrl)) {
+        return state.calendar.busyTimes.get(icalUrl);
+    }
+    try {
+        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+            throw new Error(`Calendar API Error: ${response.statusText}`);
+        }
+        const busyTimes = await response.json();
+        state.calendar.busyTimes.set(icalUrl, busyTimes);
+        return busyTimes;
+    } catch (error) {
+        console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
+        state.calendar.busyTimes.set(icalUrl, []);
+        return [];
+    }
+}
+
+export async function fetchChatMessages(sessionId) {
+    const formula = `({SessionID} = '${sessionId}')`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch chat messages from Airtable.');
+        }
+        const data = await response.json();
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching chat history:", error);
+        return [];
+    }
+}
+
+export async function postChatMessage(sessionId, senderId, senderName, content) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: sessionId,
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content,
+            }
+        }]
+    };
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+             throw new Error('Failed to post chat message to Airtable.');
+        }
+    } catch (error) {
+        console.error("Error posting chat message:", error);
+    }
+}
 
 async function fetchImagesByTags(tags, retries = 2) {
     const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
