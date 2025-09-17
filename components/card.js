@@ -1,4 +1,4 @@
-// FILE: components/card.js
+// PASTE THIS ENTIRE CODE INTO: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
