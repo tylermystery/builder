@@ -58,11 +58,12 @@ export async function saveSessionToAirtable() {
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (dateValue) {
-        // Handle both a single date string and an array from a date range
         const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
-        const dateObj = new Date(dateToFormat);
-        if (!isNaN(dateObj.getTime())) {
-            formattedDate = dateObj.toISOString();
+        if (dateToFormat) { // Ensure the value isn't empty/undefined after array check
+            const dateObj = new Date(dateToFormat);
+            if (!isNaN(dateObj.getTime())) {
+                formattedDate = dateObj.toISOString();
+            }
         }
     }
     // === END: MODIFIED DATE LOGIC ===
