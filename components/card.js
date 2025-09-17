@@ -1,4 +1,4 @@
-// PASTE THIS ENTIRE CODE INTO: components/card.js
+// FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
@@ -29,15 +29,17 @@ export function updateCardIcon(recordId) {
     });
 }
 
-export async function createInteractiveCard(record, imageCache) {
+export async function createInteractiveCard(record) {
     const fields = record.fields;
     const recordId = record.id;
     const itemState = ui.getMainGetItemState()(recordId);
+    
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all);
+    
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -46,6 +48,7 @@ export async function createInteractiveCard(record, imageCache) {
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
     let priceHTML = '', footerHTML = '', cardTooltip = '';
+
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
         priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
@@ -57,12 +60,14 @@ export async function createInteractiveCard(record, imageCache) {
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
+        
         let actionButtonHTML;
         if (isJoinable) {
             actionButtonHTML = `<button class="card-action-btn join-event-btn">Join Event</button>`;
         } else {
             actionButtonHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         }
+        
         footerHTML = `<div class="card-footer"><div class="price-quantity-wrapper"><div class="price">${priceHTML}</div>${quantitySelectorHTML}</div>${actionButtonHTML}</div>`;
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
@@ -81,6 +86,7 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         ${footerHTML}
     `;
+
     setTimeout(() => { updateCardIcon(recordId); }, 0);
     
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
