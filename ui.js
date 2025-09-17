@@ -11,7 +11,6 @@ import { showPresentationView, setupPresentationEventListeners } from './compone
 import { setupAuthEventListeners, showUserModal, isAuthenticated } from './auth.js';
 import { showEventHub, setupEventHubEventListeners } from './components/eventHub.js';
 
-// Re-export functions from all component modules
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
@@ -92,50 +91,27 @@ export function getRecordPrice(record, optionIndex = null) {
     return isNaN(price) ? 0 : price;
 }
 export function toggleLoading(show) {
-    log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);
     const loadingMessage = document.getElementById('loading-message');
-    const mainContent = document.querySelector('.main-container');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 export async function renderRecords(recordsToRender, imageCache, append = false) {
-    log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
-    const loadingMessage = document.getElementById('loading-message');
-    if (!catalogContainer) {
-        console.error("UI ERROR: catalog-container element not found in the DOM!");
-        return;
-    }
+    if (!catalogContainer) return;
     if (!append) {
         catalogContainer.innerHTML = '';
-        if (loadingMessage) {
-            loadingMessage.style.display = 'block';
-        }
     }
     if (recordsToRender.length === 0 && !append) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
-        if (loadingMessage) {
-            loadingMessage.style.display = 'none';
-        }
         return;
     }
     const fragment = document.createDocumentFragment();
-    const CHUNK_SIZE = 5;
-    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
-        const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
-        const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
-        const cards = await Promise.all(cardPromises);
-        cards.forEach(card => {
-            if (card) fragment.appendChild(card);
-        });
+    for (const record of recordsToRender) {
+        const card = await createInteractiveCard(record, imageCache); // Pass imageCache here
+        if (card) fragment.appendChild(card);
     }
     catalogContainer.appendChild(fragment);
     
     observeLazyImages(catalogContainer);
-    if (loadingMessage) {
-        loadingMessage.style.display = 'none';
-    }
-    log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
 let mainGetItemState;
 export function initStateHelpers(helpers) {
