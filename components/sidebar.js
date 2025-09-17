@@ -4,7 +4,7 @@ import * as ui from '../ui.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
-import * as api from '../api.js'; // Ensure this import is here
+import * as api from '../api.js';
 
 const defaultImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
@@ -14,7 +14,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     itemCard.className = `favorite-item`;
     itemCard.dataset.recordId = record.id;
     
-    // Use the restored API function
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     itemCard.style.backgroundImage = `url('${imageUrls[0] || defaultImageUrl}')`;
     
@@ -32,7 +31,6 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
     
-    // Use the restored API function
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
     const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -43,7 +41,7 @@ async function createLockedInItemElement(record, itemInfo) {
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail" src="${imageUrls[0] || defaultImageUrl}" alt="${fields.Name}">
+        <img class="locked-item-thumbnail" src="${imageUrls[0]}" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -55,6 +53,10 @@ async function createLockedInItemElement(record, itemInfo) {
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
+    const imgEl = itemElement.querySelector('.locked-item-thumbnail');
+    if (imgEl && imageUrls.length > 0) {
+        imgEl.src = imageUrls[0];
+    }
     return itemElement;
 }
 
@@ -86,14 +88,12 @@ export async function updateFavoritesCarousel() {
     favoritesSection.style.display = 'block';
     favoritesCarousel.innerHTML = '';
     
-    // Create an imageCache for this render pass
     const imageCache = new Map();
     
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
             try {
-                // Pass the cache to the element creation function
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
                 if (card) favoritesCarousel.appendChild(card);
             } catch (error) {
