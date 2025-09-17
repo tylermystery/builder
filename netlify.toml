@@ -1,21 +1,20 @@
-# Version: 1.2.1
-# Last Modified: 2025-09-02
-#
-# Changelog:
-#
-# v1.2.1 - 2025-09-02
-#   - Added redirect for Airtable API proxy endpoint.
-#
-# v1.2.0 - 2025-08-27
-#   - Added redirect for the new create-payment-intent API endpoint.
-#
-# v1.1.0 - 2025-08-26
-#   - Added redirect for the new calendar API endpoint.
-
+# PASTE THIS ENTIRE CODE INTO: netlify.toml
 [build]
   functions = "netlify/functions"
   command = "npm run build"
 
+# Add the two new redirects for authentication
+[[redirects]]
+  from = "/api/auth-start"
+  to = "/.netlify/functions/auth-start"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth-verify"
+  to = "/.netlify/functions/auth-verify"
+  status = 200
+
+# Keep your existing redirects
 [[redirects]]
   from = "/api/calendar"
   to = "/.netlify/functions/calendar"
