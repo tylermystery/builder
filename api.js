@@ -1,4 +1,4 @@
-// PASTE THIS ENTIRE CODE INTO: api.js
+// FILE: api.js
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
@@ -15,8 +15,7 @@ export async function loadSessionFromAirtable(sessionId) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) { throw new Error('Could not fetch session data.');
-        }
+        if (!response.ok) { throw new Error('Could not fetch session data.'); }
         const record = await response.json();
         state.session.isOwned = false;
         const sessionDataString = record.fields['Items with Variations'];
@@ -53,20 +52,8 @@ export async function saveSessionToAirtable() {
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    
-    // === START: MODIFIED DATE LOGIC ===
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    let formattedDate = null;
-    if (dateValue) {
-        const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
-        if (dateToFormat) { // Ensure the value isn't empty/undefined after array check
-            const dateObj = new Date(dateToFormat);
-            if (!isNaN(dateObj.getTime())) {
-                formattedDate = dateObj.toISOString();
-            }
-        }
-    }
-    // === END: MODIFIED DATE LOGIC ===
+    let formattedDate = dateValue ? new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue).toISOString().split('T')[0] : null;
 
     const fields = {
         "Name": sessionName,
@@ -74,16 +61,14 @@ export async function saveSessionToAirtable() {
         "Collaborators": Array.from(state.session.userProfiles.values()).join(', '),
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
+        ...(formattedDate && { "Date": formattedDate })
     };
-
-    if (formattedDate) {
-        fields["Date"] = formattedDate;
-    }
 
     const payload = { fields };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
+
     try {
         const response = await fetch(url, {
             method,
@@ -92,7 +77,6 @@ export async function saveSessionToAirtable() {
         });
         if (!response.ok) {
             const errorData = await response.json();
-            log('API', `Session save error: ${JSON.stringify(errorData)}`);
             throw new Error(`Airtable API Error: ${errorData.error.message}`);
         }
         const result = await response.json();
@@ -105,7 +89,6 @@ export async function saveSessionToAirtable() {
         return true;
     } catch (error) {
         console.error("Failed to save session:", error);
-        log('API', `Failed to save session: ${error.message}`);
         return false;
     }
 }
@@ -117,12 +100,8 @@ export async function fetchAllRecords() {
     try {
         do {
             const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch data from Airtable.');
-            }
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+            if (!response.ok) { throw new Error('Failed to fetch data from Airtable.'); }
             const data = await response.json();
             records = records.concat(data.records);
             offset = data.offset;
@@ -136,18 +115,14 @@ export async function fetchAllRecords() {
 
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-    if (!icalUrl) {
-        return [];
-    }
+    if (!icalUrl) return [];
     if (state.calendar.busyTimes.has(icalUrl)) {
         return state.calendar.busyTimes.get(icalUrl);
     }
     try {
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
         const response = await fetch(proxyUrl);
-        if (!response.ok) {
-            throw new Error(`Calendar API Error: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`Calendar API Error: ${response.statusText}`);
         const busyTimes = await response.json();
         state.calendar.busyTimes.set(icalUrl, busyTimes);
         return busyTimes;
@@ -155,6 +130,112 @@ export async function fetchCalendarForRecord(record) {
         console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
         state.calendar.busyTimes.set(icalUrl, []);
         return [];
+    }
+}
+
+async function fetchImagesByTags(tags, retries = 2) {
+    if (!tags || tags.length === 0) return [];
+    const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
+    try {
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        if (response.status === 420 && retries > 0) {
+            await new Promise(res => setTimeout(res, 500));
+            return fetchImagesByTags(tags, retries - 1);
+        }
+        if (!response.ok) return [];
+        const data = await response.json();
+        if (!data.resources) return [];
+        return data.resources.map(image => {
+            const transformations = image.format === 'gif' ? 'c_fit,w_600,h_520' : 'c_fill,g_auto,w_600,h_520';
+            const urlParts = image.secure_url.split('/upload/');
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+        });
+    } catch (error) {
+        console.error('Failed to fetch from Cloudinary via proxy:', error);
+        return [];
+    }
+}
+
+export async function fetchImagesForRecord(record, allRecords, imageCache) {
+    const cacheKey = record.id;
+    if (imageCache && imageCache.has(cacheKey)) {
+        return { imageUrls: imageCache.get(cacheKey) };
+    }
+    
+    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
+    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
+    
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+    
+    if (isGrouping) {
+        if (imageCache) imageCache.set(cacheKey, [ultimateFallbackUrl]);
+        return { imageUrls: [ultimateFallbackUrl] };
+    }
+    
+    const mediaTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()).filter(Boolean);
+    let imageUrls = await fetchImagesByTags(mediaTags);
+
+    if (!imageUrls || imageUrls.length === 0) {
+        imageUrls = [ultimateFallbackUrl];
+    }
+    
+    if (imageCache) imageCache.set(cacheKey, imageUrls);
+    return { imageUrls };
+}
+
+export async function findOrCreateEvent(catalogRecordId, eventDate) {
+    const date = new Date(eventDate);
+    const dateString = date.toISOString().split('T')[0];
+    const filterFormula = `AND({Related Catalog Item} = '${catalogRecordId}', DATETIME_DIFF({Date}, '${dateString}', 'days') = 0)`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Events?filterByFormula=${encodeURIComponent(filterFormula)}`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        const data = await response.json();
+        if (data.records && data.records.length > 0) {
+            return data.records[0].id;
+        } else {
+            const catalogRecord = state.records.all.find(r => r.id === catalogRecordId);
+            const createUrl = `https://api.airtable.com/v0/${BASE_ID}/Events`;
+            const payload = {
+                fields: { "Event Name": catalogRecord.fields.Name, "Date": dateString, "Related Catalog Item": [catalogRecordId] }
+            };
+            const createResponse = await fetch(createUrl, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records: [payload] })
+            });
+            const createData = await createResponse.json();
+            return createData.records[0].id;
+        }
+    } catch (error) {
+        console.error("Error in findOrCreateEvent:", error);
+        throw error;
+    }
+}
+
+export async function createRsvp(eventId, userId) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/RSVPs`;
+    const payload = {
+        fields: { "Event": [eventId], "User": [userId] }
+    };
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ records: [payload] })
+        });
+        if (!response.ok) {
+            throw new Error('Failed to create RSVP in Airtable.');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Error in createRsvp:", error);
+        throw error;
     }
 }
 
