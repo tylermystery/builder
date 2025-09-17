@@ -29,7 +29,6 @@ export function updateCardIcon(recordId) {
     });
 }
 
-// === START: MODIFIED FUNCTION ===
 export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
@@ -97,4 +96,3 @@ export async function createInteractiveCard(record, imageCache) {
     
     return eventCard;
 }
-// === END: MODIFIED FUNCTION ===
