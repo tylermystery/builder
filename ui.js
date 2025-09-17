@@ -40,7 +40,6 @@ export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
 }
-
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -56,7 +55,6 @@ function getDescendantBookableItems(record, allRecords) {
     }
     return bookableItems;
 }
-
 export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
@@ -81,7 +79,6 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
-
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -94,13 +91,15 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return isNaN(price) ? 0 : price;
 }
-
 export function toggleLoading(show) {
+    log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);
     const loadingMessage = document.getElementById('loading-message');
+    const mainContent = document.querySelector('.main-container');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
+    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
-
 export async function renderRecords(recordsToRender, imageCache, append = false) {
+    log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
     const loadingMessage = document.getElementById('loading-message');
     if (!catalogContainer) {
@@ -109,11 +108,15 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
     if (!append) {
         catalogContainer.innerHTML = '';
-        if (loadingMessage) loadingMessage.style.display = 'block';
+        if (loadingMessage) {
+            loadingMessage.style.display = 'block';
+        }
     }
     if (recordsToRender.length === 0 && !append) {
         catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
-        if (loadingMessage) loadingMessage.style.display = 'none';
+        if (loadingMessage) {
+            loadingMessage.style.display = 'none';
+        }
         return;
     }
     const fragment = document.createDocumentFragment();
@@ -129,9 +132,11 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     catalogContainer.appendChild(fragment);
     
     observeLazyImages(catalogContainer);
-    if (loadingMessage) loadingMessage.style.display = 'none';
+    if (loadingMessage) {
+        loadingMessage.style.display = 'none';
+    }
+    log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
-
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
@@ -166,6 +171,7 @@ export function updateHeader() {
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 export async function updateEventPlanDateDisplay() {
+    log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
     if (!dateInput) return;
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
@@ -192,6 +198,7 @@ export async function updateEventPlanDateDisplay() {
     }
 }
 export async function updateLockedItemStatusIcons() {
+    log('UI', 'Updating locked-in item status icons.');
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     if (!selectedDateISO) {
         document.querySelectorAll('.locked-item-status-icon').forEach(icon => {
