@@ -93,34 +93,38 @@ export async function saveSessionToAirtable() {
     }
 }
 
-export async function fetchAllRecords() { /* ... function content is unchanged ... */ }
-export async function fetchCalendarForRecord(record) { /* ... function content is unchanged ... */ }
-export async function fetchChatMessages(sessionId) { /* ... function content is unchanged ... */ }
-export async function postChatMessage(sessionId, senderId, senderName, content) { /* ... function content is unchanged ... */ }
+export async function fetchAllRecords() { /* This function should remain as it was in the older working version */ }
+export async function fetchCalendarForRecord(record) { /* This function should remain as it was in the older working version */ }
+export async function fetchChatMessages(sessionId) { /* This function should remain as it was in the newer version */ }
+export async function postChatMessage(sessionId, senderId, senderName, content) { /* This function should remain as it was in the newer version */ }
 
-// === START: RESTORED CODE ===
+// === START: CORRECTED IMAGE FUNCTIONS ===
 async function fetchImagesByTags(tags, retries = 2) {
-    if (!tags || tags.length === 0) return null;
-    try {
-        let payload;
-        const tagArray = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim()).filter(Boolean);
-        if (tagArray.length > 0) {
-            payload = { expression: tagArray.map(tag => `tags:"${tag}"`).join(' AND ') };
-        } else {
-            return null;
-        }
+    const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+    if (tagArray.length === 0) {
+        return []; // Return empty array instead of null
+    }
 
+    try {
+        const payload = { expression: tagArray.map(tag => `tags:"${tag}"`).join(' AND ') };
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
+
         if (response.status === 420 && retries > 0) {
             await new Promise(res => setTimeout(res, 500));
             return fetchImagesByTags(tags, retries - 1);
         }
-        if (!response.ok) return null;
+        if (!response.ok) {
+            return []; // Return empty array instead of null
+        }
+
         const data = await response.json();
-        if (!data.resources) return null;
+        if (!data.resources) {
+            return []; // Return empty array instead of null
+        }
+        
         return data.resources.map(image => {
             const transformations = image.format === 'gif' ? 'c_fit,w_600,h_520' : 'c_fill,g_auto,w_600,h_520';
             const urlParts = image.secure_url.split('/upload/');
@@ -128,7 +132,7 @@ async function fetchImagesByTags(tags, retries = 2) {
         });
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return null;
+        return []; // Return empty array instead of null
     }
 }
 
@@ -141,7 +145,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
-    let imageUrls = null;
+    let imageUrls;
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -160,4 +164,4 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     imageCache.set(cacheKey, imageUrls);
     return { imageUrls };
 }
-// === END: RESTORED CODE ===
+// === END: CORRECTED IMAGE FUNCTIONS ===
