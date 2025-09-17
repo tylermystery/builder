@@ -4,7 +4,7 @@ import * as ui from '../ui.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getImagesForTags } from '../imageManager.js';
+import * as api from '../api.js';
 
 const defaultImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
@@ -29,7 +29,7 @@ export function updateCardIcon(recordId) {
     });
 }
 
-export function createInteractiveCard(record) {
+export async function createInteractiveCard(record) {
     const fields = record.fields;
     const recordId = record.id;
     const itemState = ui.getMainGetItemState()(recordId);
@@ -38,10 +38,11 @@ export function createInteractiveCard(record) {
     eventCard.className = 'event-card';
     eventCard.dataset.recordId = recordId;
 
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all);
+    
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-    
     const isJoinable = fields['Joinable'];
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
@@ -59,20 +60,18 @@ export function createInteractiveCard(record) {
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
-        
         let actionButtonHTML;
         if (isJoinable) {
             actionButtonHTML = `<button class="card-action-btn join-event-btn">Join Event</button>`;
         } else {
             actionButtonHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         }
-        
         footerHTML = `<div class="card-footer"><div class="price-quantity-wrapper"><div class="price">${priceHTML}</div>${quantitySelectorHTML}</div>${actionButtonHTML}</div>`;
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
 
     eventCard.innerHTML = `
-        <div class="event-card-image-container" style="background-image: url('${defaultImageUrl}');">
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrls[0] || defaultImageUrl}">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
@@ -85,17 +84,6 @@ export function createInteractiveCard(record) {
         </div>
         ${footerHTML}
     `;
-
-    const imageContainer = eventCard.querySelector('.event-card-image-container');
-    const mediaTags = fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim());
-    
-    getImagesForTags(mediaTags)
-        .then(imageUrls => {
-            if (imageUrls && imageUrls.length > 0) {
-                imageContainer.style.backgroundImage = `url('${imageUrls[0]}')`;
-            }
-        })
-        .catch(err => console.error(`Failed to load images for ${fields.Name}`, err));
 
     setTimeout(() => { updateCardIcon(recordId); }, 0);
     
