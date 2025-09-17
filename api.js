@@ -15,7 +15,8 @@ export async function loadSessionFromAirtable(sessionId) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) { throw new Error('Could not fetch session data.'); }
+        if (!response.ok) { throw new Error('Could not fetch session data.');
+        }
         const record = await response.json();
         state.session.isOwned = false;
         const sessionDataString = record.fields['Items with Variations'];
@@ -53,7 +54,8 @@ export async function saveSessionToAirtable() {
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    let formattedDate = dateValue ? new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue).toISOString() : null;
+    let formattedDate = dateValue ?
+        new Date(Array.isArray(dateValue) ? dateValue[0] : dateValue).toISOString() : null;
 
     const fields = {
         "Name": sessionName,
@@ -63,12 +65,10 @@ export async function saveSessionToAirtable() {
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         ...(formattedDate && { "Date": formattedDate })
     };
-
     const payload = { fields };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
-
     try {
         const response = await fetch(url, {
             method,
@@ -98,10 +98,18 @@ export async function fetchCalendarForRecord(record) { /* ... function content i
 export async function fetchChatMessages(sessionId) { /* ... function content is unchanged ... */ }
 export async function postChatMessage(sessionId, senderId, senderName, content) { /* ... function content is unchanged ... */ }
 
+// === START: RESTORED CODE ===
 async function fetchImagesByTags(tags, retries = 2) {
-    if (!tags || tags.length === 0) return [];
-    const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
+    if (!tags || tags.length === 0) return null;
     try {
+        let payload;
+        const tagArray = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim()).filter(Boolean);
+        if (tagArray.length > 0) {
+            payload = { expression: tagArray.map(tag => `tags:"${tag}"`).join(' AND ') };
+        } else {
+            return null;
+        }
+
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
@@ -110,9 +118,9 @@ async function fetchImagesByTags(tags, retries = 2) {
             await new Promise(res => setTimeout(res, 500));
             return fetchImagesByTags(tags, retries - 1);
         }
-        if (!response.ok) return [];
+        if (!response.ok) return null;
         const data = await response.json();
-        if (!data.resources) return [];
+        if (!data.resources) return null;
         return data.resources.map(image => {
             const transformations = image.format === 'gif' ? 'c_fit,w_600,h_520' : 'c_fill,g_auto,w_600,h_520';
             const urlParts = image.secure_url.split('/upload/');
@@ -120,27 +128,36 @@ async function fetchImagesByTags(tags, retries = 2) {
         });
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return [];
+        return null;
     }
 }
 
-export async function fetchImagesForRecord(record, allRecords) {
+export async function fetchImagesForRecord(record, allRecords, imageCache) {
+    const cacheKey = record.id;
+    if (imageCache.has(cacheKey)) {
+        return { imageUrls: imageCache.get(cacheKey) };
+    }
+
     const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/${defaultImagePublicID}`;
     
+    let imageUrls = null;
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
     
     if (isGrouping) {
-        return { imageUrls: [ultimateFallbackUrl] };
+        imageUrls = [ultimateFallbackUrl];
+    } else {
+        const mediaTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS];
+        imageUrls = await fetchImagesByTags(mediaTags);
     }
-    
-    const mediaTags = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]?.split(',').map(t => t.trim()).filter(Boolean);
-    let imageUrls = await fetchImagesByTags(mediaTags);
 
     if (!imageUrls || imageUrls.length === 0) {
         imageUrls = [ultimateFallbackUrl];
     }
+
+    imageCache.set(cacheKey, imageUrls);
     return { imageUrls };
 }
+// === END: RESTORED CODE ===
