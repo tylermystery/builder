@@ -1,3 +1,4 @@
+// PASTE THIS ENTIRE CODE INTO: availability.js
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js';
@@ -20,42 +21,35 @@ export function parseICalDate(dateString) {
     return new Date(Date.UTC(year, month, day, hour, minute, second));
 }
 
-// Add export to this function so it can be used by other modules
 export function getDayStatus(day, busyTimes, record) {
     const leadTime = parseInt(record.fields[CONSTANTS.FIELD_NAMES.LEAD_TIME] || 0, 10);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const leadTimeDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
-    // --- FIX: Return a specific reason for unavailability
     if (day < leadTimeDate) {
-        log('Availability', `Day ${day.toDateString()} unavailable due to lead time: ${leadTime} days`);
         return { status: AVAILABILITY_STATUS.NONE, reason: `Unavailable due to ${leadTime} day lead time.` };
     }
-    // --- END OF FIX
 
     if (!busyTimes || busyTimes.length === 0) {
-        log('Availability', `Day ${day.toDateString()} fully available (no busy times or iCal)`);
         return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully Available' };
     }
 
-    // Check busy times for the day
     const dayStart = new Date(day);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(day);
     dayEnd.setHours(23, 59, 59, 999);
+
     const busyPeriods = busyTimes.filter(busy => {
         const busyStart = new Date(busy.start);
         const busyEnd = new Date(busy.end);
         return busyStart <= dayEnd && busyEnd >= dayStart;
     });
+
     if (busyPeriods.length === 0) {
-        log('Availability', `Day ${day.toDateString()} fully available (no conflicts)`);
         return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully Available' };
     }
 
-    // Calculate available time slots
     const totalMinutes = 24 * 60;
-    // 24 hours in minutes
     let busyMinutes = 0;
     busyPeriods.forEach(busy => {
         const start = new Date(Math.max(busy.start, dayStart));
@@ -63,12 +57,11 @@ export function getDayStatus(day, busyTimes, record) {
         const minutes = (end - start) / (1000 * 60);
         busyMinutes += minutes;
     });
+
     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
     if (availablePercentage > 50) {
-        log('Availability', `Day ${day.toDateString()} partially available (${availablePercentage.toFixed(1)}%)`);
         return { status: AVAILABILITY_STATUS.PARTIAL, reason: 'Partially Available (some times are booked).' };
     } else {
-        log('Availability', `Day ${day.toDateString()} unavailable (${availablePercentage.toFixed(1)}% available)`);
         return { status: AVAILABILITY_STATUS.NONE, reason: 'No availability today (all time slots are booked).' };
     }
 }
@@ -79,49 +72,26 @@ export function getRangeStatus(start, end, record, busyTimes) {
     today.setHours(0, 0, 0, 0);
     const leadTimeCutoffDate = new Date(today.getTime() + leadTime * 24 * 60 * 60 * 1000);
 
-    // Case 1: The entire selected range is within the lead time.
     if (end < leadTimeCutoffDate) {
         return { status: AVAILABILITY_STATUS.NONE, reason: `Unavailable due to ${leadTime} day lead time.` };
     }
 
-    // Case 2: The range starts within the lead time but ends after it.
     if (start < leadTimeCutoffDate) {
         const availableDate = leadTimeCutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         return { status: AVAILABILITY_STATUS.PARTIAL, reason: `Partially available due to lead time. Becomes available on ${availableDate}.` };
     }
 
-    // Case 3: The range is clear of the lead time; now check for booking conflicts.
-    let isFullyBooked = true;
-    let hasAnyAvailability = false;
-    
-    // Check every day in the range for availability.
-    for (let day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
-        const dailyStatus = getDayStatus(new Date(day), busyTimes, record).status;
-        if (dailyStatus !== AVAILABILITY_STATUS.NONE) {
-            isFullyBooked = false; // Found at least one day with some availability.
-        }
-        if (dailyStatus === AVAILABILITY_STATUS.FULL || dailyStatus === AVAILABILITY_STATUS.PARTIAL) {
-            hasAnyAvailability = true;
-        }
-    }
-    
-    // If every single day was fully booked solid.
-    if (isFullyBooked && !hasAnyAvailability) {
-        return { status: AVAILABILITY_STATUS.NONE, reason: 'No availability. All time slots are booked during this period.' };
-    }
-    
-    // If there were conflicts, but not every day was fully booked.
     if (checkAvailability(start, end, busyTimes) === false) {
         return { status: AVAILABILITY_STATUS.PARTIAL, reason: 'Partially available. Some days or times within this period are booked.' };
     }
 
-    // If no lead time issues and no booking conflicts were found.
     return { status: AVAILABILITY_STATUS.FULL, reason: 'Fully available during this period.' };
 }
 
-
-// Add export to this function so it can be used by other modules
 export function checkAvailability(start, end, busyTimes) {
+    // Add a check to ensure busyTimes is an array before iterating
+    if (!Array.isArray(busyTimes)) return true;
+
     for (const event of busyTimes) {
         const eventStart = new Date(event.start);
         const eventEnd = new Date(event.end);
