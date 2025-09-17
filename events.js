@@ -368,10 +368,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
         } else if (viewEventBtn) {
             e.stopPropagation();
             const recordId = viewEventBtn.closest('[data-record-id]').dataset.recordId;
-            ui.showEventHub('evt_12345');
+            ui.showEventHub('evt_placeholder_123');
         } else if (joinEventBtn) {
             e.stopPropagation();
-            if (!isAuthenticated()) {
+            if (!ui.isAuthenticated()) {
                 log('Events', 'User not authenticated. Prompting to sign in.');
                 ui.showUserModal('signin');
             } else {
@@ -384,28 +384,21 @@ export function initializeEventListeners(imageCache, flatpickr) {
                     return;
                 }
     
-                // --- START OF NEW LOGIC ---
                 try {
-                    // For now, we simulate a user ID. In a real scenario, this would come from the auth state.
-                    const simulatedUserId = 'user_12345'; // We'll create this user in Airtable manually for now.
-                    
+                    const simulatedUserId = 'user_12345';
                     const eventId = await api.findOrCreateEvent(recordId, selectedDate[0]);
                     await api.createRsvp(eventId, simulatedUserId);
-                    
                     alert('You have successfully RSVPd for the event!');
-                    
-                    // Update the button to show the user has joined
                     joinEventBtn.textContent = 'View Event Hub';
                     joinEventBtn.classList.remove('join-event-btn');
                     joinEventBtn.classList.add('view-event-btn');
-    
                 } catch (error) {
                     alert('There was an error joining the event. Please try again.');
                     console.error("Failed to join event:", error);
                 }
-                // --- END OF NEW LOGIC ---
             }
-        } else if (presentBtn) {
+        }
+        else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
         } else if (carouselNav) {
