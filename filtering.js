@@ -41,7 +41,6 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         if (activeSubcategories.length === 0) {
             return getAllBookableItems(records);
         } else {
-            // Safely handle records that may not have a Parent Item field
             return records.filter(record => 
                 activeSubcategories.includes((record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase())
             );
@@ -55,7 +54,10 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
     
     if (activeSubcategories.length > 0) {
         let items = [];
-        const subcategoryRecords = records.filter(r => activeSubcategories.includes(r.fields.Name.toLowerCase()));
+        // === START: MODIFIED CODE ===
+        // Safely handle records that may not have a Name field
+        const subcategoryRecords = records.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
+        // === END: MODIFIED CODE ===
         subcategoryRecords.forEach(subcatRecord => {
             items = items.concat(getDescendantBookableItems(subcatRecord, records, allRecordNames));
         });
