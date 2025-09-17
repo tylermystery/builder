@@ -1,19 +1,12 @@
 // FILE: components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
-import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
+import { getImagesForTags } from '../imageManager.js';
 
-function getPlaceholderImage(imageUrls) {
-    // Return a random image from the provided list, or a default if none exist.
-    if (!imageUrls || imageUrls.length === 0) {
-        return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
-    }
-    const randomIndex = Math.floor(Math.random() * imageUrls.length);
-    return imageUrls[randomIndex];
-}
+const defaultImageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
 export function updateCardIcon(recordId) {
     const isLocked = state.cart.lockedItems.has(recordId);
@@ -21,10 +14,7 @@ export function updateCardIcon(recordId) {
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
-        if (!icon) {
-            log('Card', `No heart icon found for record: ${recordId}`);
-            return;
-        }
+        if (!icon) return;
         if (isLocked) {
             icon.className = 'heart-icon locked';
             icon.innerHTML = checkSVG;
@@ -35,9 +25,7 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.innerHTML = heartSVG;
         }
-        icon.style.display = 'block'; // Ensure visibility
-
-        log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
+        icon.style.display = 'block';
     });
 }
 
@@ -54,9 +42,7 @@ export function createInteractiveCard(record) {
     const childRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
     
-    // --- START OF NEW LOGIC ---
-    const isJoinable = fields['Joinable']; // Check the new "Joinable" field from Airtable
-    // --- END OF NEW LOGIC ---
+    const isJoinable = fields['Joinable'];
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
@@ -74,16 +60,13 @@ export function createInteractiveCard(record) {
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
         
-        // --- START OF MODIFIED LOGIC ---
-        // Display "Join Event" button if the item is joinable
         let actionButtonHTML;
         if (isJoinable) {
             actionButtonHTML = `<button class="card-action-btn join-event-btn">Join Event</button>`;
         } else {
             actionButtonHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         }
-        // --- END OF MODIFIED LOGIC ---
-
+        
         footerHTML = `<div class="card-footer"><div class="price-quantity-wrapper"><div class="price">${priceHTML}</div>${quantitySelectorHTML}</div>${actionButtonHTML}</div>`;
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
@@ -111,7 +94,8 @@ export function createInteractiveCard(record) {
             if (imageUrls && imageUrls.length > 0) {
                 imageContainer.style.backgroundImage = `url('${imageUrls[0]}')`;
             }
-        });
+        })
+        .catch(err => console.error(`Failed to load images for ${fields.Name}`, err));
 
     setTimeout(() => { updateCardIcon(recordId); }, 0);
     
