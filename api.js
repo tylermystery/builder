@@ -113,26 +113,6 @@ export async function fetchAllRecords() {
     }
 }
 
-export async function fetchCalendarForRecord(record) {
-    const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-    if (!icalUrl) return [];
-    if (state.calendar.busyTimes.has(icalUrl)) {
-        return state.calendar.busyTimes.get(icalUrl);
-    }
-    try {
-        const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error(`Calendar API Error: ${response.statusText}`);
-        const busyTimes = await response.json();
-        state.calendar.busyTimes.set(icalUrl, busyTimes);
-        return busyTimes;
-    } catch (error) {
-        console.error(`Failed to fetch calendar for ${record.fields.Name}:`, error);
-        state.calendar.busyTimes.set(icalUrl, []);
-        return [];
-    }
-}
-
 async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) return [];
     const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
