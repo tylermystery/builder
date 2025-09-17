@@ -39,11 +39,11 @@ const processRequestQueue = debounce(async () => {
 }, 50);
 
 export function getImagesForTags(tags) {
-    if (!tags || tags.length === 0) {
+    const tagArray = Array.isArray(tags) ? tags.filter(Boolean) : [];
+    if (tagArray.length === 0) {
         return Promise.resolve([]);
     }
     
-    const tagArray = Array.isArray(tags) ? tags : [tags];
     const cacheKey = tagArray.sort().join(',');
 
     if (imageCache.has(cacheKey)) {
