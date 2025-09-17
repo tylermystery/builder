@@ -149,6 +149,7 @@ async function initialize() {
         while (retries > 0) {
             try {
                 state.records.all = await api.fetchAllRecords();
+                console.log('Records after fetch:', state.records.all);
                 log('Main', `5. Fetched ${state.records.all.length} records from Airtable.`);
                 break;
             } catch (error) {
