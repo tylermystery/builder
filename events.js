@@ -22,6 +22,7 @@ function getCurrentCategoryRecord() {
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
     return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
+
 function getAvailableSubcategories(categoryRecord) {
     if (!categoryRecord) {
         return [];
@@ -29,6 +30,7 @@ function getAvailableSubcategories(categoryRecord) {
     const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     return subcategoryOptions.map(option => option.name).sort();
 }
+
 function updateSubcategoryButtons() {
     if (!subcategoryFiltersContainer) return;
     subcategoryFiltersContainer.innerHTML = '';
@@ -42,6 +44,7 @@ function updateSubcategoryButtons() {
         subcategoryFiltersContainer.appendChild(button);
     });
 }
+
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
@@ -55,6 +58,7 @@ function loadMoreRecords(imageCache) {
         });
     }
 }
+
 export function updateSaveShareButton() {
     if (!saveShareBtn) return;
     switch (state.ui.saveState) {
@@ -76,6 +80,7 @@ export function updateSaveShareButton() {
             break;
     }
 }
+
 export function triggerSave() {
     if (state.ui.isInitializing) return;
     clearTimeout(saveTimeout);
@@ -91,6 +96,7 @@ export function triggerSave() {
         }
     }, 1500);
 }
+
 export async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
         document.querySelectorAll('.availability-btn').forEach(icon => {
@@ -139,6 +145,7 @@ export async function updateAllCardAvailabilityIcons() {
         }
     }
 }
+
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
