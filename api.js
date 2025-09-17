@@ -2,7 +2,6 @@
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
-import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
@@ -195,58 +194,49 @@ export async function fetchCalendarForRecord(record) {
 
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || tags.length === 0) {
-        log('API', 'No tags provided for image fetch');
-        return null;
+        return new Map();
     }
     try {
-        let payload;
-        if (Array.isArray(tags)) {
-            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
-        } else {
-            payload = { tag: tags };
-        }
-        log('API', `Fetching images with payload: ${JSON.stringify(payload)}`);
+        const payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' OR ') };
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        log('API', `Image fetch response: status ${response.status}`);
+        
         if (response.status === 420 && retries > 0) {
-            console.warn(`Cloudinary rate limit hit. Retrying in 500ms... (${retries} retries left)`);
             log('API', `Cloudinary rate limit hit, retrying (${retries} left)`);
             await new Promise(res => setTimeout(res, 500));
             return fetchImagesByTags(tags, retries - 1);
         }
 
         if (!response.ok) {
-            const errorData = await response.json();
-            log('API', `Image fetch error: ${JSON.stringify(errorData)}`);
-            console.warn(`Cloudinary function error: ${response.statusText}`);
-            return null;
+            log('API', `Image fetch error: ${await response.text()}`);
+            return new Map();
         }
         
         const data = await response.json();
         if (!data.resources || data.resources.length === 0) {
-            log('API', 'No image resources found');
-            return null;
+            return new Map();
         }
-        
-        const imageUrls = data.resources.map(image => {
-            let transformations;
-            if (image.format === 'gif') {
-                transformations = 'c_fit,w_600,h_520';
-            } else {
-                transformations = 'c_fill,g_auto,w_600,h_520';
-            }
+
+        const imagesByTag = new Map();
+        tags.forEach(tag => imagesByTag.set(tag, []));
+
+        data.resources.forEach(image => {
+            const transformations = image.format === 'gif' ? 'c_fit,w_600,h_520' : 'c_fill,g_auto,w_600,h_520';
             const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+            const finalUrl = `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+            
+            image.tags.forEach(tag => {
+                if (imagesByTag.has(tag)) {
+                    imagesByTag.get(tag).push(finalUrl);
+                }
+            });
         });
-        log('API', `Fetched ${imageUrls.length} images`);
-        return imageUrls;
+        return imagesByTag;
     } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
         log('API', `Failed to fetch images: ${error.message}`);
-        return null;
+        return new Map();
     }
 }
 
