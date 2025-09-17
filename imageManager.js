@@ -2,20 +2,17 @@
 import { debounce } from './utils.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { state } from './state.js';
-import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
-import { parseOptions } from './utils.js';
 
-const requestQueue = new Set();
+let requestQueue = new Set();
 const imageCache = new Map();
-const pendingRequests = new Map();
-const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+let pendingRequests = new Map();
 
 const processRequestQueue = debounce(async () => {
     if (requestQueue.size === 0) return;
 
     const tagsToFetch = Array.from(requestQueue);
     requestQueue.clear();
+
     log('ImageManager', `Processing batch request for tags: ${tagsToFetch.join(', ')}`);
 
     try {
@@ -41,10 +38,16 @@ const processRequestQueue = debounce(async () => {
     }
 }, 50);
 
-function fetchAndCacheTags(tags) {
-    const tagArray = Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : []);
-    if (tagArray.length === 0) {
+export function getImagesForTags(tags) {
+    if (!tags || tags.length === 0) {
         return Promise.resolve([]);
+    }
+    
+    const tagArray = Array.isArray(tags) ? tags : [tags];
+    const cacheKey = tagArray.sort().join(',');
+
+    if (imageCache.has(cacheKey)) {
+        return Promise.resolve(imageCache.get(cacheKey));
     }
 
     return new Promise((resolve, reject) => {
@@ -67,33 +70,10 @@ function fetchAndCacheTags(tags) {
         Promise.all(promises)
             .then(results => {
                 const flattenedResults = results.flat();
-                resolve(Array.from(new Set(flattenedResults)));
+                const uniqueResults = Array.from(new Set(flattenedResults));
+                imageCache.set(cacheKey, uniqueResults);
+                resolve(uniqueResults);
             })
             .catch(reject);
     });
-}
-
-/**
- * The primary function to get images for any record.
- * It intelligently handles grouping items vs. bookable items.
- */
-export async function getImagesForRecord(record) {
-    const allRecords = state.records.all;
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
-    if (isGrouping) {
-        log('ImageManager', `Record "${record.fields.Name}" is a grouping. Returning fallback.`);
-        return [ultimateFallbackUrl];
-    }
-
-    log('ImageManager', `Record "${record.fields.Name}" is bookable. Fetching tags.`);
-    let imageUrls = await fetchAndCacheTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
-
-    if (!imageUrls || imageUrls.length === 0) {
-        imageUrls = [ultimateFallbackUrl];
-    }
-
-    return imageUrls;
 }
