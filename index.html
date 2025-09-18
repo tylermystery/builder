@@ -225,11 +225,10 @@
         #event-plan-panel {
             background-color: #fff;
             padding: 20px;
-            border-radius: 8px;
+            border-radius: 8-px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
-            position: relative;
         }
         #cart-items-container {
             flex-grow: 1;
@@ -300,7 +299,6 @@
             border-radius: 8px;
             background-size: cover;
             background-position: center;
-            background-color: #eee;
         }
         .favorite-item .card-actions {
             position: absolute;
@@ -329,7 +327,7 @@
         }
         .event-card {
             position: relative;
-            border-radius: 8px;
+            border-radius: 10-px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
             background-color: #fff;
             color: #333;
@@ -344,7 +342,6 @@
             height: 200px;
             background-size: cover;
             background-position: center;
-            background-color: #eee;
         }
         .event-card-actions {
             position: absolute;
@@ -482,7 +479,6 @@
             object-fit: cover;
             border-radius: 4px;
             flex-shrink: 0;
-            background-color: #eee;
         }
         .locked-item-details {
             flex-grow: 1;
@@ -1269,67 +1265,6 @@
             color: #6c757d;
             min-height: 20px;
         }
-
-        .event-hub-content {
-            background: #fff;
-            border-radius: 8px;
-            width: 95vw;
-            height: 90vh;
-            max-width: 1800px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-            position: relative;
-            color: #333;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .event-hub-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 30px;
-            background-color: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            flex-shrink: 0;
-        }
-        #event-hub-details h2 {
-            margin: 0 0 5px 0;
-        }
-        #event-hub-details p {
-            margin: 0;
-            color: #6c757d;
-        }
-        #event-hub-attendees {
-            text-align: right;
-        }
-        #event-hub-attendees h4 {
-            margin: 0 0 5px 0;
-        }
-        #attendee-list {
-            display: flex;
-            justify-content: flex-end;
-        }
-        .attendee-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background-color: #007bff;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 0.9em;
-            border: 2px solid white;
-            margin-left: -10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
-        .event-hub-main {
-            flex-grow: 1;
-            display: grid;
-            grid-template-columns: 3fr 1fr; /* 3 parts for presentation, 1 part for chat */
-            overflow: hidden;
-        }
         
     </style>
 </head>
@@ -1341,7 +1276,6 @@
     <div class="main-content">
         <div id="right-sidebar">
             <div id="event-plan-panel">
-                <button id="user-profile-button" title="Profile & Sign In">👤</button>
                 <div class="event-name-group">
                     <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
                 </div>
@@ -1716,22 +1650,20 @@
                     <button id="summary-ideas-link" class="summary-link-btn"></button>
                     <button id="summary-locked-link" class="summary-link-btn"></button>
                 </div>
-             </div>
+            </div>
             
             <div class="presentation-header">
-                <div class="presentation-title-group">
-                    <h2 id="presentation-title"></h2>
-                    <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
-                </div>
+                <h2 id="presentation-title"></h2>
+                <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
                 <span id="presentation-counter"></span>
-             </div>
+            </div>
     
             <div class="presentation-body">
                 <div id="presentation-gallery-column">
                     <div id="presentation-main-image"></div>
                     <div id="presentation-thumbnail-strip"></div>
                 </div>
-                 <div id="presentation-details-column">
+                <div id="presentation-details-column">
                     <h3 id="presentation-item-name"></h3>
                     <p id="presentation-item-price"></p>
                     <p id="presentation-item-description"></p>
@@ -1740,12 +1672,12 @@
                     <div id="presentation-reactions">
                         <div id="reaction-buttons" class="reaction-bar-buttons"></div>
                         <div id="reaction-summary" class="reaction-summary-display"></div>
-                     </div>
+                    </div>
                 
                     <div id="presentation-item-note-container">
                         <h4>Note:</h4>
                         <p id="presentation-item-note"></p>
-                     </div>
+                    </div>
                 </div>
             </div>
     
@@ -1753,57 +1685,9 @@
             <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
         </div>
     </div>
-    <div id="user-modal-overlay" class="modal-overlay">
-        <div class="user-modal-content">
-            <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
-            
-            <div id="signin-view">
-                <h2>Sign In or Create Account</h2>
-                <p>Enter your email to receive a secure sign-in link.</p>
-                <form id="signin-form">
-                    <input type="email" id="signin-email" placeholder="you@example.com" required>
-                    <button type="submit">Send Magic Link</button>
-                </form>
-                <p id="signin-message" class="feedback-message"></p>
-            </div>
-    
-            <div id="profile-view" style="display: none;">
-                <h2>Your Profile</h2>
-                <div class="profile-details">
-                    <div id="profile-avatar"></div>
-                    <input type="text" id="profile-name">
-                </div>
-                <div id="my-events-list">
-                    <h3>My Events</h3>
-                    </div>
-                <button id="signout-btn">Sign Out</button>
-            </div>
-        </div>
-    </div>
 
     <script type="module" src="main.js"></script>
  
        <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
-    <div id="event-hub-modal-overlay" class="modal-overlay">
-    <div class="event-hub-content">
-            <button id="event-hub-close-btn" class="modal-close-btn" title="Close">×</button>
-            
-            <div class="event-hub-header">
-                <div id="event-hub-details">
-                    <h2 id="event-hub-title"></h2>
-                    <p id="event-hub-date"></p>
-                </div>
-                <div id="event-hub-attendees">
-                    <h4>Attendees</h4>
-                    <div id="attendee-list"></div>
-                </div>
-            </div>
-    
-            <div class="event-hub-main">
-                </div>
-        </div>
-    </div>
-    
 </body>
 </html>
