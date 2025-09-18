@@ -1,31 +1,34 @@
 // FILE: ui.js
+/*
+ * Version: 3.0.9
+ * Last Modified: 2025-09-15
+ */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-import { setupItineraryEventListeners, showItineraryModal } from './components/itinerary.js';
-import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS } from './availability.js';
+import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
+import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
-import { setupAuthEventListeners, showUserModal, isAuthenticated } from './auth.js';
-import { showEventHub, setupEventHubEventListeners } from './components/eventHub.js';
 
+// Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
-export { parseOptions, setupItineraryEventListeners, showItineraryModal };
+export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, setupPresentationEventListeners };
-export { setupAuthEventListeners, showUserModal, isAuthenticated };
-export { showEventHub, setupEventHubEventListeners };
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             const element = entry.target;
+            // Handle background images for divs
             if (element.dataset.bgImage) {
                 element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
             }
+            // Handle src for img tags
             if (element.dataset.src) {
                 element.src = element.dataset.src;
             }
@@ -35,10 +38,13 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     });
 }, { rootMargin: "0px 0px 200px 0px" });
 
+// Export a helper function to allow other modules to use the observer
 export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
 }
+
+// ... (rest of the file is unchanged) ...
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -54,6 +60,7 @@ function getDescendantBookableItems(record, allRecords) {
     }
     return bookableItems;
 }
+
 export function getGroupPriceRange(record) {
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
@@ -78,6 +85,7 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
+
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
@@ -90,52 +98,86 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return isNaN(price) ? 0 : price;
 }
+
 export function toggleLoading(show) {
+    log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);
     const loadingMessage = document.getElementById('loading-message');
+    const mainContent = document.querySelector('.main-container');
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
+    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
+    log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
-    if (!catalogContainer) return;
-    if (!append) {
-        catalogContainer.innerHTML = '';
-    }
-    if (recordsToRender.length === 0 && !append) {
-        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
+    const loadingMessage = document.getElementById('loading-message');
+    if (!catalogContainer) {
+        console.error("UI ERROR: catalog-container element not found in the DOM!");
         return;
     }
+    if (!append) {
+        catalogContainer.innerHTML = '';
+        if (loadingMessage) {
+            loadingMessage.style.display = 'block';
+        }
+    }
+    if (recordsToRender.length === 0 && !append) {
+        log('UI', "No records to render, displaying 'No items to show.'");
+        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
+        if (loadingMessage) {
+            loadingMessage.style.display = 'none';
+        }
+        return;
+    }
+
     const fragment = document.createDocumentFragment();
-    for (const record of recordsToRender) {
-        const card = await createInteractiveCard(record, imageCache); // Pass imageCache here
-        if (card) fragment.appendChild(card);
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
+        const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
+        const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
+        const cards = await Promise.all(cardPromises);
+        cards.forEach(card => {
+            if (card) fragment.appendChild(card);
+        });
     }
     catalogContainer.appendChild(fragment);
     
     observeLazyImages(catalogContainer);
+
+    if (loadingMessage) {
+        loadingMessage.style.display = 'none';
+    }
+    log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
+
 let mainGetItemState;
 export function initStateHelpers(helpers) {
     mainGetItemState = helpers.getItemState;
 }
+
 export function getMainGetItemState() {
     return mainGetItemState;
 }
+
 export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
     }
     return { quantity: 1, selectedOptionIndex: 0, note: '' };
 }
+
 export function updateItemState(recordId, updates) {
     const existing = getItemState(recordId);
     const newState = { ...existing, ...updates };
     state.cart.items.set(recordId, newState);
 }
+
 export function updateLockedItemState(recordId, updates) {
     const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
     const newState = { ...existing, ...updates };
     state.cart.lockedItems.set(recordId, newState);
 }
+
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
@@ -146,6 +188,7 @@ export function updateHeader() {
     const goalsInput = document.getElementById('header-goals');
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
+
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
@@ -173,6 +216,7 @@ export async function updateEventPlanDateDisplay() {
             break;
     }
 }
+
 export async function updateLockedItemStatusIcons() {
     log('UI', 'Updating locked-in item status icons.');
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
@@ -213,6 +257,7 @@ export async function updateLockedItemStatusIcons() {
         }
     }
 }
+
 export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
