@@ -45,7 +45,6 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombined
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
 import { initializeChat } from './chat.js';
-import { setupAuthEventListeners } from './auth.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
@@ -149,7 +148,6 @@ async function initialize() {
         while (retries > 0) {
             try {
                 state.records.all = await api.fetchAllRecords();
-                console.log('Records after fetch:', state.records.all);
                 log('Main', `5. Fetched ${state.records.all.length} records from Airtable.`);
                 break;
             } catch (error) {
@@ -220,7 +218,6 @@ async function initialize() {
     log('Main', '21. Header calendar updated.');
 
     initializeChatEventListeners();
-    setupAuthEventListeners();
     initializeChat();
     log('Main', '22. Chat initialized.');
 
