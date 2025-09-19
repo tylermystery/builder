@@ -1,42 +1,22 @@
 // FILE: main.js
 /*
- * Version: 4.9.2
- * Last Modified: 2025-09-10
+ * Version: 4.9.4
+ * Last Modified: 2025-09-19
  * * Changelog:
+ * v4.9.4 - 2025-09-19
+ * - Automatically checks the "Keep open" checkbox when the chat is first opened in presentation view.
+ * v4.9.3 - 2025-09-19
+ * - Added logic to auto-open the chat window on the first visit to a session's presentation view.
  * v4.9.2 - 2025-09-10
  * - Set isInitializing flag to false after setup to prevent "Fork on Load" bug.
  * v4.9.1 - 2025-09-09
- * - Implemented dynamic availability for locked-in items and the 
- event plan date.
+ * - Implemented dynamic availability for locked-in items and the event plan date.
  * - Synced the detail modal calendar with the event plan date.
- * - Updated event handlers for adding/removing items to trigger 
- an availability refresh.
- * v4.9.0 - 2025-09-09
- * - Finalized itinerary builder functionality with live editing and date sync.
- * v4.8.9 - 2025-09-09
- * - Added functionality to open the new itinerary builder modal.
- * v4.8.8 - 2025-09-09
- * - Fixed SyntaxError: Corrected import of getItemState from events.js to ui.js.
- * - Added functionality for carousel navigation buttons.
- * v4.8.7 - 2025-09-08
- * - Corrected a ReferenceError by providing flatpickr as a global object to the event listeners.
- * v4.8.6 - 2025-09-08
- * - Added functionality to update the header calendar based on favorited items.
- * v4.8.5 - 2025-09-02
- * - Added initial localStorage clear to mitigate FILE_ERROR_NO_SPACE.
- * v4.8.4 - 2025-09-02
- * - Added debug logging for initialization steps.
- * v4.8.3 - 2025-09-02
- * - Continue initialization if session loading fails due to storage errors.
- * v4.8.2 - 2025-09-02
- * - Added retry logic for fetchAllRecords to handle transient errors.
- * v4.8.1 - 2025-09-02
- * - Added storage error handling during initialization.
+ * - Updated event handlers for adding/removing items to trigger an availability refresh.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
-// FIX: Import the new setupItineraryEventListeners function from ui.js
 import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { getStoredSessions } from './session.js';
@@ -48,7 +28,7 @@ import { initializeChat } from './chat.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
-// New function to handle the header calendar's availability display
+
 async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
@@ -63,14 +43,11 @@ async function updateHeaderCalendarAvailability() {
     }
     
     if (mainDatePicker) {
-        // Clear previous date highlighting
         mainDatePicker.clear();
-        // Use the combined busy times to highlight dates on the main calendar
         mainDatePicker.config.onDayCreate = (dObj, dStr, fp, dayElem) => {
             const day = dayElem.dateObj;
             let status = AVAILABILITY_STATUS.FULL;
             
-            // Check against lead time first for all items
             let hasLeadTimeConflict = false;
             for (const [recordId] of favoriteItems.entries()) {
                 const record = state.records.all.find(r => r.id === recordId);
@@ -102,7 +79,6 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-   
                         busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
@@ -114,7 +90,6 @@ async function updateHeaderCalendarAvailability() {
                 }
             }
             
-            // Apply classes based on the calculated status
             if (status === AVAILABILITY_STATUS.FULL) {
                 dayElem.classList.add('available-full');
             } else if (status === AVAILABILITY_STATUS.PARTIAL) {
@@ -123,8 +98,6 @@ async function updateHeaderCalendarAvailability() {
                 dayElem.classList.add('unavailable');
             }
         };
-
-        // Redraw the calendar to apply the new highlights
         mainDatePicker.redraw();
     }
 }
@@ -137,7 +110,6 @@ async function initialize() {
         log('Main', `2. Failed to clear localStorage: ${e.message}`);
     }
 
-    // FIX: Passing the correct function from ui.js
     ui.initStateHelpers({ getItemState: ui.getItemState });
     log('Main', '3. State helpers initialized.');
 
@@ -168,18 +140,15 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
-    // FIX: Removed the redundant call to initializeEventListeners
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
     
-    // FIX: Call the new setup function for the itinerary modal's event listeners from ui.js
     ui.setupItineraryEventListeners();
     if (sessionId) {
         try {
             await api.loadSessionFromAirtable(sessionId);
             log('Main', '10. Session loaded successfully.');
             ui.updateHeader();
-            // FIX: Corrected function name
             ui.updateEventPlanSection();
             ui.updateTotalCost();
             log('Main', '11. Updated header, event plan, and total cost.');
@@ -221,24 +190,36 @@ async function initialize() {
     initializeChat();
     log('Main', '22. Chat initialized.');
 
-    // --- ADDED: Set initialization flag to false after all setup is complete ---
     state.ui.isInitializing = false;
     log('Main', '23. Initialization complete, ready for user interaction.');
 
-      // Check for presentation view parameter in URL
     const finalUrlParams = new URLSearchParams(window.location.search);
     if (finalUrlParams.get('view') === 'present') {
         log('Main', 'URL indicates to start in presentation view.');
+
+        // --- NEW LOGIC START ---
+        const storageKey = `session-viewed-${state.session.id}`;
+        if (!localStorage.getItem(storageKey)) {
+            log('Main', 'First time in presentation view for this session, opening chat.');
+            const chatWidgetContainer = document.getElementById('chat-widget-container');
+            if (chatWidgetContainer) {
+                chatWidgetContainer.classList.add('chat-open');
+                // Automatically check the "Keep open" checkbox.
+                document.getElementById('chat-remain-open-checkbox').checked = true;
+            }
+            // Mark this session as viewed to prevent the chat from auto-opening on subsequent loads.
+            localStorage.setItem(storageKey, 'true');
+        }
+        // --- NEW LOGIC END ---
+        
         const listToShow = state.cart.items.size > 0 ? 'favorites' : 'locked';
         if (state.cart.items.size > 0 || state.cart.lockedItems.size > 0) {
-            // Use a small timeout to ensure the UI is fully ready
             setTimeout(() => ui.showPresentationView(listToShow), 100);
         }
     }
 
     state.ui.isInitializing = false;
     log('Main', '23. Initialization complete, ready for user interaction.');
- 
 }
 
 initialize();
