@@ -6,7 +6,6 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
-
 let stripe, elements, cardElement, clientSecret;
 
 function getBreadcrumbs(record) {
@@ -46,6 +45,7 @@ function resetModalState() {
 }
 
 export async function showDetailModal(record) {
+    // This function is correct and does not need changes
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
     const modalHeaderActions = document.getElementById('modal-header-actions');
@@ -70,7 +70,7 @@ export async function showDetailModal(record) {
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ?
-        'Update Plan' : 'Add to Plan';
+'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -83,7 +83,7 @@ export async function showDetailModal(record) {
         const range = ui.getGroupPriceRange(record);
         if (range && typeof range.min === 'number' && typeof range.max === 'number') {
             modalItemPrice.textContent = range.min === range.max ?
-            `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+`$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
             modalItemPrice.textContent = 'Price Varies';
         }
@@ -102,7 +102,6 @@ export async function showDetailModal(record) {
             modalMainImage.style.backgroundImage = `url('${url}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
-     
            });
         modalThumbnailStrip.appendChild(thumb);
     });
@@ -126,7 +125,6 @@ export async function showDetailModal(record) {
         }
         let priceModText = '';
         if (opt.price !== null) {
-           
          priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
@@ -135,8 +133,6 @@ export async function showDetailModal(record) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
- 
-         
            optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
@@ -148,7 +144,7 @@ export async function showDetailModal(record) {
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = ui.getRecordPrice(record, newIndex);
                 modalItemPrice.textContent = typeof newPrice === 'number' ?
-                `$${newPrice.toFixed(2)}` : 'N/A';
+`$${newPrice.toFixed(2)}` : 'N/A';
             });
         }
         modalOptionsContainer.appendChild(optionButton);
@@ -186,14 +182,13 @@ export async function showDetailModal(record) {
             let tooltip = status.reason;
             if (status.status === AVAILABILITY_STATUS.FULL) {
                 className = 'available-full';
-     
                } else if (status.status === 
             AVAILABILITY_STATUS.PARTIAL) {
                 className = 'available-partial';
                 tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
-                className = 'unavailable';
-  
+            
+     className = 'unavailable';
                   }
             dayElem.classList.add(className);
             dayElem.setAttribute('data-tippy-content', tooltip);
@@ -204,7 +199,6 @@ export async function showDetailModal(record) {
                 placement: 'top',
                 theme: 'light',
                 allowHTML: true,
-    
               });
         },
         onChange: (selectedDates) => {
@@ -223,7 +217,6 @@ export async function showDetailModal(record) {
     modalOverlay.classList.add('active');
     setTimeout(() => {
         modalOverlay.style.display = 'flex';
-        // FIX: Add a null check before trying to focus the button
         const modalCloseBtn = document.getElementById('modal-close-btn');
         if (modalCloseBtn) modalCloseBtn.focus();
         log('Modal', 'Detail modal shown, focused close button.');
@@ -243,10 +236,8 @@ export function hideDetailModal() {
             modalOverlay.style.display = 'none';
             resetModalState();
             const closeBtn = document.getElementById('modal-close-btn');
-            // FIX: Remove the event listener to prevent memory leaks
             if (closeBtn) {
                 closeBtn.removeEventListener('click', hideDetailModal);
-     
            }
             document.getElementById('header-event-name').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
@@ -267,18 +258,15 @@ export async function showCheckoutModal() {
         return;
     }
 
-    // --- FIX: Add event listener for the close button ---
     if (checkoutCloseBtn) {
         checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     }
 
-    // Clear previous summary and totals
     summaryDetailsEl.innerHTML = '';
     fullTotalEl.textContent = '$0.00';
     depositEl.textContent = '$0.00';
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
-    // Sum up the total cost from locked items
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
@@ -290,21 +278,19 @@ export async function showCheckoutModal() {
         summaryList.appendChild(listItem);
     }
     summaryDetailsEl.appendChild(summaryList);
-    // Calculate the 35% deposit
-    const depositAmount = finalTotal * 0.35;
-    const depositInCents = Math.round(depositAmount * 100);
-    // Update the display
+
+    // --- CORRECTED LOGIC START ---
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
 
-    // Determine the amount to charge in this transaction
     const isFirstPayment = amountReceived === 0;
     const amountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
     const depositInCents = Math.round(amountToCharge * 100);
 
-    // Update the display to show what this transaction is for
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     depositEl.textContent = `$${amountToCharge.toFixed(2)}`;
+    // --- CORRECTED LOGIC END ---
+
     try {
         const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
@@ -345,13 +331,12 @@ export function hideCheckoutModal() {
     if (checkoutModalOverlay) {
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
-            // --- FIX: Remove the event listener to prevent memory leaks ---
             const checkoutCloseBtn = document.getElementById('checkout-close-btn');
             if (checkoutCloseBtn) {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
             checkoutModalOverlay.style.display = 'none';
-            log('Modal', 'Checkout modal hidden.');
+             log('Modal', 'Checkout modal hidden.');
         }, 300);
         document.body.classList.remove('modal-open');
     }
