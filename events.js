@@ -529,6 +529,16 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }
     });
 
+    // Listen for clicks on the "pay remainder" button
+    document.addEventListener('click', function(event) {
+        if (event.target.id === 'pay-remainder-button') {
+            event.preventDefault();
+            // Assuming `ui.js` has a function to show the checkout modal
+            showCheckoutModal();
+        }
+    });
+
+
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
