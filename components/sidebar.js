@@ -14,7 +14,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     
     // Set the image URL in a data attribute instead of the background style
-    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+    itemCard.dataset.bgImage = imageUrls[0] ||
+`https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -56,8 +57,6 @@ async function createLockedInItemElement(record, itemInfo) {
 
     const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
-
-    // Use data-src for the img tag and add the lazy-load class
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -93,7 +92,6 @@ export async function updateEventPlanSection() {
             container.appendChild(itemElement);
         }
     }
-    // Tell the UI module to observe the new lazy-load images
     ui.observeLazyImages(container);
 }
 
@@ -121,11 +119,10 @@ export async function updateFavoritesCarousel() {
             }
         }
     }
-    // Tell the UI module to observe the new lazy-load images
     ui.observeLazyImages(favoritesCarousel);
     updateTotalCost();
 }
-// ... (rest of the file remains the same)
+
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
     document.title = eventName || 'Event Builder';
@@ -177,7 +174,7 @@ export function updateTotalCost() {
     }
 
     const isPlanEmpty = subtotal === 0;
-    const isFullyPaid = totalDue <= 0;
+    const isFullyPaid = totalDue <= 0.009; // Use a small tolerance for floating point math
 
     if (checkoutBtn) {
         checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
