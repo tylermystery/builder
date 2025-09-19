@@ -294,8 +294,17 @@ export async function showCheckoutModal() {
     const depositAmount = finalTotal * 0.35;
     const depositInCents = Math.round(depositAmount * 100);
     // Update the display
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = finalTotal - amountReceived;
+
+    // Determine the amount to charge in this transaction
+    const isFirstPayment = amountReceived === 0;
+    const amountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+    const depositInCents = Math.round(amountToCharge * 100);
+
+    // Update the display to show what this transaction is for
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    depositEl.textContent = `$${depositAmount.toFixed(2)}`;
+    depositEl.textContent = `$${amountToCharge.toFixed(2)}`;
     try {
         const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
