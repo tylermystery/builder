@@ -260,6 +260,7 @@
             background-color: #28a745;
             color: white;
             border-color: #28a745;
+            margin-top: 15px;
             margin-bottom: 10px;
         }
         #cart-footer #save-share-btn {
@@ -545,14 +546,14 @@
             z-index: 1000;
             justify-content: center;
             align-items: center;
-            pointer-events: none; /* FIX: Allow clicks to pass through the overlay */
+            pointer-events: none;
         }
         .modal-overlay.active {
             display: flex;
             opacity: 1;
         }
         .modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
-            pointer-events: auto; /* FIX: Re-enable clicks on the modal content itself */
+            pointer-events: auto;
         }
         .modal-content {
             background: #fff;
@@ -793,7 +794,27 @@
             font-size: 0.9em;
             margin-top: 5px;
         }
-        /* Itinerary Modal Styles */
+        .checkout-deposit {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tip-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+        .tip-row label {
+            margin-bottom: 0;
+        }
+        .tip-row input {
+            width: 100px;
+            text-align: right;
+        }
         .itinerary-content {
             max-width: 1000px;
         }
@@ -916,12 +937,11 @@
             cursor: default;
         }
 
-        /* CHAT WIDGET STYLES */
         #chat-widget-container {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            z-index: 1050; /* Increased from 1000 */
+            z-index: 1050; 
         }
 
         .chat-options {
@@ -1068,7 +1088,7 @@
             padding: 5px 10px;
             font-style: italic;
             color: #888;
-            height: 24px; /* Reserve space to prevent layout shifts */
+            height: 24px; 
             font-size: 0.85em;
         }
 
