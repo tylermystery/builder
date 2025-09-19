@@ -16,10 +16,8 @@ export async function loadSessionFromAirtable(sessionId) {
     log('API', `Loading session from URL: ${url}`);
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        log('API', `Session load response: status ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
-            log('API', `Session load error: ${JSON.stringify(errorData)}`);
             throw new Error('Could not fetch session data.');
         }
         const record = await response.json();
@@ -27,6 +25,10 @@ export async function loadSessionFromAirtable(sessionId) {
         
         state.session.isOwned = false;
         
+        // Load amount received data into state
+        state.session.user.amountReceived = record.fields['Amount Received'] || 0;
+        state.session.user.amountReceivedNote = record.fields['Amount Received Note'] || '';
+
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
@@ -51,6 +53,37 @@ export async function loadSessionFromAirtable(sessionId) {
         log('API', `Failed to load session: ${error.message}`);
         alert("Could not load the shared session.");
         window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+export async function updateSessionAmountReceived(sessionId, amount, note) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    log('API', `Updating session ${sessionId} with amount ${amount}`);
+    const payload = {
+        fields: {
+            'Amount Received': amount,
+            'Amount Received Note': note,
+        }
+    };
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Airtable API Error: ${errorData.error.message}`);
+        }
+        log('API', `Successfully updated session ${sessionId}`);
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to update session amount:", error);
+        log('API', `Failed to update session amount: ${error.message}`);
+        return null;
     }
 }
 
