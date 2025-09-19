@@ -1,13 +1,12 @@
 // FILE: events.js
 /*
-* Version: 5.0.0
+* Version: 5.1.0
 * Last Modified: 2025-09-19
 * Changelog:
+* v5.1.0 - 2025-09-19
+* - Refactored handlePaymentFormSubmit to create the Stripe Payment Intent at the moment of submission, allowing for variable tip amounts.
 * v5.0.0 - 2025-09-19
 * - Updated handlePaymentFormSubmit to update Airtable with the amount received after a successful transaction.
-* v4.9.9 - 2025-09-11
-* - Fixed bug where "Update Plan" button in the modal reset changes.
-* - Fixed "Unsave" button to correctly move items from the plan back to the favorites carousel.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -133,17 +132,10 @@ export async function updateAllCardAvailabilityIcons() {
             let statusIcon;
             
             switch (rangeStatus.status) {
-                case AVAILABILITY_STATUS.FULL:
-                    statusIcon = '✅';
-                    break;
-                case AVAILABILITY_STATUS.PARTIAL:
-                    statusIcon = '🟠';
-                    break;
-                case AVAILABILITY_STATUS.NONE:
-                    statusIcon = '❌';
-                    break;
-                default:
-                    statusIcon = '📅';
+                case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
+                case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
+                case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
+                default: statusIcon = '📅';
             }
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
@@ -170,58 +162,81 @@ async function handlePaymentFormSubmit(event) {
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
 
-    const { stripe, elements, cardElement, clientSecret } = ui.getStripeContext();
-    if (!stripe || !elements || !cardElement || !clientSecret) {
+    const { stripe, cardElement } = ui.getStripeContext();
+    if (!stripe || !cardElement) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
         return;
     }
+    
+    try {
+        // 1. Calculate the final amount to be charged, including tip
+        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+        const amountReceived = state.session.user.amountReceived || 0;
+        const totalDue = finalTotal - amountReceived;
+        const isFirstPayment = amountReceived === 0;
+        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+        const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
+        const finalAmountToCharge = baseAmountToCharge + tipAmount;
+        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
 
-    const customerName = document.getElementById('customer-name').value;
-    const customerEmail = document.getElementById('customer-email').value;
-    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-            card: cardElement,
-            billing_details: {
-                name: customerName,
-                email: customerEmail,
+        if (finalAmountInCents < 50) { // Stripe minimum charge is $0.50
+            throw new Error("Final amount is too low to process.");
+        }
+
+        // 2. Create the Payment Intent with the final amount
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: finalAmountInCents }),
+        });
+        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
+        const paymentIntentData = await intentResponse.json();
+        const clientSecret = paymentIntentData.clientSecret;
+
+        // 3. Confirm the payment
+        const customerName = document.getElementById('customer-name').value;
+        const customerEmail = document.getElementById('customer-email').value;
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: cardElement,
+                billing_details: { name: customerName, email: customerEmail },
             },
-        },
-    });
+        });
 
-    if (error) {
-        cardErrors.textContent = error.message;
-        log('Events', `Stripe payment error: ${error.message}`);
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+            log('Events', 'Payment succeeded.');
+            const amountPaid = paymentIntent.amount / 100;
+            const newTotalAmountReceived = amountReceived + amountPaid;
+            let note = state.session.user.amountReceivedNote || '';
+            note += `\nPayment of $${amountPaid.toFixed(2)} received on ${new Date().toLocaleDateString()}.`;
+
+            await api.updateSessionAmountReceived(state.session.id, newTotalAmountReceived, note.trim());
+            state.session.user.amountReceived = newTotalAmountReceived;
+            state.session.user.amountReceivedNote = note.trim();
+            ui.updateTotalCost();
+
+            document.getElementById('payment-form').style.display = 'none';
+            document.getElementById('checkout-summary-details').style.display = 'none';
+            document.querySelector('.checkout-total-deposit-section').style.display = 'none';
+            document.querySelector('.terms-and-conditions').style.display = 'none';
+            document.getElementById('payment-success-message').style.display = 'block';
+
+            ui.displayReservedStatus();
+            setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+        }
+    } catch (err) {
+        log('Events', `Stripe payment error: ${err.message}`);
+        cardErrors.textContent = err.message;
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
-    } else if (paymentIntent.status === 'succeeded') {
-        log('Events', 'Payment succeeded.');
-
-        const amountPaid = paymentIntent.amount / 100;
-        const currentAmountReceived = state.session.user.amountReceived || 0;
-        const newTotalAmountReceived = currentAmountReceived + amountPaid;
-        const note = `Deposit of $${amountPaid.toFixed(2)} paid via Stripe on ${new Date().toLocaleDateString()}.`;
-        
-        await api.updateSessionAmountReceived(state.session.id, newTotalAmountReceived, note);
-        
-        state.session.user.amountReceived = newTotalAmountReceived;
-        state.session.user.amountReceivedNote = note;
-        
-        ui.updateTotalCost();
-
-        document.getElementById('payment-form').style.display = 'none';
-        document.getElementById('checkout-summary-details').style.display = 'none';
-        document.querySelector('.checkout-total-deposit-section').style.display = 'none';
-        document.querySelector('.terms-and-conditions').style.display = 'none';
-        document.getElementById('payment-success-message').style.display = 'block';
-
-        ui.displayReservedStatus();
-        setTimeout(() => {
-            ui.hideCheckoutModal();
-        }, 4000);
     }
 }
 
