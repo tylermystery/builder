@@ -1,74 +1,457 @@
-/**
- * Initializes all event listeners for the application.
- * @param {HTMLDivElement} bodyEl - The main body element of the page.
- */
-export function eventListeners(bodyEl) {
+// FILE: events.js
+/*
+* Version: 5.1.0
+* Last Modified: 2025-09-19
+* Changelog:
+* v5.1.0 - 2025-09-19
+* - Refactored handlePaymentFormSubmit to create the Stripe Payment Intent at the moment of submission, allowing for variable tip amounts.
+* v5.0.0 - 2025-09-19
+* - Updated handlePaymentFormSubmit to update Airtable with the amount received after a successful transaction.
+*/
+import { state } from './state.js';
+import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
+import * as ui from './ui.js';
+import * as api from './api.js';
+import { applyFiltersAndSort } from './filtering.js';
+import { log, setDebugMode } from './utils/debug.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
+import { debounce } from './utils.js';
+import { showItineraryModal } from './components/itinerary.js';
+import { sendMessage } from './chat.js';
 
-    // Global event listener for clicks
-    document.addEventListener('click', async (e) => {
-        const card = e.target.closest('.record-card');
-        const lockedItemCard = e.target.closest('.locked-item-card');
-        const favoriteItem = e.target.closest('.favorite-item');
-        const addToCartBtn = e.target.closest('.add-to-cart-btn');
-        const removeCartItemBtn = e.target.closest('.remove-cart-item-btn');
-        const detailModalBtn = e.target.closest('.detail-modal-btn');
-        const parentLink = e.target.closest('.parent-link');
-        const heartIcon = e.target.closest('.heart-icon');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn');
-        const demoteBtn = e.target.closest('.demote-btn');
-        const removeBtn = e.target.closest('.remove-btn');
+let mainDatePicker = null;
+let saveTimeout = null;
+let currentStore = null;
+let saveShareBtn = null;
+let categoryFiltersContainer = null;
+let subcategoryFiltersContainer = null;
 
-        // Target the "reserve" button by its class
-        const reserveBtn = e.target.closest('.reserve-btn');
+function getCurrentCategoryRecord() {
+    if (!categoryFiltersContainer) return null;
+    const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
+    return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
+}
 
-        // Target the "pay remainder" button by its id
-        const payRemainderBtn = document.getElementById('pay-remainder-button');
+function getAvailableSubcategories(categoryRecord) {
+    if (!categoryRecord) {
+        return [];
+    }
+    const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    return subcategoryOptions.map(option => option.name).sort();
+}
 
+function updateSubcategoryButtons() {
+    if (!subcategoryFiltersContainer) return;
+    subcategoryFiltersContainer.innerHTML = '';
+    const categoryRecord = getCurrentCategoryRecord();
+    const subcategories = getAvailableSubcategories(categoryRecord);
+    subcategories.forEach(subcat => {
+        const button = document.createElement('button');
+        button.className = 'filter-btn subcategory-filter-btn';
+        button.dataset.filter = subcat.toLowerCase();
+        button.textContent = subcat;
+        subcategoryFiltersContainer.appendChild(button);
+    });
+}
 
-        // If an element with a quantity selector was clicked
-        if (e.target.closest('.quantity-selector')) {
-            e.stopPropagation();
-        } else if (e.target.closest('.quantity-up-btn')) {
-            const card = e.target.closest('.record-card');
-            const recordId = card.dataset.recordId;
-            const quantitySpan = card.querySelector('.quantity');
-            let currentQuantity = parseInt(quantitySpan.textContent, 10);
-            const newQuantity = currentQuantity + 1;
-            ui.updateQuantity(recordId, newQuantity);
-        } else if (e.target.closest('.quantity-down-btn')) {
-            const card = e.target.closest('.record-card');
-            const recordId = card.dataset.recordId;
-            const quantitySpan = card.querySelector('.quantity');
-            let currentQuantity = parseInt(quantitySpan.textContent, 10);
-            if (currentQuantity > 1) {
-                const newQuantity = currentQuantity - 1;
-                ui.updateQuantity(recordId, newQuantity);
+function loadMoreRecords(imageCache) {
+    if (state.ui.isLoadingMore) return;
+    const start = state.ui.recordsCurrentlyDisplayed;
+    const end = start + RECORDS_PER_LOAD;
+    const recordsToLoad = state.records.filtered.slice(start, end);
+    if (recordsToLoad.length > 0) {
+        state.ui.isLoadingMore = true;
+        ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
+            state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
+            state.ui.isLoadingMore = false;
+        });
+    }
+}
+
+export function updateSaveShareButton() {
+    if (!saveShareBtn) return;
+    switch (state.ui.saveState) {
+        case 'MODIFIED':
+            saveShareBtn.textContent = 'Changes pending...';
+            saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes automatically...';
+            break;
+        case 'SAVING':
+            saveShareBtn.textContent = '⚙️ Saving...';
+            saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes...';
+            break;
+        case 'SAVED':
+            saveShareBtn.textContent = '🔗 Copy Link';
+            const hasContent = state.cart.items.size > 0 || state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0;
+            saveShareBtn.disabled = !hasContent;
+            saveShareBtn.dataset.tooltip = !hasContent ? 'Add items or details to enable sharing' : 'Copy a shareable link to this plan';
+            break;
+    }
+}
+
+export function triggerSave() {
+    if (state.ui.isInitializing) return;
+    clearTimeout(saveTimeout);
+    state.ui.saveState = 'MODIFIED';
+    updateSaveShareButton();
+    saveTimeout = setTimeout(async () => {
+        state.ui.saveState = 'SAVING';
+        updateSaveShareButton();
+        const success = await api.saveSessionToAirtable();
+        if (success) {
+            state.ui.saveState = 'SAVED';
+            updateSaveShareButton();
+        }
+    }, 1500);
+}
+
+export async function updateAllCardAvailabilityIcons() {
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
+        document.querySelectorAll('.availability-btn').forEach(icon => {
+            if (icon._tippy) icon._tippy.destroy();
+            icon.title = 'Select a date range to check availability';
+            icon.textContent = '📅';
+        });
+        return;
+    }
+    const startDate = mainDatePicker.selectedDates[0];
+    const requestedEnd = mainDatePicker.selectedDates[1];
+    const cards = document.querySelectorAll('.event-card');
+    for (const card of cards) {
+        const recordId = card.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+        
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
+        const icon = card.querySelector('.availability-btn');
+
+        if (icon) {
+            if (icon._tippy) icon._tippy.destroy();
+            let statusIcon;
+            
+            switch (rangeStatus.status) {
+                case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
+                case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
+                case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
+                default: statusIcon = '📅';
             }
-        } else if (addToCartBtn) {
-            e.stopPropagation();
-            const recordId = addToCartBtn.closest('[data-record-id]').dataset.recordId;
-            ui.addItemToCart(recordId);
-        } else if (removeCartItemBtn) {
-            e.stopPropagation();
-            const recordId = removeCartItemBtn.closest('[data-record-id]').dataset.recordId;
-            ui.removeItemFromCart(recordId);
-        } else if (detailModalBtn) {
-            e.stopPropagation();
-            const recordId = detailModalBtn.closest('[data-record-id]').dataset.recordId;
-            ui.showDetailModal(recordId);
+            
+            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
+            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+
+            tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
+            icon.title = rangeStatus.reason;
+            icon.textContent = statusIcon;
+        }
+    }
+}
+
+async function handlePaymentFormSubmit(event) {
+    event.preventDefault();
+    log('Events', 'Payment form submitted.');
+
+    const submitBtn = document.getElementById('payment-submit-btn');
+    const buttonText = submitBtn.querySelector('.button-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    const cardErrors = document.getElementById('card-errors');
+    cardErrors.textContent = '';
+
+    submitBtn.disabled = true;
+    buttonText.style.display = 'none';
+    spinner.style.display = 'inline';
+
+    const { stripe, cardElement } = ui.getStripeContext();
+    if (!stripe || !cardElement) {
+        cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
+        submitBtn.disabled = false;
+        buttonText.style.display = 'inline';
+        spinner.style.display = 'none';
+        return;
+    }
+    
+    try {
+        // 1. Calculate the final amount to be charged, including tip
+        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+        const amountReceived = state.session.user.amountReceived || 0;
+        const totalDue = finalTotal - amountReceived;
+        const isFirstPayment = amountReceived === 0;
+        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+        const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
+        const finalAmountToCharge = baseAmountToCharge + tipAmount;
+        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
+
+        if (finalAmountInCents < 50) { // Stripe minimum charge is $0.50
+            throw new Error("Final amount is too low to process.");
+        }
+
+        // 2. Create the Payment Intent with the final amount
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: finalAmountInCents }),
+        });
+        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
+        const paymentIntentData = await intentResponse.json();
+        const clientSecret = paymentIntentData.clientSecret;
+
+        // 3. Confirm the payment
+        const customerName = document.getElementById('customer-name').value;
+        const customerEmail = document.getElementById('customer-email').value;
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: cardElement,
+                billing_details: { name: customerName, email: customerEmail },
+            },
+        });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+            log('Events', 'Payment succeeded.');
+            const amountPaid = paymentIntent.amount / 100;
+            const newTotalAmountReceived = amountReceived + amountPaid;
+            let note = state.session.user.amountReceivedNote || '';
+            note += `\nPayment of $${amountPaid.toFixed(2)} received on ${new Date().toLocaleDateString()}.`;
+
+            await api.updateSessionAmountReceived(state.session.id, newTotalAmountReceived, note.trim());
+            state.session.user.amountReceived = newTotalAmountReceived;
+            state.session.user.amountReceivedNote = note.trim();
+            ui.updateTotalCost();
+
+            document.getElementById('payment-form').style.display = 'none';
+            document.getElementById('checkout-summary-details').style.display = 'none';
+            document.querySelector('.checkout-total-deposit-section').style.display = 'none';
+            document.querySelector('.terms-and-conditions').style.display = 'none';
+            document.getElementById('payment-success-message').style.display = 'block';
+
+            ui.displayReservedStatus();
+            setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+        }
+    } catch (err) {
+        log('Events', `Stripe payment error: ${err.message}`);
+        cardErrors.textContent = err.message;
+        submitBtn.disabled = false;
+        buttonText.style.display = 'inline';
+        spinner.style.display = 'none';
+    }
+}
+
+export function initializeEventListeners(imageCache, flatpickr) {
+    saveShareBtn = document.getElementById('save-share-btn');
+    categoryFiltersContainer = document.getElementById('category-filters');
+    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+    let debugEnabled = false;
+    const safeAddEventListener = (selector, event, handler) => {
+        const element = document.getElementById(selector);
+        if (element) element.addEventListener(event, handler);
+        else console.warn(`Element with ID "${selector}" not found.`);
+    };
+
+    const betaTrigger = document.getElementById('beta-trigger');
+    if (betaTrigger) {
+        betaTrigger.addEventListener('click', () => {
+            debugEnabled = !debugEnabled;
+            setDebugMode(debugEnabled);
+            log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
+        });
+    }
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        if (scrollTimeout) return;
+        scrollTimeout = setTimeout(() => {
+            const buffer = 300;
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
+                loadMoreRecords(imageCache);
+            }
+            scrollTimeout = null;
+        }, 100);
+    });
+    
+    currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+    if (currentStore) {
+        const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn active';
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
+        categoryFiltersContainer.appendChild(allButton);
+        categories.forEach((cat) => {
+            const button = document.createElement('button');
+            button.className = 'filter-btn category-filter-btn';
+            button.dataset.filter = cat.name.toLowerCase();
+            button.textContent = cat.name;
+            categoryFiltersContainer.appendChild(button);
+        });
+        updateSubcategoryButtons();
+    }
+    
+    safeAddEventListener('category-filters', 'click', (e) => {
+        if (e.target.classList.contains('category-filter-btn')) {
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            updateSubcategoryButtons();
+            applyFiltersAndSort(imageCache);
+        }
+    });
+    safeAddEventListener('subcategory-filters', 'click', (e) => {
+        if (e.target.classList.contains('subcategory-filter-btn')) {
+            e.target.classList.toggle('active');
+            applyFiltersAndSort(imageCache);
+        }
+    });
+    safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+    safeAddEventListener('headcount-filter', 'change', (e) => {
+        document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
+        applyFiltersAndSort(imageCache);
+    });
+    safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('reset-filters-btn', 'click', () => {
+        const allButton = categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]');
+        if (allButton) {
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            allButton.classList.add('active');
+        }
+        updateSubcategoryButtons();
+        
+        document.getElementById('name-filter').value = '';
+        document.getElementById('status-filter').value = 'Available';
+        document.getElementById('headcount-filter').selectedIndex = 0;
+        document.getElementById('headcount-custom').value = '';
+        document.getElementById('headcount-custom').style.display = 'none';
+        document.getElementById('location-filter').selectedIndex = 0;
+        document.getElementById('budget-filter').selectedIndex = 0;
+        document.getElementById('sort-by').selectedIndex = 0;
+        if (mainDatePicker) mainDatePicker.clear();
+        applyFiltersAndSort(imageCache);
+    });
+
+    mainDatePicker = flatpickr("#date-filter", {
+        mode: "range",
+        dateFormat: "M j, Y",
+        onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return;
+            if (selectedDates.length > 0) {
+                if (selectedDates.length === 2) {
+                    selectedDates[1].setHours(23, 59, 59, 999);
+                }
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                triggerSave();
+                await updateAllCardAvailabilityIcons();
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                triggerSave();
+                await updateAllCardAvailabilityIcons();
+            }
+        },
+    });
+
+    safeAddEventListener('date-filter-group', 'click', (e) => {
+        const quickButton = e.target.closest('[data-date-quick]');
+        if (!quickButton || !mainDatePicker) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let startDate = new Date(today);
+        let endDate = new Date(today);
+        const quickFilterType = quickButton.dataset.dateQuick;
+
+        switch (quickFilterType) {
+            case 'tomorrow':
+                startDate.setDate(today.getDate() + 1);
+                endDate.setDate(today.getDate() + 1);
+                break;
+            case 'this-week':
+                endDate.setDate(today.getDate() + (6 - today.getDay()));
+                break;
+            case 'next-2-weeks':
+                endDate.setDate(today.getDate() + 14);
+                break;
+        }
+        mainDatePicker.setDate([startDate, endDate], true);
+    });
+
+    safeAddEventListener('header-event-name', 'change', (e) => {
+        if (state.ui.isInitializing) return;
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        triggerSave();
+    });
+    safeAddEventListener('header-goals', 'change', (e) => {
+        if (state.ui.isInitializing) return;
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        triggerSave();
+    });
+
+    document.body.addEventListener('click', async (e) => {
+        if (state.ui.isInitializing) return;
+        
+        const card = e.target.closest('.event-card');
+        const heartIcon = e.target.closest('.heart-icon');
+        const saveShareBtn = e.target.closest('#save-share-btn');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        const favoriteItem = e.target.closest('.favorite-item');
+        const removeBtn = favoriteItem?.querySelector('.remove-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
+        const lockedItemCard = e.target.closest('.locked-item-card');
+        const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const parentLink = e.target.closest('.parent-link');
+        const presentBtn = e.target.closest('.present-btn');
+        const carouselNav = e.target.closest('.carousel-nav');
+    
+        if (saveShareBtn) {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                const originalText = saveShareBtn.textContent;
+                saveShareBtn.textContent = 'Copied!';
+                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
+           });
+        } else if (checkoutBtn) {
+            ui.showCheckoutModal();
+        } else if (presentBtn) {
+            const listType = presentBtn.dataset.listType;
+            ui.showPresentationView(listType);
+        } else if (carouselNav) {
+            const carousel = document.getElementById('favorites-carousel');
+            if (carousel) {
+                const scrollAmount = 300;
+                const direction = carouselNav.classList.contains('right') ? 1 : -1;
+                carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+            }
         } else if (parentLink) {
-            e.preventDefault();
-            const recordId = e.target.closest('[data-record-id]').dataset.recordId;
-            ui.showDetailModal(recordId);
+            e.stopPropagation();
+            const parentName = parentLink.dataset.parentName;
+            if (parentName) {
+                const targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn')).find(btn => btn.textContent === parentName);
+                if (targetButton) {
+                    targetButton.click();
+                    if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
+                        ui.hideDetailModal();
+                    }
+                }
+            }
         } else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            state.toggleFavorite(recordId);
-            ui.updateCardIcon(recordId);
-            await debounce(ui.updateFavoritesCarousel, 300)();
-        } else if (addToPlanBtn || reserveBtn) {
+            if (!state.cart.lockedItems.has(recordId)) {
+                if (state.cart.items.has(recordId)) {
+                    state.cart.items.delete(recordId);
+                } else {
+                    ui.updateItemState(recordId, {});
+                }
+                ui.updateCardIcon(recordId);
+                await debounce(ui.updateFavoritesCarousel, 300)();
+                triggerSave();
+            }
+        } else if (addToPlanBtn) {
             e.stopPropagation();
-            const recordId = (addToPlanBtn || reserveBtn).closest('[data-record-id]').dataset.recordId;
+            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
                 ui.hideDetailModal();
                 return;
@@ -84,85 +467,131 @@ export function eventListeners(bodyEl) {
         } else if (demoteBtn) {
             e.stopPropagation();
             const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
-            const itemInfo = state.cart.lockedItems.get(recordId);
-            state.cart.items.set(recordId, itemInfo);
-            state.cart.lockedItems.delete(recordId);
-            ui.updateCardIcon(recordId);
-            await debounce(ui.updateFavoritesCarousel, 300)();
-            await ui.updateEventPlanSection();
-            ui.updateTotalCost();
-            triggerSave();
+            if (state.cart.lockedItems.has(recordId)) {
+                const itemInfo = state.cart.lockedItems.get(recordId);
+                state.cart.lockedItems.delete(recordId);
+                state.cart.items.set(recordId, itemInfo);
+                ui.updateCardIcon(recordId);
+                await ui.updateEventPlanSection();
+                await ui.updateFavoritesCarousel();
+                ui.updateTotalCost();
+                triggerSave();
+            }
         } else if (removeBtn && e.target === removeBtn) {
             e.stopPropagation();
-            const recordId = removeBtn.closest('[data-record-id]').dataset.recordId;
-            state.cart.lockedItems.delete(recordId);
+            const recordId = favoriteItem.dataset.recordId;
+            state.cart.items.delete(recordId);
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
-            await ui.updateEventPlanSection();
-            ui.updateTotalCost();
             triggerSave();
         } else if (card && !e.target.closest('.quantity-selector')) {
             const recordId = card.dataset.recordId;
-            ui.showDetailModal(recordId);
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
         } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
-            ui.showDetailModal(recordId);
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
         } else if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
             const recordId = favoriteItem.dataset.recordId;
-            ui.showDetailModal(recordId);
-        } else if (payRemainderBtn && e.target === payRemainderBtn) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
+        }
+    });
+    
+    document.body.addEventListener('change', (e) => {
+        if (state.ui.isInitializing) return;
+        const target = e.target;
+        const container = target.closest('[data-record-id]');
+        if (!container) return;
+        const recordId = container.dataset.recordId;
+        
+        const isLocked = state.cart.lockedItems.has(recordId);
+        let updates = {};
+
+        if (target.matches('.quantity-input')) {
+            updates.quantity = parseInt(target.value, 10);
+        } else if (target.matches('#modal-item-note')) {
+            updates.note = target.value;
+        } else if (e.detail?.selectedOptionIndex !== undefined) {
+             updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            if (isLocked) {
+                ui.updateLockedItemState(recordId, updates);
+                ui.updateEventPlanSection();
+                ui.updateTotalCost();
+            } else {
+                ui.updateItemState(recordId, updates);
+            }
+            triggerSave();
+        }
+    });
+
+    const eventPlanDatePicker = flatpickr("#event-date-picker", {
+        dateFormat: "M j, Y",
+        onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return;
+            if (selectedDates.length > 0) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            await ui.updateEventPlanDateDisplay();
+            await ui.updateLockedItemStatusIcons();
+            triggerSave();
+        }
+    });
+
+    safeAddEventListener('itinerary-btn', 'click', () => {
+        log('Events', 'Itinerary button clicked, showing modal.');
+        showItineraryModal();
+    });
+    ui.setupPresentationEventListeners();
+    safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    return { mainDatePicker, eventPlanDatePicker };
+}
+
+export function initializeChatEventListeners() {
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    if (messageForm) {
+        messageForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            ui.showCheckoutModal();
-        }
-
-    });
-
-    // Event listener for the search input
-    document.getElementById('search-input').addEventListener('input', (e) => {
-        state.filters.search = e.target.value;
-        debounce(ui.renderCards, 300)();
-    });
-
-    // Event listeners for filter checkboxes
-    document.querySelectorAll('.filter-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', () => {
-            state.filters[checkbox.name] = checkbox.checked;
-            ui.renderCards();
+            const message = messageInput.value;
+            if (message.trim() === '') return;
+            sendMessage(message);
+            messageInput.value = '';
         });
-    });
-
-    // Event listeners for clearing filters
-    document.getElementById('clear-filters-btn').addEventListener('click', () => {
-        document.getElementById('search-input').value = '';
-        state.filters.search = '';
-        document.querySelectorAll('.filter-checkbox').forEach(checkbox => {
-            checkbox.checked = false;
-            state.filters[checkbox.name] = false;
-        });
-        ui.renderCards();
-    });
-
-    // Event listener to show/hide the sidebar on mobile
-    document.getElementById('sidebar-toggle').addEventListener('click', () => {
-        bodyEl.classList.toggle('sidebar-open');
-    });
-
-    // Event listener for the 'plan it' button
-    document.getElementById('plan-it-button').addEventListener('click', () => {
-        ui.showEventPlanModal();
-    });
-
-    // Event listener for the modal close button
-    bodyEl.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal') && !e.target.closest('.modal-content')) {
-            ui.hideDetailModal();
-            ui.hideEventPlanModal();
-            ui.hideCheckoutModal();
+    }
+    
+    const chatToggleButton = document.getElementById('chat-toggle-button');
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    function toggleChatWindow(forceClose = false) {
+        if (chatWidgetContainer) {
+            if (forceClose) {
+                chatWidgetContainer.classList.remove('chat-open');
+            } else {
+                chatWidgetContainer.classList.toggle('chat-open');
+            }
         }
-    });
+    }
 
-    // Event listener for exporting the file
-    document.getElementById('export-plan-btn').addEventListener('click', async () => {
-        ui.exportPlan();
+    if (chatToggleButton) {
+        chatToggleButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleChatWindow();
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+        if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
+            if (!remainOpenCheckbox || !remainOpenCheckbox.checked) {
+                toggleChatWindow(true);
+            }
+        }
     });
 }
