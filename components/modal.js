@@ -6,7 +6,21 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
-let stripe, elements, cardElement, clientSecret;
+let stripe;
+
+// --- Helper function to update the checkout total display ---
+function updateCheckoutDisplay() {
+    const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = finalTotal - amountReceived;
+    const isFirstPayment = amountReceived === 0;
+
+    const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+    const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
+    const finalAmountToCharge = baseAmountToCharge + tipAmount;
+
+    document.getElementById('deposit-price').textContent = `$${finalAmountToCharge.toFixed(2)}`;
+}
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
@@ -45,7 +59,6 @@ function resetModalState() {
 }
 
 export async function showDetailModal(record) {
-    // This function is correct and does not need changes
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     const modalOverlay = document.getElementById('detail-modal-overlay');
     const modalHeaderActions = document.getElementById('modal-header-actions');
@@ -69,8 +82,7 @@ export async function showDetailModal(record) {
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getMainGetItemState()(record.id);
     if (addToPlanBtn) {
-        addToPlanBtn.textContent = isLocked ?
-'Update Plan' : 'Add to Plan';
+        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -82,8 +94,7 @@ export async function showDetailModal(record) {
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
         if (range && typeof range.min === 'number' && typeof range.max === 'number') {
-            modalItemPrice.textContent = range.min === range.max ?
-`$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
+            modalItemPrice.textContent = range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`;
         } else {
             modalItemPrice.textContent = 'Price Varies';
         }
@@ -102,7 +113,7 @@ export async function showDetailModal(record) {
             modalMainImage.style.backgroundImage = `url('${url}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
-           });
+        });
         modalThumbnailStrip.appendChild(thumb);
     });
     modalHeaderActions.innerHTML = '';
@@ -125,7 +136,7 @@ export async function showDetailModal(record) {
         }
         let priceModText = '';
         if (opt.price !== null) {
-         priceModText = `$${opt.price.toFixed(2)}`;
+            priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
@@ -133,7 +144,7 @@ export async function showDetailModal(record) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
-           optionButton.addEventListener('click', (e) => {
+            optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
@@ -143,8 +154,7 @@ export async function showDetailModal(record) {
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = ui.getRecordPrice(record, newIndex);
-                modalItemPrice.textContent = typeof newPrice === 'number' ?
-`$${newPrice.toFixed(2)}` : 'N/A';
+                modalItemPrice.textContent = typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A';
             });
         }
         modalOptionsContainer.appendChild(optionButton);
@@ -175,21 +185,18 @@ export async function showDetailModal(record) {
             return status.status === AVAILABILITY_STATUS.NONE;
         }],
         onDayCreate: function (dObj, dStr, fp, dayElem) {
-            const 
-            day = dayElem.dateObj;
+            const day = dayElem.dateObj;
             const status = getDayStatus(day, busyTimes, record);
             let className = '';
             let tooltip = status.reason;
             if (status.status === AVAILABILITY_STATUS.FULL) {
                 className = 'available-full';
-               } else if (status.status === 
-            AVAILABILITY_STATUS.PARTIAL) {
+            } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                 className = 'available-partial';
                 tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
-            
-     className = 'unavailable';
-                  }
+                className = 'unavailable';
+            }
             dayElem.classList.add(className);
             dayElem.setAttribute('data-tippy-content', tooltip);
         },
@@ -199,7 +206,7 @@ export async function showDetailModal(record) {
                 placement: 'top',
                 theme: 'light',
                 allowHTML: true,
-              });
+            });
         },
         onChange: (selectedDates) => {
             if (selectedDates.length > 0) {
@@ -238,7 +245,7 @@ export function hideDetailModal() {
             const closeBtn = document.getElementById('modal-close-btn');
             if (closeBtn) {
                 closeBtn.removeEventListener('click', hideDetailModal);
-           }
+            }
             document.getElementById('header-event-name').focus();
             log('Modal', 'Detail modal hidden, focused header title.');
         }, 300);
@@ -251,20 +258,19 @@ export async function showCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const fullTotalEl = document.getElementById('full-total-price');
     const depositEl = document.getElementById('deposit-price');
+    const depositLabelEl = document.getElementById('deposit-label');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
     const summaryDetailsEl = document.getElementById('checkout-summary-details');
-    if (!checkoutModalOverlay || !fullTotalEl || !depositEl || !summaryDetailsEl) {
-        log('Modal', 'Error: Missing elements for checkout modal.');
-        return;
-    }
+    const tipAmountInput = document.getElementById('tip-amount');
 
-    if (checkoutCloseBtn) {
-        checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
-    }
+    if (!checkoutModalOverlay || !fullTotalEl || !depositEl || !summaryDetailsEl || !tipAmountInput) return;
 
+    if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
+
+    // Reset UI
     summaryDetailsEl.innerHTML = '';
-    fullTotalEl.textContent = '$0.00';
-    depositEl.textContent = '$0.00';
+    tipAmountInput.value = '';
+
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
@@ -279,48 +285,41 @@ export async function showCheckoutModal() {
     }
     summaryDetailsEl.appendChild(summaryList);
 
-    // --- CORRECTED LOGIC START ---
     const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = finalTotal - amountReceived;
-
-    const isFirstPayment = amountReceived === 0;
-    const amountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
-    const depositInCents = Math.round(amountToCharge * 100);
-
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    depositEl.textContent = `$${amountToCharge.toFixed(2)}`;
-    // --- CORRECTED LOGIC END ---
+    fullTotalEl.dataset.total = finalTotal; // Store the raw total for calculations
+
+    // Dynamically set the label
+    if (amountReceived === 0) {
+        depositLabelEl.textContent = 'Deposit Due (35%):';
+    } else {
+        depositLabelEl.textContent = 'Remaining Balance Due:';
+    }
+
+    // Initial display update
+    updateCheckoutDisplay();
+
+    // Add event listener for the tip input
+    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
 
     try {
-        const response = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: depositInCents }),
-        });
-        if (!response.ok) {
-            throw new Error('Network error: Could not connect to payment server.');
-        }
-        const data = await response.json();
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        clientSecret = data.clientSecret;
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-        elements = stripe.elements({ clientSecret });
+        const elements = stripe.elements();
         const cardElementContainer = document.getElementById('card-element');
         if (cardElementContainer) cardElementContainer.innerHTML = '';
-        cardElement = elements.create('card');
+        const cardElement = elements.create('card');
         cardElement.mount('#card-element');
+
+        checkoutModalOverlay.cardElement = cardElement;
+
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             checkoutCloseBtn.focus();
-            log('Modal', 'Checkout modal shown, focused close button.');
         }, 0);
         document.body.classList.add('modal-open');
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
-        log('Modal', `Failed to initialize payment form: ${err.message}`);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
     }
@@ -329,6 +328,7 @@ export async function showCheckoutModal() {
 export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
+        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
             const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -336,12 +336,13 @@ export function hideCheckoutModal() {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
             checkoutModalOverlay.style.display = 'none';
-             log('Modal', 'Checkout modal hidden.');
+            log('Modal', 'Checkout modal hidden.');
         }, 300);
         document.body.classList.remove('modal-open');
     }
 }
 
 export function getStripeContext() {
-    return { stripe, elements, cardElement, clientSecret };
+    const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
+    return { stripe, cardElement };
 }
