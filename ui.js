@@ -1,7 +1,9 @@
 // FILE: ui.js
 /*
- * Version: 3.0.9
- * Last Modified: 2025-09-15
+ * Version: 3.1.0
+ * Last Modified: 2025-09-19
+ * Changelog:
+ * - Removed obsolete updateTotalCost function, allowing the correct version from sidebar.js to be exported. This fixes the cost breakdown display.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -44,7 +46,6 @@ export function observeLazyImages(container) {
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
 }
 
-// ... (rest of the file is unchanged) ...
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
     const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -254,44 +255,6 @@ export async function updateLockedItemStatusIcons() {
                 statusIconEl.textContent = '❌';
                 statusIconEl.classList.add('unavailable');
                 break;
-        }
-    }
-}
-
-export function updateTotalCost() {
-    const totalCostEl = document.getElementById('total-cost');
-    const checkoutBtn = document.getElementById('checkout-btn');
-    const saveShareBtn = document.getElementById('save-share-btn');
-    if (!totalCostEl) return;
-    let total = 0;
-    const allItems = state.cart.lockedItems;
-    allItems.forEach((itemInfo, recordId) => {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record) return;
-        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        if (isNaN(unitPrice)) return;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase() || 'default';
-        
-        let itemCost;
-        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            itemCost = unitPrice * effectiveQuantity;
-        } else {
-            itemCost = unitPrice;
-        }
-        total += itemCost;
-    });
-    totalCostEl.textContent = `$${total.toFixed(2)}`;
-    const isPlanEmpty = total === 0;
-    if (checkoutBtn) {
-        checkoutBtn.disabled = isPlanEmpty;
-    }
-    if (saveShareBtn) {
-        if (isPlanEmpty) {
-            saveShareBtn.disabled = true;
-        } else if (state.ui.saveState === 'SAVED') {
-            saveShareBtn.disabled = false;
         }
     }
 }
