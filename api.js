@@ -136,7 +136,7 @@ export async function saveSessionToAirtable() {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json' 
             },
-            body: JSON.stringify(isUpdate ? payload : { records: [payload] })
+             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
@@ -161,7 +161,6 @@ export async function saveSessionToAirtable() {
     }
 }
 
-// ... (rest of the file remains the same) ...
 export async function fetchAllRecords() {
     let records = [];
     let offset = null;
