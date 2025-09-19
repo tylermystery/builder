@@ -1,4 +1,4 @@
-// PASTE THIS ENTIRE CODE INTO: chat.js
+// FILE: chat.js
 import { state } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
@@ -60,10 +60,7 @@ async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
     messagesList.innerHTML = '';
-    
-    // Add a fallback to ensure records is always an array
-    const records = await api.fetchChatMessages(sessionId) || [];
-
+    const records = await api.fetchChatMessages(sessionId);
     records.forEach(record => {
         const { SenderID, SenderName, Content, Timestamp } = record.fields;
         const isSent = SenderID === currentUser.id;
@@ -71,8 +68,47 @@ async function loadChatHistory(sessionId) {
     });
 }
 
-function addMessageToUI(sender, message, isSent, timestamp) { /* This function is unchanged */ }
-function bindPresenceEvents() { /* This function is unchanged */ }
+function addMessageToUI(sender, message, isSent, timestamp) {
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = isSent ? 'message-wrapper sent' : 'message-wrapper received';
+
+    const messageElement = document.createElement('div');
+    messageElement.className = 'chat-message';
+    
+    const senderElement = document.createElement('div');
+    senderElement.className = 'sender';
+    senderElement.innerText = isSent ? 'You' : sender;
+    
+    messageElement.appendChild(senderElement);
+    messageElement.append(document.createTextNode(message));
+    
+    const timestampElement = document.createElement('div');
+    timestampElement.className = 'timestamp';
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    wrapper.appendChild(messageElement);
+    wrapper.appendChild(timestampElement);
+    messagesList.appendChild(wrapper);
+
+    // FIX: Replace the old scrolling logic with this more reliable method.
+    wrapper.scrollIntoView({ behavior: 'smooth' });
+}
+
+function bindPresenceEvents() {
+    channel.bind('pusher:subscription_succeeded', (members) => {
+        updatePresenceUI(members);
+    });
+    channel.bind('pusher:member_added', (member) => {
+        updatePresenceUI(channel.members);
+    });
+    channel.bind('pusher:member_removed', (member) => {
+        updatePresenceUI(channel.members);
+    });
+}
 
 export async function initializeChat() {
     currentUser = getSimpleUserIdentity();
@@ -91,12 +127,7 @@ export async function initializeChat() {
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
                 log('Chat', `User name changed to: ${newName}`);
-
-                // Add a check to make sure the channel is ready before updating
-                if (channel && channel.members) {
-                    updatePresenceUI(channel.members);
-                }
-                
+                updatePresenceUI(channel.members);
                 triggerSave();
             } else {
                 e.target.value = currentUser.name;
