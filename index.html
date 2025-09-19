@@ -1282,7 +1282,18 @@
             color: #6c757d;
             min-height: 20px;
         }
-        
+        .total-row.amount-paid-row {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .total-row.final-total-row {
+            margin-top: 5px;
+        }
+        hr.total-divider {
+            border: none;
+            border-top: 1px solid #e9ecef;
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
@@ -1705,6 +1716,23 @@
             <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
         </div>
     </div>
+
+    <div id="total-breakdown">
+        <div class="total-row subtotal-row">
+            <span>Subtotal:</span>
+            <span id="subtotal-cost">$0.00</span>
+        </div>
+        <div class="total-row amount-paid-row" style="display: none;">
+            <span>Amount Paid:</span>
+            <span id="amount-paid-cost">$0.00</span>
+        </div>
+        <hr class="total-divider" style="display: none;">
+        <div class="total-row final-total-row">
+            <strong>Total Due:</strong>
+            <strong id="total-cost">$0.00</strong>
+        </div>
+    </div>
+
 
     <script type="module" src="main.js"></script>
  
