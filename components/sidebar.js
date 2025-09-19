@@ -137,53 +137,63 @@ export function updateHeader() {
 }
 
 export function updateTotalCost() {
+    const subtotalCostEl = document.getElementById('subtotal-cost');
+    const amountPaidCostEl = document.getElementById('amount-paid-cost');
+    const amountPaidRowEl = document.querySelector('.amount-paid-row');
+    const totalDividerEl = document.querySelector('.total-divider');
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
-    if (!totalCostEl) return;
 
-    let total = 0;
-    const allItems = state.cart.lockedItems;
-    allItems.forEach((itemInfo, recordId) => {
+    if (!totalCostEl || !subtotalCostEl || !amountPaidCostEl || !amountPaidRowEl) return;
+
+    let subtotal = 0;
+    state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
         const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] ? parseInt(record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN]) : 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, headcountMin);
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
         const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
- 
-        let itemCost;
- 
-        if (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            itemCost = unitPrice * effectiveQuantity;
-        } else {
-            itemCost = unitPrice;
-        }
-        total += itemCost;
+        let itemCost = (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) ? unitPrice * effectiveQuantity : unitPrice;
+        subtotal += itemCost;
     });
-    totalCostEl.textContent = `$${total.toFixed(2)}`;
 
-    const isPlanEmpty = total === 0;
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = subtotal - amountReceived;
+
+    subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
+    totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
+
+    if (amountReceived > 0) {
+        amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        amountPaidRowEl.style.display = 'flex';
+        totalDividerEl.style.display = 'block';
+        if (checkoutBtn) checkoutBtn.textContent = 'Pay Remainder';
+    } else {
+        amountPaidRowEl.style.display = 'none';
+        totalDividerEl.style.display = 'none';
+        if (checkoutBtn) checkoutBtn.textContent = 'Reserve';
+    }
+
+    const isPlanEmpty = subtotal === 0;
+    const isFullyPaid = totalDue <= 0;
+
     if (checkoutBtn) {
-        checkoutBtn.disabled = isPlanEmpty;
+        checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
     }
     if (saveShareBtn) {
-        if (isPlanEmpty) {
-            saveShareBtn.disabled = true;
-        } else if (state.ui.saveState === 'SAVED') {
-            saveShareBtn.disabled = false;
-        }
+        saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
 }
 
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
-    const totalRow = document.querySelector('#cart-footer .total-row');
+    const totalBreakdown = document.getElementById('total-breakdown');
 
-    if (totalRow) {
-        totalRow.innerHTML = '<span style="color: #28a745; font-weight: bold;">✅ Event Reserved</span>';
+    if (totalBreakdown) {
+        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'none';
