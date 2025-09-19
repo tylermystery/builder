@@ -593,8 +593,12 @@ export function initializeChatEventListeners() {
     }
 
     document.addEventListener('click', (event) => {
+        const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
         if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
-            toggleChatWindow(true);
+            // ONLY close the window if the checkbox is NOT checked
+            if (!remainOpenCheckbox.checked) {
+                toggleChatWindow(true); // This line is now conditional
+            }
         }
     });
 }
