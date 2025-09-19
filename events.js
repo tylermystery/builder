@@ -1,12 +1,3 @@
-import {
-    debounce
-} from './utils/file-export.js'; // Corrected import path
-import * as ui from './ui.js';
-import * as state from './state.js';
-import {
-    triggerSave
-} from './main.js';
-
 /**
  * Initializes all event listeners for the application.
  * @param {HTMLDivElement} bodyEl - The main body element of the page.
@@ -27,10 +18,10 @@ export function eventListeners(bodyEl) {
         const demoteBtn = e.target.closest('.demote-btn');
         const removeBtn = e.target.closest('.remove-btn');
 
-        // Add this line to target the "reserve" button by its class
+        // Target the "reserve" button by its class
         const reserveBtn = e.target.closest('.reserve-btn');
 
-        // Add this line to target the "pay remainder" button by its id
+        // Target the "pay remainder" button by its id
         const payRemainderBtn = document.getElementById('pay-remainder-button');
 
 
