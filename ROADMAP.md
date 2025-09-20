@@ -1,42 +1,102 @@
-# Project Roadmap: TMT Event Catalog v2.0 - v6.0
-
-**Version: 1.1**
-**Last Modified: 2025-09-17**
+Project Roadmap: TMT Event Catalog v3.0 - v7.0
+Version: 3.0
+Last Modified: 2025-09-20
 
 This document outlines the phased development plan for enhancing the interactive event catalog. Each version builds upon the last, introducing major new features while leveraging the existing modular architecture.
 
----
+## Version 2.1: Live Chat & CRM Dashboard (MVP) - ✅ COMPLETE
+Core Objective: To integrate real-time communication for users and provide an internal tool for monitoring session activity.
 
-### ## Version 2.0: User Authentication 🔐
+Key Features Delivered
+Real-Time Chat: A persistent chat widget has been added to the main catalog view, allowing users in the same session to communicate in real-time.
 
-**Core Objective:** To replace the temporary user identity system with a robust and secure user authentication system, laying the groundwork for personalized experiences.
+Browser & Tab Notifications: The catalog now provides both system-level browser notifications and dynamic tab title updates to alert users of new messages.
 
-#### **Key Design Decisions**
-* **Gradual Engagement & Authentication:** The system will support both **Guest** and **Registered Users**. [cite_start]New visitors will begin as guests, assigned a temporary ID and a fun, generated name[cite: 165, 166]. This ensures a frictionless initial experience.
-* **Non-Intrusive Prompts:** Instead of disruptive popups, users will be gently prompted to sign up at logical points. This includes a banner in the chat widget and a universal account icon in the main header.
-* **Technology:** We'll use **JSON Web Tokens (JWT)** for managing sessions. A JWT will be issued upon login and sent with each API request to authenticate the user. This is a stateless, secure standard that works perfectly with our serverless function architecture.
-* **Data Model:** A new `Users` table will be created in Airtable to store permanent user data (ID, name, email, hashed password) and will be linked to the `Sessions` table to establish ownership.
+CRM Dashboard (Draft v1): A password-protected internal dashboard (crm.html) has been created with features for live monitoring, direct messaging, and session archiving.
 
-#### **Step-by-Step Development Plan**
-1.  **Backend (Airtable & Serverless Functions):**
-    * Create the `Users` table in Airtable.
-    * Develop three new serverless functions: `/api/register`, `/api/login`, and `/api/update-profile`.
-2.  **State Management:**
-    * Modify `state.js` to evolve the `state.user` object to support both guest and registered states, including an `isAuthenticated` flag.
-3.  **Frontend (UI):**
-    * [cite_start]Add a non-intrusive sign-up banner to the chat header (`#chat-header`) in `index.html`[cite: 859].
-    * [cite_start]Add a dynamic user account icon and dropdown menu to the main application header (`#header-toolbar`) in `index.html`[cite: 660].
-4.  **Frontend (Modals):**
-    * Build the necessary modals for the authentication flow: Login, Sign Up, and a simple "Edit Profile" modal for registered users.
-5.  **Integration & Refactoring:**
-    * Connect all UI prompts and buttons to their respective modals using handlers in `events.js`.
-    * Update `api.js` to call the new authentication endpoints.
-    * Refactor `chat.js` and other modules to pull user identity from the new, centralized `state.user` object, ensuring a seamless transition from a "fun name" to a registered user's name.
+## Version 3.0: User Authentication & Notification Preferences
+Core Objective: To replace the temporary user identity system with a robust and secure user authentication system, laying the groundwork for personalized experiences and multi-channel notifications.
 
----
+Guiding Principles (Lean & Intuitive)
+Frictionless Start: Users will never be forced to sign up. The current "fun name" guest system will remain the default, allowing anyone to browse, create a plan, and share it without an account.
 
-### ## Version 3.0: Smart Discounts 💸
+Value-Driven Sign-Up: We will only prompt users to sign up when there is a clear benefit, such as saving their event plans to their account to access them across different devices.
 
+Passwordless Login: We will use a "magic link" system for authentication. This is a secure and user-friendly method that doesn't require users to create or remember a password.
+
+Unified Profile: A single "My Account" area will be the central hub for users to manage their details and, eventually, their notification preferences.
+
+Phase 1: Backend & Core Logic (The MVP)
+Airtable Schema Update:
+
+Create a new Users table with the following fields:
+
+UserID (Primary Key, Autonumber or Formula)
+
+Email (Email type, marked as unique)
+
+Name (Single line text)
+
+Sessions (Link to Sessions table, allow linking to multiple records)
+
+CreatedAt (Created time)
+
+Future-Proofing: Also add the following fields now so we don't have to migrate the database later:
+
+PhoneNumber (Phone number type, for future SMS notifications)
+
+NotificationPreferences (Single line text, to store JSON like {"email": true, "sms": false})
+
+Create a new AuthTokens table to temporarily store magic link tokens. Fields: Token (Single line text), Email (Email type), ExpiresAt (Date time).
+
+Develop Serverless Functions:
+
+/api/auth-start: A function that accepts an email address. It will:
+
+Generate a secure, single-use token.
+
+Store the token, email, and a 15-minute expiration date in the AuthTokens table.
+
+Email the user a "magic link" containing the token (e.g., yoursite.com/?loginToken=...).
+
+/api/auth-verify: A function that accepts the token from the magic link. It will:
+
+Find the token in the AuthTokens table and verify it hasn't expired.
+
+Find or create a user in the Users table with the corresponding email.
+
+Generate a long-lived JSON Web Token (JWT) containing the UserID.
+
+Return the JWT to the client.
+
+Delete the single-use token from AuthTokens.
+
+Phase 2: Frontend Integration
+Create the "My Account" Modal:
+
+Build a single modal that handles both guest and registered user states.
+
+Guest View: A simple form with one field: "Enter your email to sign in or create an account." Submitting this form calls the /api/auth-start function.
+
+Logged-In View: Displays the user's name and email, an input to edit their name, and a "Sign Out" button. This is also where the UI for managing notification preferences will eventually be added.
+
+Integrate UI Triggers:
+
+Add a user/account icon to the main header of the application.
+
+When a guest clicks the icon, it opens the "My Account" modal to the guest view.
+
+When a logged-in user clicks the icon, it opens the modal to the logged-in profile view.
+
+Update State Management:
+
+Modify state.js to store the JWT and user information (ID, name, email).
+
+When the application loads, it will check for a valid JWT in local storage to automatically sign the user in.
+
+The chat widget will be updated to use the registered user's name instead of the "fun name" when a user is logged in.
+
+## Version 4.0: Smart Discounts 💸
 **Core Objective:** To implement a flexible system for applying discounts to an event plan, from simple promo codes to more complex, rule-based rewards.
 
 #### **Key Design Decisions**
