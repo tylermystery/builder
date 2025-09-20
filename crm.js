@@ -94,7 +94,6 @@ async function initializeDashboard() {
     
     // Render the initial activity feed
     messages.forEach(message => {
-        // --- FIX: Add a check to ensure SessionID exists and is a valid array ---
         if (message.fields.SessionID && Array.isArray(message.fields.SessionID) && message.fields.SessionID.length > 0) {
             const sessionName = sessionMap.get(message.fields.SessionID[0]);
             renderActivityItem(message, sessionName);
@@ -103,7 +102,6 @@ async function initializeDashboard() {
     
     // Calculate last activity for each session
     sessions.forEach(session => {
-        // --- FIX: Add a check here as well to safely find the last message ---
         const lastMessage = messages.find(m => 
             m.fields.SessionID && Array.isArray(m.fields.SessionID) && m.fields.SessionID.length > 0 && m.fields.SessionID[0] === session.id
         );
@@ -122,10 +120,19 @@ async function initializeDashboard() {
 
 // --- Real-Time Updates ---
 function setupPusher(sessionMap) {
-    const pusher = new Pusher(PUSHER_KEY, { cluster: PUSHER_CLUSTER });
+    // --- FIX: Add authEndpoint and user details for presence channels ---
+    const pusher = new Pusher(PUSHER_KEY, {
+        cluster: PUSHER_CLUSTER,
+        authEndpoint: '/api/pusher-auth',
+        auth: {
+            params: {
+                // Provide a static ID for the admin dashboard user
+                user_id: `admin-${Date.now()}`,
+                user_name: 'Dashboard Admin'
+            }
+        }
+    });
     
-    // We need to listen to all possible session channels. This is a simple approach.
-    // A more advanced system might use a single "admin" channel.
     sessionMap.forEach((name, id) => {
         const channel = pusher.subscribe(`presence-session-${id}`);
         channel.bind('client-new-message', (data) => {
@@ -139,9 +146,25 @@ function setupPusher(sessionMap) {
             };
             // Prepend new messages to the top of the feed
             renderActivityItem(fakeMessageRecord, name, true);
+            
+            // --- BONUS: Update the session list to re-sort on new messages ---
+            const sessions = Array.from(sessionListContainer.querySelectorAll('a')).map(a => {
+                const sessionId = a.href.split('session=')[1];
+                if (sessionId === id) {
+                    a.querySelector('small').textContent = `Last message: ${new Date(data.timestamp).toLocaleString()}`;
+                }
+                return { element: a, lastActivity: a.querySelector('small').textContent };
+            });
+
+            // A simple re-sort by moving the updated session to the top
+            const updatedSessionElement = sessions.find(s => s.element.href.includes(id))?.element;
+            if (updatedSessionElement) {
+                sessionListContainer.prepend(updatedSessionElement);
+            }
         });
     });
 }
 
 // Start the application
 initializeDashboard();
+
