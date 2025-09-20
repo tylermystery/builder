@@ -17,6 +17,7 @@ let sessionMap = new Map();
 let catalogMap = new Map();
 let archivedSessionIds = new Set();
 let unreadArchivedSessions = new Set();
+let pusherChannelMap = new Map(); // <-- To store Pusher channels
 
 // --- DOM Elements ---
 const loadingIndicator = document.getElementById('loading');
@@ -96,10 +97,9 @@ function renderSessionLists() {
     sessionListContainer.innerHTML = '';
     archiveListContainer.innerHTML = '';
     
-    // Calculate stats for all sessions first
     allSessions.forEach(session => {
         const sessionMessages = allMessages.filter(m => m.fields.SessionID && m.fields.SessionID[0] === session.id);
-        const lastMessage = sessionMessages[0]; // Assumes messages are pre-sorted descending
+        const lastMessage = sessionMessages[0];
         session.lastActivity = lastMessage ? lastMessage.fields.Timestamp : session.createdTime;
         session.messageCount = sessionMessages.length;
         let totalValue = 0;
@@ -117,14 +117,11 @@ function renderSessionLists() {
         session.stage = (session.fields['Amount Received'] || 0) > 0 ? 'Reserved' : 'Planning';
     });
 
-    // Separate into active and archived
     const activeSessions = allSessions.filter(s => !archivedSessionIds.has(s.id));
     const archivedSessions = allSessions.filter(s => archivedSessionIds.has(s.id));
     
-    // Sort active sessions
     activeSessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
     
-    // Sort archived sessions (unread first, then by activity)
     archivedSessions.sort((a, b) => {
         const aIsUnread = unreadArchivedSessions.has(a.id);
         const bIsUnread = unreadArchivedSessions.has(b.id);
@@ -132,7 +129,6 @@ function renderSessionLists() {
         return new Date(b.lastActivity) - new Date(a.lastActivity);
     });
 
-    // Render lists
     const renderList = (sessions, container) => {
         sessions.forEach(session => {
             const item = document.createElement('div');
@@ -237,6 +233,7 @@ function setupDragAndDrop() {
                     archivedSessionIds.add(sessionId);
                 } else {
                     archivedSessionIds.delete(sessionId);
+                    unreadArchivedSessions.delete(sessionId); // Mark as read when unarchived
                 }
                 saveArchivedState();
                 renderSessionLists();
@@ -271,21 +268,38 @@ async function initializeDashboard() {
     setupDragAndDrop();
 
     document.body.addEventListener('click', (e) => {
-        const sessionItem = e.target.closest('.session-list-item');
-        if (sessionItem) handleSessionSelect(sessionItem.dataset.sessionId);
+        const sessionItem = e.target.closest('.session-list-item, .feed-item');
+        if (sessionItem) {
+            e.preventDefault(); // FIX: Prevent link navigation default
+            handleSessionSelect(sessionItem.dataset.sessionId);
+        }
     });
 
     chatForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const content = chatInput.value.trim();
         if (content && currentlySelectedSessionId) {
-            chatInput.value = '';
-            const messageEl = document.createElement('div');
-            messageEl.className = 'chat-message admin';
-            messageEl.innerHTML = `<strong>You:</strong> ${content}`;
-            chatMessagesContainer.appendChild(messageEl);
+            const tempMessageEl = document.createElement('div');
+            tempMessageEl.className = 'chat-message admin';
+            tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
+            chatMessagesContainer.appendChild(tempMessageEl);
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-            await postChatMessage(currentlySelectedSessionId, content);
+            
+            const messageToSend = chatInput.value;
+            chatInput.value = '';
+
+            await postChatMessage(currentlySelectedSessionId, messageToSend);
+            
+            // FIX: Trigger Pusher message so the client gets it
+            const channel = pusherChannelMap.get(currentlySelectedSessionId);
+            if (channel) {
+                channel.trigger('client-new-message', {
+                    content: messageToSend,
+                    senderId: 'admin-dashboard',
+                    senderName: 'TMT Admin',
+                    timestamp: new Date().toISOString()
+                });
+            }
         }
     });
     
@@ -302,7 +316,11 @@ function setupPusher() {
     });
     sessionMap.forEach((name, id) => {
         const channel = pusher.subscribe(`presence-session-${id}`);
+        pusherChannelMap.set(id, channel); // Store channel for sending messages
         channel.bind('client-new-message', (data) => {
+            // Ignore messages sent by the admin dashboard itself
+            if (data.senderId === 'admin-dashboard') return;
+
             const fakeMessageRecord = { fields: { Content: data.content, SenderName: data.senderName, SessionID: [id], Timestamp: data.timestamp } };
             allMessages.unshift(fakeMessageRecord);
             renderActivityItem(fakeMessageRecord, name, true);
