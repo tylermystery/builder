@@ -65,7 +65,6 @@ async function fetchAirtableData(tableName) {
 }
 async function postChatMessage(sessionId, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${MESSAGES_TABLE}`;
-    // FIX: Send SessionID as a string in an array, which is the correct format for linked records.
     const payload = { records: [{ fields: { SessionID: [sessionId], SenderID: 'admin-dashboard', SenderName: 'TMT Admin', Content: content, Timestamp: new Date().toISOString() } }] };
     try {
         const response = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -166,7 +165,6 @@ function renderEventPlan(sessionId) {
             lockedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
                 totalValue += (item?.fields?.Price || 0) * (info.quantity || 1);
-                // FIX: Add placeholder for missing images to prevent console errors
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
             });
@@ -175,7 +173,6 @@ function renderEventPlan(sessionId) {
         if (favoritedItems.size > 0) {
             favoritedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
-                // FIX: Add placeholder for missing images
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
@@ -190,7 +187,6 @@ function renderEventPlan(sessionId) {
 
 function renderChatPane(sessionId) {
     const session = allSessions.find(s => s.id === sessionId);
-    // FIX: Add a more robust guard clause to prevent crash on missing session
     if (!session || !session.fields) {
         chatPane.style.display = 'none';
         chatPlaceholder.style.display = 'block';
@@ -216,6 +212,19 @@ function renderChatPane(sessionId) {
 
 // --- Event Handlers & Initialization ---
 function handleSessionSelect(sessionId) {
+    // FIX: Add a check to ensure the session exists before trying to render it.
+    if (!sessionMap.has(sessionId)) {
+        console.warn(`Attempted to select a non-existent session: ${sessionId}`);
+        // Optionally, show a message to the user in the UI.
+        planView.style.display = 'none';
+        planViewPlaceholder.style.display = 'block';
+        planViewPlaceholder.textContent = 'This session may have been deleted.';
+        chatPane.style.display = 'none';
+        chatPlaceholder.style.display = 'block';
+        chatPlaceholder.textContent = '';
+        return;
+    }
+
     currentlySelectedSessionId = sessionId;
     if (unreadArchivedSessions.has(sessionId)) {
         unreadArchivedSessions.delete(sessionId);
