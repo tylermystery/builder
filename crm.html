@@ -7,22 +7,24 @@
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; }
-        /* This hides the dashboard content by default */
         #dashboard-wrapper { display: none; } 
         .dashboard-container { display: flex; height: 100vh; }
-        .sidebar { width: 300px; background-color: #fff; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; }
+        .sidebar { width: 350px; background-color: #fff; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; box-sizing: border-box; }
         .main-content { flex-grow: 1; padding: 30px; overflow-y: auto; }
         h1, h2 { color: #2c3e50; }
-        .session-list a { display: block; padding: 10px; border-radius: 6px; text-decoration: none; color: #34495e; margin-bottom: 8px; background-color: #ecf0f1; }
-        .session-list a:hover { background-color: #e0e6e8; }
-        .session-list small { display: block; color: #7f8c8d; font-size: 0.8em; }
-        .activity-feed .feed-item { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .feed-item:first-child { border-left: 4px solid #3498db; }
-        .feed-item p { margin: 0 0 8px 0; }
+        .session-list a { display: block; padding: 12px; border-radius: 8px; text-decoration: none; color: #34495e; margin-bottom: 10px; background-color: #ecf0f1; border-left: 5px solid transparent; transition: all 0.2s ease; }
+        .session-list a:hover { background-color: #e0e6e8; border-left-color: #3498db; }
+        .session-list strong { font-size: 1.1em; margin-bottom: 8px; display: block; }
+        .session-list small { display: block; color: #7f8c8d; font-size: 0.8em; margin-top: 8px; }
+        .session-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em; color: #555; }
+        .activity-feed .feed-item { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.3s; }
+        .feed-item.highlight-question { background-color: #fffbe6; border-left: 4px solid #f1c40f; }
+        .feed-item.highlight-followup { background-color: #e8f5e9; border-left: 4px solid #2ecc71; }
+        .feed-item p { margin: 0 0 8px 0; font-size: 1.1em; }
         .feed-item .meta { font-size: 0.9em; color: #7f8c8d; }
-        .feed-item .meta a { color: #3498db; text-decoration: none; }
+        .feed-item .meta a { color: #3498db; text-decoration: none; font-weight: bold; }
         .feed-item .meta a:hover { text-decoration: underline; }
-        #loading { text-align: center; font-size: 1.2em; color: #7f8c8d; }
+        #loading { text-align: center; font-size: 1.2em; color: #7f8c8d; padding: 40px; }
     </style>
 </head>
 <body>
@@ -52,13 +54,12 @@
         const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
 
         if (!isAuthenticated) {
-            // If the user is not authenticated, redirect to the login page.
             window.location.href = '/crm-login.html';
         } else {
-            // If authenticated, show the dashboard content.
             document.getElementById('dashboard-wrapper').style.display = 'block';
         }
     </script>
     <script type="module" src="crm.js"></script>
 </body>
 </html>
+
