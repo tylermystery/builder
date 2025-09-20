@@ -9,6 +9,20 @@ let channel = null;
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 
+// --- Tab Title Notification Logic ---
+let originalTitle = document.title;
+let isTabActive = true;
+
+window.addEventListener('focus', () => {
+  isTabActive = true;
+  document.title = originalTitle; // Change title back when tab is viewed
+});
+
+window.addEventListener('blur', () => {
+  isTabActive = false;
+});
+// --- End of Tab Title Logic ---
+
 function generateFunName() {
     const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
     const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
@@ -50,6 +64,7 @@ function updatePresenceUI(members) {
             }
             const userElement = document.createElement('div');
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+   
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
         });
@@ -94,7 +109,6 @@ function addMessageToUI(sender, message, isSent, timestamp) {
     wrapper.appendChild(timestampElement);
     messagesList.appendChild(wrapper);
 
-    // FIX: Replace the old scrolling logic with this more reliable method.
     wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -126,6 +140,7 @@ export async function initializeChat() {
                 currentUser.name = newName;
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
+            
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(channel.members);
                 triggerSave();
@@ -154,14 +169,19 @@ export async function initializeChat() {
         if (data.senderId !== currentUser.id) {
             addMessageToUI(data.senderName, data.content, false, data.timestamp);
             showNewMessageNotification(data.senderName, data.content);
+            // Update tab title if the window is not active
+            if (!isTabActive) {
+                document.title = 'New Message! - ' + originalTitle;
+            }
         }
     });
-        // A good place for this is in main.js or chat.js during initialization
+    
+    // Request notification permission
     if ('Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {
           if (permission === 'granted') {
-            console.log('Notification permission granted.');
+            log('Chat', 'Notification permission granted.');
           }
         });
       }
@@ -188,15 +208,14 @@ export function getCurrentUser() {
     return currentUser || getSimpleUserIdentity();
 }
 
-// Add this new function to chat.js
 function showNewMessageNotification(sender, message) {
   // Only show notifications if permission is granted and the window isn't focused
   if (Notification.permission === 'granted' && !document.hasFocus()) {
     const notification = new Notification(`New message from ${sender}`, {
       body: message,
-      icon: '/path/to/your/chat-icon.png' // Optional: adds an icon
+      // Optional: replace with a real path to your icon
+      // icon: '/images/chat-icon.png' 
     });
-
     // Optional: close the notification after a few seconds
     setTimeout(notification.close.bind(notification), 4000);
   }
