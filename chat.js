@@ -153,6 +153,7 @@ export async function initializeChat() {
     channel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
             addMessageToUI(data.senderName, data.content, false, data.timestamp);
+            showNewMessageNotification(data.senderName, data.content);
         }
     });
 }
