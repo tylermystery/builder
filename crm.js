@@ -17,7 +17,7 @@ let sessionMap = new Map();
 let catalogMap = new Map();
 let archivedSessionIds = new Set();
 let unreadArchivedSessions = new Set();
-let pusherChannelMap = new Map(); // <-- To store Pusher channels
+let pusherChannelMap = new Map();
 
 // --- DOM Elements ---
 const loadingIndicator = document.getElementById('loading');
@@ -65,10 +65,14 @@ async function fetchAirtableData(tableName) {
 }
 async function postChatMessage(sessionId, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${MESSAGES_TABLE}`;
+    // FIX: Send SessionID as a string in an array, which is the correct format for linked records.
     const payload = { records: [{ fields: { SessionID: [sessionId], SenderID: 'admin-dashboard', SenderName: 'TMT Admin', Content: content, Timestamp: new Date().toISOString() } }] };
     try {
         const response = await fetch(url, { method: 'POST', headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) throw new Error('Failed to post message to Airtable.');
+        if (!response.ok) {
+            console.error("Airtable response error:", await response.json());
+            throw new Error('Failed to post message to Airtable.');
+        }
     } catch (error) { console.error("Error posting chat message:", error); }
 }
 
@@ -162,6 +166,7 @@ function renderEventPlan(sessionId) {
             lockedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
                 totalValue += (item?.fields?.Price || 0) * (info.quantity || 1);
+                // FIX: Add placeholder for missing images to prevent console errors
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
             });
@@ -170,6 +175,7 @@ function renderEventPlan(sessionId) {
         if (favoritedItems.size > 0) {
             favoritedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
+                // FIX: Add placeholder for missing images
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
@@ -184,7 +190,8 @@ function renderEventPlan(sessionId) {
 
 function renderChatPane(sessionId) {
     const session = allSessions.find(s => s.id === sessionId);
-    if (!session) {
+    // FIX: Add a more robust guard clause to prevent crash on missing session
+    if (!session || !session.fields) {
         chatPane.style.display = 'none';
         chatPlaceholder.style.display = 'block';
         chatPlaceholder.textContent = 'Could not find data for this session.';
@@ -270,7 +277,7 @@ async function initializeDashboard() {
     document.body.addEventListener('click', (e) => {
         const sessionItem = e.target.closest('.session-list-item, .feed-item');
         if (sessionItem) {
-            e.preventDefault(); // FIX: Prevent link navigation default
+            e.preventDefault();
             handleSessionSelect(sessionItem.dataset.sessionId);
         }
     });
@@ -290,7 +297,6 @@ async function initializeDashboard() {
 
             await postChatMessage(currentlySelectedSessionId, messageToSend);
             
-            // FIX: Trigger Pusher message so the client gets it
             const channel = pusherChannelMap.get(currentlySelectedSessionId);
             if (channel) {
                 channel.trigger('client-new-message', {
@@ -316,9 +322,8 @@ function setupPusher() {
     });
     sessionMap.forEach((name, id) => {
         const channel = pusher.subscribe(`presence-session-${id}`);
-        pusherChannelMap.set(id, channel); // Store channel for sending messages
+        pusherChannelMap.set(id, channel);
         channel.bind('client-new-message', (data) => {
-            // Ignore messages sent by the admin dashboard itself
             if (data.senderId === 'admin-dashboard') return;
 
             const fakeMessageRecord = { fields: { Content: data.content, SenderName: data.senderName, SessionID: [id], Timestamp: data.timestamp } };
