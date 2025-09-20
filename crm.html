@@ -7,6 +7,8 @@
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; }
+        /* This hides the dashboard content by default */
+        #dashboard-wrapper { display: none; } 
         .dashboard-container { display: flex; height: 100vh; }
         .sidebar { width: 300px; background-color: #fff; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; }
         .main-content { flex-grow: 1; padding: 30px; overflow-y: auto; }
@@ -25,21 +27,38 @@
 </head>
 <body>
 
-    <div class="dashboard-container">
-        <aside class="sidebar">
-            <h2>Active Sessions</h2>
-            <div id="session-list" class="session-list">
+    <div id="dashboard-wrapper">
+        <div class="dashboard-container">
+            <aside class="sidebar">
+                <h2>Active Sessions</h2>
+                <div id="session-list" class="session-list">
+                    <!-- Session links will be dynamically inserted here -->
                 </div>
-        </aside>
+            </aside>
 
-        <main class="main-content">
-            <h1>Real-Time Activity Feed</h1>
-            <div id="loading">Loading session data...</div>
-            <div id="activity-feed" class="activity-feed">
+            <main class="main-content">
+                <h1>Real-Time Activity Feed</h1>
+                <div id="loading">Loading session data...</div>
+                <div id="activity-feed" class="activity-feed">
+                    <!-- Live chat messages will appear here -->
                 </div>
-        </main>
+            </main>
+        </div>
     </div>
 
+    <script>
+        // --- PAGE PROTECTION SCRIPT ---
+        const AUTH_KEY = 'tmt-crm-auth-token';
+        const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
+
+        if (!isAuthenticated) {
+            // If the user is not authenticated, redirect to the login page.
+            window.location.href = '/crm-login.html';
+        } else {
+            // If authenticated, show the dashboard content.
+            document.getElementById('dashboard-wrapper').style.display = 'block';
+        }
+    </script>
     <script type="module" src="crm.js"></script>
 </body>
 </html>
