@@ -57,6 +57,7 @@ async function postChatMessage(sessionId, content) {
                 SenderID: 'admin-dashboard',
                 SenderName: 'TMT Admin',
                 Content: content,
+                Timestamp: new Date().toISOString() // FIX: Add timestamp to the payload
             }
         }]
     };
@@ -182,8 +183,10 @@ function renderEventPlan(sessionId) {
                 const item = catalogMap.get(id);
                 const price = item ? (item.fields.Price || 0) : 0;
                 totalValue += price * (info.quantity || 1);
+                // FIX: Add a placeholder for missing images
+                const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item">
-                    <img src="${item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50'}" alt="">
+                    <img src="${imageUrl}" alt="">
                     <div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div>
                 </div>`;
             });
@@ -195,8 +198,10 @@ function renderEventPlan(sessionId) {
         if (favoritedItems.size > 0) {
             favoritedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
+                 // FIX: Add a placeholder for missing images
+                const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item">
-                     <img src="${item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50'}" alt="">
+                     <img src="${imageUrl}" alt="">
                     <div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div>
                 </div>`;
             });
@@ -216,6 +221,14 @@ function renderEventPlan(sessionId) {
 
 function renderChatPane(sessionId) {
     const session = allSessions.find(s => s.id === sessionId);
+    // FIX: Add a guard clause to prevent crash on missing session
+    if (!session) {
+        chatPane.style.display = 'none';
+        chatPlaceholder.style.display = 'block';
+        chatPlaceholder.textContent = 'Could not find data for this session.';
+        return;
+    }
+
     chatMessagesContainer.innerHTML = '';
     
     const messagesForSession = allMessages.filter(m => m.fields.SessionID && m.fields.SessionID[0] === sessionId);
@@ -287,18 +300,19 @@ async function initializeDashboard() {
         e.preventDefault();
         const content = chatInput.value.trim();
         if (content && currentlySelectedSessionId) {
-            const tempId = `temp_${Date.now()}`;
+            chatInput.value = '';
+            
+            // Immediately display the message optimistically
             const messageEl = document.createElement('div');
             messageEl.className = 'chat-message admin';
             messageEl.innerHTML = `<strong>You:</strong> ${content}`;
-            messageEl.id = tempId;
             chatMessagesContainer.appendChild(messageEl);
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-            chatInput.value = '';
 
+            // Send the message to the backend
             await postChatMessage(currentlySelectedSessionId, content);
-            // In a real app, you'd wait for the Pusher echo or re-fetch to confirm,
-            // but for now we just remove the temp message and let the real-time update handle it.
+            // The real-time listener will receive the message back and re-render the pane,
+            // which will replace our optimistic message with the confirmed one.
         }
     });
 }
