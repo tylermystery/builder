@@ -12,12 +12,10 @@ const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard
 // --- Tab Title Notification Logic ---
 let originalTitle = document.title;
 let isTabActive = true;
-
 window.addEventListener('focus', () => {
   isTabActive = true;
   document.title = originalTitle; // Change title back when tab is viewed
 });
-
 window.addEventListener('blur', () => {
   isTabActive = false;
 });
@@ -32,6 +30,16 @@ function generateFunName() {
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
 
+    // --- START: New logic to check for authenticated user ---
+    const authenticatedUser = state.session.user;
+    if (authenticatedUser && authenticatedUser.isAuthenticated) {
+        log('Chat', `Using authenticated user: ${authenticatedUser.name}`);
+        currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
+        return currentUser;
+    }
+    // --- END: New logic ---
+
+    // Fallback to existing "fun name" logic for guests
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -147,7 +155,7 @@ export async function initializeChat() {
             } else {
                 e.target.value = currentUser.name;
             }
-        });
+         });
     }
 
     await loadChatHistory(sessionId);
@@ -175,7 +183,6 @@ export async function initializeChat() {
             }
         }
     });
-    
     // Request notification permission
     if ('Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
