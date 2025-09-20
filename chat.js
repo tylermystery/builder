@@ -176,3 +176,17 @@ export async function sendMessage(message) {
 export function getCurrentUser() {
     return currentUser || getSimpleUserIdentity();
 }
+
+// Add this new function to chat.js
+function showNewMessageNotification(sender, message) {
+  // Only show notifications if permission is granted and the window isn't focused
+  if (Notification.permission === 'granted' && !document.hasFocus()) {
+    const notification = new Notification(`New message from ${sender}`, {
+      body: message,
+      icon: '/path/to/your/chat-icon.png' // Optional: adds an icon
+    });
+
+    // Optional: close the notification after a few seconds
+    setTimeout(notification.close.bind(notification), 4000);
+  }
+}
