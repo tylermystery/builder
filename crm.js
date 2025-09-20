@@ -94,13 +94,19 @@ async function initializeDashboard() {
     
     // Render the initial activity feed
     messages.forEach(message => {
-        const sessionName = sessionMap.get(message.fields.SessionID[0]);
-        renderActivityItem(message, sessionName);
+        // --- FIX: Add a check to ensure SessionID exists and is a valid array ---
+        if (message.fields.SessionID && Array.isArray(message.fields.SessionID) && message.fields.SessionID.length > 0) {
+            const sessionName = sessionMap.get(message.fields.SessionID[0]);
+            renderActivityItem(message, sessionName);
+        }
     });
     
     // Calculate last activity for each session
     sessions.forEach(session => {
-        const lastMessage = messages.find(m => m.fields.SessionID[0] === session.id);
+        // --- FIX: Add a check here as well to safely find the last message ---
+        const lastMessage = messages.find(m => 
+            m.fields.SessionID && Array.isArray(m.fields.SessionID) && m.fields.SessionID.length > 0 && m.fields.SessionID[0] === session.id
+        );
         session.lastActivity = lastMessage ? lastMessage.fields.Timestamp : session.createdTime;
     });
 
