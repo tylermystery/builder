@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMT Sessions Dashboard</title>
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; }
+        .dashboard-container { display: flex; height: 100vh; }
+        .sidebar { width: 300px; background-color: #fff; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; }
+        .main-content { flex-grow: 1; padding: 30px; overflow-y: auto; }
+        h1, h2 { color: #2c3e50; }
+        .session-list a { display: block; padding: 10px; border-radius: 6px; text-decoration: none; color: #34495e; margin-bottom: 8px; background-color: #ecf0f1; }
+        .session-list a:hover { background-color: #e0e6e8; }
+        .session-list small { display: block; color: #7f8c8d; font-size: 0.8em; }
+        .activity-feed .feed-item { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .feed-item:first-child { border-left: 4px solid #3498db; }
+        .feed-item p { margin: 0 0 8px 0; }
+        .feed-item .meta { font-size: 0.9em; color: #7f8c8d; }
+        .feed-item .meta a { color: #3498db; text-decoration: none; }
+        .feed-item .meta a:hover { text-decoration: underline; }
+        #loading { text-align: center; font-size: 1.2em; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <h2>Active Sessions</h2>
+            <div id="session-list" class="session-list">
+                </div>
+        </aside>
+
+        <main class="main-content">
+            <h1>Real-Time Activity Feed</h1>
+            <div id="loading">Loading session data...</div>
+            <div id="activity-feed" class="activity-feed">
+                </div>
+        </main>
+    </div>
+
+    <script type="module" src="crm.js"></script>
+</body>
+</html>
