@@ -36,10 +36,27 @@ async function fetchAirtableData(tableName) {
     }
 }
 
+// --- NEW: Message Analysis for Highlighting ---
+function analyzeMessageContent(content) {
+    const questionKeywords = ['?', 'how', 'what', 'when', 'where', 'why', 'can we', 'is it', 'tmt'];
+    const followupKeywords = ['follow up', 'circle back', 'next steps', 'send me', 'proposal'];
+
+    const lowerCaseContent = content.toLowerCase();
+
+    if (questionKeywords.some(keyword => lowerCaseContent.includes(keyword))) {
+        return 'highlight-question'; // Yellow for questions
+    }
+    if (followupKeywords.some(keyword => lowerCaseContent.includes(keyword))) {
+        return 'highlight-followup'; // Green for follow-ups
+    }
+    return ''; // No highlight
+}
+
 // --- UI Rendering ---
 function renderActivityItem(message, sessionName, prepend = false) {
     const item = document.createElement('div');
-    item.className = 'feed-item';
+    const highlightClass = analyzeMessageContent(message.fields.Content);
+    item.className = `feed-item ${highlightClass}`;
 
     const time = new Date(message.fields.Timestamp).toLocaleString();
     const sessionUrl = `/?session=${message.fields.SessionID[0]}`;
@@ -60,8 +77,41 @@ function renderActivityItem(message, sessionName, prepend = false) {
     }
 }
 
-function renderSessionList(sessions) {
+// --- UPDATED: Session List Rendering with More Stats ---
+function renderSessionList(sessions, messages) {
     sessionListContainer.innerHTML = ''; // Clear existing list
+
+    // First, calculate stats for each session
+    sessions.forEach(session => {
+        const sessionMessages = messages.filter(m => m.fields.SessionID && m.fields.SessionID[0] === session.id);
+        const lastMessage = sessionMessages[0]; // Messages are pre-sorted descending
+        
+        session.lastActivity = lastMessage ? lastMessage.fields.Timestamp : session.createdTime;
+        session.messageCount = sessionMessages.length;
+        
+        // Calculate total value (requires parsing the JSON)
+        let totalValue = 0;
+        if (session.fields['Items with Variations']) {
+            try {
+                const sessionData = JSON.parse(session.fields['Items with Variations']);
+                const lockedItems = new Map(Object.entries(sessionData.lockedInItems || {}));
+                lockedItems.forEach(item => {
+                    // This is a simplified calculation. A full version would need to fetch item prices.
+                    // For now, we assume a placeholder or that price is stored with the item.
+                    totalValue += (item.price || 100) * (item.quantity || 1); 
+                });
+            } catch (e) { /* Ignore parsing errors */ }
+        }
+        session.totalValue = totalValue;
+
+        // Determine event stage
+        session.stage = (session.fields['Amount Received'] || 0) > 0 ? 'Reserved' : 'Planning';
+    });
+
+    // Sort sessions by last activity
+    sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
+
+    // Now, render the list
     sessions.forEach(session => {
         const link = document.createElement('a');
         link.href = `/?session=${session.id}`;
@@ -71,11 +121,17 @@ function renderSessionList(sessions) {
         
         link.innerHTML = `
             <strong>${session.fields.Name || 'Unnamed Session'}</strong>
-            <small>Last message: ${lastActivity}</small>
+            <div class="session-stats">
+                <span>Value: $${session.totalValue.toFixed(2)}</span>
+                <span>Stage: ${session.stage}</span>
+                <span>${session.messageCount} messages</span>
+            </div>
+            <small>Last active: ${lastActivity}</small>
         `;
         sessionListContainer.appendChild(link);
     });
 }
+
 
 // --- Main Initialization ---
 async function initializeDashboard() {
@@ -86,13 +142,10 @@ async function initializeDashboard() {
     
     loadingIndicator.style.display = 'none';
 
-    // Create a map for quick session name lookup
     const sessionMap = new Map(sessions.map(s => [s.id, s.fields.Name]));
 
-    // Sort messages by timestamp descending
     messages.sort((a, b) => new Date(b.fields.Timestamp) - new Date(a.fields.Timestamp));
     
-    // Render the initial activity feed
     messages.forEach(message => {
         if (message.fields.SessionID && Array.isArray(message.fields.SessionID) && message.fields.SessionID.length > 0) {
             const sessionName = sessionMap.get(message.fields.SessionID[0]);
@@ -100,33 +153,18 @@ async function initializeDashboard() {
         }
     });
     
-    // Calculate last activity for each session
-    sessions.forEach(session => {
-        const lastMessage = messages.find(m => 
-            m.fields.SessionID && Array.isArray(m.fields.SessionID) && m.fields.SessionID.length > 0 && m.fields.SessionID[0] === session.id
-        );
-        session.lastActivity = lastMessage ? lastMessage.fields.Timestamp : session.createdTime;
-    });
-
-    // Sort sessions by last activity descending
-    sessions.sort((a, b) => new Date(b.lastActivity) - new Date(a.lastActivity));
-
-    // Render the sorted session list
-    renderSessionList(sessions);
+    renderSessionList(sessions, messages);
     
-    // Initialize Pusher for real-time updates
-    setupPusher(sessionMap);
+    setupPusher(sessionMap, sessions, messages);
 }
 
 // --- Real-Time Updates ---
-function setupPusher(sessionMap) {
-    // --- FIX: Add authEndpoint and user details for presence channels ---
+function setupPusher(sessionMap, sessions, messages) {
     const pusher = new Pusher(PUSHER_KEY, {
         cluster: PUSHER_CLUSTER,
         authEndpoint: '/api/pusher-auth',
         auth: {
             params: {
-                // Provide a static ID for the admin dashboard user
                 user_id: `admin-${Date.now()}`,
                 user_name: 'Dashboard Admin'
             }
@@ -144,23 +182,13 @@ function setupPusher(sessionMap) {
                     Timestamp: data.timestamp
                 }
             };
-            // Prepend new messages to the top of the feed
+            
             renderActivityItem(fakeMessageRecord, name, true);
             
-            // --- BONUS: Update the session list to re-sort on new messages ---
-            const sessions = Array.from(sessionListContainer.querySelectorAll('a')).map(a => {
-                const sessionId = a.href.split('session=')[1];
-                if (sessionId === id) {
-                    a.querySelector('small').textContent = `Last message: ${new Date(data.timestamp).toLocaleString()}`;
-                }
-                return { element: a, lastActivity: a.querySelector('small').textContent };
-            });
-
-            // A simple re-sort by moving the updated session to the top
-            const updatedSessionElement = sessions.find(s => s.element.href.includes(id))?.element;
-            if (updatedSessionElement) {
-                sessionListContainer.prepend(updatedSessionElement);
-            }
+            // Add the new message to our local cache and re-render the session list
+            messages.unshift(fakeMessageRecord);
+            const currentSessions = sessions.map(s => s.id === id ? { ...s } : s);
+            renderSessionList(currentSessions, messages);
         });
     });
 }
