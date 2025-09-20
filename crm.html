@@ -6,25 +6,55 @@
     <title>TMT Sessions Dashboard</title>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; color: #333; margin: 0; }
+        :root {
+            --border-color: #e0e0e0;
+            --highlight-blue: #3498db;
+            --highlight-yellow: #f1c40f;
+            --highlight-green: #2ecc71;
+            --bg-light: #f4f7f9;
+            --bg-white: #fff;
+            --text-dark: #2c3e50;
+            --text-light: #7f8c8d;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; }
         #dashboard-wrapper { display: none; } 
-        .dashboard-container { display: flex; height: 100vh; }
-        .sidebar { width: 350px; background-color: #fff; border-right: 1px solid #e0e0e0; padding: 20px; overflow-y: auto; box-sizing: border-box; }
-        .main-content { flex-grow: 1; padding: 30px; overflow-y: auto; }
-        h1, h2 { color: #2c3e50; }
-        .session-list a { display: block; padding: 12px; border-radius: 8px; text-decoration: none; color: #34495e; margin-bottom: 10px; background-color: #ecf0f1; border-left: 5px solid transparent; transition: all 0.2s ease; }
-        .session-list a:hover { background-color: #e0e6e8; border-left-color: #3498db; }
-        .session-list strong { font-size: 1.1em; margin-bottom: 8px; display: block; }
-        .session-list small { display: block; color: #7f8c8d; font-size: 0.8em; margin-top: 8px; }
+        .dashboard-container { display: grid; grid-template-columns: 320px 1fr 380px; height: 100vh; }
+        .sidebar, .main-content, .right-sidebar { background-color: var(--bg-white); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; }
+        .sidebar { padding: 20px; box-sizing: border-box; }
+        .main-content { padding: 30px; }
+        .right-sidebar { border-right: none; }
+        h1, h2, h3 { color: var(--text-dark); }
+        h2 { border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 0; }
+        
+        /* Session List (Left) */
+        .session-list-item { display: block; padding: 12px; border-radius: 8px; text-decoration: none; color: #34495e; margin-bottom: 10px; background-color: #ecf0f1; border-left: 5px solid transparent; transition: all 0.2s ease; cursor: pointer; }
+        .session-list-item:hover { background-color: #e0e6e8; }
+        .session-list-item.selected { background-color: #dbeeff; border-left-color: var(--highlight-blue); }
+        .session-list-item strong { font-size: 1.1em; margin-bottom: 8px; display: block; }
+        .session-list-item small { display: block; color: var(--text-light); font-size: 0.8em; margin-top: 8px; }
         .session-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em; color: #555; }
-        .activity-feed .feed-item { background-color: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.3s; }
-        .feed-item.highlight-question { background-color: #fffbe6; border-left: 4px solid #f1c40f; }
-        .feed-item.highlight-followup { background-color: #e8f5e9; border-left: 4px solid #2ecc71; }
+        
+        /* Activity Feed & Plan View (Middle) */
+        .activity-feed .feed-item { background-color: var(--bg-white); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.3s; cursor: pointer; }
+        .feed-item.highlight-question { background-color: #fffbe6; border-left: 4px solid var(--highlight-yellow); }
+        .feed-item.highlight-followup { background-color: #e8f5e9; border-left: 4px solid var(--highlight-green); }
         .feed-item p { margin: 0 0 8px 0; font-size: 1.1em; }
-        .feed-item .meta { font-size: 0.9em; color: #7f8c8d; }
-        .feed-item .meta a { color: #3498db; text-decoration: none; font-weight: bold; }
-        .feed-item .meta a:hover { text-decoration: underline; }
-        #loading { text-align: center; font-size: 1.2em; color: #7f8c8d; padding: 40px; }
+        .feed-item .meta { font-size: 0.9em; color: var(--text-light); }
+        .plan-view-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .plan-item { display: flex; align-items: center; gap: 15px; padding: 10px; border-bottom: 1px solid #f0f0f0; }
+        .plan-item img { width: 50px; height: 50px; border-radius: 4px; object-fit: cover; }
+        
+        /* Chat Pane (Right) */
+        .chat-pane { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 15px; }
+        .chat-message { max-width: 85%; padding: 8px 12px; border-radius: 18px; margin-bottom: 8px; word-wrap: break-word; }
+        .chat-message.admin { background-color: #dcf8c6; align-self: flex-end; }
+        .chat-message.user { background-color: #fff; align-self: flex-start; box-shadow: 0 1px 1px rgba(0,0,0,0.05); }
+        #chat-form { display: flex; gap: 10px; }
+        #chat-form input { flex-grow: 1; border: 1px solid #ccc; padding: 10px; border-radius: 20px; }
+        
+        #loading { text-align: center; font-size: 1.2em; color: var(--text-light); padding: 40px; }
+        .open-new-tab { font-size: 0.8em; text-decoration: none; color: var(--highlight-blue); }
     </style>
 </head>
 <body>
@@ -33,18 +63,35 @@
         <div class="dashboard-container">
             <aside class="sidebar">
                 <h2>Active Sessions</h2>
-                <div id="session-list" class="session-list">
-                    <!-- Session links will be dynamically inserted here -->
-                </div>
+                <div id="session-list" class="session-list"></div>
             </aside>
 
-            <main class="main-content">
-                <h1>Real-Time Activity Feed</h1>
-                <div id="loading">Loading session data...</div>
-                <div id="activity-feed" class="activity-feed">
-                    <!-- Live chat messages will appear here -->
+            <main id="main-content" class="main-content">
+                <!-- This will hold either the global feed or a specific plan -->
+                <div id="activity-feed-wrapper">
+                    <h1>Real-Time Activity Feed</h1>
+                    <div id="loading">Loading session data...</div>
+                    <div id="activity-feed" class="activity-feed"></div>
                 </div>
+                <div id="plan-view" style="display: none;"></div>
             </main>
+
+            <aside class="right-sidebar">
+                <div id="chat-pane" class="chat-pane" style="display: none;">
+                    <div class="plan-view-header">
+                        <h3 id="chat-header-title">Chat</h3>
+                        <a id="chat-open-link" href="#" target="_blank" class="open-new-tab">Open in New Tab ↗</a>
+                    </div>
+                    <div id="chat-messages" class="chat-messages"></div>
+                    <form id="chat-form">
+                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" required>
+                        <button type="submit">Send</button>
+                    </form>
+                </div>
+                <div id="chat-placeholder">
+                     <div style="text-align: center; padding: 40px; color: var(--text-light);">Select a session to view its chat.</div>
+                </div>
+            </aside>
         </div>
     </div>
 
@@ -52,7 +99,6 @@
         // --- PAGE PROTECTION SCRIPT ---
         const AUTH_KEY = 'tmt-crm-auth-token';
         const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
-
         if (!isAuthenticated) {
             window.location.href = '/crm-login.html';
         } else {
