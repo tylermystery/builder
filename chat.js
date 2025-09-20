@@ -156,6 +156,16 @@ export async function initializeChat() {
             showNewMessageNotification(data.senderName, data.content);
         }
     });
+        // A good place for this is in main.js or chat.js during initialization
+    if ('Notification' in window) {
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            console.log('Notification permission granted.');
+          }
+        });
+      }
+    }
 }
 
 export async function sendMessage(message) {
