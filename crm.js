@@ -18,9 +18,9 @@ let catalogMap = new Map();
 // --- DOM Elements ---
 const loadingIndicator = document.getElementById('loading');
 const sessionListContainer = document.getElementById('session-list');
-const activityFeedWrapper = document.getElementById('activity-feed-wrapper');
 const activityFeed = document.getElementById('activity-feed');
 const planView = document.getElementById('plan-view');
+const planViewPlaceholder = document.getElementById('plan-view-placeholder');
 const chatPane = document.getElementById('chat-pane');
 const chatPlaceholder = document.getElementById('chat-placeholder');
 const chatMessagesContainer = document.getElementById('chat-messages');
@@ -45,6 +45,30 @@ async function fetchAirtableData(tableName) {
         console.error("Airtable fetch error:", error);
         loadingIndicator.textContent = `Error loading data: ${error.message}`;
         return [];
+    }
+}
+
+async function postChatMessage(sessionId, content) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${MESSAGES_TABLE}`;
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: [sessionId],
+                SenderID: 'admin-dashboard',
+                SenderName: 'TMT Admin',
+                Content: content,
+            }
+        }]
+    };
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Failed to post message to Airtable.');
+    } catch (error) {
+        console.error("Error posting chat message:", error);
     }
 }
 
@@ -134,20 +158,33 @@ function renderEventPlan(sessionId) {
     const session = allSessions.find(s => s.id === sessionId);
     if (!session) return;
     
-    let planHtml = `<div class="plan-view-header"><h2>Event Plan for: ${session.fields.Name || 'Unnamed'}</h2> <a href="/?session=${sessionId}" target="_blank" class="open-new-tab">Open in New Tab ↗</a></div>`;
+    let planHtml = `<div class="pane-header"><h2>Event Plan</h2> <a href="/?session=${sessionId}" target="_blank" class="open-new-tab">Open in New Tab ↗</a></div>`;
     
     try {
         const data = JSON.parse(session.fields['Items with Variations'] || '{}');
+        const sessionDetails = new Map(Object.entries(data.favoritedDetails || {}));
         const lockedItems = new Map(Object.entries(data.lockedInItems || {}));
         const favoritedItems = new Map(Object.entries(data.favoritedItems || {}));
         
+        const eventDate = sessionDetails.get('date');
+        planHtml += `
+            <div class="plan-details-grid">
+                <div><strong>Event Name</strong> ${session.fields.Name || 'N/A'}</div>
+                <div><strong>Date</strong> ${eventDate ? new Date(eventDate).toLocaleDateString() : 'Not set'}</div>
+                <div style="grid-column: 1 / -1;"><strong>Goals/Notes</strong> ${session.fields.Goals || 'N/A'}</div>
+            </div>
+        `;
+
         planHtml += '<h3>Locked-In Items</h3>';
+        let totalValue = 0;
         if (lockedItems.size > 0) {
             lockedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
+                const price = item ? (item.fields.Price || 0) : 0;
+                totalValue += price * (info.quantity || 1);
                 planHtml += `<div class="plan-item">
                     <img src="${item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50'}" alt="">
-                    <div><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity}</small></div>
+                    <div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div>
                 </div>`;
             });
         } else {
@@ -166,8 +203,11 @@ function renderEventPlan(sessionId) {
         } else {
              planHtml += '<p>No favorited items.</p>';
         }
+        
+        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
 
     } catch(e) {
+        console.error("Error rendering plan:", e);
         planHtml += '<p>Could not load event plan details.</p>';
     }
 
@@ -179,17 +219,18 @@ function renderChatPane(sessionId) {
     chatMessagesContainer.innerHTML = '';
     
     const messagesForSession = allMessages.filter(m => m.fields.SessionID && m.fields.SessionID[0] === sessionId);
-    
     messagesForSession.sort((a,b) => new Date(a.fields.Timestamp) - new Date(b.fields.Timestamp));
     
     messagesForSession.forEach(msg => {
         const messageEl = document.createElement('div');
-        messageEl.className = 'chat-message user';
-        messageEl.innerHTML = `<strong>${msg.fields.SenderName}:</strong> ${msg.fields.Content}`;
+        const sender = msg.fields.SenderName;
+        const isAdmin = sender === 'TMT Admin';
+        messageEl.className = `chat-message ${isAdmin ? 'admin' : 'user'}`;
+        messageEl.innerHTML = `<strong>${sender}:</strong> ${msg.fields.Content}`;
         chatMessagesContainer.appendChild(messageEl);
     });
 
-    document.getElementById('chat-header-title').textContent = `Chat with ${session.fields.Name || 'Session'}`;
+    document.getElementById('chat-header-title').textContent = `Chat: ${session.fields.Name || 'Session'}`;
     document.getElementById('chat-open-link').href = `/?session=${sessionId}`;
 
     chatPane.style.display = 'flex';
@@ -201,10 +242,10 @@ function renderChatPane(sessionId) {
 function handleSessionSelect(sessionId) {
     currentlySelectedSessionId = sessionId;
     
-    activityFeedWrapper.style.display = 'none';
     planView.style.display = 'block';
+    planViewPlaceholder.style.display = 'none';
     
-    renderSessionList(); // Re-render to show selection
+    renderSessionList(); 
     renderEventPlan(sessionId);
     renderChatPane(sessionId);
 }
@@ -235,7 +276,6 @@ async function initializeDashboard() {
     renderSessionList();
     setupPusher();
 
-    // Add unified event listener
     document.body.addEventListener('click', (e) => {
         const sessionItem = e.target.closest('[data-session-id]');
         if (sessionItem) {
@@ -247,14 +287,18 @@ async function initializeDashboard() {
         e.preventDefault();
         const content = chatInput.value.trim();
         if (content && currentlySelectedSessionId) {
-            // Placeholder for posting message
-            chatInput.value = '';
-            // In a real app, you would call an API here and then update the UI
+            const tempId = `temp_${Date.now()}`;
             const messageEl = document.createElement('div');
             messageEl.className = 'chat-message admin';
             messageEl.innerHTML = `<strong>You:</strong> ${content}`;
+            messageEl.id = tempId;
             chatMessagesContainer.appendChild(messageEl);
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+            chatInput.value = '';
+
+            await postChatMessage(currentlySelectedSessionId, content);
+            // In a real app, you'd wait for the Pusher echo or re-fetch to confirm,
+            // but for now we just remove the temp message and let the real-time update handle it.
         }
     });
 }
@@ -277,11 +321,7 @@ function setupPusher() {
             renderSessionList();
 
             if (id === currentlySelectedSessionId) {
-                const messageEl = document.createElement('div');
-                messageEl.className = 'chat-message user';
-                messageEl.innerHTML = `<strong>${data.senderName}:</strong> ${data.content}`;
-                chatMessagesContainer.appendChild(messageEl);
-                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+                renderChatPane(id); // Re-render the whole chat to maintain order
             }
         });
     });
