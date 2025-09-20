@@ -25,6 +25,8 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombined
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
 import { initializeChat } from './chat.js';
+import { updateUserProfileIcon } from './auth.js'; // <-- ADD THIS IMPORT
+
 
 const imageCache = new Map();
 let mainDatePicker = null;
@@ -137,8 +139,69 @@ async function initialize() {
         return;
     }
 
+    // --- ADD THIS BLOCK: Handle automatic sign-in from JWT ---
+    const jwt = localStorage.getItem('jwt');
+    if (jwt) {
+        try {
+            // A simple way to check expiry without a full library
+            const payload = JSON.parse(atob(jwt.split('.')[1]));
+            if (payload.exp * 1000 > Date.now()) {
+                setState({ 
+                    session: {
+                        ...state.session,
+                        user: { 
+                            ...state.session.user,
+                            isAuthenticated: true, 
+                            id: payload.userId, 
+                            name: payload.name, 
+                            email: payload.email 
+                        }
+                    }
+                });
+                log('Main', `Auto sign-in successful for ${payload.name}`);
+            } else {
+                localStorage.removeItem('jwt');
+                log('Main', 'Removed expired JWT.');
+            }
+        } catch (e) {
+            localStorage.removeItem('jwt');
+            console.error("Failed to parse JWT:", e);
+        }
+    }
+    // --- END OF BLOCK ---
+
+    
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
+    const loginToken = urlParams.get('loginToken'); // <-- ADD THIS LINE
+
+        // --- ADD THIS BLOCK: Handle magic link verification ---
+    if (loginToken) {
+        try {
+            const response = await fetch('/api/auth-verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: loginToken })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
+
+            localStorage.setItem('jwt', data.token);
+            setState({ 
+                session: {
+                    ...state.session,
+                    user: { ...state.session.user, ...data.user, isAuthenticated: true }
+                }
+            });
+            // Clean the token from the URL
+            window.history.replaceState({}, document.title, window.location.pathname + `?session=${sessionId || ''}`);
+        } catch (error) {
+            alert(`Sign-in failed: ${error.message}`);
+            window.history.replaceState({}, document.title, window.location.pathname + `?session=${sessionId || ''}`);
+        }
+    }
+
+    
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
     log('Main', '9. Event listeners initialized.');
@@ -188,6 +251,7 @@ async function initialize() {
 
     initializeChatEventListeners();
     initializeChat();
+    updateUserProfileIcon(); // <-- ADD THIS LINE
     log('Main', '22. Chat initialized.');
 
     state.ui.isInitializing = false;
