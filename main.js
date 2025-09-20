@@ -14,7 +14,7 @@
  * - Synced the detail modal calendar with the event plan date.
  * - Updated event handlers for adding/removing items to trigger an availability refresh.
  */
-import { state } from './state.js';
+import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import * as ui from './ui.js';
@@ -25,12 +25,11 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombined
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
 import { initializeChat } from './chat.js';
-import { updateUserProfileIcon } from './auth.js'; // <-- ADD THIS IMPORT
+import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 
 const imageCache = new Map();
 let mainDatePicker = null;
-
 async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
@@ -81,7 +80,7 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                        busyMinutes += minutes;
+                         busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -251,7 +250,8 @@ async function initialize() {
 
     initializeChatEventListeners();
     initializeChat();
-    updateUserProfileIcon(); // <-- ADD THIS LINE
+    setupAuthEventListeners();
+    updateUserProfileIcon();
     log('Main', '22. Chat initialized.');
 
     state.ui.isInitializing = false;
@@ -260,7 +260,6 @@ async function initialize() {
     const finalUrlParams = new URLSearchParams(window.location.search);
     if (finalUrlParams.get('view') === 'present') {
         log('Main', 'URL indicates to start in presentation view.');
-
         // --- NEW LOGIC START ---
         const storageKey = `session-viewed-${state.session.id}`;
         if (!localStorage.getItem(storageKey)) {
@@ -276,7 +275,8 @@ async function initialize() {
         }
         // --- NEW LOGIC END ---
         
-        const listToShow = state.cart.items.size > 0 ? 'favorites' : 'locked';
+        const listToShow = state.cart.items.size > 0 ?
+ 'favorites' : 'locked';
         if (state.cart.items.size > 0 || state.cart.lockedItems.size > 0) {
             setTimeout(() => ui.showPresentationView(listToShow), 100);
         }
