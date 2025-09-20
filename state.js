@@ -1,16 +1,14 @@
 // FILE: state.js
 /*
- * Version: 1.9.0
- * Last Modified: 2025-09-19
+ * Version: 3.0.0
+ * Last Modified: 2025-09-20
  *
  * Changelog:
- * v1.9.0 - 2025-09-19
- * - Added `amountReceived` and `amountReceivedNote` to the user session object for payment tracking.
- * v1.8.2 - 2025-09-10
- * - Added ui.isInitializing flag to prevent "Fork on Load" bug.
+ * v3.0.0 - 2025-09-20
+ * - Updated user session object to support full authentication state.
  */
 
-export const state = {
+export let state = {
     records: {
         all: [],
         filtered: [],
@@ -25,14 +23,14 @@ export const state = {
     session: {
         id: null,
         isOwned: false,
-        user: { // User object can hold auth state and payment info
+        user: { 
             isAuthenticated: false,
+            id: null,
             name: '',
             email: '',
             amountReceived: 0,
             amountReceivedNote: '',
         },
-        collaborators: [],
         userProfiles: new Map(),
         reactions: new Map(),
     },
@@ -42,14 +40,12 @@ export const state = {
     ui: {
         recordsCurrentlyDisplayed: 0,
         isLoadingMore: false,
-        currentSort: 'reactions-desc',
-        cardImageIndexes: new Map(),
         saveState: 'SAVED',
         isInitializing: true,
     },
-    history: {
-        undoStack: [],
-        redoStack: [],
-        isRestoring: false,
-    }
 };
+
+// Allows modules to update the state and trigger re-renders if needed
+export function setState(newState) {
+    state = { ...state, ...newState };
+}
