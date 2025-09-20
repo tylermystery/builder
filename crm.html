@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TMT Sessions Dashboard</title>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
         :root {
             --border-color: #e0e0e0;
@@ -18,25 +19,38 @@
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; }
         #dashboard-wrapper { display: none; } 
-        .dashboard-container { display: grid; grid-template-columns: 320px 1fr 1fr 380px; height: 100vh; }
-        .sidebar, .main-content, .plan-pane, .right-sidebar { background-color: var(--bg-white); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; }
-        .sidebar { padding: 20px; box-sizing: border-box; }
-        .main-content { padding: 30px; }
-        .plan-pane { padding: 30px; }
-        .right-sidebar { border-right: none; }
+        .dashboard-container { display: grid; grid-template-columns: auto 320px 1fr 1fr 380px; height: 100vh; }
+        .panel { background-color: var(--bg-white); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box;}
+        
+        /* Archive Panel (Pane 0) */
+        .archive-pane { width: 60px; padding: 20px 10px; transition: width 0.3s ease; text-align: center; }
+        .archive-pane.expanded { width: 300px; }
+        #archive-toggle { cursor: pointer; font-size: 1.5rem; margin-bottom: 20px; }
+        .archive-pane .archive-content { display: none; }
+        .archive-pane.expanded .archive-content { display: block; }
+        .archive-pane .session-list-item { padding: 8px; }
+        .archive-pane.expanded .session-list-item { padding: 12px; }
+
+        /* Sessions, Feed, Plan, Chat Panes */
+        .sessions-pane { padding: 20px; }
+        .feed-pane, .plan-pane { padding: 30px; }
+        .chat-pane-container { border-right: none; }
+
         h1, h2, h3 { color: var(--text-dark); }
         h2, h3 { border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 0; }
         
-        /* Session List (Pane 1) */
-        .session-list-item { display: block; padding: 12px; border-radius: 8px; text-decoration: none; color: #34495e; margin-bottom: 10px; background-color: #ecf0f1; border-left: 5px solid transparent; transition: all 0.2s ease; cursor: pointer; }
+        /* Session List Items */
+        .session-list-item { display: block; padding: 12px; border-radius: 8px; text-decoration: none; color: #34495e; margin-bottom: 10px; background-color: #ecf0f1; border-left: 5px solid transparent; transition: all 0.2s ease; cursor: grab; }
         .session-list-item:hover { background-color: #e0e6e8; }
         .session-list-item.selected { background-color: #dbeeff; border-left-color: var(--highlight-blue); }
+        .session-list-item.unread { border-left-color: var(--highlight-blue); background-color: #eaf5ff; }
         .session-list-item strong { font-size: 1.1em; margin-bottom: 8px; display: block; }
         .session-list-item small { display: block; color: var(--text-light); font-size: 0.8em; margin-top: 8px; }
         .session-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em; color: #555; }
+        .sortable-ghost { background: #c8dadf; opacity: 0.5; }
         
         /* Activity Feed (Pane 2) */
-        .activity-feed .feed-item { background-color: var(--bg-white); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.3s; cursor: pointer; }
+        .feed-item { background-color: var(--bg-white); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: background-color 0.3s; cursor: pointer; }
         .feed-item.highlight-question { background-color: #fffbe6; border-left: 4px solid var(--highlight-yellow); }
         .feed-item.highlight-followup { background-color: #e8f5e9; border-left: 4px solid var(--highlight-green); }
         .feed-item p { margin: 0 0 8px 0; font-size: 1.1em; }
@@ -71,23 +85,31 @@
 
     <div id="dashboard-wrapper">
         <div class="dashboard-container">
-            <aside class="sidebar">
+            <aside id="archive-pane" class="panel archive-pane">
+                <div id="archive-toggle">🗄️</div>
+                <div class="archive-content">
+                    <h2>Archive</h2>
+                    <div id="archive-list" class="session-list"></div>
+                </div>
+            </aside>
+
+            <aside class="panel sessions-pane">
                 <h2>Active Sessions</h2>
                 <div id="session-list" class="session-list"></div>
             </aside>
 
-            <main class="main-content">
+            <main class="panel feed-pane">
                 <h1>Real-Time Activity Feed</h1>
                 <div id="loading">Loading session data...</div>
                 <div id="activity-feed" class="activity-feed"></div>
             </main>
 
-            <section id="plan-pane" class="plan-pane">
+            <section class="panel plan-pane">
                  <div id="plan-view-placeholder" class="pane-placeholder">Select a session to see the event plan.</div>
                  <div id="plan-view" style="display: none;"></div>
             </section>
 
-            <aside class="right-sidebar">
+            <aside class="panel chat-pane-container">
                 <div id="chat-pane" class="chat-pane" style="display: none;">
                     <div class="pane-header">
                         <h3 id="chat-header-title">Chat</h3>
