@@ -1,15 +1,12 @@
 // FILE: events.js
 /*
-* Version: 5.2.0
+* Version: 5.2.1
 * Last Modified: 2025-09-21
 * Changelog:
+* v5.2.1 - 2025-09-21
+* - Fixed TypeError by adding an Array.isArray() check to ensure the store's 'Items' field is an array before processing.
 * v5.2.0 - 2025-09-21
 * - Refactored filter initialization to be dynamic based on the active shop in the global state.
-* - Removed hardcoded reference to "Tyler's Mystery Tours".
-* v5.1.0 - 2025-09-19
-* - Refactored handlePaymentFormSubmit to create the Stripe Payment Intent at the moment of submission, allowing for variable tip amounts.
-* v5.0.0 - 2025-09-19
-* - Updated handlePaymentFormSubmit to update Airtable with the amount received after a successful transaction.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -264,25 +261,23 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }, 100);
     });
 
-    // --- NEW LOGIC FOR CATEGORY BUTTONS ---
+    // --- LOGIC FOR CATEGORY BUTTONS ---
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
-    if (currentStore && currentStore.fields.Items) {
-        // Get the record IDs of the categories linked to the store
+    
+    // THIS IS THE FIX: Ensure currentStore.fields.Items is an array before using .map()
+    if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
         
-        // Find the full record data for each category ID from our main catalog list
         const categories = categoryRecordIds.map(id => 
             state.records.all.find(record => record.id === id)
-        ).filter(Boolean); // Filter out any that weren't found
+        ).filter(Boolean);
 
-        // Create the "All" button
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
 
-        // Create a button for each linked category
         categories.forEach((catRecord) => {
             const button = document.createElement('button');
             button.className = 'filter-btn category-filter-btn';
@@ -292,8 +287,15 @@ export function initializeEventListeners(imageCache, flatpickr) {
         });
         
         updateSubcategoryButtons();
+    } else {
+        // If there are no categories, still add the "All" button
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn active';
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
+        categoryFiltersContainer.appendChild(allButton);
     }
-    // --- END NEW LOGIC ---
+    // --- END LOGIC ---
     
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
