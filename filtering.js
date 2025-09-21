@@ -4,13 +4,17 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 
-function getDescendantBookableItems(record, allRecords, allRecordNames) {
+function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
-    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    // Find items within the current store whose Parent Item matches the record's name
+    const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+    
     for (const child of children) {
         if (isGrouping(child, allRecordNames)) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords, allRecordNames));
+            // If a child is a grouping (a sub-category), recurse to find its children
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecordsInStore, allRecordNames));
         } else {
+            // If it's a final item, add it to the list
             bookableItems.push(child);
         }
     }
@@ -22,11 +26,6 @@ function isGrouping(record, allRecordNames) {
     return rawOptions.some(opt => allRecordNames.has(opt.name));
 }
 
-function getAllBookableItems(records) {
-    const allRecordNames = new Set(records.map(r => r.fields.Name));
-    return records.filter(record => !isGrouping(record, allRecordNames));
-}
-
 function parseCapacity(capacityStr) {
     if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
     if (capacityStr.includes('+')) {
@@ -36,42 +35,41 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
-    const allRecordNames = new Set(records.map(r => r.fields.Name));
+// v-- THIS FUNCTION IS REWRITTEN TO BE MORE ACCURATE --v
+function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
+    const allRecordNames = new Set(recordsInStore.map(r => r.fields.Name));
     
-    // If the "All" category is selected, show all bookable items for the current store.
+    // Case 1: The "All" category is selected.
     if (selectedCategory === 'all') {
-        // The subcategory filter can still apply if the user wants to see items
-        // from a specific parent, even with "All" categories selected.
-        if (activeSubcategories.length === 0) {
-            return getAllBookableItems(records);
-        } else {
-            return records.filter(record => 
-                activeSubcategories.includes((record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase())
-            );
-        }
+        // Find the top-level categories for the store. These are items that do NOT have a parent.
+        const topLevelCategories = recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+        let allBookableItems = [];
+        
+        // For each top-level category, find all of its descendant bookable items.
+        topLevelCategories.forEach(categoryRecord => {
+            allBookableItems = allBookableItems.concat(getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames));
+        });
+        return allBookableItems;
     }
 
-    // Find the main category record from the list of items for this store.
-    // We no longer check for PARENT_ITEM here, as top-level categories are defined by the store link.
-    const categoryRecord = records.find(r => r.fields.Name === selectedCategory);
-    
+    // Case 2: A specific category is selected.
+    const categoryRecord = recordsInStore.find(r => r.fields.Name === selectedCategory);
     if (!categoryRecord) {
         return [];
     }
     
-    // If subcategories are selected, find their descendants.
+    // If subcategories are also selected, get items from those specific subcategories.
     if (activeSubcategories.length > 0) {
         let items = [];
-        const subcategoryRecords = records.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
+        const subcategoryRecords = recordsInStore.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
         subcategoryRecords.forEach(subcatRecord => {
-            items = items.concat(getDescendantBookableItems(subcatRecord, records, allRecordNames));
+            items = items.concat(getDescendantBookableItems(subcatRecord, recordsInStore, allRecordNames));
         });
         return items;
     } 
-    // Otherwise, find all descendants of the main selected category.
+    // Otherwise, get all bookable items under the main selected category.
     else {
-        return getDescendantBookableItems(categoryRecord, records, allRecordNames);
+        return getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
     }
 }
 
@@ -218,13 +216,14 @@ export function applyFiltersAndSort(imageCache) {
     const sortBy = document.getElementById('sort-by').value;
 
     // First, filter all records to get only those belonging to the current store.
-    // The 'Store' field from Airtable will be an array of record IDs.
-    let recordsToDisplay = state.records.all.filter(record => 
+    let recordsForCurrentStore = state.records.all.filter(record => 
         record.fields.Store && record.fields.Store.includes(state.ui.activeShopId)
     );
 
-    // All subsequent filters now run on the pre-filtered list of items for the current store.
-    recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
+    // Now, apply the category and subcategory filtering.
+    let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
+    
+    // All subsequent filters run on the pre-filtered list of items.
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
