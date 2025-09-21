@@ -1,14 +1,19 @@
 // FILE: state.js
 /*
- * Version: 3.0.0
- * Last Modified: 2025-09-20
+ * Version: 3.1.0
+ * Last Modified: 2025-09-21
  *
  * Changelog:
+ * v3.1.0 - 2025-09-21
+ * - Added a `stores` object to the state to hold records from the new Stores table.
  * v3.0.0 - 2025-09-20
  * - Updated user session object to support full authentication state.
  */
 
 export let state = {
+    stores: { // <-- ADD THIS OBJECT
+        all: [],
+    },
     records: {
         all: [],
         filtered: [],
@@ -42,9 +47,8 @@ export let state = {
         isLoadingMore: false,
         saveState: 'SAVED',
         isInitializing: true,
-        activeShopId: null, // <-- ADD THIS LINE
+        activeShopId: null,
     },
-
 };
 
 // Allows modules to update the state and trigger re-renders if needed
