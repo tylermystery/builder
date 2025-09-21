@@ -1,3 +1,4 @@
+// FILE: filtering.js
 // PASTE THIS ENTIRE CODE INTO: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -54,10 +55,7 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
     
     if (activeSubcategories.length > 0) {
         let items = [];
-        // === START: MODIFIED CODE ===
-        // Safely handle records that may not have a Name field
         const subcategoryRecords = records.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
-        // === END: MODIFIED CODE ===
         subcategoryRecords.forEach(subcatRecord => {
             items = items.concat(getDescendantBookableItems(subcatRecord, records, allRecordNames));
         });
@@ -196,7 +194,8 @@ function sortRecords(records, sortBy) {
 
 export function applyFiltersAndSort(imageCache) {
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
+    const selectedCategory = activeCategoryButton ?
+        (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
@@ -208,8 +207,13 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    let recordsToDisplay = state.records.all;
+    // First, filter all records to get only those belonging to the current store.
+    // The 'Store' field from Airtable will be an array of record IDs.
+    let recordsToDisplay = state.records.all.filter(record => 
+        record.fields.Store && record.fields.Store.includes(state.ui.activeShopId)
+    );
 
+    // All subsequent filters now run on the pre-filtered list of items for the current store.
     recordsToDisplay = filterByCategoryAndSubcategory(recordsToDisplay, selectedCategory, activeSubcategories);
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
