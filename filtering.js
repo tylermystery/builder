@@ -38,7 +38,11 @@ function parseCapacity(capacityStr) {
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     const allRecordNames = new Set(records.map(r => r.fields.Name));
+    
+    // If the "All" category is selected, show all bookable items for the current store.
     if (selectedCategory === 'all') {
+        // The subcategory filter can still apply if the user wants to see items
+        // from a specific parent, even with "All" categories selected.
         if (activeSubcategories.length === 0) {
             return getAllBookableItems(records);
         } else {
@@ -48,11 +52,15 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         }
     }
 
-    const categoryRecord = records.find(r => r.fields.Name === selectedCategory && !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+    // Find the main category record from the list of items for this store.
+    // We no longer check for PARENT_ITEM here, as top-level categories are defined by the store link.
+    const categoryRecord = records.find(r => r.fields.Name === selectedCategory);
+    
     if (!categoryRecord) {
         return [];
     }
     
+    // If subcategories are selected, find their descendants.
     if (activeSubcategories.length > 0) {
         let items = [];
         const subcategoryRecords = records.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
@@ -60,7 +68,9 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
             items = items.concat(getDescendantBookableItems(subcatRecord, records, allRecordNames));
         });
         return items;
-    } else {
+    } 
+    // Otherwise, find all descendants of the main selected category.
+    else {
         return getDescendantBookableItems(categoryRecord, records, allRecordNames);
     }
 }
