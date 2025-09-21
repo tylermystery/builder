@@ -1330,7 +1330,7 @@
     </style>
 </head>
 <body>
-    <h1 style="text-align: center;">Tyler's Mystery Tours <sup style="font-size: 0.5em;">Shop</sup></h1>
+    <h1 id="main-shop-title" style="text-align: center;"></h1>
 
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
@@ -1720,6 +1720,15 @@ details are confirmed and, in some cases, after
 
     <div class="footer-link">
         <a href="/crm-login.html">Admin Dashboard</a>
+    </div>
+
+    <div id="shop-switcher-overlay" class="modal-overlay">
+        <div class="checkout-modal-content" style="max-width: 500px;">
+            <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3>Select a Shop</h3>
+            <div id="shop-list-container">
+                </div>
+        </div>
     </div>
 
     <script type="module" src="main.js"></script>
