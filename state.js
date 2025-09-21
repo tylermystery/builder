@@ -42,7 +42,9 @@ export let state = {
         isLoadingMore: false,
         saveState: 'SAVED',
         isInitializing: true,
+        activeShopId: null, // <-- ADD THIS LINE
     },
+
 };
 
 // Allows modules to update the state and trigger re-renders if needed
