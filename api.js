@@ -9,6 +9,7 @@ const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba9
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
+const STORES_TABLE_NAME = 'Stores'; // <-- ADD THIS CONSTANT
 
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
@@ -192,6 +193,35 @@ export async function fetchAllRecords() {
         throw error;
     }
 }
+
+// v-- ADD THIS NEW FUNCTION --v
+export async function fetchAllStores() {
+    let records = [];
+    let offset = null;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE_NAME}?`;
+    log('API', `Fetching stores from base URL: ${baseUrl}`);
+    try {
+        do {
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch stores from Airtable.');
+            }
+            const data = await response.json();
+            records = records.concat(data.records);
+            offset = data.offset;
+        } while (offset);
+        log('API', `Total stores fetched: ${records.length}`);
+        return records.filter(record => record.fields.Name);
+    } catch (error) {
+        console.error(error);
+        log('API', `Failed to fetch stores: ${error.message}`);
+        throw error;
+    }
+}
+
 
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
