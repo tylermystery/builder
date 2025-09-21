@@ -1,8 +1,11 @@
 // FILE: events.js
 /*
-* Version: 5.1.0
-* Last Modified: 2025-09-19
+* Version: 5.2.0
+* Last Modified: 2025-09-21
 * Changelog:
+* v5.2.0 - 2025-09-21
+* - Refactored filter initialization to be dynamic based on the active shop in the global state.
+* - Removed hardcoded reference to "Tyler's Mystery Tours".
 * v5.1.0 - 2025-09-19
 * - Refactored handlePaymentFormSubmit to create the Stripe Payment Intent at the moment of submission, allowing for variable tip amounts.
 * v5.0.0 - 2025-09-19
@@ -21,7 +24,6 @@ import { sendMessage } from './chat.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
-let currentStore = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
@@ -126,11 +128,9 @@ export async function updateAllCardAvailabilityIcons() {
         const busyTimes = await api.fetchCalendarForRecord(record);
         const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
-
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
-            
             switch (rangeStatus.status) {
                 case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
                 case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
@@ -140,7 +140,6 @@ export async function updateAllCardAvailabilityIcons() {
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
             const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
-
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
@@ -172,7 +171,6 @@ async function handlePaymentFormSubmit(event) {
     }
     
     try {
-        // 1. Calculate the final amount to be charged, including tip
         const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
         const amountReceived = state.session.user.amountReceived || 0;
         const totalDue = finalTotal - amountReceived;
@@ -181,12 +179,10 @@ async function handlePaymentFormSubmit(event) {
         const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
         const finalAmountToCharge = baseAmountToCharge + tipAmount;
         const finalAmountInCents = Math.round(finalAmountToCharge * 100);
-
-        if (finalAmountInCents < 50) { // Stripe minimum charge is $0.50
+        if (finalAmountInCents < 50) {
             throw new Error("Final amount is too low to process.");
         }
 
-        // 2. Create the Payment Intent with the final amount
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -195,8 +191,6 @@ async function handlePaymentFormSubmit(event) {
         if (!intentResponse.ok) throw new Error('Could not create payment intent.');
         const paymentIntentData = await intentResponse.json();
         const clientSecret = paymentIntentData.clientSecret;
-
-        // 3. Confirm the payment
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
         const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
@@ -205,7 +199,6 @@ async function handlePaymentFormSubmit(event) {
                 billing_details: { name: customerName, email: customerEmail },
             },
         });
-
         if (error) {
             throw new Error(error.message);
         }
@@ -221,7 +214,6 @@ async function handlePaymentFormSubmit(event) {
             state.session.user.amountReceived = newTotalAmountReceived;
             state.session.user.amountReceivedNote = note.trim();
             ui.updateTotalCost();
-
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('checkout-summary-details').style.display = 'none';
             document.querySelector('.checkout-total-deposit-section').style.display = 'none';
@@ -271,8 +263,8 @@ export function initializeEventListeners(imageCache, flatpickr) {
             scrollTimeout = null;
         }, 100);
     });
-    
-    currentStore = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+
+    const currentStore = state.records.all.find(r => r.id === state.ui.activeShopId);
     if (currentStore) {
         const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const allButton = document.createElement('button');
@@ -353,7 +345,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             }
         },
     });
-
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton || !mainDatePicker) return;
@@ -371,14 +362,13 @@ export function initializeEventListeners(imageCache, flatpickr) {
                 break;
             case 'this-week':
                 endDate.setDate(today.getDate() + (6 - today.getDay()));
-                break;
+                 break;
             case 'next-2-weeks':
                 endDate.setDate(today.getDate() + 14);
                 break;
         }
         mainDatePicker.setDate([startDate, endDate], true);
     });
-
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -389,7 +379,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
         
@@ -498,7 +487,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             if (record) ui.showDetailModal(record);
         }
     });
-    
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
         const target = e.target;
@@ -528,7 +516,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
-
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
@@ -543,7 +530,6 @@ export function initializeEventListeners(imageCache, flatpickr) {
             triggerSave();
         }
     });
-
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
