@@ -258,3 +258,50 @@ export async function updateLockedItemStatusIcons() {
         }
     }
 }
+
+function hideShopSwitcher() {
+    const overlay = document.getElementById('shop-switcher-overlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => {
+            overlay.style.display = 'none';
+        }, 300);
+    }
+}
+
+export function showShopSwitcher() {
+    const overlay = document.getElementById('shop-switcher-overlay');
+    const listContainer = document.getElementById('shop-list-container');
+    if (!overlay || !listContainer) return;
+
+    // Find all records that are designated as a "Store"
+    // We assume the 'Categories' field contains the word 'Store' for these records.
+    const storeRecords = state.records.all.filter(record => 
+        record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.includes('Store')
+    );
+
+    listContainer.innerHTML = ''; // Clear previous list
+    storeRecords.forEach(record => {
+        const link = document.createElement('a');
+        link.href = `/?shopId=${record.id}`;
+        link.textContent = record.fields.Name;
+        link.style.display = 'block';
+        link.style.padding = '10px';
+        link.style.borderBottom = '1px solid #eee';
+        link.style.textDecoration = 'none';
+        link.style.color = '#007bff';
+        listContainer.appendChild(link);
+    });
+
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.classList.add('active'), 10);
+
+    // Add event listeners for closing the modal
+    document.getElementById('shop-switcher-close-btn').addEventListener('click', hideShopSwitcher);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            hideShopSwitcher();
+        }
+    });
+}
+
