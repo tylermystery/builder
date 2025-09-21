@@ -264,23 +264,36 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }, 100);
     });
 
-    const currentStore = state.records.all.find(r => r.id === state.ui.activeShopId);
-    if (currentStore) {
-        const categories = ui.parseOptions(currentStore.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    // --- NEW LOGIC FOR CATEGORY BUTTONS ---
+    const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
+    if (currentStore && currentStore.fields.Items) {
+        // Get the record IDs of the categories linked to the store
+        const categoryRecordIds = currentStore.fields.Items;
+        
+        // Find the full record data for each category ID from our main catalog list
+        const categories = categoryRecordIds.map(id => 
+            state.records.all.find(record => record.id === id)
+        ).filter(Boolean); // Filter out any that weren't found
+
+        // Create the "All" button
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
-        categories.forEach((cat) => {
+
+        // Create a button for each linked category
+        categories.forEach((catRecord) => {
             const button = document.createElement('button');
             button.className = 'filter-btn category-filter-btn';
-            button.dataset.filter = cat.name.toLowerCase();
-            button.textContent = cat.name;
+            button.dataset.filter = catRecord.fields.Name.toLowerCase();
+            button.textContent = catRecord.fields.Name;
             categoryFiltersContainer.appendChild(button);
         });
+        
         updateSubcategoryButtons();
     }
+    // --- END NEW LOGIC ---
     
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
