@@ -1,8 +1,13 @@
 // FILE: main.js
 /*
- * Version: 4.9.4
- * Last Modified: 2025-09-19
+ * Version: 5.0.0
+ * Last Modified: 2025-09-21
  * * Changelog:
+ * v5.0.0 - 2025-09-21
+ * - Implemented multi-store functionality.
+ * - App now reads a `shopId` from the URL to determine which store to load.
+ * - Defaults to "Tyler's Mystery Tours" if no `shopId` is specified.
+ * - Dynamically generates the main title and a hidden "s" button to open a shop switcher modal.
  * v4.9.4 - 2025-09-19
  * - Automatically checks the "Keep open" checkbox when the chat is first opened in presentation view.
  * v4.9.3 - 2025-09-19
@@ -80,7 +85,7 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                         busyMinutes += minutes;
+                        busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -138,11 +143,43 @@ async function initialize() {
         return;
     }
 
-    // --- ADD THIS BLOCK: Handle automatic sign-in from JWT ---
+    // --- NEW LOGIC: DETERMINE ACTIVE SHOP ---
+    const urlParams = new URLSearchParams(window.location.search);
+    let shopId = urlParams.get('shopId');
+    let activeShop = null;
+
+    if (shopId) {
+        activeShop = state.records.all.find(r => r.id === shopId);
+    }
+
+    // If no valid shopId is found in the URL, default to "Tyler's Mystery Tours"
+    if (!activeShop) {
+        activeShop = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+    }
+    
+    // Ensure we have an active shop before proceeding
+    if (activeShop) {
+        state.ui.activeShopId = activeShop.id;
+        log('Main', `Active shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
+        
+        // Update the main title and add the hidden 's' button
+        const titleElement = document.getElementById('main-shop-title');
+        titleElement.innerHTML = `${activeShop.fields.Name} Shop<button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
+        
+        // Add event listener for our new easter egg
+        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
+            ui.showShopSwitcher();
+        });
+
+    } else {
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
+        return;
+    }
+    // --- END NEW LOGIC ---
+
     const jwt = localStorage.getItem('jwt');
     if (jwt) {
         try {
-            // A simple way to check expiry without a full library
             const payload = JSON.parse(atob(jwt.split('.')[1]));
             if (payload.exp * 1000 > Date.now()) {
                 setState({ 
@@ -167,14 +204,10 @@ async function initialize() {
             console.error("Failed to parse JWT:", e);
         }
     }
-    // --- END OF BLOCK ---
-
     
-    const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
-    const loginToken = urlParams.get('loginToken'); // <-- ADD THIS LINE
+    const loginToken = urlParams.get('loginToken');
 
-        // --- ADD THIS BLOCK: Handle magic link verification ---
     if (loginToken) {
         try {
             const response = await fetch('/api/auth-verify', {
@@ -192,14 +225,16 @@ async function initialize() {
                     user: { ...state.session.user, ...data.user, isAuthenticated: true }
                 }
             });
-            // Clean the token from the URL
-            window.history.replaceState({}, document.title, window.location.pathname + `?session=${sessionId || ''}`);
+            const cleanUrl = new URL(window.location);
+            cleanUrl.searchParams.delete('loginToken');
+            window.history.replaceState({}, document.title, cleanUrl.toString());
         } catch (error) {
             alert(`Sign-in failed: ${error.message}`);
-            window.history.replaceState({}, document.title, window.location.pathname + `?session=${sessionId || ''}`);
+            const cleanUrl = new URL(window.location);
+            cleanUrl.searchParams.delete('loginToken');
+            window.history.replaceState({}, document.title, cleanUrl.toString());
         }
     }
-
     
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
     const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
@@ -260,30 +295,22 @@ async function initialize() {
     const finalUrlParams = new URLSearchParams(window.location.search);
     if (finalUrlParams.get('view') === 'present') {
         log('Main', 'URL indicates to start in presentation view.');
-        // --- NEW LOGIC START ---
         const storageKey = `session-viewed-${state.session.id}`;
         if (!localStorage.getItem(storageKey)) {
             log('Main', 'First time in presentation view for this session, opening chat.');
             const chatWidgetContainer = document.getElementById('chat-widget-container');
             if (chatWidgetContainer) {
                 chatWidgetContainer.classList.add('chat-open');
-                // Automatically check the "Keep open" checkbox.
                 document.getElementById('chat-remain-open-checkbox').checked = true;
             }
-            // Mark this session as viewed to prevent the chat from auto-opening on subsequent loads.
             localStorage.setItem(storageKey, 'true');
         }
-        // --- NEW LOGIC END ---
         
-        const listToShow = state.cart.items.size > 0 ?
- 'favorites' : 'locked';
+        const listToShow = state.cart.items.size > 0 ? 'favorites' : 'locked';
         if (state.cart.items.size > 0 || state.cart.lockedItems.size > 0) {
             setTimeout(() => ui.showPresentationView(listToShow), 100);
         }
     }
-
-    state.ui.isInitializing = false;
-    log('Main', '23. Initialization complete, ready for user interaction.');
 }
 
 initialize();
