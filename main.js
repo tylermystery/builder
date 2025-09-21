@@ -4,20 +4,12 @@
  * Last Modified: 2025-09-21
  * * Changelog:
  * v5.0.0 - 2025-09-21
- * - Implemented multi-store functionality.
- * - App now reads a `shopId` from the URL to determine which store to load.
+ * - Implemented multi-store functionality by reading a `shopId` from the URL.
+ * - App now fetches from the new `Stores` table in Airtable.
  * - Defaults to "Tyler's Mystery Tours" if no `shopId` is specified.
  * - Dynamically generates the main title and a hidden "s" button to open a shop switcher modal.
  * v4.9.4 - 2025-09-19
  * - Automatically checks the "Keep open" checkbox when the chat is first opened in presentation view.
- * v4.9.3 - 2025-09-19
- * - Added logic to auto-open the chat window on the first visit to a session's presentation view.
- * v4.9.2 - 2025-09-10
- * - Set isInitializing flag to false after setup to prevent "Fork on Load" bug.
- * v4.9.1 - 2025-09-09
- * - Implemented dynamic availability for locked-in items and the event plan date.
- * - Synced the detail modal calendar with the event plan date.
- * - Updated event handlers for adding/removing items to trigger an availability refresh.
  */
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -110,32 +102,20 @@ async function updateHeaderCalendarAvailability() {
 
 async function initialize() {
     log('Main', '1. Initialization started.');
-    try {
-        log('Main', '2. Cleared localStorage to prevent storage errors.');
-    } catch (e) {
-        log('Main', `2. Failed to clear localStorage: ${e.message}`);
-    }
-
     ui.initStateHelpers({ getItemState: ui.getItemState });
     log('Main', '3. State helpers initialized.');
 
     ui.toggleLoading(true);
     log('Main', '4. Loading UI toggled on.');
     try {
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                state.records.all = await api.fetchAllRecords();
-                log('Main', `5. Fetched ${state.records.all.length} records from Airtable.`);
-                break;
-            } catch (error) {
-                retries--;
-                log('Main', `6. Fetch failed, retries left: ${retries}, error: ${error.message}`);
-                if (retries === 0) throw error;
-                log('Main', `Retrying fetchAllRecords (${retries} attempts left)...`);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
+        // Fetch both stores and catalog items at the same time
+        const [stores, records] = await Promise.all([
+            api.fetchAllStores(),
+            api.fetchAllRecords()
+        ]);
+        state.stores.all = stores;
+        state.records.all = records;
+        log('Main', `5. Fetched ${state.stores.all.length} stores and ${state.records.all.length} records.`);
     } catch (error) {
         console.error("Failed to load initial data:", error);
         log('Main', `7. Failed to load initial data: ${error.message}`);
@@ -143,43 +123,41 @@ async function initialize() {
         return;
     }
 
-    // --- NEW LOGIC: DETERMINE ACTIVE SHOP ---
+    // --- UPDATED LOGIC: DETERMINE ACTIVE SHOP FROM STORES TABLE ---
     const urlParams = new URLSearchParams(window.location.search);
     let shopId = urlParams.get('shopId');
     let activeShop = null;
 
     if (shopId) {
-        activeShop = state.records.all.find(r => r.id === shopId);
+        activeShop = state.stores.all.find(r => r.id === shopId);
     }
 
-    // If no valid shopId is found in the URL, default to "Tyler's Mystery Tours"
+    // If no valid shopId is found, default to "Tyler's Mystery Tours" from the Stores table
     if (!activeShop) {
-        activeShop = state.records.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+        activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     }
     
-    // Ensure we have an active shop before proceeding
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
         log('Main', `Active shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
         
-        // Update the main title and add the hidden 's' button
         const titleElement = document.getElementById('main-shop-title');
         titleElement.innerHTML = `${activeShop.fields.Name} Shop<button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
         
-        // Add event listener for our new easter egg
         document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
             ui.showShopSwitcher();
         });
-
     } else {
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. "Tyler's Mystery Tours" might be missing from your Stores table.</p>`;
         return;
     }
-    // --- END NEW LOGIC ---
+    // --- END UPDATED LOGIC ---
 
+    // --- HANDLE AUTOMATIC SIGN-IN FROM JWT ---
     const jwt = localStorage.getItem('jwt');
     if (jwt) {
         try {
+            // A simple way to check expiry without a full library
             const payload = JSON.parse(atob(jwt.split('.')[1]));
             if (payload.exp * 1000 > Date.now()) {
                 setState({ 
@@ -225,6 +203,7 @@ async function initialize() {
                     user: { ...state.session.user, ...data.user, isAuthenticated: true }
                 }
             });
+            // Clean the token from the URL
             const cleanUrl = new URL(window.location);
             cleanUrl.searchParams.delete('loginToken');
             window.history.replaceState({}, document.title, cleanUrl.toString());
