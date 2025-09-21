@@ -274,15 +274,13 @@ export function showShopSwitcher() {
     const listContainer = document.getElementById('shop-list-container');
     if (!overlay || !listContainer) return;
 
-    // Find all records that are designated as a "Store"
-    // We assume the 'Categories' field contains the word 'Store' for these records.
-    const storeRecords = state.records.all.filter(record => 
-        record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]?.includes('Store')
-    );
+    // Use the new, clean list of stores from the state
+    const storeRecords = state.stores.all;
 
     listContainer.innerHTML = ''; // Clear previous list
     storeRecords.forEach(record => {
         const link = document.createElement('a');
+        // Use the store record's ID to build the link
         link.href = `/?shopId=${record.id}`;
         link.textContent = record.fields.Name;
         link.style.display = 'block';
