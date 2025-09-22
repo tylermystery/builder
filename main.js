@@ -184,6 +184,20 @@ async function initialize() {
 
             localStorage.setItem('jwt', data.token);
             setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
+            
+            // --- START: MODIFIED SECTION ---
+            // After successful login, check the user's email domain
+            if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
+                // If it's a TMT email, redirect to the new personal dashboard
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('loginToken');
+                // First set the clean URL, then redirect.
+                window.history.replaceState({}, document.title, cleanUrl.toString());
+                window.location.href = '/dashboard.html'; // Redirect to the new page
+                return; // Stop further execution of this function
+            }
+            // --- END: MODIFIED SECTION ---
+
             const cleanUrl = new URL(window.location);
             cleanUrl.searchParams.delete('loginToken');
             window.history.replaceState({}, document.title, cleanUrl.toString());
