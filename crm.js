@@ -6,6 +6,7 @@ const MESSAGES_TABLE = 'Messages';
 const CATALOG_TABLE = 'tblUA4uuS8IYlhKpD'; 
 const PUSHER_KEY = '236f480714e5001590b5';
 const PUSHER_CLUSTER = 'us3';
+const TEAMMATES_TABLE = 'Teammates'; // <-- ADD THIS LINE
 const ARCHIVE_STORAGE_KEY = 'tmt-archived-sessions';
 
 // --- State ---
