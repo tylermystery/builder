@@ -1,15 +1,9 @@
 // FILE: main.js
 /*
- * Version: 5.0.0
+ * Version: 5.0.1 (Debug)
  * Last Modified: 2025-09-21
  * * Changelog:
- * v5.0.0 - 2025-09-21
- * - Implemented multi-store functionality by reading a `shopId` from the URL.
- * - App now fetches from the new `Stores` table in Airtable.
- * - Defaults to "Tyler's Mystery Tours" if no `shopId` is specified.
- * - Dynamically generates the main title and a hidden "s" button to open a shop switcher modal.
- * v4.9.4 - 2025-09-19
- * - Automatically checks the "Keep open" checkbox when the chat is first opened in presentation view.
+ * v5.0.1 - Added deep logging to inspect raw data fetched from Airtable at initialization.
  */
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -108,14 +102,20 @@ async function initialize() {
     ui.toggleLoading(true);
     log('Main', '4. Loading UI toggled on.');
     try {
-        // Fetch both stores and catalog items at the same time
         const [stores, records] = await Promise.all([
             api.fetchAllStores(),
             api.fetchAllRecords()
         ]);
         state.stores.all = stores;
         state.records.all = records;
-        log('Main', `5. Fetched ${state.stores.all.length} stores and ${state.records.all.length} records.`);
+
+        // --- NEW DEBUG STATEMENTS ---
+        console.log("--- RAW DATA FROM AIRTABLE ---");
+        console.log(`[Main] Fetched ${state.stores.all.length} stores. Sample store record:`, state.stores.all.length > 0 ? state.stores.all[0] : "No stores found.");
+        console.log(`[Main] Fetched ${state.records.all.length} catalog items. Sample item record:`, state.records.all.length > 0 ? state.records.all[0] : "No items found.");
+        console.log("------------------------------");
+        // --- END DEBUG STATEMENTS ---
+
     } catch (error) {
         console.error("Failed to load initial data:", error);
         log('Main', `7. Failed to load initial data: ${error.message}`);
@@ -123,7 +123,6 @@ async function initialize() {
         return;
     }
 
-    // --- UPDATED LOGIC: DETERMINE ACTIVE SHOP FROM STORES TABLE ---
     const urlParams = new URLSearchParams(window.location.search);
     let shopId = urlParams.get('shopId');
     let activeShop = null;
@@ -132,7 +131,6 @@ async function initialize() {
         activeShop = state.stores.all.find(r => r.id === shopId);
     }
 
-    // If no valid shopId is found, default to "Tyler's Mystery Tours" from the Stores table
     if (!activeShop) {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     }
@@ -151,26 +149,14 @@ async function initialize() {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. "Tyler's Mystery Tours" might be missing from your Stores table.</p>`;
         return;
     }
-    // --- END UPDATED LOGIC ---
 
-    // --- HANDLE AUTOMATIC SIGN-IN FROM JWT ---
     const jwt = localStorage.getItem('jwt');
     if (jwt) {
         try {
-            // A simple way to check expiry without a full library
             const payload = JSON.parse(atob(jwt.split('.')[1]));
             if (payload.exp * 1000 > Date.now()) {
                 setState({ 
-                    session: {
-                        ...state.session,
-                        user: { 
-                            ...state.session.user,
-                            isAuthenticated: true, 
-                            id: payload.userId, 
-                            name: payload.name, 
-                            email: payload.email 
-                        }
-                    }
+                    session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
                 });
                 log('Main', `Auto sign-in successful for ${payload.name}`);
             } else {
@@ -197,13 +183,7 @@ async function initialize() {
             if (!response.ok) throw new Error(data.error);
 
             localStorage.setItem('jwt', data.token);
-            setState({ 
-                session: {
-                    ...state.session,
-                    user: { ...state.session.user, ...data.user, isAuthenticated: true }
-                }
-            });
-            // Clean the token from the URL
+            setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
             const cleanUrl = new URL(window.location);
             cleanUrl.searchParams.delete('loginToken');
             window.history.replaceState({}, document.title, cleanUrl.toString());
@@ -236,11 +216,6 @@ async function initialize() {
         } catch (error) {
             console.error("Failed to load session:", error);
             log('Main', `13. Failed to load session: ${error.message}`);
-            if (error.message.includes('FILE_ERROR_NO_SPACE')) {
-                console.warn('Clearing local storage due to storage error.');
-                log('Main', '14. Clearing local storage due to storage error.');
-                localStorage.clear();
-            }
             state.session.isOwned = true;
             log('Main', '15. Set session as owned due to load failure.');
         }
