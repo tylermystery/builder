@@ -31,6 +31,7 @@
 ├── crm.html
 ├── crm.js
 ├── crm-login.html
+dashboard.html
 ├── events.js
 ├── export.js
 ├── filtering.js
