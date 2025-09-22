@@ -392,3 +392,60 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         console.error("Error posting chat message:", error);
     }
 }
+
+// Add these functions to your existing api.js file
+
+export async function fetchAllTeammates() {
+    // This function will be useful for the CRM dashboard
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Teammates`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) throw new Error('Could not fetch teammates.');
+        const data = await response.json();
+        return data.records;
+    } catch (error) {
+        console.error("Failed to fetch teammates:", error);
+        return [];
+    }
+}
+
+export async function fetchTeammateData(teammateId) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Teammates/${teammateId}`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) throw new Error('Could not fetch teammate data.');
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to load teammate:", error);
+        return null;
+    }
+}
+
+export async function fetchSessionsForTeammate(teammateId, roleField) {
+    // roleField should be either 'SalesLead' or 'EventHost'
+    const formula = `({${roleField}} = '${teammateId}')`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=${encodeURIComponent(formula)}`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) throw new Error(`Could not fetch sessions for teammate role: ${roleField}.`);
+        const data = await response.json();
+        return data.records;
+    } catch (error) {
+        console.error(error);
+        return [];
+    }
+}
+
+export async function fetchRatingsForTeammate(teammateId) {
+    const formula = `({Teammate} = '${teammateId}')`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Ratings?filterByFormula=${encodeURIComponent(formula)}`;
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) throw new Error('Could not fetch ratings.');
+        const data = await response.json();
+        return data.records;
+    } catch (error) {
+        console.error(error);
+        return [];
+    }
+}
