@@ -321,6 +321,21 @@ async function initializeDashboard() {
     document.getElementById('archive-toggle').addEventListener('click', () => {
         archivePane.classList.toggle('expanded');
     });
+        // Add this part to fetch and render a teammate list
+    const teammates = await fetchAllTeammates(); // Assuming fetchAllTeammates is imported from api.js
+    const teammateListContainer = document.createElement('div');
+    teammateListContainer.innerHTML = '<h2>Teammates</h2>';
+    
+    teammates.forEach(tm => {
+        const link = document.createElement('a');
+        link.href = `/teammate.html?id=${tm.id}`;
+        link.textContent = tm.fields.Name;
+        link.className = 'session-list-item'; // Reuse existing style
+        teammateListContainer.appendChild(link);
+    });
+    
+    // Add the list to a visible part of your CRM dashboard
+    document.querySelector('.sessions-pane').appendChild(teammateListContainer);
 }
 
 function setupPusher() {
