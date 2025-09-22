@@ -1,12 +1,11 @@
 // FILE: events.js
 /*
-* Version: 5.2.1
+* Version: 5.2.3 (Debug)
 * Last Modified: 2025-09-21
 * Changelog:
-* v5.2.1 - 2025-09-21
-* - Fixed TypeError by adding an Array.isArray() check to ensure the store's 'Items' field is an array before processing.
-* v5.2.0 - 2025-09-21
-* - Refactored filter initialization to be dynamic based on the active shop in the global state.
+* v5.2.3 - Added logging to inspect the store record and the categories being generated.
+* v5.2.2 - Updated category creation logic to correctly reference the linked record field from the Stores table.
+* v5.2.1 - Fixed TypeError by adding an Array.isArray() check to ensure the store's 'Items' field is an array before processing.
 */
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -264,13 +263,22 @@ export function initializeEventListeners(imageCache, flatpickr) {
     // --- LOGIC FOR CATEGORY BUTTONS ---
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
     
-    // THIS IS THE FIX: Ensure currentStore.fields.Items is an array before using .map()
+    // --- NEW DEBUG STATEMENTS ---
+    console.log("[Events] Attempting to build category filters. Inspecting currentStore record:", currentStore);
+    // --- END DEBUG STATEMENTS ---
+
+    // Check if the store record exists and if its linked Items field is an array.
+    // Make sure the field name `currentStore.fields.Items` matches your Airtable field name exactly.
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
         
         const categories = categoryRecordIds.map(id => 
             state.records.all.find(record => record.id === id)
         ).filter(Boolean);
+
+        // --- NEW DEBUG STATEMENTS ---
+        console.log(`[Events] Found ${categoryRecordIds.length} linked category IDs. Matched ${categories.length} full records.`);
+        // --- END DEBUG STATEMENTS ---
 
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
@@ -288,7 +296,9 @@ export function initializeEventListeners(imageCache, flatpickr) {
         
         updateSubcategoryButtons();
     } else {
-        // If there are no categories, still add the "All" button
+        // --- NEW DEBUG STATEMENTS ---
+        console.warn("[Events] Could not build category filters. Either currentStore was not found, or its 'Items' field is not an array. Value of 'Items' field:", currentStore ? currentStore.fields.Items : "N/A");
+        // --- END DEBUG STATEMENTS ---
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
