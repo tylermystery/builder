@@ -261,11 +261,21 @@ function setupDragAndDrop() {
 
 async function initializeDashboard() {
     loadArchivedState();
-    [allSessions, allMessages, allCatalogItems] = await Promise.all([
+    
+    // MODIFIED: Added fetchAirtableData for TEAMMATES_TABLE
+    const [allSessionsData, allMessagesData, allCatalogItemsData, allTeammatesData] = await Promise.all([
         fetchAirtableData(SESSIONS_TABLE),
         fetchAirtableData(MESSAGES_TABLE),
-        fetchAirtableData(CATALOG_TABLE)
+        fetchAirtableData(CATALOG_TABLE),
+        fetchAirtableData(TEAMMATES_TABLE) // <-- NEW: Fetch teammates
     ]);
+
+    // Assign fetched data to state variables
+    allSessions = allSessionsData;
+    allMessages = allMessagesData;
+    allCatalogItems = allCatalogItemsData;
+    const allTeammates = allTeammatesData; // <-- NEW: Store teammates in a local const
+
     loadingIndicator.style.display = 'none';
 
     sessionMap = new Map(allSessions.map(s => [s.id, s.fields.Name]));
@@ -284,11 +294,32 @@ async function initializeDashboard() {
     setupPusher();
     setupDragAndDrop();
 
+    // --- NEW: Teammate list rendering logic is now here ---
+    const teammateListContainer = document.createElement('div');
+    teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
+    
+    allTeammates.forEach(tm => {
+        const link = document.createElement('a');
+        link.href = `/teammate.html?id=${tm.id}`;
+        link.textContent = tm.fields.Name;
+        link.className = 'session-list-item'; // Reuse existing style
+        teammateListContainer.appendChild(link);
+    });
+    
+    // Add the list to a visible part of your CRM dashboard
+    document.querySelector('.sessions-pane').appendChild(teammateListContainer);
+    // --- END NEW SECTION ---
+
     document.body.addEventListener('click', (e) => {
         const sessionItem = e.target.closest('.session-list-item, .feed-item');
         if (sessionItem) {
             e.preventDefault();
-            handleSessionSelect(sessionItem.dataset.sessionId);
+            // Ensure we don't try to handle teammate links as session links
+            if (sessionItem.href && sessionItem.href.includes('teammate.html')) {
+                window.location.href = sessionItem.href;
+            } else {
+                handleSessionSelect(sessionItem.dataset.sessionId);
+            }
         }
     });
 
@@ -300,6 +331,7 @@ async function initializeDashboard() {
             tempMessageEl.className = 'chat-message admin';
             tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
             chatMessagesContainer.appendChild(tempMessageEl);
+        
             chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
             
             const messageToSend = chatInput.value;
@@ -308,6 +340,7 @@ async function initializeDashboard() {
             await postChatMessage(currentlySelectedSessionId, messageToSend);
             
             const channel = pusherChannelMap.get(currentlySelectedSessionId);
+            
             if (channel) {
                 channel.trigger('client-new-message', {
                     content: messageToSend,
@@ -318,25 +351,10 @@ async function initializeDashboard() {
             }
         }
     });
-    
+
     document.getElementById('archive-toggle').addEventListener('click', () => {
         archivePane.classList.toggle('expanded');
     });
-        // Add this part to fetch and render a teammate list
-    const teammates = await fetchAllTeammates(); // Assuming fetchAllTeammates is imported from api.js
-    const teammateListContainer = document.createElement('div');
-    teammateListContainer.innerHTML = '<h2>Teammates</h2>';
-    
-    teammates.forEach(tm => {
-        const link = document.createElement('a');
-        link.href = `/teammate.html?id=${tm.id}`;
-        link.textContent = tm.fields.Name;
-        link.className = 'session-list-item'; // Reuse existing style
-        teammateListContainer.appendChild(link);
-    });
-    
-    // Add the list to a visible part of your CRM dashboard
-    document.querySelector('.sessions-pane').appendChild(teammateListContainer);
 }
 
 function setupPusher() {
