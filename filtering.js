@@ -4,11 +4,19 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 
+// --- START DEBUGGING LOGS ---
+console.log('[Filtering] Initializing filtering.js. Total records loaded:', state.records.all.length, 'Total stores loaded:', state.stores.all.length);
+// --- END DEBUGGING LOGS ---
+
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
     // Find items within the current store whose Parent Item matches the record's name
     const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     
+    // --- START DEBUGGING LOGS ---
+    console.log(`[getDescendantBookableItems] Finding children for "${record.fields.Name}". Found ${children.length} direct children.`);
+    // --- END DEBUGGING LOGS ---
+
     for (const child of children) {
         if (isGrouping(child, allRecordNames)) {
             // If a child is a grouping (a sub-category), recurse to find its children
@@ -35,30 +43,43 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-// v-- THIS FUNCTION IS REWRITTEN TO BE MORE ACCURATE --v
 function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
+    // --- START DEBUGGING LOGS ---
+    console.log(`[filterByCategoryAndSubcategory] Received ${recordsInStore.length} items. Looking for category: "${selectedCategory}"`);
+    // --- END DEBUGGING LOGS ---
+    
     const allRecordNames = new Set(recordsInStore.map(r => r.fields.Name));
     
-    // Case 1: The "All" category is selected.
     if (selectedCategory === 'all') {
-        // Find the top-level categories for the store. These are items that do NOT have a parent.
         const topLevelCategories = recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
         let allBookableItems = [];
         
-        // For each top-level category, find all of its descendant bookable items.
+        // --- START DEBUGGING LOGS ---
+        console.log(`[filterByCategoryAndSubcategory] "All" is selected. Found ${topLevelCategories.length} top-level categories to search within.`);
+        // --- END DEBUGGING LOGS ---
+
         topLevelCategories.forEach(categoryRecord => {
             allBookableItems = allBookableItems.concat(getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames));
         });
+        
+        // --- START DEBUGGING LOGS ---
+        console.log('[filterByCategoryAndSubcategory] Returning a total of', allBookableItems.length, 'bookable items for "All".');
+        // --- END DEBUGGING LOGS ---
+
         return allBookableItems;
     }
 
-    // Case 2: A specific category is selected.
     const categoryRecord = recordsInStore.find(r => r.fields.Name === selectedCategory);
-    if (!categoryRecord) {
-        return [];
-    }
     
-    // If subcategories are also selected, get items from those specific subcategories.
+    // --- START DEBUGGING LOGS ---
+    if (!categoryRecord) {
+        console.error(`[filterByCategoryAndSubcategory] CRITICAL: Did not find the category record for "${selectedCategory}" in the list of store items.`);
+        return [];
+    } else {
+        console.log(`[filterByCategoryAndSubcategory] Successfully found the category record for "${selectedCategory}".`);
+    }
+    // --- END DEBUGGING LOGS ---
+    
     if (activeSubcategories.length > 0) {
         let items = [];
         const subcategoryRecords = recordsInStore.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
@@ -67,9 +88,12 @@ function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, active
         });
         return items;
     } 
-    // Otherwise, get all bookable items under the main selected category.
     else {
-        return getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
+        const finalItems = getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
+        // --- START DEBUGGING LOGS ---
+        console.log(`[filterByCategoryAndSubcategory] Returning ${finalItems.length} descendant items for "${selectedCategory}".`);
+        // --- END DEBUGGING LOGS ---
+        return finalItems;
     }
 }
 
@@ -201,6 +225,11 @@ function sortRecords(records, sortBy) {
 }
 
 export function applyFiltersAndSort(imageCache) {
+    // --- START DEBUGGING LOGS ---
+    console.log('--- applyFiltersAndSort TRIGGERED ---');
+    console.log('[Filtering] Active Shop ID:', state.ui.activeShopId);
+    // --- END DEBUGGING LOGS ---
+
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
     const selectedCategory = activeCategoryButton ?
         (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
@@ -215,21 +244,31 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    // First, filter all records to get only those belonging to the current store.
     let recordsForCurrentStore = state.records.all.filter(record => 
         record.fields.Store && record.fields.Store.includes(state.ui.activeShopId)
     );
 
-    // Now, apply the category and subcategory filtering.
+    // --- START DEBUGGING LOGS ---
+    console.log('[Filtering] Step 1: Found', recordsForCurrentStore.length, 'items linked to this store.');
+    // --- END DEBUGGING LOGS ---
+
     let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
     
-    // All subsequent filters run on the pre-filtered list of items.
+    // --- START DEBUGGING LOGS ---
+    console.log('[Filtering] Step 2: After category filtering, we have', recordsToDisplay.length, 'items.');
+    // --- END DEBUGGING LOGS ---
+
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
+
+    // --- START DEBUGGING LOGS ---
+    console.log('[Filtering] Step 3: After all filters, we have', recordsToDisplay.length, 'final items to render.');
+    console.log('--- applyFiltersAndSort FINISHED ---');
+    // --- END DEBUGGING LOGS ---
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
