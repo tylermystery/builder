@@ -1,4 +1,4 @@
-// FILE: components/card.js
+// In components/card.js
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
@@ -7,7 +7,6 @@ import { parseOptions } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 function getPlaceholderImage(imageUrls) {
-    // Return a random image from the provided list, or a default if none exist.
     if (!imageUrls || imageUrls.length === 0) {
         return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
     }
@@ -20,9 +19,9 @@ export function updateCardIcon(recordId) {
     const isHearted = state.cart.items.has(recordId);
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
+    
     document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
         if (!icon) {
-            log('Card', `No heart icon found for record: ${recordId}`);
             return;
         }
         if (isLocked) {
@@ -35,20 +34,16 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.innerHTML = heartSVG;
         }
-        icon.style.display = 'block'; // Ensure visibility
-
-        log('Card', `Updated heart icon for record: ${recordId}, state: ${isLocked ? 'locked' : isHearted ? 'hearted' : 'default'}`);
+        icon.style.display = 'block';
     });
 }
-
-// In components/card.js
 
 export async function createInteractiveCard(record, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const itemState = ui.getMainGetItemState()(recordId);
+    const itemState = ui.getItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
@@ -60,7 +55,6 @@ export async function createInteractiveCard(record, imageCache) {
     const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrls = fetchedImages?.imageUrls || [];
     const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
-
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
@@ -84,8 +78,12 @@ export async function createInteractiveCard(record, imageCache) {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
-        priceHTML = `$${displayPrice.toFixed(2)}`;
+        const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+        priceHTML = `$${displayPrice.toFixed(2)}${pricingTypeHTML}`;
+
         const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
@@ -96,12 +94,11 @@ export async function createInteractiveCard(record, imageCache) {
                 ${addToPlanBtnHTML}
             </div>
         `;
-        cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
+        cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}${pricingType ? ` ${pricingType.toLowerCase()}` : ''}.`;
     }
 
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
-            ${fields.Status === 'Coming Soon' ? '<div class="coming-soon-banner">Coming Soon</div>' : ''}
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
@@ -135,14 +132,14 @@ export async function createInteractiveCard(record, imageCache) {
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
     }
-
+    
     tippy(eventCard.querySelector('.event-card-content'), {
         content: cardTooltip,
         allowHTML: true,
         placement: 'top',
         theme: 'light',
     });
-
+    
     tippy(eventCard.querySelector('.heart-icon'), {
         content: 'Add to favorites',
         placement: 'top',
