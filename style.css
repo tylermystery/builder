@@ -494,3 +494,8 @@ body {
   font-weight: bold;
   z-index: 5;
 }
+
+.shop-title-link {
+  color: inherit;
+  text-decoration: none;
+}
