@@ -109,7 +109,7 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         <div class="event-card-content" data-tippy-content="${cardTooltip}">
             ${parentLinkHTML}
-            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'}</h3>
+            <h3>${fields[CONSTANTS.FIELD_NAMES.NAME] || 'Untitled Event'} ${fields.Status === 'Coming Soon' ? '<sup style="color: #f1c40f; font-size: 0.6em;">Coming Soon</sup>' : ''}</h3>
             <p class="description">${fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || ''}</p>
         </div>
         ${footerHTML}
