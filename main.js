@@ -140,12 +140,6 @@ async function initialize() {
         // In initialize() function
         titleElement.innerHTML = `<a href="/?shopId=${activeShop.id}" class="shop-title-link">${activeShop.fields.Name} Shop</a><button id="shop-switcher-trigger" ... >s</button>`;        
         
-        const titleElement = document.getElementById('main-shop-title');
-        titleElement.innerHTML = `${activeShop.fields.Name} Shop<button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
-        
-        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
-            ui.showShopSwitcher();
-        });
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. "Tyler's Mystery Tours" might be missing from your Stores table.</p>`;
         return;
