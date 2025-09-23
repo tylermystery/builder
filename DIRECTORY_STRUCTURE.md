@@ -17,10 +17,12 @@
 │       ├── cloudinary.js
 │       ├── create-payment-intent.js
 │       ├── package.json
+│       ├── process-email.js
 │       └── pusher-auth.js
 ├── utils/
 │   └── debug.js
 ├── ARCHITECTURE.md
+├── DIRECTORY_STRUCTURE.md
 ├── ROADMAP.md
 ├── api.js
 ├── auth.js
@@ -31,7 +33,7 @@
 ├── crm.html
 ├── crm.js
 ├── crm-login.html
-dashboard.html
+├── dashboard.html
 ├── events.js
 ├── export.js
 ├── filtering.js
@@ -45,6 +47,6 @@ dashboard.html
 ├── spec_sheet.md
 ├── state.js
 ├── style.css
-├── teammate.css      <-- NEW
-├── teammate.html     <-- NEW
-└── teammate.js       <-- NEW
+├── teammate.css
+├── teammate.html
+└── teammate.js
