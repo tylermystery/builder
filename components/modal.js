@@ -237,13 +237,98 @@ export function hideDetailModal() {
 }
 
 export async function showCheckoutModal(shopSettings) {
-    // ... (This function remains unchanged)
+    currentShopSettings = shopSettings;
+    log('Modal', 'Showing checkout modal.');
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    const fullTotalEl = document.getElementById('full-total-price');
+    const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+    const summaryDetailsEl = document.getElementById('checkout-summary-details');
+    const tipAmountInput = document.getElementById('tip-amount');
+    const paymentChoiceContainer = document.getElementById('payment-choice-container');
+    const termsContainer = document.querySelector('.terms-and-conditions');
+
+    if (!checkoutModalOverlay) return;
+
+    if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
+    
+    summaryDetailsEl.innerHTML = '';
+    tipAmountInput.value = '';
+
+    let finalTotal = 0;
+    const summaryList = document.createElement('ul');
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+        const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const itemTotal = price * itemInfo.quantity;
+        finalTotal += itemTotal;
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
+        summaryList.appendChild(listItem);
+    }
+    summaryDetailsEl.appendChild(summaryList);
+
+    fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
+    fullTotalEl.dataset.total = finalTotal;
+
+    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+        paymentChoiceContainer.style.display = 'block';
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
+            radio.addEventListener('change', updateCheckoutDisplay);
+        });
+    } else {
+        paymentChoiceContainer.style.display = 'none';
+    }
+
+    if (termsContainer && currentShopSettings.terms) {
+        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
+    }
+
+    updateCheckoutDisplay();
+    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
+    
+    try {
+        stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        const elements = stripe.elements();
+        const cardElementContainer = document.getElementById('card-element');
+        if (cardElementContainer) cardElementContainer.innerHTML = '';
+        const cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+        checkoutModalOverlay.cardElement = cardElement;
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => {
+            checkoutModalOverlay.style.display = 'flex';
+            if(checkoutCloseBtn) checkoutCloseBtn.focus();
+        }, 0);
+        document.body.classList.add('modal-open');
+    } catch (err) {
+        console.error("Failed to initialize payment form:", err);
+        alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
+        hideCheckoutModal();
+    }
 }
 
 export function hideCheckoutModal() {
-    // ... (This function remains unchanged)
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    if (checkoutModalOverlay) {
+        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
+            radio.removeEventListener('change', updateCheckoutDisplay);
+        });
+        checkoutModalOverlay.classList.remove('active');
+        setTimeout(() => {
+            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+            if (checkoutCloseBtn) {
+                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
+            }
+            checkoutModalOverlay.style.display = 'none';
+            log('Modal', 'Checkout modal hidden.');
+        }, 300);
+        document.body.classList.remove('modal-open');
+    }
 }
 
 export function getStripeContext() {
-    // ... (This function remains unchanged)
+    const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
+    return { stripe, cardElement };
 }
