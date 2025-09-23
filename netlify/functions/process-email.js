@@ -1,8 +1,8 @@
 // In netlify/functions/process-email.js
 const fetch = require('node-fetch');
 
-// Securely get your secrets from Netlify environment variables
-const { AIRTABLE_PAT, BASE_ID, OPENAI_API_KEY } = process.env;
+// --- MODIFIED: Uses GEMINI_API_KEY now ---
+const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
 
 // The main handler for the serverless function
 exports.handler = async (event) => {
@@ -13,9 +13,10 @@ exports.handler = async (event) => {
   try {
     const emailData = JSON.parse(event.body);
 
-    // 1. SEND EMAIL TO AI FOR PARSING
+    // 1. SEND EMAIL TO GEMINI AI FOR PARSING
+    // --- MODIFIED: Prompt is more explicit for Gemini to ensure JSON output ---
     const aiPrompt = `
-      You are an expert sales assistant for Tyler's Mystery Tours. Your task is to read an email thread and extract key information about a potential or ongoing event booking. Analyze the entire text and respond ONLY with a valid JSON object.
+      You are an expert sales assistant for Tyler's Mystery Tours. Your task is to read an email thread and extract key information about a potential or ongoing event booking. Analyze the entire text and respond ONLY with a valid JSON object. Do not include the markdown specifier \`\`\`json or any text before or after the JSON object.
 
       The JSON object must have the following fields:
       - "sessionName": The name of the event. If not mentioned, create a name like "Event for [Company Name]". If no company name, use "Event from [Client's Email]".
@@ -28,30 +29,32 @@ exports.handler = async (event) => {
       If any information is not present, use a value of null for that field.
     `;
 
-    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    // --- MODIFIED: This is the new fetch request for Google Gemini API ---
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          { role: 'system', content: aiPrompt },
-          { role: 'user', content: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` }
-        ],
-        response_format: { "type": "json_object" }
+        contents: [{
+          parts: [
+            { text: aiPrompt },
+            { text: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` }
+          ]
+        }]
       })
     });
 
-    if (!openAIResponse.ok) {
-      throw new Error('OpenAI API request failed');
+    if (!geminiResponse.ok) {
+      const errorBody = await geminiResponse.text();
+      throw new Error(`Gemini API request failed: ${errorBody}`);
     }
 
-    const aiResult = await openAIResponse.json();
-    const extractedData = JSON.parse(aiResult.choices[0].message.content);
+    const geminiResult = await geminiResponse.json();
+    // --- MODIFIED: How we get the text and parse it is different for Gemini ---
+    const extractedData = JSON.parse(geminiResult.candidates[0].content.parts[0].text);
 
-    // 2. FIND OR CREATE A SESSION IN AIRTABLE
+    // 2. FIND OR CREATE A SESSION IN AIRTABLE (This logic remains the same)
     const findUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=({ClientEmail}='${extractedData.clientEmail}')`;
     const findResponse = await fetch(findUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
     const existingSessions = await findResponse.json();
@@ -76,7 +79,7 @@ exports.handler = async (event) => {
           records: [{
             fields: {
               Name: extractedData.sessionName,
-              ClientEmail: extractedData.clientEmail, // Make sure you have this field in Airtable
+              ClientEmail: extractedData.clientEmail,
               Value: extractedData.value,
               Stage: extractedData.status,
               Goals: extractedData.summary
@@ -88,7 +91,7 @@ exports.handler = async (event) => {
       sessionId = newSessionData.records[0].id;
     }
 
-    // 3. POST THE EMAIL CONTENT TO THE MESSAGES TABLE
+    // 3. POST THE EMAIL CONTENT TO THE MESSAGES TABLE (This logic remains the same)
     const messageUrl = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
     const fullEmailContent = `--- EMAIL FROM ${emailData.from_email} ---\nSubject: ${emailData.subject}\n\n${emailData.body}`;
     await fetch(messageUrl, {
@@ -97,7 +100,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         records: [{
           fields: {
-            SessionID: [sessionId], // Link to the session we found/created
+            SessionID: [sessionId],
             SenderName: emailData.from_email,
             Content: fullEmailContent
           }
