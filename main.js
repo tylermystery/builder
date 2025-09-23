@@ -192,10 +192,10 @@ async function initialize() {
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-
+        
                 localStorage.setItem('jwt', data.token);
                 setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
-                
+        
                 if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
                     const cleanUrl = new URL(window.location);
                     cleanUrl.searchParams.delete('loginToken');
@@ -203,10 +203,14 @@ async function initialize() {
                     window.location.href = '/dashboard.html';
                     return; 
                 }
-
+        
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('loginToken');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
+        
+                // Refresh the UI to show the user is logged in
+                updateUserProfileIcon();
+        
             } catch (error) {
                 alert(`Sign-in failed: ${error.message}`);
                 const cleanUrl = new URL(window.location);
