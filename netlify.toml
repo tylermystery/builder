@@ -39,3 +39,8 @@
   from = "/api/register"
   to = "/.netlify/functions/register"
   status = 200
+
+[[redirects]]
+  from = "/api/process-email"
+  to = "/.netlify/functions/process-email"
+  status = 200
