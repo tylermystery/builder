@@ -329,23 +329,3 @@ export function showShopSwitcher() {
         }
     });
 }
-
-export function applyCartLabels(labels) {
-    if (labels.cartNamePlaceholder) {
-        document.getElementById('header-event-name').placeholder = labels.cartNamePlaceholder;
-    }
-    if (labels.notesLabel) {
-        // The label for "header-goals" needs to be targeted. Let's assume it's the element right before the input.
-        const goalsInput = document.getElementById('header-goals');
-        if (goalsInput && goalsInput.previousElementSibling) {
-            goalsInput.previousElementSibling.textContent = labels.notesLabel;
-        }
-    }
-    // Repeat for dateLabel, planTitle, and reserveButtonText
-    if (labels.planTitle) {
-        document.getElementById('itinerary-btn').textContent = labels.planTitle;
-    }
-    if (labels.reserveButtonText) {
-        document.getElementById('checkout-btn').textContent = labels.reserveButtonText;
-    }
-}
