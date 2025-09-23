@@ -158,6 +158,21 @@ async function initialize() {
         return;
     }
 
+    let shopSettings = {
+        shopType: activeShop.fields.ShopType || 'Events',
+        enabledFilters: activeShop.fields.EnabledFilters || [],
+        paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
+        terms: activeShop.fields.TermsAndConditions || 'Default terms...',
+        cartLabels: {}
+    };
+    
+    try {
+        shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels);
+    } catch (e) {
+        console.warn('Could not parse CartLabels JSON, using defaults.');
+    }
+
+    
     const jwt = localStorage.getItem('jwt');
     if (jwt) {
         try {
