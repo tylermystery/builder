@@ -53,6 +53,10 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
+    if (fields.Status === 'Coming Soon') {
+        eventCard.classList.add('coming-soon');
+    }
+
     eventCard.dataset.recordId = recordId;
 
     // --- START OF LAZY LOAD CHANGE ---
