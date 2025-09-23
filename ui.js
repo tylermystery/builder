@@ -190,6 +190,33 @@ export function updateHeader() {
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
+export function applyCartLabels(labels) {
+    const cartNameEl = document.getElementById('header-event-name');
+    if (cartNameEl && labels.cartNamePlaceholder) {
+        cartNameEl.value = labels.cartNamePlaceholder; // Use .value for input fields
+    }
+
+    const notesLabelEl = document.querySelector('label[for="header-goals"]');
+    if (notesLabelEl && labels.notesLabel) {
+        notesLabelEl.textContent = labels.notesLabel;
+    }
+
+    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
+    if (dateLabelEl && labels.dateLabel) {
+        dateLabelEl.textContent = labels.dateLabel;
+    }
+    
+    const planTitleEl = document.getElementById('itinerary-btn');
+    if (planTitleEl && labels.planTitle) {
+        planTitleEl.textContent = labels.planTitle;
+    }
+
+    const reserveButtonEl = document.getElementById('checkout-btn');
+    if (reserveButtonEl && labels.reserveButtonText) {
+        reserveButtonEl.textContent = labels.reserveButtonText;
+    }
+}
+
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
