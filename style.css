@@ -494,8 +494,3 @@ body {
   font-weight: bold;
   z-index: 5;
 }
-
-#main-shop-title a.shop-title-link {
-  color: #2c3e50; /* A dark text color, you can also use 'black' */
-  text-decoration: none; /* Removes the underline */
-}
