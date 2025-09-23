@@ -41,6 +41,8 @@ export function updateCardIcon(recordId) {
     });
 }
 
+// In components/card.js
+
 export async function createInteractiveCard(record, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
@@ -53,15 +55,11 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
-
     eventCard.dataset.recordId = recordId;
 
-    // --- START OF LAZY LOAD CHANGE ---
-    // We fetch the image URL info but DON'T apply it immediately.
     const fetchedImages = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrls = fetchedImages?.imageUrls || [];
     const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
-    // --- END OF LAZY LOAD CHANGE ---
 
     const parentName = record?.fields?.[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
@@ -69,18 +67,12 @@ export async function createInteractiveCard(record, imageCache) {
     let priceHTML = '';
     let footerHTML = '';
     let cardTooltip = '';
-    
-    // --- LAZY LOAD CHANGE: This line is now empty by default ---
     let cardImageStyle = '';
-    
+
     if (isGrouping) {
-        // ... (rest of the isGrouping block is unchanged)
-        log('Card', `Card for "${record.fields.Name}" is a grouping. Using a placeholder image.`);
         cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
-        
         const range = ui.getGroupPriceRange(record);
-        priceHTML = range ?
-            (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
         footerHTML = `
             <div class="card-footer">
                 <div class="price">${priceHTML}</div>
@@ -89,16 +81,12 @@ export async function createInteractiveCard(record, imageCache) {
         `;
         cardTooltip = `Explore the various items and pricing options in this category.`;
     } else {
-        // ... (rest of the 'else' block is unchanged)
-        log('Card', `Card for "${record.fields.Name}" is a bookable item. Using the first fetched image.`);
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         priceHTML = `$${displayPrice.toFixed(2)}`;
-
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ?
-            'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
         footerHTML = `
             <div class="card-footer">
                 <div class="price-quantity-wrapper">
@@ -111,8 +99,6 @@ export async function createInteractiveCard(record, imageCache) {
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}.`;
     }
 
-    // --- START OF LAZY LOAD CHANGE ---
-    // Note the added class 'lazy-load' and the 'data-bg-image' attribute
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
             ${fields.Status === 'Coming Soon' ? '<div class="coming-soon-banner">Coming Soon</div>' : ''}
@@ -128,14 +114,15 @@ export async function createInteractiveCard(record, imageCache) {
         </div>
         ${footerHTML}
     `;
-    // --- END OF LAZY LOAD CHANGE ---
 
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
+
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
+
     if (plusBtn && minusBtn && quantityInput) {
         plusBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -148,16 +135,19 @@ export async function createInteractiveCard(record, imageCache) {
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
     }
+
     tippy(eventCard.querySelector('.event-card-content'), {
         content: cardTooltip,
         allowHTML: true,
         placement: 'top',
         theme: 'light',
     });
+
     tippy(eventCard.querySelector('.heart-icon'), {
         content: 'Add to favorites',
         placement: 'top',
         theme: 'light',
     });
+
     return eventCard;
 }
