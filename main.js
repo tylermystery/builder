@@ -97,66 +97,84 @@ async function updateHeaderCalendarAvailability() {
 async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
-    log('Main', '3. State helpers initialized.');
-
     ui.toggleLoading(true);
-    log('Main', '4. Loading UI toggled on.');
+
     try {
-        const [stores, records] = await Promise.all([
-            api.fetchAllStores(),
-            api.fetchAllRecords()
-        ]);
+        const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
         state.stores.all = stores;
         state.records.all = records;
-
-        // --- NEW DEBUG STATEMENTS ---
-        console.log("--- RAW DATA FROM AIRTABLE ---");
-        console.log(`[Main] Fetched ${state.stores.all.length} stores. Sample store record:`, state.stores.all.length > 0 ? state.stores.all[0] : "No stores found.");
-        console.log(`[Main] Fetched ${state.records.all.length} catalog items. Sample item record:`, state.records.all.length > 0 ? state.records.all[0] : "No items found.");
-        console.log("------------------------------");
-        // --- END DEBUG STATEMENTS ---
-
     } catch (error) {
         console.error("Failed to load initial data:", error);
-        log('Main', `7. Failed to load initial data: ${error.message}`);
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please try again later.</p>`;
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}.</p>`;
         return;
     }
 
     const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
     let activeShop = null;
 
+    // --- NEW, SMARTER SHOP SELECTION LOGIC ---
+
+    // 1. Prioritize a 'shopId' in the URL
     if (shopId) {
-        activeShop = state.stores.all.find(r => r.id === shopId);
+        activeShop = state.stores.all.find(s => s.id === shopId);
     }
 
+    // 2. If no shopId, check for a session and load it to find its linked store
+    if (!activeShop && sessionId) {
+        await api.loadSessionFromAirtable(sessionId);
+        if (state.session.storeId) {
+            activeShop = state.stores.all.find(s => s.id === state.session.storeId);
+        }
+    }
+
+    // 3. If still no shop, check localStorage for the last one you visited
+    if (!activeShop) {
+        const lastVisitedShopId = localStorage.getItem('lastVisitedShopId');
+        if (lastVisitedShopId) {
+            activeShop = state.stores.all.find(s => s.id === lastVisitedShopId);
+        }
+    }
+
+    // 4. As a final fallback, default to Tyler's Mystery Tours
     if (!activeShop) {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     }
-    
+
+    // --- END OF NEW LOGIC ---
+
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
+        localStorage.setItem('lastVisitedShopId', activeShop.id); // Remember for next time
+
         const titleElement = document.getElementById('main-shop-title');
-        // This single line sets the title and the link correctly
-        titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
-        titleElement.style.cursor = 'pointer'; // Changes the mouse to a pointer on hover
-        titleElement.addEventListener('click', (e) => {
-            // Prevents the shop switcher button from also triggering this
-            if (e.target.id !== 'shop-switcher-trigger') {
-                window.location.href = `/?shopId=${activeShop.id}`;
+        titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup>`;
+        titleElement.style.cursor = 'pointer';
+        titleElement.addEventListener('click', () => { window.location.href = `/?shopId=${activeShop.id}`; });
+
+        let shopSettings = { /* ... parsing logic from previous step ... */ };
+        
+        const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
+        
+        if (sessionId) {
+            // If we didn't already load the session, load it now
+            if (!state.session.id) {
+                await api.loadSessionFromAirtable(sessionId);
             }
-        });
-
-        // This listener needs to be attached after the button is created
-        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
-            ui.showShopSwitcher();
-        });
+            ui.updateHeader();
+            ui.updateEventPlanSection();
+            ui.updateTotalCost();
+        }
+        
+        ui.toggleLoading(false);
+        applyFiltersAndSort(imageCache);
+        ui.updateFavoritesCarousel();
+        // ... (rest of the function, including login token logic, etc.)
     } else {
-
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. "Tyler's Mystery Tours" might be missing from your Stores table.</p>`;
-        return;
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
     }
+
 
     let shopSettings = {
         shopType: activeShop.fields.ShopType || 'Events',
