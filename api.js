@@ -23,7 +23,13 @@ export async function loadSessionFromAirtable(sessionId) {
         }
         const record = await response.json();
         log('API', `Session loaded: ${record.fields.Name}`);
-        
+     // --- NEW LOGIC START ---
+        // If the session has a linked store, save its ID to the state
+        if (record.fields.Store && record.fields.Store.length > 0) {
+            state.session.storeId = record.fields.Store[0];
+        }
+        // --- NEW LOGIC END ---
+
         state.session.isOwned = false;
         
         // Load amount received data into state
