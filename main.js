@@ -233,7 +233,7 @@ async function initialize() {
     }
     
     log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
-    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr);
+    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
     log('Main', '9. Event listeners initialized.');
     
     ui.setupItineraryEventListeners();
