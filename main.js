@@ -172,7 +172,8 @@ async function initialize() {
         console.warn('Could not parse CartLabels JSON, using defaults.');
     }
 
-    
+    ui.applyCartLabels(shopSettings.cartLabels); // <-- ADD THIS LINE
+
     const jwt = localStorage.getItem('jwt');
     if (jwt) {
         try {
