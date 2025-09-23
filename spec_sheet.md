@@ -93,3 +93,14 @@ The application includes a complete checkout flow to finalize and pay for an eve
 * **Checkout Modal**: Clicking the button opens a checkout modal with three sections: an order summary, fields for customer information, and a secure payment form.
 * **Secure Payment Processing**: Payment details are handled by integrating Stripe Elements.
 This ensures sensitive credit card information is sent directly to Stripe and never touches the application's server, providing maximum security and PCI compliance.
+
+### Multi-Shop Customization
+The application has been upgraded to support different types of storefronts (e.g., event-based vs. general stores) with UIs that adapt dynamically based on settings controlled in the Airtable `Stores` table.
+
+* **Shop-Specific Settings (Airtable):** The `Stores` table now acts as a "control panel." New fields like `ShopType`, `EnabledFilters` (Multiple Select), and `CartLabels` (JSON) allow for per-store configuration without changing the application's code.
+
+* **Dynamic Filter Display:** The filter panel on the main catalog page is no longer static. It reads the `EnabledFilters` setting for the active store and shows or hides filter groups like "Headcount" and "Location" accordingly.
+
+* **Customizable UI Text:** Text labels, placeholders, and button text in the right-hand cart panel are now dynamic. This is driven by a JSON object stored in the `CartLabels` field, allowing text like "Event Plan" to be changed to "Cart" for different shop types.
+
+* **Flexible Checkout Flow:** The checkout process can be customized per-store. A `PaymentOptions` field in Airtable determines whether customers can pay a deposit only, or choose between a deposit and the full amount. The "Simplified Terms" displayed in the modal are also populated from a store-specific field.
