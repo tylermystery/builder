@@ -239,7 +239,8 @@ async function initialize() {
     }
     ui.toggleLoading(false);
     log('Main', '17. Loading UI toggled off.');
-    document.getElementById('status-filter').value = 'Available';
+    const defaultFilter = activeShop.fields.DefaultStatusFilter || 'Available';
+    document.getElementById('status-filter').value = defaultFilter;
     log('Main', '18. Set status filter to Available.');
 
     log('Main', '19. Applying initial filters and rendering...');
