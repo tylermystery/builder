@@ -53,9 +53,6 @@ export async function createInteractiveCard(record, imageCache) {
 
     const eventCard = document.createElement('div');
     eventCard.className = 'event-card';
-    if (fields.Status === 'Coming Soon') {
-        eventCard.classList.add('coming-soon');
-    }
 
     eventCard.dataset.recordId = recordId;
 
@@ -118,6 +115,7 @@ export async function createInteractiveCard(record, imageCache) {
     // Note the added class 'lazy-load' and the 'data-bg-image' attribute
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
+            ${fields.Status === 'Coming Soon' ? '<div class="coming-soon-banner">Coming Soon</div>' : ''}
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
