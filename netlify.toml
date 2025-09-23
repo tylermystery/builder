@@ -1,7 +1,6 @@
 # PASTE THIS ENTIRE CODE INTO: netlify.toml
 [build]
   functions = "netlify/functions"
-  command = "npm run build"
 
 # Add the two new redirects for authentication
 [[redirects]]
