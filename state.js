@@ -28,6 +28,7 @@ export let state = {
     session: {
         id: null,
         isOwned: false,
+        storeId: null, // <-- ADD THIS LINE
         user: { 
             isAuthenticated: false,
             id: null,
