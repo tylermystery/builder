@@ -1,10 +1,4 @@
-// FILE: main.js
-/*
- * Version: 5.0.1 (Debug)
- * Last Modified: 2025-09-21
- * * Changelog:
- * v5.0.1 - Added deep logging to inspect raw data fetched from Airtable at initialization.
- */
+// In main.js
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -18,9 +12,9 @@ import { initializeEventListeners, updateSaveShareButton, initializeChatEventLis
 import { initializeChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
-
 const imageCache = new Map();
 let mainDatePicker = null;
+
 async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
@@ -115,13 +109,10 @@ async function initialize() {
     let activeShop = null;
 
     // --- NEW, SMARTER SHOP SELECTION LOGIC ---
-
-    // 1. Prioritize a 'shopId' in the URL
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
     }
 
-    // 2. If no shopId, check for a session and load it to find its linked store
     if (!activeShop && sessionId) {
         await api.loadSessionFromAirtable(sessionId);
         if (state.session.storeId) {
@@ -129,7 +120,6 @@ async function initialize() {
         }
     }
 
-    // 3. If still no shop, check localStorage for the last one you visited
     if (!activeShop) {
         const lastVisitedShopId = localStorage.getItem('lastVisitedShopId');
         if (lastVisitedShopId) {
@@ -137,195 +127,134 @@ async function initialize() {
         }
     }
 
-    // 4. As a final fallback, default to Tyler's Mystery Tours
     if (!activeShop) {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     }
-
     // --- END OF NEW LOGIC ---
 
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
-        localStorage.setItem('lastVisitedShopId', activeShop.id); // Remember for next time
+        localStorage.setItem('lastVisitedShopId', activeShop.id);
 
         const titleElement = document.getElementById('main-shop-title');
-        titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup>`;
+        titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
         titleElement.style.cursor = 'pointer';
-        titleElement.addEventListener('click', () => { window.location.href = `/?shopId=${activeShop.id}`; });
+        titleElement.addEventListener('click', (e) => {
+            if (e.target.id !== 'shop-switcher-trigger') {
+                window.location.href = `/?shopId=${activeShop.id}`;
+            }
+        });
+        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
+            ui.showShopSwitcher();
+        });
+        
+        let shopSettings = {
+            shopType: activeShop.fields.ShopType || 'Events',
+            enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+            paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
+            terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
+            cartLabels: {}
+        };
+        try {
+            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels);
+        } catch (e) {
+            console.warn('Could not parse CartLabels JSON, using defaults.');
+        }
 
-        let shopSettings = { /* ... parsing logic from previous step ... */ };
+        ui.applyCartLabels(shopSettings.cartLabels);
         
         const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
         
-        if (sessionId) {
-            // If we didn't already load the session, load it now
-            if (!state.session.id) {
-                await api.loadSessionFromAirtable(sessionId);
+        const jwt = localStorage.getItem('jwt');
+        if (jwt) {
+            try {
+                const payload = JSON.parse(atob(jwt.split('.')[1]));
+                if (payload.exp * 1000 > Date.now()) {
+                    setState({ 
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
+                    });
+                } else {
+                    localStorage.removeItem('jwt');
+                }
+            } catch (e) {
+                localStorage.removeItem('jwt');
+                console.error("Failed to parse JWT:", e);
             }
+        }
+        
+        const loginToken = urlParams.get('loginToken');
+        if (loginToken) {
+            try {
+                const response = await fetch('/api/auth-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: loginToken })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+
+                localStorage.setItem('jwt', data.token);
+                setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
+                
+                if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
+                    const cleanUrl = new URL(window.location);
+                    cleanUrl.searchParams.delete('loginToken');
+                    window.history.replaceState({}, document.title, cleanUrl.toString());
+                    window.location.href = '/dashboard.html';
+                    return; 
+                }
+
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('loginToken');
+                window.history.replaceState({}, document.title, cleanUrl.toString());
+            } catch (error) {
+                alert(`Sign-in failed: ${error.message}`);
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('loginToken');
+                window.history.replaceState({}, document.title, cleanUrl.toString());
+            }
+        }
+
+        if (sessionId && !state.session.id) {
+            await api.loadSessionFromAirtable(sessionId);
+        }
+
+        if (state.session.id) {
             ui.updateHeader();
             ui.updateEventPlanSection();
             ui.updateTotalCost();
         }
-        
+
+        let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available';
+        if (defaultFilterValue === 'Show All') {
+            defaultFilterValue = 'all';
+        }
+        document.getElementById('status-filter').value = defaultFilterValue;
+
         ui.toggleLoading(false);
         applyFiltersAndSort(imageCache);
         ui.updateFavoritesCarousel();
-        // ... (rest of the function, including login token logic, etc.)
+        updateSaveShareButton();
+        
+        initializeChatEventListeners();
+        initializeChat();
+        setupAuthEventListeners();
+        updateUserProfileIcon();
+        
+        state.ui.isInitializing = false;
+        log('Main', 'Initialization complete.');
+
+        const finalUrlParams = new URLSearchParams(window.location.search);
+        const itemIdToOpen = finalUrlParams.get('openItem');
+        if (itemIdToOpen) {
+            const recordToOpen = state.records.all.find(r => r.id === itemIdToOpen);
+            if (recordToOpen) {
+                const photoIndex = parseInt(finalUrlParams.get('photo'), 10) || 0;
+                setTimeout(() => { ui.showDetailModal(recordToOpen, photoIndex); }, 100);
+            }
+        }
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
-    }
-
-
-    let shopSettings = {
-        shopType: activeShop.fields.ShopType || 'Events',
-        enabledFilters: activeShop.fields.EnabledFilters || [],
-        paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
-        terms: activeShop.fields.TermsAndConditions || 'Default terms...',
-        cartLabels: {}
-    };
-    
-    try {
-        shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels);
-    } catch (e) {
-        console.warn('Could not parse CartLabels JSON, using defaults.');
-    }
-
-    ui.applyCartLabels(shopSettings.cartLabels); // <-- ADD THIS LINE
-
-    const jwt = localStorage.getItem('jwt');
-    if (jwt) {
-        try {
-            const payload = JSON.parse(atob(jwt.split('.')[1]));
-            if (payload.exp * 1000 > Date.now()) {
-                setState({ 
-                    session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
-                });
-                log('Main', `Auto sign-in successful for ${payload.name}`);
-            } else {
-                localStorage.removeItem('jwt');
-                log('Main', 'Removed expired JWT.');
-            }
-        } catch (e) {
-            localStorage.removeItem('jwt');
-            console.error("Failed to parse JWT:", e);
-        }
-    }
-    
-    const sessionId = urlParams.get('session');
-    const loginToken = urlParams.get('loginToken');
-
-    if (loginToken) {
-        try {
-            const response = await fetch('/api/auth-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: loginToken })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
-
-            localStorage.setItem('jwt', data.token);
-            setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
-            
-            // --- START: MODIFIED SECTION ---
-            // After successful login, check the user's email domain
-            if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
-                // If it's a TMT email, redirect to the new personal dashboard
-                const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('loginToken');
-                // First set the clean URL, then redirect.
-                window.history.replaceState({}, document.title, cleanUrl.toString());
-                window.location.href = '/dashboard.html'; // Redirect to the new page
-                return; // Stop further execution of this function
-            }
-            // --- END: MODIFIED SECTION ---
-
-            const cleanUrl = new URL(window.location);
-            cleanUrl.searchParams.delete('loginToken');
-            window.history.replaceState({}, document.title, cleanUrl.toString());
-        } catch (error) {
-            alert(`Sign-in failed: ${error.message}`);
-            const cleanUrl = new URL(window.location);
-            cleanUrl.searchParams.delete('loginToken');
-            window.history.replaceState({}, document.title, cleanUrl.toString());
-        }
-    }
-    
-    log('Main', `8. Session ID from URL: ${sessionId || 'none'}`);
-    const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
-    log('Main', '9. Event listeners initialized.');
-    
-    ui.setupItineraryEventListeners();
-    if (sessionId) {
-        try {
-            await api.loadSessionFromAirtable(sessionId);
-            log('Main', '10. Session loaded successfully.');
-            ui.updateHeader();
-            ui.updateEventPlanSection();
-            ui.updateTotalCost();
-            log('Main', '11. Updated header, event plan, and total cost.');
-            const savedDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-            if (savedDate && eventPlanDatePicker) {
-                eventPlanDatePicker.setDate(savedDate, true);
-                log('Main', '12. Set saved date in event plan date picker.');
-            }
-        } catch (error) {
-            console.error("Failed to load session:", error);
-            log('Main', `13. Failed to load session: ${error.message}`);
-            state.session.isOwned = true;
-            log('Main', '15. Set session as owned due to load failure.');
-        }
-    } else {
-        state.session.isOwned = true;
-        log('Main', '16. No session ID, set session as owned.');
-    }
-    ui.toggleLoading(false);
-    log('Main', '17. Loading UI toggled off.');
-    let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available';
-    // Map the human-readable Airtable value to the HTML option value
-    if (defaultFilterValue === 'Show All') {
-        defaultFilterValue = 'all';
-    }
-    document.getElementById('status-filter').value = defaultFilterValue;
-
-    log('Main', '18. Set status filter to Available.');
-
-    log('Main', '19. Applying initial filters and rendering...');
-    applyFiltersAndSort(imageCache);
-    ui.updateFavoritesCarousel();
-    updateSaveShareButton();
-    log('Main', '20. Filters applied, favorites and share button updated.');
-
-    await updateHeaderCalendarAvailability();
-    log('Main', '21. Header calendar updated.');
-
-    initializeChatEventListeners();
-    initializeChat();
-    setupAuthEventListeners();
-    updateUserProfileIcon();
-    log('Main', '22. Chat initialized.');
-
-    state.ui.isInitializing = false;
-    log('Main', '23. Initialization complete, ready for user interaction.');
-
-    const finalUrlParams = new URLSearchParams(window.location.search);
-    if (finalUrlParams.get('view') === 'present') {
-        log('Main', 'URL indicates to start in presentation view.');
-        const storageKey = `session-viewed-${state.session.id}`;
-        if (!localStorage.getItem(storageKey)) {
-            log('Main', 'First time in presentation view for this session, opening chat.');
-            const chatWidgetContainer = document.getElementById('chat-widget-container');
-            if (chatWidgetContainer) {
-                chatWidgetContainer.classList.add('chat-open');
-                document.getElementById('chat-remain-open-checkbox').checked = true;
-            }
-            localStorage.setItem(storageKey, 'true');
-        }
-        
-        const listToShow = state.cart.items.size > 0 ? 'favorites' : 'locked';
-        if (state.cart.items.size > 0 || state.cart.lockedItems.size > 0) {
-            setTimeout(() => ui.showPresentationView(listToShow), 100);
-        }
     }
 }
 
