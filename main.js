@@ -137,7 +137,8 @@ async function initialize() {
     
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
-        log('Main', `Active shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
+        // In initialize() function
+        titleElement.innerHTML = `<a href="/?shopId=${activeShop.id}" class="shop-title-link">${activeShop.fields.Name} Shop</a><button id="shop-switcher-trigger" ... >s</button>`;        
         
         const titleElement = document.getElementById('main-shop-title');
         titleElement.innerHTML = `${activeShop.fields.Name} Shop<button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
