@@ -1,7 +1,11 @@
 // In netlify/functions/process-email.js
+
+// Version 1.1 - Forcing a redeploy
 const fetch = require('node-fetch');
 
+// --- MODIFIED: Uses GEMINI_API_KEY now ---
 const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
+
 
 exports.handler = async (event) => {
   console.log('--- Function Invoked ---');
