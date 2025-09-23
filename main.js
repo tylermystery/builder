@@ -240,8 +240,13 @@ async function initialize() {
     }
     ui.toggleLoading(false);
     log('Main', '17. Loading UI toggled off.');
-    const defaultFilter = activeShop.fields.DefaultStatusFilter || 'Available';
-    document.getElementById('status-filter').value = defaultFilter;
+    let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available';
+    // Map the human-readable Airtable value to the HTML option value
+    if (defaultFilterValue === 'Show All') {
+        defaultFilterValue = 'all';
+    }
+    document.getElementById('status-filter').value = defaultFilterValue;
+
     log('Main', '18. Set status filter to Available.');
 
     log('Main', '19. Applying initial filters and rendering...');
