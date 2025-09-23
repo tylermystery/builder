@@ -396,19 +396,19 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
+    
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
-        
+    
+        console.log('Body clicked. Target:', e.target); // <-- What did we click?
+    
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-       const checkoutBtn = e.target.closest('#checkout-btn');
-           if (checkoutBtn) {
-               ui.showCheckoutModal(shopSettings); // Pass shopSettings here
-           }
+        const checkoutBtn = e.target.closest('#checkout-btn');
         const lockedItemCard = e.target.closest('.locked-item-card');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
@@ -416,17 +416,21 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const carouselNav = e.target.closest('.carousel-nav');
     
         if (saveShareBtn) {
+            console.log('Logic branch: saveShareBtn');
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
            });
         } else if (checkoutBtn) {
-            ui.showCheckoutModal();
+            console.log('Logic branch: checkoutBtn');
+            ui.showCheckoutModal(shopSettings); // Assumes shopSettings is available
         } else if (presentBtn) {
+            console.log('Logic branch: presentBtn');
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
         } else if (carouselNav) {
+            console.log('Logic branch: carouselNav');
             const carousel = document.getElementById('favorites-carousel');
             if (carousel) {
                 const scrollAmount = 300;
@@ -434,6 +438,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
             }
         } else if (parentLink) {
+            console.log('Logic branch: parentLink');
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
@@ -446,6 +451,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
             }
         } else if (heartIcon) {
+            console.log('Logic branch: heartIcon');
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
             if (!state.cart.lockedItems.has(recordId)) {
@@ -459,6 +465,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 triggerSave();
             }
         } else if (addToPlanBtn) {
+            console.log('Logic branch: addToPlanBtn');
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
@@ -474,6 +481,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.updateTotalCost();
             triggerSave();
         } else if (demoteBtn) {
+            console.log('Logic branch: demoteBtn');
             e.stopPropagation();
             const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
@@ -487,6 +495,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 triggerSave();
             }
         } else if (removeBtn && e.target === removeBtn) {
+            console.log('Logic branch: removeBtn');
             e.stopPropagation();
             const recordId = favoriteItem.dataset.recordId;
             state.cart.items.delete(recordId);
@@ -494,17 +503,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } else if (card && !e.target.closest('.quantity-selector')) {
+            console.log('Logic branch: card'); // <-- We expect to see this!
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (lockedItemCard) {
+            console.log('Logic branch: lockedItemCard'); // <-- Or this!
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
+            console.log('Logic branch: favoriteItem'); // <-- Or this!
             const recordId = favoriteItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
+        } else {
+            console.log('Logic branch: no match found.'); // <-- This is what we see if something is wrong.
         }
     });
     document.body.addEventListener('change', (e) => {
