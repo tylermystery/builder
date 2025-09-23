@@ -228,7 +228,7 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-export function initializeEventListeners(imageCache, flatpickr) {
+export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -260,32 +260,15 @@ export function initializeEventListeners(imageCache, flatpickr) {
         }, 100);
     });
 
-    // --- LOGIC FOR CATEGORY BUTTONS ---
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
-    
-    // --- NEW DEBUG STATEMENTS ---
-    console.log("[Events] Attempting to build category filters. Inspecting currentStore record:", currentStore);
-    // --- END DEBUG STATEMENTS ---
-
-    // Check if the store record exists and if its linked Items field is an array.
-    // Make sure the field name `currentStore.fields.Items` matches your Airtable field name exactly.
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
-        
-        const categories = categoryRecordIds.map(id => 
-            state.records.all.find(record => record.id === id)
-        ).filter(Boolean);
-
-        // --- NEW DEBUG STATEMENTS ---
-        console.log(`[Events] Found ${categoryRecordIds.length} linked category IDs. Matched ${categories.length} full records.`);
-        // --- END DEBUG STATEMENTS ---
-
+        const categories = categoryRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
-
         categories.forEach((catRecord) => {
             const button = document.createElement('button');
             button.className = 'filter-btn category-filter-btn';
@@ -293,19 +276,28 @@ export function initializeEventListeners(imageCache, flatpickr) {
             button.textContent = catRecord.fields.Name;
             categoryFiltersContainer.appendChild(button);
         });
-        
         updateSubcategoryButtons();
     } else {
-        // --- NEW DEBUG STATEMENTS ---
-        console.warn("[Events] Could not build category filters. Either currentStore was not found, or its 'Items' field is not an array. Value of 'Items' field:", currentStore ? currentStore.fields.Items : "N/A");
-        // --- END DEBUG STATEMENTS ---
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
     }
-    // --- END LOGIC ---
+
+    // --- NEW: Conditionally Display Filters ---
+    const toggleFilter = (elementId, settingName) => {
+        const container = document.getElementById(elementId)?.parentElement;
+        if (container) {
+            container.style.display = shopSettings.enabledFilters.includes(settingName) ? 'flex' : 'none';
+        }
+    };
+
+    toggleFilter('subcategory-filters', 'Subcategories');
+    toggleFilter('date-filter-group', 'Date & Time');
+    toggleFilter('headcount-filter', 'Headcount');
+    toggleFilter('location-filter', 'Location');
+    toggleFilter('budget-filter', 'Budget');
     
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
@@ -413,7 +405,10 @@ export function initializeEventListeners(imageCache, flatpickr) {
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
-        const checkoutBtn = e.target.closest('#checkout-btn');
+       const checkoutBtn = e.target.closest('#checkout-btn');
+           if (checkoutBtn) {
+               ui.showCheckoutModal(shopSettings); // Pass shopSettings here
+           }
         const lockedItemCard = e.target.closest('.locked-item-card');
         const demoteBtn = e.target.closest('.demote-locked-item-btn');
         const parentLink = e.target.closest('.parent-link');
