@@ -1,4 +1,3 @@
-// FILE: chat.js
 import { state } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
@@ -14,7 +13,7 @@ let originalTitle = document.title;
 let isTabActive = true;
 window.addEventListener('focus', () => {
   isTabActive = true;
-  document.title = originalTitle; // Change title back when tab is viewed
+  document.title = originalTitle;
 });
 window.addEventListener('blur', () => {
   isTabActive = false;
@@ -29,8 +28,7 @@ function generateFunName() {
 
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
-
-    // Step 1: Always ensure a base "fun name" identity exists for this browser session.
+    
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -38,27 +36,23 @@ function getSimpleUserIdentity() {
     }
 
     let userName = localStorage.getItem('chatUserName');
-    if (!userName || userName.split(' ').length !== 3) { // Regenerate if it's not a fun name or a modified one
-        userName = generateFunName(); // e.g., "Happy Panda"
+    if (!userName || userName.split(' ').length > 3) {
+        userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
 
-    // Step 2: Check if the user is authenticated.
     const authenticatedUser = state.session.user;
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        // User is logged in. Modify the fun name with their real name if it hasn't been already.
         const funNameParts = userName.split(' ');
-        const realFirstName = authenticatedUser.name.split(' ')[0]; // e.g., "Tyler"
+        const realFirstName = authenticatedUser.name.split(' ')[0];
 
         if (funNameParts.length === 2) { 
-            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`; // e.g., "Happy Tyler Panda"
+            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`;
             userName = newName;
-            localStorage.setItem('chatUserName', newName); // Save the new name for future visits
+            localStorage.setItem('chatUserName', newName);
         }
-        // Use the authenticated user's permanent ID but the fun/modified name
         currentUser = { id: authenticatedUser.id, name: userName };
     } else {
-        // User is a guest, so use the generated fun identity.
         currentUser = { id: userId, name: userName };
     }
     
@@ -69,9 +63,11 @@ function updatePresenceUI(members) {
     const presenceCounter = document.getElementById('presence-counter');
     const whosHereCount = document.getElementById('whos-here-count');
     const whosHereList = document.getElementById('whos-here-list');
+    
     const count = members.count;
     if (presenceCounter) presenceCounter.innerText = count;
     if (whosHereCount) whosHereCount.innerText = count;
+
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
@@ -81,7 +77,6 @@ function updatePresenceUI(members) {
             }
             const userElement = document.createElement('div');
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
-   
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
         });
@@ -91,21 +86,28 @@ function updatePresenceUI(members) {
 async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
-    messagesList.innerHTML = '';
+    messagesList.innerHTML = ''; 
     const records = await api.fetchChatMessages(sessionId);
     records.forEach(record => {
-        const { SenderID, SenderName, Content, Timestamp } = record.fields;
+        const { SenderID, SenderName, Content, Timestamp, Reactions } = record.fields;
         const isSent = SenderID === currentUser.id;
-        addMessageToUI(SenderName, Content, isSent, Timestamp);
+        let reactionsData = {};
+        try { reactionsData = JSON.parse(Reactions || '{}'); } catch(e) {}
+        addMessageToUI(SenderName, Content, isSent, Timestamp, record.id, reactionsData);
     });
 }
 
-function addMessageToUI(sender, message, isSent, timestamp) {
+function addMessageToUI(sender, message, isSent, timestamp, messageId, reactionsData) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
 
+    const elementId = `message-${messageId || Date.now()}`;
+    if (document.getElementById(elementId)) return;
+
     const wrapper = document.createElement('div');
     wrapper.className = isSent ? 'message-wrapper sent' : 'message-wrapper received';
+    wrapper.id = elementId;
+    wrapper.dataset.messageId = messageId;
 
     const messageElement = document.createElement('div');
     messageElement.className = 'chat-message';
@@ -122,23 +124,79 @@ function addMessageToUI(sender, message, isSent, timestamp) {
     const date = timestamp ? new Date(timestamp) : new Date();
     timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+    const reactionsContainer = document.createElement('div');
+    reactionsContainer.className = 'reactions-container';
+    
+    const reactButton = document.createElement('button');
+    reactButton.className = 'react-btn';
+    reactButton.textContent = '😊+';
+    reactButton.title = 'Add Reaction';
+    messageElement.appendChild(reactButton);
+
     wrapper.appendChild(messageElement);
+    wrapper.appendChild(reactionsContainer);
     wrapper.appendChild(timestampElement);
     messagesList.appendChild(wrapper);
+
+    updateReactionsUI(elementId, reactionsData);
+
+    reactButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let picker = document.querySelector('emoji-picker');
+        if (!picker) {
+            picker = document.createElement('emoji-picker');
+            document.body.appendChild(picker);
+            picker.style.position = 'absolute';
+            picker.style.zIndex = '1100';
+        }
+        
+        picker.style.left = `${e.pageX}px`;
+        picker.style.top = `${e.pageY}px`;
+        picker.style.display = 'block';
+
+        const emojiSelectedHandler = async (event) => {
+            const currentUser = getCurrentUser();
+            await fetch('/api/update-message-reaction', {
+                method: 'POST',
+                body: JSON.stringify({
+                    messageId: messageId,
+                    emoji: event.detail.emoji.unicode,
+                    userId: currentUser.id,
+                    sessionId: state.session.id
+                })
+            });
+            picker.style.display = 'none';
+            picker.removeEventListener('emoji-click', emojiSelectedHandler);
+        };
+        
+        picker.addEventListener('emoji-click', emojiSelectedHandler);
+    });
 
     wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
+function updateReactionsUI(elementId, reactionsData) {
+    const messageWrapper = document.getElementById(elementId);
+    if (!messageWrapper) return;
+    const reactionsContainer = messageWrapper.querySelector('.reactions-container');
+    
+    reactionsContainer.innerHTML = '';
+    if (reactionsData && Object.keys(reactionsData).length > 0) {
+        for (const [emoji, users] of Object.entries(reactionsData)) {
+            if (users.length > 0) {
+                const reactionChip = document.createElement('span');
+                reactionChip.className = 'reaction-chip';
+                reactionChip.textContent = `${emoji} ${users.length}`;
+                reactionsContainer.appendChild(reactionChip);
+            }
+        }
+    }
+}
+
 function bindPresenceEvents() {
-    channel.bind('pusher:subscription_succeeded', (members) => {
-        updatePresenceUI(members);
-    });
-    channel.bind('pusher:member_added', (member) => {
-        updatePresenceUI(channel.members);
-    });
-    channel.bind('pusher:member_removed', (member) => {
-        updatePresenceUI(channel.members);
-    });
+    channel.bind('pusher:subscription_succeeded', (members) => updatePresenceUI(members));
+    channel.bind('pusher:member_added', (member) => updatePresenceUI(channel.members));
+    channel.bind('pusher:member_removed', (member) => updatePresenceUI(channel.members));
 }
 
 export async function initializeChat() {
@@ -157,17 +215,17 @@ export async function initializeChat() {
                 currentUser.name = newName;
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
-            
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(channel.members);
                 triggerSave();
             } else {
                 e.target.value = currentUser.name;
             }
-         });
+        });
     }
 
     await loadChatHistory(sessionId);
+
     const pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
@@ -178,21 +236,27 @@ export async function initializeChat() {
             }
         }
     });
+    
     const channelName = `presence-session-${sessionId}`;
     channel = pusher.subscribe(channelName);
 
     bindPresenceEvents();
+
     channel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
             addMessageToUI(data.senderName, data.content, false, data.timestamp);
             showNewMessageNotification(data.senderName, data.content);
-            // Update tab title if the window is not active
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
             }
         }
     });
-    // Request notification permission
+
+    channel.bind('reaction-updated', (data) => {
+        const elementId = `message-${data.messageId}`;
+        updateReactionsUI(elementId, data.reactions);
+    });
+
     if ('Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {
@@ -225,14 +289,10 @@ export function getCurrentUser() {
 }
 
 function showNewMessageNotification(sender, message) {
-  // Only show notifications if permission is granted and the window isn't focused
   if (Notification.permission === 'granted' && !document.hasFocus()) {
     const notification = new Notification(`New message from ${sender}`, {
       body: message,
-      // Optional: replace with a real path to your icon
-      // icon: '/images/chat-icon.png' 
     });
-    // Optional: close the notification after a few seconds
     setTimeout(notification.close.bind(notification), 4000);
   }
 }
