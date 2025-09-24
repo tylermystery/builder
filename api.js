@@ -370,18 +370,22 @@ export async function fetchChatMessages(sessionId) {
     }
 }
 
-export async function postChatMessage(sessionId, senderId, senderName, content) {
+export async function postChatMessage(sessionId, senderId, senderName, content, parentMessageId = null) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
-    const payload = {
-        records: [{
-            fields: {
-                SessionID: sessionId,
-                SenderID: senderId,
-                SenderName: senderName,
-                Content: content,
-           }
-        }]
+    
+    const fields = {
+        SessionID: sessionId,
+        SenderID: senderId,
+        SenderName: senderName,
+        Content: content,
     };
+
+    if (parentMessageId) {
+        fields.ParentMessage = [parentMessageId]; // Link to the parent record
+    }
+
+    const payload = { records: [{ fields }] };
+
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -398,8 +402,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         console.error("Error posting chat message:", error);
     }
 }
-
-// Add these functions to your existing api.js file
 
 export async function fetchAllTeammates() {
     // This function will be useful for the CRM dashboard
