@@ -268,7 +268,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
     
     // --- CHAT LOGIC ---
-    initializeItemChat(record.id);
+    const chatContainer = document.getElementById('modal-chat-container');
+    if (state.session.user.isAuthenticated && chatContainer) {
+      chatContainer.style.display = 'flex';
+      initializeItemChat(record.id);
+    } else {
+      chatContainer.style.display = 'none';
+    }
 
     ui.updateCardIcon(record.id);
     
