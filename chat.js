@@ -8,7 +8,6 @@ let channel = null;
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 
-// --- Tab Title Notification Logic ---
 let originalTitle = document.title;
 let isTabActive = true;
 window.addEventListener('focus', () => {
@@ -18,7 +17,6 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
   isTabActive = false;
 });
-// --- End of Tab Title Logic ---
 
 function generateFunName() {
     const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
@@ -146,12 +144,24 @@ function addMessageToUI(sender, message, isSent, timestamp, messageId, reactions
         if (!picker) {
             picker = document.createElement('emoji-picker');
             document.body.appendChild(picker);
-            picker.style.position = 'absolute';
+            picker.style.position = 'fixed';
             picker.style.zIndex = '1100';
         }
         
-        picker.style.left = `${e.pageX}px`;
-        picker.style.top = `${e.pageY}px`;
+        const pickerWidth = 350;
+        const pickerHeight = 450;
+        let newX = e.clientX;
+        let newY = e.clientY;
+
+        if (newX + pickerWidth > window.innerWidth) {
+            newX = window.innerWidth - pickerWidth - 10;
+        }
+        if (newY + pickerHeight > window.innerHeight) {
+            newY = window.innerHeight - pickerHeight - 10;
+        }
+        
+        picker.style.left = `${newX}px`;
+        picker.style.top = `${newY}px`;
         picker.style.display = 'block';
 
         const emojiSelectedHandler = async (event) => {
@@ -244,7 +254,7 @@ export async function initializeChat() {
 
     channel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
-            addMessageToUI(data.senderName, data.content, false, data.timestamp);
+            addMessageToUI(data.senderName, data.content, false, data.timestamp, data.messageId, {});
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
@@ -273,7 +283,8 @@ export async function sendMessage(message) {
     const sessionId = state.session.id || 'default-session';
     const timestamp = new Date().toISOString();
     
-    addMessageToUI(currentUser.name, message, true, timestamp);
+    // We pass null for messageId because Airtable generates it on creation
+    addMessageToUI(currentUser.name, message, true, timestamp, null, {});
     
     await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
     channel.trigger('client-new-message', {
