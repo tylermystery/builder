@@ -6,10 +6,12 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
+import { initializeItemChat } from '../chat.js';
 
 let stripe;
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
+let currentItemChatRecordId = null;
 
 function handleEscapeKey(event) {
     if (event.key === 'Escape') {
@@ -69,7 +71,8 @@ function resetModalState() {
         modalQuantitySelector: document.getElementById('modal-quantity-selector'),
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
-        modalBreadcrumbs: document.getElementById('modal-breadcrumbs')
+        modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
+        modalChatContainer: document.getElementById('modal-chat-container')
     };
     for (const key in elements) {
         if (elements[key]) {
@@ -105,6 +108,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
+    currentItemChatRecordId = record.id;
+    
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
     
@@ -213,7 +218,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalQuantitySelector.innerHTML = '';
     }
 
-    // --- THIS IS THE RESTORED CALENDAR LOGIC ---
+    // --- CALENDAR LOGIC ---
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
     const calendarInstance = window.flatpickr(modalCalendarContainer, {
@@ -256,13 +261,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         }
     });
-    // --- END OF RESTORED LOGIC ---
 
     const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     if (eventDate) {
         calendarInstance.setDate(new Date(eventDate), true);
     }
     
+    // --- CHAT LOGIC ---
+    initializeItemChat(record.id);
+
     ui.updateCardIcon(record.id);
     
     modalOverlay.classList.add('active');
@@ -275,6 +282,15 @@ export function hideDetailModal() {
     closeBtn.removeEventListener('click', hideDetailModal);
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
+
+    // Stop item-specific chat when modal is closed
+    if (currentItemChatRecordId) {
+      log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
+      // Here, we would unsubscribe from the Pusher channel for this item.
+      // Since it's handled in `initializeItemChat` by clearing the map,
+      // a simple `currentItemChatRecordId = null` is sufficient.
+      currentItemChatRecordId = null;
+    }
 
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
