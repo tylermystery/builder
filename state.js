@@ -1,9 +1,12 @@
 // FILE: state.js
 /*
- * Version: 3.1.0
- * Last Modified: 2025-09-21
+ * Version: 3.2.0
+ * Last Modified: 2025-09-24
  *
  * Changelog:
+ * v3.2.0 - 2025-09-24
+ * - Added `flaggedUsers` and `bannedUsers` sets for moderation.
+ * - Added a new Pusher channel map for item-specific chats.
  * v3.1.0 - 2025-09-21
  * - Added a `stores` object to the state to hold records from the new Stores table.
  * v3.0.0 - 2025-09-20
@@ -11,7 +14,7 @@
  */
 
 export let state = {
-    stores: { // <-- ADD THIS OBJECT
+    stores: {
         all: [],
     },
     records: {
@@ -28,7 +31,7 @@ export let state = {
     session: {
         id: null,
         isOwned: false,
-        storeId: null, // <-- ADD THIS LINE
+        storeId: null,
         user: { 
             isAuthenticated: false,
             id: null,
@@ -36,11 +39,13 @@ export let state = {
             email: '',
             amountReceived: 0,
             amountReceivedNote: '',
-            isOwner: false, // <-- ADD THIS
-            ownerDashboardId: null // <-- ADD THIS
+            isOwner: false,
+            ownerDashboardId: null
         },
         userProfiles: new Map(),
         reactions: new Map(),
+        flaggedUsers: new Set(), // New: Stores IDs of users with flagged content
+        bannedUsers: new Set(), // New: Stores IDs of banned users
     },
     calendar: {
         busyTimes: new Map(),
