@@ -9,7 +9,7 @@ import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
-import { initializeChat } from './chat.js';
+import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
@@ -248,7 +248,7 @@ async function initialize() {
         updateSaveShareButton();
         
         initializeChatEventListeners();
-        initializeChat();
+        initializeSessionChat(); // Now initializes the main session chat
         setupAuthEventListeners();
         updateUserProfileIcon();
         
