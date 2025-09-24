@@ -1,6 +1,5 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import { updateChatUserWithRealName } from './chat.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -88,10 +87,6 @@ async function handleSignIn(e) {
             // Save the session token and update the application state
             localStorage.setItem('jwt', payload.token);
             setState({ session: { ...state.session, user: { ...state.session.user, ...payload.user, isAuthenticated: true } } });
-        
-            // --- ADD THIS LINE ---
-            updateChatUserWithRealName(); 
-            // --------------------
         
             // Update the UI and close the modal
             updateUserProfileIcon();
