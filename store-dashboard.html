@@ -17,16 +17,6 @@
             <div id="item-list-container"></div>
         </main>
     </div>
-
-    <script>
-        const AUTH_KEY = 'store-dashboard-auth-token';
-        const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
-        if (!isAuthenticated) {
-            window.location.href = '/store-login.html';
-        } else {
-            document.getElementById('dashboard-wrapper').style.display = 'block';
-        }
-    </script>
     <script type="module" src="store-dashboard.js"></script>
 </body>
 </html>
