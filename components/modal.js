@@ -274,15 +274,18 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     document.body.classList.add('modal-open');
 
     // FIX: Delay the chat initialization to ensure the DOM elements are ready.
+    // This solves the TypeError by waiting for the chat container to exist.
     setTimeout(() => {
         const chatContainer = document.getElementById('modal-chat-container');
         if (state.session.user.isAuthenticated && chatContainer) {
-            console.log('Chat container found, initializing chat for item:', record.id);
+            log('Modal', 'Chat container found and user is authenticated. Initializing item chat.');
             chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
         } else {
-            console.log('Chat container not found or user not authenticated. Hiding chat.');
-            if (chatContainer) chatContainer.style.display = 'none';
+            log('Modal', 'User is not authenticated or chat container not found. Hiding chat.');
+            if (chatContainer) {
+                chatContainer.style.display = 'none';
+            }
         }
     }, 0);
 }
@@ -296,9 +299,6 @@ export function hideDetailModal() {
     // Stop item-specific chat when modal is closed
     if (currentItemChatRecordId) {
       log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-      // Here, we would unsubscribe from the Pusher channel for this item.
-      // Since it's handled in `initializeItemChat` by clearing the map,
-      // a simple `currentItemChatRecordId = null` is sufficient.
       currentItemChatRecordId = null;
     }
 
