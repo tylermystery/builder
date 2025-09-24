@@ -104,7 +104,7 @@ function addMessageToUI(messageRecord, isReply = false) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList || !messageRecord.fields) return;
 
-    const { SenderID, SenderName, Content, Timestamp, Reactions } = messageRecord.fields;
+    const { SenderID, SenderName, Content, Reactions } = messageRecord.fields;  // Removed Timestamp
     const isSent = SenderID === currentUser.id;
     const messageId = messageRecord.id;
 
@@ -133,7 +133,7 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
-    timestampElement.innerText = new Date(Timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    timestampElement.innerText = new Date(messageRecord.createdTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });  // Use createdTime
 
     const reactionsContainer = document.createElement('div');
     reactionsContainer.className = 'reactions-container';
