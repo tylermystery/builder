@@ -1,8 +1,7 @@
 // In store-dashboard.js
 async function initializeDashboard() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const ownerId = urlParams.get('id');
-    console.log(`[Dashboard Page] Initializing with Owner ID: ${ownerId}`); // <-- ADD THIS
+    // The ID is now hardcoded to load the TMT dashboard data
+    const ownerId = 'tmtdashboard';
 
     if (!ownerId) {
         document.body.innerHTML = '<h1>Error: No dashboard ID provided.</h1>';
@@ -11,20 +10,16 @@ async function initializeDashboard() {
 
     try {
         const response = await fetch(`/api/get-store-data-by-owner-id?id=${ownerId}`);
-        console.log(`[Dashboard Page] Raw response from API:`, response); // <-- ADD THIS
-
         if (!response.ok) {
             throw new Error('Could not load store data.');
         }
         const { store, items } = await response.json();
-
-        // Render the data (simple version for now)
+        
         document.getElementById('store-name-header').textContent = `${store.fields.Name} Dashboard`;
         document.getElementById('store-settings-container').textContent = 'Settings form will go here.';
         
         let itemsHtml = items.map(item => `<div>${item.fields.Name}</div>`).join('');
         document.getElementById('item-list-container').innerHTML = `<ul>${itemsHtml}</ul>`;
-
     } catch (error) {
         document.body.innerHTML = `<h1>Error: ${error.message}</h1>`;
     }
