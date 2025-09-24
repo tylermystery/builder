@@ -83,14 +83,6 @@ function resetModalState() {
 
 export async function showDetailModal(record, startPhotoIndex = 0) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
-
-    const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.addEventListener('click', hideDetailModal);
-    modalOverlay.addEventListener('click', handleOverlayClick);
-    document.addEventListener('keydown', handleEscapeKey);
-
-    resetModalState();
-
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -105,10 +97,17 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-    
+
+    const closeBtn = document.getElementById('modal-close-btn');
+    closeBtn.addEventListener('click', hideDetailModal);
+    modalOverlay.addEventListener('click', handleOverlayClick);
+    document.addEventListener('keydown', handleEscapeKey);
+
+    resetModalState();
     modalOverlay.dataset.recordId = record.id;
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
+    
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
 
     if (addToPlanBtn) {
@@ -124,12 +123,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
 
+    const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+
     if (isGrouping) {
         const range = ui.getGroupPriceRange(record);
-        modalItemPrice.textContent = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
         const price = ui.getRecordPrice(record, itemState.selectedOptionIndex);
-        modalItemPrice.textContent = typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A';
+        modalItemPrice.innerHTML = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A') + pricingTypeHTML;
     }
 
     let currentPhotoIndex = startPhotoIndex;
@@ -159,8 +161,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-    
-    // --- THIS IS THE RESTORED OPTIONS LOGIC ---
+
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -189,7 +190,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = ui.getRecordPrice(record, newIndex);
-                modalItemPrice.textContent = typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A';
+                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
         }
         modalOptionsContainer.appendChild(optionButton);
@@ -211,8 +212,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
-    // --- END OF RESTORED LOGIC ---
-
+    
     ui.updateCardIcon(record.id);
     
     modalOverlay.classList.add('active');
