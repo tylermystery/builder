@@ -36,6 +36,8 @@ export let state = {
             email: '',
             amountReceived: 0,
             amountReceivedNote: '',
+            isOwner: false, // <-- ADD THIS
+            ownerDashboardId: null // <-- ADD THIS
         },
         userProfiles: new Map(),
         reactions: new Map(),
