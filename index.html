@@ -11,7 +11,6 @@
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
         body {
             padding-bottom: 150px;
@@ -1516,7 +1515,6 @@ Bay</option>
                     <button type="submit">Send</button>
                   </form>
                 </div>
-
                 <div id="modal-actions-container">
                     <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
                 </div>
@@ -1643,10 +1641,11 @@ Bay</option>
             </div>
                    <div id="typing-indicator"></div>
             <form id="message-form">
-                <div id="reply-indicator" style="display: none;"></div>
-                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                   <input type="text" 
+ id="message-input" placeholder="Type a message..." autocomplete="off">
                 <button type="submit">Send</button>
             </form>
+                   </div>
     </div>
     
     <div id="presentation-modal-overlay" class="modal-overlay">
