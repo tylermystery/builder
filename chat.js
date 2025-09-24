@@ -236,29 +236,3 @@ function showNewMessageNotification(sender, message) {
     setTimeout(notification.close.bind(notification), 4000);
   }
 }
-
-export function updateChatUserWithRealName() {
-    if (!state.session.user.isAuthenticated || !currentUser) return;
-
-    const funName = localStorage.getItem('chatUserName');
-    if (!funName) return;
-
-    const funNameParts = funName.split(' ');
-    const realFirstName = state.session.user.name.split(' ')[0];
-
-    if (funNameParts.length === 2) {
-        // Injects the real first name: "Happy Panda" + "Tyler" -> "Happy Tyler Panda"
-        const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`;
-        
-        currentUser.name = newName;
-        localStorage.setItem('chatUserName', newName);
-        state.session.userProfiles.set(currentUser.id, newName);
-
-        log('Chat', `Updated chat name to: ${newName}`);
-        if (channel) {
-            // Trigger a UI update for other users
-            updatePresenceUI(channel.members); 
-        }
-        triggerSave();
-    }
-}
