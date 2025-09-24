@@ -1,9 +1,9 @@
 // FILE: ui.js
 /*
- * Version: 3.1.0
- * Last Modified: 2025-09-19
+ * Version: 3.2.0
+ * Last Modified: 2025-09-24
  * Changelog:
- * - Removed obsolete updateTotalCost function, allowing the correct version from sidebar.js to be exported. This fixes the cost breakdown display.
+ * - Added `initializeItemChat` to `showDetailModal`.
  */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -14,6 +14,8 @@ import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, r
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
 import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
+import { initializeItemChat } from './chat.js';
+
 
 // Re-export functions from the new component modules so other files can use them
 export * from './components/card.js';
@@ -21,6 +23,8 @@ export * from './components/modal.js';
 export * from './components/sidebar.js';
 export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, setupPresentationEventListeners };
+export { initializeItemChat };
+
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
