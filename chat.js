@@ -5,21 +5,14 @@ import { triggerSave } from './events.js';
 
 let currentUser = null;
 let channel = null;
-let isReplyingTo = null; // State to track which message is being replied to
+let isReplyingTo = null;
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 
-// --- Tab Title Notification Logic ---
 let originalTitle = document.title;
 let isTabActive = true;
-window.addEventListener('focus', () => {
-  isTabActive = true;
-  document.title = originalTitle;
-});
-window.addEventListener('blur', () => {
-  isTabActive = false;
-});
-// --- End of Tab Title Logic ---
+window.addEventListener('focus', () => { isTabActive = true; document.title = originalTitle; });
+window.addEventListener('blur', () => { isTabActive = false; });
 
 function generateFunName() {
     const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
@@ -29,25 +22,21 @@ function generateFunName() {
 
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
-    
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         localStorage.setItem('chatUserId', userId);
     }
-
     let userName = localStorage.getItem('chatUserName');
     if (!userName || userName.split(' ').length > 3) {
         userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
-
     const authenticatedUser = state.session.user;
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
         const funNameParts = userName.split(' ');
         const realFirstName = authenticatedUser.name.split(' ')[0];
-
-        if (funNameParts.length === 2) { 
+        if (funNameParts.length === 2) {
             const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`;
             userName = newName;
             localStorage.setItem('chatUserName', newName);
@@ -56,7 +45,6 @@ function getSimpleUserIdentity() {
     } else {
         currentUser = { id: userId, name: userName };
     }
-    
     return currentUser;
 }
 
@@ -64,11 +52,9 @@ function updatePresenceUI(members) {
     const presenceCounter = document.getElementById('presence-counter');
     const whosHereCount = document.getElementById('whos-here-count');
     const whosHereList = document.getElementById('whos-here-list');
-    
     const count = members.count;
     if (presenceCounter) presenceCounter.innerText = count;
     if (whosHereCount) whosHereCount.innerText = count;
-
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
@@ -107,8 +93,8 @@ async function loadChatHistory(sessionId) {
     });
 
     topLevelMessages.forEach(message => {
-        addMessageToUI(message, false);
-        message.replies.forEach(reply => addMessageToUI(reply, true));
+        addMessageToUI(message);
+        message.replies.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(reply => addMessageToUI(reply, true));
     });
 }
 
@@ -136,7 +122,7 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const senderElement = document.createElement('div');
     senderElement.className = 'sender';
-    senderElement.innerText = isSent ? 'You' : sender;
+    senderElement.innerText = isSent ? 'You' : SenderName;
     messageElement.appendChild(senderElement);
     messageElement.append(document.createTextNode(Content));
 
@@ -158,13 +144,19 @@ function addMessageToUI(messageRecord, isReply = false) {
     replyButton.textContent = '↩';
     replyButton.title = 'Reply';
     messageElement.appendChild(replyButton);
-    
+
     wrapper.appendChild(messageElement);
     wrapper.appendChild(reactionsContainer);
     wrapper.appendChild(timestampElement);
     
-    const parentContainer = isReply ? document.getElementById(`message-${messageRecord.fields.ParentMessage[0]}`)?.parentElement : messagesList;
-    (parentContainer || messagesList).appendChild(wrapper);
+    const parentId = isReply ? messageRecord.fields.ParentMessage[0] : null;
+    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : null;
+    
+    if (parentContainer) {
+        parentContainer.appendChild(wrapper);
+    } else {
+        messagesList.appendChild(wrapper);
+    }
 
     updateReactionsUI(elementId, reactionsData);
 
@@ -178,10 +170,8 @@ function addMessageToUI(messageRecord, isReply = false) {
             picker.style.zIndex = '1100';
         }
         
-        const pickerWidth = 350;
-        const pickerHeight = 450;
-        let newX = e.clientX;
-        let newY = e.clientY;
+        const pickerWidth = 350, pickerHeight = 450;
+        let newX = e.clientX, newY = e.clientY;
 
         if (newX + pickerWidth > window.innerWidth) newX = window.innerWidth - pickerWidth - 10;
         if (newY + pickerHeight > window.innerHeight) newY = window.innerHeight - pickerHeight - 10;
@@ -191,13 +181,12 @@ function addMessageToUI(messageRecord, isReply = false) {
         picker.style.display = 'block';
 
         const emojiSelectedHandler = async (event) => {
-            const currentUser = getCurrentUser();
             await fetch('/api/update-message-reaction', {
                 method: 'POST',
                 body: JSON.stringify({
                     messageId: messageId,
                     emoji: event.detail.emoji.unicode,
-                    userId: currentUser.id,
+                    userId: getCurrentUser().id,
                     sessionId: state.session.id
                 })
             });
@@ -298,46 +287,41 @@ export async function initializeChat() {
 
     bindPresenceEvents();
 
-    channel.bind('client-new-message', (data) => {
+    channel.bind('client-new-message', async (data) => {
         if (data.senderId !== currentUser.id) {
-            // Find the message in Airtable to see if it's a reply
-            // This part is complex; for now, we render all new messages as top-level
-            addMessageToUI({ fields: { ...data, SenderID: data.senderId, SenderName: data.senderName, Content: data.content, Timestamp: data.timestamp } });
+            // A new message has arrived, so we reload the whole history to render threads correctly
+            await loadChatHistory(sessionId);
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
             }
         }
     });
-
-    channel.bind('reaction-updated', (data) => {
-        const elementId = `message-${data.messageId}`;
-        updateReactionsUI(elementId, data.reactions);
+    
+    channel.bind('reload-chat-history', () => {
+        loadChatHistory(sessionId);
     });
 
-    if ('Notification' in window) {
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') log('Chat', 'Notification permission granted.');
-        });
-      }
+    channel.bind('reaction-updated', (data) => {
+        updateReactionsUI(`message-${data.messageId}`, data.reactions);
+    });
+
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
     }
 }
 
 export async function sendMessage(message) {
-    if (!channel || !currentUser) return;
-    const sessionId = state.session.id || 'default-session';
+    if (!channel || !currentUser || !state.session.id) return;
     const parentId = isReplyingTo ? isReplyingTo.id : null;
-
-    // Post to Airtable, which will then trigger a reload via Pusher for all clients
-    await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message, parentId);
     
+    await api.postChatMessage(state.session.id, currentUser.id, currentUser.name, message, parentId);
+    
+    // Clear the reply UI and trigger a reload for all clients
     isReplyingTo = null;
     updateReplyUI();
-
-    // Reload the chat history for all to see the new message in its proper thread
-    // This is a simple but effective way to handle real-time threading
-    pusher.trigger(channel.name, 'reload-chat-history', {});
+    channel.trigger('reload-chat-history', {});
+    loadChatHistory(state.session.id); // Reload for the sender immediately
 }
 
 export function getCurrentUser() {
