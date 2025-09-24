@@ -92,7 +92,7 @@ async function loadChatHistory(sessionId) {
         }
     });
 
-    topLevelMessages.forEach(message => {
+    topLevelMessages.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(message => {
         addMessageToUI(message);
         message.replies.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(reply => addMessageToUI(reply, true));
     });
@@ -132,7 +132,7 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const reactionsContainer = document.createElement('div');
     reactionsContainer.className = 'reactions-container';
-
+    
     const reactButton = document.createElement('button');
     reactButton.className = 'react-btn';
     reactButton.textContent = '😊+';
@@ -144,19 +144,15 @@ function addMessageToUI(messageRecord, isReply = false) {
     replyButton.textContent = '↩';
     replyButton.title = 'Reply';
     messageElement.appendChild(replyButton);
-
+    
     wrapper.appendChild(messageElement);
     wrapper.appendChild(reactionsContainer);
     wrapper.appendChild(timestampElement);
     
-    const parentId = isReply ? messageRecord.fields.ParentMessage[0] : null;
-    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : null;
+    const parentId = isReply && messageRecord.fields.ParentMessage ? messageRecord.fields.ParentMessage[0] : null;
+    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : messagesList;
     
-    if (parentContainer) {
-        parentContainer.appendChild(wrapper);
-    } else {
-        messagesList.appendChild(wrapper);
-    }
+    (parentContainer || messagesList).appendChild(wrapper);
 
     updateReactionsUI(elementId, reactionsData);
 
@@ -172,10 +168,8 @@ function addMessageToUI(messageRecord, isReply = false) {
         
         const pickerWidth = 350, pickerHeight = 450;
         let newX = e.clientX, newY = e.clientY;
-
         if (newX + pickerWidth > window.innerWidth) newX = window.innerWidth - pickerWidth - 10;
         if (newY + pickerHeight > window.innerHeight) newY = window.innerHeight - pickerHeight - 10;
-        
         picker.style.left = `${newX}px`;
         picker.style.top = `${newY}px`;
         picker.style.display = 'block';
@@ -193,7 +187,6 @@ function addMessageToUI(messageRecord, isReply = false) {
             picker.style.display = 'none';
             picker.removeEventListener('emoji-click', emojiSelectedHandler);
         };
-        
         picker.addEventListener('emoji-click', emojiSelectedHandler);
     });
 
@@ -202,7 +195,7 @@ function addMessageToUI(messageRecord, isReply = false) {
         updateReplyUI();
     });
 
-    wrapper.scrollIntoView({ behavior: 'smooth' });
+    if(!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
 function updateReplyUI() {
@@ -229,7 +222,6 @@ function updateReactionsUI(elementId, reactionsData) {
     const messageWrapper = document.getElementById(elementId);
     if (!messageWrapper) return;
     const reactionsContainer = messageWrapper.querySelector('.reactions-container');
-    
     reactionsContainer.innerHTML = '';
     if (reactionsData && Object.keys(reactionsData).length > 0) {
         for (const [emoji, users] of Object.entries(reactionsData)) {
@@ -287,21 +279,14 @@ export async function initializeChat() {
 
     bindPresenceEvents();
 
-    channel.bind('client-new-message', async (data) => {
+    channel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
-            // A new message has arrived, so we reload the whole history to render threads correctly
-            await loadChatHistory(sessionId);
+            addMessageToUI({ id: data.messageId, fields: { ...data, SenderID: data.senderId, SenderName: data.senderName, Content: data.content, Timestamp: data.timestamp } }, !!data.parentId);
             showNewMessageNotification(data.senderName, data.content);
-            if (!isTabActive) {
-                document.title = 'New Message! - ' + originalTitle;
-            }
+            if (!isTabActive) document.title = 'New Message! - ' + originalTitle;
         }
     });
     
-    channel.bind('reload-chat-history', () => {
-        loadChatHistory(sessionId);
-    });
-
     channel.bind('reaction-updated', (data) => {
         updateReactionsUI(`message-${data.messageId}`, data.reactions);
     });
@@ -314,14 +299,27 @@ export async function initializeChat() {
 export async function sendMessage(message) {
     if (!channel || !currentUser || !state.session.id) return;
     const parentId = isReplyingTo ? isReplyingTo.id : null;
-    
+    const timestamp = new Date().toISOString();
+
+    const tempMessageId = `temp-${Date.now()}`;
+    addMessageToUI({
+        id: tempMessageId,
+        fields: {
+            SenderID: currentUser.id,
+            SenderName: currentUser.name,
+            Content: message,
+            Timestamp: timestamp,
+            ParentMessage: parentId ? [parentId] : null
+        }
+    }, !!parentId);
+
     await api.postChatMessage(state.session.id, currentUser.id, currentUser.name, message, parentId);
     
-    // Clear the reply UI and trigger a reload for all clients
     isReplyingTo = null;
     updateReplyUI();
-    channel.trigger('reload-chat-history', {});
-    loadChatHistory(state.session.id); // Reload for the sender immediately
+
+    // After sending, we reload the history to get the permanent ID and correct threading
+    await loadChatHistory(state.session.id);
 }
 
 export function getCurrentUser() {
