@@ -351,23 +351,39 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
+    let records = [];
+    let offset = null;
     const formula = `({SessionID} = '${sessionId}')`;
     const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}`;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}`;
+    log('API', `Fetching chat messages for session: ${sessionId}`);
 
     try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
-        if (!response.ok) {
-            throw new Error('Failed to fetch chat messages from Airtable.');
-        }
-        const data = await response.json();
+        do {
+            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
+            log('API', `Fetching from: ${url}`);
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+            log('API', `Chat fetch response: status ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                log('API', `Chat fetch error: ${JSON.stringify(errorData)}`);
+                throw new Error('Failed to fetch chat messages from Airtable.');
+            }
+            const data = await response.json();
+            records = records.concat(data.records);
+            offset = data.offset;
+            log('API', `Fetched ${data.records.length} messages, offset: ${offset}`);
+        } while (offset);
+
         // Sort client-side by createdTime (ascending)
-        const sortedRecords = data.records.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+        const sortedRecords = records.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+        log('API', `Total messages fetched and sorted: ${sortedRecords.length}`);
         return sortedRecords;
     } catch (error) {
         console.error("Error fetching chat history:", error);
+        log('API', `Failed to fetch chat messages: ${error.message}`);
         return [];
     }
 }
