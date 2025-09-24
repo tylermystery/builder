@@ -351,61 +351,37 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
-    let records = [];
-    let offset = null;
     const formula = `({SessionID} = '${sessionId}')`;
     const encodedFormula = encodeURIComponent(formula);
-    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}`;
-    log('API', `Fetching chat messages for session: ${sessionId}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
     try {
-        do {
-            const url = offset ? `${baseUrl}&offset=${offset}` : baseUrl;
-            log('API', `Fetching from: ${url}`);
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-            });
-            log('API', `Chat fetch response: status ${response.status}`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                log('API', `Chat fetch error: ${JSON.stringify(errorData)}`);
-                throw new Error('Failed to fetch chat messages from Airtable.');
-            }
-            const data = await response.json();
-            records = records.concat(data.records);
-            offset = data.offset;
-            log('API', `Fetched ${data.records.length} messages, offset: ${offset}`);
-        } while (offset);
-
-        // Sort client-side by createdTime (ascending)
-        const sortedRecords = records.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
-        log('API', `Total messages fetched and sorted: ${sortedRecords.length}`);
-        return sortedRecords;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch chat messages from Airtable.');
+        }
+        const data = await response.json();
+        return data.records;
     } catch (error) {
         console.error("Error fetching chat history:", error);
-        log('API', `Failed to fetch chat messages: ${error.message}`);
         return [];
     }
 }
 
-export async function postChatMessage(sessionId, senderId, senderName, content, parentMessageId = null) {
+export async function postChatMessage(sessionId, senderId, senderName, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
-    
-    const fields = {
-        SessionID: sessionId,
-        SenderID: senderId,
-        SenderName: senderName,
-        Content: content,
-        Timestamp: new Date().toISOString(), // Add explicit Timestamp field
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: sessionId,
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content,
+           }
+        }]
     };
-
-    if (parentMessageId) {
-        fields.ParentMessage = [parentMessageId]; // Link to the parent record
-    }
-
-    const payload = { records: [{ fields }] };
-    log('API', `Posting message to session ${sessionId}: ${content.substring(0, 50)}...`);
-
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -415,22 +391,15 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
             },
             body: JSON.stringify(payload)
         });
-        log('API', `Post message response: status ${response.status}`);
         if (!response.ok) {
-            const errorData = await response.json();
-            log('API', `Post message error: ${JSON.stringify(errorData)}`);
-            throw new Error('Failed to post chat message to Airtable.');
+             throw new Error('Failed to post chat message to Airtable.');
         }
-        const data = await response.json();
-        const newMessage = data.records[0];
-        log('API', `New message created with ID: ${newMessage.id}`);
-        return newMessage; // Return the full new message record
     } catch (error) {
         console.error("Error posting chat message:", error);
-        log('API', `Failed to post message: ${error.message}`);
-        return null;
     }
 }
+
+// Add these functions to your existing api.js file
 
 export async function fetchAllTeammates() {
     // This function will be useful for the CRM dashboard
