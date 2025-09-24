@@ -87,7 +87,7 @@ async function handleSignIn(e) {
 
         channel.bind('auth-success', (payload) => {
             clearTimeout(loginTimeout);
-            log('Auth', 'Auth success event received via Pusher.');
+            console.log("Pusher auth-success payload received:", payload);
             
             localStorage.setItem('jwt', payload.token);
             
@@ -103,7 +103,9 @@ async function handleSignIn(e) {
                     } 
                 } 
             });
-            
+
+            console.log("User state after update:", state.session.user);
+        
             updateUserProfileIcon();
             hideUserModal();
             pusher.unsubscribe(channelName);
@@ -118,6 +120,7 @@ async function handleSignIn(e) {
 export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
+    // Also clear owner status on sign out
     setState({
         session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
     });
@@ -126,7 +129,7 @@ export function handleSignOut() {
 }
 
 export function updateUserProfileIcon() {
-    if (state.session.user.isAuthenticated) {
+    if (state.session.user.isAuthenticated && state.session.user.name) {
         userProfileButton.classList.add('signed-in');
         userProfileButton.textContent = state.session.user.name.charAt(0).toUpperCase();
         userProfileButton.title = `Logged in as ${state.session.user.name}`;
