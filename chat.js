@@ -73,7 +73,7 @@ function updatePresenceUI(members) {
 async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
-    const scrollPosition = messagesList.scrollTop;
+    const scrollPosition = messagesList.scrollHeight - messagesList.scrollTop; // Save user's scroll position
     messagesList.innerHTML = '';
     const records = await api.fetchChatMessages(sessionId);
 
@@ -97,7 +97,7 @@ async function loadChatHistory(sessionId) {
         addMessageToUI(message);
         message.replies.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(reply => addMessageToUI(reply, true));
     });
-    messagesList.scrollTop = scrollPosition;
+    messagesList.scrollTop = messagesList.scrollHeight - scrollPosition; // Restore scroll position
 }
 
 function addMessageToUI(messageRecord, isReply = false) {
@@ -161,7 +161,7 @@ function addMessageToUI(messageRecord, isReply = false) {
     wrapper.appendChild(timestampElement);
     
     const parentId = isReply && messageRecord.fields.ParentMessage ? messageRecord.fields.ParentMessage[0] : null;
-    const parentContainer = parentId ? document.getElementById(elementId).parentElement : messagesList;
+    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : messagesList;
     
     (parentContainer || messagesList).appendChild(wrapper);
 
@@ -286,6 +286,7 @@ export async function initializeChat() {
     bindPresenceEvents();
 
     channel.bind('client-new-message', async (data) => {
+        // When a message comes in from another user, reload the history to show it in the correct thread
         await loadChatHistory(sessionId);
         if (data.senderId !== currentUser.id) {
             showNewMessageNotification(data.senderName, data.content);
@@ -315,9 +316,7 @@ export async function sendMessage(message) {
     channel.trigger('client-new-message', {
         senderId: currentUser.id,
         senderName: currentUser.name,
-        content: message,
-        timestamp: new Date().toISOString(),
-        parentId: parentId
+        content: message
     });
     
     await loadChatHistory(state.session.id);
