@@ -33,7 +33,6 @@ exports.handler = async (event) => {
 
         // 3. Find or create the user
         const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=AND({Email}='${Email}')`;
-        // ... (this section contains the same find/create user logic as the old auth-verify function)
         const userRes = await fetch(findUserUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         let userData = await userRes.json();
         let userRecord;
@@ -49,16 +48,37 @@ exports.handler = async (event) => {
             userRecord = newUserData.records[0];
         }
 
-        // 4. Generate the session JWT
-        const sessionToken = jwt.sign({ userId: userRecord.id, email: userRecord.fields.Email }, JWT_SECRET, { expiresIn: '30d' });
+        // 4. --- THIS IS THE NEW LOGIC ---
+        // Check if the user is a store owner by looking at the 'OwnedStore' field.
+        let ownerData = { isOwner: false, ownerDashboardId: null };
+        if (userRecord.fields.OwnedStore && userRecord.fields.OwnedStore.length > 0) {
+            const storeId = userRecord.fields.OwnedStore[0];
+            const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/Stores/${storeId}`;
+            const storeRes = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+            if (storeRes.ok) {
+                const storeRecord = await storeRes.json();
+                if (storeRecord.fields.OwnerDashboardID) {
+                    ownerData.isOwner = true;
+                    ownerData.ownerDashboardId = storeRecord.fields.OwnerDashboardID;
+                }
+            }
+        }
 
-        // 5. Send the JWT to the original tab via Pusher
+        // 5. Generate the session JWT, now including the user's name
+        const sessionToken = jwt.sign(
+            { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner }, 
+            JWT_SECRET, 
+            { expiresIn: '30d' }
+        );
+
+        // 6. Send the JWT AND the new ownerData to the original tab via Pusher
         await pusher.trigger(`private-auth-${ChannelID}`, "auth-success", {
             token: sessionToken,
-            user: { id: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email }
+            user: { id: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email },
+            ownerData: ownerData // <-- Now including owner data
         });
 
-        // 6. Return a friendly message to the user
+        // 7. Return a friendly message to the user
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'text/html' },
