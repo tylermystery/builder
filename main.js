@@ -195,29 +195,32 @@ async function initialize() {
         
                 localStorage.setItem('jwt', data.token);
                 setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
-        
-                if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
-                    const cleanUrl = new URL(window.location);
-                    cleanUrl.searchParams.delete('loginToken');
-                    window.history.replaceState({}, document.title, cleanUrl.toString());
+                
+                // --- REDIRECT LOGIC ---
+                const cleanUrl = new URL(window.location);
+                cleanUrl.searchParams.delete('token');
+                window.history.replaceState({}, document.title, cleanUrl.toString());
+
+                if (data.ownerData && data.ownerData.isOwner) {
+                    // If user is a store owner, redirect to their dashboard
+                    window.location.href = `/store-dashboard.html?id=${data.ownerData.ownerDashboardId}`;
+                    return; // Stop further execution
+                } else if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
+                    // If user is a TMT employee, redirect to the CRM
                     window.location.href = '/dashboard.html';
-                    return; 
+                    return; // Stop further execution
                 }
         
-                const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('loginToken');
-                window.history.replaceState({}, document.title, cleanUrl.toString());
-        
-                // Refresh the UI to show the user is logged in
+                // Regular user, just update the icon
                 updateUserProfileIcon();
-        
             } catch (error) {
                 alert(`Sign-in failed: ${error.message}`);
                 const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('loginToken');
+                cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
             }
         }
+
 
         if (sessionId && !state.session.id) {
             await api.loadSessionFromAirtable(sessionId);
