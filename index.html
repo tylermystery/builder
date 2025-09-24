@@ -1147,6 +1147,105 @@
             display: block;
             margin-bottom: 4px;
         }
+/* New CSS for item chat within the modal */
+#modal-chat-container {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+}
+
+#modal-chat-container h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  flex-grow: 1;
+}
+
+#message-form-item {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+#message-input-item {
+  flex-grow: 1;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  padding: 10px;
+}
+
+#message-form-item button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 15px;
+  cursor: pointer;
+}
+
+/* Moderation Styles */
+.message-wrapper .moderation-actions {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: none;
+  gap: 5px;
+}
+
+.message-wrapper:hover .moderation-actions {
+  display: flex;
+}
+
+.message-wrapper .flag-btn, .message-wrapper .ban-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  font-size: 0.8em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.message-wrapper .flag-btn {
+  background-color: #ffc107;
+  color: #333;
+}
+
+.chat-message.banned, .chat-message.flagged {
+    color: #6c757d;
+    font-style: italic;
+    background-color: #e9ecef;
+}
+
+.coming-soon-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
+  font-weight: bold;
+  z-index: 5; /* Ensures it's on top of the image */
+}
+
 
         .timestamp {
             font-size: 0.7em;
