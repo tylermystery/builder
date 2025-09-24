@@ -403,6 +403,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
     }
 
     const payload = { records: [{ fields }] };
+    log('API', `Posting message to session ${sessionId}: ${content.substring(0, 50)}...`);
 
     try {
         const response = await fetch(url, {
@@ -413,11 +414,20 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
             },
             body: JSON.stringify(payload)
         });
+        log('API', `Post message response: status ${response.status}`);
         if (!response.ok) {
-             throw new Error('Failed to post chat message to Airtable.');
+            const errorData = await response.json();
+            log('API', `Post message error: ${JSON.stringify(errorData)}`);
+            throw new Error('Failed to post chat message to Airtable.');
         }
+        const data = await response.json();
+        const newMessage = data.records[0];
+        log('API', `New message created with ID: ${newMessage.id}`);
+        return newMessage; // Return the full new message record (includes createdTime, etc.)
     } catch (error) {
         console.error("Error posting chat message:", error);
+        log('API', `Failed to post message: ${error.message}`);
+        return null;
     }
 }
 
