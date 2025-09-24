@@ -17,14 +17,25 @@ const userProfileButton = document.getElementById('user-profile-button');
 // --- Functions ---
 export function showUserModal() {
     const user = state.session.user;
+    const ownerDashboardLink = document.getElementById('owner-dashboard-link');
+
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
         profileEmailEl.textContent = user.email;
         signinView.style.display = 'none';
         profileView.style.display = 'block';
+
+        // Check if the user is an owner and show the dashboard link
+        if (user.isOwner && user.ownerDashboardId) {
+            ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
+            ownerDashboardLink.style.display = 'block';
+        } else {
+            ownerDashboardLink.style.display = 'none';
+        }
     } else {
         signinView.style.display = 'block';
         profileView.style.display = 'none';
+        ownerDashboardLink.style.display = 'none';
     }
     userModalOverlay.classList.add('active');
     userModalOverlay.style.display = 'flex';
