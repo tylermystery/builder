@@ -2,6 +2,7 @@
 async function initializeDashboard() {
     const urlParams = new URLSearchParams(window.location.search);
     const ownerId = urlParams.get('id');
+    console.log(`[Dashboard Page] Initializing with Owner ID: ${ownerId}`); // <-- ADD THIS
 
     if (!ownerId) {
         document.body.innerHTML = '<h1>Error: No dashboard ID provided.</h1>';
@@ -10,6 +11,8 @@ async function initializeDashboard() {
 
     try {
         const response = await fetch(`/api/get-store-data-by-owner-id?id=${ownerId}`);
+        console.log(`[Dashboard Page] Raw response from API:`, response); // <-- ADD THIS
+
         if (!response.ok) {
             throw new Error('Could not load store data.');
         }
