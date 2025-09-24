@@ -182,7 +182,7 @@ async function initialize() {
             }
         }
         
-        const loginToken = urlParams.get('loginToken');
+        const loginToken = urlParams.get('token');
         if (loginToken) {
             try {
                 const response = await fetch('/api/auth-verify', {
