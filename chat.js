@@ -73,6 +73,7 @@ function updatePresenceUI(members) {
 async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
     if (!messagesList) return;
+    const scrollPosition = messagesList.scrollTop;
     messagesList.innerHTML = '';
     const records = await api.fetchChatMessages(sessionId);
 
@@ -96,11 +97,12 @@ async function loadChatHistory(sessionId) {
         addMessageToUI(message);
         message.replies.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(reply => addMessageToUI(reply, true));
     });
+    messagesList.scrollTop = scrollPosition;
 }
 
 function addMessageToUI(messageRecord, isReply = false) {
     const messagesList = document.getElementById('messages-list');
-    if (!messagesList) return;
+    if (!messagesList || !messageRecord.fields) return;
 
     const { SenderID, SenderName, Content, Timestamp, Reactions } = messageRecord.fields;
     const isSent = SenderID === currentUser.id;
@@ -111,7 +113,6 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const elementId = `message-${messageId}`;
     if (document.getElementById(elementId)) {
-        // If message exists, just update its reactions
         updateReactionsUI(elementId, reactionsData);
         return;
     }
@@ -143,18 +144,24 @@ function addMessageToUI(messageRecord, isReply = false) {
     reactButton.title = 'Add Reaction';
     messageElement.appendChild(reactButton);
 
-    const replyButton = document.createElement('button');
-    replyButton.className = 'reply-btn';
-    replyButton.textContent = '↩';
-    replyButton.title = 'Reply';
-    messageElement.appendChild(replyButton);
+    if (!isReply) {
+        const replyButton = document.createElement('button');
+        replyButton.className = 'reply-btn';
+        replyButton.textContent = '↩';
+        replyButton.title = 'Reply';
+        messageElement.appendChild(replyButton);
+        replyButton.addEventListener('click', () => {
+            isReplyingTo = { id: messageId, author: SenderName };
+            updateReplyUI();
+        });
+    }
     
     wrapper.appendChild(messageElement);
     wrapper.appendChild(reactionsContainer);
     wrapper.appendChild(timestampElement);
     
     const parentId = isReply && messageRecord.fields.ParentMessage ? messageRecord.fields.ParentMessage[0] : null;
-    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : messagesList;
+    const parentContainer = parentId ? document.getElementById(elementId).parentElement : messagesList;
     
     (parentContainer || messagesList).appendChild(wrapper);
 
@@ -192,11 +199,6 @@ function addMessageToUI(messageRecord, isReply = false) {
             picker.removeEventListener('emoji-click', emojiSelectedHandler);
         };
         picker.addEventListener('emoji-click', emojiSelectedHandler);
-    });
-
-    replyButton.addEventListener('click', () => {
-        isReplyingTo = { id: messageId, author: SenderName };
-        updateReplyUI();
     });
 
     if(!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
@@ -284,8 +286,8 @@ export async function initializeChat() {
     bindPresenceEvents();
 
     channel.bind('client-new-message', async (data) => {
+        await loadChatHistory(sessionId);
         if (data.senderId !== currentUser.id) {
-            await loadChatHistory(sessionId);
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) document.title = 'New Message! - ' + originalTitle;
         }
@@ -304,14 +306,12 @@ export async function sendMessage(message) {
     if (!channel || !currentUser || !state.session.id) return;
     const parentId = isReplyingTo ? isReplyingTo.id : null;
     
-    // Send the message to Airtable first
     await api.postChatMessage(state.session.id, currentUser.id, currentUser.name, message, parentId);
     
-    // Clear the reply UI
     isReplyingTo = null;
     updateReplyUI();
     
-    // Trigger an event for other clients to reload their history
+    // Use the correct client- event prefix
     channel.trigger('client-new-message', {
         senderId: currentUser.id,
         senderName: currentUser.name,
@@ -319,8 +319,7 @@ export async function sendMessage(message) {
         timestamp: new Date().toISOString(),
         parentId: parentId
     });
-
-    // Reload the sender's history to show the new message
+    
     await loadChatHistory(state.session.id);
 }
 
