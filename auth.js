@@ -1,5 +1,6 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
+import { updateChatUserWithRealName } from './chat.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -88,13 +89,11 @@ async function handleSignIn(e) {
 
         channel.bind('auth-success', (payload) => {
             clearTimeout(loginTimeout);
-            
-            // --- DIAGNOSTIC LOG #1 ---
-            console.log("Pusher auth-success payload received:", payload);
+            log('Auth', 'Auth success event received via Pusher.');
             
             localStorage.setItem('jwt', payload.token);
-
-            // --- THIS IS THE CORRECTED STATE UPDATE ---
+            
+            // This setState call correctly saves all user data, including owner status.
             setState({ 
                 session: { 
                     ...state.session, 
@@ -107,10 +106,8 @@ async function handleSignIn(e) {
                     } 
                 } 
             });
-
-            // --- DIAGNOSTIC LOG #2 ---
-            console.log("User state after update:", state.session.user);
-        
+            
+            updateChatUserWithRealName();
             updateUserProfileIcon();
             hideUserModal();
             pusher.unsubscribe(channelName);
@@ -126,7 +123,7 @@ export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
     setState({
-        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '' } }
+        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
     });
     updateUserProfileIcon();
     hideUserModal();
@@ -149,7 +146,6 @@ export function setupAuthEventListeners() {
     userModalCloseBtn.addEventListener('click', hideUserModal);
     signinForm.addEventListener('submit', handleSignIn);
     signoutBtn.addEventListener('click', handleSignOut);
-    
     userModalOverlay.addEventListener('click', (e) => {
         if (e.target === userModalOverlay) {
             hideUserModal();
