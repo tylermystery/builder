@@ -67,7 +67,7 @@ exports.handler = async (event) => {
         
         // 5. Generate JWT and return response
         const sessionToken = jwt.sign(
-            { userId: userRecord.id, email: userRecord.fields.Email, isOwner: ownerData.isOwner },
+            { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner },
             JWT_SECRET,
             { expiresIn: '30d' }
         );
