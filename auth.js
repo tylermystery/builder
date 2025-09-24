@@ -67,39 +67,44 @@ async function handleSignIn(e) {
             throw new Error(data.error || 'Failed to send confirmation email.');
         }
         
-        // Let the user know the email is on its way
         signinMessage.style.color = '#28a745';
         signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
         signinEmailInput.value = '';
 
-        // Initialize Pusher to listen for the confirmation
-        const pusher = new Pusher('236f480714e5001590b5', { // Your Pusher Key
+        const pusher = new Pusher('236f480714e5001590b5', {
             cluster: 'us3',
             authEndpoint: '/api/pusher-auth'
         });
 
-        // Subscribe to the unique, private channel for this login attempt
         const channelName = `private-auth-${data.channelId}`;
         const channel = pusher.subscribe(channelName);
 
-        // Set a timeout for the login attempt
         const loginTimeout = setTimeout(() => {
             channel.unbind('auth-success');
             pusher.unsubscribe(channelName);
             signinMessage.style.color = '#dc3545';
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
-        }, 5 * 60 * 1000); // 5 minute timeout
+        }, 5 * 60 * 1000);
 
-        // Wait for the 'auth-success' event from the server
         channel.bind('auth-success', (payload) => {
-            clearTimeout(loginTimeout); // Stop the timeout
+            clearTimeout(loginTimeout);
             log('Auth', 'Auth success event received via Pusher.');
             
-            // Save the session token and update the application state
             localStorage.setItem('jwt', payload.token);
-            setState({ session: { ...state.session, user: { ...state.session.user, ...payload.user, isAuthenticated: true } } });
+            // --- THIS IS THE CORRECTED LINE ---
+            setState({ 
+                session: { 
+                    ...state.session, 
+                    user: { 
+                        ...state.session.user, 
+                        ...payload.user, 
+                        isAuthenticated: true,
+                        isOwner: payload.ownerData.isOwner,
+                        ownerDashboardId: payload.ownerData.ownerDashboardId
+                    } 
+                } 
+            });
         
-            // Update the UI and close the modal
             updateUserProfileIcon();
             hideUserModal();
             pusher.unsubscribe(channelName);
