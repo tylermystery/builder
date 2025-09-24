@@ -396,6 +396,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
         SenderID: senderId,
         SenderName: senderName,
         Content: content,
+        Timestamp: new Date().toISOString(), // Add explicit Timestamp field
     };
 
     if (parentMessageId) {
@@ -423,7 +424,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content, 
         const data = await response.json();
         const newMessage = data.records[0];
         log('API', `New message created with ID: ${newMessage.id}`);
-        return newMessage; // Return the full new message record (includes createdTime, etc.)
+        return newMessage; // Return the full new message record
     } catch (error) {
         console.error("Error posting chat message:", error);
         log('API', `Failed to post message: ${error.message}`);
