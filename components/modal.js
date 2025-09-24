@@ -161,7 +161,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-
+    
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -211,6 +211,56 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalActionsContainer.style.display = 'none';
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
+    }
+
+    // --- THIS IS THE RESTORED CALENDAR LOGIC ---
+    modalCalendarContainer.innerHTML = '';
+    const busyTimes = await api.fetchCalendarForRecord(record);
+    const calendarInstance = window.flatpickr(modalCalendarContainer, {
+        inline: true,
+        showMonths: 1,
+        disable: [(date) => {
+            const status = getDayStatus(date, busyTimes, record);
+            return status.status === AVAILABILITY_STATUS.NONE;
+        }],
+        onDayCreate: function (dObj, dStr, fp, dayElem) {
+            const day = dayElem.dateObj;
+            const status = getDayStatus(day, busyTimes, record);
+            let className = '';
+            let tooltip = status.reason;
+            if (status.status === AVAILABILITY_STATUS.FULL) {
+                className = 'available-full';
+            } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
+                className = 'available-partial';
+                tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+            } else {
+                className = 'unavailable';
+            }
+            dayElem.classList.add(className);
+            dayElem.setAttribute('data-tippy-content', tooltip);
+        },
+        onReady: function () {
+            tippy('.flatpickr-day', {
+                content: reference => reference.getAttribute('data-tippy-content'),
+                placement: 'top',
+                theme: 'light',
+                allowHTML: true,
+            });
+        },
+        onChange: (selectedDates) => {
+            if (selectedDates.length > 0) {
+                const eventDateInput = document.getElementById('event-date-picker');
+                if (eventDateInput && eventDateInput._flatpickr) {
+                    eventDateInput._flatpickr.setDate(selectedDates[0], true);
+                }
+            }
+        }
+    });
+    // --- END OF RESTORED LOGIC ---
+
+    const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    if (eventDate) {
+        calendarInstance.setDate(new Date(eventDate), true);
     }
     
     ui.updateCardIcon(record.id);
