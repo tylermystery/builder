@@ -21,7 +21,7 @@ exports.handler = async (event) => {
         const storeRecord = storeData.records[0];
         const storeId = storeRecord.id;
         
-        // 2. Find all items linked to that store's record ID (CORRECTED FORMULA)
+        // 2. Find all items linked to that store's record ID using the corrected formula
         const itemsFormula = `FIND('${storeId}', {Stores} & '')`;
         const itemsUrl = `https://api.airtable.com/v0/${BASE_ID}/tblUA4uuS8IYlhKpD?filterByFormula=${encodeURIComponent(itemsFormula)}`;
         const itemsResponse = await fetch(itemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
