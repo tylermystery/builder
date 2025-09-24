@@ -110,7 +110,11 @@ function addMessageToUI(messageRecord, isReply = false) {
     try { reactionsData = JSON.parse(Reactions || '{}'); } catch (e) {}
 
     const elementId = `message-${messageId}`;
-    if (document.getElementById(elementId)) return;
+    if (document.getElementById(elementId)) {
+        // If message exists, just update its reactions
+        updateReactionsUI(elementId, reactionsData);
+        return;
+    }
 
     const wrapper = document.createElement('div');
     wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'} ${isReply ? 'is-reply' : ''}`;
@@ -279,9 +283,9 @@ export async function initializeChat() {
 
     bindPresenceEvents();
 
-    channel.bind('client-new-message', (data) => {
+    channel.bind('client-new-message', async (data) => {
         if (data.senderId !== currentUser.id) {
-            addMessageToUI({ id: data.messageId, fields: { ...data, SenderID: data.senderId, SenderName: data.senderName, Content: data.content, Timestamp: data.timestamp } }, !!data.parentId);
+            await loadChatHistory(sessionId);
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) document.title = 'New Message! - ' + originalTitle;
         }
@@ -299,26 +303,24 @@ export async function initializeChat() {
 export async function sendMessage(message) {
     if (!channel || !currentUser || !state.session.id) return;
     const parentId = isReplyingTo ? isReplyingTo.id : null;
-    const timestamp = new Date().toISOString();
-
-    const tempMessageId = `temp-${Date.now()}`;
-    addMessageToUI({
-        id: tempMessageId,
-        fields: {
-            SenderID: currentUser.id,
-            SenderName: currentUser.name,
-            Content: message,
-            Timestamp: timestamp,
-            ParentMessage: parentId ? [parentId] : null
-        }
-    }, !!parentId);
-
+    
+    // Send the message to Airtable first
     await api.postChatMessage(state.session.id, currentUser.id, currentUser.name, message, parentId);
     
+    // Clear the reply UI
     isReplyingTo = null;
     updateReplyUI();
+    
+    // Trigger an event for other clients to reload their history
+    channel.trigger('client-new-message', {
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        content: message,
+        timestamp: new Date().toISOString(),
+        parentId: parentId
+    });
 
-    // After sending, we reload the history to get the permanent ID and correct threading
+    // Reload the sender's history to show the new message
     await loadChatHistory(state.session.id);
 }
 
