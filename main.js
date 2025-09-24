@@ -192,7 +192,11 @@ async function initialize() {
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-        
+
+                // --- ADD THIS DEBUGGING LOG ---
+                console.log("Data received from /api/auth-verify:", data);
+                // ---------------------------------
+                
                 // This block correctly saves all user data, including owner status, to the state.
                 localStorage.setItem('jwt', data.token);
                 setState({ 
