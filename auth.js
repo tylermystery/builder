@@ -1,6 +1,5 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import { updateChatUserWithRealName } from './chat.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -26,7 +25,6 @@ export function showUserModal() {
         signinView.style.display = 'none';
         profileView.style.display = 'block';
 
-        // Check if the user is an owner and show the dashboard link
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
             ownerDashboardLink.style.display = 'block';
@@ -93,7 +91,6 @@ async function handleSignIn(e) {
             
             localStorage.setItem('jwt', payload.token);
             
-            // This setState call correctly saves all user data, including owner status.
             setState({ 
                 session: { 
                     ...state.session, 
@@ -107,7 +104,6 @@ async function handleSignIn(e) {
                 } 
             });
             
-            updateChatUserWithRealName();
             updateUserProfileIcon();
             hideUserModal();
             pusher.unsubscribe(channelName);
@@ -136,7 +132,7 @@ export function updateUserProfileIcon() {
         userProfileButton.title = `Logged in as ${state.session.user.name}`;
     } else {
         userProfileButton.classList.remove('signed-in');
-        userProfileButton.innerHTML = '&#128100;'; // Person emoji
+        userProfileButton.innerHTML = '&#128100;';
         userProfileButton.title = 'Sign In / My Account';
     }
 }
