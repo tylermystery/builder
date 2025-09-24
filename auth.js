@@ -45,17 +45,22 @@ async function handleSignIn(e) {
     signinMessage.textContent = `Sending magic link...`;
 
     try {
+        // --- THIS IS THE MODIFIED PART ---
         const response = await fetch('/api/auth-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email }),
+            body: JSON.stringify({ 
+                email: email,
+                siteUrl: window.location.origin // Automatically include the site's base URL
+            }),
         });
+        // --- END MODIFICATION ---
 
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Failed to send magic link.');
         }
-
+        
         signinMessage.style.color = '#28a745';
         signinMessage.textContent = `A sign-in link has been sent to ${email}. Please check your inbox.`;
         signinEmailInput.value = '';
