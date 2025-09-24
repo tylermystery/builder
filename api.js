@@ -353,7 +353,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 export async function fetchChatMessages(sessionId) {
     const formula = `({SessionID} = '${sessionId}')`;
     const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}`;
 
     try {
         const response = await fetch(url, {
@@ -363,7 +363,9 @@ export async function fetchChatMessages(sessionId) {
             throw new Error('Failed to fetch chat messages from Airtable.');
         }
         const data = await response.json();
-        return data.records;
+        // Sort client-side by createdTime (ascending)
+        const sortedRecords = data.records.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime));
+        return sortedRecords;
     } catch (error) {
         console.error("Error fetching chat history:", error);
         return [];
