@@ -1,246 +1,238 @@
+// FILE: chat.js
 import { state } from './state.js';
+import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { postChatMessage, fetchChatMessages } from './api.js';
+import { triggerSave } from './events.js';
 
-// Current user (set during auth or session load)
-let currentUser = { id: null, name: null };
-let isReplyingTo = null;
+let currentUser = null;
+let channel = null;
+const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
+const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 
-// Initialize Pusher for real-time chat (using global Pusher from script tag)
-const pusherClient = window.Pusher ? new window.Pusher('YOUR_PUSHER_KEY', {
-    cluster: 'YOUR_PUSHER_CLUSTER',
-    authEndpoint: '/api/pusher-auth'
-}) : null;
+// --- Tab Title Notification Logic ---
+let originalTitle = document.title;
+let isTabActive = true;
+window.addEventListener('focus', () => {
+  isTabActive = true;
+  document.title = originalTitle; // Change title back when tab is viewed
+});
+window.addEventListener('blur', () => {
+  isTabActive = false;
+});
+// --- End of Tab Title Logic ---
 
-// Initialize chat system
-export async function initializeChat(sessionId, userId, userName) {
-    log('Chat', `Initializing chat for session ${sessionId}, user ${userName}`);
-    if (!pusherClient) {
-        log('Chat', 'Pusher not available; real-time updates disabled');
+function generateFunName() {
+    const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
+    const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
+    return `${adj} ${noun}`;
+}
+
+function getSimpleUserIdentity() {
+    if (currentUser) return currentUser;
+
+    // Step 1: Always ensure a base "fun name" identity exists for this browser session.
+    let userId = localStorage.getItem('chatUserId');
+    if (!userId) {
+        userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('chatUserId', userId);
     }
-    currentUser = { id: userId, name: userName };
-    state.session.id = sessionId;
 
-    // Subscribe to Pusher channel if available
-    if (pusherClient) {
-        const channel = pusherClient.subscribe(`chat-${sessionId}`);
-        channel.bind('new-message', (data) => {
-            log('Chat', `Received new message via Pusher: ${data.messageId}`);
-            fetchAndRenderSingleMessage(data.messageId);
-        });
+    let userName = localStorage.getItem('chatUserName');
+    if (!userName || userName.split(' ').length !== 3) { // Regenerate if it's not a fun name or a modified one
+        userName = generateFunName(); // e.g., "Happy Panda"
+        localStorage.setItem('chatUserName', userName);
     }
 
-    // Load and render chat history
-    await loadChatHistory();
+    // Step 2: Check if the user is authenticated.
+    const authenticatedUser = state.session.user;
+    if (authenticatedUser && authenticatedUser.isAuthenticated) {
+        // User is logged in. Modify the fun name with their real name if it hasn't been already.
+        const funNameParts = userName.split(' ');
+        const realFirstName = authenticatedUser.name.split(' ')[0]; // e.g., "Tyler"
 
-    // Setup form submit listener
-    const chatForm = document.getElementById('chat-form');
-    if (chatForm) {
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('message-input');
-            const content = input.value.trim();
-            if (!content) return;
-
-            const parentMessageId = isReplyingTo ? isReplyingTo.id : null;
-            const newMessage = await postChatMessage(state.session.id, currentUser.id, currentUser.name, content, parentMessageId);
-            
-            if (newMessage) {
-                addMessageToUI(newMessage, !!parentMessageId); // Add locally for instant feedback
-                if (pusherClient) {
-                    pusherClient.trigger(`chat-${sessionId}`, 'new-message', { messageId: newMessage.id });
-                }
-            } else {
-                log('Chat', 'Failed to post message; not adding to UI');
-            }
-
-            input.value = '';
-            if (isReplyingTo) {
-                isReplyingTo = null;
-                updateReplyUI();
-            }
-        });
+        if (funNameParts.length === 2) { 
+            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`; // e.g., "Happy Tyler Panda"
+            userName = newName;
+            localStorage.setItem('chatUserName', newName); // Save the new name for future visits
+        }
+        // Use the authenticated user's permanent ID but the fun/modified name
+        currentUser = { id: authenticatedUser.id, name: userName };
     } else {
-        log('Chat', 'Chat form not found in DOM');
+        // User is a guest, so use the generated fun identity.
+        currentUser = { id: userId, name: userName };
     }
+    
+    return currentUser;
 }
 
-// Fetch and render a single message (used for real-time updates)
-async function fetchAndRenderSingleMessage(messageId) {
-    const url = `https://api.airtable.com/v0/app5yTznb3R5YNUFw/Messages/${messageId}`; // Use BASE_ID directly
-    try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57` }
+function updatePresenceUI(members) {
+    const presenceCounter = document.getElementById('presence-counter');
+    const whosHereCount = document.getElementById('whos-here-count');
+    const whosHereList = document.getElementById('whos-here-list');
+    const count = members.count;
+    if (presenceCounter) presenceCounter.innerText = count;
+    if (whosHereCount) whosHereCount.innerText = count;
+    if (whosHereList) {
+        whosHereList.innerHTML = '';
+        members.each((member) => {
+            if (!state.session.userProfiles.has(member.id)) {
+                state.session.userProfiles.set(member.id, member.info.name);
+                triggerSave();
+            }
+            const userElement = document.createElement('div');
+            const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
+   
+            userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
+            whosHereList.appendChild(userElement);
         });
-        if (!response.ok) throw new Error('Failed to fetch single message');
-        const messageRecord = await response.json();
-        const isReply = !!messageRecord.fields.ParentMessage;
-        addMessageToUI(messageRecord, isReply);
-    } catch (error) {
-        log('Chat', `Error fetching single message ${messageId}: ${error.message}`);
     }
 }
 
-// Load and render chat history
-async function loadChatHistory() {
-    log('Chat', `Loading chat history for session ${state.session.id}`);
-    const messages = await fetchChatMessages(state.session.id);
+async function loadChatHistory(sessionId) {
     const messagesList = document.getElementById('messages-list');
-    if (!messagesList) {
-        log('Chat', 'Messages list container not found in DOM');
-        return;
-    }
-    messagesList.innerHTML = ''; // Clear existing messages
-    messages.forEach(message => {
-        const isReply = !!message.fields.ParentMessage;
-        addMessageToUI(message, isReply);
+    if (!messagesList) return;
+    messagesList.innerHTML = '';
+    const records = await api.fetchChatMessages(sessionId);
+    records.forEach(record => {
+        const { SenderID, SenderName, Content, Timestamp } = record.fields;
+        const isSent = SenderID === currentUser.id;
+        addMessageToUI(SenderName, Content, isSent, Timestamp);
     });
-    messagesList.scrollTop = messagesList.scrollHeight; // Scroll to bottom
 }
 
-// Add a message to the UI
-function addMessageToUI(messageRecord, isReply = false) {
+function addMessageToUI(sender, message, isSent, timestamp) {
     const messagesList = document.getElementById('messages-list');
-    if (!messagesList || !messageRecord.fields) {
-        log('Chat', 'Messages list or message fields missing');
-        return;
-    }
-
-    const { SenderID, SenderName, Content, Reactions } = messageRecord.fields;
-    const isSent = SenderID === currentUser.id;
-    const messageId = messageRecord.id;
-
-    let reactionsData = {};
-    try { reactionsData = JSON.parse(Reactions || '{}'); } catch (e) {
-        log('Chat', `Failed to parse reactions for message ${messageId}: ${e.message}`);
-    }
-
-    const elementId = `message-${messageId}`;
-    if (document.getElementById(elementId)) {
-        updateReactionsUI(elementId, reactionsData);
-        return;
-    }
+    if (!messagesList) return;
 
     const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'} ${isReply ? 'is-reply' : ''}`;
-    wrapper.id = elementId;
-    wrapper.dataset.messageId = messageId;
+    wrapper.className = isSent ? 'message-wrapper sent' : 'message-wrapper received';
 
     const messageElement = document.createElement('div');
     messageElement.className = 'chat-message';
-
+    
     const senderElement = document.createElement('div');
     senderElement.className = 'sender';
-    senderElement.innerText = isSent ? 'You' : SenderName;
+    senderElement.innerText = isSent ? 'You' : sender;
+    
     messageElement.appendChild(senderElement);
-    messageElement.append(document.createTextNode(Content));
-
+    messageElement.append(document.createTextNode(message));
+    
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
-    // Use Timestamp field if available, else fall back to createdTime
-    const timestamp = messageRecord.fields.Timestamp || messageRecord.createdTime;
-    timestampElement.innerText = new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-    const reactionsContainer = document.createElement('div');
-    reactionsContainer.className = 'reactions-container';
-    
-    const reactButton = document.createElement('button');
-    reactButton.className = 'react-btn';
-    reactButton.textContent = '😊+';
-    reactButton.title = 'Add Reaction';
-    messageElement.appendChild(reactButton);
-
-    if (!isReply) {
-        const replyButton = document.createElement('button');
-        replyButton.className = 'reply-btn';
-        replyButton.textContent = '↩';
-        replyButton.title = 'Reply';
-        messageElement.appendChild(replyButton);
-        replyButton.addEventListener('click', () => {
-            isReplyingTo = { id: messageId, author: SenderName };
-            updateReplyUI();
-        });
-    }
-    
     wrapper.appendChild(messageElement);
-    wrapper.appendChild(reactionsContainer);
     wrapper.appendChild(timestampElement);
+    messagesList.appendChild(wrapper);
+
+    wrapper.scrollIntoView({ behavior: 'smooth' });
+}
+
+function bindPresenceEvents() {
+    channel.bind('pusher:subscription_succeeded', (members) => {
+        updatePresenceUI(members);
+    });
+    channel.bind('pusher:member_added', (member) => {
+        updatePresenceUI(channel.members);
+    });
+    channel.bind('pusher:member_removed', (member) => {
+        updatePresenceUI(channel.members);
+    });
+}
+
+export async function initializeChat() {
+    currentUser = getSimpleUserIdentity();
+    if (!state.session.userProfiles.has(currentUser.id)) {
+        state.session.userProfiles.set(currentUser.id, currentUser.name);
+    }
     
-    const parentId = isReply && messageRecord.fields.ParentMessage ? messageRecord.fields.ParentMessage[0] : null;
-    const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : messagesList;
-    
-    if (parentContainer || messagesList) {
-        (parentContainer || messagesList).appendChild(wrapper);
-    } else {
-        log('Chat', `Parent container ${parentId} not found; appending to messagesList`);
-        messagesList.appendChild(wrapper);
+    const sessionId = state.session.id || 'default-session';
+    const chatUserNameInput = document.getElementById('chat-user-name');
+    if (chatUserNameInput) {
+        chatUserNameInput.value = currentUser.name;
+        chatUserNameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName && newName !== currentUser.name) {
+                currentUser.name = newName;
+                localStorage.setItem('chatUserName', newName);
+                state.session.userProfiles.set(currentUser.id, newName);
+            
+                log('Chat', `User name changed to: ${newName}`);
+                updatePresenceUI(channel.members);
+                triggerSave();
+            } else {
+                e.target.value = currentUser.name;
+            }
+         });
     }
 
-    updateReactionsUI(elementId, reactionsData);
-
-    reactButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        let picker = document.querySelector('emoji-picker');
-        if (!picker) {
-            picker = document.createElement('emoji-picker');
-            document.body.appendChild(picker);
-            picker.style.position = 'fixed';
-            picker.style.zIndex = '1100';
+    await loadChatHistory(sessionId);
+    const pusher = new Pusher('236f480714e5001590b5', {
+        cluster: 'us3',
+        authEndpoint: '/api/pusher-auth',
+        auth: {
+            params: { 
+                user_id: currentUser.id,
+                user_name: currentUser.name
+            }
         }
-        
-        const pickerWidth = 350, pickerHeight = 450;
-        let newX = e.clientX, newY = e.clientY;
-        if (newX + pickerWidth > window.innerWidth) newX = window.innerWidth - pickerWidth - 10;
-        if (newY + pickerHeight > window.innerHeight) newY = window.innerHeight - pickerHeight - 10;
-        picker.style.left = `${newX}px`;
-        picker.style.top = `${newY}px`;
-        picker.style.display = 'block';
-
-        const emojiSelectedHandler = async (event) => {
-            await fetch('/api/update-message-reaction', {
-                method: 'POST',
-                body: JSON.stringify({
-                    messageId: messageId,
-                    emoji: event.detail.emoji.unicode,
-                    userId: currentUser.id,
-                    sessionId: state.session.id
-                })
-            });
-            picker.style.display = 'none';
-            picker.removeEventListener('emoji-click', emojiSelectedHandler);
-        };
-        picker.addEventListener('emoji-click', emojiSelectedHandler);
     });
+    const channelName = `presence-session-${sessionId}`;
+    channel = pusher.subscribe(channelName);
 
-    if (!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
+    bindPresenceEvents();
+    channel.bind('client-new-message', (data) => {
+        if (data.senderId !== currentUser.id) {
+            addMessageToUI(data.senderName, data.content, false, data.timestamp);
+            showNewMessageNotification(data.senderName, data.content);
+            // Update tab title if the window is not active
+            if (!isTabActive) {
+                document.title = 'New Message! - ' + originalTitle;
+            }
+        }
+    });
+    // Request notification permission
+    if ('Notification' in window) {
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            log('Chat', 'Notification permission granted.');
+          }
+        });
+      }
+    }
 }
 
-// Update reactions UI
-function updateReactionsUI(elementId, reactionsData) {
-    const container = document.querySelector(`#${elementId} .reactions-container`);
-    if (!container) return;
-    container.innerHTML = '';
-    Object.entries(reactionsData).forEach(([emoji, users]) => {
-        const span = document.createElement('span');
-        span.textContent = `${emoji} ${users.length}`;
-        span.className = 'reaction';
-        span.style.marginRight = '5px';
-        container.appendChild(span);
+export async function sendMessage(message) {
+    if (!channel || !currentUser) return;
+    const sessionId = state.session.id || 'default-session';
+    const timestamp = new Date().toISOString();
+    
+    addMessageToUI(currentUser.name, message, true, timestamp);
+    
+    await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+    channel.trigger('client-new-message', {
+        content: message,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        timestamp: timestamp
     });
 }
 
-// Update reply UI
-function updateReplyUI() {
-    const replyContainer = document.getElementById('reply-container');
-    if (!replyContainer) {
-        log('Chat', 'Reply container not found in DOM');
-        return;
-    }
-    if (isReplyingTo) {
-        replyContainer.style.display = 'block';
-        replyContainer.innerText = `Replying to ${isReplyingTo.author}`;
-    } else {
-        replyContainer.style.display = 'none';
-        replyContainer.innerText = '';
-    }
+export function getCurrentUser() {
+    return currentUser || getSimpleUserIdentity();
+}
+
+function showNewMessageNotification(sender, message) {
+  // Only show notifications if permission is granted and the window isn't focused
+  if (Notification.permission === 'granted' && !document.hasFocus()) {
+    const notification = new Notification(`New message from ${sender}`, {
+      body: message,
+      // Optional: replace with a real path to your icon
+      // icon: '/images/chat-icon.png' 
+    });
+    // Optional: close the notification after a few seconds
+    setTimeout(notification.close.bind(notification), 4000);
+  }
 }
