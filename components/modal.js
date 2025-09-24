@@ -267,20 +267,24 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         calendarInstance.setDate(new Date(eventDate), true);
     }
     
-    // --- CHAT LOGIC ---
-    const chatContainer = document.getElementById('modal-chat-container');
-    if (state.session.user.isAuthenticated && chatContainer) {
-      chatContainer.style.display = 'flex';
-      initializeItemChat(record.id);
-    } else {
-      chatContainer.style.display = 'none';
-    }
-
     ui.updateCardIcon(record.id);
     
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
+
+    // FIX: Delay the chat initialization to ensure the DOM elements are ready.
+    setTimeout(() => {
+        const chatContainer = document.getElementById('modal-chat-container');
+        if (state.session.user.isAuthenticated && chatContainer) {
+            console.log('Chat container found, initializing chat for item:', record.id);
+            chatContainer.style.display = 'flex';
+            initializeItemChat(record.id);
+        } else {
+            console.log('Chat container not found or user not authenticated. Hiding chat.');
+            if (chatContainer) chatContainer.style.display = 'none';
+        }
+    }, 0);
 }
 
 export function hideDetailModal() {
