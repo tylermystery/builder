@@ -42,28 +42,58 @@ async function handleSignIn(e) {
     const email = signinEmailInput.value;
     log('Auth', `Sign-in initiated for: ${email}`);
     signinMessage.style.color = '#333';
-    signinMessage.textContent = `Sending magic link...`;
+    signinMessage.textContent = `Sending confirmation email...`;
 
     try {
-        // --- THIS IS THE MODIFIED PART ---
         const response = await fetch('/api/auth-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                email: email,
-                siteUrl: window.location.origin // Automatically include the site's base URL
-            }),
+            body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
         });
-        // --- END MODIFICATION ---
 
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to send magic link.');
+            throw new Error(data.error || 'Failed to send confirmation email.');
         }
         
+        // Let the user know the email is on its way
         signinMessage.style.color = '#28a745';
-        signinMessage.textContent = `A sign-in link has been sent to ${email}. Please check your inbox.`;
+        signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
         signinEmailInput.value = '';
+
+        // Initialize Pusher to listen for the confirmation
+        const pusher = new Pusher('236f480714e5001590b5', { // Your Pusher Key
+            cluster: 'us3',
+            authEndpoint: '/api/pusher-auth'
+        });
+
+        // Subscribe to the unique, private channel for this login attempt
+        const channelName = `private-auth-${data.channelId}`;
+        const channel = pusher.subscribe(channelName);
+
+        // Set a timeout for the login attempt
+        const loginTimeout = setTimeout(() => {
+            channel.unbind('auth-success');
+            pusher.unsubscribe(channelName);
+            signinMessage.style.color = '#dc3545';
+            signinMessage.textContent = 'Login attempt timed out. Please try again.';
+        }, 5 * 60 * 1000); // 5 minute timeout
+
+        // Wait for the 'auth-success' event from the server
+        channel.bind('auth-success', (payload) => {
+            clearTimeout(loginTimeout); // Stop the timeout
+            log('Auth', 'Auth success event received via Pusher.');
+            
+            // Save the session token and update the application state
+            localStorage.setItem('jwt', payload.token);
+            setState({ session: { ...state.session, user: { ...state.session.user, ...payload.user, isAuthenticated: true } } });
+            
+            // Update the UI and close the modal
+            updateUserProfileIcon();
+            hideUserModal();
+            pusher.unsubscribe(channelName);
+        });
+
     } catch (error) {
         signinMessage.style.color = '#dc3545';
         signinMessage.textContent = error.message;
