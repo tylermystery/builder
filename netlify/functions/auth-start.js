@@ -1,7 +1,6 @@
-// PASTE THIS ENTIRE CODE INTO: netlify/functions/auth-start.js
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
-
+const crypto = require('crypto');
 const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
@@ -16,20 +15,17 @@ exports.handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Email is required.' }) };
         }
 
-        // Generate a simple, secure token
-        const token = require('crypto').randomBytes(16).toString('hex');
+        const token = crypto.randomBytes(16).toString('hex');
+        const channelId = crypto.randomBytes(12).toString('hex'); // Unique ID for the real-time channel
         const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // Token expires in 15 minutes
 
-        // Store the token in Airtable
+        // Store the token and the new channelId in Airtable
         const airtableUrl = `https://api.airtable.com/v0/${BASE_ID}/Magic%20Links`;
         const airtableResponse = await fetch(airtableUrl, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${AIRTABLE_PAT}`,
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                records: [{ fields: { Token: token, Email: email, ExpiresAt: expiresAt.toISOString() } }]
+                records: [{ fields: { Token: token, Email: email, ExpiresAt: expiresAt.toISOString(), ChannelID: channelId } }]
             })
         });
 
@@ -38,22 +34,22 @@ exports.handler = async (event) => {
             throw new Error('Could not create magic link in database.');
         }
 
-        // Send the magic link email via SendGrid
-        const signInLink = `${siteUrl}?token=${token}`;
+        // The confirmation link now points to a new 'auth-confirm' function
+        const confirmationLink = `${siteUrl}/.netlify/functions/auth-confirm?token=${token}`;
         const msg = {
             to: email,
-            from: 'info@tylersmysterytours.com', // Use an email you have verified with SendGrid
-            subject: 'Your Sign-In Link for TMT Shop',
-            html: `<p>Hello!</p><p>Click the link below to sign in to your TMT Shop account. This link will expire in 15 minutes.</p><p><a href="${signInLink}">Sign In</a></p>`,
+            from: 'your-verified-email@example.com', // Replace with your verified sender
+            subject: 'Confirm Your Sign-In for TMT Shop',
+            html: `<p>Hello!</p><p>Please click the link below to confirm your sign-in attempt. This link will expire in 15 minutes.</p><p><a href="${confirmationLink}">Confirm Sign-In</a></p>`,
         };
         
         await sgMail.send(msg);
 
+        // Return the channelId to the browser so it can listen for the confirmation
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Magic link sent successfully.' }),
+            body: JSON.stringify({ message: 'Confirmation email sent.', channelId: channelId }),
         };
-
     } catch (error) {
         console.error('Auth-start error:', error);
         return {
