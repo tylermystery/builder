@@ -16,7 +16,7 @@ import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
 import { showItineraryModal } from './components/itinerary.js';
-import { sendMessage } from './chat.js';
+import { sendMessage, initializeSessionChat } from './chat.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
