@@ -1,115 +1,110 @@
 import { state } from './state.js';
-import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { triggerSave } from './events.js';
+import { postChatMessage, fetchChatMessages } from './api.js';
+import Pusher from 'https://js.pusher.com/8.2.0/pusher.min.js';
 
-let currentUser = null;
-let channel = null;
+// Current user (set during auth or session load)
+let currentUser = { id: null, name: null };
 let isReplyingTo = null;
-const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
-const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 
-let originalTitle = document.title;
-let isTabActive = true;
-window.addEventListener('focus', () => { isTabActive = true; document.title = originalTitle; });
-window.addEventListener('blur', () => { isTabActive = false; });
+// Initialize Pusher for real-time chat
+const pusherClient = new Pusher('YOUR_PUSHER_KEY', {
+    cluster: 'YOUR_PUSHER_CLUSTER',
+    authEndpoint: '/api/pusher-auth'
+});
 
-function generateFunName() {
-    const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
-    const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
-    return `${adj} ${noun}`;
-}
+// Initialize chat system
+export async function initializeChat(sessionId, userId, userName) {
+    log('Chat', `Initializing chat for session ${sessionId}, user ${userName}`);
+    currentUser = { id: userId, name: userName };
+    state.session.id = sessionId;
 
-function getSimpleUserIdentity() {
-    if (currentUser) return currentUser;
-    let userId = localStorage.getItem('chatUserId');
-    if (!userId) {
-        userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('chatUserId', userId);
-    }
-    let userName = localStorage.getItem('chatUserName');
-    if (!userName || userName.split(' ').length > 3) {
-        userName = generateFunName();
-        localStorage.setItem('chatUserName', userName);
-    }
-    const authenticatedUser = state.session.user;
-    if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        const funNameParts = userName.split(' ');
-        const realFirstName = authenticatedUser.name.split(' ')[0];
-        if (funNameParts.length === 2) {
-            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`;
-            userName = newName;
-            localStorage.setItem('chatUserName', newName);
-        }
-        currentUser = { id: authenticatedUser.id, name: userName };
-    } else {
-        currentUser = { id: userId, name: userName };
-    }
-    return currentUser;
-}
+    // Subscribe to Pusher channel
+    const channel = pusherClient.subscribe(`chat-${sessionId}`);
+    channel.bind('new-message', (data) => {
+        log('Chat', `Received new message via Pusher: ${data.messageId}`);
+        fetchAndRenderSingleMessage(data.messageId);
+    });
 
-function updatePresenceUI(members) {
-    const presenceCounter = document.getElementById('presence-counter');
-    const whosHereCount = document.getElementById('whos-here-count');
-    const whosHereList = document.getElementById('whos-here-list');
-    const count = members.count;
-    if (presenceCounter) presenceCounter.innerText = count;
-    if (whosHereCount) whosHereCount.innerText = count;
-    if (whosHereList) {
-        whosHereList.innerHTML = '';
-        members.each((member) => {
-            if (!state.session.userProfiles.has(member.id)) {
-                state.session.userProfiles.set(member.id, member.info.name);
-                triggerSave();
+    // Load and render chat history
+    await loadChatHistory();
+
+    // Setup form submit listener
+    const chatForm = document.getElementById('chat-form');
+    if (chatForm) {
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            if (!content) return;
+
+            const parentMessageId = isReplyingTo ? isReplyingTo.id : null;
+            const newMessage = await postChatMessage(state.session.id, currentUser.id, currentUser.name, content, parentMessageId);
+            
+            if (newMessage) {
+                addMessageToUI(newMessage, !!parentMessageId); // Add locally for instant feedback
             }
-            const userElement = document.createElement('div');
-            const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
-            userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
-            whosHereList.appendChild(userElement);
+
+            input.value = '';
+            if (isReplyingTo) {
+                isReplyingTo = null;
+                updateReplyUI();
+            }
         });
+    } else {
+        log('Chat', 'Chat form not found in DOM');
     }
 }
 
-async function loadChatHistory(sessionId) {
-    const messagesList = document.getElementById('messages-list');
-    if (!messagesList) return;
-    const scrollPosition = messagesList.scrollHeight - messagesList.scrollTop; // Save user's scroll position
-    messagesList.innerHTML = '';
-    const records = await api.fetchChatMessages(sessionId);
-
-    const messageMap = new Map();
-    const topLevelMessages = [];
-
-    records.forEach(record => {
-        messageMap.set(record.id, { ...record, replies: [] });
-    });
-
-    records.forEach(record => {
-        const parentId = record.fields.ParentMessage ? record.fields.ParentMessage[0] : null;
-        if (parentId && messageMap.has(parentId)) {
-            messageMap.get(parentId).replies.push(messageMap.get(record.id));
-        } else {
-            topLevelMessages.push(messageMap.get(record.id));
-        }
-    });
-
-    topLevelMessages.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(message => {
-        addMessageToUI(message);
-        message.replies.sort((a, b) => new Date(a.createdTime) - new Date(b.createdTime)).forEach(reply => addMessageToUI(reply, true));
-    });
-    messagesList.scrollTop = messagesList.scrollHeight - scrollPosition; // Restore scroll position
+// Fetch and render a single message (used for real-time updates)
+async function fetchAndRenderSingleMessage(messageId) {
+    const url = `https://api.airtable.com/v0/${state.airtable.baseId}/Messages/${messageId}`;
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${state.airtable.token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch single message');
+        const messageRecord = await response.json();
+        const isReply = !!messageRecord.fields.ParentMessage;
+        addMessageToUI(messageRecord, isReply);
+    } catch (error) {
+        log('Chat', `Error fetching single message ${messageId}: ${error.message}`);
+    }
 }
 
+// Load and render chat history
+async function loadChatHistory() {
+    log('Chat', `Loading chat history for session ${state.session.id}`);
+    const messages = await fetchChatMessages(state.session.id);
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) {
+        log('Chat', 'Messages list container not found in DOM');
+        return;
+    }
+    messagesList.innerHTML = ''; // Clear existing messages
+    messages.forEach(message => {
+        const isReply = !!message.fields.ParentMessage;
+        addMessageToUI(message, isReply);
+    });
+    messagesList.scrollTop = messagesList.scrollHeight; // Scroll to bottom
+}
+
+// Add a message to the UI
 function addMessageToUI(messageRecord, isReply = false) {
     const messagesList = document.getElementById('messages-list');
-    if (!messagesList || !messageRecord.fields) return;
+    if (!messagesList || !messageRecord.fields) {
+        log('Chat', 'Messages list or message fields missing');
+        return;
+    }
 
-    const { SenderID, SenderName, Content, Reactions } = messageRecord.fields;  // Removed Timestamp
+    const { SenderID, SenderName, Content, Reactions } = messageRecord.fields;
     const isSent = SenderID === currentUser.id;
     const messageId = messageRecord.id;
 
     let reactionsData = {};
-    try { reactionsData = JSON.parse(Reactions || '{}'); } catch (e) {}
+    try { reactionsData = JSON.parse(Reactions || '{}'); } catch (e) {
+        log('Chat', `Failed to parse reactions for message ${messageId}: ${e.message}`);
+    }
 
     const elementId = `message-${messageId}`;
     if (document.getElementById(elementId)) {
@@ -133,7 +128,7 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
-    timestampElement.innerText = new Date(messageRecord.createdTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });  // Use createdTime
+    timestampElement.innerText = new Date(messageRecord.createdTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
     const reactionsContainer = document.createElement('div');
     reactionsContainer.className = 'reactions-container';
@@ -191,7 +186,7 @@ function addMessageToUI(messageRecord, isReply = false) {
                 body: JSON.stringify({
                     messageId: messageId,
                     emoji: event.detail.emoji.unicode,
-                    userId: getCurrentUser().id,
+                    userId: currentUser.id,
                     sessionId: state.session.id
                 })
             });
@@ -201,134 +196,32 @@ function addMessageToUI(messageRecord, isReply = false) {
         picker.addEventListener('emoji-click', emojiSelectedHandler);
     });
 
-    if(!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
+    if (!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
-function updateReplyUI() {
-    const replyIndicator = document.getElementById('reply-indicator');
-    const messageInput = document.getElementById('message-input');
-    if (!replyIndicator || !messageInput) return;
-
-    if (isReplyingTo) {
-        replyIndicator.innerHTML = `Replying to <strong>${isReplyingTo.author}</strong> <button id="cancel-reply-btn">×</button>`;
-        replyIndicator.style.display = 'flex';
-        messageInput.focus();
-
-        document.getElementById('cancel-reply-btn').addEventListener('click', () => {
-            isReplyingTo = null;
-            updateReplyUI();
-        });
-    } else {
-        replyIndicator.innerHTML = '';
-        replyIndicator.style.display = 'none';
-    }
-}
-
+// Update reactions UI (stub; implement as needed)
 function updateReactionsUI(elementId, reactionsData) {
-    const messageWrapper = document.getElementById(elementId);
-    if (!messageWrapper) return;
-    const reactionsContainer = messageWrapper.querySelector('.reactions-container');
-    reactionsContainer.innerHTML = '';
-    if (reactionsData && Object.keys(reactionsData).length > 0) {
-        for (const [emoji, users] of Object.entries(reactionsData)) {
-            if (users.length > 0) {
-                const reactionChip = document.createElement('span');
-                reactionChip.className = 'reaction-chip';
-                reactionChip.textContent = `${emoji} ${users.length}`;
-                reactionsContainer.appendChild(reactionChip);
-            }
-        }
-    }
-}
-
-function bindPresenceEvents() {
-    channel.bind('pusher:subscription_succeeded', (members) => updatePresenceUI(members));
-    channel.bind('pusher:member_added', () => updatePresenceUI(channel.members));
-    channel.bind('pusher:member_removed', () => updatePresenceUI(channel.members));
-}
-
-export async function initializeChat() {
-    currentUser = getSimpleUserIdentity();
-    if (!state.session.userProfiles.has(currentUser.id)) {
-        state.session.userProfiles.set(currentUser.id, currentUser.name);
-    }
-    
-    const sessionId = state.session.id || 'default-session';
-    const chatUserNameInput = document.getElementById('chat-user-name');
-    if (chatUserNameInput) {
-        chatUserNameInput.value = currentUser.name;
-        chatUserNameInput.addEventListener('change', (e) => {
-            const newName = e.target.value.trim();
-            if (newName && newName !== currentUser.name) {
-                currentUser.name = newName;
-                localStorage.setItem('chatUserName', newName);
-                state.session.userProfiles.set(currentUser.id, newName);
-                log('Chat', `User name changed to: ${newName}`);
-                updatePresenceUI(channel.members);
-                triggerSave();
-            } else {
-                e.target.value = currentUser.name;
-            }
-        });
-    }
-
-    await loadChatHistory(sessionId);
-
-    const pusher = new Pusher('236f480714e5001590b5', {
-        cluster: 'us3',
-        authEndpoint: '/api/pusher-auth',
-        auth: { params: { user_id: currentUser.id, user_name: currentUser.name } }
+    const container = document.querySelector(`#${elementId} .reactions-container`);
+    if (!container) return;
+    container.innerHTML = '';
+    Object.entries(reactionsData).forEach(([emoji, users]) => {
+        const span = document.createElement('span');
+        span.textContent = `${emoji} ${users.length}`;
+        span.className = 'reaction';
+        span.style.marginRight = '5px';
+        container.appendChild(span);
     });
-    
-    const channelName = `presence-session-${sessionId}`;
-    channel = pusher.subscribe(channelName);
+}
 
-    bindPresenceEvents();
-
-    channel.bind('client-new-message', async (data) => {
-        // When a message comes in from another user, reload the history to show it in the correct thread
-        await loadChatHistory(sessionId);
-        if (data.senderId !== currentUser.id) {
-            showNewMessageNotification(data.senderName, data.content);
-            if (!isTabActive) document.title = 'New Message! - ' + originalTitle;
-        }
-    });
-    
-    channel.bind('reaction-updated', (data) => {
-        updateReactionsUI(`message-${data.messageId}`, data.reactions);
-    });
-
-    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission();
+// Update reply UI (stub; implement based on your UI)
+function updateReplyUI() {
+    const replyContainer = document.getElementById('reply-container');
+    if (!replyContainer) return;
+    if (isReplyingTo) {
+        replyContainer.style.display = 'block';
+        replyContainer.innerText = `Replying to ${isReplyingTo.author}`;
+    } else {
+        replyContainer.style.display = 'none';
+        replyContainer.innerText = '';
     }
-}
-
-export async function sendMessage(message) {
-    if (!channel || !currentUser || !state.session.id) return;
-    const parentId = isReplyingTo ? isReplyingTo.id : null;
-    
-    await api.postChatMessage(state.session.id, currentUser.id, currentUser.name, message, parentId);
-    
-    isReplyingTo = null;
-    updateReplyUI();
-    
-    // Use the correct client- event prefix
-    channel.trigger('client-new-message', {
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        content: message
-    });
-    
-    await loadChatHistory(state.session.id);
-}
-
-export function getCurrentUser() {
-    return currentUser || getSimpleUserIdentity();
-}
-
-function showNewMessageNotification(sender, message) {
-  if (Notification.permission === 'granted' && !document.hasFocus()) {
-    const notification = new Notification(`New message from ${sender}`, { body: message });
-    setTimeout(notification.close.bind(notification), 4000);
-  }
 }
