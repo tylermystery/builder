@@ -38,7 +38,7 @@ exports.handler = async (event) => {
         const confirmationLink = `${siteUrl}/.netlify/functions/auth-confirm?token=${token}`;
         const msg = {
             to: email,
-            from: 'your-verified-email@example.com', // Replace with your verified sender
+            from: 'info@tylersmysterytours.com', // Replace with your verified sender
             subject: 'Confirm Your Sign-In for TMT Shop',
             html: `<p>Hello!</p><p>Please click the link below to confirm your sign-in attempt. This link will expire in 15 minutes.</p><p><a href="${confirmationLink}">Confirm Sign-In</a></p>`,
         };
