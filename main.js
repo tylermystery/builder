@@ -193,26 +193,28 @@ async function initialize() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
         
-                localStorage.setItem('jwt', data.token);
-                setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
-                
-                // --- REDIRECT LOGIC ---
+                // --- SIMPLIFIED REDIRECT LOGIC ---
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
 
-                if (data.ownerData && data.ownerData.isOwner) {
-                    // If user is a store owner, redirect to their dashboard
-                    window.location.href = `/store-dashboard.html?id=${data.ownerData.ownerDashboardId}`;
+                const userEmail = data.user.email.toLowerCase();
+
+                if (userEmail === 'tyler@tylersmysterytours.com') {
+                    // If the user is the specific store owner, redirect to their dashboard
+                    window.location.href = '/store-dashboard.html?id=tmtdashboard';
                     return; // Stop further execution
-                } else if (data.user && data.user.email.toLowerCase().endsWith('@tylersmysterytours.com')) {
-                    // If user is a TMT employee, redirect to the CRM
+                } else if (userEmail.endsWith('@tylersmysterytours.com')) {
+                    // If it's any other TMT employee, redirect to the main CRM
                     window.location.href = '/dashboard.html';
                     return; // Stop further execution
                 }
         
-                // Regular user, just update the icon
+                // For regular users, save the token and update the UI
+                localStorage.setItem('jwt', data.token);
+                setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
                 updateUserProfileIcon();
+
             } catch (error) {
                 alert(`Sign-in failed: ${error.message}`);
                 const cleanUrl = new URL(window.location);
@@ -220,7 +222,6 @@ async function initialize() {
                 window.history.replaceState({}, document.title, cleanUrl.toString());
             }
         }
-
 
         if (sessionId && !state.session.id) {
             await api.loadSessionFromAirtable(sessionId);
