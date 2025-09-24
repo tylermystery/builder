@@ -193,7 +193,7 @@ async function initialize() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
         
-                // Save all user data, including owner status, to the state
+                // This block correctly saves all user data, including owner status, to the state.
                 localStorage.setItem('jwt', data.token);
                 setState({ 
                     session: { 
@@ -208,7 +208,7 @@ async function initialize() {
                     } 
                 });
         
-                // Clean the URL and update the UI without redirecting
+                // Clean the URL and update the UI icon without redirecting
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
