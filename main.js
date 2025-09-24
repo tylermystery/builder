@@ -193,26 +193,25 @@ async function initialize() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
         
-                // --- SIMPLIFIED REDIRECT LOGIC ---
+                // Save all user data, including owner status, to the state
+                localStorage.setItem('jwt', data.token);
+                setState({ 
+                    session: { 
+                        ...state.session, 
+                        user: { 
+                            ...state.session.user, 
+                            ...data.user, 
+                            isAuthenticated: true,
+                            isOwner: data.ownerData.isOwner,
+                            ownerDashboardId: data.ownerData.ownerDashboardId
+                        } 
+                    } 
+                });
+        
+                // Clean the URL and update the UI without redirecting
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
-
-                const userEmail = data.user.email.toLowerCase();
-
-                if (userEmail === 'tyler@tylersmysterytours.com') {
-                    // If the user is the specific store owner, redirect to their dashboard
-                    window.location.href = '/store-dashboard.html?id=tmtdashboard';
-                    return; // Stop further execution
-                } else if (userEmail.endsWith('@tylersmysterytours.com')) {
-                    // If it's any other TMT employee, redirect to the main CRM
-                    window.location.href = '/dashboard.html';
-                    return; // Stop further execution
-                }
-        
-                // For regular users, save the token and update the UI
-                localStorage.setItem('jwt', data.token);
-                setState({ session: { ...state.session, user: { ...state.session.user, ...data.user, isAuthenticated: true } } });
                 updateUserProfileIcon();
 
             } catch (error) {
