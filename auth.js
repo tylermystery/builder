@@ -88,10 +88,13 @@ async function handleSignIn(e) {
 
         channel.bind('auth-success', (payload) => {
             clearTimeout(loginTimeout);
-            log('Auth', 'Auth success event received via Pusher.');
+            
+            // --- DIAGNOSTIC LOG #1 ---
+            console.log("Pusher auth-success payload received:", payload);
             
             localStorage.setItem('jwt', payload.token);
-            // --- THIS IS THE CORRECTED LINE ---
+
+            // --- THIS IS THE CORRECTED STATE UPDATE ---
             setState({ 
                 session: { 
                     ...state.session, 
@@ -104,6 +107,9 @@ async function handleSignIn(e) {
                     } 
                 } 
             });
+
+            // --- DIAGNOSTIC LOG #2 ---
+            console.log("User state after update:", state.session.user);
         
             updateUserProfileIcon();
             hideUserModal();
