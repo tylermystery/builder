@@ -9,7 +9,8 @@ const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba9
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const TABLE_ID = 'tblUA4uuS8IYlhKpD';
 const SESSIONS_TABLE_NAME = 'Sessions';
-const STORES_TABLE_NAME = 'Stores'; // <-- ADD THIS CONSTANT
+const STORES_TABLE_NAME = 'Stores';
+const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages'; // New table for item-specific chats
 
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
@@ -200,7 +201,6 @@ export async function fetchAllRecords() {
     }
 }
 
-// v-- ADD THIS NEW FUNCTION --v
 export async function fetchAllStores() {
     let records = [];
     let offset = null;
@@ -350,6 +350,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     return { imageUrls };
 }
 
+// Session chat messages
 export async function fetchChatMessages(sessionId) {
     const formula = `({SessionID} = '${sessionId}')`;
     const encodedFormula = encodeURIComponent(formula);
@@ -399,59 +400,76 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     }
 }
 
-// Add these functions to your existing api.js file
 
-export async function fetchAllTeammates() {
-    // This function will be useful for the CRM dashboard
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Teammates`;
+// --- New API functions for item-specific chat ---
+
+export async function fetchItemChatMessages(itemId) {
+    const formula = `({ItemID} = '${itemId}')`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) throw new Error('Could not fetch teammates.');
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch item chat messages from Airtable.');
+        }
         const data = await response.json();
         return data.records;
     } catch (error) {
-        console.error("Failed to fetch teammates:", error);
+        console.error("Error fetching item chat history:", error);
         return [];
     }
 }
 
-export async function fetchTeammateData(teammateId) {
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Teammates/${teammateId}`;
+export async function postItemChatMessage(itemId, senderId, senderName, content) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+    const payload = {
+        records: [{
+            fields: {
+                ItemID: itemId,
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content,
+           }
+        }]
+    };
     try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) throw new Error('Could not fetch teammate data.');
-        return await response.json();
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+             throw new Error('Failed to post item chat message to Airtable.');
+        }
     } catch (error) {
-        console.error("Failed to load teammate:", error);
-        return null;
+        console.error("Error posting item chat message:", error);
     }
 }
 
-export async function fetchSessionsForTeammate(teammateId, roleField) {
-    // roleField should be either 'SalesLead' or 'EventHost'
-    const formula = `({${roleField}} = '${teammateId}')`;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=${encodeURIComponent(formula)}`;
-    try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) throw new Error(`Could not fetch sessions for teammate role: ${roleField}.`);
-        const data = await response.json();
-        return data.records;
-    } catch (error) {
-        console.error(error);
-        return [];
-    }
+export async function banUser(userId) {
+    // This would call a Netlify function to handle the ban logic securely
+    // For now, we'll log and simulate the effect.
+    log('API', `Simulating API call to ban user: ${userId}`);
+    state.session.bannedUsers.add(userId);
+    // In a real app, this would be a server-side call:
+    // await fetch('/.netlify/functions/ban-user', { ... })
 }
 
-export async function fetchRatingsForTeammate(teammateId) {
-    const formula = `({Teammate} = '${teammateId}')`;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Ratings?filterByFormula=${encodeURIComponent(formula)}`;
-    try {
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        if (!response.ok) throw new Error('Could not fetch ratings.');
-        const data = await response.json();
-        return data.records;
-    } catch (error) {
-        console.error(error);
-        return [];
+export async function updateUserFlagStatus(userId, isFlagged) {
+    // This would call a Netlify function to handle the flag logic securely
+    // For now, we'll log and simulate the effect.
+    log('API', `Simulating API call to update flag for user: ${userId} to ${isFlagged}`);
+    if (isFlagged) {
+        state.session.flaggedUsers.add(userId);
+    } else {
+        state.session.flaggedUsers.delete(userId);
     }
+    // In a real app, this would be a server-side call:
+    // await fetch('/.netlify/functions/flag-user', { ... })
 }
