@@ -38,3 +38,8 @@
   from = "/api/process-email"
   to = "/.netlify/functions/process-email"
   status = 200
+
+[[redirects]]
+  from = "/api/get-store-data-by-owner-id"
+  to = "/.netlify/functions/get-store-data-by-owner-id"
+  status = 200
