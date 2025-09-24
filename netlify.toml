@@ -48,3 +48,8 @@
   from = "/api/get-store-data-by-owner-id"
   to = "/.netlify/functions/get-store-data-by-owner-id"
   status = 200
+
+[[redirects]]
+  from = "/api/update-message-reaction"
+  to = "/.netlify/functions/update-message-reaction"
+  status = 200
