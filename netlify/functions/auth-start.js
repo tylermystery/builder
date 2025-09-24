@@ -42,7 +42,7 @@ exports.handler = async (event) => {
         const signInLink = `${siteUrl}?token=${token}`;
         const msg = {
             to: email,
-            from: 'your-verified-email@example.com', // Use an email you have verified with SendGrid
+            from: 'tyler@tylersmysterytours.com', // Use an email you have verified with SendGrid
             subject: 'Your Sign-In Link for TMT Shop',
             html: `<p>Hello!</p><p>Click the link below to sign in to your TMT Shop account. This link will expire in 15 minutes.</p><p><a href="${signInLink}">Sign In</a></p>`,
         };
