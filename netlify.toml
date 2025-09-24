@@ -13,6 +13,11 @@
   to = "/.netlify/functions/auth-verify"
   status = 200
 
+[[redirects]]
+  from = "/api/auth-confirm"
+  to = "/.netlify/functions/auth-confirm"
+  status = 200
+
 # Keep your existing redirects
 [[redirects]]
   from = "/api/calendar"
