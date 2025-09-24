@@ -1,7 +1,8 @@
 // In store-dashboard.js
 async function initializeDashboard() {
     // The ID is now hardcoded to load the TMT dashboard data
-    const ownerId = 'tmtdashboard';
+    const urlParams = new URLSearchParams(window.location.search);
+    const ownerId = urlParams.get('id');
 
     if (!ownerId) {
         document.body.innerHTML = '<h1>Error: No dashboard ID provided.</h1>';
