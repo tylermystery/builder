@@ -30,16 +30,7 @@ function generateFunName() {
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
 
-    // --- START: New logic to check for authenticated user ---
-    const authenticatedUser = state.session.user;
-    if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        log('Chat', `Using authenticated user: ${authenticatedUser.name}`);
-        currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
-        return currentUser;
-    }
-    // --- END: New logic ---
-
-    // Fallback to existing "fun name" logic for guests
+    // Step 1: Always ensure a base "fun name" identity exists for this browser session.
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -47,12 +38,30 @@ function getSimpleUserIdentity() {
     }
 
     let userName = localStorage.getItem('chatUserName');
-    if (!userName) {
-        userName = generateFunName();
+    if (!userName || userName.split(' ').length !== 3) { // Regenerate if it's not a fun name or a modified one
+        userName = generateFunName(); // e.g., "Happy Panda"
         localStorage.setItem('chatUserName', userName);
     }
+
+    // Step 2: Check if the user is authenticated.
+    const authenticatedUser = state.session.user;
+    if (authenticatedUser && authenticatedUser.isAuthenticated) {
+        // User is logged in. Modify the fun name with their real name if it hasn't been already.
+        const funNameParts = userName.split(' ');
+        const realFirstName = authenticatedUser.name.split(' ')[0]; // e.g., "Tyler"
+
+        if (funNameParts.length === 2) { 
+            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`; // e.g., "Happy Tyler Panda"
+            userName = newName;
+            localStorage.setItem('chatUserName', newName); // Save the new name for future visits
+        }
+        // Use the authenticated user's permanent ID but the fun/modified name
+        currentUser = { id: authenticatedUser.id, name: userName };
+    } else {
+        // User is a guest, so use the generated fun identity.
+        currentUser = { id: userId, name: userName };
+    }
     
-    currentUser = { id: userId, name: userName };
     return currentUser;
 }
 
