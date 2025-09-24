@@ -1,7 +1,5 @@
-// PASTE THIS ENTIRE CODE INTO: netlify/functions/auth-verify.js
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
-
 const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
 
 exports.handler = async (event) => {
@@ -15,11 +13,10 @@ exports.handler = async (event) => {
             return { statusCode: 400, body: JSON.stringify({ error: 'Token is required.' }) };
         }
 
-        // 1. Find the token in the Magic Links table
+        // 1. Find and validate the magic link token
         const findTokenUrl = `https://api.airtable.com/v0/${BASE_ID}/Magic%20Links?filterByFormula=AND({Token}='${token}')`;
         const tokenRes = await fetch(findTokenUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         const tokenData = await tokenRes.json();
-
         if (!tokenData.records || tokenData.records.length === 0) {
             return { statusCode: 401, body: JSON.stringify({ error: 'Invalid or expired token.' }) };
         }
@@ -40,7 +37,6 @@ exports.handler = async (event) => {
         const userRes = await fetch(findUserUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         let userData = await userRes.json();
         let userRecord;
-
         if (userData.records && userData.records.length > 0) {
             userRecord = userData.records[0];
         } else {
@@ -50,21 +46,40 @@ exports.handler = async (event) => {
                 headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ records: [{ fields: { Email: Email, Name: Email.split('@')[0] } }] })
             });
-            const newUser_Data = await createUserRes.json();
-            userRecord = newUser_Data.records[0];
+            const newUserData = await createUserRes.json();
+            userRecord = newUserData.records[0];
         }
 
-        // 4. Generate a long-lived session token (JWT)
-        const sessionToken = jwt.sign({ userId: userRecord.id, email: userRecord.fields.Email }, JWT_SECRET, { expiresIn: '30d' });
+        // 4. Check if the user is a store owner
+        let ownerData = { isOwner: false, ownerDashboardId: null };
+        if (userRecord.fields.OwnedStore && userRecord.fields.OwnedStore.length > 0) {
+            const storeId = userRecord.fields.OwnedStore[0];
+            const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/Stores/${storeId}`;
+            const storeRes = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+            if (storeRes.ok) {
+                const storeRecord = await storeRes.json();
+                if (storeRecord.fields.OwnerDashboardID) {
+                    ownerData.isOwner = true;
+                    ownerData.ownerDashboardId = storeRecord.fields.OwnerDashboardID;
+                }
+            }
+        }
+        
+        // 5. Generate JWT and return response
+        const sessionToken = jwt.sign(
+            { userId: userRecord.id, email: userRecord.fields.Email, isOwner: ownerData.isOwner },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
 
         return {
             statusCode: 200,
             body: JSON.stringify({
                 token: sessionToken,
-                user: { id: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email }
+                user: { id: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email },
+                ownerData: ownerData
             }),
         };
-
     } catch (error) {
         console.error('Auth-verify error:', error);
         return {
