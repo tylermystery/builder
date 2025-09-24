@@ -1,30 +1,34 @@
 import { state } from './state.js';
 import { log } from './utils/debug.js';
 import { postChatMessage, fetchChatMessages } from './api.js';
-import Pusher from 'https://js.pusher.com/8.2.0/pusher.min.js';
 
 // Current user (set during auth or session load)
 let currentUser = { id: null, name: null };
 let isReplyingTo = null;
 
-// Initialize Pusher for real-time chat
-const pusherClient = new Pusher('YOUR_PUSHER_KEY', {
+// Initialize Pusher for real-time chat (using global Pusher from script tag)
+const pusherClient = window.Pusher ? new window.Pusher('YOUR_PUSHER_KEY', {
     cluster: 'YOUR_PUSHER_CLUSTER',
     authEndpoint: '/api/pusher-auth'
-});
+}) : null;
 
 // Initialize chat system
 export async function initializeChat(sessionId, userId, userName) {
     log('Chat', `Initializing chat for session ${sessionId}, user ${userName}`);
+    if (!pusherClient) {
+        log('Chat', 'Pusher not available; real-time updates disabled');
+    }
     currentUser = { id: userId, name: userName };
     state.session.id = sessionId;
 
-    // Subscribe to Pusher channel
-    const channel = pusherClient.subscribe(`chat-${sessionId}`);
-    channel.bind('new-message', (data) => {
-        log('Chat', `Received new message via Pusher: ${data.messageId}`);
-        fetchAndRenderSingleMessage(data.messageId);
-    });
+    // Subscribe to Pusher channel if available
+    if (pusherClient) {
+        const channel = pusherClient.subscribe(`chat-${sessionId}`);
+        channel.bind('new-message', (data) => {
+            log('Chat', `Received new message via Pusher: ${data.messageId}`);
+            fetchAndRenderSingleMessage(data.messageId);
+        });
+    }
 
     // Load and render chat history
     await loadChatHistory();
@@ -43,6 +47,11 @@ export async function initializeChat(sessionId, userId, userName) {
             
             if (newMessage) {
                 addMessageToUI(newMessage, !!parentMessageId); // Add locally for instant feedback
+                if (pusherClient) {
+                    pusherClient.trigger(`chat-${sessionId}`, 'new-message', { messageId: newMessage.id });
+                }
+            } else {
+                log('Chat', 'Failed to post message; not adding to UI');
             }
 
             input.value = '';
@@ -58,10 +67,10 @@ export async function initializeChat(sessionId, userId, userName) {
 
 // Fetch and render a single message (used for real-time updates)
 async function fetchAndRenderSingleMessage(messageId) {
-    const url = `https://api.airtable.com/v0/${state.airtable.baseId}/Messages/${messageId}`;
+    const url = `https://api.airtable.com/v0/app5yTznb3R5YNUFw/Messages/${messageId}`; // Use BASE_ID directly
     try {
         const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${state.airtable.token}` }
+            headers: { 'Authorization': `Bearer patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57` }
         });
         if (!response.ok) throw new Error('Failed to fetch single message');
         const messageRecord = await response.json();
@@ -128,7 +137,9 @@ function addMessageToUI(messageRecord, isReply = false) {
 
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
-    timestampElement.innerText = new Date(messageRecord.createdTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    // Use Timestamp field if available, else fall back to createdTime
+    const timestamp = messageRecord.fields.Timestamp || messageRecord.createdTime;
+    timestampElement.innerText = new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
     const reactionsContainer = document.createElement('div');
     reactionsContainer.className = 'reactions-container';
@@ -158,7 +169,12 @@ function addMessageToUI(messageRecord, isReply = false) {
     const parentId = isReply && messageRecord.fields.ParentMessage ? messageRecord.fields.ParentMessage[0] : null;
     const parentContainer = parentId ? document.getElementById(`message-${parentId}`) : messagesList;
     
-    (parentContainer || messagesList).appendChild(wrapper);
+    if (parentContainer || messagesList) {
+        (parentContainer || messagesList).appendChild(wrapper);
+    } else {
+        log('Chat', `Parent container ${parentId} not found; appending to messagesList`);
+        messagesList.appendChild(wrapper);
+    }
 
     updateReactionsUI(elementId, reactionsData);
 
@@ -199,7 +215,7 @@ function addMessageToUI(messageRecord, isReply = false) {
     if (!isReply) wrapper.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Update reactions UI (stub; implement as needed)
+// Update reactions UI
 function updateReactionsUI(elementId, reactionsData) {
     const container = document.querySelector(`#${elementId} .reactions-container`);
     if (!container) return;
@@ -213,10 +229,13 @@ function updateReactionsUI(elementId, reactionsData) {
     });
 }
 
-// Update reply UI (stub; implement based on your UI)
+// Update reply UI
 function updateReplyUI() {
     const replyContainer = document.getElementById('reply-container');
-    if (!replyContainer) return;
+    if (!replyContainer) {
+        log('Chat', 'Reply container not found in DOM');
+        return;
+    }
     if (isReplyingTo) {
         replyContainer.style.display = 'block';
         replyContainer.innerText = `Replying to ${isReplyingTo.author}`;
