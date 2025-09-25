@@ -53,3 +53,8 @@
   from = "/api/update-message-reaction"
   to = "/.netlify/functions/update-message-reaction"
   status = 200
+
+[[redirects]]
+  from = "/api/get-event-by-slug"
+  to = "/.netlify/functions/get-event-by-slug"
+  status = 200
