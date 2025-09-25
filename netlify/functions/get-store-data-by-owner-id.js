@@ -1,41 +1,34 @@
-// In netlify/functions/get-store-data-by-owner-id.js
+// In netlify/functions/get-event-by-slug.js
 const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 
 exports.handler = async (event) => {
-    const { id } = event.queryStringParameters;
-    if (!id) {
-        return { statusCode: 400, body: 'Missing owner dashboard ID.' };
-    }
-
     try {
-        // 1. Find the store using the secure UUID
-        const storeFormula = `({OwnerDashboardID} = '${id}')`;
-        const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/Stores?filterByFormula=${encodeURIComponent(storeFormula)}`;
-        const storeResponse = await fetch(storeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-        const storeData = await storeResponse.json();
+        // --- TEMPORARY DIAGNOSTIC CODE ---
+        // This will fetch ALL records from the Events table without a filter
+        const eventUrl = `https://api.airtable.com/v0/${BASE_ID}/Events`;
+        console.log('Fetching all records from:', eventUrl);
 
-        if (!storeData.records || storeData.records.length === 0) {
-            return { statusCode: 404, body: 'Store not found.' };
+        const eventResponse = await fetch(eventUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        const eventData = await eventResponse.json();
+
+        if (!eventData.records || eventData.records.length === 0) {
+            console.log('No records found in the Events table.');
+            return { statusCode: 404, body: 'No records found in Events table.' };
         }
-        const storeRecord = storeData.records[0];
-        const storeId = storeRecord.id;
-        
-        // 2. Find all items linked to that store's record ID using the corrected formula
-        const itemsFormula = `FIND('${storeId}', {Stores} & '')`;
-        const itemsUrl = `https://api.airtable.com/v0/${BASE_ID}/tblUA4uuS8IYlhKpD?filterByFormula=${encodeURIComponent(itemsFormula)}`;
-        const itemsResponse = await fetch(itemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-        const itemsData = await itemsResponse.json();
 
-        // 3. Return all the data together
+        // Log the fields of the very first record Airtable returns
+        console.log('Airtable returned the following fields for the first record:', eventData.records[0].fields);
+
+        // Return a success message so we can see the log
         return {
             statusCode: 200,
-            body: JSON.stringify({
-                store: storeRecord,
-                items: itemsData.records
-            }),
+            body: JSON.stringify({ message: "Diagnostic check complete. Please see function logs." }),
         };
+        // --- END TEMPORARY CODE ---
+
     } catch (error) {
+        console.error('Error during diagnostic check:', error);
         return { statusCode: 500, body: error.toString() };
     }
 };
