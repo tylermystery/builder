@@ -337,17 +337,20 @@ export async function initializeItemChat(recordId) {
         }
     });
     
-    // Handle form submission
-    const handleMessageSubmit = (e) => {
+  // --- NEW: Robust Event Listener Cleanup ---
+    // Clone and replace the form element to completely remove all prior event listeners
+    const newForm = messageForm.cloneNode(true);
+    messageForm.parentNode.replaceChild(newForm, messageForm);
+    const newMessageInput = document.getElementById('message-input-item'); // Re-select the input from the new form
+
+    newForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const message = messageInput.value;
+        const message = newMessageInput.value;
         if (message.trim() === '') return;
         sendMessage(message, recordId);
-        messageInput.value = '';
-    };
-
-    messageForm.removeEventListener('submit', handleMessageSubmit);
-    messageForm.addEventListener('submit', handleMessageSubmit);
+        newMessageInput.value = '';
+    });
+    // --- END NEW SECTION ---
 }
 
 // --- Moderation Functions (Client-side stubs for now) ---
