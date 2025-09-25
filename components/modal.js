@@ -272,26 +272,27 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
 
-    // FIX: Delay the chat initialization to ensure the DOM elements are ready.
-    // This solves the TypeError by waiting for the chat container to exist.
-    setTimeout(() => {
+        setTimeout(() => {
         const chatContainer = document.getElementById('modal-chat-container');
-        
-        // --- NEW DIAGNOSTIC LOG ---
+        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false; // Check our new Airtable field
+
+        // --- MODIFIED DIAGNOSTIC LOG ---
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            user: state.session.user,
-            chatContainerExists: !!chatContainer
+            isChatEnabledOnItem: isChatEnabledOnItem,
+            chatContainerExists: !!chatContainer,
+            user: state.session.user
         });
-        // --- END DIAGNOSTIC LOG ---
-
-        if (state.session.user.isAuthenticated && chatContainer) {
-            log('Modal', 'Chat container found and user is authenticated. Initializing item chat.');
+        
+        // --- MODIFIED LOGIC ---
+        if (state.session.user.isAuthenticated && chatContainer && isChatEnabledOnItem) {
+            log('Modal', 'All conditions met. Initializing item chat.');
             chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
         } else {
             log('Modal', 'Hiding chat. Reason:', {
                 isAuthenticated: state.session.user.isAuthenticated,
+                isChatEnabledOnItem: isChatEnabledOnItem,
                 chatContainerExists: !!chatContainer
             });
             if (chatContainer) {
