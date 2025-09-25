@@ -404,7 +404,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
-    const formula = `({ItemID} = '${itemId}')`;
+    const formula = `(RECORD_ID({ItemID}) = '${itemId}')`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
