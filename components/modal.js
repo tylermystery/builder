@@ -71,8 +71,7 @@ function resetModalState() {
         modalQuantitySelector: document.getElementById('modal-quantity-selector'),
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
-        modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalChatContainer: document.getElementById('modal-chat-container')
+        modalBreadcrumbs: document.getElementById('modal-breadcrumbs')
     };
     for (const key in elements) {
         if (elements[key]) {
