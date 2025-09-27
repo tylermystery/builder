@@ -38,6 +38,21 @@ function getAvailableSubcategories(categoryRecord) {
     return subcategoryOptions.map(option => option.name).sort();
 }
 
+// PASTE THIS AT THE END OF: events.js
+
+export function openChatWidget(andKeepOpen = false) {
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    if (chatWidgetContainer) {
+        chatWidgetContainer.classList.add('chat-open');
+        if (andKeepOpen) {
+            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+            if (remainOpenCheckbox) {
+                remainOpenCheckbox.checked = true;
+            }
+        }
+    }
+}
+
 function updateSubcategoryButtons() {
     if (!subcategoryFiltersContainer) return;
     subcategoryFiltersContainer.innerHTML = '';
