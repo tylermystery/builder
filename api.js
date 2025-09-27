@@ -106,10 +106,16 @@ export async function saveSessionToAirtable() {
             formattedDate = startDate.toISOString();
         }
     }
+    
+    // *** THIS IS THE FIX ***
+    // We get the user IDs (the keys) from the userProfiles map
+    const collaboratorIds = Array.from(state.session.userProfiles.keys());
+
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
-        "Collaborators": Array.from(state.session.userProfiles.values()).join(', '),
+        // Use the array of IDs for the linked record field
+        "Collaborators": collaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
@@ -336,8 +342,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     const payload = {
         records: [{
             fields: {
-                // *** THIS IS THE FIX ***
-                SessionID: [sessionId], // Send as an array
+                SessionID: [sessionId],
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
