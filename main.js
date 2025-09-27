@@ -1,6 +1,3 @@
-// REPLACE THE ENTIRE CONTENTS OF: main.js
-
-// In main.js
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -108,7 +105,6 @@ async function initialize() {
     const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
     let activeShop = null;
-    // --- NEW, SMARTER SHOP SELECTION LOGIC ---
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
     }
@@ -130,7 +126,6 @@ async function initialize() {
     if (!activeShop) {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
     }
-    // --- END OF NEW LOGIC ---
 
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
@@ -148,14 +143,10 @@ async function initialize() {
             ui.showShopSwitcher();
         });
         let shopSettings = {
-            shopType: activeShop.fields.ShopType ||
-            'Events',
-            enabledFilters: activeShop.fields.EnabledFilters ||
-            ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
-            paymentOptions: activeShop.fields.PaymentOptions ||
-            'DepositOnly',
-            terms: activeShop.fields.TermsAndConditions ||
-            'Default terms and conditions text.',
+            shopType: activeShop.fields.ShopType || 'Events',
+            enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+            paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
+            terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
             cartLabels: {}
         };
         try {
@@ -190,32 +181,25 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                   
                      body: JSON.stringify({ token: loginToken })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-                // --- ADD THIS DEBUGGING LOG ---
-                console.log("Data received from /api/auth-verify:", data);
-                // ---------------------------------
                 
-                // This block correctly saves all user data, including owner status, to the state.
+                // *** MODIFIED STATE UPDATE ***
                 localStorage.setItem('jwt', data.token);
                 setState({ 
                     session: { 
                         ...state.session, 
                         user: { 
-                        
                          ...state.session.user, 
                             ...data.user, 
                             isAuthenticated: true,
                             isOwner: data.ownerData.isOwner,
-        
                              ownerDashboardId: data.ownerData.ownerDashboardId
                         } 
                     } 
                 });
-                // Clean the URL and update the UI icon without redirecting
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
@@ -229,9 +213,27 @@ async function initialize() {
             }
         }
 
-        if (sessionId && !state.session.id) {
-            await api.loadSessionFromAirtable(sessionId);
+        if (sessionId) {
+            if (!state.session.id) {
+                await api.loadSessionFromAirtable(sessionId);
+            }
+            // *** NEW LOGIC TO ASSOCIATE SESSION ON JOIN ***
+            if (state.session.user.isAuthenticated) {
+                const isAlreadyAssociated = state.session.user.associatedSessions?.includes(sessionId);
+                if (!isAlreadyAssociated) {
+                    log('Main', `New session detected. Associating user ${state.session.user.id} with session ${sessionId}.`);
+                    fetch('/api/associate-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: state.session.user.id, sessionId: sessionId })
+                    })
+                    .then(res => res.json())
+                    .then(data => console.log('Session association result:', data.message))
+                    .catch(err => console.error('Failed to associate session:', err));
+                }
+            }
         }
+
 
         if (state.session.id) {
             ui.updateHeader();
@@ -252,31 +254,26 @@ async function initialize() {
         
         initializeChatEventListeners();
         initializeSessionChat();
-        // Now initializes the main session chat
         setupAuthEventListeners();
         updateUserProfileIcon();
         
         state.ui.isInitializing = false;
         log('Main', 'Initialization complete.');
 
-        // --- NEW LOGIC FOR AUTOMATIC VIEW SELECTION ---
         const finalUrlParams = new URLSearchParams(window.location.search);
         const viewMode = finalUrlParams.get('view');
         const itemIdToOpen = finalUrlParams.get('openItem');
         const totalItems = state.cart.items.size + state.cart.lockedItems.size;
 
-        // Case 1: URL explicitly requests presentation view
         if (viewMode === 'present') {
             if (totalItems > 0) {
-                ui.showPresentationView('favorites'); // Default to showing ideas first
-                openChatWidget(true); // Open the chat and check the "keep open" box
+                ui.showPresentationView('favorites');
+                openChatWidget(true);
             }
         }
-        // Case 2: No specific view requested, but there are 3+ items, so default to presentation
         else if (!itemIdToOpen && totalItems >= 3) {
             ui.showPresentationView('favorites');
         }
-        // Case 3: URL requests a specific item to be opened
         else if (itemIdToOpen) {
             const recordToOpen = state.records.all.find(r => r.id === itemIdToOpen);
             if (recordToOpen) {
@@ -284,7 +281,6 @@ async function initialize() {
                 setTimeout(() => { ui.showDetailModal(recordToOpen, photoIndex); }, 100);
             }
         }
-        // --- END OF NEW LOGIC ---
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
     }
