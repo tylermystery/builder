@@ -69,3 +69,8 @@
   from = "/api/get-event-by-slug"
   to = "/.netlify/functions/get-event-by-slug"
   status = 200
+
+[[redirects]]
+  from = "/api/associate-session"
+  to = "/.netlify/functions/associate-session"
+  status = 200
