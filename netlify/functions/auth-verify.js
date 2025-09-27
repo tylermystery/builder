@@ -1,6 +1,9 @@
+// REPLACE THE ENTIRE CONTENTS OF: netlify/functions/auth-verify.js
+
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
 const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
+
 exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -28,6 +31,7 @@ exports.handler = async (event) => {
 
         const deleteTokenUrl = `https://api.airtable.com/v0/${BASE_ID}/Magic%20Links/${magicLinkRecord.id}`;
         await fetch(deleteTokenUrl, { method: 'DELETE', headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        
         const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=AND({Email}='${Email}')`;
         const userRes = await fetch(findUserUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         let userData = await userRes.json();
@@ -58,13 +62,27 @@ exports.handler = async (event) => {
                 }
             }
         }
-        
+
+        // *** NEW LOGIC TO FETCH SESSION NAMES ***
+        let associatedSessions = [];
+        const sessionIds = userRecord.fields['Associated Sessions'];
+        if (sessionIds && sessionIds.length > 0) {
+            const formula = `OR(${sessionIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+            const sessionsUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?fields%5B%5D=Name&filterByFormula=${encodeURIComponent(formula)}`;
+            const sessionsRes = await fetch(sessionsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+            if (sessionsRes.ok) {
+                const sessionsData = await sessionsRes.json();
+                associatedSessions = sessionsData.records.map(rec => ({ id: rec.id, name: rec.fields.Name }));
+            }
+        }
+        // *** END NEW LOGIC ***
+
         const sessionToken = jwt.sign(
             { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner },
             JWT_SECRET,
-           
              { expiresIn: '30d' }
         );
+
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -73,13 +91,11 @@ exports.handler = async (event) => {
                     id: userRecord.id, 
                     name: userRecord.fields.Name, 
                     email: userRecord.fields.Email,
-                    // *** ADD THIS LINE ***
-                    associatedSessions: userRecord.fields['Associated Sessions'] || []
+                    associatedSessions: associatedSessions // Send the array of objects
                 },
                 ownerData: ownerData
             }),
-   
-             };
+        };
     } catch (error) {
         console.error('Auth-verify error:', error);
         return {
