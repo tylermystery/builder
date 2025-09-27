@@ -261,6 +261,7 @@ async function initialize() {
         initializeSessionChat();
         setupAuthEventListeners();
         updateUserProfileIcon();
+        ui.renderSessionDropdown(); // Add this line to render the dropdown on load
         
         state.ui.isInitializing = false;
         log('Main', 'Initialization complete.');
