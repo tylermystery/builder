@@ -1,9 +1,7 @@
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
 const Pusher = require("pusher");
-
 const { AIRTABLE_PAT, BASE_ID, JWT_SECRET, PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER } = process.env;
-
 const pusher = new Pusher({
     appId: PUSHER_APP_ID,
     key: PUSHER_KEY,
@@ -11,7 +9,6 @@ const pusher = new Pusher({
     cluster: PUSHER_CLUSTER,
     useTLS: true,
 });
-
 exports.handler = async (event) => {
     try {
         const { token } = event.queryStringParameters;
@@ -26,7 +23,6 @@ exports.handler = async (event) => {
         const { Email, ExpiresAt, ChannelID } = magicLinkRecord.fields;
 
         if (new Date() > new Date(ExpiresAt)) throw new Error('Invalid or expired token.');
-
         await fetch(`https://api.airtable.com/v0/${BASE_ID}/Magic%20Links/${magicLinkRecord.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
 
         const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=AND({Email}='${Email}')`;
@@ -64,25 +60,29 @@ exports.handler = async (event) => {
             JWT_SECRET, 
             { expiresIn: '30d' }
         );
-
         await pusher.trigger(`private-auth-${ChannelID}`, "auth-success", {
             token: sessionToken,
-            user: { id: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email },
+            user: { 
+                id: userRecord.id, 
+                name: userRecord.fields.Name, 
+                email: userRecord.fields.Email,
+                // *** ADD THIS LINE ***
+                associatedSessions: userRecord.fields['Associated Sessions'] || []
+            },
             ownerData: ownerData
         });
-
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'text/html' },
             body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Authentication Confirmed!</h1><p>You can now return to the original tab to continue.</p></div>`
         };
-
     } catch (error) {
         console.error('Auth-confirm error:', error);
         return {
             statusCode: 400,
             headers: { 'Content-Type': 'text/html' },
-            body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Authentication Failed</h1><p>${error.message}. Please try again.</p></div>`
+            body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Authentication Failed</h1><p>${error.message}.
+ Please try again.</p></div>`
         };
     }
 };
