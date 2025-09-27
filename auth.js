@@ -1,5 +1,3 @@
-// REPLACE THE ENTIRE CONTENTS OF: auth.js
-
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 
@@ -27,10 +25,9 @@ export function showUserModal() {
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
         profileEmailEl.textContent = user.email;
-        // Populate the new preference fields
         profilePhoneInput.value = user.phoneNumber || '';
         profileNotificationsSelect.value = user.notificationFrequency || 'None';
-        prefsMessage.textContent = ''; // Clear any previous messages
+        prefsMessage.textContent = ''; 
 
         signinView.style.display = 'none';
         profileView.style.display = 'block';
@@ -96,6 +93,7 @@ async function handleSignIn(e) {
             
             localStorage.setItem('jwt', payload.token);
             
+            // *** MODIFIED STATE UPDATE ***
             setState({ 
                 session: { 
                    ...state.session,
@@ -104,9 +102,8 @@ async function handleSignIn(e) {
                         ...payload.user, 
                         isAuthenticated: true,
                         isOwner: payload.ownerData.isOwner,
-                        ownerDashboardId: payload.ownerData.ownerDashboardId
+                        ownerDashboardId: payload.ownerData.ownerDashboardId,
                     } 
-            
                  }
             });
 
@@ -142,8 +139,7 @@ async function handleUpdateUserPrefs(e) {
         if (!response.ok) {
             throw new Error(data.error || 'Failed to save preferences.');
         }
-
-        // Update local state with the confirmed data from the server
+        
         setState({
             session: {
                 ...state.session,
@@ -165,7 +161,6 @@ async function handleUpdateUserPrefs(e) {
 export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
-    // Also clear owner status on sign out
     setState({
         session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
     });
@@ -190,7 +185,7 @@ export function setupAuthEventListeners() {
     userModalCloseBtn.addEventListener('click', hideUserModal);
     signinForm.addEventListener('submit', handleSignIn);
     signoutBtn.addEventListener('click', handleSignOut);
-    userPrefsForm.addEventListener('submit', handleUpdateUserPrefs); // Add listener for the new form
+    userPrefsForm.addEventListener('submit', handleUpdateUserPrefs);
     userModalOverlay.addEventListener('click', (e) => {
         if (e.target === userModalOverlay) {
             hideUserModal();
