@@ -336,7 +336,8 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     const payload = {
         records: [{
             fields: {
-                SessionID: sessionId,
+                // *** THIS IS THE FIX ***
+                SessionID: [sessionId], // Send as an array
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
@@ -380,7 +381,7 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
     const payload = {
         records: [{
             fields: {
-                ItemID: itemId,
+                ItemID: [itemId],
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
