@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://unpkg.com/tippy.js@6"></script>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
             padding-bottom: 150px;
@@ -1429,6 +1430,8 @@
     </style>
 </head>
 <body>
+    <div id="toast-notification"></div>
+
     <h1 id="main-shop-title" style="text-align: center;"></h1>
 
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
@@ -1437,291 +1440,237 @@
         <div id="right-sidebar">
             <div id="event-plan-panel">
                 <div class="event-name-group">
-                    <input type="text" id="header-event-name" value="Enter 
-Event Name" autocomplete="off">
-       
-                 </div>
+                    <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
+                </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
-                    <input type="text" id="header-goals" placeholder="What are the goals for your event?"
- autocomplete="off">
+                    <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
                 </div>
                 <div class="toolbar-group">
                     <label for="event-date-picker">Event Date</label>
                     <input type="text" id="event-date-picker" placeholder="Select date">
                 </div>
      
-                           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                
+                <button id="new-plan-btn" class="card-action-btn" style="width:100%; margin-bottom: 20px; background-color: #6c757d;">+ Start New Plan</button>
+
                 <div id="favorites-section">
                     <div class="sidebar-header-group">
                         <h4>Ideas</h4>
-                  
-                       <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
+                        <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
                     </div>
-                    <button class="carousel-nav left">◄</button>
-                    <div id="favorites-carousel"></div>
-                    <button class="carousel-nav 
-right">►</button>
-     
-                           </div>
+                    <div id="favorites-carousel-wrapper" style="position: relative;">
+                        <button class="carousel-nav left">◄</button>
+                        <div id="favorites-carousel"></div>
+                        <button class="carousel-nav right">►</button>
+                    </div>
+                </div>
                 <div class="sidebar-header-group">
                     <button id="itinerary-btn">Event Plan</button>
                     <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
-                    <button class="present-btn" data-list-type="locked" title="Present 
- Event Plan">▶️</button>
+                    <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
                 </div>
     
                 <div id="cart-items-container">
-                     <p style="font-size: 0.9em;
- color: #6c757d;">No items locked in yet.</p>
+                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
                 </div>
                 <div id="cart-footer">
                     <div id="total-breakdown">
                         <div class="total-row subtotal-row">
-               
                              <span>Subtotal:</span>
                             <span id="subtotal-cost">$0.00</span>
                         </div>
                         <div class="total-row amount-paid-row" style="display: none;">
-      
-                                     <span>Amount Paid:</span>
+                            <span>Amount Paid:</span>
                             <span id="amount-paid-cost">$0.00</span>
                         </div>
-                        
- <hr class="total-divider" style="display: none;">
+                        <hr class="total-divider" style="display: none;">
                         <div class="total-row final-total-row">
                             <strong>Total Due:</strong>
                             <strong id="total-cost">$0.00</strong>
-             
-                           </div>
+                        </div>
                     </div>
                     <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
                     <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
-           
-                 </div>
+                </div>
            </div>
         </div>
 
         <div id="left-sidebar">
-        <div id="filter-controls" data-active-filters="0">
-            <h3>Filters</h3>
-            <div class="filter-group">
-                <label for="name-filter">Search Catalog</label>
-              
-                 <input 
-type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-            </div>
-               <div class="filter-group">
-                <label>Categories</label>
-                <div id="category-filters" class="filter-btn-group"></div>
-            </div>
-                <div 
- class="filter-group">
-                <label>Subcategories</label>
-                   <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
-            </div>
-                <div id="date-filter-group" class="filter-group">
-                <label for="date-filter">Date & Time</label>
-            
-                             <input type="text" id="date-filter" placeholder="Select date and time range">
-                                 <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div id="filter-controls" data-active-filters="0">
+                <h3>Filters</h3>
+                <div class="filter-group">
+                    <label for="name-filter">Search Catalog</label>
+                    <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+                </div>
+                   <div class="filter-group">
+                    <label>Categories</label>
+                    <div id="category-filters" class="filter-btn-group"></div>
+                </div>
+                    <div class="filter-group">
+                    <label>Subcategories</label>
+                       <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
+                </div>
+                    <div id="date-filter-group" class="filter-group">
+                    <label for="date-filter">Date & Time</label>
+                    <input type="text" id="date-filter" placeholder="Select date and time range">
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
-                
-                       <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
                         <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
                     </div>
                 </div>
                 <div class="filter-group">
-        
-                                         <label for="headcount-filter">Headcount</label>
-                                 <select id="headcount-filter">
-                                    <option value="any">Any Size</option>
-  
-                                     <option value="1-10">1-10</option>
-                       <option value="11-25">11-25</option>
-                             <option value="26-50">26-50</option>
-                       
-                           <option value="51-100">51-100</option>
-                           <option value="101-250">101-250</option>
-                                         <option value="250-plus">250+</option>
-                         
- <option value="custom">Custom...</option>
-                       </select>
-                     <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
+                    <label for="headcount-filter">Headcount</label>
+                    <select id="headcount-filter">
+                        <option value="any">Any Size</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-25">11-25</option>
+                        <option value="26-50">26-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-250">101-250</option>
+                        <option value="250-plus">250+</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
                 </div>
                 <div class="filter-group">
-              
-                     <label for="location-filter">Location</label>
+                    <label for="location-filter">Location</label>
                     <select id="location-filter">
-                                     <option value="any">Any Location</option>
+                        <option value="any">Any Location</option>
                         <option value="sf">San Francisco</option>
-       
-                                   <option value="oakland">Oakland</option>
-                                     <option value="peninsula">Peninsula</option>
+                        <option value="oakland">Oakland</option>
+                        <option value="peninsula">Peninsula</option>
                         <option value="south-bay">South Bay</option>
-                   
-                           <option value="north-bay">North Bay</option>
-                        <option value="east-bay">East 
-Bay</option>
-                          <option value="other">Other</option>
-                   </select>
+                        <option value="north-bay">North Bay</option>
+                        <option value="east-bay">East Bay</option>
+                        <option value="other">Other</option>
+                    </select>
                 </div>
-      
-          
                 <div class="filter-group">
                     <label for="budget-filter">Budget</label>
-                     <select id="budget-filter">
+                    <select id="budget-filter">
                         <option value="any">Any Budget</option>
-    
-                                                               <option 
- value="budget-friendly">Budget-Friendly</option>
-                       <option value="moderate">Moderate</option>
+                        <option value="budget-friendly">Budget-Friendly</option>
+                        <option value="moderate">Moderate</option>
                         <option value="executive">Executive</option>
-                
-                            <option value="luxury">Luxury</option>
-                     </select>
-                             </div>
-                           <div class="filter-group">
-        
-                           <label for="status-filter">Status</label>
-                           <select id="status-filter">
-                                              <option value="Available">Available</option>
-            
-                           <option value="all">Show All</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter">
+                        <option value="Available">Available</option>
+                        <option value="all">Show All</option>
                         <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold         
-                         
-                                           Out">Sold Out</option>
-                   </select>
-                 </div>
-                   <button id="reset-filters-btn">Reset All Filters</button>
+                        <option value="Sold Out">Sold Out</option>
+                    </select>
+                </div>
+                <button id="reset-filters-btn">Reset All Filters</button>
             </div>
-         
         </div>
         
         <div id="catalog-area">
-      <div id="catalog-header">
+            <div id="catalog-header">
                 <div id="breadcrumbs"></div>
-                        <h2 id="catalog-title"></h2>
+                <h2 id="catalog-title"></h2>
             </div>
             <div id="catalog-toolbar">
-         
-                           <select id="sort-by">
-                         <option value="price-asc">Price (Low to High</option>
+                <select id="sort-by">
+                    <option value="price-asc">Price (Low to High)</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
-            
-                       </select>
+                </select>
             </div>
-           <div id="catalog-container"></div>
-  </div>
+            <div id="catalog-container"></div>
+        </div>
     </div>
+
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
- 
-                               <div id="modal-thumbnail-strip"></div>
+                <div id="modal-thumbnail-strip"></div>
             </div>
             <div class="modal-sidebar-column">
-                <div id="modal-header-actions">
-                    </div>
+                <div id="modal-header-actions"></div>
                 <div id="modal-breadcrumbs"></div>
-     
-                           <h2 id="modal-item-name"></h2>
+                <h2 id="modal-item-name"></h2>
                 <p id="modal-item-price" class="price"></p>
                 <p id="modal-item-description"></p>
                 <div id="modal-options-container"></div>
                 <div id="modal-quantity-selector"></div>
                 <div id="modal-notes-container">
-  
-                                 <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
+                    <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
                 </div>
                 <div id="modal-calendar-container"></div>
                 <div id="modal-actions-container">
-                    <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add 
- to plan">Add to Plan</button>
+                    <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
                 </div>
                 <div id="modal-chat-container">
                   <h4>Item Chat</h4>
                   <div id="messages-list-item" class="messages-list"></div>
                   <form id="message-form-item">
-      
-                                 <input type="text" id="message-input-item" placeholder="Type a message..." autocomplete="off">
+                    <input type="text" id="message-input-item" placeholder="Type a message..." autocomplete="off">
                     <button type="submit">Send</button>
                   </form>
                 </div>
-
             </div>
         </div>
     </div>
-</div>
- 
-      
-<div id="checkout-modal-overlay" class="modal-overlay">
+    
+    <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
             </div>
-        
-                 <hr>
+            <hr>
             <div class="checkout-total-deposit-section">
                 <div class="checkout-total">
                     <span>Total Estimated Cost:</span>
                     <span id="full-total-price">$0.00</span>
                 </div>
-       
-                       <div class="tip-row">
+                <div class="tip-row">
                     <label for="tip-amount">Add Tip:</label>
                     <input type="number" id="tip-amount" placeholder="$0.00" min="0" step="0.01">
                 </div>
                 <div class="checkout-deposit">
-          
-                         <span id="deposit-label">Amount Due Today:</span>
+                    <span id="deposit-label">Amount Due Today:</span>
                     <span id="deposit-price">$0.00</span>
                 </div>
             </div>
-
-            <div id="payment-choice-container" style="display: none;
- margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+            <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
                 <h4 style="margin-top: 0;">Payment Option</h4>
-                <div style="display: flex;
- justify-content: space-around;">
+                <div style="display: flex; justify-content: space-around;">
                     <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
                     <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
                 </div>
             </div>
-
-            <div class="terms-and-conditions">
-     
-                           </div>
+            <div class="terms-and-conditions"></div>
             <form id="payment-form">
                 <div class="form-row">
                     <label for="customer-name">Full Name</label>
                     <input type="text" id="customer-name" required autocomplete="cc-name">
-             
-               </div>
+                </div>
                 <div class="form-row">
                     <label for="customer-email">Email Address</label>
                     <input type="email" id="customer-email" required autocomplete="email">
                 </div>
                 <div class="form-row">
- 
-                                   <label for="card-element">Credit or debit card</label>
+                    <label for="card-element">Credit or debit card</label>
                     <div id="card-element"></div>
                     <div id="card-errors" role="alert"></div>
                 </div>
-                <button id="payment-submit-btn" 
- class="primary-action-btn" type="submit">
+                <button id="payment-submit-btn" class="primary-action-btn" type="submit">
                     <span class="button-text">Pay Now</span>
                     <span class="spinner" style="display: none;">Processing...</span>
                 </button>
             </form>
-            <div id="payment-success-message" style="display: none;
- text-align: center; padding: 20px;">
+            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
                 <h3 style="color: #28a745;">✅ Payment Successful!</h3>
                 <p>Your items are reserved. This window will close shortly.</p>
             </div>
@@ -1730,131 +1679,102 @@ Bay</option>
     
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
-         
-                                   <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
                    <input type="text" id="itinerary-event-name" value="Enter Event Name" autocomplete="off">
- 
-                                 </div>
+                </div>
                 <div class="itinerary-header-item">
                     <label for="itinerary-goals">Goals / Notes</label>
-                    <input 
- type="text" id="itinerary-goals" placeholder="What are the goals for your event?"
-             
-                                                             autocomplete="off">
+                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
                 </div>
-                     <div class="itinerary-header-item">
-                        <label for="itinerary-date-picker">Date & Time</label>
-     
-                         <input type="text" id="itinerary-date-picker" placeholder="Select date range">
-                       </div>
+                <div class="itinerary-header-item">
+                    <label for="itinerary-date-picker">Date & Time</label>
+                    <input type="text" id="itinerary-date-picker" placeholder="Select date range">
+                </div>
             </div>
-                     <div class="itinerary-container">
+            <div class="itinerary-container">
                 <div class="itinerary-column">
-           
-                       <h3>Event Plan</h3>
-                    <p class="description">Drag 
- items to change 
- their order.</p>
-                                <div id="itinerary-locked-items" class="itinerary-list"></div>
+                    <h3>Event Plan</h3>
+                    <p class="description">Drag items to change their order.</p>
+                    <div id="itinerary-locked-items" class="itinerary-list"></div>
                 </div>
-            
-                       <div class="itinerary-column">
-                                   <h3>Ideas</h3>
-                                      <p class="description">Move items here to add them to your plan.</p>
-        
-                                                               <div id="itinerary-favorited-items" class="itinerary-list"></div>
+                <div class="itinerary-column">
+                    <h3>Ideas</h3>
+                    <p class="description">Move items here to add them to your plan.</p>
+                    <div id="itinerary-favorited-items" class="itinerary-list"></div>
                 </div>
             </div>
-             </div>
+        </div>
     </div>
+
     <div id="chat-widget-container">
-         <button id="chat-toggle-button">
-     
-              💬
-              <span id="presence-counter">0</span>
-                     </button>
+        <button id="chat-toggle-button">
+            💬
+            <span id="presence-counter">0</span>
+        </button>
         <div id="chat-window">
             <div id="chat-header">
                <p>Session Chat (<span id="whos-here-count">0</span>)</p>
-                 
-               <div class="user-identity">
+                <div class="user-identity">
                    <label for="chat-user-name">Your Name:</label>
                     <input type="text" id="chat-user-name" autocomplete="off">
                 </div>
                 <div class="chat-options">
-                     <input 
- type="checkbox" id="chat-remain-open-checkbox">
-                   <label for="chat-remain-open-checkbox">Keep open</label>
+                    <input type="checkbox" id="chat-remain-open-checkbox">
+                    <label for="chat-remain-open-checkbox">Keep open</label>
                 </div>
             </div>
-             <div id="whos-here-list"></div>
+            <div id="whos-here-list"></div>
             <div id="messages-container">
-                   <div id="messages-list">
-   
-                                       </div>
+                <div id="messages-list"></div>
             </div>
-                   <div id="typing-indicator"></div>
+            <div id="typing-indicator"></div>
             <form id="message-form">
-                   <input type="text" 
- id="message-input" placeholder="Type a message..." autocomplete="off">
-     
-                         <button type="submit">Send</button>
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <button type="submit">Send</button>
             </form>
-                   </div>
+        </div>
     </div>
     
     <div id="presentation-modal-overlay" class="modal-overlay">
         <div class="presentation-content">
-                 <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
-
+            <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
             <div class="presentation-summary-header">
- 
-                               <div class="summary-item"><strong>Event:</strong> <span id="summary-event-name"></span></div>
+                <div class="summary-item"><strong>Event:</strong> <span id="summary-event-name"></span></div>
                 <div class="summary-item"><strong>Notes:</strong> <span id="summary-event-notes"></span></div>
                 <div class="summary-item"><strong>Date:</strong> <span id="summary-event-date"></span></div>
                 <div class="summary-links">
-                           
-                       <button id="summary-ideas-link" class="summary-link-btn"></button>
+                    <button id="summary-ideas-link" class="summary-link-btn"></button>
                     <button id="summary-locked-link" class="summary-link-btn"></button>
                 </div>
             </div>
-            
-             <div class="presentation-header">
-             
-                               <h2 id="presentation-title"></h2>
+            <div class="presentation-header">
+                <h2 id="presentation-title"></h2>
                 <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
                 <span id="presentation-counter"></span>
             </div>
-             <div class="presentation-body">
-                
- <div id="presentation-gallery-column">
+            <div class="presentation-body">
+                <div id="presentation-gallery-column">
                     <div id="presentation-main-image"></div>
                     <div id="presentation-thumbnail-strip"></div>
-                 </div>
+                </div>
                 <div id="presentation-details-column">
                     <h3 id="presentation-item-name"></h3>
-  
-                                                               <p id="presentation-item-price"></p>
+                    <p id="presentation-item-price"></p>
                     <p id="presentation-item-description"></p>
-                     <div id="presentation-item-options"></div>
-                    
-     
-               
+                    <div id="presentation-item-options"></div>
                     <div id="presentation-reactions">
-                         <div id="reaction-buttons" class="reaction-bar-buttons"></div>
+                        <div id="reaction-buttons" class="reaction-bar-buttons"></div>
                         <div id="reaction-summary" class="reaction-summary-display"></div>
-           
-                       </div>
-                  <div id="presentation-item-note-container">
+                    </div>
+                    <div id="presentation-item-note-container">
                         <h4>Note:</h4>
                         <p id="presentation-item-note"></p>
                     </div>
-   
-                           </div>
                 </div>
+            </div>
             <button class="presentation-nav-arrow up" id="presentation-prev-item-btn" title="Previous Item (Up Arrow)">▲</button>
             <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
         </div>
@@ -1862,31 +1782,25 @@ Bay</option>
 
     <div id="user-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content" style="max-width: 400px;">
-    
-               <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
-            
+            <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
             <div id="signin-view">
                 <h3>Sign In or Create Account</h3>
                 <p>Enter your email to receive a password-free sign-in link.</p>
                 <form id="signin-form">
-   
-                               <div class="form-row">
+                   <div class="form-row">
                         <label for="signin-email">Email Address</label>
                         <input type="email" id="signin-email" required autocomplete="email">
                     </div>
-        
-                           <button class="primary-action-btn" type="submit">Send Magic Link</button>
+                    <button class="primary-action-btn" type="submit">Send Magic Link</button>
                 </form>
                 <p id="signin-message"></p>
             </div>
-    
             <div id="profile-view" style="display: none;">
                 <h3>My Account</h3>
                 <form id="user-prefs-form">
                     <div class="profile-details">
                         <p><strong>Name:</strong> <span id="profile-name"></span></p>
                         <p><strong>Email:</strong> <span id="profile-email"></span></p>
-                        
                         <div class="form-row" style="margin-top: 20px;">
                             <label for="profile-phone">Phone Number (for SMS alerts)</label>
                             <input type="tel" id="profile-phone" autocomplete="tel" placeholder="(555) 123-4567">
@@ -1900,10 +1814,8 @@ Bay</option>
                                 <option value="Weekly Digest">Weekly Digest</option>
                             </select>
                         </div>
-
                         <button class="primary-action-btn" type="submit" style="margin-top: 15px;">Save Preferences</button>
                         <p id="prefs-message" style="margin-top: 10px; min-height: 1em;"></p>
-
                         <a href="#" id="owner-dashboard-link" class="primary-action-btn" style="display: none; margin-top: 15px; text-align: center; text-decoration: none; background-color: #555;">Store Dashboard</a>
                     </div>
                 </form>
@@ -1916,20 +1828,16 @@ Bay</option>
     <div class="footer-link">
         <a href="/crm-login.html">Admin Dashboard</a>
     </div>
-
   
-     <div id="shop-switcher-overlay" class="modal-overlay">
+    <div id="shop-switcher-overlay" class="modal-overlay">
         <div class="checkout-modal-content" style="max-width: 500px;">
             <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close">×</button>
             <h3>Select a Shop</h3>
-            <div id="shop-list-container">
-                </div>
+            <div id="shop-list-container"></div>
         </div>
     </div>
 
     <script type="module" src="main.js"></script>
- 
-       <script 
- src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </body>
 </html>
