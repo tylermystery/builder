@@ -333,3 +333,14 @@ export function showShopSwitcher() {
         }
     });
 }
+
+export function showToast(message, duration = 5000) {
+    const toast = document.getElementById('toast-notification');
+    if (toast) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, duration);
+    }
+}
