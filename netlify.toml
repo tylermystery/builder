@@ -8,6 +8,11 @@
   to = "/.netlify/functions/update-user-prefs"
   status = 200
 
+  [[redirects]]
+  from = "/api/send-session-notification"
+  to = "/.netlify/functions/send-session-notification"
+  status = 200
+
 # Add the two new redirects for authentication
 [[redirects]]
   from = "/api/auth-start"
