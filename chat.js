@@ -18,38 +18,43 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
   isTabActive = false;
 });
+
 function generateFunName() {
     const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
     const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
     return `${adj} ${noun}`;
 }
+
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
+    
+    // *** THIS IS THE FIX: Part 1 ***
+    // Always create a temporary ID first for anonymous users.
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         localStorage.setItem('chatUserId', userId);
     }
+
     let userName = localStorage.getItem('chatUserName');
-    if (!userName || userName.split(' ').length !== 3) {
+    if (!userName) {
         userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
+    
+    // Now, check if the user is authenticated and overwrite the temporary ID with the real one if they are.
     const authenticatedUser = state.session.user;
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        const funNameParts = userName.split(' ');
-        const realFirstName = authenticatedUser.name.split(' ')[0];
-        if (funNameParts.length === 2) {
-            const newName = `${funNameParts[0]} ${realFirstName} ${funNameParts[1]}`;
-            userName = newName;
-            localStorage.setItem('chatUserName', newName);
-        }
-        currentUser = { id: authenticatedUser.id, name: userName };
+        // Use the real Airtable record ID for authenticated users
+        currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
     } else {
+        // Use the temporary ID for anonymous users
         currentUser = { id: userId, name: userName };
     }
+    
     return currentUser;
 }
+
 function updatePresenceUI(members) {
     const presenceCounter = document.getElementById('presence-counter');
     const whosHereCount = document.getElementById('whos-here-count');
@@ -60,8 +65,14 @@ function updatePresenceUI(members) {
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
-            if (!state.session.userProfiles.has(member.id)) {
-                state.session.userProfiles.set(member.id, member.info.name);
+            // *** THIS IS THE FIX: Part 2 ***
+            // Use the real user object from the state if available, otherwise use the pusher info.
+            // This ensures we always store the REAL Airtable ID when a user is logged in.
+            const profileId = state.session.user.isAuthenticated ? state.session.user.id : member.id;
+            const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
+
+            if (!state.session.userProfiles.has(profileId)) {
+                state.session.userProfiles.set(profileId, profileName);
                 triggerSave();
             }
             const userElement = document.createElement('div');
