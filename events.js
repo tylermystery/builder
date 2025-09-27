@@ -633,3 +633,19 @@ export function openChatWidget(andKeepOpen = false) {
         }
     }
 }
+
+// PASTE THIS AT THE END OF: events.js
+
+// Add event listener for the new session manager
+safeAddEventListener('session-manager-btn', 'click', (e) => {
+    e.stopPropagation(); // Prevent the document click listener from firing immediately
+    document.getElementById('session-dropdown').classList.toggle('visible');
+});
+
+// Add a global click listener to close the dropdown when clicking elsewhere
+document.addEventListener('click', () => {
+    const dropdown = document.getElementById('session-dropdown');
+    if (dropdown && dropdown.classList.contains('visible')) {
+        dropdown.classList.remove('visible');
+    }
+});
