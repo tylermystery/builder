@@ -1,13 +1,4 @@
-// FILE: events.js
-/*
-* Version: 5.2.3 (Debug)
-* Last Modified: 2025-09-21
-* Changelog:
-* v5.2.3 - Added logging to inspect the store record and the categories being generated.
-* v5.2.2 - Updated category creation logic to correctly reference the linked record field from the Stores table.
-* v5.2.1 - Fixed TypeError by adding an Array.isArray() check to ensure the store's 'Items' field is an array before processing.
-*/
-import { state } from './state.js';
+import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
@@ -36,21 +27,6 @@ function getAvailableSubcategories(categoryRecord) {
     }
     const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     return subcategoryOptions.map(option => option.name).sort();
-}
-
-// PASTE THIS AT THE END OF: events.js
-
-export function openChatWidget(andKeepOpen = false) {
-    const chatWidgetContainer = document.getElementById('chat-widget-container');
-    if (chatWidgetContainer) {
-        chatWidgetContainer.classList.add('chat-open');
-        if (andKeepOpen) {
-            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
-            if (remainOpenCheckbox) {
-                remainOpenCheckbox.checked = true;
-            }
-        }
-    }
 }
 
 function updateSubcategoryButtons() {
@@ -244,15 +220,18 @@ async function handlePaymentFormSubmit(event) {
 }
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
-    saveShareBtn = document.getElementById('save-share-btn');
-    categoryFiltersContainer = document.getElementById('category-filters');
-    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
-    let debugEnabled = false;
+    // *** THIS IS THE FIX ***
+    // The function definition is moved to the top of the scope, before it is called.
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
         else console.warn(`Element with ID "${selector}" not found.`);
     };
+
+    saveShareBtn = document.getElementById('save-share-btn');
+    categoryFiltersContainer = document.getElementById('category-filters');
+    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+    let debugEnabled = false;
 
     const betaTrigger = document.getElementById('beta-trigger');
     if (betaTrigger) {
@@ -274,7 +253,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             scrollTimeout = null;
         }, 100);
     });
-
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
@@ -300,7 +278,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         categoryFiltersContainer.appendChild(allButton);
     }
 
-    // --- NEW: Conditionally Display Filters ---
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
         if (container) {
@@ -313,7 +290,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     toggleFilter('headcount-filter', 'Headcount');
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
-    
+
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
             categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -394,7 +371,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 break;
             case 'this-week':
                 endDate.setDate(today.getDate() + (6 - today.getDay()));
-                 break;
+                break;
             case 'next-2-weeks':
                 endDate.setDate(today.getDate() + 14);
                 break;
@@ -411,11 +388,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
     });
-    
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
     
-        console.log('Body clicked. Target:', e.target); // <-- What did we click?
+        console.log('Body clicked. Target:', e.target);
     
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
@@ -439,7 +415,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
            });
         } else if (checkoutBtn) {
             console.log('Logic branch: checkoutBtn');
-            ui.showCheckoutModal(shopSettings); // Assumes shopSettings is available
+            ui.showCheckoutModal(shopSettings);
         } else if (presentBtn) {
             console.log('Logic branch: presentBtn');
             const listType = presentBtn.dataset.listType;
@@ -518,22 +494,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
         } else if (card && !e.target.closest('.quantity-selector')) {
-            console.log('Logic branch: card'); // <-- We expect to see this!
+            console.log('Logic branch: card');
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (lockedItemCard) {
-            console.log('Logic branch: lockedItemCard'); // <-- Or this!
+            console.log('Logic branch: lockedItemCard');
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
-            console.log('Logic branch: favoriteItem'); // <-- Or this!
+            console.log('Logic branch: favoriteItem');
             const recordId = favoriteItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
         } else {
-            console.log('Logic branch: no match found.'); // <-- This is what we see if something is wrong.
+            console.log('Logic branch: no match found.');
         }
     });
     document.body.addEventListener('change', (e) => {
@@ -586,6 +562,20 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
+    // Add the new button's ID to the safeAddEventListener function
+    safeAddEventListener('new-plan-btn', 'click', () => {
+        // Clear the session ID from the state
+        setState({ session: { ...state.session, id: null, isOwned: false } });
+        
+        // Clear the session from the URL
+        const cleanUrl = new URL(window.location);
+        cleanUrl.searchParams.delete('session');
+        window.history.pushState({}, '', cleanUrl);
+
+        // Reload the page to start fresh
+        location.reload();
+    });
+
     return { mainDatePicker, eventPlanDatePicker };
 }
 
@@ -631,16 +621,15 @@ export function initializeChatEventListeners() {
     });
 }
 
-// Add the new button's ID to the safeAddEventListener function
-safeAddEventListener('new-plan-btn', 'click', () => {
-    // Clear the session ID from the state
-    setState({ session: { ...state.session, id: null, isOwned: false } });
-    
-    // Clear the session from the URL
-    const cleanUrl = new URL(window.location);
-    cleanUrl.searchParams.delete('session');
-    window.history.pushState({}, '', cleanUrl);
-
-    // Reload the page to start fresh
-    location.reload();
-});
+export function openChatWidget(andKeepOpen = false) {
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    if (chatWidgetContainer) {
+        chatWidgetContainer.classList.add('chat-open');
+        if (andKeepOpen) {
+            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+            if (remainOpenCheckbox) {
+                remainOpenCheckbox.checked = true;
+            }
+        }
+    }
+}
