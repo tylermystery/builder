@@ -603,3 +603,67 @@ body {
 #toast-notification.show {
     top: 0; /* Animate to show */
 }
+
+/* Session Manager Dropdown Styles */
+#session-manager-container {
+    position: relative;
+    display: none; /* Hidden by default, shown for logged-in users */
+}
+
+#session-manager-btn {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+#session-dropdown {
+    position: absolute;
+    right: 0;
+    top: 110%;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: 1px solid #e0e0e0;
+    width: 250px;
+    z-index: 1100;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+#session-dropdown.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+#session-dropdown a {
+    display: block;
+    padding: 10px 15px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#session-dropdown a:hover {
+    background-color: #f8f9fa;
+}
+
+#session-dropdown a.active-session {
+    font-weight: bold;
+    color: #007bff;
+}
+
+#session-dropdown .divider {
+    height: 1px;
+    background-color: #e9ecef;
+    margin: 5px 0;
+}
