@@ -108,13 +108,13 @@ export async function saveSessionToAirtable() {
     }
     
     // *** THIS IS THE FIX ***
-    // We get the user IDs (the keys) from the userProfiles map
-    const collaboratorIds = Array.from(state.session.userProfiles.keys());
+    // Filter out temporary user IDs (which start with 'user-') before saving.
+    const collaboratorIds = Array.from(state.session.userProfiles.keys())
+        .filter(id => id.startsWith('rec'));
 
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
-        // Use the array of IDs for the linked record field
         "Collaborators": collaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
