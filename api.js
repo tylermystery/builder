@@ -1,5 +1,3 @@
-// PASTE THIS ENTIRE CODE INTO: api.js
-
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
 import { storeSession } from './session.js';
@@ -107,8 +105,6 @@ export async function saveSessionToAirtable() {
         }
     }
     
-    // *** THIS IS THE FIX ***
-    // Filter out temporary user IDs (which start with 'user-') before saving.
     const collaboratorIds = Array.from(state.session.userProfiles.keys())
         .filter(id => id.startsWith('rec'));
 
@@ -146,6 +142,23 @@ export async function saveSessionToAirtable() {
         if (!isUpdate) {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
+            
+            // *** NEW LOGIC ***
+            // If the user is logged in, associate this new session with their account.
+            if (state.session.user.isAuthenticated && state.session.user.id) {
+                const userId = state.session.user.id;
+                const newSessionId = state.session.id;
+                log('API', `Associating new session ${newSessionId} with user ${userId}`);
+                
+                // We can "fire and forget" this call and don't need to wait for it.
+                fetch('/api/associate-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userId, sessionId: newSessionId })
+                });
+            }
+            // *** END NEW LOGIC ***
+
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
             log('API', `New session created with ID: ${state.session.id}`);
         }
