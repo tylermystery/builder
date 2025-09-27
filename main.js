@@ -186,7 +186,6 @@ async function initialize() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
                 
-                // *** MODIFIED STATE UPDATE ***
                 localStorage.setItem('jwt', data.token);
                 setState({ 
                     session: { 
@@ -214,10 +213,16 @@ async function initialize() {
         }
 
         if (sessionId) {
+            const isNewSessionForThisUser = !getStoredSessions()[sessionId];
+
             if (!state.session.id) {
                 await api.loadSessionFromAirtable(sessionId);
             }
-            // *** NEW LOGIC TO ASSOCIATE SESSION ON JOIN ***
+
+            if (isNewSessionForThisUser) {
+                ui.showToast("You've joined a shared plan. Changes are collaborative and real-time.");
+            }
+            
             if (state.session.user.isAuthenticated) {
                 const isAlreadyAssociated = state.session.user.associatedSessions?.includes(sessionId);
                 if (!isAlreadyAssociated) {
