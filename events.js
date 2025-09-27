@@ -630,3 +630,17 @@ export function initializeChatEventListeners() {
         }
     });
 }
+
+// Add the new button's ID to the safeAddEventListener function
+safeAddEventListener('new-plan-btn', 'click', () => {
+    // Clear the session ID from the state
+    setState({ session: { ...state.session, id: null, isOwned: false } });
+    
+    // Clear the session from the URL
+    const cleanUrl = new URL(window.location);
+    cleanUrl.searchParams.delete('session');
+    window.history.pushState({}, '', cleanUrl);
+
+    // Reload the page to start fresh
+    location.reload();
+});
