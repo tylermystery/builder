@@ -575,3 +575,31 @@ body {
   font-weight: bold;
   z-index: 5; /* Ensures it's on top of the image */
 }
+
+#new-plan-btn {
+    transition: background-color 0.2s ease;
+}
+
+#new-plan-btn:hover {
+    background-color: #5a6268 !important;
+}
+
+#toast-notification {
+    position: fixed;
+    top: -100px; /* Start off-screen */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #2c3e50;
+    color: white;
+    padding: 16px 30px;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 2000;
+    font-size: 1.1em;
+    font-weight: 500;
+    transition: top 0.5s ease-in-out;
+}
+
+#toast-notification.show {
+    top: 0; /* Animate to show */
+}
