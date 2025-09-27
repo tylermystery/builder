@@ -2,6 +2,12 @@
 [build]
   functions = "netlify/functions"
 
+# Add the new redirect for updating user preferences
+[[redirects]]
+  from = "/api/update-user-prefs"
+  to = "/.netlify/functions/update-user-prefs"
+  status = 200
+
 # Add the two new redirects for authentication
 [[redirects]]
   from = "/api/auth-start"
