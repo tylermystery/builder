@@ -1,7 +1,10 @@
+// REPLACE THE ENTIRE CONTENTS OF: netlify/functions/auth-confirm.js
+
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
 const Pusher = require("pusher");
 const { AIRTABLE_PAT, BASE_ID, JWT_SECRET, PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER } = process.env;
+
 const pusher = new Pusher({
     appId: PUSHER_APP_ID,
     key: PUSHER_KEY,
@@ -9,6 +12,7 @@ const pusher = new Pusher({
     cluster: PUSHER_CLUSTER,
     useTLS: true,
 });
+
 exports.handler = async (event) => {
     try {
         const { token } = event.queryStringParameters;
@@ -29,6 +33,7 @@ exports.handler = async (event) => {
         const userRes = await fetch(findUserUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         let userData = await userRes.json();
         let userRecord;
+
         if (userData.records && userData.records.length > 0) {
             userRecord = userData.records[0];
         } else {
@@ -54,23 +59,38 @@ exports.handler = async (event) => {
                 }
             }
         }
+        
+        // *** NEW LOGIC TO FETCH SESSION NAMES ***
+        let associatedSessions = [];
+        const sessionIds = userRecord.fields['Associated Sessions'];
+        if (sessionIds && sessionIds.length > 0) {
+            const formula = `OR(${sessionIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+            const sessionsUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?fields%5B%5D=Name&filterByFormula=${encodeURIComponent(formula)}`;
+            const sessionsRes = await fetch(sessionsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+            if (sessionsRes.ok) {
+                const sessionsData = await sessionsRes.json();
+                associatedSessions = sessionsData.records.map(rec => ({ id: rec.id, name: rec.fields.Name }));
+            }
+        }
+        // *** END NEW LOGIC ***
 
         const sessionToken = jwt.sign(
             { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner }, 
             JWT_SECRET, 
             { expiresIn: '30d' }
         );
+
         await pusher.trigger(`private-auth-${ChannelID}`, "auth-success", {
             token: sessionToken,
             user: { 
                 id: userRecord.id, 
                 name: userRecord.fields.Name, 
                 email: userRecord.fields.Email,
-                // *** ADD THIS LINE ***
-                associatedSessions: userRecord.fields['Associated Sessions'] || []
+                associatedSessions: associatedSessions // Send the array of objects
             },
             ownerData: ownerData
         });
+
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'text/html' },
@@ -81,8 +101,7 @@ exports.handler = async (event) => {
         return {
             statusCode: 400,
             headers: { 'Content-Type': 'text/html' },
-            body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Authentication Failed</h1><p>${error.message}.
- Please try again.</p></div>`
+            body: `<div style="font-family: sans-serif; text-align: center; padding-top: 50px;"><h1>Authentication Failed</h1><p>${error.message}. Please try again.</p></div>`
         };
     }
 };
