@@ -344,3 +344,50 @@ export function showToast(message, duration = 5000) {
         }, duration);
     }
 }
+
+// PASTE THIS AT THE END OF: ui.js
+
+export function renderSessionDropdown() {
+    const container = document.getElementById('session-manager-container');
+    const dropdown = document.getElementById('session-dropdown');
+    const user = state.session.user;
+
+    if (!container || !dropdown || !user.isAuthenticated) {
+        if(container) container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    dropdown.innerHTML = ''; // Clear existing items
+
+    const sessions = user.associatedSessions || [];
+    
+    // Add "Start New Plan" option
+    const newPlanLink = document.createElement('a');
+    newPlanLink.href = window.location.pathname; // Link to root to start fresh
+    newPlanLink.textContent = '➕ Start New Plan';
+    dropdown.appendChild(newPlanLink);
+
+    const divider = document.createElement('div');
+    divider.className = 'divider';
+    dropdown.appendChild(divider);
+
+    if (sessions.length > 0) {
+        sessions.forEach(session => {
+            const link = document.createElement('a');
+            link.href = `/?session=${session.id}`;
+            link.textContent = session.name || 'Unnamed Plan';
+            if (state.session.id === session.id) {
+                link.classList.add('active-session');
+            }
+            dropdown.appendChild(link);
+        });
+    } else {
+        const noItems = document.createElement('span');
+        noItems.textContent = 'No saved plans yet.';
+        noItems.style.padding = '10px 15px';
+        noItems.style.fontSize = '0.9em';
+        noItems.style.color = '#6c757d';
+        dropdown.appendChild(noItems);
+    }
+}
