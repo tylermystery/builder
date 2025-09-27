@@ -1,3 +1,5 @@
+// REPLACE THE ENTIRE CONTENTS OF: main.js
+
 // In main.js
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -8,13 +10,12 @@ import { getStoredSessions } from './session.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners } from './events.js';
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
 let mainDatePicker = null;
-
 async function updateHeaderCalendarAvailability() {
     log('Main', 'Updating header calendar availability based on favorited items.');
     const allBusyTimes = [];
@@ -65,7 +66,8 @@ async function updateHeaderCalendarAvailability() {
                         const start = new Date(Math.max(busy.start, dayStart));
                         const end = new Date(Math.min(busy.end, dayEnd));
                         const minutes = (end - start) / (1000 * 60);
-                        busyMinutes += minutes;
+   
+                         busyMinutes += minutes;
                     });
                     const availablePercentage = ((totalMinutes - busyMinutes) / totalMinutes) * 100;
                     if (availablePercentage <= 50) {
@@ -92,7 +94,6 @@ async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
     ui.toggleLoading(true);
-
     try {
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
         state.stores.all = stores;
@@ -107,7 +108,6 @@ async function initialize() {
     const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
     let activeShop = null;
-
     // --- NEW, SMARTER SHOP SELECTION LOGIC ---
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
@@ -147,12 +147,15 @@ async function initialize() {
         document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
             ui.showShopSwitcher();
         });
-        
         let shopSettings = {
-            shopType: activeShop.fields.ShopType || 'Events',
-            enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
-            paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
-            terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
+            shopType: activeShop.fields.ShopType ||
+            'Events',
+            enabledFilters: activeShop.fields.EnabledFilters ||
+            ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+            paymentOptions: activeShop.fields.PaymentOptions ||
+            'DepositOnly',
+            terms: activeShop.fields.TermsAndConditions ||
+            'Default terms and conditions text.',
             cartLabels: {}
         };
         try {
@@ -164,7 +167,6 @@ async function initialize() {
         ui.applyCartLabels(shopSettings.cartLabels);
         
         const { mainDatePicker, eventPlanDatePicker } = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
-        
         const jwt = localStorage.getItem('jwt');
         if (jwt) {
             try {
@@ -188,11 +190,11 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: loginToken })
+                   
+                     body: JSON.stringify({ token: loginToken })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
-
                 // --- ADD THIS DEBUGGING LOG ---
                 console.log("Data received from /api/auth-verify:", data);
                 // ---------------------------------
@@ -203,15 +205,16 @@ async function initialize() {
                     session: { 
                         ...state.session, 
                         user: { 
-                            ...state.session.user, 
+                        
+                         ...state.session.user, 
                             ...data.user, 
                             isAuthenticated: true,
                             isOwner: data.ownerData.isOwner,
-                            ownerDashboardId: data.ownerData.ownerDashboardId
+        
+                             ownerDashboardId: data.ownerData.ownerDashboardId
                         } 
                     } 
                 });
-        
                 // Clean the URL and update the UI icon without redirecting
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
@@ -248,22 +251,40 @@ async function initialize() {
         updateSaveShareButton();
         
         initializeChatEventListeners();
-        initializeSessionChat(); // Now initializes the main session chat
+        initializeSessionChat();
+        // Now initializes the main session chat
         setupAuthEventListeners();
         updateUserProfileIcon();
         
         state.ui.isInitializing = false;
         log('Main', 'Initialization complete.');
 
+        // --- NEW LOGIC FOR AUTOMATIC VIEW SELECTION ---
         const finalUrlParams = new URLSearchParams(window.location.search);
+        const viewMode = finalUrlParams.get('view');
         const itemIdToOpen = finalUrlParams.get('openItem');
-        if (itemIdToOpen) {
+        const totalItems = state.cart.items.size + state.cart.lockedItems.size;
+
+        // Case 1: URL explicitly requests presentation view
+        if (viewMode === 'present') {
+            if (totalItems > 0) {
+                ui.showPresentationView('favorites'); // Default to showing ideas first
+                openChatWidget(true); // Open the chat and check the "keep open" box
+            }
+        }
+        // Case 2: No specific view requested, but there are 3+ items, so default to presentation
+        else if (!itemIdToOpen && totalItems >= 3) {
+            ui.showPresentationView('favorites');
+        }
+        // Case 3: URL requests a specific item to be opened
+        else if (itemIdToOpen) {
             const recordToOpen = state.records.all.find(r => r.id === itemIdToOpen);
             if (recordToOpen) {
                 const photoIndex = parseInt(finalUrlParams.get('photo'), 10) || 0;
                 setTimeout(() => { ui.showDetailModal(recordToOpen, photoIndex); }, 100);
             }
         }
+        // --- END OF NEW LOGIC ---
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
     }
