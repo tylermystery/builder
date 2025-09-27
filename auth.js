@@ -1,3 +1,5 @@
+// REPLACE THE ENTIRE CONTENTS OF: auth.js
+
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 
@@ -13,15 +15,23 @@ const signoutBtn = document.getElementById('signout-btn');
 const profileNameEl = document.getElementById('profile-name');
 const profileEmailEl = document.getElementById('profile-email');
 const userProfileButton = document.getElementById('user-profile-button');
+const userPrefsForm = document.getElementById('user-prefs-form');
+const profilePhoneInput = document.getElementById('profile-phone');
+const profileNotificationsSelect = document.getElementById('profile-notifications');
+const prefsMessage = document.getElementById('prefs-message');
 
 // --- Functions ---
 export function showUserModal() {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
-
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
         profileEmailEl.textContent = user.email;
+        // Populate the new preference fields
+        profilePhoneInput.value = user.phoneNumber || '';
+        profileNotificationsSelect.value = user.notificationFrequency || 'None';
+        prefsMessage.textContent = ''; // Clear any previous messages
+
         signinView.style.display = 'none';
         profileView.style.display = 'block';
 
@@ -53,14 +63,12 @@ async function handleSignIn(e) {
     log('Auth', `Sign-in initiated for: ${email}`);
     signinMessage.style.color = '#333';
     signinMessage.textContent = `Sending confirmation email...`;
-
     try {
         const response = await fetch('/api/auth-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
         });
-
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Failed to send confirmation email.');
@@ -69,12 +77,10 @@ async function handleSignIn(e) {
         signinMessage.style.color = '#28a745';
         signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
         signinEmailInput.value = '';
-
         const pusher = new Pusher('236f480714e5001590b5', {
             cluster: 'us3',
             authEndpoint: '/api/pusher-auth'
         });
-
         const channelName = `private-auth-${data.channelId}`;
         const channel = pusher.subscribe(channelName);
 
@@ -84,7 +90,6 @@ async function handleSignIn(e) {
             signinMessage.style.color = '#dc3545';
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
         }, 5 * 60 * 1000);
-
         channel.bind('auth-success', (payload) => {
             clearTimeout(loginTimeout);
             console.log("Pusher auth-success payload received:", payload);
@@ -93,7 +98,7 @@ async function handleSignIn(e) {
             
             setState({ 
                 session: { 
-                    ...state.session, 
+                   ...state.session,
                     user: { 
                         ...state.session.user, 
                         ...payload.user, 
@@ -101,7 +106,8 @@ async function handleSignIn(e) {
                         isOwner: payload.ownerData.isOwner,
                         ownerDashboardId: payload.ownerData.ownerDashboardId
                     } 
-                } 
+            
+                 }
             });
 
             console.log("User state after update:", state.session.user);
@@ -110,10 +116,49 @@ async function handleSignIn(e) {
             hideUserModal();
             pusher.unsubscribe(channelName);
         });
-
     } catch (error) {
         signinMessage.style.color = '#dc3545';
         signinMessage.textContent = error.message;
+    }
+}
+
+async function handleUpdateUserPrefs(e) {
+    e.preventDefault();
+    prefsMessage.textContent = 'Saving...';
+    prefsMessage.style.color = '#333';
+
+    const phone = profilePhoneInput.value;
+    const frequency = profileNotificationsSelect.value;
+    const userId = state.session.user.id;
+
+    try {
+        const response = await fetch('/api/update-user-prefs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, phone, frequency }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save preferences.');
+        }
+
+        // Update local state with the confirmed data from the server
+        setState({
+            session: {
+                ...state.session,
+                user: {
+                    ...state.session.user,
+                    ...data.user
+                }
+            }
+        });
+
+        prefsMessage.textContent = data.message;
+        prefsMessage.style.color = '#28a745';
+    } catch (error) {
+        prefsMessage.textContent = error.message;
+        prefsMessage.style.color = '#dc3545';
     }
 }
 
@@ -145,6 +190,7 @@ export function setupAuthEventListeners() {
     userModalCloseBtn.addEventListener('click', hideUserModal);
     signinForm.addEventListener('submit', handleSignIn);
     signoutBtn.addEventListener('click', handleSignOut);
+    userPrefsForm.addEventListener('submit', handleUpdateUserPrefs); // Add listener for the new form
     userModalOverlay.addEventListener('click', (e) => {
         if (e.target === userModalOverlay) {
             hideUserModal();
