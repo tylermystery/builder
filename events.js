@@ -228,6 +228,20 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
+        // --- ADD THIS NEW LISTENER ---
+    safeAddEventListener('my-plans-dropdown', 'change', (e) => {
+        const dropdown = e.target;
+        const selectedId = dropdown.value;
+        if (selectedId === 'new') {
+            // Use the shopId to ensure the new plan is for the correct shop
+            const currentShopId = state.ui.activeShopId;
+            window.location.href = `${window.location.pathname}?shopId=${currentShopId}`;
+        } else if (selectedId) {
+            window.location.href = `${window.location.pathname}?session=${selectedId}`;
+        }
+    });
+
+    
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
