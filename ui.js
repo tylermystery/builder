@@ -392,23 +392,24 @@ export function renderSessionDropdown() {
     }
 }
 
-// PASTE THIS FUNCTION ANYWHERE inside: ui.js
-
 export function populateMyPlansDropdown(plans) {
     const container = document.getElementById('my-plans-container');
     const dropdown = document.getElementById('my-plans-dropdown');
-    if (!container || !dropdown) return;
+    if (!container || !dropdown) {
+        // --- DEBUG ---
+        console.error('[DEBUG] populateMyPlansDropdown: Could not find container or dropdown element.');
+        return;
+    }
 
-    dropdown.innerHTML = ''; // Clear existing options
-    
-    // Add a default, disabled option
+    // --- DEBUG ---
+    console.log(`[DEBUG] populateMyPlansDropdown: Rendering dropdown with ${plans ? plans.length : 0} plans.`);
+
+    dropdown.innerHTML = '';
     const defaultOption = document.createElement('option');
     defaultOption.textContent = 'My Saved Plans...';
     defaultOption.disabled = true;
     defaultOption.selected = true;
     dropdown.appendChild(defaultOption);
-
-    // Add an option to create a new plan
     const newPlanOption = document.createElement('option');
     newPlanOption.textContent = '✨ Create a New Plan';
     newPlanOption.value = 'new';
@@ -419,28 +420,27 @@ export function populateMyPlansDropdown(plans) {
             const option = document.createElement('option');
             option.value = plan.id;
             option.textContent = plan.fields.Name || 'Untitled Plan';
-            // If this plan is the one currently being viewed, select it
             if (plan.id === state.session.id) {
                 option.selected = true;
-                defaultOption.disabled = false; // Allow re-selecting the placeholder
+                defaultOption.disabled = false;
                 defaultOption.selected = false;
             }
             dropdown.appendChild(option);
         });
         container.style.display = 'block';
     } else {
-        // Still show the dropdown even with no saved plans, so user can start a new one
         container.style.display = 'block';
     }
 
     dropdown.addEventListener('change', () => {
         const selectedId = dropdown.value;
         if (selectedId === 'new') {
-            // Clear session by reloading the page without a session parameter
             window.location.href = window.location.pathname;
         } else if (selectedId) {
-            // Load the selected session
             window.location.href = `${window.location.pathname}?session=${selectedId}`;
         }
     });
+
+    // --- DEBUG ---
+    console.log('[DEBUG] populateMyPlansDropdown: Dropdown rendering complete.');
 }
