@@ -20,12 +20,12 @@ async function populateUserPlans(userId) {
     console.log(`[DEBUG] populateUserPlans: Called for userId '${userId}'.`);
     if (userId) {
         const plans = await api.fetchPlansForUser(userId);
-        // --- DEBUG ---
         console.log(`[DEBUG] populateUserPlans: Received ${plans.length} plans from API. Passing to UI.`);
         ui.populateMyPlansDropdown(plans);
     } else {
-        // --- DEBUG ---
-        console.log('[DEBUG] populateUserPlans: No userId, skipping fetch and render.');
+        // For guests, call with no plans to render the "login to save" state.
+        console.log('[DEBUG] populateUserPlans: No userId, rendering guest state for dropdown.');
+        ui.populateMyPlansDropdown([]);
     }
 }
 
@@ -110,7 +110,6 @@ async function initialize() {
                     setState({ 
                         session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
                     });
-                    await populateUserPlans(payload.userId); // Fetch plans for JWT user
                 } else {
                     localStorage.removeItem('jwt');
                 }
@@ -120,6 +119,9 @@ async function initialize() {
             }
         }
         
+        // --- MODIFIED LOGIC: This now runs for everyone ---
+        await populateUserPlans(state.session.user.id); 
+
         const loginToken = urlParams.get('token');
         if (loginToken) {
             try {
