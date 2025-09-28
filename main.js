@@ -32,6 +32,12 @@ async function populateUserPlans(userId) {
 async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
+        // --- NEW: Listen for the 'planCreated' event to refresh the dropdown ---
+    document.addEventListener('planCreated', () => {
+        if (state.session.user.isAuthenticated) {
+            populateUserPlans(state.session.user.id);
+        }
+    });
     ui.toggleLoading(true);
     try {
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
