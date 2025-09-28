@@ -1,5 +1,7 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
+import { associateSessionWithUser } from './api.js'; // <-- ADD THIS IMPORT AT THE TOP OF THE FILE
+
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -87,24 +89,30 @@ async function handleSignIn(e) {
             signinMessage.style.color = '#dc3545';
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
         }, 5 * 60 * 1000);
-        channel.bind('auth-success', (payload) => {
+
+        channel.bind('auth-success', async (payload) => { // <-- Made this async
             clearTimeout(loginTimeout);
             console.log("Pusher auth-success payload received:", payload);
             
+            // --- NEW LOGIC: Associate the current session with the new user ---
+            if (state.session.id) {
+                await associateSessionWithUser(state.session.id, payload.user.id);
+            }
+            // --- END NEW LOGIC ---
+
             localStorage.setItem('jwt', payload.token);
             
-            // *** MODIFIED STATE UPDATE ***
             setState({ 
                 session: { 
-                   ...state.session,
+                    ...state.session, 
                     user: { 
                         ...state.session.user, 
                         ...payload.user, 
                         isAuthenticated: true,
                         isOwner: payload.ownerData.isOwner,
-                        ownerDashboardId: payload.ownerData.ownerDashboardId,
+                        ownerDashboardId: payload.ownerData.ownerDashboardId
                     } 
-                 }
+                } 
             });
 
             console.log("User state after update:", state.session.user);
