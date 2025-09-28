@@ -428,3 +428,49 @@ export async function updateUserFlagStatus(userId, isFlagged) {
         state.session.flaggedUsers.delete(userId);
     }
 }
+
+// PASTE THIS FUNCTION ANYWHERE inside: api.js
+
+export async function associateSessionWithUser(sessionId, userId) {
+    if (!sessionId || !userId) return;
+    log('API', `Associating session ${sessionId} with user ${userId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    
+    try {
+        // First, get the existing collaborators to avoid overwriting them
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) throw new Error('Could not fetch existing session to update collaborators.');
+        
+        const existingRecord = await getResponse.json();
+        const collaborators = new Set(existingRecord.fields.Collaborators || []);
+        collaborators.add(userId); // Add the new user ID
+
+        // Now, update the record with the new set of collaborators
+        const payload = {
+            fields: {
+                'Collaborators': Array.from(collaborators)
+            }
+        };
+
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error: ${errorData.error.message}`);
+        }
+        log('API', `Successfully associated user ${userId} with session.`);
+    } catch (error) {
+        console.error("Failed to associate session with user:", error);
+        log('API', `Failed to associate session: ${error.message}`);
+    }
+}
