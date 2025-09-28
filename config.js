@@ -23,6 +23,7 @@ export const CONSTANTS = {
         SUBCATEGORIES: 'Subcategories',
         ICAL_URL: 'iCal URL',
         LEAD_TIME: 'Lead Time (days)',
+        COLLABORATOR_IDS_FIELD: 'CollaboratorIDs',
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
