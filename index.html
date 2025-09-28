@@ -1451,13 +1451,10 @@
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
     <div class="main-content">
-        <div id="right-sidebar">
+<div id="right-sidebar">
             <div id="event-plan-panel">
                 <div class="event-name-group">
                     <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
-                </div>
-                <div id="my-plans-container" style="display: none; margin-top: 15px;">
-                    <select id="my-plans-dropdown" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;"></select>
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
@@ -1470,8 +1467,6 @@
      
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 
-                <button id="new-plan-btn" class="card-action-btn" style="width:100%; margin-bottom: 20px; background-color: #6c757d;">+ Start New Plan</button>
-
                 <div id="favorites-section">
                     <div class="sidebar-header-group">
                         <h4>Ideas</h4>
@@ -1485,14 +1480,6 @@
                 </div>
                 <div class="sidebar-header-group">
                     <button id="itinerary-btn">Event Plan</button>
-
-                    <div id="session-manager-container">
-                        <button id="session-manager-btn">My Plans ▾</button>
-                        <div id="session-dropdown" class="hidden">
-                            </div>
-                    </div>
-
-                    <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
                     <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
                 </div>
     
@@ -1502,7 +1489,7 @@
                 <div id="cart-footer">
                     <div id="total-breakdown">
                         <div class="total-row subtotal-row">
-                             <span>Subtotal:</span>
+                            <span>Subtotal:</span>
                             <span id="subtotal-cost">$0.00</span>
                         </div>
                         <div class="total-row amount-paid-row" style="display: none;">
