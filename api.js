@@ -82,55 +82,60 @@ export async function updateSessionAmountReceived(sessionId, amount, note) {
         return null;
     }
 }
+// REPLACE the saveSessionToAirtable function in: api.js
+
 export async function saveSessionToAirtable() {
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
-    const sessionData = {
-        favoritedItems: Object.fromEntries(state.cart.items),
-        lockedInItems: Object.fromEntries(state.cart.lockedItems),
+    
+    const sessionData = { 
+        favoritedItems: Object.fromEntries(state.cart.items), 
+        lockedInItems: Object.fromEntries(state.cart.lockedItems), 
         itemReactions: reactionsForSaving,
         userProfiles: Object.fromEntries(state.session.userProfiles),
-        favoritedDetails: Object.fromEntries(state.eventDetails.combined)
+        favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
     log('API', `Saving session: ${sessionName}`);
+
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDate = new Date(dateRange[0]);
         if (!isNaN(startDate.getTime())) {
-            formattedDate = startDate.toISOString();
+             formattedDate = startDate.toISOString();
         }
     }
-    
-    const collaboratorIds = Array.from(state.session.userProfiles.keys())
-        .filter(id => id.startsWith('rec'));
 
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
-        "Collaborators": collaboratorIds,
+        // --- THIS IS THE CORRECTED LINE ---
+        "Collaborators": Array.from(state.session.userProfiles.keys()),
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
     if (formattedDate) {
         fields["Date"] = formattedDate;
     }
+
     const payload = { fields };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
     log('API', `Saving session to URL: ${url}, Method: ${method}`);
+
     try {
         const response = await fetch(url, {
             method: method,
-            headers: {
+            headers: { 
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json' 
             },
-            body: JSON.stringify(isUpdate ? payload : { records: [payload] })
+   
+              body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
         log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
@@ -142,26 +147,10 @@ export async function saveSessionToAirtable() {
         if (!isUpdate) {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
-            
-            // *** NEW LOGIC ***
-            // If the user is logged in, associate this new session with their account.
-            if (state.session.user.isAuthenticated && state.session.user.id) {
-                const userId = state.session.user.id;
-                const newSessionId = state.session.id;
-                log('API', `Associating new session ${newSessionId} with user ${userId}`);
-                
-                // We can "fire and forget" this call and don't need to wait for it.
-                fetch('/api/associate-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: userId, sessionId: newSessionId })
-                });
-            }
-            // *** END NEW LOGIC ***
-
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
             log('API', `New session created with ID: ${state.session.id}`);
         }
+        
         storeSession(state.session.id, sessionName);
         return true;
     } catch (error) {
@@ -169,8 +158,7 @@ export async function saveSessionToAirtable() {
         log('API', `Failed to save session: ${error.message}`);
         return false;
     }
-}
-export async function fetchAllRecords() {
+}export async function fetchAllRecords() {
     let records = [];
     let offset = null;
     const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
