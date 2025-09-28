@@ -16,9 +16,16 @@ const imageCache = new Map();
 
 // --- NEW HELPER FUNCTION ---
 async function populateUserPlans(userId) {
+    // --- DEBUG ---
+    console.log(`[DEBUG] populateUserPlans: Called for userId '${userId}'.`);
     if (userId) {
         const plans = await api.fetchPlansForUser(userId);
+        // --- DEBUG ---
+        console.log(`[DEBUG] populateUserPlans: Received ${plans.length} plans from API. Passing to UI.`);
         ui.populateMyPlansDropdown(plans);
+    } else {
+        // --- DEBUG ---
+        console.log('[DEBUG] populateUserPlans: No userId, skipping fetch and render.');
     }
 }
 
