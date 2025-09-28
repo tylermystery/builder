@@ -15,9 +15,9 @@ export async function fetchPlansForUser(userId) {
     if (!userId) return [];
     log('API', `Fetching plans for user: ${userId}`);
     
-    // --- FINAL CORRECTED FORMULA ---
-    // This formula now checks if {CollaboratorIDs} exists before searching.
-    const formula = `IF({CollaboratorIDs}, FIND('${userId}', {CollaboratorIDs}))`;
+    // --- FINAL, FINAL CORRECTED FORMULA ---
+    // Added the required third argument (0) to the IF function.
+    const formula = `IF({CollaboratorIDs}, FIND('${userId}', {CollaboratorIDs}), 0)`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=LastModified&sort%5B0%5D%5Bdirection%5D=desc`;
 
