@@ -14,9 +14,10 @@ const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages'; // New table for item-specific 
 export async function fetchPlansForUser(userId) {
     if (!userId) return [];
     log('API', `Fetching plans for user: ${userId}`);
-    // --- THIS IS THE CORRECTED FORMULA ---
-    // It now searches in our new, reliable Rollup field.
-    const formula = `FIND('${userId}', {CollaboratorIDs})`;
+    
+    // --- FINAL CORRECTED FORMULA ---
+    // This formula now checks if {CollaboratorIDs} exists before searching.
+    const formula = `IF({CollaboratorIDs}, FIND('${userId}', {CollaboratorIDs}))`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=LastModified&sort%5B0%5D%5Bdirection%5D=desc`;
 
