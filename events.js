@@ -232,8 +232,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
         const dropdown = e.target;
         const selectedId = dropdown.value;
-        if (selectedId === 'new') {
-            // Use the shopId to ensure the new plan is for the correct shop
+
+        if (selectedId === 'login-to-save') {
+            ui.showUserModal();
+            // Reset dropdown so it can be clicked again if the user closes the modal
+            dropdown.selectedIndex = 0;
+        } else if (selectedId === 'new') {
             const currentShopId = state.ui.activeShopId;
             window.location.href = `${window.location.pathname}?shopId=${currentShopId}`;
         } else if (selectedId) {
