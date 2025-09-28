@@ -396,12 +396,10 @@ export function populateMyPlansDropdown(plans) {
     const container = document.getElementById('my-plans-container');
     const dropdown = document.getElementById('my-plans-dropdown');
     if (!container || !dropdown) {
-        // --- DEBUG ---
         console.error('[DEBUG] populateMyPlansDropdown: Could not find container or dropdown element.');
         return;
     }
 
-    // --- DEBUG ---
     console.log(`[DEBUG] populateMyPlansDropdown: Rendering dropdown with ${plans ? plans.length : 0} plans.`);
 
     dropdown.innerHTML = '';
@@ -431,16 +429,8 @@ export function populateMyPlansDropdown(plans) {
     } else {
         container.style.display = 'block';
     }
+    
+    // The addEventListener block has been REMOVED from this function.
 
-    dropdown.addEventListener('change', () => {
-        const selectedId = dropdown.value;
-        if (selectedId === 'new') {
-            window.location.href = window.location.pathname;
-        } else if (selectedId) {
-            window.location.href = `${window.location.pathname}?session=${selectedId}`;
-        }
-    });
-
-    // --- DEBUG ---
     console.log('[DEBUG] populateMyPlansDropdown: Dropdown rendering complete.');
 }
