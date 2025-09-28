@@ -235,6 +235,10 @@ export async function saveSessionToAirtable() {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
+            log('API', `New session created with ID: ${state.session.id}`);
+            
+            // --- NEW: Dispatch an event to notify the UI to refresh the plans list ---
+            document.dispatchEvent(new CustomEvent('planCreated'));
         }
         // --- DEBUG ---
         console.log(`[DEBUG] saveSessionToAirtable: SUCCESS for session ${state.session.id}`);
