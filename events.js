@@ -228,16 +228,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
-        // --- ADD THIS NEW LISTENER ---
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
         const dropdown = e.target;
         const selectedId = dropdown.value;
-
-        if (selectedId === 'login-to-save') {
-            ui.showUserModal();
-            // Reset dropdown so it can be clicked again if the user closes the modal
-            dropdown.selectedIndex = 0;
-        } else if (selectedId === 'new') {
+        if (selectedId === 'new') {
             const currentShopId = state.ui.activeShopId;
             window.location.href = `${window.location.pathname}?shopId=${currentShopId}`;
         } else if (selectedId) {
@@ -245,7 +239,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
 
-    
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -271,6 +264,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             scrollTimeout = null;
         }, 100);
     });
+
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
@@ -340,7 +334,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
-        
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -375,13 +368,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton || !mainDatePicker) return;
-
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let startDate = new Date(today);
         let endDate = new Date(today);
         const quickFilterType = quickButton.dataset.dateQuick;
-
         switch (quickFilterType) {
             case 'tomorrow':
                 startDate.setDate(today.getDate() + 1);
@@ -408,7 +399,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
-    
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
@@ -421,13 +411,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
         const carouselNav = e.target.closest('.carousel-nav');
-    
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
-           });
+            });
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
         } else if (presentBtn) {
@@ -520,10 +509,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const container = target.closest('[data-record-id]');
         if (!container) return;
         const recordId = container.dataset.recordId;
-        
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
-
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
@@ -531,7 +518,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
         }
-
         if (Object.keys(updates).length > 0) {
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
@@ -563,27 +549,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
-
-    safeAddEventListener('new-plan-btn', 'click', () => {
-        setState({ session: { ...state.session, id: null, isOwned: false } });
-        const cleanUrl = new URL(window.location);
-        cleanUrl.searchParams.delete('session');
-        window.history.pushState({}, '', cleanUrl);
-        location.reload();
-    });
-
-    safeAddEventListener('session-manager-btn', 'click', (e) => {
-        e.stopPropagation();
-        document.getElementById('session-dropdown').classList.toggle('visible');
-    });
-
-    document.addEventListener('click', () => {
-        const dropdown = document.getElementById('session-dropdown');
-        if (dropdown && dropdown.classList.contains('visible')) {
-            dropdown.classList.remove('visible');
-        }
-    });
-
     return { mainDatePicker, eventPlanDatePicker };
 }
 
