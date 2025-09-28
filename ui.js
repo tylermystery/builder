@@ -395,42 +395,46 @@ export function renderSessionDropdown() {
 export function populateMyPlansDropdown(plans) {
     const container = document.getElementById('my-plans-container');
     const dropdown = document.getElementById('my-plans-dropdown');
-    if (!container || !dropdown) {
-        console.error('[DEBUG] populateMyPlansDropdown: Could not find container or dropdown element.');
-        return;
-    }
+    if (!container || !dropdown) return;
 
-    console.log(`[DEBUG] populateMyPlansDropdown: Rendering dropdown with ${plans ? plans.length : 0} plans.`);
+    console.log(`[DEBUG] populateMyPlansDropdown: Rendering dropdown. User authenticated: ${state.session.user.isAuthenticated}`);
 
-    dropdown.innerHTML = '';
-    const defaultOption = document.createElement('option');
-    defaultOption.textContent = 'My Saved Plans...';
-    defaultOption.disabled = true;
-    defaultOption.selected = true;
-    dropdown.appendChild(defaultOption);
-    const newPlanOption = document.createElement('option');
-    newPlanOption.textContent = '✨ Create a New Plan';
-    newPlanOption.value = 'new';
-    dropdown.appendChild(newPlanOption);
+    dropdown.innerHTML = ''; // Clear existing options
+    container.style.display = 'block'; // Always show the container
 
-    if (plans && plans.length > 0) {
-        plans.forEach(plan => {
-            const option = document.createElement('option');
-            option.value = plan.id;
-            option.textContent = plan.fields.Name || 'Untitled Plan';
-            if (plan.id === state.session.id) {
-                option.selected = true;
-                defaultOption.disabled = false;
-                defaultOption.selected = false;
-            }
-            dropdown.appendChild(option);
-        });
-        container.style.display = 'block';
+    if (state.session.user.isAuthenticated) {
+        // --- LOGGED-IN USER VIEW ---
+        const defaultOption = document.createElement('option');
+        defaultOption.textContent = 'My Saved Plans...';
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        dropdown.appendChild(defaultOption);
+
+        const newPlanOption = document.createElement('option');
+        newPlanOption.textContent = '✨ Create a New Plan';
+        newPlanOption.value = 'new';
+        dropdown.appendChild(newPlanOption);
+
+        if (plans && plans.length > 0) {
+            plans.forEach(plan => {
+                const option = document.createElement('option');
+                option.value = plan.id;
+                option.textContent = plan.fields.Name || 'Untitled Plan';
+                if (plan.id === state.session.id) {
+                    option.selected = true;
+                    defaultOption.disabled = false;
+                    defaultOption.selected = false;
+                }
+                dropdown.appendChild(option);
+            });
+        }
     } else {
-        container.style.display = 'block';
+        // --- GUEST USER VIEW ---
+        const guestOption = document.createElement('option');
+        guestOption.textContent = 'Save & View My Plans...';
+        guestOption.value = 'login-to-save';
+        dropdown.appendChild(guestOption);
     }
-    
-    // The addEventListener block has been REMOVED from this function.
 
     console.log('[DEBUG] populateMyPlansDropdown: Dropdown rendering complete.');
 }
