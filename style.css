@@ -667,3 +667,69 @@ body {
     background-color: #e9ecef;
     margin: 5px 0;
 }
+
+/* PASTE THIS at the end of: style.css */
+
+#main-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+    padding: 10px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.header-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#header-left h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+
+#header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#my-plans-dropdown {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #f8f9fa;
+    font-size: 0.9em;
+    min-width: 180px; /* Gives it some space */
+}
+
+#user-profile-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+#user-profile-button:hover {
+    background-color: #f0f0f0;
+}
+
+#user-profile-button.signed-in {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+}
