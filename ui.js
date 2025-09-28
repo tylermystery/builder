@@ -391,3 +391,56 @@ export function renderSessionDropdown() {
         dropdown.appendChild(noItems);
     }
 }
+
+// PASTE THIS FUNCTION ANYWHERE inside: ui.js
+
+export function populateMyPlansDropdown(plans) {
+    const container = document.getElementById('my-plans-container');
+    const dropdown = document.getElementById('my-plans-dropdown');
+    if (!container || !dropdown) return;
+
+    dropdown.innerHTML = ''; // Clear existing options
+    
+    // Add a default, disabled option
+    const defaultOption = document.createElement('option');
+    defaultOption.textContent = 'My Saved Plans...';
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    dropdown.appendChild(defaultOption);
+
+    // Add an option to create a new plan
+    const newPlanOption = document.createElement('option');
+    newPlanOption.textContent = '✨ Create a New Plan';
+    newPlanOption.value = 'new';
+    dropdown.appendChild(newPlanOption);
+
+    if (plans && plans.length > 0) {
+        plans.forEach(plan => {
+            const option = document.createElement('option');
+            option.value = plan.id;
+            option.textContent = plan.fields.Name || 'Untitled Plan';
+            // If this plan is the one currently being viewed, select it
+            if (plan.id === state.session.id) {
+                option.selected = true;
+                defaultOption.disabled = false; // Allow re-selecting the placeholder
+                defaultOption.selected = false;
+            }
+            dropdown.appendChild(option);
+        });
+        container.style.display = 'block';
+    } else {
+        // Still show the dropdown even with no saved plans, so user can start a new one
+        container.style.display = 'block';
+    }
+
+    dropdown.addEventListener('change', () => {
+        const selectedId = dropdown.value;
+        if (selectedId === 'new') {
+            // Clear session by reloading the page without a session parameter
+            window.location.href = window.location.pathname;
+        } else if (selectedId) {
+            // Load the selected session
+            window.location.href = `${window.location.pathname}?session=${selectedId}`;
+        }
+    });
+}
