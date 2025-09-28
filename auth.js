@@ -90,15 +90,13 @@ async function handleSignIn(e) {
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
         }, 5 * 60 * 1000);
 
-        channel.bind('auth-success', async (payload) => { // <-- Made this async
+        channel.bind('auth-success', async (payload) => { // Made this async
             clearTimeout(loginTimeout);
             console.log("Pusher auth-success payload received:", payload);
             
-            // --- NEW LOGIC: Associate the current session with the new user ---
             if (state.session.id) {
                 await associateSessionWithUser(state.session.id, payload.user.id);
             }
-            // --- END NEW LOGIC ---
 
             localStorage.setItem('jwt', payload.token);
             
@@ -117,10 +115,15 @@ async function handleSignIn(e) {
 
             console.log("User state after update:", state.session.user);
         
+            // --- THIS IS THE FIX ---
+            // Dispatch an event to notify the rest of the app that login is complete.
+            document.dispatchEvent(new CustomEvent('userLoggedIn'));
+            
             updateUserProfileIcon();
             hideUserModal();
             pusher.unsubscribe(channelName);
         });
+
     } catch (error) {
         signinMessage.style.color = '#dc3545';
         signinMessage.textContent = error.message;
