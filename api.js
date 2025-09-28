@@ -11,12 +11,12 @@ const SESSIONS_TABLE_NAME = 'Sessions';
 const STORES_TABLE_NAME = 'Stores';
 const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages'; // New table for item-specific chats
 
-// --- NEW FUNCTION ---
 export async function fetchPlansForUser(userId) {
     if (!userId) return [];
     log('API', `Fetching plans for user: ${userId}`);
-    // This formula finds records where the user's ID is present in the Collaborators linked field.
-    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+    // --- THIS IS THE CORRECTED FORMULA ---
+    // It now searches in our new, reliable Rollup field.
+    const formula = `FIND('${userId}', {CollaboratorIDs})`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=LastModified&sort%5B0%5D%5Bdirection%5D=desc`;
 
