@@ -84,6 +84,8 @@ export async function updateSessionAmountReceived(sessionId, amount, note) {
 }
 // REPLACE the saveSessionToAirtable function in: api.js
 
+// REPLACE the saveSessionToAirtable function in: api.js
+
 export async function saveSessionToAirtable() {
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
@@ -109,11 +111,14 @@ export async function saveSessionToAirtable() {
         }
     }
 
+    // --- NEW LOGIC: Filter collaborators to only include valid Airtable record IDs ---
+    const allUserIds = Array.from(state.session.userProfiles.keys());
+    const validCollaboratorIds = allUserIds.filter(id => id && id.startsWith('rec'));
+
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
-        // --- THIS IS THE CORRECTED LINE ---
-        "Collaborators": Array.from(state.session.userProfiles.keys()),
+        "Collaborators": validCollaboratorIds, // Use the new filtered array
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
     };
@@ -158,7 +163,8 @@ export async function saveSessionToAirtable() {
         log('API', `Failed to save session: ${error.message}`);
         return false;
     }
-}export async function fetchAllRecords() {
+}
+export async function fetchAllRecords() {
     let records = [];
     let offset = null;
     const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?`;
