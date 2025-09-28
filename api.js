@@ -13,38 +13,36 @@ const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages'; // New table for item-specific 
 
 export async function fetchPlansForUser(userId) {
     if (!userId) {
-        // --- DEBUG ---
         console.log('[DEBUG] fetchPlansForUser: Bailed because no userId was provided.');
         return [];
     }
     
     const collaboratorField = CONSTANTS.FIELD_NAMES.COLLABORATOR_IDS_FIELD;
-    // --- DEBUG ---
     console.log(`[DEBUG] fetchPlansForUser: Fetching plans for userId '${userId}' using rollup field named '${collaboratorField}'`);
     
     const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaboratorField}}), 0)`;
-    
-    // --- DEBUG ---
     console.log(`[DEBUG] fetchPlansForUser: Sending Airtable formula: ${formula}`);
 
     const encodedFormula = encodeURIComponent(formula);
     // --- THIS IS THE CORRECTED LINE ---
-    // Changed the sort field from "LastModified" to the reliable "createdTime" field.
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=createdTime&sort%5B0%5D%5Bdirection%5D=desc`;
+    // The broken '&sort...' parameter has been completely removed.
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
 
     try {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         if (!response.ok) {
-            // --- DEBUG ---
             const errorText = await response.text();
             console.error(`[DEBUG] fetchPlansForUser: Airtable API failed with status ${response.status}. Response:`, errorText);
             throw new Error('Failed to fetch user plans from Airtable.');
         }
         const data = await response.json();
-        // --- DEBUG ---
-        console.log(`[DEBUG] fetchPlansForUser: SUCCESS! Found ${data.records.length} plans for user.`);
+        
+        // --- NEW: Sort the results here on the client-side ---
+        data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+
+        console.log(`[DEBUG] fetchPlansForUser: SUCCESS! Found and sorted ${data.records.length} plans for user.`);
         return data.records;
     } catch (error) {
         console.error("Error fetching user plans:", error);
