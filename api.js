@@ -12,12 +12,21 @@ const STORES_TABLE_NAME = 'Stores';
 const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages'; // New table for item-specific chats
 
 export async function fetchPlansForUser(userId) {
-    if (!userId) return [];
-    log('API', `Fetching plans for user: ${userId}`);
+    if (!userId) {
+        // --- DEBUG ---
+        console.log('[DEBUG] fetchPlansForUser: Bailed because no userId was provided.');
+        return [];
+    }
     
-    // --- FINAL, FINAL CORRECTED FORMULA ---
-    // Added the required third argument (0) to the IF function.
-    const formula = `IF({CollaboratorIDs}, FIND('${userId}', {CollaboratorIDs}), 0)`;
+    const collaboratorField = CONSTANTS.FIELD_NAMES.COLLABORATOR_IDS_FIELD;
+    // --- DEBUG ---
+    console.log(`[DEBUG] fetchPlansForUser: Fetching plans for userId '${userId}' using rollup field named '${collaboratorField}'`);
+    
+    const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaboratorField}}), 0)`;
+    
+    // --- DEBUG ---
+    console.log(`[DEBUG] fetchPlansForUser: Sending Airtable formula: ${formula}`);
+
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=LastModified&sort%5B0%5D%5Bdirection%5D=desc`;
 
@@ -26,10 +35,14 @@ export async function fetchPlansForUser(userId) {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         if (!response.ok) {
+            // --- DEBUG ---
+            const errorText = await response.text();
+            console.error(`[DEBUG] fetchPlansForUser: Airtable API failed with status ${response.status}. Response:`, errorText);
             throw new Error('Failed to fetch user plans from Airtable.');
         }
         const data = await response.json();
-        log('API', `Found ${data.records.length} plans for user.`);
+        // --- DEBUG ---
+        console.log(`[DEBUG] fetchPlansForUser: SUCCESS! Found ${data.records.length} plans for user.`);
         return data.records;
     } catch (error) {
         console.error("Error fetching user plans:", error);
@@ -165,11 +178,15 @@ export async function updateSessionAmountReceived(sessionId, amount, note) {
 }
 
 export async function saveSessionToAirtable() {
+    // --- DEBUG ---
+    const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
+    console.log(`[DEBUG] saveSessionToAirtable: Triggered for ${sessionStatus}`);
+
+    // ... (rest of the function is the same)
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
-    
     const sessionData = { 
         favoritedItems: Object.fromEntries(state.cart.items), 
         lockedInItems: Object.fromEntries(state.cart.lockedItems), 
@@ -178,8 +195,6 @@ export async function saveSessionToAirtable() {
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    log('API', `Saving session: ${sessionName}`);
-
     const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
@@ -188,10 +203,8 @@ export async function saveSessionToAirtable() {
              formattedDate = startDate.toISOString();
         }
     }
-    
     const allUserIds = Array.from(state.session.userProfiles.keys());
     const validCollaboratorIds = allUserIds.filter(id => id && id.startsWith('rec'));
-
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData),
@@ -202,26 +215,19 @@ export async function saveSessionToAirtable() {
     if (formattedDate) {
         fields["Date"] = formattedDate;
     }
-
     const payload = { fields };
     const isUpdate = state.session.id !== null;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
-    log('API', `Saving session to URL: ${url}, Method: ${method}`);
 
     try {
         const response = await fetch(url, {
             method: method,
-            headers: { 
-                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json' 
-            },
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
-        log('API', `Session save response: status ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
-            log('API', `Session save error: ${JSON.stringify(errorData)}`);
             throw new Error(`Airtable API Error: ${errorData.error.message}`);
         }
         const result = await response.json();
@@ -229,14 +235,12 @@ export async function saveSessionToAirtable() {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${state.session.id}`);
-            log('API', `New session created with ID: ${state.session.id}`);
         }
-        
-        // REMOVED: storeSession(state.session.id, sessionName);
+        // --- DEBUG ---
+        console.log(`[DEBUG] saveSessionToAirtable: SUCCESS for session ${state.session.id}`);
         return true;
     } catch (error) {
         console.error("Failed to save session:", error);
-        log('API', `Failed to save session: ${error.message}`);
         return false;
     }
 }
