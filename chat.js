@@ -6,6 +6,7 @@ import { log } from './utils/debug.js';
 import { triggerSave } from './events.js';
 
 let currentUser = null;
+let pusher = null;
 let sessionChatChannel = null;
 const itemChatChannels = new Map();
 const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave', 'Sparkling', 'Cosmic', 'Witty', 'Zesty'];
@@ -169,6 +170,12 @@ function showNewMessageNotification(sender, message) {
 }
 
 export async function initializeSessionChat() {
+    // --- FIX: Disconnect from any existing pusher instance before re-initializing ---
+    if (pusher) {
+        pusher.disconnect();
+        log('Chat', 'Disconnected from previous Pusher instance.');
+    }
+
     currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
         state.session.userProfiles.set(currentUser.id, currentUser.name);
@@ -176,62 +183,57 @@ export async function initializeSessionChat() {
     const sessionId = state.session.id || 'default-session';
     const chatUserNameInput = document.getElementById('chat-user-name');
     if (chatUserNameInput) {
-        chatUserNameInput.value = currentUser.name; // <-- This line is corrected
+        chatUserNameInput.value = currentUser.name;
         chatUserNameInput.addEventListener('change', (e) => {
             const newName = e.target.value.trim();
             if (newName && newName !== currentUser.name) {
                 currentUser.name = newName;
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
-
+            
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(sessionChatChannel.members);
                 triggerSave();
             } else {
                 e.target.value = currentUser.name;
             }
-        });
+          });
     }
 
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        // --- DEBUG: Confirm we are about to fetch messages ---
         console.log(`[DEBUG] initializeSessionChat: About to fetch messages for session ${sessionId}`);
-
         const records = await api.fetchChatMessages(sessionId);
-
-        // --- DEBUG: Confirm what was received from the API ---
         console.log(`[DEBUG] initializeSessionChat: Received ${records.length} records from API.`);
 
         if (records.length > 0) {
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
-                // --- DEBUG: Log each message as it's being rendered ---
                 console.log(`[DEBUG] initializeSessionChat: Rendering message - Sender: ${SenderName}, Content: "${Content}"`);
                 const isSent = SenderID === currentUser.id;
                 addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
             });
         } else {
-            console.log(`[DEBUG] initializeSessionChat: No message records to render.`);
+             console.log(`[DEBUG] initializeSessionChat: No message records to render.`);
         }
-
     } else {
-        // --- DEBUG: Add an error if the message list element isn't found ---
         console.error('[DEBUG] initializeSessionChat: CRITICAL - Could not find the "messages-list" element in the DOM.');
     }
-
-    const pusher = new Pusher('236f480714e5001590b5', {
+    
+    // Assign to the new file-level pusher variable
+    pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
         auth: {
-            params: {
+            params: { 
                 user_id: currentUser.id,
                 user_name: currentUser.name
             }
         }
     });
     const channelName = `presence-session-${sessionId}`;
+    log('Chat', `Subscribing to Pusher channel: ${channelName}`);
     sessionChatChannel = pusher.subscribe(channelName);
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
@@ -244,13 +246,13 @@ export async function initializeSessionChat() {
         }
     });
     if ('Notification' in window) {
-        if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    log('Chat', 'Notification permission granted.');
-                }
-            });
-        }
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            log('Chat', 'Notification permission granted.');
+          }
+        });
+      }
     }
 }
 
