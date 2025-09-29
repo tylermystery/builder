@@ -929,3 +929,72 @@ body {
     text-shadow: none;
     color: inherit;
 }
+
+/* PASTE THIS at the end of: style.css */
+
+/* --- NEW Card Simplification --- */
+
+.event-card {
+    /* Main container: white background, simple border, no shadow */
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    height: auto;
+    box-shadow: none;
+    transition: none;
+}
+
+.event-card:hover {
+    /* No hover effects for a truly simple MVP */
+    box-shadow: none;
+    transform: none;
+}
+
+.event-card-image-container {
+    /* Just the image, fixed height for grid alignment */
+    height: 200px;
+    width: 100%;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+}
+
+.event-card-content {
+    /* The text area below the image */
+    padding: 16px;
+    background: none;
+    text-shadow: none;
+    color: #333;
+    flex-grow: 1; /* Allows description to push footer down */
+    display: flex;
+    flex-direction: column;
+}
+
+.event-card-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.2em;
+    color: #2c3e50;
+    text-shadow: none;
+}
+
+.event-card-content p.description {
+    margin: 0;
+    color: #6c757d;
+    font-size: 0.9em;
+    line-height: 1.5;
+    text-shadow: none;
+    flex-grow: 1;
+}
+
+.card-footer {
+    /* The actions area at the very bottom */
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
