@@ -435,31 +435,21 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
-    console.log(`[DEBUG] fetchChatMessages: Called for session ID: ${sessionId}`);
-
-    // --- THIS FORMULA IS NOW CORRECT AND USES CONSTANTS ---
-    const sessionField = CONSTANTS.FIELD_NAMES.SESSION_ID_FIELD;
-    const timestampField = CONSTANTS.FIELD_NAMES.TIMESTAMP_FIELD;
-
-    const formula = `FIND('${sessionId}', ARRAYJOIN({${sessionField}}))`;
+    // --- THIS FORMULA IS NOW CORRECT & MORE RELIABLE ---
+    // It directly queries the new Rollup field for an exact match.
+    const formula = `({SessionID_Rollup} = '${sessionId}')`;
     const encodedFormula = encodeURIComponent(formula);
-    
-    // The sort parameter now also uses a constant
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=${timestampField}&sort%5B0%5D%5Bdirection%5D=asc`;
-
-    console.log(`[DEBUG] fetchChatMessages: Fetching URL: ${url}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
     try {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`[DEBUG] fetchChatMessages: Airtable API failed with status ${response.status}. Response:`, errorText);
             throw new Error('Failed to fetch chat messages from Airtable.');
         }
         const data = await response.json();
-        console.log(`[DEBUG] fetchChatMessages: SUCCESS! Found ${data.records.length} messages for session ${sessionId}.`);
+        // The debug logs are no longer needed here, but you can keep them if you like
         return data.records;
     } catch (error) {
         console.error("Error fetching chat history:", error);
