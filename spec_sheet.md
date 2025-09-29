@@ -104,3 +104,19 @@ The application has been upgraded to support different types of storefronts (e.g
 * **Customizable UI Text:** Text labels, placeholders, and button text in the right-hand cart panel are now dynamic. This is driven by a JSON object stored in the `CartLabels` field, allowing text like "Event Plan" to be changed to "Cart" for different shop types.
 
 * **Flexible Checkout Flow:** The checkout process can be customized per-store. A `PaymentOptions` field in Airtable determines whether customers can pay a deposit only, or choose between a deposit and the full amount. The "Simplified Terms" displayed in the modal are also populated from a store-specific field.
+
+### Session Management
+The application supports both guest and authenticated users with a robust, database-driven session model.
+
+* **Database-Driven "My Plans":** For authenticated users, the application provides a "My Plans" dropdown in the main header. This list is populated by fetching all sessions from Airtable where the user is listed as a collaborator. This replaces the previous reliance on browser `localStorage`, ensuring a user's plans are available on any device.
+* **Anonymous Sessions:** Unauthenticated users can fully build, edit, and share an event plan. The session is saved to Airtable automatically but is not linked to a permanent user.
+* **Session "Claiming":** When a guest user signs in while working on a plan, the application automatically associates their active session with their new authenticated account. The plan immediately appears in their "My Plans" list without requiring a page reload.
+* **Fork on Edit:** The "fork on edit" model is preserved for shared links. When a user opens a shared URL and makes a change, a new copy of the session is created and assigned to them, protecting the original plan from being overwritten.
+
+### User Accounts & Notifications
+The application features a user account system with customizable preferences.
+
+* **Authentication:** Users can create an account or sign in using a passwordless "magic link" system.
+* **My Account Modal:** Logged-in users can access a "My Account" modal to view their information and set preferences.
+* **SMS Notifications:** Users can add their phone number and choose a notification frequency (e.g., "Real-Time"). When another collaborator sends a message in the session chat, a serverless function is triggered, sending a real-time SMS alert via Twilio to opted-in users.
+
