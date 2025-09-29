@@ -242,6 +242,14 @@ export async function initializeSessionChat() {
 }
 
 export async function sendMessage(message, recordId = null) {
+    // --- DEBUG: Log the attempt to send a message ---
+    if (recordId) {
+        console.log(`[DEBUG] sendMessage: Attempting to send ITEM message for recordId ${recordId}: "${message}"`);
+    } else {
+        const sessionId = state.session.id || 'default-session';
+        console.log(`[DEBUG] sendMessage: Attempting to send SESSION message to session ${sessionId}: "${message}"`);
+    }
+
     if (recordId) {
         const channel = itemChatChannels.get(recordId);
         if (!channel || !currentUser) return;
