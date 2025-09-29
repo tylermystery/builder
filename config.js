@@ -26,6 +26,7 @@ export const CONSTANTS = {
         COLLABORATOR_IDS_FIELD: 'CollaboratorIDs',
         SESSION_ID_FIELD: 'SessionID',
         TIMESTAMP_FIELD: 'Timestamp',
+        ITEM_ID_ROLLUP_FIELD: 'ItemID_Rollup',
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
