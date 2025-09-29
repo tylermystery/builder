@@ -8,10 +8,12 @@
   to = "/.netlify/functions/update-user-prefs"
   status = 200
 
-  [[redirects]]
-  from = "/api/send-session-notification"
-  to = "/.netlify/functions/send-session-notification"
+# --- THIS IS THE CORRECTED LINE ---
+[[redirects]]
+  from = "/api/send-notification"
+  to = "/.netlify/functions/send-notification"
   status = 200
+
 
 # Add the two new redirects for authentication
 [[redirects]]
