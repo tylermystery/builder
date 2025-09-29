@@ -155,14 +155,28 @@ function showNewMessageNotification(sender, message) {
   }
 }
 export async function initializeSessionChat() {
-    currentUser = getSimpleUserIdentity(); [cite_start]// [cite: 333]
+    currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
-        state.session.userProfiles.set(currentUser.id, currentUser.name); [cite_start]// [cite: 334]
+        state.session.userProfiles.set(currentUser.id, currentUser.name);
     }
     const sessionId = state.session.id || 'default-session';
     const chatUserNameInput = document.getElementById('chat-user-name');
     if (chatUserNameInput) {
-        // ... (rest of the name input logic is unchanged)
+        chatUserName-input.value = currentUser.name;
+        chatUserNameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName && newName !== currentUser.name) {
+                currentUser.name = newName;
+                localStorage.setItem('chatUserName', newName);
+                state.session.userProfiles.set(currentUser.id, newName);
+            
+                log('Chat', `User name changed to: ${newName}`);
+                updatePresenceUI(sessionChatChannel.members);
+                triggerSave();
+            } else {
+                e.target.value = currentUser.name;
+            }
+          });
     }
 
     const messagesList = document.getElementById('messages-list');
@@ -192,7 +206,7 @@ export async function initializeSessionChat() {
         // --- DEBUG: Add an error if the message list element isn't found ---
         console.error('[DEBUG] initializeSessionChat: CRITICAL - Could not find the "messages-list" element in the DOM.');
     }
-
+    
     const pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
@@ -225,7 +239,6 @@ export async function initializeSessionChat() {
       }
     }
 }
-
 export async function sendMessage(message, recordId = null) {
     if (recordId) {
         const channel = itemChatChannels.get(recordId);
