@@ -132,8 +132,21 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     messagesList.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
 }
+// In chat.js
+
 function bindPresenceEvents() {
     sessionChatChannel.bind('pusher:subscription_succeeded', (members) => {
+        // --- THIS IS THE FIX ---
+        // Enable the form now that the connection is ready.
+        const messageInput = document.getElementById('message-input');
+        const messageForm = document.getElementById('message-form');
+        if (messageInput && messageForm) {
+            messageInput.disabled = false;
+            messageForm.querySelector('button').disabled = false;
+            messageInput.placeholder = 'Type a message...';
+        }
+        // --- END FIX ---
+
         updatePresenceUI(members);
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
