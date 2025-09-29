@@ -549,6 +549,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    // REMOVED event listeners for 'new-plan-btn' and 'session-manager-btn'
+    
     return { mainDatePicker, eventPlanDatePicker };
 }
 
