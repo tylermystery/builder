@@ -1,4 +1,3 @@
-// REPLACE THE ENTIRE CONTENTS OF: netlify.toml
 
 [build]
   functions = "netlify/functions"
