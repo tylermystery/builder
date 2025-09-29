@@ -31,7 +31,6 @@ function updateCheckoutDisplay() {
     const totalDue = finalTotal - amountReceived;
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue;
-
     if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
@@ -113,7 +112,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
     
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
-
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
@@ -154,7 +152,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         });
         modalThumbnailStrip.appendChild(thumb);
     });
-
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
@@ -176,7 +173,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
         let priceModText = '';
         if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
+           priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
@@ -184,7 +181,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
-            optionButton.addEventListener('click', (e) => {
+           optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
@@ -199,7 +196,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
         modalOptionsContainer.appendChild(optionButton);
     });
-
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
@@ -217,7 +213,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalQuantitySelector.innerHTML = '';
     }
 
-    // --- CALENDAR LOGIC ---
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
     const calendarInstance = window.flatpickr(modalCalendarContainer, {
@@ -260,7 +255,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         }
     });
-
     const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     if (eventDate) {
         calendarInstance.setDate(new Date(eventDate), true);
@@ -271,20 +265,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
-
-        setTimeout(() => {
+    setTimeout(() => {
         const chatContainer = document.getElementById('modal-chat-container');
-        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false; // Check our new Airtable field
-
-        // --- MODIFIED DIAGNOSTIC LOG ---
+        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
             isChatEnabledOnItem: isChatEnabledOnItem,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
-        
-        // --- MODIFIED LOGIC ---
         if (state.session.user.isAuthenticated && chatContainer && isChatEnabledOnItem) {
             log('Modal', 'All conditions met. Initializing item chat.');
             chatContainer.style.display = 'flex';
@@ -307,8 +296,6 @@ export function hideDetailModal() {
     closeBtn.removeEventListener('click', hideDetailModal);
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
-
-    // Stop item-specific chat when modal is closed
     if (currentItemChatRecordId) {
       log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
       currentItemChatRecordId = null;
@@ -337,7 +324,6 @@ export async function showCheckoutModal(shopSettings) {
 
     if (!checkoutModalOverlay) return;
 
-    // --- NEW: Event listener for the overlay click ---
     const handleOverlayClick = (e) => {
         if (e.target === checkoutModalOverlay) {
             hideCheckoutModal();
@@ -345,12 +331,9 @@ export async function showCheckoutModal(shopSettings) {
     };
     checkoutModalOverlay.addEventListener('click', handleOverlayClick);
     
-    // Also remove the listener when the modal is hidden to prevent memory leaks
     checkoutModalOverlay.removeEventListenerOnClick = () => {
         checkoutModalOverlay.removeEventListener('click', handleOverlayClick);
     };
-    // --- END NEW SECTION ---
-
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
@@ -409,35 +392,12 @@ export async function showCheckoutModal(shopSettings) {
     }
 }
 
-// And update the hideCheckoutModal function as well
 export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
-        // --- NEW: Remove the overlay click listener ---
         if (checkoutModalOverlay.removeEventListenerOnClick) {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
-
-        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
-        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.removeEventListener('change', updateCheckoutDisplay);
-        });
-        checkoutModalOverlay.classList.remove('active');
-        setTimeout(() => {
-            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
-            if (checkoutCloseBtn) {
-                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
-            }
-            checkoutModalOverlay.style.display = 'none';
-            log('Modal', 'Checkout modal hidden.');
-        }, 300);
-        document.body.classList.remove('modal-open');
-    }
-}
-
-export function hideCheckoutModal() {
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    if (checkoutModalOverlay) {
         document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.removeEventListener('change', updateCheckoutDisplay);
