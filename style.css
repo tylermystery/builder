@@ -1142,3 +1142,55 @@ body {
     font-size: 0.9em;
     flex-shrink: 0; /* Prevent the button from shrinking */
 }
+
+/* PASTE THIS at the end of style.css to override previous styles. */
+
+/* --- Polished Card Footer Layout --- */
+
+.card-footer {
+    padding: 12px 16px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end; /* Align items to the bottom */
+    gap: 12px;
+}
+
+.price-wrapper {
+    /* Aligns to the left by default */
+    flex-grow: 1;
+}
+
+.actions-wrapper {
+    /* New container for right-aligned items */
+    display: flex;
+    flex-direction: column; /* Stack items vertically */
+    align-items: flex-end; /* Align items to the right */
+    flex-shrink: 0;
+}
+
+.card-footer .price {
+    font-weight: bold;
+    font-size: 1.2em; /* Slightly larger price */
+    color: #28a745;
+    line-height: 1.2;
+    /* "White border" effect using text-shadow for readability */
+    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+}
+
+.card-footer .price .pricing-type {
+    display: block; /* Make price type appear on a new line */
+    font-size: 0.7em;
+    font-weight: normal;
+    color: #6c757d;
+}
+
+.quantity-selector {
+    margin-bottom: 8px; /* Space above the "Add to Plan" button */
+}
+
+.card-action-btn.add-to-plan-btn {
+    padding: 8px 16px;
+    font-size: 0.9em;
+}
