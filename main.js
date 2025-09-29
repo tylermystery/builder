@@ -38,6 +38,11 @@ async function initialize() {
             populateUserPlans(state.session.user.id);
         }
     });
+    // when a new session is created for the first time.
+    document.addEventListener('sessionReady', () => {
+        log('Main', '"sessionReady" event received, re-initializing session chat.');
+        initializeSessionChat();
+    });
     ui.toggleLoading(true);
     try {
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
