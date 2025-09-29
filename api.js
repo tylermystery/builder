@@ -461,9 +461,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     const payload = {
         records: [{
             fields: {
-                // --- THIS IS THE FIX ---
-                // The SessionID must be sent as an array of strings.
-                SessionID: [sessionId],
+                SessionID: [sessionId], // Keep the array fix
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
@@ -482,24 +480,10 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         if (!response.ok) {
              throw new Error('Failed to post chat message to Airtable.');
         }
-
-        const result = await response.json();
-        const newMessageRecordId = result.records[0].id;
-
-        if (newMessageRecordId) {
-            // Now that the message is saved, this part will run.
-            await fetch('/api/send-notification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recordId: newMessageRecordId })
-            });
-        }
-
     } catch (error) {
-        console.error("Error posting chat message or triggering notification:", error);
+        console.error("Error posting chat message:", error);
     }
 }
-
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
