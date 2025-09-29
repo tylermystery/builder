@@ -454,6 +454,8 @@ export async function fetchChatMessages(sessionId) {
     }
 }
 
+// REPLACE the postChatMessage function in: api.js
+
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
     const payload = {
@@ -463,7 +465,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
-       
             }
         }]
     };
@@ -479,11 +480,26 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         if (!response.ok) {
              throw new Error('Failed to post chat message to Airtable.');
         }
+
+        // --- NEW LOGIC ---
+        // After successfully creating the message, get its new ID and trigger the notification.
+        const result = await response.json();
+        const newMessageRecordId = result.records[0].id;
+
+        if (newMessageRecordId) {
+            // Call the notification function directly, no automation needed.
+            await fetch('/api/send-notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recordId: newMessageRecordId })
+            });
+        }
+        // --- END NEW LOGIC ---
+
     } catch (error) {
-        console.error("Error posting chat message:", error);
+        console.error("Error posting chat message or triggering notification:", error);
     }
 }
-
 
 // --- New API functions for item-specific chat ---
 
