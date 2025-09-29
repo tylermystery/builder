@@ -337,11 +337,25 @@ export async function showCheckoutModal(shopSettings) {
 
     if (!checkoutModalOverlay) return;
 
+    // --- NEW: Event listener for the overlay click ---
+    const handleOverlayClick = (e) => {
+        if (e.target === checkoutModalOverlay) {
+            hideCheckoutModal();
+        }
+    };
+    checkoutModalOverlay.addEventListener('click', handleOverlayClick);
+    
+    // Also remove the listener when the modal is hidden to prevent memory leaks
+    checkoutModalOverlay.removeEventListenerOnClick = () => {
+        checkoutModalOverlay.removeEventListener('click', handleOverlayClick);
+    };
+    // --- END NEW SECTION ---
+
+
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
-
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
@@ -358,7 +372,6 @@ export async function showCheckoutModal(shopSettings) {
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
-
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
@@ -393,6 +406,32 @@ export async function showCheckoutModal(shopSettings) {
         console.error("Failed to initialize payment form:", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
+    }
+}
+
+// And update the hideCheckoutModal function as well
+export function hideCheckoutModal() {
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    if (checkoutModalOverlay) {
+        // --- NEW: Remove the overlay click listener ---
+        if (checkoutModalOverlay.removeEventListenerOnClick) {
+            checkoutModalOverlay.removeEventListenerOnClick();
+        }
+
+        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
+            radio.removeEventListener('change', updateCheckoutDisplay);
+        });
+        checkoutModalOverlay.classList.remove('active');
+        setTimeout(() => {
+            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+            if (checkoutCloseBtn) {
+                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
+            }
+            checkoutModalOverlay.style.display = 'none';
+            log('Modal', 'Checkout modal hidden.');
+        }, 300);
+        document.body.classList.remove('modal-open');
     }
 }
 
