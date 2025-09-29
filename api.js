@@ -433,15 +433,13 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     return { imageUrls };
 }
 
-// In api.js
-
 export async function fetchChatMessages(sessionId) {
     // --- DEBUG: Confirm function is called ---
     console.log(`[DEBUG] fetchChatMessages: Called for session ID: ${sessionId}`);
 
     // --- THIS FORMULA IS NOW CORRECT ---
     // It correctly searches for the session ID within the linked record array.
-    const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`; [cite_start]// [cite: 166]
+    const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
@@ -450,21 +448,21 @@ export async function fetchChatMessages(sessionId) {
 
     try {
         const response = await fetch(url, {
-            [cite_start]headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } // [cite: 167]
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
-        [cite_start]if (!response.ok) { // [cite: 168]
+        if (!response.ok) {
             // --- DEBUG: Log error response from Airtable ---
             const errorText = await response.text();
             console.error(`[DEBUG] fetchChatMessages: Airtable API failed with status ${response.status}. Response:`, errorText);
-            throw new Error('Failed to fetch chat messages from Airtable.'); [cite_start]// [cite: 168]
+            throw new Error('Failed to fetch chat messages from Airtable.');
         }
         const data = await response.json();
         // --- DEBUG: Log success and number of records found ---
         console.log(`[DEBUG] fetchChatMessages: SUCCESS! Found ${data.records.length} messages for session ${sessionId}.`);
-        return data.records; [cite_start]// [cite: 169]
+        return data.records;
     } catch (error) {
-        console.error("Error fetching chat history:", error); [cite_start]// [cite: 170]
-        return []; [cite_start]// [cite: 171]
+        console.error("Error fetching chat history:", error);
+        return [];
     }
 }
 
