@@ -243,8 +243,8 @@ export async function sendMessage(message, recordId = null) {
         const messagesList = document.getElementById('messages-list');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
         
-        // --- THIS IS THE ONLY CHANGE IN THIS FILE ---
-        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+        // Reverted to the simpler version without await
+        api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
         
         sessionChatChannel.trigger('client-new-message', {
             content: message,
