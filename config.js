@@ -24,14 +24,19 @@ export const CONSTANTS = {
         ICAL_URL: 'iCal URL',
         LEAD_TIME: 'Lead Time (days)',
         COLLABORATOR_IDS_FIELD: 'CollaboratorIDs',
+        
+        // Session Chat Fields
         SESSION_ID_FIELD: 'SessionID',
         TIMESTAMP_FIELD: 'Timestamp',
+        SESSION_ID_ROLLUP_FIELD: 'SessionID_Rollup',
+
+        // Item Chat Fields (to mirror session chat)
+        ITEM_ID_FIELD: 'ItemID',
         ITEM_ID_ROLLUP_FIELD: 'ItemID_Rollup',
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
     },
-    // This part is crucial for session loading
     DETAIL_TYPES: {
         EVENT_NAME: 'eventName',
         DATE: 'date',
