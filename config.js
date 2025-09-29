@@ -24,6 +24,8 @@ export const CONSTANTS = {
         ICAL_URL: 'iCal URL',
         LEAD_TIME: 'Lead Time (days)',
         COLLABORATOR_IDS_FIELD: 'CollaboratorIDs',
+        SESSION_ID_FIELD: 'SessionID',
+        TIMESTAMP_FIELD: 'Timestamp',
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
