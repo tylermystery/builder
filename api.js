@@ -456,6 +456,8 @@ export async function fetchChatMessages(sessionId) {
 
 // REPLACE the postChatMessage function in: api.js
 
+// REPLACE the postChatMessage function in: api.js
+
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
     const payload = {
@@ -469,7 +471,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         }]
     };
     try {
-        // Step 1: Save the message to Airtable
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -485,19 +486,27 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
 
-        // Step 2: If successful, trigger the notification function
         if (newMessageRecordId) {
-            await fetch('/api/send-notification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recordId: newMessageRecordId })
-            });
+            // Trigger both SMS and Email notifications in parallel
+            await Promise.all([
+                fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                }),
+                fetch('/api/send-email-notification', { // <-- ADDED THIS CALL
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                })
+            ]);
         }
 
     } catch (error) {
         console.error("Error posting chat message or triggering notification:", error);
     }
 }
+
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
