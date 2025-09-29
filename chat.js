@@ -228,6 +228,7 @@ export async function sendMessage(message, recordId = null) {
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list-item');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+
         await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
         channel.trigger('client-new-message-item', {
             content: message,
@@ -241,7 +242,10 @@ export async function sendMessage(message, recordId = null) {
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+        
+        // --- THIS IS THE ONLY CHANGE IN THIS FILE ---
         await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+        
         sessionChatChannel.trigger('client-new-message', {
             content: message,
             senderId: currentUser.id,
@@ -250,6 +254,7 @@ export async function sendMessage(message, recordId = null) {
         });
     }
 }
+
 export async function initializeItemChat(recordId) {
     log('Chat', `Initializing item chat for recordId: ${recordId}`);
     if (!state.session.user.isAuthenticated) {
