@@ -434,16 +434,18 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
-    // --- DEBUG: Confirm function is called ---
     console.log(`[DEBUG] fetchChatMessages: Called for session ID: ${sessionId}`);
 
-    // --- THIS FORMULA IS NOW CORRECT ---
-    // It correctly searches for the session ID within the linked record array.
-    const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`;
-    const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
+    // --- THIS FORMULA IS NOW CORRECT AND USES CONSTANTS ---
+    const sessionField = CONSTANTS.FIELD_NAMES.SESSION_ID_FIELD;
+    const timestampField = CONSTANTS.FIELD_NAMES.TIMESTAMP_FIELD;
 
-    // --- DEBUG: Log the exact URL being fetched ---
+    const formula = `FIND('${sessionId}', ARRAYJOIN({${sessionField}}))`;
+    const encodedFormula = encodeURIComponent(formula);
+    
+    // The sort parameter now also uses a constant
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=${timestampField}&sort%5B0%5D%5Bdirection%5D=asc`;
+
     console.log(`[DEBUG] fetchChatMessages: Fetching URL: ${url}`);
 
     try {
@@ -451,13 +453,11 @@ export async function fetchChatMessages(sessionId) {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         if (!response.ok) {
-            // --- DEBUG: Log error response from Airtable ---
             const errorText = await response.text();
             console.error(`[DEBUG] fetchChatMessages: Airtable API failed with status ${response.status}. Response:`, errorText);
             throw new Error('Failed to fetch chat messages from Airtable.');
         }
         const data = await response.json();
-        // --- DEBUG: Log success and number of records found ---
         console.log(`[DEBUG] fetchChatMessages: SUCCESS! Found ${data.records.length} messages for session ${sessionId}.`);
         return data.records;
     } catch (error) {
