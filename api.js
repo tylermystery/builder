@@ -461,7 +461,9 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     const payload = {
         records: [{
             fields: {
-                SessionID: sessionId,
+                // --- THIS IS THE FIX ---
+                // The SessionID must be sent as an array of strings.
+                SessionID: [sessionId],
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
@@ -481,20 +483,17 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
              throw new Error('Failed to post chat message to Airtable.');
         }
 
-        // --- NEW LOGIC ---
-        // After successfully creating the message, get its new ID and trigger the notification.
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
 
         if (newMessageRecordId) {
-            // Call the notification function directly, no automation needed.
+            // Now that the message is saved, this part will run.
             await fetch('/api/send-notification', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ recordId: newMessageRecordId })
             });
         }
-        // --- END NEW LOGIC ---
 
     } catch (error) {
         console.error("Error posting chat message or triggering notification:", error);
