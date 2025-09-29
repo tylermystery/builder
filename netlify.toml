@@ -1,21 +1,25 @@
-# PASTE THIS ENTIRE CODE INTO: netlify.toml
+// REPLACE THE ENTIRE CONTENTS OF: netlify.toml
+
 [build]
   functions = "netlify/functions"
 
-# Add the new redirect for updating user preferences
 [[redirects]]
   from = "/api/update-user-prefs"
   to = "/.netlify/functions/update-user-prefs"
   status = 200
 
-# --- THIS IS THE CORRECTED LINE ---
 [[redirects]]
   from = "/api/send-notification"
   to = "/.netlify/functions/send-notification"
   status = 200
 
+# --- ADD THIS NEW REDIRECT ---
+[[redirects]]
+  from = "/api/send-email-notification"
+  to = "/.netlify/functions/send-email-notification"
+  status = 200
 
-# Add the two new redirects for authentication
+# Authentication redirects
 [[redirects]]
   from = "/api/auth-start"
   to = "/.netlify/functions/auth-start"
@@ -31,7 +35,7 @@
   to = "/.netlify/functions/auth-confirm"
   status = 200
 
-# Keep your existing redirects
+# Core service proxies
 [[redirects]]
   from = "/api/calendar"
   to = "/.netlify/functions/calendar"
@@ -43,36 +47,17 @@
   status = 200
 
 [[redirects]]
-  from = "/api/airtable/*"
-  to = "/.netlify/functions/airtable"
-  status = 200
-
-[[redirects]]
   from = "/api/pusher-auth"
   to = "/.netlify/functions/pusher-auth"
   status = 200
 
+# Other redirects
 [[redirects]]
   from = "/api/process-email"
   to = "/.netlify/functions/process-email"
   status = 200
-
-[[redirects]]
-  from = "/api/get-store-data-by-owner-id"
-  to = "/.netlify/functions/get-store-data-by-owner-id"
-  status = 200
-
-[[redirects]]
-  from = "/api/update-message-reaction"
-  to = "/.netlify/functions/update-message-reaction"
-  status = 200
-
+  
 [[redirects]]
   from = "/api/get-event-by-slug"
   to = "/.netlify/functions/get-event-by-slug"
-  status = 200
-
-[[redirects]]
-  from = "/api/associate-session"
-  to = "/.netlify/functions/associate-session"
   status = 200
