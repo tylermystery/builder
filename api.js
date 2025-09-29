@@ -470,10 +470,19 @@ export async function fetchChatMessages(sessionId) {
 // REPLACE the postChatMessage function in: api.js
 
 export async function postChatMessage(sessionId, senderId, senderName, content) {
+    console.log(`[DEBUG] postChatMessage: Called for session ${sessionId}`);
+
+    // --- FIX: Ensure sessionId is valid before proceeding ---
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.error(`[DEBUG] postChatMessage: FAILED. Invalid sessionId provided: "${sessionId}". Cannot save message.`);
+        return; // Stop execution if the session ID is invalid
+    }
+
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
     const payload = {
         records: [{
             fields: {
+                // Airtable's Linked Record field MUST be an array of record IDs
                 SessionID: [sessionId],
                 SenderID: senderId,
                 SenderName: senderName,
@@ -481,6 +490,9 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
             }
         }]
     };
+
+    console.log('[DEBUG] postChatMessage: Sending payload to Airtable:', JSON.stringify(payload, null, 2));
+
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -490,22 +502,26 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
             },
             body: JSON.stringify(payload)
         });
+
         if (!response.ok) {
-             throw new Error('Failed to post chat message to Airtable.');
+            const errorData = await response.json();
+            console.error('[DEBUG] postChatMessage: Airtable API Error Response:', errorData);
+            // Also throw the error to make the failure more visible
+            throw new Error(`Airtable API Error: ${errorData.error.message || 'Unknown error'}`);
         }
 
         const result = await response.json();
-        const newMessageRecordId = result.records[0].id;
+        console.log('[DEBUG] postChatMessage: SUCCESS! Airtable response:', result);
 
+        const newMessageRecordId = result.records[0].id;
         if (newMessageRecordId) {
-            // Trigger both SMS and Email notifications in parallel
             await Promise.all([
                 fetch('/api/send-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ recordId: newMessageRecordId })
                 }),
-                fetch('/api/send-email-notification', { // <-- ADDED THIS CALL
+                fetch('/api/send-email-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ recordId: newMessageRecordId })
@@ -514,10 +530,11 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         }
 
     } catch (error) {
-        console.error("Error posting chat message or triggering notification:", error);
+        // Make the error highly visible to the user
+        console.error("CRITICAL: Failed to save chat message to database.", error);
+        alert(`Could not save message: ${error.message}`);
     }
 }
-
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
