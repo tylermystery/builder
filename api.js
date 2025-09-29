@@ -528,8 +528,8 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
-    // --- THIS FORMULA IS NOW CORRECT ---
-    const formula = `FIND('${itemId}', ARRAYJOIN({ItemID}))`;
+    // --- FIX: Use the new, reliable Rollup field for fetching ---
+    const formula = `({ItemID_Rollup} = '${itemId}')`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
@@ -553,11 +553,11 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
     const payload = {
         records: [{
             fields: {
-                ItemID: itemId,
+                // --- FIX: Linked records must be sent in an array ---
+                ItemID: [itemId],
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
-       
             }
         }]
     };
