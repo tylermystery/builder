@@ -8,8 +8,8 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce } from './utils.js';
-import { showItineraryModal } from './components/itinerary.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
+import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -550,7 +550,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
-    // REMOVED event listeners for 'new-plan-btn' and 'session-manager-btn'
+    setupItineraryEventListeners(); // This will attach the listeners for the itinerary modal
     
     return { mainDatePicker, eventPlanDatePicker };
 }
