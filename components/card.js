@@ -78,25 +78,27 @@ export async function createInteractiveCard(record, imageCache) {
         const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const isLocked = state.cart.lockedItems.has(recordId);
         const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        
         let displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
         const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-        const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
-        priceHTML = `$${displayPrice.toFixed(2)}${pricingTypeHTML}`;
-
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+        const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
         const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    
+        // --- THIS HTML STRUCTURE IS NEW ---
         footerHTML = `
             <div class="card-footer">
-                <div class="price-quantity-wrapper">
+                <div class="price-wrapper">
                     <div class="price">${priceHTML}</div>
-                    ${quantitySelectorHTML}
                 </div>
-                ${addToPlanBtnHTML}
+                <div class="actions-wrapper">
+                    ${quantitySelectorHTML}
+                    ${addToPlanBtnHTML}
+                </div>
             </div>
         `;
         cardTooltip = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}${pricingType ? ` ${pricingType.toLowerCase()}` : ''}.`;
     }
-
+    
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
             <div class="event-card-actions">
