@@ -241,13 +241,19 @@ export function setupPresentationEventListeners() {
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
     
+    // --- NEW: Event listener for the overlay click ---
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hidePresentationView();
+        }
+    });
+
     summaryIdeasLink.addEventListener('click', () => {
         if (state.cart.items.size > 0) showPresentationView('favorites');
     });
     summaryLockedLink.addEventListener('click', () => {
         if (state.cart.lockedItems.size > 0) showPresentationView('locked');
     });
-
     shareBtn.addEventListener('click', (e) => {
         const baseURL = window.location.origin + window.location.pathname;
         const sessionID = state.session.id;
@@ -262,3 +268,4 @@ export function setupPresentationEventListeners() {
         });
     });
 }
+
