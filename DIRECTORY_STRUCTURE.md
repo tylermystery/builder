@@ -11,6 +11,7 @@
 ├── netlify/
 │   └── functions/
 │       ├── airtable.js
+│       ├── associate-session.js
 │       ├── auth-start.js
 │       ├── auth-verify.js
 │       ├── calendar.js
@@ -18,7 +19,9 @@
 │       ├── create-payment-intent.js
 │       ├── package.json
 │       ├── process-email.js
-│       └── pusher-auth.js
+│       ├── pusher-auth.js
+│       ├── send-notification.js
+│       └── update-user-prefs.js
 ├── utils/
 │   └── debug.js
 ├── ARCHITECTURE.md
