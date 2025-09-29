@@ -855,3 +855,77 @@ body {
     color: #6c757d;
     text-shadow: none;
 }
+
+/* PASTE THIS at the end of: style.css */
+
+/* --- NEW: Minimalist Card & Modal Styles --- */
+
+/* Resetting the Card */
+.event-card {
+    display: flex;
+    flex-direction: column;
+    height: auto; /* Let content define the height */
+    background-color: #ffffff;
+    color: #333333;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.event-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.event-card-image-container {
+    height: 200px;
+}
+
+.event-card-content {
+    background: none;
+    text-shadow: none;
+    color: #333;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.event-card-content h3, .event-card-content p.description {
+    text-shadow: none;
+    color: inherit;
+}
+
+.card-footer {
+    background-color: transparent;
+    border-top: 1px solid #f0f0f0;
+    margin-top: auto; /* Pushes the footer to the bottom */
+}
+
+/* Resetting the Modal */
+.modal-content {
+    background: #ffffff; /* Solid background */
+    color: #333333;
+    display: flex;
+    flex-direction: row; /* Enforce two columns */
+    max-width: 1000px;
+    height: 90vh;
+    max-height: 650px;
+}
+
+.modal-main-column {
+    flex: 6; /* 60% width */
+}
+
+.modal-sidebar-column {
+    flex: 4; /* 40% width */
+}
+
+#modal-main-image {
+    background-size: cover; /* Changed back to cover for a better look */
+}
+
+#modal-item-name, #modal-item-price, #modal-item-description {
+    text-shadow: none;
+    color: inherit;
+}
