@@ -435,7 +435,9 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 
 // Session chat messages
 export async function fetchChatMessages(sessionId) {
-    const formula = `({SessionID} = '${sessionId}')`;
+    // --- THIS FORMULA IS NOW CORRECT ---
+    // It correctly searches for the session ID within the linked record array.
+    const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/Messages?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
@@ -510,7 +512,8 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
-    const formula = `(RECORD_ID({ItemID}) = '${itemId}')`;
+    // --- THIS FORMULA IS NOW CORRECT ---
+    const formula = `FIND('${itemId}', ARRAYJOIN({ItemID}))`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
