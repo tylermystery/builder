@@ -1,683 +1,26 @@
-/*
- * Version: 2.1.1
- * Last Modified: 2025-08-21
- *
- * Changelog:
- *
- * v2.1.1 - 2025-08-21
- * - Fixed a bug where the sticky header was not collapsing on scroll.
- *
- * v2.1.0 - 2025-08-21
- * - Final UI Polish: Styled favorites carousel for compact view.
- * - Restored and polished all card hover effects and modal styles.
-...
- */
+/* ============================================================ */
+/* --- FUNCTIONAL CSS AUDIT VERSION --- */
+/* All decorative styles (colors, shadows, transitions) have been removed. */
+/* Only layout, positioning, and core functional styles remain. */
+/* ============================================================ */
 
+/* --- CORE LAYOUT & TYPOGRAPHY --- */
 body {
-    padding-bottom: 80px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    padding-bottom: 150px;
 }
-#sticky-header {
-    position: sticky;
-    top: 0;
-    background-color: white;
-    z-index: 999;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: padding 0.3s ease-in-out;
-}
-#header-summary {
-    display: none;
-    align-items: center;
-    padding: 10px 20px;
-    width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    font-size: 1.1em;
-    box-sizing: border-box;
-}
-#header-summary span { color: #6c757d; }
-#header-full-content { 
-    max-height: 500px; /* A large enough value for the expanded state */
-    overflow: hidden;
-    transition: max-height 0.4s ease-in-out; 
-}
-#sticky-header.header-collapsed #header-full-content { 
-    max-height: 0; 
-    padding: 0;
-}
-#sticky-header.header-collapsed #header-summary { 
-    display: flex;
-}
-#total-cost-section {
-    padding: 0;
-    text-align: right;
-    font-size: 1.2em;
-}
-#total-cost {
-    font-weight: bold;
-    color: #007aff;
-    cursor: pointer;
-}
-#summary-total-cost {
-    font-size: 1.4em;
-    font-weight: bold;
-    color: #007aff;
-    cursor: pointer;
-}
-#favorites-section { max-width: 1200px; margin: 0 auto; padding: 0 20px 15px 20px; }
-.favorites-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 20px;
-    padding-bottom: 15px;
-}
-#event-title-header {
-    margin: 0;
-    text-align: center;
-    flex-grow: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.header-group-left, .header-group-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-shrink: 0;
-}
-#sessions-dropdown-container { margin-bottom: 0; }
-#sessions-dropdown {
-    padding: 5px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    background-color: #f8f9fa;
-    font-size: 0.9em;
-}
-#collaborators-section { display: flex; align-items: center; gap: 10px; }
-#collaborator-avatars { display: flex;
-}
-.avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background-color: #6c757d;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.9em;
-    border: 2px solid white;
-    margin-left: -10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    cursor: pointer;
-    transition: transform 0.2s;
-}
-.avatar:hover { transform: translateY(-2px); z-index: 5; }
-#add-collaborator-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 1px dashed #6c757d;
-    background: #f8f9fa;
-    color: #6c757d;
-    font-size: 1.2em;
-    cursor: pointer;
-    margin-left: -2px;
-}
-#favorites-carousel { display: flex;
-    gap: 15px; overflow-x: auto; padding-bottom: 5px; }
-.favorite-item {
-    position: relative;
-    flex: 0 0 220px; /* Compact width */
-    height: 180px;  /* Compact height */
-    border-radius: 8px;
-    overflow: hidden;
-    background-size: cover;
-    background-position: center;
-    color: white;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    cursor: pointer;
-    transition: all 0.3s;
-    border: 1px solid #ddd;
-}
-.favorite-item.locked-item { border: 3px solid #FFD700;
-}
-.favorite-item-content {
-    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-    padding: 10px;
-    text-align: left; /* Align text left for better readability */
-}
-.card-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 10px;
-}
-.event-card .card-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
-}
-.reactions-summary { display: flex;
-    gap: 4px; font-size: 0.8em; }
-.reaction-pill { background-color: rgba(255, 255, 255, 0.2); padding: 2px 6px; border-radius: 10px; text-shadow: none;
-}
-.action-btn-container { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; }
-.secondary-action-btn { position: absolute; bottom: 8px; right: 8px;
-    font-size: 1.2em; opacity: 0.6; cursor: pointer; transition: opacity 0.2s; }
-.secondary-action-btn:hover { opacity: 1;
-}
-.primary-action-btn {
-    font-size: 1.8em;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-.primary-action-btn .icon-hover { display: none; }
-.primary-action-btn:hover .icon-default { display: none; }
-.primary-action-btn:hover .icon-hover { display: block; animation: pop 0.3s;
-}
-.favorite-item p { margin: 2px 0; font-size: 0.9em; text-shadow: 0 1px 2px rgba(0,0,0,0.7); }
-.favorite-item .item-name { font-weight: bold; font-size: 1em;
-}
-.favorite-item .variation-name { font-size: 0.8em; font-style: italic; }
-.favorite-item .item-price { font-weight: bold; margin-top: 5px;
-}
-@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1);
-} }
-.heart-icon.hearted { animation: pop 0.3s ease-in-out; }
-.reaction-bar {
-    position: absolute;
-    top: 10px;
-    bottom: 10px;
-    left: 0;
-    width: 45px;
-    background-color: rgba(0,0,0,0.5);
-    backdrop-filter: blur(4px);
-    border-radius: 0 20px 20px 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 5px;
-    transform: translateX(-100%);
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-    z-index: 15;
-}
-.event-card:hover .reaction-bar, .favorite-item:hover .reaction-bar, .modal-content:hover .reaction-bar {
-    transform: translateX(0);
-    opacity: 1;
-    visibility: visible;
-}
-.reaction-bar button { background: none; border: none; font-size: 1.5em; cursor: pointer; transition: transform 0.1s; }
-.reaction-bar button:hover { transform: scale(1.3);
-}
-#share-section { display: flex; align-items: center; gap: 15px; }
-#filter-controls {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    padding: 20px;
-    max-width: 1200px;
-    margin: 20px auto;
-    flex-wrap: wrap;
-}
-#catalog-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 25px;
-    padding: 20px;
-    max-width: 1400px;
-    margin: 0 auto;
-}
-.event-card {
-    position: relative;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    display: flex;
-    flex-direction: column;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    height: 520px;
-    width: 100%;
-    background-size: cover;
-    background-position: center;
-    color: white;
-    overflow: hidden;
-    cursor: pointer;
-    border: 1px solid #e0e0e0;
-}
-.event-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-}
-.heart-icon, .edit-card-btn {
-    position: absolute;
-    top: 15px;
-    width: 30px;
-    height: 30px;
-    cursor: pointer;
-    z-index: 10;
-    background: none;
-    border: none;
-    font-size: 1.5em;
-    padding: 0;
-}
-.heart-icon { right: 15px; }
-.edit-card-btn { left: 15px;
-}
-.heart-icon svg {
-    width: 100%;
-    height: 100%;
-    stroke: white;
-    stroke-width: 2;
-    fill: rgba(0,0,0,0.3);
-    transition: fill 0.2s, stroke 0.2s;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
-}
-.heart-icon.hearted svg { fill: #ff4f6c; stroke: #ff4f6c;
-}
-.event-card-content {
-    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%);
-    padding: 20px;
-    margin-top: auto;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-.event-card-content h3 {
-    margin-top: 0;
-    margin-bottom: 10px;
-    font-size: 1.6em;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-}
-.event-card-content p {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: #f0f0f0;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-}
-.event-card-content .details { font-size: 0.9em; margin-bottom: 15px;
-}
-.event-card-content .options-selector {
-    width: 100%;
-    padding: 8px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    margin-bottom: 15px;
-    background-color: rgba(255,255,255,0.9);
-    color: #333;
-}
-.price-quantity-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: auto;
-    padding-top: 10px;
-    flex-shrink: 0;
-}
-.quantity-selector { display: flex; align-items: center; }
-.quantity-selector button {
-    width: 30px;
-    height: 30px;
-    border: 1px solid #ccc;
-    background-color: #f0f0f0;
-    cursor: pointer;
-    font-size: 1.2em;
-    color: #333;
-}
-.quantity-selector input {
-    width: 40px;
-    text-align: center;
-    border: 1px solid #ccc;
-    border-left: none;
-    border-right: none;
-    height: 30px;
-    -moz-appearance: textfield;
-}
-.event-card-content .price { font-size: 1.3em; font-weight: bold; }
-.option-description {
-    font-size: 0.85em;
-    padding: 5px 0;
-    margin: 5px 0;
-    color: #f0f0f0;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-    min-height: 2.5em; /* Reserve space to prevent layout shift */
-}
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.6);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-.modal-content {
-    position: relative;
-    background-size: cover;
-    background-position: center;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 600px;
-    height: 520px; /* Give modal a fixed aspect ratio like cards */
-    max-height: 90vh;
-    display: flex;
-    flex-direction: column;
-    color: white;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+
+body.modal-open {
     overflow: hidden;
 }
-.modal-close {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(0,0,0,0.5);
-    border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    color: white;
-    font-size: 1.5em;
-    cursor: pointer;
-    z-index: 20;
-}
-#modal-body {
-    padding: 30px;
-    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%);
-    margin-top: auto;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    overflow-y: auto;
-}
-#modal-body h3 {
-    margin-top: 0;
-    font-size: 2em;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-}
-#modal-body .description {
-    margin: 15px 0;
-    color: #f0f0f0;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-}
-#modal-body .modal-footer {
-    display: flex;
-    gap: 15px;
-    margin-top: 20px;
-    align-items: center;
-    justify-content: center;
-}
-#modal-body .price-quantity-wrapper {
-    color: white;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-}
-
-.gallery-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0,0,0,0.5);
-    color: white;
-    border: none;
-    cursor: pointer;
-    padding: 10px;
-    font-size: 1.5em;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 10;
-}
-.gallery-arrow.left { left: 10px; }
-.gallery-arrow.right { right: 10px; }
-.event-card:hover .gallery-arrow, .favorite-item:hover .gallery-arrow, .modal-content:hover .gallery-arrow { opacity: 1;
-}
-#messages-container {
-    background-color: #e9eaed;
-}
-
-.chat-message {
-    padding: 8px 12px;
-    border-radius: 18px;
-    margin-bottom: 8px;
-    max-width: 80%;
-    word-wrap: break-word;
-}
-
-.chat-message.sent {
-    background-color: #007bff;
-    color: white;
-    align-self: flex-end;
-}
-
-.chat-message.received {
-    background-color: #f1f1f1;
-    color: #333;
-    align-self: flex-start;
-}
-
-.chat-message .sender {
-    font-size: 0.75em;
-    font-weight: bold;
-    display: block;
-    margin-bottom: 4px;
-}
-/* New CSS for item chat within the modal */
-#modal-chat-container {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-}
-
-#modal-chat-container h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
-
-.messages-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-  padding: 10px;
-  border-radius: 8px;
-  background-color: #f8f9fa;
-  flex-grow: 1;
-}
-
-#message-form-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#message-input-item {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  padding: 10px;
-}
-
-#message-form-item button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 10px 15px;
-  cursor: pointer;
-}
-
-/* Moderation Styles */
-.message-wrapper .moderation-actions {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  display: none;
-  gap: 5px;
-}
-
-.message-wrapper:hover .moderation-actions {
-  display: flex;
-}
-
-.message-wrapper .flag-btn, .message-wrapper .ban-btn {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  font-size: 0.8em;
-  padding: 3px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.message-wrapper .flag-btn {
-  background-color: #ffc107;
-  color: #333;
-}
-
-.chat-message.banned, .chat-message.flagged {
-    color: #6c757d;
-    font-style: italic;
-    background-color: #e9ecef;
-}
-
-.coming-soon-banner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5em;
-  font-weight: bold;
-  z-index: 5; /* Ensures it's on top of the image */
-}
-
-#new-plan-btn {
-    transition: background-color 0.2s ease;
-}
-
-#new-plan-btn:hover {
-    background-color: #5a6268 !important;
-}
-
-#toast-notification {
-    position: fixed;
-    top: -100px; /* Start off-screen */
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: #2c3e50;
-    color: white;
-    padding: 16px 30px;
-    border-radius: 0 0 8px 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 2000;
-    font-size: 1.1em;
-    font-weight: 500;
-    transition: top 0.5s ease-in-out;
-}
-
-#toast-notification.show {
-    top: 0; /* Animate to show */
-}
-
-/* Session Manager Dropdown Styles */
-#session-manager-container {
-    position: relative;
-    display: none; /* Hidden by default, shown for logged-in users */
-}
-
-#session-manager-btn {
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    border-radius: 20px;
-    padding: 6px 12px;
-    font-size: 0.9em;
-    font-weight: 500;
-    cursor: pointer;
-}
-
-#session-dropdown {
-    position: absolute;
-    right: 0;
-    top: 110%;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border: 1px solid #e0e0e0;
-    width: 250px;
-    z-index: 1100;
-    opacity: 0;
-    transform: translateY(-10px);
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    pointer-events: none;
-}
-
-#session-dropdown.visible {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-}
-
-#session-dropdown a {
-    display: block;
-    padding: 10px 15px;
-    color: #333;
-    text-decoration: none;
-    font-size: 0.9em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-#session-dropdown a:hover {
-    background-color: #f8f9fa;
-}
-
-#session-dropdown a.active-session {
-    font-weight: bold;
-    color: #007bff;
-}
-
-#session-dropdown .divider {
-    height: 1px;
-    background-color: #e9ecef;
-    margin: 5px 0;
-}
-
-/* PASTE THIS at the end of: style.css */
 
 #main-header {
-    background-color: #ffffff;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #ccc;
     padding: 10px 20px;
     position: sticky;
     top: 0;
     z-index: 1000;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    background-color: white; /* Kept for usability on sticky header */
 }
 
 .header-content {
@@ -699,262 +42,125 @@ body {
     gap: 15px;
 }
 
-#my-plans-dropdown {
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-    background-color: #f8f9fa;
-    font-size: 0.9em;
-    min-width: 180px; /* Gives it some space */
-}
-
-#user-profile-button {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    padding: 5px;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
-}
-
-#user-profile-button:hover {
-    background-color: #f0f0f0;
-}
-
-#user-profile-button.signed-in {
-    background-color: #007bff;
-    color: white;
-    font-weight: bold;
-    font-size: 1.1em;
-}
-
-/* PASTE THIS at the end of: style.css */
-
-/* --- Card Polish --- */
-.event-card {
+.main-content {
     display: flex;
     flex-direction: column;
-    height: auto; /* Remove fixed height for content flexibility */
-    background: #ffffff; /* Use a solid background */
-    color: #333;
-    border: 1px solid #e9ecef;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    gap: 25px;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 20px;
 }
 
-.event-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+@media (min-width: 1000px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 380px;
+    }
 }
 
-.event-card-image-container {
-    height: 200px; /* Keep a uniform image height */
-    width: 100%;
+/* --- SIDEBARS & PANELS --- */
+#right-sidebar h3, #left-sidebar h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 10px;
+}
+
+#filter-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
     position: relative;
-    background-size: cover;
-    background-position: center;
+    border: 1px solid #ccc;
+    padding: 20px;
 }
 
-.event-card-content {
-    background: none; /* Remove gradient */
-    flex-grow: 1;
-    padding: 15px;
+.filter-group {
     display: flex;
     flex-direction: column;
-    text-shadow: none; /* Remove text shadow */
+    gap: 10px;
 }
 
-.event-card-content h3 {
-    color: #2c3e50;
-    text-shadow: none;
+.filter-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
-.event-card-content p.description {
-    color: #6c757d;
-    text-shadow: none;
-    flex-grow: 1; /* Allow description to push footer down */
+.filter-btn {
+    padding: 8px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    background: none;
 }
 
-.card-footer {
-    padding: 15px;
-    border-top: 1px solid #e9ecef;
-    background-color: #f8f9fa;
+.filter-btn.active {
+    border: 2px solid blue;
+}
+
+#cart-items-container {
+    flex-grow: 1;
+}
+
+#cart-footer {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 2px solid #ccc;
+}
+
+#cart-footer .total-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.card-footer .price {
-    font-weight: bold;
-    font-size: 1.1em;
-    color: #28a745;
+/* --- FAVORITES CAROUSEL --- */
+#favorites-section {
+    position: relative;
 }
 
-/* --- Modal Polish --- */
-.modal-content {
+#favorites-carousel {
     display: flex;
-    flex-direction: row; /* Two-column layout */
-    background: #ffffff; /* Solid white background */
-    color: #333;
-    max-width: 1100px; /* Wider for two columns */
-    max-height: 700px;
-    height: 90vh;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    gap: 15px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    scroll-behavior: smooth;
 }
 
-.modal-main-column {
-    flex: 6; /* 60% width */
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #e9ecef;
+.carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
 }
+.carousel-nav.left { left: -20px; }
+.carousel-nav.right { right: -20px; }
 
-#modal-main-image {
-    flex-grow: 1;
-    background-size: contain; /* Use contain to see the whole image */
-    background-repeat: no-repeat;
+.favorite-item {
+    position: relative;
+    flex: 0 0 100px;
+    height: 100px;
+    border: 1px solid #ccc;
+    background-size: cover;
     background-position: center;
 }
 
-#modal-thumbnail-strip {
-    flex-shrink: 0;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
+/* --- CATALOG CARDS (Simplified) --- */
+#catalog-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
 }
 
-.modal-sidebar-column {
-    flex: 4; /* 40% width */
-    padding: 30px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-#modal-item-name {
-    color: #2c3e50;
-    text-shadow: none;
-}
-#modal-item-price {
-    font-size: 1.5em;
-    font-weight: bold;
-    margin: 10px 0;
-    color: #28a745;
-}
-
-#modal-item-description {
-    color: #6c757d;
-    text-shadow: none;
-}
-
-/* PASTE THIS at the end of: style.css */
-
-/* --- NEW: Minimalist Card & Modal Styles --- */
-
-/* Resetting the Card */
 .event-card {
     display: flex;
     flex-direction: column;
-    height: auto; /* Let content define the height */
-    background-color: #ffffff;
-    color: #333333;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    transition: box-shadow 0.2s ease-in-out;
-}
-
-.event-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-.event-card-image-container {
-    height: 200px;
-}
-
-.event-card-content {
-    background: none;
-    text-shadow: none;
-    color: #333;
-    padding: 15px;
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;
-}
-
-.event-card-content h3, .event-card-content p.description {
-    text-shadow: none;
-    color: inherit;
-}
-
-.card-footer {
-    background-color: transparent;
-    border-top: 1px solid #f0f0f0;
-    margin-top: auto; /* Pushes the footer to the bottom */
-}
-
-/* Resetting the Modal */
-.modal-content {
-    background: #ffffff; /* Solid background */
-    color: #333333;
-    display: flex;
-    flex-direction: row; /* Enforce two columns */
-    max-width: 1000px;
-    height: 90vh;
-    max-height: 650px;
-}
-
-.modal-main-column {
-    flex: 6; /* 60% width */
-}
-
-.modal-sidebar-column {
-    flex: 4; /* 40% width */
-}
-
-#modal-main-image {
-    background-size: cover; /* Changed back to cover for a better look */
-}
-
-#modal-item-name, #modal-item-price, #modal-item-description {
-    text-shadow: none;
-    color: inherit;
-}
-
-/* PASTE THIS at the end of: style.css */
-
-/* --- NEW Card Simplification --- */
-
-.event-card {
-    /* Main container: white background, simple border, no shadow */
-    display: flex;
-    flex-direction: column;
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    overflow: hidden;
     height: auto;
-    box-shadow: none;
-    transition: none;
-}
-
-.event-card:hover {
-    /* No hover effects for a truly simple MVP */
-    box-shadow: none;
-    transform: none;
+    border: 1px solid #e0e0e0;
+    background-color: #ffffff;
+    overflow: hidden;
 }
 
 .event-card-image-container {
-    /* Just the image, fixed height for grid alignment */
     height: 200px;
     width: 100%;
     background-size: cover;
@@ -963,12 +169,8 @@ body {
 }
 
 .event-card-content {
-    /* The text area below the image */
     padding: 16px;
-    background: none;
-    text-shadow: none;
-    color: #333;
-    flex-grow: 1; /* Allows description to push footer down */
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
 }
@@ -976,221 +178,193 @@ body {
 .event-card-content h3 {
     margin: 0 0 8px 0;
     font-size: 1.2em;
-    color: #2c3e50;
-    text-shadow: none;
 }
 
 .event-card-content p.description {
     margin: 0;
-    color: #6c757d;
     font-size: 0.9em;
     line-height: 1.5;
-    text-shadow: none;
     flex-grow: 1;
 }
 
 .card-footer {
-    /* The actions area at the very bottom */
-    padding: 16px;
-    background-color: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* PASTE THIS at the end of style.css to override previous styles */
-
-.card-footer {
     padding: 12px 16px;
-    background-color: #f8f9fa;
     border-top: 1px solid #e9ecef;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
     gap: 12px;
-}
-
-.price-quantity-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 12px; /* Space between price and quantity selector */
-    flex-wrap: nowrap;
-}
-
-.card-footer .price {
-    font-weight: bold;
-    font-size: 1.1em;
-    color: #28a745;
-    white-space: nowrap; /* Prevent price from wrapping */
-}
-
-.pricing-type {
-    font-size: 0.8em;
-    font-weight: normal;
-    color: #6c757d;
-    margin-left: 4px;
-}
-
-.quantity-selector {
-    display: flex;
-    align-items: center;
-}
-
-.quantity-selector button {
-    width: 28px;
-    height: 28px;
-    border: 1px solid #ced4da;
-    background-color: #ffffff;
-    cursor: pointer;
-    font-size: 1.1em;
-    color: #495057;
-    line-height: 1;
-    padding: 0;
-}
-
-.quantity-selector input {
-    width: 40px;
-    height: 28px;
-    text-align: center;
-    border: 1px solid #ced4da;
-    border-left: none;
-    border-right: none;
-    -moz-appearance: textfield;
-}
-
-.quantity-selector input::-webkit-outer-spin-button,
-.quantity-selector input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.card-action-btn.add-to-plan-btn {
-    padding: 8px 12px;
-    font-size: 0.9em;
-    flex-shrink: 0; /* Prevent the button from shrinking */
-}
-
-/* PASTE THIS at the end of style.css to override previous styles */
-
-.card-footer {
-    padding: 12px 16px;
-    background-color: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-}
-
-.price-quantity-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 12px; /* Space between price and quantity selector */
-    flex-wrap: nowrap;
-}
-
-.card-footer .price {
-    font-weight: bold;
-    font-size: 1.1em;
-    color: #28a745;
-    white-space: nowrap; /* Prevent price from wrapping */
-}
-
-.pricing-type {
-    font-size: 0.8em;
-    font-weight: normal;
-    color: #6c757d;
-    margin-left: 4px;
-}
-
-.quantity-selector {
-    display: flex;
-    align-items: center;
-}
-
-.quantity-selector button {
-    width: 28px;
-    height: 28px;
-    border: 1px solid #ced4da;
-    background-color: #ffffff;
-    cursor: pointer;
-    font-size: 1.1em;
-    color: #495057;
-    line-height: 1;
-    padding: 0;
-}
-
-.quantity-selector input {
-    width: 40px;
-    height: 28px;
-    text-align: center;
-    border: 1px solid #ced4da;
-    border-left: none;
-    border-right: none;
-    -moz-appearance: textfield;
-}
-
-.quantity-selector input::-webkit-outer-spin-button,
-.quantity-selector input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.card-action-btn.add-to-plan-btn {
-    padding: 8px 12px;
-    font-size: 0.9em;
-    flex-shrink: 0; /* Prevent the button from shrinking */
-}
-
-/* PASTE THIS at the end of style.css to override previous styles. */
-
-/* --- Polished Card Footer Layout --- */
-
-.card-footer {
-    padding: 12px 16px;
-    background-color: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end; /* Align items to the bottom */
-    gap: 12px;
-}
-
-.price-wrapper {
-    /* Aligns to the left by default */
-    flex-grow: 1;
 }
 
 .actions-wrapper {
-    /* New container for right-aligned items */
     display: flex;
-    flex-direction: column; /* Stack items vertically */
-    align-items: flex-end; /* Align items to the right */
+    flex-direction: column;
+    align-items: flex-end;
     flex-shrink: 0;
+}
+
+.quantity-selector {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
 .card-footer .price {
     font-weight: bold;
-    font-size: 1.2em; /* Slightly larger price */
-    color: #28a745;
+    font-size: 1.2em;
     line-height: 1.2;
-    /* "White border" effect using text-shadow for readability */
-    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
 }
 
 .card-footer .price .pricing-type {
-    display: block; /* Make price type appear on a new line */
+    display: block;
     font-size: 0.7em;
     font-weight: normal;
-    color: #6c757d;
 }
 
-.quantity-selector {
-    margin-bottom: 8px; /* Space above the "Add to Plan" button */
+/* --- MODALS (Functional Layout) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
 }
 
-.card-action-btn.add-to-plan-btn {
-    padding: 8px 16px;
-    font-size: 0.9em;
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
+    pointer-events: auto;
+    background: #ffffff;
+    padding: 20px;
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 2em;
+    cursor: pointer;
+    z-index: 1010;
+}
+
+/* Detail Modal Two-Column Layout */
+.modal-content {
+    display: flex;
+    flex-direction: row;
+    width: 90%;
+    max-width: 1000px;
+    height: 90vh;
+    max-height: 650px;
+    padding: 0; /* Remove padding for column layout */
+}
+
+.modal-main-column {
+    flex: 6;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #ccc;
+}
+
+.modal-sidebar-column {
+    flex: 4;
+    padding: 30px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-main-image {
+    flex-grow: 1;
+    background-size: cover;
+    background-position: center;
+}
+
+#modal-thumbnail-strip {
+    flex-shrink: 0;
+    padding: 10px;
+    border-top: 1px solid #ccc;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+}
+
+.thumbnail-img {
+    width: 80px;
+    height: 60px;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.thumbnail-img.active {
+    border-color: blue;
+}
+
+/* --- CHAT WIDGET (Layout) --- */
+#chat-widget-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1050;
+}
+
+#chat-window {
+    width: 350px;
+    height: 500px;
+    border: 1px solid #ccc;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    z-index: 1000;
+    visibility: hidden;
+}
+
+#chat-widget-container.chat-open #chat-window {
+    visibility: visible;
+}
+
+#messages-container {
+    flex-grow: 1;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#message-form {
+    border-top: 1px solid #ccc;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+#message-input {
+    flex-grow: 1;
+}
+
+.message-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+}
+.message-wrapper.sent { align-self: flex-end; }
+.message-wrapper.received { align-self: flex-start; }
+
+/* --- Utility --- */
+.hidden {
+    display: none;
 }
