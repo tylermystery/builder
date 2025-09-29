@@ -1,9 +1,10 @@
-// PASTE THIS ENTIRE CODE INTO: chat.js
+// FILE: chat.js
 
 import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
 import { triggerSave } from './events.js';
+
 let currentUser = null;
 let sessionChatChannel = null;
 const itemChatChannels = new Map();
@@ -27,8 +28,6 @@ function generateFunName() {
 
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
-    
-    // *** THIS IS THE FIX: Part 1 ***
     // Always create a temporary ID first for anonymous users.
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
@@ -65,9 +64,7 @@ function updatePresenceUI(members) {
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
-            // *** THIS IS THE FIX: Part 2 ***
             // Use the real user object from the state if available, otherwise use the pusher info.
-            // This ensures we always store the REAL Airtable ID when a user is logged in.
             const profileId = state.session.user.isAuthenticated ? state.session.user.id : member.id;
             const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
 
@@ -76,6 +73,7 @@ function updatePresenceUI(members) {
                 triggerSave();
             }
             const userElement = document.createElement('div');
+            
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
@@ -221,6 +219,7 @@ export async function initializeSessionChat() {
       }
     }
 }
+
 export async function sendMessage(message, recordId = null) {
     if (recordId) {
         const channel = itemChatChannels.get(recordId);
@@ -228,7 +227,6 @@ export async function sendMessage(message, recordId = null) {
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list-item');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
-
         await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
         channel.trigger('client-new-message-item', {
             content: message,
@@ -242,10 +240,7 @@ export async function sendMessage(message, recordId = null) {
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
-        
-        // Reverted to the simpler version without await
-        api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
-        
+        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
         sessionChatChannel.trigger('client-new-message', {
             content: message,
             senderId: currentUser.id,
