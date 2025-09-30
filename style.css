@@ -494,7 +494,7 @@ body.modal-open {
 
 @media (max-width: 999px) {
     #mobile-filter-trigger {
-        display: none; /* Hidden on desktop by default */
+        display: flex; /* <-- THIS IS THE FIX */
         width: 100%;
         position: sticky;
         top: 75px; /* Adjust to header height */
