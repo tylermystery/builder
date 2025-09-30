@@ -259,13 +259,21 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('mobile-view-plan-btn', 'click', () => {
         rightSidebar?.classList.toggle('collapsed');
+        
         if (!leftSidebar?.classList.contains('collapsed')) {
             leftSidebar?.classList.add('collapsed');
         }
-    });
-    // --- END NEW SECTION ---
-
     
+        // --- ADD THIS LOGIC ---
+        // If the panel was just opened, scroll to it
+        if (!rightSidebar?.classList.contains('collapsed')) {
+            // Timeout allows the CSS transition to begin, ensuring a smooth scroll
+            setTimeout(() => {
+                rightSidebar.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 50);
+        }
+    });
+
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
