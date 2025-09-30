@@ -305,25 +305,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
-            const btn = e.target;
-            const isAllButton = btn.dataset.filter === 'all';
-            
-            if (isAllButton) {
-                // If 'All' is clicked, activate it and deactivate others
-                categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            } else {
-                // If any other button is clicked, toggle it and deactivate 'All'
-                btn.classList.toggle('active');
-                categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]').classList.remove('active');
-            }
-            
-            // If no categories are selected, re-activate the 'All' button
-            if (categoryFiltersContainer.querySelectorAll('.category-filter-btn.active').length === 0) {
-                categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]').classList.add('active');
-            }
-    
-            updateSubcategoryButtons(); // Note: This will show subcategories for the *first* selected category
+            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            updateSubcategoryButtons();
             applyFiltersAndSort(imageCache);
         }
     });
@@ -624,29 +608,4 @@ export function openChatWidget(andKeepOpen = false) {
             }
         }
     }
-}
-
-function updateActiveFilterCount() {
-    const filterControls = document.getElementById('filter-controls');
-    if (!filterControls) return;
-
-    let activeCount = 0;
-    
-    // 1. Search term
-    if (document.getElementById('name-filter').value.trim() !== '') activeCount++;
-    // 2. Categories (anything other than 'All')
-    const selectedCategory = document.querySelector('#category-filters .filter-btn.active');
-    if (selectedCategory && selectedCategory.dataset.filter !== 'all') activeCount++;
-    // 3. Subcategories
-    if (document.querySelectorAll('#subcategory-filters .filter-btn.active').length > 0) activeCount++;
-    // 4. Status (anything other than the default 'Available')
-    if (document.getElementById('status-filter').value !== 'Available') activeCount++;
-    // 5. Headcount, Location, Budget (anything other than 'any')
-    if (document.getElementById('headcount-filter').value !== 'any') activeCount++;
-    if (document.getElementById('location-filter').value !== 'any') activeCount++;
-    if (document.getElementById('budget-filter').value !== 'any') activeCount++;
-    // 6. Date
-    if (mainDatePicker && mainDatePicker.selectedDates.length > 0) activeCount++;
-
-    filterControls.dataset.activeFilters = activeCount;
 }
