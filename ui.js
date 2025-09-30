@@ -438,3 +438,29 @@ export function populateMyPlansDropdown(plans) {
 
     console.log('[DEBUG] populateMyPlansDropdown: Dropdown rendering complete.');
 }
+
+export async function updateMobileBarAvailability() {
+    const mobileBar = document.getElementById('mobile-summary-bar');
+    if (!mobileBar || window.innerWidth > 999) return;
+
+    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    mobileBar.classList.remove('available', 'partial', 'unavailable');
+
+    if (selectedDateISO && state.cart.lockedItems.size > 0) {
+        const selectedDate = new Date(selectedDateISO);
+        const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
+        const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
+
+        switch (overallStatus) {
+            case AVAILABILITY_STATUS.FULL:
+                mobileBar.classList.add('available');
+                break;
+            case AVAILABILITY_STATUS.PARTIAL:
+                mobileBar.classList.add('partial');
+                break;
+            case AVAILABILITY_STATUS.NONE:
+                mobileBar.classList.add('unavailable');
+                break;
+        }
+    }
+}
