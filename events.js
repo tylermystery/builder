@@ -625,3 +625,28 @@ export function openChatWidget(andKeepOpen = false) {
         }
     }
 }
+
+function updateActiveFilterCount() {
+    const filterControls = document.getElementById('filter-controls');
+    if (!filterControls) return;
+
+    let activeCount = 0;
+    
+    // 1. Search term
+    if (document.getElementById('name-filter').value.trim() !== '') activeCount++;
+    // 2. Categories (anything other than 'All')
+    const selectedCategory = document.querySelector('#category-filters .filter-btn.active');
+    if (selectedCategory && selectedCategory.dataset.filter !== 'all') activeCount++;
+    // 3. Subcategories
+    if (document.querySelectorAll('#subcategory-filters .filter-btn.active').length > 0) activeCount++;
+    // 4. Status (anything other than the default 'Available')
+    if (document.getElementById('status-filter').value !== 'Available') activeCount++;
+    // 5. Headcount, Location, Budget (anything other than 'any')
+    if (document.getElementById('headcount-filter').value !== 'any') activeCount++;
+    if (document.getElementById('location-filter').value !== 'any') activeCount++;
+    if (document.getElementById('budget-filter').value !== 'any') activeCount++;
+    // 6. Date
+    if (mainDatePicker && mainDatePicker.selectedDates.length > 0) activeCount++;
+
+    filterControls.dataset.activeFilters = activeCount;
+}
