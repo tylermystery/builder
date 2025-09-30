@@ -240,36 +240,35 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
 
-    // --- ADD THIS NEW SECTION for mobile listeners ---
+    // --- REVISED Mobile Listeners ---
     const leftSidebar = document.getElementById('left-sidebar');
     const rightSidebar = document.getElementById('right-sidebar');
 
-    // Add collapsed class on mobile page load
+    // On mobile, collapse panels by default
     if (window.innerWidth < 1000) {
         leftSidebar?.classList.add('collapsed');
         rightSidebar?.classList.add('collapsed');
     }
 
-    safeAddEventListener('mobile-show-filters-btn', 'click', () => {
-        leftSidebar?.classList.toggle('collapsed');
-        if (!rightSidebar?.classList.contains('collapsed')) {
-            rightSidebar?.classList.add('collapsed');
+    // Listener for the NEW filter trigger (the h3)
+    safeAddEventListener('mobile-filter-trigger', 'click', () => {
+        if (window.innerWidth < 1000) { // Only enable this behavior on mobile
+            leftSidebar?.classList.toggle('collapsed');
         }
     });
 
+    // REVISED listener for the mobile plan button
     safeAddEventListener('mobile-view-plan-btn', 'click', () => {
+        const isCollapsing = !rightSidebar?.classList.contains('collapsed');
         rightSidebar?.classList.toggle('collapsed');
         
-        if (!leftSidebar?.classList.contains('collapsed')) {
-            leftSidebar?.classList.add('collapsed');
-        }
-    
-        // --- ADD THIS LOGIC ---
-        // If the panel was just opened, scroll to it
-        if (!rightSidebar?.classList.contains('collapsed')) {
-            // Timeout allows the CSS transition to begin, ensuring a smooth scroll
+        if (isCollapsing) {
+            // On collapse, scroll to the top of the catalog
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            // On expand, scroll down to the plan
             setTimeout(() => {
-                rightSidebar.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }, 50);
         }
     });
