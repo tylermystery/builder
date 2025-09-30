@@ -1,271 +1,116 @@
-// FILE: components/presentation.js
+/* REPLACE THE ENTIRE CONTENTS OF: components/presentation.js */
+
 import { state } from '../state.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
-import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
+import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
-import { getCurrentUser } from '../chat.js';
-import { triggerSave } from '../events.js';
 
 const modal = document.getElementById('presentation-modal-overlay');
 const closeBtn = document.getElementById('presentation-close-btn');
-const titleEl = document.getElementById('presentation-title');
-const counterEl = document.getElementById('presentation-counter');
-const mainImageEl = document.getElementById('presentation-main-image');
-const thumbStripEl = document.getElementById('presentation-thumbnail-strip');
-const itemNameEl = document.getElementById('presentation-item-name');
-const itemPriceEl = document.getElementById('presentation-item-price');
-const itemDescEl = document.getElementById('presentation-item-description');
-const itemNoteContainerEl = document.getElementById('presentation-item-note-container');
-const itemNoteEl = document.getElementById('presentation-item-note');
-const prevItemBtn = document.getElementById('presentation-prev-item-btn');
-const nextItemBtn = document.getElementById('presentation-next-item-btn');
-const reactionButtonsEl = document.getElementById('reaction-buttons');
-const reactionSummaryEl = document.getElementById('reaction-summary');
-const summaryEventNameEl = document.getElementById('summary-event-name');
-const summaryEventNotesEl = document.getElementById('summary-event-notes');
-const summaryEventDateEl = document.getElementById('summary-event-date');
-const summaryIdeasLink = document.getElementById('summary-ideas-link');
-const summaryLockedLink = document.getElementById('summary-locked-link');
-const shareBtn = document.getElementById('presentation-share-btn');
+let presentationBody = null; // Will be assigned when modal is shown
 
-let combinedList = [];
-let globalCurrentIndex = 0;
-let currentImages = [];
-let currentImageIndex = 0;
-
-function updateHeader(currentItem) {
-    const listType = currentItem.type;
-    titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
-    counterEl.textContent = `Item ${globalCurrentIndex + 1} of ${combinedList.length}`;
+/**
+ * NEW HELPER: Creates a single item tile for the dashboard.
+ * @param {object} record - The Airtable record for the item.
+ * @returns {HTMLElement} The generated tile element.
+ */
+async function createDashboardTile(record) {
+    const tile = document.createElement('div');
+    tile.className = 'item-tile';
+    tile.dataset.recordId = record.id;
     
-    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
-    summaryLockedLink.classList.toggle('active', listType === 'locked');
-    summaryIdeasLink.disabled = listType === 'favorites';
-    summaryLockedLink.disabled = listType === 'locked';
-}
-
-function renderSummaryHeader() {
-    summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
-    summaryEventNotesEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || 'N/A';
-    
-    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    if (dateValue) {
-        const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
-        summaryEventDateEl.textContent = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } else {
-        summaryEventDateEl.textContent = 'N/A';
-    }
-
-    summaryIdeasLink.textContent = `${state.cart.items.size} Ideas`;
-    summaryLockedLink.textContent = `${state.cart.lockedItems.size} Locked In`;
-}
-
-function renderReactions(recordId) {
-    const currentUser = getCurrentUser();
-    let allReactions = state.session.reactions.get(recordId);
-    if (!(allReactions instanceof Map)) {
-        allReactions = new Map();
-    }
-    const currentUserReaction = allReactions.get(currentUser.id);
-
-    reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
-        `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}">${emoji}</button>`
-    ).join('');
-
-    let summaryHTML = 'Reactions: ';
-    if (allReactions.size > 0) {
-        summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
-            // Use the new userProfiles map for a reliable name lookup
-            const name = state.session.userProfiles.get(userId) || 'A User';
-            return `<span>${name}: ${reaction}</span>`;
-        }).join(' | ');
-    } else {
-        summaryHTML += 'None yet.';
-    }
-    reactionSummaryEl.innerHTML = summaryHTML;
-}
-
-async function renderCurrentSlide() {
-    if (combinedList.length === 0) {
-        hidePresentationView();
-        return;
-    }
-    mainImageEl.style.backgroundImage = '';
-    thumbStripEl.innerHTML = '<p>Loading images...</p>';
-
-    const currentItem = combinedList[globalCurrentIndex];
-    const { recordId, type } = currentItem;
-    const record = state.records.all.find(r => r.id === recordId);
-    if (!record) {
-        log('Presentation', `Record not found for ID: ${recordId}`);
-        return;
-    }
-    
-    updateHeader(currentItem);
-    renderReactions(recordId);
-
-    const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
-    itemNameEl.textContent = record.fields.Name || 'Untitled';
-    const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
-    itemPriceEl.textContent = `$${price.toFixed(2)}`;
-    itemDescEl.textContent = record.fields.Description || '';
-
-    if (itemInfo?.note) {
-        itemNoteContainerEl.style.display = 'block';
-        itemNoteEl.textContent = itemInfo.note;
-    } else {
-        itemNoteContainerEl.style.display = 'none';
-    }
-
+    // Fetch a representative image for the tile background
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    currentImages = imageUrls || [];
-    currentImageIndex = 0;
-    renderCurrentImage();
-}
-
-function renderCurrentImage() {
-    if (currentImages.length === 0) {
-        mainImageEl.style.backgroundImage = '';
-        thumbStripEl.innerHTML = '<p>No images available.</p>';
-        return;
-    }
-    mainImageEl.style.backgroundImage = `url('${currentImages[currentImageIndex]}')`;
-
-    thumbStripEl.innerHTML = '';
-    currentImages.forEach((url, index) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url}')`;
-        if (index === currentImageIndex) {
-            thumb.classList.add('active');
-        }
-        thumb.addEventListener('click', () => {
-            currentImageIndex = index;
-            renderCurrentImage();
-        });
-        thumbStripEl.appendChild(thumb);
-    });
-}
-
-function navigateToSlide(direction) {
-    if (combinedList.length === 0) return;
-    globalCurrentIndex = (globalCurrentIndex + direction + combinedList.length) % combinedList.length;
-    renderCurrentSlide();
-}
-
-function cycleImage(direction) {
-    const newIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
-    if (currentImages.length > 0) {
-        currentImageIndex = newIndex;
-        renderCurrentImage();
-    }
-}
-
-function handleKeyDown(e) {
-    switch (e.key) {
-        case 'ArrowDown': navigateToSlide(1); break;
-        case 'ArrowUp': navigateToSlide(-1); break;
-        case 'ArrowRight': cycleImage(1); break;
-        case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape': hidePresentationView(); break;
-    }
-}
-
-function handleReactionClick(e) {
-    const button = e.target.closest('.reaction-btn');
-    if (!button) return;
-
-    const emoji = button.dataset.emoji;
-    const currentUser = getCurrentUser();
-    const recordId = combinedList[globalCurrentIndex].recordId;
-
-    if (!state.session.reactions.has(recordId)) {
-        state.session.reactions.set(recordId, new Map());
-    }
-
-    const itemReactions = state.session.reactions.get(recordId);
-    
-    // Toggle reaction off if the same one is clicked again
-    if (itemReactions.get(currentUser.id) === emoji) {
-        itemReactions.delete(currentUser.id);
-    } else {
-        itemReactions.set(currentUser.id, emoji);
+    if (imageUrls && imageUrls.length > 0) {
+        tile.style.backgroundImage = `url('${imageUrls[0]}')`;
     }
     
-    renderReactions(recordId);
-    triggerSave();
+    tile.innerHTML = `<span class="item-tile-name">${record.fields.Name}</span>`;
+    return tile;
 }
 
-export function showPresentationView(listType, startRecordId = null) {
-    log('Presentation', `Showing presentation for: ${listType}`);
-    
-    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
-    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
-    combinedList = [...favorites, ...locked];
-    
-    if (combinedList.length === 0) {
-        alert(`There are no items in your lists to present.`);
+/**
+ * REFACTORED: This function now builds and displays the main dashboard view.
+ */
+export async function showPresentationView() {
+    log('Presentation', `Showing new Visual Event Dashboard`);
+
+    if (state.cart.items.size === 0 && state.cart.lockedItems.size === 0) {
+        alert(`Add items to your plan or ideas to present them.`);
         return;
     }
 
-    if (startRecordId) {
-        globalCurrentIndex = combinedList.findIndex(item => item.recordId === startRecordId);
-    } else {
-        const firstItemOfList = combinedList.find(item => item.type === listType);
-        globalCurrentIndex = firstItemOfList ? combinedList.indexOf(firstItemOfList) : 0;
-    }
+    modal.innerHTML = `
+        <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
+        <div class="presentation-body">
+            <div class="presentation-dashboard">
+                <div class="dashboard-section" id="plan-section">
+                    <h3>Your Event Plan</h3>
+                    <div class="dashboard-grid" id="plan-grid"></div>
+                </div>
+                <div class="dashboard-section" id="ideas-section">
+                    <h3>More Ideas</h3>
+                    <div class="ideas-carousel" id="ideas-carousel"></div>
+                </div>
+            </div>
+        </div>
+    `;
 
-    renderSummaryHeader();
+    // Re-assign element variables now that the innerHTML is set
+    presentationBody = modal.querySelector('.presentation-body');
+    const planGrid = modal.querySelector('#plan-grid');
+    const ideasCarousel = modal.querySelector('#ideas-carousel');
     
+    // Show modal
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    document.addEventListener('keydown', handleKeyDown);
+
+    // Asynchronously render tiles for locked-in items
+    if (state.cart.lockedItems.size > 0) {
+        for (const [recordId] of state.cart.lockedItems.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const tile = await createDashboardTile(record);
+                planGrid.appendChild(tile);
+            }
+        }
+    } else {
+        modal.querySelector('#plan-section').style.display = 'none';
+    }
+
+    // Asynchronously render tiles for idea items
+    if (state.cart.items.size > 0) {
+        for (const [recordId] of state.cart.items.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const tile = await createDashboardTile(record);
+                ideasCarousel.appendChild(tile);
+            }
+        }
+    } else {
+        modal.querySelector('#ideas-section').style.display = 'none';
+    }
     
-    renderCurrentSlide();
+    // Setup event listeners for the modal itself
+    setupPresentationEventListeners();
 }
 
 function hidePresentationView() {
     modal.classList.remove('active');
     setTimeout(() => {
         modal.style.display = 'none';
+        modal.innerHTML = ''; // Clear content to ensure a fresh state
     }, 300);
     document.body.classList.remove('modal-open');
-    document.removeEventListener('keydown', handleKeyDown);
 }
 
 export function setupPresentationEventListeners() {
-    closeBtn.addEventListener('click', hidePresentationView);
-    prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
-    nextItemBtn.addEventListener('click', () => navigateToSlide(1));
-    reactionButtonsEl.addEventListener('click', handleReactionClick);
-    
-    // --- NEW: Event listener for the overlay click ---
+    // Use event delegation on the modal for close actions
     modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
+        if (e.target.id === 'presentation-close-btn' || e.target === modal) {
             hidePresentationView();
         }
     });
-
-    summaryIdeasLink.addEventListener('click', () => {
-        if (state.cart.items.size > 0) showPresentationView('favorites');
-    });
-    summaryLockedLink.addEventListener('click', () => {
-        if (state.cart.lockedItems.size > 0) showPresentationView('locked');
-    });
-    shareBtn.addEventListener('click', (e) => {
-        const baseURL = window.location.origin + window.location.pathname;
-        const sessionID = state.session.id;
-        const shareURL = `${baseURL}?session=${sessionID}&view=present`;
-        
-        navigator.clipboard.writeText(shareURL).then(() => {
-            const originalText = e.target.textContent;
-            e.target.textContent = 'Copied!';
-            setTimeout(() => {
-                e.target.textContent = originalText;
-            }, 1500);
-        });
-    });
 }
-
