@@ -536,3 +536,25 @@ body.modal-open {
         font-size: 16px;
     }
 }
+/* ADD THIS TO: style.css */
+
+#plan-filter-btn {
+    /* Style to make it stand out a bit */
+    background-color: #f0f8ff;
+    font-weight: bold;
+}
+
+#plan-filter-btn.active {
+    /* More prominent active state */
+    background-color: #cce5ff;
+    border-color: #007bff;
+}
+
+#catalog-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #dee2e6;
+    display: none; /* Hidden by default */
+}
