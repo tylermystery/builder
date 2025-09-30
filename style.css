@@ -43,8 +43,8 @@ body.modal-open {
 }
 
 .main-content {
-    display: flex;
-    flex-direction: column;
+    display: grid; /* This restores the 3-column desktop layout */
+    grid-template-columns: 300px 1fr 380px;
     gap: 25px;
     max-width: 1800px;
     margin: 0 auto;
@@ -424,12 +424,12 @@ body.modal-open {
 /* --- Mobile-Specific Layout & Collapse/Expand --- */
 @media (max-width: 999px) {
     .main-content {
-        display: flex;
+        display: flex; /* This now correctly applies ONLY to mobile */
         flex-direction: column;
     }
 
     #mobile-summary-bar, #mobile-show-filters-btn {
-        display: flex;
+        display: flex; 
     }
 
     /* Set up sidebars for smooth transition */
