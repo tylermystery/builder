@@ -305,9 +305,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('category-filters', 'click', (e) => {
         if (e.target.classList.contains('category-filter-btn')) {
-            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
-            e.target.classList.add('active');
-            updateSubcategoryButtons();
+            const btn = e.target;
+            const isAllButton = btn.dataset.filter === 'all';
+            
+            if (isAllButton) {
+                // If 'All' is clicked, activate it and deactivate others
+                categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            } else {
+                // If any other button is clicked, toggle it and deactivate 'All'
+                btn.classList.toggle('active');
+                categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]').classList.remove('active');
+            }
+            
+            // If no categories are selected, re-activate the 'All' button
+            if (categoryFiltersContainer.querySelectorAll('.category-filter-btn.active').length === 0) {
+                categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]').classList.add('active');
+            }
+    
+            updateSubcategoryButtons(); // Note: This will show subcategories for the *first* selected category
             applyFiltersAndSort(imageCache);
         }
     });
