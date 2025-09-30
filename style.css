@@ -43,9 +43,11 @@ body.modal-open {
     padding: 20px;
 }
 
-#left-sidebar { order: 1; }
-#catalog-area { order: 2; }
-#right-sidebar { order: 3; }
+/* CORRECTED GRID PLACEMENT */
+
+#left-sidebar { grid-column: 1 / 2; }
+#catalog-area { grid-column: 2 / 3; }
+#right-sidebar { grid-column: 3 / 4; }
 
 #right-sidebar, #left-sidebar {
     position: relative;
