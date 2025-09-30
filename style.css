@@ -490,4 +490,29 @@ body.modal-open {
         transition: bottom 0.3s ease-in-out;
     }
 }
+/* ADD these rules to the end of your style.css file */
 
+@media (max-width: 999px) {
+    #mobile-filter-trigger {
+        position: sticky;
+        top: 75px; /* Height of main header */
+        z-index: 999;
+        background-color: #6c757d;
+        color: white;
+        padding: 15px;
+        margin: -20px -20px 15px -20px; /* Overcome parent padding */
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .caret {
+        transition: transform 0.3s ease;
+    }
+
+    /* Rotate caret when panel is open */
+    .collapsed .caret {
+        transform: rotate(-90deg);
+    }
+}
