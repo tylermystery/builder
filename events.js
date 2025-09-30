@@ -240,38 +240,36 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
 
-    // --- REVISED Mobile Listeners ---
     const leftSidebar = document.getElementById('left-sidebar');
     const rightSidebar = document.getElementById('right-sidebar');
 
-    // On mobile, collapse panels by default
     if (window.innerWidth < 1000) {
         leftSidebar?.classList.add('collapsed');
         rightSidebar?.classList.add('collapsed');
     }
 
-    // Listener for the NEW filter trigger (the h3)
+    // This listener now correctly targets the standalone button
     safeAddEventListener('mobile-filter-trigger', 'click', () => {
-        if (window.innerWidth < 1000) { // Only enable this behavior on mobile
+        if (window.innerWidth < 1000) {
             leftSidebar?.classList.toggle('collapsed');
         }
     });
 
-    // REVISED listener for the mobile plan button
     safeAddEventListener('mobile-view-plan-btn', 'click', () => {
-        const isCollapsing = !rightSidebar?.classList.contains('collapsed');
+        const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
         rightSidebar?.classList.toggle('collapsed');
         
-        if (isCollapsing) {
-            // On collapse, scroll to the top of the catalog
-            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-            // On expand, scroll down to the plan
+        if (isCurrentlyCollapsed) {
+            // If it WAS collapsed, we are now OPENING it. Scroll to it.
             setTimeout(() => {
                 rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }, 50);
+        } else {
+            // If it WAS open, we are now CLOSING it. Scroll to the top of the catalog.
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
+
 
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
