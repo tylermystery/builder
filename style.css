@@ -624,6 +624,19 @@ body.modal-open {
     margin-bottom: 20px;
 }
 
+.presentation-content {
+    background-color: #fff; /* This ensures the modal has a solid background */
+    display: flex;
+    flex-direction: column;
+    width: 95vw;
+    height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+
 /* --- Detailed Item View (Single Item) Styles --- */
 .detailed-item-view {
     display: grid; /* Default to desktop grid */
@@ -640,3 +653,5 @@ body.modal-open {
         flex-direction: column;
     }
 }
+
+
