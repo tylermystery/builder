@@ -298,6 +298,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
+    // --- ADD THIS NEW BLOCK ---
+    // Create and prepend the "My Plan" filter button
+    const planFilterBtn = document.createElement('button');
+    planFilterBtn.className = 'filter-btn';
+    planFilterBtn.id = 'plan-filter-btn';
+    planFilterBtn.textContent = '⭐ My Plan';
+    if (categoryFiltersContainer) {
+        categoryFiltersContainer.prepend(planFilterBtn);
+    }
+    // --- END NEW BLOCK ---
+
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
         const categories = categoryRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
