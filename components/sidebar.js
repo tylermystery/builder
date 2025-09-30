@@ -184,6 +184,14 @@ export function updateTotalCost() {
     const isPlanEmpty = subtotal === 0;
     const isFullyPaid = totalDue <= 0.009;
 
+    // --- NEW LOGIC: Toggle body class for mobile bar visibility ---
+    if (isPlanEmpty || isFullyPaid) {
+        document.body.classList.remove('mobile-bar-active');
+    } else {
+        document.body.classList.add('mobile-bar-active');
+    }
+    // --- END NEW LOGIC ---
+    
     if (checkoutBtn) {
         checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
     }
