@@ -454,6 +454,13 @@ body.modal-open {
         display: flex;
     }
 
+    #mobile-show-filters-btn {
+        position: sticky;
+        top: 75px; /* Adjust based on your header's height */
+        z-index: 999;
+    }
+
+    
     .presentation-body {
         display: flex;
         flex-direction: column;
