@@ -1,10 +1,3 @@
-// FILE: ui.js
-/*
- * Version: 3.2.0
- * Last Modified: 2025-09-24
- * Changelog:
- * - Added `initializeItemChat` to `showDetailModal`.
- */
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { parseOptions } from './utils.js';
@@ -16,8 +9,7 @@ import * as api from './api.js';
 import { showPresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
 
-
-// Re-export functions from the new component modules so other files can use them
+// Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
 export * from './components/sidebar.js';
@@ -25,16 +17,13 @@ export { parseOptions, setupItineraryEventListeners, showItineraryModal, hideIti
 export { showPresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
 
-
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             const element = entry.target;
-            // Handle background images for divs
             if (element.dataset.bgImage) {
                 element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
             }
-            // Handle src for img tags
             if (element.dataset.src) {
                 element.src = element.dataset.src;
             }
@@ -44,11 +33,11 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     });
 }, { rootMargin: "0px 0px 200px 0px" });
 
-// Export a helper function to allow other modules to use the observer
 export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
 }
+
 
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
