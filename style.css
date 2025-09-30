@@ -539,29 +539,32 @@ body.modal-open {
 
 /* ADD THIS TO THE END OF: style.css */
 
-/* --- Visual Event Dashboard Styles --- */
-.presentation-dashboard {
+/* ADD THIS TO THE END OF: style.css */
+
+/* --- Correctly Scoped Visual Event Dashboard Styles --- */
+#presentation-modal-overlay .presentation-dashboard {
     display: flex;
     flex-direction: column;
     padding: 20px;
     gap: 30px;
     overflow-y: auto;
+    width: 100%;
     height: 100%;
 }
 
-.dashboard-section h3 {
+#presentation-modal-overlay .dashboard-section h3 {
     margin-top: 0;
     padding-bottom: 10px;
     border-bottom: 1px solid #eee;
 }
 
-.dashboard-grid {
+#presentation-modal-overlay .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 20px;
 }
 
-.item-tile {
+#presentation-modal-overlay .item-tile {
     position: relative;
     aspect-ratio: 4 / 3;
     background-size: cover;
@@ -572,7 +575,7 @@ body.modal-open {
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
-.item-tile::after {
+#presentation-modal-overlay .item-tile::after {
     content: '';
     position: absolute;
     bottom: 0;
@@ -582,7 +585,7 @@ body.modal-open {
     background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
 }
 
-.item-tile-name {
+#presentation-modal-overlay .item-tile-name {
     position: absolute;
     bottom: 10px;
     left: 15px;
@@ -592,15 +595,33 @@ body.modal-open {
     z-index: 2;
 }
 
-.ideas-carousel {
+#presentation-modal-overlay .ideas-carousel {
     display: flex;
     gap: 15px;
     overflow-x: auto;
     padding-bottom: 10px;
 }
 
-.ideas-carousel .item-tile {
+#presentation-modal-overlay .ideas-carousel .item-tile {
     flex: 0 0 200px; /* Smaller tiles for ideas */
+}
+
+#presentation-modal-overlay .detailed-item-view {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* Back to Summary Button */
+#presentation-modal-overlay #back-to-summary-btn {
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 8px 12px;
+    cursor: pointer;
+    margin-bottom: 20px;
 }
 
 /* --- Detailed Item View (Single Item) Styles --- */
