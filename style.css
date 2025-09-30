@@ -521,3 +521,19 @@ body.modal-open {
         transform: rotate(-90deg);
     }
 }
+
+@media (max-width: 999px) {
+    /* --- Presentation View Mobile Layout --- */
+    .presentation-body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .presentation-nav-arrow {
+        background: rgba(0,0,0,0.4);
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+}
+
