@@ -1,28 +1,15 @@
-// FILE: filtering.js
-// PASTE THIS ENTIRE CODE INTO: filtering.js
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 
-// --- START DEBUGGING LOGS ---
-console.log('[Filtering] Initializing filtering.js. Total records loaded:', state.records.all.length, 'Total stores loaded:', state.stores.all.length);
-// --- END DEBUGGING LOGS ---
-
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
-    // Find items within the current store whose Parent Item matches the record's name
     const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
-    
-    // --- START DEBUGGING LOGS ---
-    console.log(`[getDescendantBookableItems] Finding children for "${record.fields.Name}". Found ${children.length} direct children.`);
-    // --- END DEBUGGING LOGS ---
 
     for (const child of children) {
         if (isGrouping(child, allRecordNames)) {
-            // If a child is a grouping (a sub-category), recurse to find its children
             bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecordsInStore, allRecordNames));
         } else {
-            // If it's a final item, add it to the list
             bookableItems.push(child);
         }
     }
@@ -43,50 +30,47 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
-    // --- START DEBUGGING LOGS ---
-    console.log(`[filterByCategoryAndSubcategory] Received ${recordsInStore.length} items. Looking for category: "${selectedCategory}"`);
-    // --- END DEBUGGING LOGS ---
-    
+// --- MODIFIED FUNCTION ---
+// Now accepts an array of category names.
+function filterByCategoryAndSubcategory(recordsInStore, selectedCategories, activeSubcategories) {
     const allRecordNames = new Set(recordsInStore.map(r => r.fields.Name));
     
-    if (selectedCategory === 'all') {
+    // If 'All' is selected or no specific categories are, find all bookable items.
+    const isAllSelected = selectedCategories.length === 0 || selectedCategories.includes('All');
+    if (isAllSelected) {
         const topLevelCategories = recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
         let allBookableItems = [];
-        
-        console.log(`[filterByCategoryAndSubcategory] "All" is selected. Found ${topLevelCategories.length} top-level categories to search within.`);
-
         topLevelCategories.forEach(categoryRecord => {
             allBookableItems = allBookableItems.concat(getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames));
         });
-        
-        console.log('[filterByCategoryAndSubcategory] Returning a total of', allBookableItems.length, 'bookable items for "All".');
         return allBookableItems;
     }
 
-    const categoryRecord = recordsInStore.find(r => r.fields.Name === selectedCategory);
-    
-    if (!categoryRecord) {
-        console.error(`[filterByCategoryAndSubcategory] CRITICAL: Did not find the category record for "${selectedCategory}" in the list of store items.`);
-        return [];
-    } else {
-        console.log(`[filterByCategoryAndSubcategory] Successfully found the category record for "${selectedCategory}".`);
-    }
-    
+    // --- NEW LOGIC for multiple categories ---
+    let combinedItems = new Set();
+    selectedCategories.forEach(categoryName => {
+        const categoryRecord = recordsInStore.find(r => r.fields.Name === categoryName);
+        if (categoryRecord) {
+            const descendantItems = getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
+            descendantItems.forEach(item => combinedItems.add(item));
+        }
+    });
+
+    let recordsToDisplay = Array.from(combinedItems);
+
+    // If subcategories are also selected, filter the combined results further.
     if (activeSubcategories.length > 0) {
-        let items = [];
-        const subcategoryRecords = recordsInStore.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
-        subcategoryRecords.forEach(subcatRecord => {
-            items = items.concat(getDescendantBookableItems(subcatRecord, recordsInStore, allRecordNames));
+        recordsToDisplay = recordsToDisplay.filter(record => {
+            // This assumes subcategories are tags on the final item.
+            // A more complex hierarchical subcategory filter would be needed if subcategories are also groupings.
+            const recordSubcategories = record.fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || [];
+            return activeSubcategories.some(subcat => recordSubcategories.includes(subcat));
         });
-        return items;
-    } 
-    else {
-        const finalItems = getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
-        console.log(`[filterByCategoryAndSubcategory] Returning ${finalItems.length} descendant items for "${selectedCategory}".`);
-        return finalItems;
     }
+
+    return recordsToDisplay;
 }
+
 
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') return records;
@@ -213,15 +197,19 @@ function sortRecords(records, sortBy) {
     });
 }
 
+// --- MODIFIED FUNCTION ---
+// Gathers an array of categories to send to the filter function.
 export function applyFiltersAndSort(imageCache) {
-    console.log('--- applyFiltersAndSort TRIGGERED ---');
-    console.log('[Filtering] Active Shop ID:', state.ui.activeShopId);
-
-    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
+    const activeCategoryButtons = document.querySelectorAll('#category-filters .filter-btn.active');
+    
+    let selectedCategories = [];
+    // If the 'All' button is active, we treat it as an empty selection array, so the filter function shows all items.
+    if (activeCategoryButtons.length > 0 && activeCategoryButtons[0].dataset.filter !== 'all') {
+        selectedCategories = Array.from(activeCategoryButtons).map(btn => btn.textContent);
+    }
     
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
-    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
+    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.textContent); // Using textContent to match potential Airtable tags
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
@@ -229,21 +217,13 @@ export function applyFiltersAndSort(imageCache) {
     const locationFilter = document.getElementById('location-filter').value;
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
-
+    
     let recordsForCurrentStore = state.records.all.filter(record => 
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
-    console.log('[Filtering] Step 1: Found', recordsForCurrentStore.length, 'items linked to this store.');
+    let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategories, activeSubcategories);
     
-    if (recordsForCurrentStore.length > 0) {
-        console.log('[Filtering] Inspecting a sample item from the store:', recordsForCurrentStore[0]);
-    }
-
-    let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
-    
-    console.log('[Filtering] Step 2: After category filtering, we have', recordsToDisplay.length, 'items.');
-
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
@@ -251,13 +231,11 @@ export function applyFiltersAndSort(imageCache) {
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
-    console.log('[Filtering] Step 3: After all filters, we have', recordsToDisplay.length, 'final items to render.');
-    console.log('--- applyFiltersAndSort FINISHED ---');
-
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
+    
 }
