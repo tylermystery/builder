@@ -528,12 +528,10 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 // --- New API functions for item-specific chat ---
 
 export async function fetchItemChatMessages(itemId) {
-    const rollupField = CONSTANTS.FIELD_NAMES.ITEM_ID_ROLLUP_FIELD;
-    const timestampField = CONSTANTS.FIELD_NAMES.TIMESTAMP_FIELD; // Re-using the timestamp field name
-
-    const formula = `({${rollupField}} = '${itemId}')`;
+    // --- THIS FORMULA IS NOW CORRECT ---
+    const formula = `FIND('${itemId}', ARRAYJOIN({ItemID}))`;
     const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=${timestampField}&sort%5B0%5D%5Bdirection%5D=asc`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
     try {
         const response = await fetch(url, {
@@ -555,10 +553,11 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
     const payload = {
         records: [{
             fields: {
-                [CONSTANTS.FIELD_NAMES.ITEM_ID_FIELD]: [itemId], // Use constant and ensure it's an array
+                ItemID: itemId,
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content,
+       
             }
         }]
     };
