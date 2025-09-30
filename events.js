@@ -10,6 +10,7 @@ import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } 
 import { debounce } from './utils.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
+import { updateMobileBarAvailability } from './ui.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -239,6 +240,32 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
 
+    // --- ADD THIS NEW SECTION for mobile listeners ---
+    const leftSidebar = document.getElementById('left-sidebar');
+    const rightSidebar = document.getElementById('right-sidebar');
+
+    // Add collapsed class on mobile page load
+    if (window.innerWidth < 1000) {
+        leftSidebar?.classList.add('collapsed');
+        rightSidebar?.classList.add('collapsed');
+    }
+
+    safeAddEventListener('mobile-show-filters-btn', 'click', () => {
+        leftSidebar?.classList.toggle('collapsed');
+        if (!rightSidebar?.classList.contains('collapsed')) {
+            rightSidebar?.classList.add('collapsed');
+        }
+    });
+
+    safeAddEventListener('mobile-view-plan-btn', 'click', () => {
+        rightSidebar?.classList.toggle('collapsed');
+        if (!leftSidebar?.classList.contains('collapsed')) {
+            leftSidebar?.classList.add('collapsed');
+        }
+    });
+    // --- END NEW SECTION ---
+
+    
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -362,6 +389,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
+                await updateMobileBarAvailability();
             }
         },
     });
@@ -468,6 +496,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await debounce(ui.updateFavoritesCarousel, 300)();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
+            updateMobileBarAvailability();
             triggerSave();
         } else if (demoteBtn) {
             e.stopPropagation();
@@ -480,6 +509,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 await ui.updateEventPlanSection();
                 await ui.updateFavoritesCarousel();
                 ui.updateTotalCost();
+                updateMobileBarAvailability();
                 triggerSave();
             }
         } else if (removeBtn && e.target === removeBtn) {
@@ -540,6 +570,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
             await ui.updateEventPlanDateDisplay();
             await ui.updateLockedItemStatusIcons();
+            await updateMobileBarAvailability();
             triggerSave();
         }
     });
