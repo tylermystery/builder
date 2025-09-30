@@ -472,5 +472,22 @@ body.modal-open {
         height: 32px;
         font-size: 16px;
     }
+
+    /* Hide the summary bar by default */
+    #mobile-summary-bar {
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    /* When the body has our new class, slide the bar into view */
+    body.mobile-bar-active #mobile-summary-bar {
+        transform: translateY(0);
+    }
+    
+    /* Also, when the body has our class, move the chat widget up */
+    body.mobile-bar-active #chat-widget-container {
+        bottom: 75px; /* Adjust to be the height of your summary bar + original margin */
+        transition: bottom 0.3s ease-in-out;
+    }
 }
 
