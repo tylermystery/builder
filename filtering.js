@@ -214,12 +214,49 @@ function sortRecords(records, sortBy) {
 }
 
 export function applyFiltersAndSort(imageCache) {
-    console.log('--- applyFiltersAndSort TRIGGERED ---');
-    console.log('[Filtering] Active Shop ID:', state.ui.activeShopId);
+    const catalogTitle = document.getElementById('catalog-title');
+    const planFilterBtn = document.getElementById('plan-filter-btn');
+
+    // --- NEW: Special logic for the "My Plan" view ---
+    if (planFilterBtn && planFilterBtn.classList.contains('active')) {
+        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
+        if (catalogTitle) {
+            catalogTitle.textContent = `${eventName} Plan & Ideas`;
+            catalogTitle.style.display = 'block';
+        }
+
+        // Get record IDs from locked items first, then from regular items
+        const lockedItemIds = Array.from(state.cart.lockedItems.keys());
+        const itemIds = Array.from(state.cart.items.keys());
+        
+        // Combine the lists
+        const allPlanRecordIds = [...lockedItemIds, ...itemIds];
+
+        // Map the IDs back to the full record objects from the main records list
+        const recordsToDisplay = allPlanRecordIds.map(id =>
+            state.records.all.find(record => record.id === id)
+        ).filter(Boolean); // Filter out any null/undefined results
+
+        state.records.filtered = recordsToDisplay;
+        state.ui.recordsCurrentlyDisplayed = 0;
+        
+        // Render all plan/idea items at once, no "load more" needed for this view
+        ui.renderRecords(recordsToDisplay, imageCache, false).then(() => {
+            state.ui.recordsCurrentlyDisplayed = recordsToDisplay.length;
+        });
+
+        // IMPORTANT: Exit the function to bypass all other filtering logic
+        return;
+    }
+    // --- END of new logic ---
+
+    // If not in "My Plan" view, ensure the title is hidden and proceed with normal filtering
+    if (catalogTitle) {
+        catalogTitle.style.display = 'none';
+    }
 
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
     const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
-    
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -230,29 +267,18 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    let recordsForCurrentStore = state.records.all.filter(record => 
+    let recordsForCurrentStore = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
-    console.log('[Filtering] Step 1: Found', recordsForCurrentStore.length, 'items linked to this store.');
-    
-    if (recordsForCurrentStore.length > 0) {
-        console.log('[Filtering] Inspecting a sample item from the store:', recordsForCurrentStore[0]);
-    }
-
     let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
     
-    console.log('[Filtering] Step 2: After category filtering, we have', recordsToDisplay.length, 'items.');
-
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
-
-    console.log('[Filtering] Step 3: After all filters, we have', recordsToDisplay.length, 'final items to render.');
-    console.log('--- applyFiltersAndSort FINISHED ---');
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
