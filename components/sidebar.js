@@ -142,7 +142,11 @@ export function updateTotalCost() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
 
-    if (!totalCostEl || !subtotalCostEl || !amountPaidCostEl || !amountPaidRowEl) return;
+    // --- Mobile Bar Elements ---
+    const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
+    const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
+
+    if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
@@ -151,30 +155,34 @@ export function updateTotalCost() {
         const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
-        const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]?.toLowerCase();
-        let itemCost = (pricingType === 'per hour' || pricingType === CONSTANTS.PRICING_TYPES.PER_GUEST) ? unitPrice * effectiveQuantity : unitPrice;
-        subtotal += itemCost;
+        subtotal += unitPrice * effectiveQuantity;
     });
 
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = subtotal - amountReceived;
 
+    // Update Desktop Sidebar
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
-
     if (amountReceived > 0) {
         amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
         amountPaidRowEl.style.display = 'flex';
         totalDividerEl.style.display = 'block';
-        if (checkoutBtn) checkoutBtn.textContent = 'Pay Remainder';
     } else {
         amountPaidRowEl.style.display = 'none';
         totalDividerEl.style.display = 'none';
-        if (checkoutBtn) checkoutBtn.textContent = 'Reserve';
     }
 
+    // --- NEW: Update Mobile Sticky Bar ---
+    if (mobileItemCountEl && mobileTotalCostEl) {
+        const itemCount = state.cart.lockedItems.size;
+        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
+    }
+
+    // Update Button States
     const isPlanEmpty = subtotal === 0;
-    const isFullyPaid = totalDue <= 0.009; // Use a small tolerance for floating point math
+    const isFullyPaid = totalDue <= 0.009;
 
     if (checkoutBtn) {
         checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
