@@ -134,18 +134,14 @@ async function handleUpdateUserPrefs(e) {
     e.preventDefault();
     prefsMessage.textContent = 'Saving...';
     prefsMessage.style.color = '#333';
-
-    const phone = profilePhoneInput.value;
     const frequency = profileNotificationsSelect.value;
     const userId = state.session.user.id;
-
     try {
         const response = await fetch('/api/update-user-prefs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, phone, frequency }),
+            body: JSON.stringify({ userId, frequency }), // "phone" has been removed
         });
-
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Failed to save preferences.');
@@ -160,7 +156,6 @@ async function handleUpdateUserPrefs(e) {
                 }
             }
         });
-
         prefsMessage.textContent = data.message;
         prefsMessage.style.color = '#28a745';
     } catch (error) {
