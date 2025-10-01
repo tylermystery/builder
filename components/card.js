@@ -114,7 +114,39 @@ export async function createInteractiveCard(record, imageCache) {
         ${footerHTML}
     `;
     
-    // ... (rest of the existing function, including setTimeout, event listeners, and tippy)
+    setTimeout(() => {
+        updateCardIcon(recordId);
+    }, 0);
+
+    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
+    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
+    const quantityInput = eventCard.querySelector('.quantity-input');
+
+    if (plusBtn && minusBtn && quantityInput) {
+        plusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quantityInput.stepUp();
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        minusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            quantityInput.stepDown();
+            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
+    
+    tippy(eventCard.querySelector('.event-card-content'), {
+        content: cardTooltip,
+        allowHTML: true,
+        placement: 'top',
+        theme: 'light',
+    });
+    
+    tippy(eventCard.querySelector('.heart-icon'), {
+        content: 'Add to favorites',
+        placement: 'top',
+        theme: 'light',
+    });
 
     return eventCard;
 }
