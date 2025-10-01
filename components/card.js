@@ -37,18 +37,16 @@ export function updateCardIcon(recordId) {
     });
 }
 
-/* REPLACE the createInteractiveCard function in: components/card.js */
-
 export async function createInteractiveCard(record, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
-    const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
     
     // --- NEW: Check for the "Event" item type ---
     if (fields['Item Type'] === 'Event') {
+        const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+        const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
         const eventCard = document.createElement('div');
         eventCard.className = 'event-card event-type-card';
         eventCard.dataset.recordId = recordId;
@@ -58,6 +56,12 @@ export async function createInteractiveCard(record, imageCache) {
         const day = eventDate ? eventDate.getDate() : '';
 
         const priceText = (fields.Price && fields.Price > 0) ? `$${fields.Price.toFixed(2)}` : 'Free';
+
+        // Check if current user has already RSVP'd
+        const rsvpUserIds = fields.RSVPs || [];
+        const hasRsvpd = state.session.user.isAuthenticated && rsvpUserIds.includes(state.session.user.id);
+        const buttonText = hasRsvpd ? "You're Going! ✅" : "RSVP";
+        const buttonDisabled = hasRsvpd ? "disabled" : "";
 
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}"></div>
@@ -73,10 +77,9 @@ export async function createInteractiveCard(record, imageCache) {
             </div>
             <div class="card-footer">
                 <div class="price">${priceText}</div>
-                <button class="card-action-btn rsvp-btn">RSVP</button>
+                <button class="card-action-btn rsvp-btn" ${buttonDisabled}>${buttonText}</button>
             </div>
         `;
-        // No tippy() or other logic needed for the simple event card yet
         return eventCard;
     }
     // --- END of new logic ---
