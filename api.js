@@ -599,3 +599,48 @@ export async function updateUserFlagStatus(userId, isFlagged) {
     // In a real app, this would be a server-side call:
     // await fetch('/.netlify/functions/flag-user', { ... })
 }
+
+// ADD this new function to the end of: api.js
+
+export async function addRsvpToEvent(eventId, userId) {
+    log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    try {
+        // 1. Get the current record to read existing RSVPs
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) throw new Error('Could not fetch the event to update RSVPs.');
+        
+        const existingRecord = await getResponse.json();
+        const rsvps = new Set(existingRecord.fields.RSVPs || []);
+        rsvps.add(userId); // Add the new user ID, Set handles duplicates
+
+        // 2. Send the updated list back to Airtable
+        const payload = {
+            fields: { 'RSVPs': Array.from(rsvps) }
+        };
+
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error: ${errorData.error.message}`);
+        }
+        
+        log('API', `Successfully added RSVP for user ${userId}`);
+        return await patchResponse.json(); // Return the updated record
+    } catch (error) {
+        console.error("Failed to add RSVP:", error);
+        log('API', `Failed to add RSVP: ${error.message}`);
+        return null;
+    }
+}
