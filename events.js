@@ -493,7 +493,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (rsvpBtn) {
             e.stopPropagation();
             if (!state.session.user.isAuthenticated) {
-                ui.showUserModal();
+                showUserModal();
                 return;
             }
             
