@@ -37,6 +37,8 @@ export function updateCardIcon(recordId) {
     });
 }
 
+/* REPLACE the createInteractiveCard function in: components/card.js */
+
 export async function createInteractiveCard(record, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const fields = record.fields;
@@ -48,7 +50,7 @@ export async function createInteractiveCard(record, imageCache) {
     // --- NEW: Check for the "Event" item type ---
     if (fields['Item Type'] === 'Event') {
         const eventCard = document.createElement('div');
-        eventCard.className = 'event-card event-type-card'; // Special class for event styling
+        eventCard.className = 'event-card event-type-card';
         eventCard.dataset.recordId = recordId;
 
         const eventDate = fields['Event Date'] ? new Date(fields['Event Date']) : null;
@@ -74,12 +76,12 @@ export async function createInteractiveCard(record, imageCache) {
                 <button class="card-action-btn rsvp-btn">RSVP</button>
             </div>
         `;
+        // No tippy() or other logic needed for the simple event card yet
         return eventCard;
     }
     // --- END of new logic ---
 
-
-    // --- Existing logic for standard cards ---
+    // --- Logic for standard and grouping cards ---
     const itemState = ui.getItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
@@ -93,31 +95,58 @@ export async function createInteractiveCard(record, imageCache) {
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
     let footerHTML = '';
+    let cardTooltipText = ''; // Renamed variable to avoid conflict
+    let cardImageStyle = '';
+
     if (isGrouping) {
-        // ... (existing grouping card logic)
+        cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
+        const range = ui.getGroupPriceRange(record);
+        const priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+        footerHTML = `
+            <div class="card-footer">
+                <div class="price">${priceHTML}</div>
+                <button class="card-action-btn view-options-btn" title="View Options">View Options</button>
+            </div>
+        `;
+        cardTooltipText = `Explore the various items and pricing options in this category.`;
     } else {
-        // ... (existing standard item card logic)
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        const displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
+        const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+        const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to Plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        
+        footerHTML = `
+            <div class="card-footer">
+                <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+                <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+            </div>
+        `;
+        cardTooltipText = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}${pricingType ? ` ${pricingType.toLowerCase()}` : ''}.`;
     }
 
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
             <div class="event-card-actions">
                 <button class="action-btn availability-btn" title="Check Availability">📅</button>
             </div>
             <div class="heart-icon" data-record-id="${record.id}" data-tippy-content="Add to favorites"></div>
         </div>
-        <div class="event-card-content">
+        <div class="event-card-content" data-tippy-content="${cardTooltipText}">
             ${parentLinkHTML}
             <h3>${fields.Name || 'Untitled Event'}</h3>
             <p class="description">${fields.Description || ''}</p>
         </div>
         ${footerHTML}
     `;
-    
+
     setTimeout(() => {
         updateCardIcon(recordId);
     }, 0);
-
+    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -136,12 +165,11 @@ export async function createInteractiveCard(record, imageCache) {
     }
     
     tippy(eventCard.querySelector('.event-card-content'), {
-        content: cardTooltip,
+        content: cardTooltipText,
         allowHTML: true,
         placement: 'top',
         theme: 'light',
     });
-    
     tippy(eventCard.querySelector('.heart-icon'), {
         content: 'Add to favorites',
         placement: 'top',
