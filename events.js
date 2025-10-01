@@ -471,6 +471,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        const rsvpBtn = e.target.closest('.rsvp-btn'); // <-- ADD THIS LINE
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
