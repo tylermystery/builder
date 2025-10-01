@@ -11,6 +11,8 @@ import { debounce } from './utils.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
+import { showUserModal } from './auth.js';
+
 
 let mainDatePicker = null;
 let saveTimeout = null;
