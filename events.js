@@ -487,6 +487,37 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             });
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
+        } else if (rsvpBtn) {
+            e.stopPropagation();
+            if (!state.session.user.isAuthenticated) {
+                ui.showUserModal();
+                return;
+            }
+            
+            const cardEl = rsvpBtn.closest('.event-card');
+            const recordId = cardEl.dataset.recordId;
+            
+            rsvpBtn.disabled = true;
+            rsvpBtn.textContent = 'Saving...';
+            
+            const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
+            
+            if (updatedRecord) {
+                rsvpBtn.textContent = "You're Going! ✅";
+                // Update the record in the main state so the UI stays correct on re-render
+                const recordIndex = state.records.all.findIndex(r => r.id === recordId);
+                if (recordIndex > -1) {
+                    state.records.all[recordIndex] = updatedRecord;
+                }
+            } else {
+                rsvpBtn.textContent = 'Error!';
+                // Optionally re-enable the button after a delay
+                setTimeout(() => {
+                    rsvpBtn.textContent = 'RSVP';
+                    rsvpBtn.disabled = false;
+                }, 2000);
+            }
+
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
             ui.showPresentationView(listType);
