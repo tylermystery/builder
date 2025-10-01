@@ -43,10 +43,12 @@ export async function createInteractiveCard(record, imageCache) {
     const recordId = record.id;
     const allRecords = state.records.all;
     
-    // --- NEW: Check for the "Event" item type ---
+    // --- MOVED TO TOP: This now runs for all card types ---
+    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
+
+    // --- Check for the "Event" item type ---
     if (fields['Item Type'] === 'Event') {
-        const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
-        const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
         const eventCard = document.createElement('div');
         eventCard.className = 'event-card event-type-card';
         eventCard.dataset.recordId = recordId;
@@ -57,7 +59,6 @@ export async function createInteractiveCard(record, imageCache) {
 
         const priceText = (fields.Price && fields.Price > 0) ? `$${fields.Price.toFixed(2)}` : 'Free';
 
-        // Check if current user has already RSVP'd
         const rsvpUserIds = fields.RSVPs || [];
         const hasRsvpd = state.session.user.isAuthenticated && rsvpUserIds.includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : "RSVP";
@@ -82,9 +83,8 @@ export async function createInteractiveCard(record, imageCache) {
         `;
         return eventCard;
     }
-    // --- END of new logic ---
 
-    // --- Logic for standard and grouping cards ---
+    // --- Existing logic for standard and grouping cards ---
     const itemState = ui.getItemState(recordId);
     const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
@@ -98,7 +98,7 @@ export async function createInteractiveCard(record, imageCache) {
     const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
 
     let footerHTML = '';
-    let cardTooltipText = ''; // Renamed variable to avoid conflict
+    let cardTooltipText = '';
     let cardImageStyle = '';
 
     if (isGrouping) {
