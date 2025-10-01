@@ -39,6 +39,7 @@ export let state = {
             email: '',
             amountReceived: 0,
             amountReceivedNote: '',
+            rsvps: new Set(), // ADD THIS LINE
             isOwner: false,
             ownerDashboardId: null
         },
