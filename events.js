@@ -23,6 +23,10 @@ let subcategoryFiltersContainer = null;
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
+    // Ensure we don't try to get a record for "all" or "my plan"
+    if (!selectedCategoryButton || selectedCategoryButton.dataset.filter === 'all' || selectedCategoryButton.id === 'plan-filter-btn') {
+        return null;
+    }
     return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
 
