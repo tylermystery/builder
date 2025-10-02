@@ -51,6 +51,7 @@ export async function createInteractiveCard(record, imageCache) {
     if (fields['Item Type'] === 'Grouping') {
         const groupingCard = document.createElement('div');
         groupingCard.className = 'event-card grouping-card'; // Add a new class for styling
+        groupingCard.dataset.recordId = record.id; // <-- ADD THIS LINE
         groupingCard.dataset.categoryName = fields.Name; // Store the category name
 
         // --- NEW COLLAGE LOGIC ---
