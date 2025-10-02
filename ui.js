@@ -453,3 +453,25 @@ export async function updateMobileBarAvailability() {
         }
     }
 }
+
+// ADD THIS NEW FUNCTION to ui.js
+
+export function updateCatalogHeader() {
+    const breadcrumbsEl = document.getElementById('breadcrumbs');
+    const titleEl = document.getElementById('catalog-title');
+    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
+
+    if (!breadcrumbsEl || !titleEl || !activeCategoryButton || activeCategoryButton.dataset.filter === 'all') {
+        if(titleEl) titleEl.style.display = 'none';
+        if(breadcrumbsEl) breadcrumbsEl.innerHTML = '';
+        return;
+    }
+    
+    const categoryName = activeCategoryButton.textContent;
+    titleEl.textContent = categoryName;
+    titleEl.style.display = 'block';
+
+    breadcrumbsEl.innerHTML = `
+        <a href="#" class="parent-link" data-parent-name="All">All Categories</a> > <span>${categoryName}</span>
+    `;
+}
