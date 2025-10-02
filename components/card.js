@@ -47,6 +47,31 @@ export async function createInteractiveCard(record, imageCache) {
     const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
 
+        // --- NEW LOGIC FOR GROUPING CARDS ---
+    if (fields['Item Type'] === 'Grouping') {
+        const groupingCard = document.createElement('div');
+        groupingCard.className = 'event-card grouping-card'; // Add a new class for styling
+        groupingCard.dataset.categoryName = fields.Name; // Store the category name
+
+        // The footer will be different: no price, just a call to action.
+        const footerHTML = `
+            <div class="card-footer">
+                <button class="card-action-btn view-options-btn">View Collection</button>
+            </div>
+        `;
+
+        groupingCard.innerHTML = `
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                </div>
+            <div class="event-card-content">
+                <h3>${fields.Name || 'Untitled Category'}</h3>
+                <p class="description">${fields.Description || ''}</p>
+            </div>
+            ${footerHTML}
+        `;
+        return groupingCard;
+    }
+
     // --- Check for the "Event" item type ---
     if (fields['Item Type'] === 'Event') {
         const eventCard = document.createElement('div');
