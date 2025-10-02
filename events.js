@@ -620,7 +620,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
             const recordId = favoriteItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
         }
     });
     document.body.addEventListener('change', (e) => {
