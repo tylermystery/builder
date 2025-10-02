@@ -273,4 +273,5 @@ export function applyFiltersAndSort(imageCache) {
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
+    ui.updateCatalogHeader();
 }
