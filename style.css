@@ -600,3 +600,23 @@ body.modal-open {
 .event-details h3 {
     margin-top: 0;
 }
+
+/* ADD THIS to style.css */
+
+.collage-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 200px; /* Or your standard card image height */
+}
+
+.collage-image {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+}
+
+.grouping-card .card-footer {
+    justify-content: center;
+}
