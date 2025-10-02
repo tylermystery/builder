@@ -53,6 +53,30 @@ export async function createInteractiveCard(record, imageCache) {
         groupingCard.className = 'event-card grouping-card'; // Add a new class for styling
         groupingCard.dataset.categoryName = fields.Name; // Store the category name
 
+        // --- NEW COLLAGE LOGIC ---
+        // Find the first 4 bookable items in this category to make a collage
+        const childItems = state.records.all.filter(r => 
+            (r.fields.Categories || '').toLowerCase().includes(fields.Name.toLowerCase())
+        );
+    
+        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, state.records.all, imageCache));
+        const imageResults = await Promise.all(imagePromises);
+        const collageImages = imageResults.map(res => res.imageUrls[0]);
+    
+        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
+        if (collageImages.length > 0) {
+            // Create a 2x2 grid of images
+            imageContainerHTML += collageImages.map(url => 
+                `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`
+            ).join('');
+        } else {
+            // Fallback if no images found
+            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
+        }
+        imageContainerHTML += `</div>`;
+        // --- END COLLAGE LOGIC ---
+    
+            
         // The footer will be different: no price, just a call to action.
         const footerHTML = `
             <div class="card-footer">
