@@ -213,41 +213,52 @@ function sortRecords(records, sortBy) {
     });
 }
 
-// REPLACE the entire applyFiltersAndSort function in filtering.js
-
 export function applyFiltersAndSort(imageCache) {
     const catalogTitle = document.getElementById('catalog-title');
     const planFilterBtn = document.getElementById('plan-filter-btn');
 
+    // --- NEW: Special logic for the "My Plan" view ---
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
-        // "My Plan" view logic remains unchanged
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         if (catalogTitle) {
             catalogTitle.textContent = `${eventName} Plan & Ideas`;
             catalogTitle.style.display = 'block';
         }
+
+        // Get record IDs from locked items first, then from regular items
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
         const itemIds = Array.from(state.cart.items.keys());
+        
+        // Combine the lists
         const allPlanRecordIds = [...lockedItemIds, ...itemIds];
+
+        // Map the IDs back to the full record objects from the main records list
         const recordsToDisplay = allPlanRecordIds.map(id =>
             state.records.all.find(record => record.id === id)
-        ).filter(Boolean);
+        ).filter(Boolean); // Filter out any null/undefined results
+
         state.records.filtered = recordsToDisplay;
         state.ui.recordsCurrentlyDisplayed = 0;
+        
+        // Render all plan/idea items at once, no "load more" needed for this view
         ui.renderRecords(recordsToDisplay, imageCache, false).then(() => {
             state.ui.recordsCurrentlyDisplayed = recordsToDisplay.length;
         });
+
+        // IMPORTANT: Exit the function to bypass all other filtering logic
         return;
     }
+    // --- END of new logic ---
 
+    // If not in "My Plan" view, ensure the title is hidden and proceed with normal filtering
     if (catalogTitle) {
         catalogTitle.style.display = 'none';
     }
 
-    // --- NEW: Logic to get multiple active categories ---
-    const activeCategoryNodes = document.querySelectorAll('#category-filters .category-filter-btn.active');
-    const activeCategories = Array.from(activeCategoryNodes).map(btn => btn.dataset.filter);
-    
+    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
+    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
@@ -259,26 +270,9 @@ export function applyFiltersAndSort(imageCache) {
     let recordsForCurrentStore = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
-    
-    let recordsToDisplay;
 
-    // --- NEW: Tag-based filtering logic ---
-    if (activeCategories.includes('all') || activeCategories.length === 0) {
-        // If 'all' is selected, show everything (respecting the store filter)
-        recordsToDisplay = recordsForCurrentStore;
-    } else {
-        // Otherwise, filter by the Categories tag field
-        recordsToDisplay = recordsForCurrentStore.filter(record => {
-            const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
-                .split(',')
-                .map(cat => cat.trim().toLowerCase());
-            
-            // Return true if any of the item's categories are in the activeCategories list
-            return activeCategories.some(activeCat => itemCategories.includes(activeCat));
-        });
-    }
+    let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
     
-    // The rest of the filtering pipeline
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
