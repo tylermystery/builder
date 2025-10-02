@@ -597,23 +597,40 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } else if (card && !e.target.closest('.quantity-selector')) {
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
+            
+            } else if (card && !e.target.closest('.quantity-selector')) {
+                const recordId = card.dataset.recordId;
+                const record = state.records.all.find(r => r.id === recordId);
+            
                 if (record && record.fields['Item Type'] === 'Grouping') {
                     // This is a grouping card. Find and click the matching filter button.
                     const categoryName = record.fields.Name;
-                    const targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
-                                              .find(btn => btn.textContent === categoryName);
-                    if (targetButton) {
-                        targetButton.click();
+            
+                    // First, check if it's a main category button
+                    let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
+                                          .find(btn => btn.textContent === categoryName);
+                    
+                    // If not found, check if it's a subcategory button (for nested groupings)
+                    if (!targetButton) {
+                        targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
+                                            .find(btn => btn.textContent === categoryName);
                     }
+            
+                    if (targetButton) {
+                        // Programmatically click the found button to trigger the filter
+                        targetButton.click();
+                    } else {
+                        // Fallback to the modal if for some reason no matching filter button is found
+                        ui.showDetailModal(record);
+                    }
+            
                 } else if (record) {
-                    // This is a bookable item or event, open the modal as before.
+                    // This is a regular bookable item or event, so open the modal as intended.
                     ui.showDetailModal(record);
                 }
-            if (record) ui.showDetailModal(record);
-        } else if (lockedItemCard) {
+                // The duplicate line that was here has now been removed.
+            
+            } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
