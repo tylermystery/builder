@@ -348,49 +348,38 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
 
-    // REPLACE the 'click' handler for #category-filters in events.js
-    
     safeAddEventListener('category-filters', 'click', (e) => {
+        const planFilterBtn = document.getElementById('plan-filter-btn');
         const clickedBtn = e.target.closest('.filter-btn');
-        if (!clickedBtn || clickedBtn.id === 'plan-filter-btn') {
-            // We'll let the "My Plan" logic handle itself separately
-            if (clickedBtn && clickedBtn.id === 'plan-filter-btn') {
-                 // Deactivate all category buttons first
-                categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
-                clickedBtn.classList.add('active');
-                applyFiltersAndSort(imageCache);
-            }
-            return;
-        }
     
-        // If "My Plan" was active, deactivate it
-        const planBtn = document.getElementById('plan-filter-btn');
-        if(planBtn) planBtn.classList.remove('active');
+        if (!clickedBtn) return; // Exit if the click wasn't on a button
     
-        const allBtn = categoryFiltersContainer.querySelector('[data-filter="all"]');
-        const isAllFilter = clickedBtn === allBtn;
+        const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
     
-        if (isAllFilter) {
-            // If "All" is clicked, make it the only active category
-            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
-            allBtn.classList.add('active');
+        // Deactivate all category buttons first
+        categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+        
+        if (isPlanFilterClick) {
+            // Case 1: The "My Plan" button was clicked
+            planFilterBtn.classList.add('active');
+            // Clear subcategories since we're not in a category view
+            updateSubcategoryButtons(); 
         } else {
-            // For any other category button, toggle its state
-            clickedBtn.classList.toggle('active');
-            // If another category is now active, deactivate "All"
-            if (allBtn.classList.contains('active')) {
-                allBtn.classList.remove('active');
+            // Case 2: A normal category button was clicked
+            // Deactivate the plan button if it was active
+            if (planFilterBtn) {
+                planFilterBtn.classList.remove('active');
             }
-            // If no other categories are active after a toggle, re-activate "All"
-            const anyOtherActive = categoryFiltersContainer.querySelector('.category-filter-btn.active');
-            if (!anyOtherActive) {
-                allBtn.classList.add('active');
-            }
+            // Activate the clicked category button
+            clickedBtn.classList.add('active');
+            // Update the subcategories for the new active category
+            updateSubcategoryButtons();
         }
         
+        // Run the main filter function, which will now see the correct active button
         applyFiltersAndSort(imageCache);
     });
-    
+
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
