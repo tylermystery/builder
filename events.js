@@ -600,6 +600,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (card && !e.target.closest('.quantity-selector')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
+                if (record && record.fields['Item Type'] === 'Grouping') {
+                    // This is a grouping card. Find and click the matching filter button.
+                    const categoryName = record.fields.Name;
+                    const targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
+                                              .find(btn => btn.textContent === categoryName);
+                    if (targetButton) {
+                        targetButton.click();
+                    }
+                } else if (record) {
+                    // This is a bookable item or event, open the modal as before.
+                    ui.showDetailModal(record);
+                }
             if (record) ui.showDetailModal(record);
         } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
