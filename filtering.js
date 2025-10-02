@@ -44,48 +44,46 @@ function parseCapacity(capacityStr) {
 }
 
 function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
-    // --- START DEBUGGING LOGS ---
-    console.log(`[filterByCategoryAndSubcategory] Received ${recordsInStore.length} items. Looking for category: "${selectedCategory}"`);
-    // --- END DEBUGGING LOGS ---
-    
     const allRecordNames = new Set(recordsInStore.map(r => r.fields.Name));
-    
+
+    // If "All" is selected, show top-level grouping items, just like before.
     if (selectedCategory === 'all') {
-        const topLevelCategories = recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-        let allBookableItems = [];
-        
-        console.log(`[filterByCategoryAndSubcategory] "All" is selected. Found ${topLevelCategories.length} top-level categories to search within.`);
-
-        topLevelCategories.forEach(categoryRecord => {
-            allBookableItems = allBookableItems.concat(getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames));
-        });
-        
-        console.log('[filterByCategoryAndSubcategory] Returning a total of', allBookableItems.length, 'bookable items for "All".');
-        return allBookableItems;
+        // This keeps the initial catalog view of "Grouping" items intact.
+        const topLevelItems = recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+        return topLevelItems;
     }
 
-    const categoryRecord = recordsInStore.find(r => r.fields.Name === selectedCategory);
-    
-    if (!categoryRecord) {
-        console.error(`[filterByCategoryAndSubcategory] CRITICAL: Did not find the category record for "${selectedCategory}" in the list of store items.`);
-        return [];
-    } else {
-        console.log(`[filterByCategoryAndSubcategory] Successfully found the category record for "${selectedCategory}".`);
-    }
-    
+    // --- NEW HYBRID LOGIC ---
+
+    // 1. Find all items that match the selected category via the comma-separated TAG field.
+    // This is the core of your request.
+    const selectedCategoryLower = selectedCategory.toLowerCase();
+    let finalItems = recordsInStore.filter(record => {
+        const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
+            .split(',')
+            .map(cat => cat.trim().toLowerCase());
+        return itemCategories.includes(selectedCategoryLower);
+    });
+
+    // 2. Apply the EXISTING subcategory filter logic to the results from step 1.
+    // This part remains untouched, as requested.
     if (activeSubcategories.length > 0) {
-        let items = [];
+        // Note: This assumes subcategories are also "grouping" items in the hierarchy.
+        // We find the items that are descendants of the selected subcategory groupings.
+        let subcategoryItems = [];
         const subcategoryRecords = recordsInStore.filter(r => activeSubcategories.includes((r.fields.Name || '').toLowerCase()));
+        
         subcategoryRecords.forEach(subcatRecord => {
-            items = items.concat(getDescendantBookableItems(subcatRecord, recordsInStore, allRecordNames));
+            const descendantItems = getDescendantBookableItems(subcatRecord, recordsInStore, allRecordNames);
+            subcategoryItems = subcategoryItems.concat(descendantItems);
         });
-        return items;
-    } 
-    else {
-        const finalItems = getDescendantBookableItems(categoryRecord, recordsInStore, allRecordNames);
-        console.log(`[filterByCategoryAndSubcategory] Returning ${finalItems.length} descendant items for "${selectedCategory}".`);
-        return finalItems;
+
+        // We now filter our category results to only include items that ALSO belong to the selected subcategories.
+        const subcategoryItemIds = new Set(subcategoryItems.map(item => item.id));
+        finalItems = finalItems.filter(item => subcategoryItemIds.has(item.id));
     }
+    
+    return finalItems;
 }
 
 function filterByStatus(records, statusFilter) {
