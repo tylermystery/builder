@@ -84,7 +84,7 @@ export async function associateSessionWithUser(sessionId, userId) {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(rsvpPayload) // This correctly converts the object to a JSON string
         });
 
         if (!patchResponse.ok) {
