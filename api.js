@@ -617,19 +617,20 @@ export async function addRsvpToEvent(eventId, userId) {
         
         const existingRecord = await getResponse.json();
         const rsvps = new Set(existingRecord.fields.RSVPs || []);
-        rsvps.add(userId); // Add the new user ID, Set handles duplicates
+        rsvps.add(userId);
 
-        // 2. Send the updated list back to Airtable
-        const payload = {
+        // 2. Send the updated list back to Airtable with a unique variable name
+        const rsvpPayload = {
             fields: { 'RSVPs': Array.from(rsvps) }
         };
+
         const patchResponse = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(rsvpPayload)
         });
 
         if (!patchResponse.ok) {
@@ -638,7 +639,7 @@ export async function addRsvpToEvent(eventId, userId) {
         }
         
         log('API', `Successfully added RSVP for user ${userId}`);
-        return await patchResponse.json(); // Return the updated record
+        return await patchResponse.json();
     } catch (error) {
         console.error("Failed to add RSVP:", error);
         log('API', `Failed to add RSVP: ${error.message}`);
