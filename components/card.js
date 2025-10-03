@@ -38,25 +38,23 @@ export function updateCardIcon(recordId) {
 }
 
 if (fields['Item Type'] === 'Grouping') {
-    const groupingCard = document.createElement('div');
-    groupingCard.className = 'event-card grouping-card';
-    groupingCard.dataset.recordId = record.id;
-    groupingCard.dataset.categoryName = fields.Name;
+    eventCard.className = 'event-card grouping-card';
+    eventCard.dataset.categoryName = fields.Name;
 
-    // --- CORRECTED LOGIC ---
     const groupingNameForFilter = fields.Name.toLowerCase();
     const childItems = allRecords.filter(r => {
         if (r.fields['Item Type'] !== 'Bookable Item') return false;
 
-        // Split the item's categories into an array of tags
         const itemCategories = (r.fields.Categories || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase());
 
-        // Check if the array includes the grouping name
+        // --- TEMPORARY DEBUG LOG ---
+        // This will print one line for every bookable item, showing us the comparison.
+        console.log(`Comparing Group "${groupingNameForFilter}" against Item "${r.fields.Name}" with tags:`, itemCategories);
+
         return itemCategories.includes(groupingNameForFilter);
     });
-    // --- END CORRECTED LOGIC ---
 
     const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
     const imageResults = await Promise.all(imagePromises);
