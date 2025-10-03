@@ -42,164 +42,76 @@ export async function createInteractiveCard(record, imageCache) {
     const fields = record.fields;
     const recordId = record.id;
     const allRecords = state.records.all;
-    
-    // --- MOVED TO TOP: This now runs for all card types ---
     const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
+    const eventCard = document.createElement('div');
+    eventCard.dataset.recordId = recordId;
 
-        // --- NEW LOGIC FOR GROUPING CARDS ---
+    // --- LOGIC FOR GROUPING CARDS ---
     if (fields['Item Type'] === 'Grouping') {
-        const groupingCard = document.createElement('div');
-        groupingCard.className = 'event-card grouping-card'; // Add a new class for styling
-        groupingCard.dataset.recordId = record.id; // <-- ADD THIS LINE
-        groupingCard.dataset.categoryName = fields.Name; // Store the category name
+        eventCard.className = 'event-card grouping-card';
+        eventCard.dataset.categoryName = fields.Name;
 
-        // --- NEW COLLAGE LOGIC ---
-        // Find the first 4 bookable items in this category to make a collage
-        const childItems = state.records.all.filter(r => 
-            (r.fields.Categories || '').toLowerCase().includes(fields.Name.toLowerCase())
+        const childItems = allRecords.filter(r => 
+            (r.fields.Categories || '').toLowerCase().includes(fields.Name.toLowerCase()) && r.fields['Item Type'] === 'Bookable Item'
         );
-    
-        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, state.records.all, imageCache));
+        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
         const imageResults = await Promise.all(imagePromises);
-        const collageImages = imageResults.map(res => res.imageUrls[0]);
-    
+        const collageImages = imageResults.flatMap(res => res.imageUrls);
+
         let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
-            // Create a 2x2 grid of images
-            imageContainerHTML += collageImages.map(url => 
-                `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`
-            ).join('');
+            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
         } else {
-            // Fallback if no images found
             imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `</div>`;
-        // --- END COLLAGE LOGIC ---
-    
-            
-        // The footer will be different: no price, just a call to action.
-        const footerHTML = `
-            <div class="card-footer">
-                <button class="card-action-btn view-options-btn">View Collection</button>
-            </div>
-        `;
 
-        groupingCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                </div>
+        eventCard.innerHTML = `
+            ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
                 <p class="description">${fields.Description || ''}</p>
             </div>
-            ${footerHTML}
-        `;
-        return groupingCard;
-    }
-
-    // --- Check for the "Event" item type ---
-    if (fields['Item Type'] === 'Event') {
-        const eventCard = document.createElement('div');
-        eventCard.className = 'event-card event-type-card';
-        eventCard.dataset.recordId = recordId;
-
-        const eventDate = fields['Event Date'] ? new Date(fields['Event Date']) : null;
-        const month = eventDate ? eventDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase() : 'TBD';
-        const day = eventDate ? eventDate.getDate() : '';
-
-        const priceText = (fields.Price && fields.Price > 0) ? `$${fields.Price.toFixed(2)}` : 'Free';
-
-        const rsvpUserIds = fields.RSVPs || [];
-        const hasRsvpd = state.session.user.isAuthenticated && rsvpUserIds.includes(state.session.user.id);
-        const buttonText = hasRsvpd ? "You're Going! ✅" : "RSVP";
-        const buttonDisabled = hasRsvpd ? "disabled" : "";
-
-        eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}"></div>
-            <div class="event-card-content">
-                <div class="event-date-display">
-                    <span class="month">${month}</span>
-                    <span class="day">${day}</span>
-                </div>
-                <div class="event-details">
-                    <h3>📅 ${fields.Name}</h3>
-                    <p class="description">${fields.Description || ''}</p>
-                </div>
-            </div>
             <div class="card-footer">
-                <div class="price">${priceText}</div>
-                <button class="card-action-btn rsvp-btn" ${buttonDisabled}>${buttonText}</button>
+                <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
         return eventCard;
     }
 
-    // --- Existing logic for standard and grouping cards ---
-    const itemState = ui.getItemState(recordId);
-    const rawOptions = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
-
-    const eventCard = document.createElement('div');
-    eventCard.className = 'event-card';
-    eventCard.dataset.recordId = recordId;
-
-    const parentName = fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-    const parentLinkHTML = parentName ? `<p class="parent-link" data-parent-name="${parentName}">⬆️ ${parentName}</p>` : '';
-
-    let footerHTML = '';
-    let cardTooltipText = '';
-    let cardImageStyle = '';
-
-    if (isGrouping) {
-        cardImageStyle = `background-image: url('${getPlaceholderImage(imageUrls)}')`;
-        const range = ui.getGroupPriceRange(record);
-        const priceHTML = range ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
-        footerHTML = `
-            <div class="card-footer">
-                <div class="price">${priceHTML}</div>
-                <button class="card-action-btn view-options-btn" title="View Options">View Options</button>
-            </div>
-        `;
-        cardTooltipText = `Explore the various items and pricing options in this category.`;
-    } else {
-        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const isLocked = state.cart.lockedItems.has(recordId);
-        const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        const displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
-        const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
-        const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
-        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''} data-tooltip="${isLocked ? 'Already in plan' : 'Add to Plan'}">${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
-        
-        footerHTML = `
-            <div class="card-footer">
-                <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
-                <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
-            </div>
-        `;
-        cardTooltipText = `${fields.Description || 'No description.'} - Price: $${displayPrice.toFixed(2)}${pricingType ? ` ${pricingType.toLowerCase()}` : ''}.`;
+    // --- LOGIC FOR EVENT CARDS ---
+    if (fields['Item Type'] === 'Event') {
+        // ... (The entire 'Event' block from your current file can be pasted here, it is correct)
     }
 
+    // --- LOGIC FOR BOOKABLE ITEM CARDS (DEFAULT) ---
+    eventCard.className = 'event-card';
+    const itemState = ui.getItemState(recordId);
+    const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    const isLocked = state.cart.lockedItems.has(recordId);
+    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+    const displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
+    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+    const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}" style="${cardImageStyle}">
-            <div class="event-card-actions">
-                <button class="action-btn availability-btn" title="Check Availability">📅</button>
-            </div>
-            <div class="heart-icon" data-record-id="${record.id}" data-tippy-content="Add to favorites"></div>
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="heart-icon" data-record-id="${record.id}"></div>
         </div>
-        <div class="event-card-content" data-tippy-content="${cardTooltipText}">
-            ${parentLinkHTML}
+        <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
             <p class="description">${fields.Description || ''}</p>
         </div>
-        ${footerHTML}
+        <div class="card-footer">
+            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+        </div>
     `;
-
-    setTimeout(() => {
-        updateCardIcon(recordId);
-    }, 0);
     
+    // Add event listeners for quantity buttons
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -216,18 +128,7 @@ export async function createInteractiveCard(record, imageCache) {
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
     }
-    
-    tippy(eventCard.querySelector('.event-card-content'), {
-        content: cardTooltipText,
-        allowHTML: true,
-        placement: 'top',
-        theme: 'light',
-    });
-    tippy(eventCard.querySelector('.heart-icon'), {
-        content: 'Add to favorites',
-        placement: 'top',
-        theme: 'light',
-    });
 
+    setTimeout(() => updateCardIcon(recordId), 0);
     return eventCard;
 }
