@@ -128,7 +128,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     const CHUNK_SIZE = 5;
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
-        const cardPromises = chunk.map(record => createInteractiveCard(record, imageCache));
+        const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
         const cards = await Promise.all(cardPromises);
         cards.forEach(card => {
             if (card) fragment.appendChild(card);
