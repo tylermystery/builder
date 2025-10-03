@@ -604,8 +604,6 @@ export async function updateUserFlagStatus(userId, isFlagged) {
     // await fetch('/.netlify/functions/flag-user', { ... })
 }
 
-// ADD this new function to the end of: api.js
-
 export async function addRsvpToEvent(eventId, userId) {
     log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
