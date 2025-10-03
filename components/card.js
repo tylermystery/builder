@@ -37,48 +37,52 @@ export function updateCardIcon(recordId) {
     });
 }
 
-export async function createInteractiveCard(record, imageCache) {
-    log('Card', `Creating card for "${record.fields.Name}"`);
-    const fields = record.fields;
-    const recordId = record.id;
-    const allRecords = state.records.all;
-    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
-    const imageUrlToLoad = imageUrls.length > 0 ? imageUrls[0] : '';
-    const eventCard = document.createElement('div');
-    eventCard.dataset.recordId = recordId;
+if (fields['Item Type'] === 'Grouping') {
+    const groupingCard = document.createElement('div');
+    groupingCard.className = 'event-card grouping-card';
+    groupingCard.dataset.recordId = record.id;
+    groupingCard.dataset.categoryName = fields.Name;
 
-    // --- LOGIC FOR GROUPING CARDS ---
-    if (fields['Item Type'] === 'Grouping') {
-        eventCard.className = 'event-card grouping-card';
-        eventCard.dataset.categoryName = fields.Name;
+    // --- CORRECTED LOGIC ---
+    const groupingNameForFilter = fields.Name.toLowerCase();
+    const childItems = allRecords.filter(r => {
+        if (r.fields['Item Type'] !== 'Bookable Item') return false;
 
-        const childItems = allRecords.filter(r => 
-            (r.fields.Categories || '').toLowerCase().includes(fields.Name.toLowerCase()) && r.fields['Item Type'] === 'Bookable Item'
-        );
-        const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
-        const imageResults = await Promise.all(imagePromises);
-        const collageImages = imageResults.flatMap(res => res.imageUrls);
+        // Split the item's categories into an array of tags
+        const itemCategories = (r.fields.Categories || '')
+            .split(',')
+            .map(cat => cat.trim().toLowerCase());
 
-        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
-        if (collageImages.length > 0) {
-            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
-        } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
-        }
-        imageContainerHTML += `</div>`;
+        // Check if the array includes the grouping name
+        return itemCategories.includes(groupingNameForFilter);
+    });
+    // --- END CORRECTED LOGIC ---
 
-        eventCard.innerHTML = `
-            ${imageContainerHTML}
-            <div class="event-card-content">
-                <h3>${fields.Name || 'Untitled Category'}</h3>
-                <p class="description">${fields.Description || ''}</p>
-            </div>
-            <div class="card-footer">
-                <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
-            </div>
-        `;
-        return eventCard;
+    const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
+    const imageResults = await Promise.all(imagePromises);
+    const collageImages = imageResults.flatMap(res => res.imageUrls);
+
+    let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
+    if (collageImages.length > 0) {
+        imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
+    } else {
+        imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
     }
+    imageContainerHTML += `</div>`;
+
+    groupingCard.innerHTML = `
+        ${imageContainerHTML}
+        <div class="event-card-content">
+            <h3>${fields.Name || 'Untitled Category'}</h3>
+            <p class="description">${fields.Description || ''}</p>
+        </div>
+        <div class="card-footer">
+            <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
+        </div>
+    `;
+    return groupingCard;
+}
+
 
     // --- LOGIC FOR EVENT CARDS ---
     if (fields['Item Type'] === 'Event') {
