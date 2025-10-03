@@ -55,7 +55,6 @@ export async function associateSessionWithUser(sessionId, userId) {
     log('API', `Associating session ${sessionId} with user ${userId}`);
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-    
     try {
         // First, get the existing collaborators to avoid overwriting them
         const getResponse = await fetch(url, {
@@ -65,6 +64,7 @@ export async function associateSessionWithUser(sessionId, userId) {
         
         const existingRecord = await getResponse.json();
         const collaborators = new Set(existingRecord.fields.Collaborators || []);
+        collaborators.add(userId); // Add the new user ID
 
         // Now, update the record with the new set of collaborators
         const payload = {
@@ -72,18 +72,13 @@ export async function associateSessionWithUser(sessionId, userId) {
                 'Collaborators': Array.from(collaborators)
             }
         };
-
-        const rsvpPayload = {
-            fields: { 'RSVPs': Array.from(rsvps) }
-        };
-
         const patchResponse = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(rsvpPayload) // This correctly converts the object to a JSON string
+            body: JSON.stringify(payload)
         });
 
         if (!patchResponse.ok) {
@@ -96,7 +91,6 @@ export async function associateSessionWithUser(sessionId, userId) {
         log('API', `Failed to associate session: ${error.message}`);
     }
 }
-
 
 export async function loadSessionFromAirtable(sessionId) {
     state.session.id = sessionId;
