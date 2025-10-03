@@ -65,7 +65,6 @@ export async function associateSessionWithUser(sessionId, userId) {
         
         const existingRecord = await getResponse.json();
         const collaborators = new Set(existingRecord.fields.Collaborators || []);
-        collaborators.add(userId); // Add the new user ID
 
         // Now, update the record with the new set of collaborators
         const payload = {
