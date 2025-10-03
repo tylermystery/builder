@@ -74,6 +74,10 @@ export async function associateSessionWithUser(sessionId, userId) {
             }
         };
 
+        const payload = {
+            fields: { 'RSVPs': Array.from(rsvps) }
+        };
+
         const patchResponse = await fetch(url, {
             method: 'PATCH',
             headers: {
