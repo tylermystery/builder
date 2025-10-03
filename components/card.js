@@ -82,9 +82,41 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return groupingCard;
     }
 
-    // --- LOGIC FOR EVENT CARDS (Placeholder if you add it back) ---
+// --- LOGIC FOR EVENT CARDS ---
     if (fields['Item Type'] === 'Event') {
-        // ... Your Event logic would go here ...
+        eventCard.className = 'event-card event-type-card';
+
+        // Date Display Logic
+        const eventDate = fields.Date ? new Date(fields.Date) : null;
+        const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
+        const day = eventDate ? eventDate.getDate() : '??';
+
+        // RSVP Button Logic
+        const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
+        const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
+        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+
+        eventCard.innerHTML = `
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                <div class="heart-icon" data-record-id="${record.id}"></div>
+            </div>
+            <div class="event-card-content">
+                <div class="event-date-display">
+                    <span class="month">${month}</span>
+                    <span class="day">${day}</span>
+                </div>
+                <div class="event-details">
+                    <h3>${fields.Name || 'Untitled Event'}</h3>
+                    <p class="description">${fields.Description || ''}</p>
+                </div>
+            </div>
+            <div class="card-footer">
+                ${rsvpButtonHTML}
+            </div>
+        `;
+
+        setTimeout(() => updateCardIcon(record.id), 0);
+        return eventCard; // This is the crucial missing line
     }
 
     // --- LOGIC FOR BOOKABLE ITEM CARDS (DEFAULT) ---
