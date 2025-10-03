@@ -74,7 +74,7 @@ export async function associateSessionWithUser(sessionId, userId) {
             }
         };
 
-        const payload = {
+        const rsvpPayload = {
             fields: { 'RSVPs': Array.from(rsvps) }
         };
 
