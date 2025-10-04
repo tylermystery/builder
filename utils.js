@@ -76,6 +76,7 @@ export function debounce(func, delay = 300) {
  * A value of null or undefined will remove the parameter.
  */
 export function updateUrl(paramsToUpdate) {
+    console.log('[updateUrl] Called with params:', paramsToUpdate);
     const url = new URL(window.location);
     const searchParams = url.searchParams;
 
@@ -88,22 +89,23 @@ export function updateUrl(paramsToUpdate) {
         }
     }
 
-    // --- THIS IS THE FIX ---
-    // Instead of comparing the full href, we compare only the pathname and search params.
-    // This is more robust and prevents unnecessary history pushes during popstate events.
     const newRelativeUrl = url.pathname + '?' + searchParams.toString();
     const currentRelativeUrl = window.location.pathname + window.location.search;
+    
+    console.log(`[updateUrl] Comparing URLs:\n  CURRENT: ${currentRelativeUrl}\n  NEW:     ${newRelativeUrl}`);
 
     if (currentRelativeUrl !== newRelativeUrl) {
-        // We use replaceState for simple parameter cleanup (like closing a modal)
-        // to avoid cluttering the history, but pushState for major navigation.
         const isJustClosingModal = paramsToUpdate.openItem === null && !paramsToUpdate.category && !paramsToUpdate.view;
 
         if (isJustClosingModal) {
+             console.log('[updateUrl] Action: history.back()');
              history.back();
         } else {
+             console.log('[updateUrl] Action: history.pushState()');
              history.pushState({}, '', url.href);
         }
+    } else {
+        console.log('[updateUrl] Action: None (URL is the same)');
     }
 }
 
@@ -149,7 +151,6 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
-
 export function getRecordPrice(record, optionIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
