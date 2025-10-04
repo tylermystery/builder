@@ -135,6 +135,7 @@ export async function loadSessionFromAirtable(sessionId) {
                 log('API', `Failed to parse session JSON: ${jsonError.message}`);
             }
         }
+        document.dispatchEvent(new CustomEvent('sessionReady'));
     } catch (error) {
         console.error("Failed to load session:", error);
         log('API', `Failed to load session: ${error.message}`);
