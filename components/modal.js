@@ -84,6 +84,7 @@ function resetModalState() {
 }
 
 export async function showDetailModal(record, startPhotoIndex = 0) {
+    console.log('[showDetailModal] Called for item:', record.id);
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
@@ -101,6 +102,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
+    console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.addEventListener('click', hideDetailModal);
     modalOverlay.addEventListener('click', handleOverlayClick);
