@@ -1,8 +1,10 @@
+// REPLACE THE ENTIRE CONTENTS OF: components/card.js
+
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS } from '../config.js';
-import { parseOptions } from '../utils.js';
+import { getRecordPrice } from '../utils.js'; // <-- UPDATED
 import { log } from '../utils/debug.js';
 
 function getPlaceholderImage(imageUrls) {
@@ -34,8 +36,6 @@ export function updateCardIcon(recordId) {
     });
 }
 
-// REPLACE the entire createInteractiveCard function in: components/card.js
-
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const eventCard = document.createElement('div');
@@ -51,8 +51,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         groupingCard.dataset.categoryName = fields.Name;
         const groupingNameForFilter = fields.Name.toLowerCase();
         const childItems = allRecords.filter(r => {
-            // --- THIS IS THE FIX ---
-            // Allow both 'Bookable Item' and 'Event' types to be counted as children.
             if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
             const itemCategories = (r.fields.Categories || '')
                 .split(',')
@@ -115,13 +113,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return eventCard;
     }
 
-    // --- LOGIC FOR BOOKABLE ITEM CARDS (DEFAULT) ---
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
     const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = ui.getRecordPrice(record, itemState.selectedOptionIndex);
+    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
