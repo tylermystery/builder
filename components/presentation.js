@@ -3,6 +3,7 @@ import { state } from '../state.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
+import { updateUrl } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
