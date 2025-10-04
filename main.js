@@ -14,31 +14,78 @@ import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
 
-// --- NEW HELPER FUNCTION ---
 async function populateUserPlans(userId) {
-    // --- DEBUG ---
-    console.log(`[DEBUG] populateUserPlans: Called for userId '${userId}'.`);
     if (userId) {
         const plans = await api.fetchPlansForUser(userId);
-        console.log(`[DEBUG] populateUserPlans: Received ${plans.length} plans from API. Passing to UI.`);
         ui.populateMyPlansDropdown(plans);
     } else {
-        // For guests, call with no plans to render the "login to save" state.
-        console.log('[DEBUG] populateUserPlans: No userId, rendering guest state for dropdown.');
         ui.populateMyPlansDropdown([]);
     }
 }
 
+// --- NEW CORE NAVIGATION FUNCTION ---
+// This function reads the URL and updates the UI to match.
+function syncUiWithUrl() {
+    log('Navigation', 'Syncing UI with current URL.');
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get('category');
+    const subcategories = params.get('subcategory')?.split(',');
+    const openItemId = params.get('openItem');
+    const view = params.get('view');
+
+    // Close any open modals first
+    ui.hideDetailModal();
+    ui.hideItineraryModal();
+    ui.hidePresentationView();
+
+    // Set the correct primary view (Category vs. Plan vs. Itinerary etc.)
+    const categoryFilters = document.getElementById('category-filters');
+    categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+
+    if (view === 'plan') {
+        document.getElementById('plan-filter-btn')?.classList.add('active');
+    } else if (category) {
+        document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active');
+    } else {
+        document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
+    }
+    
+    // Set subcategories if they exist
+    const subcategoryFilters = document.getElementById('subcategory-filters');
+    subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    if (subcategories) {
+        subcategories.forEach(subcat => {
+            subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active');
+        });
+    }
+
+    // Apply all filters to render the main view
+    applyFiltersAndSort(imageCache);
+    
+    // Open a specific view or item modal if requested
+    setTimeout(() => {
+        if (view === 'present') {
+            ui.showPresentationView('favorites');
+        } else if (view === 'itinerary') {
+            ui.showItineraryModal();
+        } else if (openItemId) {
+            const recordToOpen = state.records.all.find(r => r.id === openItemId);
+            if (recordToOpen) {
+                ui.showDetailModal(recordToOpen);
+            }
+        }
+    }, 100); // Small delay to ensure the main UI has rendered
+}
+
+
 async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
-        // --- NEW: Listen for the 'planCreated' event to refresh the dropdown ---
     document.addEventListener('planCreated', () => {
         if (state.session.user.isAuthenticated) {
             populateUserPlans(state.session.user.id);
         }
     });
-    // when a new session is created for the first time.
     document.addEventListener('sessionReady', () => {
         log('Main', '"sessionReady" event received, re-initializing session chat.');
         initializeSessionChat();
@@ -58,7 +105,6 @@ async function initialize() {
     const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
     let activeShop = null;
-
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
     }
@@ -81,8 +127,6 @@ async function initialize() {
     if (activeShop) {
         state.ui.activeShopId = activeShop.id;
         localStorage.setItem('lastVisitedShopId', activeShop.id);
-        
-        // ... (rest of shop setup is the same)
         const titleElement = document.getElementById('main-shop-title');
         titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
         titleElement.style.cursor = 'pointer';
@@ -124,9 +168,7 @@ async function initialize() {
             }
         }
         
-        // --- MODIFIED LOGIC: This now runs for everyone ---
-        await populateUserPlans(state.session.user.id); 
-
+        await populateUserPlans(state.session.user.id);
         const loginToken = urlParams.get('token');
         if (loginToken) {
             try {
@@ -145,13 +187,10 @@ async function initialize() {
                         user: { ...state.session.user, ...data.user, isAuthenticated: true, isOwner: data.ownerData.isOwner, ownerDashboardId: data.ownerData.ownerDashboardId } 
                     } 
                 });
-                
-                // After login, associate session and fetch plans
                 if (sessionId) {
                     await api.associateSessionWithUser(sessionId, data.user.id);
                 }
                 await populateUserPlans(data.user.id);
-
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
@@ -181,7 +220,8 @@ async function initialize() {
         document.getElementById('status-filter').value = defaultFilterValue;
 
         ui.toggleLoading(false);
-        applyFiltersAndSort(imageCache);
+        // We will call syncUiWithUrl instead of applyFiltersAndSort directly
+        // applyFiltersAndSort(imageCache);
         ui.updateFavoritesCarousel();
         updateSaveShareButton();
         
@@ -190,28 +230,18 @@ async function initialize() {
         setupAuthEventListeners();
         updateUserProfileIcon();
         
+        // --- NEW LOGIC TO READ URL AND HOOK UP BROWSER BUTTONS ---
+        syncUiWithUrl();
+        window.addEventListener('popstate', syncUiWithUrl);
+        // --- END NEW LOGIC ---
+
         state.ui.isInitializing = false;
         log('Main', 'Initialization complete.');
 
-        const finalUrlParams = new URLSearchParams(window.location.search);
-        const viewMode = finalUrlParams.get('view');
-        const itemIdToOpen = finalUrlParams.get('openItem');
-        const totalItems = state.cart.items.size + state.cart.lockedItems.size;
-
-        if (viewMode === 'present') {
-            if (totalItems > 0) {
-                ui.showPresentationView('favorites');
-                openChatWidget(true);
-            }
-        } else if (!itemIdToOpen && totalItems >= 3) {
-            ui.showPresentationView('favorites');
-        } else if (itemIdToOpen) {
-            const recordToOpen = state.records.all.find(r => r.id === itemIdToOpen);
-            if (recordToOpen) {
-                const photoIndex = parseInt(finalUrlParams.get('photo'), 10) || 0;
-                setTimeout(() => { ui.showDetailModal(recordToOpen, photoIndex); }, 100);
-            }
-        }
+        // --- REMOVED OLD LOGIC ---
+        // The old block for checking 'view' and 'openItem' params has been removed
+        // because its functionality is now handled by syncUiWithUrl().
+        
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
     }
