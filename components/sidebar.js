@@ -1,23 +1,22 @@
-// FILE: components/sidebar.js
+// REPLACE THE ENTIRE CONTENTS OF: components/sidebar.js
+
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { parseOptions } from '../utils.js';
+import { parseOptions, getRecordPrice } from '../utils.js'; // <-- UPDATED
 import { log } from '../utils/debug.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
     const itemCard = document.createElement('div');
-    itemCard.className = `favorite-item lazy-load`; // Add lazy-load class
+    itemCard.className = `favorite-item lazy-load`;
     itemCard.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     
-    // Set the image URL in a data attribute instead of the background style
-    itemCard.dataset.bgImage = imageUrls[0] ||
-`https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
-    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
     const tooltipContent = `
         <strong>${fields.Name || 'Untitled'}</strong><br>
         <small>${fields.Description || 'No description.'}</small><br>
@@ -55,7 +54,7 @@ async function createLockedInItemElement(record, itemInfo) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
 
-    const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
     const total = price * itemInfo.quantity;
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
@@ -141,27 +140,21 @@ export function updateTotalCost() {
     const totalCostEl = document.getElementById('total-cost');
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
-
-    // --- Mobile Bar Elements ---
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
-
     if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        const unitPrice = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
         if (isNaN(unitPrice)) return;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
         subtotal += unitPrice * effectiveQuantity;
     });
-
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = subtotal - amountReceived;
-
-    // Update Desktop Sidebar
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     if (amountReceived > 0) {
@@ -173,24 +166,20 @@ export function updateTotalCost() {
         totalDividerEl.style.display = 'none';
     }
 
-    // --- NEW: Update Mobile Sticky Bar ---
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
         mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
-    // Update Button States
     const isPlanEmpty = subtotal === 0;
     const isFullyPaid = totalDue <= 0.009;
 
-    // --- NEW LOGIC: Toggle body class for mobile bar visibility ---
     if (isPlanEmpty || isFullyPaid) {
         document.body.classList.remove('mobile-bar-active');
     } else {
         document.body.classList.add('mobile-bar-active');
     }
-    // --- END NEW LOGIC ---
     
     if (checkoutBtn) {
         checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
@@ -204,7 +193,6 @@ export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
-
     if (totalBreakdown) {
         totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
     }
