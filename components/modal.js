@@ -14,17 +14,21 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
+// --- THIS IS THE FIX ---
+// The manual close actions now trigger history.back()
+// which will fire popstate and let syncUiWithUrl handle the UI update.
 function handleEscapeKey(event) {
     if (event.key === 'Escape') {
-        hideDetailModal();
+        history.back();
     }
 }
 
 function handleOverlayClick(event) {
     if (event.target === modalOverlay) {
-        hideDetailModal();
+        history.back();
     }
 }
+// --- END FIX ---
 
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
@@ -104,7 +108,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.addEventListener('click', hideDetailModal);
+    closeBtn.onclick = () => history.back(); // Use onclick to replace any old listener
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
@@ -296,14 +300,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 }
 
 export function hideDetailModal() {
-    updateUrl({ openItem: null });
+    console.log('[hideDetailModal] Called.');
+    // --- THIS IS THE FIX ---
+    // This function now ONLY handles the UI. It no longer touches the URL.
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.removeEventListener('click', hideDetailModal);
+    closeBtn.onclick = null; // Remove the listener
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
     if (currentItemChatRecordId) {
-      log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-      currentItemChatRecordId = null;
+        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
+        currentItemChatRecordId = null;
     }
 
     if (modalOverlay) {
@@ -314,6 +320,7 @@ export function hideDetailModal() {
         }, 300);
         document.body.classList.remove('modal-open');
     }
+    // --- END FIX ---
 }
 
 export async function showCheckoutModal(shopSettings) {
