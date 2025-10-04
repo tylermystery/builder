@@ -34,25 +34,10 @@ export function updateCardIcon(recordId) {
     });
 }
 
-// --- THIS IS THE CORRECTED FUNCTION WRAPPER ---
+// REPLACE the entire createInteractiveCard function in: components/card.js
+
 export async function createInteractiveCard(record, allRecords, imageCache) {
-        // --- START: TEMPORARY DEBUG CODE ---
-    if (record.fields.Name === "Events" || record.fields.Name === "Activities") {
-        console.log("--- DEBUGGING CARD RENDER ---");
-        console.log("Record Name:", record.fields.Name);
-        console.log("Raw Options Field:", record.fields.Options);
-        
-        const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-        const rawOptions = ui.parseOptions(record.fields.Options);
-        const isGroup = rawOptions.some(opt => allRecordNames.has(opt.name));
-
-        console.log("Does the code think this is a grouping?", isGroup);
-        console.log("-----------------------------");
-    }
-    // --- END: TEMPORARY DEBUG CODE ---
-
     log('Card', `Creating card for "${record.fields.Name}"`);
-
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
@@ -61,13 +46,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const imageUrlToLoad = getPlaceholderImage(imageUrls);
 
     if (fields['Item Type'] === 'Grouping') {
-        const groupingCard = eventCard; // Re-use the created element
+        const groupingCard = eventCard;
         groupingCard.className = 'event-card grouping-card';
         groupingCard.dataset.categoryName = fields.Name;
-
         const groupingNameForFilter = fields.Name.toLowerCase();
         const childItems = allRecords.filter(r => {
-            if (r.fields['Item Type'] !== 'Bookable Item') return false;
+            // --- THIS IS THE FIX ---
+            // Allow both 'Bookable Item' and 'Event' types to be counted as children.
+            if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
             const itemCategories = (r.fields.Categories || '')
                 .split(',')
                 .map(cat => cat.trim().toLowerCase());
@@ -85,7 +71,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `</div>`;
-
         groupingCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
@@ -99,16 +84,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return groupingCard;
     }
 
-// --- LOGIC FOR EVENT CARDS ---
     if (fields['Item Type'] === 'Event') {
         eventCard.className = 'event-card event-type-card';
-
-        // Date Display Logic
         const eventDate = fields.Date ? new Date(fields.Date) : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
-
-        // RSVP Button Logic
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
         const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
@@ -131,9 +111,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${rsvpButtonHTML}
             </div>
         `;
-
         setTimeout(() => updateCardIcon(record.id), 0);
-        return eventCard; // This is the crucial missing line
+        return eventCard;
     }
 
     // --- LOGIC FOR BOOKABLE ITEM CARDS (DEFAULT) ---
@@ -147,7 +126,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
-    
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
@@ -161,11 +139,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
-    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
-
     if (plusBtn && minusBtn && quantityInput) {
         plusBtn.addEventListener('click', (e) => {
             e.stopPropagation();
