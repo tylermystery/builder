@@ -1,28 +1,18 @@
-// FILE: filtering.js
-// PASTE THIS ENTIRE CODE INTO: filtering.js
+// REPLACE THE ENTIRE CONTENTS OF: filtering.js
+
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
-
-// --- START DEBUGGING LOGS ---
-console.log('[Filtering] Initializing filtering.js. Total records loaded:', state.records.all.length, 'Total stores loaded:', state.stores.all.length);
-// --- END DEBUGGING LOGS ---
+import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js'; // <-- UPDATED
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
-    // Find items within the current store whose Parent Item matches the record's name
     const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
-    
-    // --- START DEBUGGING LOGS ---
-    console.log(`[getDescendantBookableItems] Finding children for "${record.fields.Name}". Found ${children.length} direct children.`);
-    // --- END DEBUGGING LOGS ---
 
     for (const child of children) {
         if (isGrouping(child, allRecordNames)) {
-            // If a child is a grouping (a sub-category), recurse to find its children
             bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecordsInStore, allRecordNames));
         } else {
-            // If it's a final item, add it to the list
             bookableItems.push(child);
         }
     }
@@ -30,7 +20,6 @@ function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
 }
 
 function isGrouping(record, allRecordNames) {
-    // This is the new, robust check. It's true only if the field is explicitly set.
     return record.fields['Item Type'] === 'Grouping';
 }
 
@@ -45,14 +34,10 @@ function parseCapacity(capacityStr) {
 }
 
 function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
-    // If "All" is selected, show top-level grouping items, keeping the initial catalog view intact.
     if (selectedCategory === 'all') {
         return recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
     }
 
-    // --- NEW TAG-BASED LOGIC ---
-
-    // 1. Filter by the selected CATEGORY tag.
     const selectedCategoryLower = selectedCategory.toLowerCase();
     let finalItems = recordsInStore.filter(record => {
         const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
@@ -60,15 +45,11 @@ function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, active
             .map(cat => cat.trim().toLowerCase());
         return itemCategories.includes(selectedCategoryLower);
     });
-
-    // 2. Further filter by any active SUBCATEGORY tags.
     if (activeSubcategories.length > 0) {
         finalItems = finalItems.filter(record => {
             const itemSubcategories = (record.fields.Subcategories || '')
                 .split(',')
                 .map(sc => sc.trim().toLowerCase());
-            
-            // This ensures the item has at least one of the selected subcategory tags (OR logic).
             return activeSubcategories.some(activeSubcat => itemSubcategories.includes(activeSubcat));
         });
     }
@@ -141,7 +122,7 @@ function filterByBudget(records, budgetFilter) {
     const range = BUDGET_RANGES[budgetFilter];
 
     return records.filter(record => {
-        const price = ui.getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); // <-- UPDATED
         return price >= range.min && price <= range.max;
     });
 }
@@ -159,7 +140,7 @@ function filterBySearchTerm(records, searchTerm) {
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         
-        const optionNames = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ');
+        const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' '); // <-- UPDATED
         const allOtherText = [
             fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '',
             fields[CONSTANTS.FIELD_NAMES.SUBCATEGORIES] || '',
@@ -188,8 +169,8 @@ function filterBySearchTerm(records, searchTerm) {
 
 function sortRecords(records, sortBy) {
     return records.sort((a, b) => {
-        const aPrice = ui.getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = ui.getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); // <-- UPDATED
+        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); // <-- UPDATED
         const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         switch (sortBy) {
@@ -204,8 +185,6 @@ function sortRecords(records, sortBy) {
 export function applyFiltersAndSort(imageCache) {
     const catalogTitle = document.getElementById('catalog-title');
     const planFilterBtn = document.getElementById('plan-filter-btn');
-
-    // --- NEW: Special logic for the "My Plan" view ---
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         if (catalogTitle) {
@@ -213,32 +192,22 @@ export function applyFiltersAndSort(imageCache) {
             catalogTitle.style.display = 'block';
         }
 
-        // Get record IDs from locked items first, then from regular items
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
         const itemIds = Array.from(state.cart.items.keys());
         
-        // Combine the lists
         const allPlanRecordIds = [...lockedItemIds, ...itemIds];
-
-        // Map the IDs back to the full record objects from the main records list
         const recordsToDisplay = allPlanRecordIds.map(id =>
             state.records.all.find(record => record.id === id)
-        ).filter(Boolean); // Filter out any null/undefined results
+        ).filter(Boolean);
 
         state.records.filtered = recordsToDisplay;
         state.ui.recordsCurrentlyDisplayed = 0;
-        
-        // Render all plan/idea items at once, no "load more" needed for this view
         ui.renderRecords(recordsToDisplay, imageCache, false).then(() => {
             state.ui.recordsCurrentlyDisplayed = recordsToDisplay.length;
         });
-
-        // IMPORTANT: Exit the function to bypass all other filtering logic
         return;
     }
-    // --- END of new logic ---
 
-    // If not in "My Plan" view, ensure the title is hidden and proceed with normal filtering
     if (catalogTitle) {
         catalogTitle.style.display = 'none';
     }
@@ -258,7 +227,6 @@ export function applyFiltersAndSort(imageCache) {
     let recordsForCurrentStore = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
-
     let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
     
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
