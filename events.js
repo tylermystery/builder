@@ -1,4 +1,4 @@
-// PASTE THIS ENTIRE CODE INTO: events.js
+// REPLACE THE ENTIRE CONTENTS OF: events.js
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -7,7 +7,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce } from './utils.js';
+import { debounce, updateUrl } from './utils.js'; // <-- MODIFIED IMPORT
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -23,7 +23,6 @@ let subcategoryFiltersContainer = null;
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
-    // Ensure we don't try to get a record for "all" or "my plan"
     if (!selectedCategoryButton || selectedCategoryButton.dataset.filter === 'all' || selectedCategoryButton.id === 'plan-filter-btn') {
         return null;
     }
@@ -234,7 +233,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (element) element.addEventListener(event, handler);
         else console.warn(`Element with ID "${selector}" not found.`);
     };
-
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
         const dropdown = e.target;
         const selectedId = dropdown.value;
@@ -248,35 +246,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     const leftSidebar = document.getElementById('left-sidebar');
     const rightSidebar = document.getElementById('right-sidebar');
-
     if (window.innerWidth < 1000) {
         leftSidebar?.classList.add('collapsed');
         rightSidebar?.classList.add('collapsed');
     }
 
-    // This listener now correctly targets the standalone button
     safeAddEventListener('mobile-filter-trigger', 'click', () => {
         if (window.innerWidth < 1000) {
             leftSidebar?.classList.toggle('collapsed');
         }
     });
-
     safeAddEventListener('mobile-view-plan-btn', 'click', () => {
         const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
         rightSidebar?.classList.toggle('collapsed');
         
         if (isCurrentlyCollapsed) {
-            // If it WAS collapsed, we are now OPENING it. Scroll to it.
             setTimeout(() => {
                 rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }, 50);
         } else {
-            // If it WAS open, we are now CLOSING it. Scroll to the top of the catalog.
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
-
-
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -302,10 +293,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             scrollTimeout = null;
         }, 100);
     });
-
     const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
-    // --- ADD THIS NEW BLOCK ---
-    // Create and prepend the "My Plan" filter button
     const planFilterBtn = document.createElement('button');
     planFilterBtn.className = 'filter-btn';
     planFilterBtn.id = 'plan-filter-btn';
@@ -313,7 +301,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     if (categoryFiltersContainer) {
         categoryFiltersContainer.prepend(planFilterBtn);
     }
-    // --- END NEW BLOCK ---
 
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
@@ -356,40 +343,47 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const planFilterBtn = document.getElementById('plan-filter-btn');
         const clickedBtn = e.target.closest('.filter-btn');
     
-        if (!clickedBtn) return; // Exit if the click wasn't on a button
+        if (!clickedBtn) return;
     
         const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
-    
-        // Deactivate all category buttons first
-        categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
         
+        // <-- NEW URL LOGIC -->
         if (isPlanFilterClick) {
-            // Case 1: The "My Plan" button was clicked
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
+        } else {
+            const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter;
+            updateUrl({ category: newCategory, subcategory: null, view: null });
+        }
+        // <-- END NEW URL LOGIC -->
+    
+        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+       
+        if (isPlanFilterClick) {
             planFilterBtn.classList.add('active');
-            // Clear subcategories since we're not in a category view
             updateSubcategoryButtons(); 
         } else {
-            // Case 2: A normal category button was clicked
-            // Deactivate the plan button if it was active
             if (planFilterBtn) {
                 planFilterBtn.classList.remove('active');
             }
-            // Activate the clicked category button
             clickedBtn.classList.add('active');
-            // Update the subcategories for the new active category
             updateSubcategoryButtons();
         }
         
-        // Run the main filter function, which will now see the correct active button
         applyFiltersAndSort(imageCache);
     });
 
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
+            // <-- NEW URL LOGIC -->
+            const activeSubcats = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn.active'))
+                                     .map(btn => btn.dataset.filter);
+            updateUrl({ subcategory: activeSubcats.join(',') || null });
+            // <-- END NEW URL LOGIC -->
             applyFiltersAndSort(imageCache);
         }
     });
+
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
@@ -400,10 +394,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
+
     safeAddEventListener('reset-filters-btn', 'click', () => {
+        // <-- NEW URL LOGIC -->
+        updateUrl({ category: null, subcategory: null, view: null });
+        // <-- END NEW URL LOGIC -->
         const allButton = categoryFiltersContainer.querySelector('.category-filter-btn[data-filter="all"]');
         if (allButton) {
-            categoryFiltersContainer.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+            categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
@@ -477,7 +475,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const heartIcon = e.target.closest('.heart-icon');
         const saveShareBtn = e.target.closest('#save-share-btn');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
-        const rsvpBtn = e.target.closest('.rsvp-btn'); // <-- ADD THIS LINE
+        const rsvpBtn = e.target.closest('.rsvp-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
         const checkoutBtn = e.target.closest('#checkout-btn');
@@ -508,17 +506,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             rsvpBtn.textContent = 'Saving...';
             
             const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
-            
             if (updatedRecord) {
                 rsvpBtn.textContent = "You're Going! ✅";
-                // Update the record in the main state so the UI stays correct on re-render
                 const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                 if (recordIndex > -1) {
                     state.records.all[recordIndex] = updatedRecord;
                 }
             } else {
                 rsvpBtn.textContent = 'Error!';
-                // Optionally re-enable the button after a delay
                 setTimeout(() => {
                     rsvpBtn.textContent = 'RSVP';
                     rsvpBtn.disabled = false;
@@ -597,39 +592,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-                    
         } else if (card && !e.target.closest('.quantity-selector')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
         
             if (record && record.fields['Item Type'] === 'Grouping') {
-                // This is a grouping card. Find and click the matching filter button.
                 const categoryName = record.fields.Name;
-        
-                // First, check if it's a main category button
                 let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
                                       .find(btn => btn.textContent === categoryName);
-                
-                // If not found, check if it's a subcategory button (for nested groupings)
                 if (!targetButton) {
                     targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
                                         .find(btn => btn.textContent === categoryName);
                 }
         
                 if (targetButton) {
-                    // Programmatically click the found button to trigger the filter
                     targetButton.click();
                 } else {
-                    // Fallback to the modal if for some reason no matching filter button is found
                     ui.showDetailModal(record);
                 }
         
             } else if (record) {
-                // This is a regular bookable item or event, so open the modal as intended.
                 ui.showDetailModal(record);
             }
-            // The duplicate line that was here has now been removed.
-        
         } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -687,7 +671,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
-    setupItineraryEventListeners(); // This will attach the listeners for the itinerary modal
+    setupItineraryEventListeners();
     
     return { mainDatePicker, eventPlanDatePicker };
 }
