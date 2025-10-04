@@ -3,7 +3,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions } from '../utils.js';
+import { parseOptions, updateUrl } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -84,6 +84,7 @@ function resetModalState() {
 
 export async function showDetailModal(record, startPhotoIndex = 0) {
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
+    updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -292,6 +293,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 }
 
 export function hideDetailModal() {
+    updateUrl({ openItem: null });
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.removeEventListener('click', hideDetailModal);
     modalOverlay.removeEventListener('click', handleOverlayClick);
