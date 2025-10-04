@@ -36,6 +36,23 @@ export function updateCardIcon(recordId) {
 
 // --- THIS IS THE CORRECTED FUNCTION WRAPPER ---
 export async function createInteractiveCard(record, allRecords, imageCache) {
+        // --- START: TEMPORARY DEBUG CODE ---
+    if (record.fields.Name === "Events" || record.fields.Name === "Activities") {
+        console.log("--- DEBUGGING CARD RENDER ---");
+        console.log("Record Name:", record.fields.Name);
+        console.log("Raw Options Field:", record.fields.Options);
+        
+        const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+        const rawOptions = ui.parseOptions(record.fields.Options);
+        const isGroup = rawOptions.some(opt => allRecordNames.has(opt.name));
+
+        console.log("Does the code think this is a grouping?", isGroup);
+        console.log("-----------------------------");
+    }
+    // --- END: TEMPORARY DEBUG CODE ---
+
+    log('Card', `Creating card for "${record.fields.Name}"`);
+
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
