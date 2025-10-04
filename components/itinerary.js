@@ -1,6 +1,7 @@
 // FILE: components/itinerary.js
 import { state } from '../state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+import { updateUrl } from '../utils.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
@@ -95,6 +96,7 @@ export function setupItineraryEventListeners() {
 }
 
 export function showItineraryModal() {
+    updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal.');
     renderItinerary();
     renderItineraryHeader();
@@ -105,6 +107,7 @@ export function showItineraryModal() {
 
 export function hideItineraryModal() {
     log('Itinerary', 'Hiding itinerary modal.');
+    updateUrl({ view: null });
     itineraryModal.classList.remove('active');
     setTimeout(() => {
         itineraryModal.style.display = 'none';
