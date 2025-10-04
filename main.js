@@ -23,22 +23,19 @@ async function populateUserPlans(userId) {
     }
 }
 
-// --- NEW CORE NAVIGATION FUNCTION ---
-// This function reads the URL and updates the UI to match.
 function syncUiWithUrl() {
-    log('Navigation', 'Syncing UI with current URL.');
+    console.log('[syncUiWithUrl] Fired. Current URL:', window.location.href);
     const params = new URLSearchParams(window.location.search);
     const category = params.get('category');
     const subcategories = params.get('subcategory')?.split(',');
     const openItemId = params.get('openItem');
     const view = params.get('view');
+    console.log('[syncUiWithUrl] Parsed params:', { view, category, subcategories, openItemId });
 
-    // Close any open modals first
     ui.hideDetailModal();
     ui.hideItineraryModal();
     ui.hidePresentationView();
 
-    // Set the correct primary view (Category vs. Plan vs. Itinerary etc.)
     const categoryFilters = document.getElementById('category-filters');
     categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
 
@@ -50,7 +47,6 @@ function syncUiWithUrl() {
         document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
     }
     
-    // Set subcategories if they exist
     const subcategoryFilters = document.getElementById('subcategory-filters');
     subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
     if (subcategories) {
@@ -59,10 +55,8 @@ function syncUiWithUrl() {
         });
     }
 
-    // Apply all filters to render the main view
     applyFiltersAndSort(imageCache);
     
-    // Open a specific view or item modal if requested
     setTimeout(() => {
         if (view === 'present') {
             ui.showPresentationView('favorites');
@@ -74,7 +68,7 @@ function syncUiWithUrl() {
                 ui.showDetailModal(recordToOpen);
             }
         }
-    }, 100); // Small delay to ensure the main UI has rendered
+    }, 100);
 }
 
 
@@ -220,8 +214,6 @@ async function initialize() {
         document.getElementById('status-filter').value = defaultFilterValue;
 
         ui.toggleLoading(false);
-        // We will call syncUiWithUrl instead of applyFiltersAndSort directly
-        // applyFiltersAndSort(imageCache);
         ui.updateFavoritesCarousel();
         updateSaveShareButton();
         
@@ -230,17 +222,11 @@ async function initialize() {
         setupAuthEventListeners();
         updateUserProfileIcon();
         
-        // --- NEW LOGIC TO READ URL AND HOOK UP BROWSER BUTTONS ---
         syncUiWithUrl();
         window.addEventListener('popstate', syncUiWithUrl);
-        // --- END NEW LOGIC ---
 
         state.ui.isInitializing = false;
         log('Main', 'Initialization complete.');
-
-        // --- REMOVED OLD LOGIC ---
-        // The old block for checking 'view' and 'openItem' params has been removed
-        // because its functionality is now handled by syncUiWithUrl().
         
     } else {
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
