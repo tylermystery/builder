@@ -30,16 +30,10 @@ function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
 }
 
 function isGrouping(record, allRecordNames) {
-        // --- NEW LOGIC ---
-    // An item of type "Event" is never a grouping, it's always a final, bookable item.
-    if (record.fields['Item Type'] === 'Event') {
-        return false;
-    }
-    // --- END NEW LOGIC ---
-
-    const rawOptions = ui.parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    return rawOptions.some(opt => allRecordNames.has(opt.name));
+    // This is the new, robust check. It's true only if the field is explicitly set.
+    return record.fields['Item Type'] === 'Grouping';
 }
+
 
 function parseCapacity(capacityStr) {
     if (!capacityStr || typeof capacityStr !== 'string') return { min: 0, max: Infinity };
