@@ -200,7 +200,7 @@ function handleReactionClick(e) {
 
 export function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing presentation for: ${listType}`);
-    
+    updateUrl({ view: 'present' }); 
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     combinedList = [...favorites, ...locked];
@@ -228,6 +228,7 @@ export function showPresentationView(listType, startRecordId = null) {
 }
 
 function hidePresentationView() {
+    updateUrl({ view: null });
     modal.classList.remove('active');
     setTimeout(() => {
         modal.style.display = 'none';
