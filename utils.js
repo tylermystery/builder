@@ -70,3 +70,29 @@ export function debounce(func, delay = 300) {
         }, delay);
     };
 }
+
+// PASTE THIS AT THE END OF: utils.js
+
+/**
+ * Updates the browser's URL with new query parameters without reloading the page.
+ * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
+ * A value of null or undefined will remove the parameter.
+ */
+export function updateUrl(paramsToUpdate) {
+    const url = new URL(window.location);
+    const searchParams = url.searchParams;
+
+    for (const key in paramsToUpdate) {
+        const value = paramsToUpdate[key];
+        if (value === null || value === undefined || value === '') {
+            searchParams.delete(key);
+        } else {
+            searchParams.set(key, value);
+        }
+    }
+
+    // Only push a new state if the URL has actually changed
+    if (window.location.href !== url.href) {
+        history.pushState({}, '', url.href);
+    }
+}
