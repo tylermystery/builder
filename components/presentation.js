@@ -1,9 +1,9 @@
-// FILE: components/presentation.js
+// REPLACE THE ENTIRE CONTENTS OF: components/presentation.js
+
 import { state } from '../state.js';
 import * as api from '../api.js';
-import * as ui from '../ui.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
-import { updateUrl } from '../utils.js';
+import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
@@ -37,7 +37,8 @@ let currentImageIndex = 0;
 
 function updateHeader(currentItem) {
     const listType = currentItem.type;
-    titleEl.textContent = listType === 'favorites' ? 'Presenting Ideas' : 'Presenting Event Plan';
+    titleEl.textContent = listType === 'favorites' ?
+        'Presenting Ideas' : 'Presenting Event Plan';
     counterEl.textContent = `Item ${globalCurrentIndex + 1} of ${combinedList.length}`;
     
     summaryIdeasLink.classList.toggle('active', listType === 'favorites');
@@ -73,11 +74,9 @@ function renderReactions(recordId) {
     reactionButtonsEl.innerHTML = EMOJI_REACTIONS.map(emoji => 
         `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}">${emoji}</button>`
     ).join('');
-
     let summaryHTML = 'Reactions: ';
     if (allReactions.size > 0) {
         summaryHTML += Array.from(allReactions.entries()).map(([userId, reaction]) => {
-            // Use the new userProfiles map for a reliable name lookup
             const name = state.session.userProfiles.get(userId) || 'A User';
             return `<span>${name}: ${reaction}</span>`;
         }).join(' | ');
@@ -108,10 +107,9 @@ async function renderCurrentSlide() {
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     itemNameEl.textContent = record.fields.Name || 'Untitled';
-    const price = ui.getRecordPrice(record, itemInfo?.selectedOptionIndex);
+    const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
     itemPriceEl.textContent = `$${price.toFixed(2)}`;
     itemDescEl.textContent = record.fields.Description || '';
-
     if (itemInfo?.note) {
         itemNoteContainerEl.style.display = 'block';
         itemNoteEl.textContent = itemInfo.note;
@@ -187,7 +185,6 @@ function handleReactionClick(e) {
 
     const itemReactions = state.session.reactions.get(recordId);
     
-    // Toggle reaction off if the same one is clicked again
     if (itemReactions.get(currentUser.id) === emoji) {
         itemReactions.delete(currentUser.id);
     } else {
@@ -200,11 +197,10 @@ function handleReactionClick(e) {
 
 export function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing presentation for: ${listType}`);
-    updateUrl({ view: 'present' }); 
+    updateUrl({ view: 'present' });
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     combinedList = [...favorites, ...locked];
-    
     if (combinedList.length === 0) {
         alert(`There are no items in your lists to present.`);
         return;
@@ -227,7 +223,7 @@ export function showPresentationView(listType, startRecordId = null) {
     renderCurrentSlide();
 }
 
-function hidePresentationView() {
+export function hidePresentationView() {
     updateUrl({ view: null });
     modal.classList.remove('active');
     setTimeout(() => {
@@ -243,13 +239,11 @@ export function setupPresentationEventListeners() {
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
     
-    // --- NEW: Event listener for the overlay click ---
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
             hidePresentationView();
         }
     });
-
     summaryIdeasLink.addEventListener('click', () => {
         if (state.cart.items.size > 0) showPresentationView('favorites');
     });
@@ -270,4 +264,3 @@ export function setupPresentationEventListeners() {
         });
     });
 }
-
