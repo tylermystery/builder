@@ -77,6 +77,11 @@ export function debounce(func, delay = 300) {
  * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
  * A value of null or undefined will remove the parameter.
  */
+/**
+ * Updates the browser's URL with new query parameters without reloading the page.
+ * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
+ * A value of null or undefined will remove the parameter.
+ */
 export function updateUrl(paramsToUpdate) {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
@@ -90,8 +95,22 @@ export function updateUrl(paramsToUpdate) {
         }
     }
 
-    if (window.location.href !== url.href) {
-        history.pushState({}, '', url.href);
+    // --- THIS IS THE FIX ---
+    // Instead of comparing the full href, we compare only the pathname and search params.
+    // This is more robust and prevents unnecessary history pushes during popstate events.
+    const newRelativeUrl = url.pathname + '?' + searchParams.toString();
+    const currentRelativeUrl = window.location.pathname + window.location.search;
+
+    if (currentRelativeUrl !== newRelativeUrl) {
+        // We use replaceState for simple parameter cleanup (like closing a modal)
+        // to avoid cluttering the history, but pushState for major navigation.
+        const isJustClosingModal = paramsToUpdate.openItem === null && !paramsToUpdate.category && !paramsToUpdate.view;
+
+        if (isJustClosingModal) {
+             history.back();
+        } else {
+             history.pushState({}, '', url.href);
+        }
     }
 }
 
