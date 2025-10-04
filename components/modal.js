@@ -1,9 +1,10 @@
-// In components/modal.js
+// REPLACE THE ENTIRE CONTENTS OF: components/modal.js
+
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js'; // <-- UPDATED
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -130,10 +131,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
-        const range = ui.getGroupPriceRange(record);
+        const range = getGroupPriceRange(record); // <-- UPDATED
         modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
-        const price = ui.getRecordPrice(record, itemState.selectedOptionIndex);
+        const price = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
         modalItemPrice.innerHTML = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A') + pricingTypeHTML;
     }
 
@@ -174,7 +175,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
         let priceModText = '';
         if (opt.price !== null) {
-           priceModText = `$${opt.price.toFixed(2)}`;
+            priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
@@ -182,7 +183,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
         } else {
-           optionButton.addEventListener('click', (e) => {
+            optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
@@ -191,7 +192,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     detail: { selectedOptionIndex: newIndex }
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = ui.getRecordPrice(record, newIndex);
+                const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
                 modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
         }
@@ -346,7 +347,7 @@ export async function showCheckoutModal(shopSettings) {
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        const price = ui.getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
