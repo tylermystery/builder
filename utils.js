@@ -55,13 +55,6 @@ export function parseOptions(rawOptionsString) {
         };
     });
 }
-
-/**
- * A utility function to debounce a function call.
- * @param {Function} func The function to debounce.
- * @param {number} delay The debounce delay in milliseconds.
- * @returns {Function} A new function that debounces the original.
- */
 export function debounce(func, delay = 300) {
     let timeout;
     return (...args) => {
