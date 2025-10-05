@@ -633,3 +633,46 @@ body.modal-open {
         height: 50px;
     }
 }
+
+/* ADD THIS to the end of your style.css file */
+
+.sso-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: #aaa;
+    font-size: 0.8em;
+    text-transform: uppercase;
+}
+.sso-divider::before, .sso-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #eee;
+}
+.sso-divider:not(:empty-्_)::before {
+    margin-right: .5em;
+}
+.sso-divider:not(:empty-्_)::after {
+    margin-left: .5em;
+}
+
+.sso-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1em;
+    font-weight: 500;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.sso-btn:hover {
+    background-color: #f8f8f8;
+}
