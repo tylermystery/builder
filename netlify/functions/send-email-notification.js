@@ -1,8 +1,8 @@
-
 const fetch = require('node-fetch');
 const sgMail = require('@sendgrid/mail');
 
-const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL } = process.env;
+// Destructure the Netlify-provided URL as a fallback
+const { AIRTABLE_PAT, BASE_ID, SENDGRID_API_KEY, SITE_URL, URL } = process.env;
 sgMail.setApiKey(SENDGRID_API_KEY);
 
 exports.handler = async (event) => {
@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     const { Content, SenderName, SessionID, SenderID } = message.fields;
     const sessionId = SessionID[0];
 
-    // 2. Fetch the session to find the collaborators (users) and the session name
+    // 2. Fetch the session to find the collaborators and the session name
     const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions/${sessionId}`;
     const sessionResponse = await fetch(sessionUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
     if (!sessionResponse.ok) throw new Error('Failed to fetch session from Airtable.');
@@ -51,7 +51,12 @@ exports.handler = async (event) => {
         user.id !== SenderID
       )
       .map(user => {
-        const viewPlanUrl = `${SITE_URL}/?session=${sessionId}`;
+        // --- THIS IS THE FIX ---
+        // Use the custom SITE_URL if available, otherwise fall back to Netlify's default URL.
+        const baseUrl = SITE_URL || URL; 
+        const viewPlanUrl = `${baseUrl}/?session=${sessionId}`;
+        // --- END FIX ---
+
         const msg = {
           to: user.fields.Email,
           from: 'info@tylersmysterytours.com', // Your verified SendGrid sender
