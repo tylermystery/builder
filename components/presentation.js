@@ -167,7 +167,7 @@ function handleKeyDown(e) {
         case 'ArrowUp': navigateToSlide(-1); break;
         case 'ArrowRight': cycleImage(1); break;
         case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape': hidePresentationView(); break;
+        case 'Escape': history.back(); break;
     }
 }
 
@@ -197,7 +197,7 @@ function handleReactionClick(e) {
 
 export function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing presentation for: ${listType}`);
-    updateUrl({ view: 'present' });
+    // This function no longer calls updateUrl. The event listener in events.js does.
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
     combinedList = [...favorites, ...locked];
@@ -224,7 +224,7 @@ export function showPresentationView(listType, startRecordId = null) {
 }
 
 export function hidePresentationView() {
-    updateUrl({ view: null });
+    // This function now ONLY handles the UI.
     modal.classList.remove('active');
     setTimeout(() => {
         modal.style.display = 'none';
@@ -234,21 +234,28 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    closeBtn.addEventListener('click', hidePresentationView);
+    closeBtn.addEventListener('click', () => history.back());
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            history.back();
+        }
+    });
+
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
     
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            hidePresentationView();
+    summaryIdeasLink.addEventListener('click', () => {
+        if (state.cart.items.size > 0) {
+             updateUrl({ view: 'present' }); // Keep URL in sync on sub-navigation
+             showPresentationView('favorites');
         }
     });
-    summaryIdeasLink.addEventListener('click', () => {
-        if (state.cart.items.size > 0) showPresentationView('favorites');
-    });
     summaryLockedLink.addEventListener('click', () => {
-        if (state.cart.lockedItems.size > 0) showPresentationView('locked');
+        if (state.cart.lockedItems.size > 0) {
+            updateUrl({ view: 'present' }); // Keep URL in sync on sub-navigation
+            showPresentationView('locked');
+        }
     });
     shareBtn.addEventListener('click', (e) => {
         const baseURL = window.location.origin + window.location.pathname;
