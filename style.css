@@ -600,3 +600,36 @@ body.modal-open {
 .grouping-card .card-footer {
     justify-content: center;
 }
+
+/* ADD THIS to the end of your style.css file */
+
+@media (max-width: 768px) {
+    /* --- Detail Modal Mobile Layout --- */
+    .modal-content {
+        flex-direction: column;
+        height: 95vh;
+        width: 95vw;
+        max-height: none;
+    }
+
+    .modal-main-column {
+        flex: 1; /* Allow it to shrink and grow */
+        min-height: 250px; /* Ensure it doesn't collapse */
+        border-right: none;
+        border-bottom: 1px solid #eee;
+    }
+
+    .modal-sidebar-column {
+        flex: 1; /* Allow it to shrink and grow */
+        padding: 20px;
+    }
+
+    #modal-thumbnail-strip {
+        padding: 8px;
+    }
+
+    .thumbnail-img {
+        width: 65px;
+        height: 50px;
+    }
+}
