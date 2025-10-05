@@ -1,4 +1,4 @@
-// FILE: chat.js
+// REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
 import * as api from './api.js';
@@ -21,6 +21,18 @@ window.addEventListener('blur', () => {
   isTabActive = false;
 });
 
+function requestNotificationPermissionIfNeeded() {
+    if ('Notification' in window) {
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            log('Chat', 'Notification permission granted.');
+          }
+        });
+      }
+    }
+}
+
 function generateFunName() {
     const adj = FUN_ADJECTIVES[Math.floor(Math.random() * FUN_ADJECTIVES.length)];
     const noun = FUN_NOUNS[Math.floor(Math.random() * FUN_NOUNS.length)];
@@ -29,29 +41,22 @@ function generateFunName() {
 
 function getSimpleUserIdentity() {
     if (currentUser) return currentUser;
-    // Always create a temporary ID first for anonymous users.
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         localStorage.setItem('chatUserId', userId);
     }
-
     let userName = localStorage.getItem('chatUserName');
     if (!userName) {
         userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
-    
-    // Now, check if the user is authenticated and overwrite the temporary ID with the real one if they are.
     const authenticatedUser = state.session.user;
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        // Use the real Airtable record ID for authenticated users
         currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
     } else {
-        // Use the temporary ID for anonymous users
         currentUser = { id: userId, name: userName };
     }
-    
     return currentUser;
 }
 
@@ -65,16 +70,13 @@ function updatePresenceUI(members) {
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
-            // Use the real user object from the state if available, otherwise use the pusher info.
             const profileId = state.session.user.isAuthenticated ? state.session.user.id : member.id;
             const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
-
             if (!state.session.userProfiles.has(profileId)) {
                 state.session.userProfiles.set(profileId, profileName);
                 triggerSave();
             }
             const userElement = document.createElement('div');
-            
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
@@ -133,12 +135,9 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     messagesList.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
 }
-// In chat.js
 
 function bindPresenceEvents() {
     sessionChatChannel.bind('pusher:subscription_succeeded', (members) => {
-        // --- THIS IS THE FIX ---
-        // Enable the form now that the connection is ready.
         const messageInput = document.getElementById('message-input');
         const messageForm = document.getElementById('message-form');
         if (messageInput && messageForm) {
@@ -146,8 +145,6 @@ function bindPresenceEvents() {
             messageForm.querySelector('button').disabled = false;
             messageInput.placeholder = 'Type a message...';
         }
-        // --- END FIX ---
-
         updatePresenceUI(members);
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
@@ -170,7 +167,6 @@ function showNewMessageNotification(sender, message) {
 }
 
 export async function initializeSessionChat() {
-    // --- FIX: Disconnect from any existing pusher instance before re-initializing ---
     if (pusher) {
         pusher.disconnect();
         log('Chat', 'Disconnected from previous Pusher instance.');
@@ -197,31 +193,23 @@ export async function initializeSessionChat() {
             } else {
                 e.target.value = currentUser.name;
             }
-          });
+        });
     }
 
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        console.log(`[DEBUG] initializeSessionChat: About to fetch messages for session ${sessionId}`);
         const records = await api.fetchChatMessages(sessionId);
-        console.log(`[DEBUG] initializeSessionChat: Received ${records.length} records from API.`);
 
         if (records.length > 0) {
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
-                console.log(`[DEBUG] initializeSessionChat: Rendering message - Sender: ${SenderName}, Content: "${Content}"`);
                 const isSent = SenderID === currentUser.id;
                 addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
             });
-        } else {
-             console.log(`[DEBUG] initializeSessionChat: No message records to render.`);
         }
-    } else {
-        console.error('[DEBUG] initializeSessionChat: CRITICAL - Could not find the "messages-list" element in the DOM.');
     }
     
-    // Assign to the new file-level pusher variable
     pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
@@ -238,6 +226,7 @@ export async function initializeSessionChat() {
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
+            requestNotificationPermissionIfNeeded();
             addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
@@ -245,15 +234,6 @@ export async function initializeSessionChat() {
             }
         }
     });
-    if ('Notification' in window) {
-      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            log('Chat', 'Notification permission granted.');
-          }
-        });
-      }
-    }
 }
 
 export async function sendMessage(message, recordId = null) {
@@ -272,12 +252,15 @@ export async function sendMessage(message, recordId = null) {
         });
     } else {
         if (!sessionChatChannel || !currentUser) return;
+        
+        // --- THIS IS THE FIX ---
+        // Ask for permission when the user sends their first message.
+        requestNotificationPermissionIfNeeded();
+
         const sessionId = state.session.id || 'default-session';
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list');
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
-        
-        // This is the critical sequence
         await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
         sessionChatChannel.trigger('client-new-message', {
             content: message,
