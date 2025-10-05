@@ -1,7 +1,8 @@
+// REPLACE THE ENTIRE CONTENTS OF: auth.js
+
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import { associateSessionWithUser } from './api.js'; // <-- ADD THIS IMPORT AT THE TOP OF THE FILE
-
+import { associateSessionWithUser } from './api.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -20,7 +21,35 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
-// --- Functions ---
+// --- NEW: Refactored function to handle a successful login from any method ---
+async function _handleSuccessfulLogin(payload) {
+    if (state.session.id) {
+        await associateSessionWithUser(state.session.id, payload.user.id);
+    }
+    
+    localStorage.setItem('jwt', payload.token);
+                
+    setState({ 
+        session: { 
+            ...state.session, 
+            user: { 
+                ...state.session.user, 
+                ...payload.user, 
+                isAuthenticated: true,
+                isOwner: payload.ownerData.isOwner,
+                ownerDashboardId: payload.ownerData.ownerDashboardId
+            } 
+        } 
+    });
+
+    console.log("User state after update:", state.session.user);
+
+    document.dispatchEvent(new CustomEvent('userLoggedIn'));
+    
+    updateUserProfileIcon();
+    hideUserModal();
+}
+
 export function showUserModal() {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
@@ -30,10 +59,8 @@ export function showUserModal() {
         profilePhoneInput.value = user.phoneNumber || '';
         profileNotificationsSelect.value = user.notificationFrequency || 'None';
         prefsMessage.textContent = ''; 
-
         signinView.style.display = 'none';
         profileView.style.display = 'block';
-
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
             ownerDashboardLink.style.display = 'block';
@@ -41,6 +68,7 @@ export function showUserModal() {
             ownerDashboardLink.style.display = 'none';
         }
     } else {
+        signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
         signinView.style.display = 'block';
         profileView.style.display = 'none';
         ownerDashboardLink.style.display = 'none';
@@ -60,6 +88,7 @@ async function handleSignIn(e) {
     e.preventDefault();
     const email = signinEmailInput.value;
     log('Auth', `Sign-in initiated for: ${email}`);
+    localStorage.setItem('lastSignInEmail', email);
     signinMessage.style.color = '#333';
     signinMessage.textContent = `Sending confirmation email...`;
     try {
@@ -90,45 +119,14 @@ async function handleSignIn(e) {
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
         }, 5 * 60 * 1000);
 
-        // --- THIS IS THE FIX ---
-        // We wait for the subscription to be confirmed before we listen for the auth-success event.
-        // This prevents a race condition where the server sends the event before the client is ready.
         channel.bind('pusher:subscription_succeeded', () => {
             log('Auth', `Successfully subscribed to Pusher channel: ${channelName}`);
-            
-            channel.bind('auth-success', async (payload) => { // Made this async
+            channel.bind('auth-success', async (payload) => {
                 clearTimeout(loginTimeout);
-                console.log("Pusher auth-success payload received:", payload);
-                
-                if (state.session.id) {
-                    await associateSessionWithUser(state.session.id, payload.user.id);
-                }
-    
-                localStorage.setItem('jwt', payload.token);
-                
-                setState({ 
-                    session: { 
-                        ...state.session, 
-                        user: { 
-                            ...state.session.user, 
-                            ...payload.user, 
-                            isAuthenticated: true,
-                            isOwner: payload.ownerData.isOwner,
-                            ownerDashboardId: payload.ownerData.ownerDashboardId
-                        } 
-                    } 
-                });
-    
-                console.log("User state after update:", state.session.user);
-            
-                document.dispatchEvent(new CustomEvent('userLoggedIn'));
-                
-                updateUserProfileIcon();
-                hideUserModal();
                 pusher.unsubscribe(channelName);
+                await _handleSuccessfulLogin(payload);
             });
         });
-        // --- END FIX ---
 
     } catch (error) {
         signinMessage.style.color = '#dc3545';
@@ -146,7 +144,7 @@ async function handleUpdateUserPrefs(e) {
         const response = await fetch('/api/update-user-prefs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, frequency }), // "phone" has been removed
+            body: JSON.stringify({ userId, frequency }),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -156,10 +154,7 @@ async function handleUpdateUserPrefs(e) {
         setState({
             session: {
                 ...state.session,
-                user: {
-                    ...state.session.user,
-                    ...data.user
-                }
+                user: { ...state.session.user, ...data.user }
             }
         });
         prefsMessage.textContent = data.message;
@@ -203,4 +198,37 @@ export function setupAuthEventListeners() {
             hideUserModal();
         }
     });
+
+    // --- NEW SSO EVENT LISTENERS ---
+    const googleSsoBtn = document.getElementById('google-sso-btn');
+    if (googleSsoBtn) {
+        googleSsoBtn.addEventListener('click', () => {
+            netlifyIdentity.open('login');
+        });
+    }
+
+    netlifyIdentity.on('login', async (user) => {
+        try {
+            const netlifyJwt = user.token.access_token;
+            // Call a new serverless function to get our app-specific JWT
+            const response = await fetch('/api/auth-social', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${netlifyJwt}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to sync social login.");
+
+            const appPayload = await response.json();
+            await _handleSuccessfulLogin(appPayload);
+            netlifyIdentity.close();
+
+        } catch (error) {
+            console.error("SSO login error:", error);
+            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            signinMessage.style.color = '#dc3545';
+        }
+    });
+    // --- END NEW SSO EVENT LISTENERS ---
 }
