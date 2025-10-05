@@ -90,39 +90,45 @@ async function handleSignIn(e) {
             signinMessage.textContent = 'Login attempt timed out. Please try again.';
         }, 5 * 60 * 1000);
 
-        channel.bind('auth-success', async (payload) => { // Made this async
-            clearTimeout(loginTimeout);
-            console.log("Pusher auth-success payload received:", payload);
+        // --- THIS IS THE FIX ---
+        // We wait for the subscription to be confirmed before we listen for the auth-success event.
+        // This prevents a race condition where the server sends the event before the client is ready.
+        channel.bind('pusher:subscription_succeeded', () => {
+            log('Auth', `Successfully subscribed to Pusher channel: ${channelName}`);
             
-            if (state.session.id) {
-                await associateSessionWithUser(state.session.id, payload.user.id);
-            }
-
-            localStorage.setItem('jwt', payload.token);
-            
-            setState({ 
-                session: { 
-                    ...state.session, 
-                    user: { 
-                        ...state.session.user, 
-                        ...payload.user, 
-                        isAuthenticated: true,
-                        isOwner: payload.ownerData.isOwner,
-                        ownerDashboardId: payload.ownerData.ownerDashboardId
+            channel.bind('auth-success', async (payload) => { // Made this async
+                clearTimeout(loginTimeout);
+                console.log("Pusher auth-success payload received:", payload);
+                
+                if (state.session.id) {
+                    await associateSessionWithUser(state.session.id, payload.user.id);
+                }
+    
+                localStorage.setItem('jwt', payload.token);
+                
+                setState({ 
+                    session: { 
+                        ...state.session, 
+                        user: { 
+                            ...state.session.user, 
+                            ...payload.user, 
+                            isAuthenticated: true,
+                            isOwner: payload.ownerData.isOwner,
+                            ownerDashboardId: payload.ownerData.ownerDashboardId
+                        } 
                     } 
-                } 
-            });
-
-            console.log("User state after update:", state.session.user);
-        
-            // --- THIS IS THE FIX ---
-            // Dispatch an event to notify the rest of the app that login is complete.
-            document.dispatchEvent(new CustomEvent('userLoggedIn'));
+                });
+    
+                console.log("User state after update:", state.session.user);
             
-            updateUserProfileIcon();
-            hideUserModal();
-            pusher.unsubscribe(channelName);
+                document.dispatchEvent(new CustomEvent('userLoggedIn'));
+                
+                updateUserProfileIcon();
+                hideUserModal();
+                pusher.unsubscribe(channelName);
+            });
         });
+        // --- END FIX ---
 
     } catch (error) {
         signinMessage.style.color = '#dc3545';
