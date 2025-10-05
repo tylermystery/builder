@@ -60,3 +60,8 @@
   from = "/api/get-event-by-slug"
   to = "/.netlify/functions/get-event-by-slug"
   status = 200
+
+[[redirects]]
+  from = "/api/auth-social"
+  to = "/.netlify/functions/auth-social"
+  status = 200
