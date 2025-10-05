@@ -3,7 +3,7 @@
 import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { triggerSave } from './events.js';
+import { triggerSave, openChatWidget } from './events.js'; // <-- Import openChatWidget
 
 let currentUser = null;
 let pusher = null;
@@ -13,6 +13,7 @@ const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave'
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 let originalTitle = document.title;
 let isTabActive = true;
+
 window.addEventListener('focus', () => {
   isTabActive = true;
   document.title = originalTitle;
@@ -146,6 +147,13 @@ function bindPresenceEvents() {
             messageInput.placeholder = 'Type a message...';
         }
         updatePresenceUI(members);
+        
+        // --- THIS IS THE FIX ---
+        // If there's more than one person in the channel, auto-open the chat.
+        if (members.count > 1) {
+            openChatWidget(true); // passing true keeps it open
+        }
+        // --- END FIX ---
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
         updatePresenceUI(sessionChatChannel.members);
@@ -253,8 +261,6 @@ export async function sendMessage(message, recordId = null) {
     } else {
         if (!sessionChatChannel || !currentUser) return;
         
-        // --- THIS IS THE FIX ---
-        // Ask for permission when the user sends their first message.
         requestNotificationPermissionIfNeeded();
 
         const sessionId = state.session.id || 'default-session';
