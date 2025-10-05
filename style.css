@@ -1,8 +1,4 @@
-/* ============================================================ */
-/* --- FUNCTIONAL CSS AUDIT VERSION --- */
-/* All decorative styles (colors, shadows, transitions) have been removed. */
-/* Only layout, positioning, and core functional styles remain. */
-/* ============================================================ */
+/* REPLACE the entire contents of: style.css */
 
 /* --- CORE LAYOUT & TYPOGRAPHY --- */
 body {
@@ -33,21 +29,26 @@ body.modal-open {
     align-items: center;
 }
 
-/* CORRECTED DESKTOP-FIRST LAYOUT */
+/* --- THIS IS THE FIX (Mobile-First Layout) --- */
 .main-content {
-    display: grid;
-    grid-template-columns: 300px 1fr 380px;
+    display: flex;
+    flex-direction: column;
     gap: 25px;
     max-width: 1800px;
     margin: 0 auto;
     padding: 20px;
 }
 
-/* CORRECTED GRID PLACEMENT */
-
-#left-sidebar { grid-column: 1 / 2; }
-#catalog-area { grid-column: 2 / 3; }
-#right-sidebar { grid-column: 3 / 4; }
+/* --- THIS IS THE FIX (Desktop Grid Override) --- */
+@media (min-width: 1000px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 380px;
+    }
+    #left-sidebar { grid-column: 1 / 2; }
+    #catalog-area { grid-column: 2 / 3; }
+    #right-sidebar { grid-column: 3 / 4; }
+}
 
 #right-sidebar, #left-sidebar {
     position: relative;
@@ -56,14 +57,6 @@ body.modal-open {
 #event-plan-panel {
     position: sticky;
     top: 85px; /* Height of main header + padding */
-}
-
-
-@media (min-width: 1000px) {
-    .main-content {
-        display: grid;
-        grid-template-columns: 300px 1fr 380px;
-    }
 }
 
 /* --- SIDEBARS & PANELS --- */
@@ -264,7 +257,6 @@ body.modal-open {
     z-index: 1010;
 }
 
-/* Detail Modal Two-Column Layout */
 .modal-content {
     display: flex;
     flex-direction: row;
@@ -272,7 +264,7 @@ body.modal-open {
     max-width: 1000px;
     height: 90vh;
     max-height: 650px;
-    padding: 0; /* Remove padding for column layout */
+    padding: 0;
 }
 
 .modal-main-column {
@@ -429,10 +421,14 @@ body.modal-open {
 
 /* Main Media Query for Mobile Overrides */
 @media (max-width: 999px) {
+    /* --- THIS IS THE FIX --- */
+    /* This rule is no longer needed here because mobile-first is the default */
+    /*
     .main-content {
         display: flex;
         flex-direction: column;
     }
+    */
 
     #left-sidebar, #right-sidebar {
         max-width: 100%;
@@ -456,10 +452,9 @@ body.modal-open {
 
     #mobile-show-filters-btn {
         position: sticky;
-        top: 75px; /* Adjust based on your header's height */
+        top: 75px;
         z-index: 999;
     }
-
     
     .presentation-body {
         display: flex;
@@ -473,31 +468,26 @@ body.modal-open {
         font-size: 16px;
     }
 
-    /* Hide the summary bar by default */
     #mobile-summary-bar {
         transform: translateY(100%);
         transition: transform 0.3s ease-in-out;
     }
     
-    /* When the body has our new class, slide the bar into view */
     body.mobile-bar-active #mobile-summary-bar {
         transform: translateY(0);
     }
     
-    /* Also, when the body has our class, move the chat widget up */
     body.mobile-bar-active #chat-widget-container {
-        bottom: 75px; /* Adjust to be the height of your summary bar + original margin */
+        bottom: 75px;
         transition: bottom 0.3s ease-in-out;
     }
 }
-/* ADD these rules to the end of your style.css file */
-
 @media (max-width: 999px) {
     #mobile-filter-trigger {
-        display: flex; /* <-- THIS IS THE FIX */
+        display: flex;
         width: 100%;
         position: sticky;
-        top: 75px; /* Adjust to header height */
+        top: 75px;
         z-index: 998;
         background-color: #6c757d;
         color: white;
@@ -516,14 +506,12 @@ body.modal-open {
         transition: transform 0.3s ease;
     }
 
-    /* Rotate caret when panel is open */
     .collapsed .caret {
         transform: rotate(-90deg);
     }
 }
 
 @media (max-width: 999px) {
-    /* --- Presentation View Mobile Layout --- */
     .presentation-body {
         display: flex;
         flex-direction: column;
@@ -536,16 +524,13 @@ body.modal-open {
         font-size: 16px;
     }
 }
-/* ADD THIS TO: style.css */
 
 #plan-filter-btn {
-    /* Style to make it stand out a bit */
     background-color: #f0f8ff;
     font-weight: bold;
 }
 
 #plan-filter-btn.active {
-    /* More prominent active state */
     background-color: #cce5ff;
     border-color: #007bff;
 }
@@ -556,12 +541,9 @@ body.modal-open {
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 2px solid #dee2e6;
-    display: none; /* Hidden by default */
+    display: none;
 }
 
-/* ADD THIS TO: style.css */
-
-/* --- Event Type Card Styles --- */
 .event-type-card .event-card-content {
     display: flex;
     flex-direction: row;
@@ -601,13 +583,11 @@ body.modal-open {
     margin-top: 0;
 }
 
-/* ADD THIS to style.css */
-
 .collage-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
-    height: 200px; /* Or your standard card image height */
+    height: 200px;
 }
 
 .collage-image {
