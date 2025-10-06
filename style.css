@@ -676,3 +676,11 @@ body.modal-open {
 .sso-btn:hover {
     background-color: #f8f8f8;
 }
+
+/* ADD THIS to the end of your style.css file */
+
+@media (min-width: 1000px) {
+    #mobile-filter-trigger {
+        display: none;
+    }
+}
