@@ -684,3 +684,14 @@ body.modal-open {
         display: none;
     }
 }
+
+/* ADD THIS to the end of your style.css file */
+
+#left-sidebar.collapsed ~ #mobile-filter-trigger .caret {
+    transform: rotate(0deg);
+}
+
+#mobile-filter-trigger .caret {
+    transition: transform 0.3s ease;
+    transform: rotate(180deg);
+}
