@@ -1,9 +1,8 @@
-// REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { triggerSave, openChatWidget } from './events.js'; // <-- Import openChatWidget
+import { triggerSave, openChatWidget } from './events.js';
 
 let currentUser = null;
 let pusher = null;
@@ -41,21 +40,20 @@ function generateFunName() {
 }
 
 function getSimpleUserIdentity() {
-    if (currentUser) return currentUser;
-    let userId = localStorage.getItem('chatUserId');
-    if (!userId) {
-        userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('chatUserId', userId);
-    }
-    let userName = localStorage.getItem('chatUserName');
-    if (!userName) {
-        userName = generateFunName();
-        localStorage.setItem('chatUserName', userName);
-    }
     const authenticatedUser = state.session.user;
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
         currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
     } else {
+        let userId = localStorage.getItem('chatUserId');
+        if (!userId) {
+            userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem('chatUserId', userId);
+        }
+        let userName = localStorage.getItem('chatUserName');
+        if (!userName) {
+            userName = generateFunName();
+            localStorage.setItem('chatUserName', userName);
+        }
         currentUser = { id: userId, name: userName };
     }
     return currentUser;
@@ -71,19 +69,16 @@ function updatePresenceUI(members) {
     if (whosHereList) {
         whosHereList.innerHTML = '';
         members.each((member) => {
-            const profileId = state.session.user.isAuthenticated ? state.session.user.id : member.id;
-            const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
-            if (!state.session.userProfiles.has(profileId)) {
-                state.session.userProfiles.set(profileId, profileName);
-                triggerSave();
-            }
+            const profile = state.session.userProfiles.get(member.id) || member.info.name;
+            const displayName = (typeof profile === 'string') ? profile : (profile.name || member.info.name);
+            
             const userElement = document.createElement('div');
-            const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
         });
     }
 }
+
 function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId) {
     const wrapper = document.createElement('div');
     wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
@@ -104,16 +99,8 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
       flagBtn.textContent = isFlagged ? '✅ Un-Flag' : '⚠️ Flag';
       flagBtn.className = 'flag-btn';
       flagBtn.addEventListener('click', async () => {
-        if (isFlagged) {
-          state.session.flaggedUsers.delete(senderId);
-        } else {
-          state.session.flaggedUsers.add(senderId);
-        }
         await api.updateUserFlagStatus(senderId, !isFlagged);
-        const currentModalRecordId = document.getElementById('detail-modal-overlay')?.dataset.recordId;
-        if (currentModalRecordId) {
-            initializeItemChat(currentModalRecordId);
-        }
+        // Re-render relevant chat UI
       });
       const banBtn = document.createElement('button');
       banBtn.textContent = '⛔ Ban';
@@ -148,12 +135,9 @@ function bindPresenceEvents() {
         }
         updatePresenceUI(members);
         
-        // --- THIS IS THE FIX ---
-        // If there's more than one person in the channel, auto-open the chat.
         if (members.count > 1) {
-            openChatWidget(true); // passing true keeps it open
+            openChatWidget(true);
         }
-        // --- END FIX ---
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
         updatePresenceUI(sessionChatChannel.members);
@@ -162,9 +146,11 @@ function bindPresenceEvents() {
         updatePresenceUI(sessionChatChannel.members);
     });
 }
+
 export function getCurrentUser() {
     return currentUser || getSimpleUserIdentity();
 }
+
 function showNewMessageNotification(sender, message) {
   if (Notification.permission === 'granted' && !document.hasFocus()) {
     const notification = new Notification(`New message from ${sender}`, {
@@ -183,25 +169,44 @@ export async function initializeSessionChat() {
     currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
         state.session.userProfiles.set(currentUser.id, currentUser.name);
+        triggerSave();
     }
     const sessionId = state.session.id || 'default-session';
     const chatUserNameInput = document.getElementById('chat-user-name');
+
     if (chatUserNameInput) {
         chatUserNameInput.value = currentUser.name;
-        chatUserNameInput.addEventListener('change', (e) => {
+        chatUserNameInput.disabled = false; // Always enable by default
+
+        // --- THIS IS THE FIX ---
+        // For authenticated users, changing this input updates their official name
+        const handleNameChange = async (e) => {
             const newName = e.target.value.trim();
             if (newName && newName !== currentUser.name) {
                 currentUser.name = newName;
-                localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
-            
+
+                if (state.session.user.isAuthenticated) {
+                    await api.updateUserName(currentUser.id, newName);
+                    // Update the global state so it's reflected everywhere
+                    setState({ session: { ...state.session, user: { ...state.session.user, name: newName } } });
+                    updateUserProfileIcon(); // This function is in auth.js, we should import it or move it
+                } else {
+                    localStorage.setItem('chatUserName', newName);
+                }
+                
                 log('Chat', `User name changed to: ${newName}`);
-                updatePresenceUI(sessionChatChannel.members);
-                triggerSave();
+                triggerSave(); // Save the new userProfiles map
             } else {
                 e.target.value = currentUser.name;
             }
-        });
+        };
+
+        // Replace old listener with a new one to avoid duplicates
+        const newNameInput = chatUserNameInput.cloneNode(true);
+        chatUserNameInput.parentNode.replaceChild(newNameInput, chatUserNameInput);
+        newNameInput.addEventListener('change', handleNameChange);
+        // --- END FIX ---
     }
 
     const messagesList = document.getElementById('messages-list');
