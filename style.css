@@ -687,8 +687,12 @@ body.modal-open {
     transform: rotate(0deg);
 }
 
+
 #mobile-filter-trigger .caret {
     transition: transform 0.3s ease;
+}
+
+#mobile-filter-trigger.expanded .caret {
     transform: rotate(180deg);
 }
 
