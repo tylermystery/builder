@@ -105,10 +105,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
+    const modalItemMeta = document.getElementById('modal-item-meta'); // <-- Add this line
 
-    console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = () => history.back(); // Use onclick to replace any old listener
+    closeBtn.onclick = () => history.back();
+    
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
@@ -137,14 +138,33 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
-        const range = getGroupPriceRange(record); // <-- UPDATED
+        const range = getGroupPriceRange(record);
         modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
-        const price = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
+        const price = getRecordPrice(record, itemState.selectedOptionIndex);
         modalItemPrice.innerHTML = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A') + pricingTypeHTML;
     }
 
+    // --- THIS IS THE FIX ---
+    let metaHTML = '';
+    const duration = record.fields[CONSTANTS.FIELD_NAMES.DURATION];
+    const capacity = record.fields['Capacity'];
+    const additionalInfo = record.fields['Additional Information'];
+
+    if (duration) {
+        metaHTML += `<div class="meta-item"><strong>Duration</strong><span>${duration} hours</span></div>`;
+    }
+    if (capacity) {
+        metaHTML += `<div class="meta-item"><strong>Capacity</strong><span>${capacity}</span></div>`;
+    }
+    if (additionalInfo) {
+        metaHTML += `<div class="meta-item" style="grid-column: 1 / -1;"><strong>Notes</strong><span>${additionalInfo}</span></div>`;
+    }
+    modalItemMeta.innerHTML = metaHTML;
+    // --- END FIX ---
+
     let currentPhotoIndex = startPhotoIndex;
+    // ... (rest of function is the same)
     modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
     modalThumbnailStrip.innerHTML = '';
     imageUrls.forEach((url, index) => {
@@ -165,12 +185,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     if (breadcrumbs.length > 0) {
         modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
     }
-
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-    
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -198,7 +216,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     detail: { selectedOptionIndex: newIndex }
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
+                const newPrice = getRecordPrice(record, newIndex);
                 modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
         }
@@ -220,7 +238,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
-
     modalCalendarContainer.innerHTML = '';
     const busyTimes = await api.fetchCalendarForRecord(record);
     const calendarInstance = window.flatpickr(modalCalendarContainer, {
@@ -267,9 +284,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     if (eventDate) {
         calendarInstance.setDate(new Date(eventDate), true);
     }
-    
     ui.updateCardIcon(record.id);
-    
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
