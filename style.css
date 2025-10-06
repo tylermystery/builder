@@ -677,15 +677,11 @@ body.modal-open {
     background-color: #f8f8f8;
 }
 
-/* ADD THIS to the end of your style.css file */
-
 @media (min-width: 1000px) {
     #mobile-filter-trigger {
         display: none;
     }
 }
-
-/* ADD THIS to the end of your style.css file */
 
 #left-sidebar.collapsed ~ #mobile-filter-trigger .caret {
     transform: rotate(0deg);
@@ -694,4 +690,41 @@ body.modal-open {
 #mobile-filter-trigger .caret {
     transition: transform 0.3s ease;
     transform: rotate(180deg);
+}
+
+/* ADD THIS to the end of your style.css file */
+
+.item-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 15px;
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0 20px 0;
+    font-size: 0.9em;
+}
+
+.meta-item strong {
+    display: block;
+    font-size: 0.8em;
+    color: #6c757d;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.availability-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
