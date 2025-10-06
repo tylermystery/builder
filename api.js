@@ -641,3 +641,38 @@ export async function addRsvpToEvent(eventId, userId) {
         return null;
     }
 }
+
+// ADD THIS NEW FUNCTION to the end of: api.js
+
+export async function updateUserName(userId, newName) {
+    if (!userId || !newName) return;
+    log('API', `Updating name for user ${userId} to "${newName}"`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/Users/${userId}`;
+    const payload = {
+        fields: {
+            'Name': newName
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Airtable API Error: ${errorData.error.message}`);
+        }
+        log('API', 'Successfully updated user name.');
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to update user name:", error);
+        log('API', `Failed to update name: ${error.message}`);
+        return null;
+    }
+}
