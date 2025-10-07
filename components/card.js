@@ -52,12 +52,16 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const groupingNameForFilter = fields.Name.toLowerCase();
         const childItems = allRecords.filter(r => {
             if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
-            const itemCategories = (r.fields.Categories || '').split(',').map(cat => cat.trim().toLowerCase());
+            const itemCategories = (r.fields.Categories || '')
+                .split(',')
+                .map(cat => cat.trim().toLowerCase());
             return itemCategories.includes(groupingNameForFilter);
         });
+
         const imagePromises = childItems.slice(0, 4).map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
         const imageResults = await Promise.all(imagePromises);
         const collageImages = imageResults.flatMap(res => res.imageUrls);
+
         let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
             imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
@@ -78,16 +82,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return groupingCard;
     }
 
-    // --- THIS IS THE FIX ---
-    // Added the availability button back to the image container for all non-grouping cards.
-    const cardHeaderHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-            <div class="heart-icon" data-record-id="${record.id}"></div>
-            <button class="availability-btn" title="Check Availability">📅</button>
-        </div>
-    `;
-    // --- END FIX ---
-
     if (fields['Item Type'] === 'Event') {
         eventCard.className = 'event-card event-type-card';
         const eventDate = fields.Date ? new Date(fields.Date) : null;
@@ -96,8 +90,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
         const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+
         eventCard.innerHTML = `
-            ${cardHeaderHTML}
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                <div class="heart-icon" data-record-id="${record.id}"></div>
+            </div>
             <div class="event-card-content">
                 <div class="event-date-display">
                     <span class="month">${month}</span>
@@ -115,19 +112,21 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         setTimeout(() => updateCardIcon(record.id), 0);
         return eventCard;
     }
-    
+
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
     const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
-        ${cardHeaderHTML}
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="heart-icon" data-record-id="${record.id}"></div>
+        </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
             <p class="description">${fields.Description || ''}</p>
