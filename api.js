@@ -152,6 +152,7 @@ export async function updateSessionAmountReceived(sessionId, amount, note) {
 export async function saveSessionToAirtable() {
     const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
     console.log(`[DEBUG] saveSessionToAirtable: Triggered for ${sessionStatus}`);
+    
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
@@ -202,7 +203,14 @@ export async function saveSessionToAirtable() {
         if (!isUpdate) {
             state.session.id = result.records[0].id;
             state.session.isOwned = true;
-            window.history.replaceState({}, document.title, `?session=${state.session.id}`);
+
+            // --- THIS IS THE FIX ---
+            // Preserve existing URL params (like 'view') when adding the new session ID
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('session', state.session.id);
+            window.history.replaceState({}, document.title, currentUrl.toString());
+            // --- END FIX ---
+
             log('API', `New session created with ID: ${state.session.id}`);
             document.dispatchEvent(new CustomEvent('sessionReady'));
             document.dispatchEvent(new CustomEvent('planCreated'));
