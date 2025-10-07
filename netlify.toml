@@ -65,3 +65,9 @@
   from = "/api/auth-social"
   to = "/.netlify/functions/auth-social"
   status = 200
+
+  [[redirects]]
+  from = "/api/send-chat-to-admin"
+  to = "/.netlify/functions/send-chat-to-admin"
+  status = 200
+
