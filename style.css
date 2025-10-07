@@ -732,3 +732,22 @@ body.modal-open {
     align-items: center;
     justify-content: center;
 }
+
+/* ADD THIS to the end of your style.css file */
+
+@media (min-width: 769px) {
+    .modal-content {
+        flex-direction: row;
+    }
+
+    .modal-main-column {
+        flex: 6;
+        min-height: auto; /* Reset min-height */
+        border-right: 1px solid #eee;
+        border-bottom: none;
+    }
+
+    .modal-sidebar-column {
+        flex: 4;
+    }
+}
