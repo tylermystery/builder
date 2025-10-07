@@ -1,6 +1,5 @@
 /* REPLACE THE ENTIRE CONTENTS OF: style.css */
 
-/* --- CORE LAYOUT & TYPOGRAPHY --- */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     padding-bottom: 150px;
@@ -38,7 +37,6 @@ body.modal-open {
     padding: 20px;
 }
 
-/* Desktop Grid Override */
 @media (min-width: 1000px) {
     .main-content {
         display: grid;
@@ -59,7 +57,6 @@ body.modal-open {
     top: 85px;
 }
 
-/* --- SIDEBARS & PANELS --- */
 #right-sidebar h3, #left-sidebar h3 {
     margin-top: 0;
     border-bottom: 1px solid #ccc;
@@ -110,7 +107,6 @@ body.modal-open {
     align-items: center;
 }
 
-/* --- FAVORITES CAROUSEL --- */
 #favorites-section { position: relative; }
 #favorites-carousel {
     display: flex;
@@ -136,7 +132,6 @@ body.modal-open {
     background-position: center;
 }
 
-/* --- CATALOG & CARDS --- */
 #catalog-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -183,7 +178,6 @@ body.modal-open {
 .card-footer .price { font-weight: bold; font-size: 1.2em; line-height: 1.2; }
 .card-footer .price .pricing-type { display: block; font-size: 0.7em; font-weight: normal; }
 
-/* --- MODALS (Layout) --- */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -212,28 +206,48 @@ body.modal-open {
     cursor: pointer;
     z-index: 1010;
 }
+
+/* --- THIS IS THE FIX: Detail Modal Layout --- */
 #detail-modal-overlay .modal-content {
     display: flex;
     flex-direction: column; /* Mobile-first default */
     width: 95vw;
     height: 95vh;
-    max-height: none;
     padding: 0;
 }
 #detail-modal-overlay .modal-main-column {
-    flex: 1;
+    flex: 3;
     display: flex;
     flex-direction: column;
-    min-height: 250px;
     border-bottom: 1px solid #eee;
 }
 #detail-modal-overlay .modal-sidebar-column {
-    flex: 1;
+    flex: 2;
     padding: 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
 }
+@media (min-width: 769px) {
+    #detail-modal-overlay .modal-content {
+        flex-direction: row;
+        width: 90%;
+        max-width: 1100px;
+        height: 90vh;
+        max-height: 700px;
+    }
+    #detail-modal-overlay .modal-main-column {
+        flex: 6;
+        border-right: 1px solid #eee;
+        border-bottom: none;
+    }
+    #detail-modal-overlay .modal-sidebar-column {
+        flex: 4;
+        padding: 30px;
+    }
+}
+/* --- END FIX --- */
+
 #modal-main-image { flex-grow: 1; background-size: cover; background-position: center; }
 #modal-thumbnail-strip {
     flex-shrink: 0;
@@ -253,28 +267,6 @@ body.modal-open {
 }
 .thumbnail-img.active { border-color: blue; }
 
-/* --- THIS IS THE FIX for Desktop Modal --- */
-@media (min-width: 769px) {
-    #detail-modal-overlay .modal-content {
-        flex-direction: row;
-        width: 90%;
-        max-width: 1100px;
-        height: 90vh;
-        max-height: 700px;
-    }
-    #detail-modal-overlay .modal-main-column {
-        flex: 6;
-        min-height: auto;
-        border-right: 1px solid #eee;
-        border-bottom: none;
-    }
-    #detail-modal-overlay .modal-sidebar-column {
-        flex: 4;
-        padding: 30px;
-    }
-}
-
-/* --- MOBILE & RESPONSIVE --- */
 #mobile-summary-bar {
     position: fixed;
     bottom: 0; left: 0;
@@ -295,15 +287,7 @@ body.modal-open {
 #mobile-summary-bar.unavailable { background-color: #dc3545; }
 #mobile-bar-info { display: flex; flex-direction: column; font-size: 0.9em; }
 #mobile-bar-total-cost { font-weight: bold; font-size: 1.1em; }
-#mobile-view-plan-btn {
-    padding: 10px 20px;
-    font-weight: bold;
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: 1px solid white;
-    border-radius: 5px;
-    cursor: pointer;
-}
+#mobile-view-plan-btn { padding: 10px 20px; font-weight: bold; background-color: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; border-radius: 5px; cursor: pointer; }
 body.mobile-bar-active #mobile-summary-bar { transform: translateY(0); }
 body.mobile-bar-active #chat-widget-container { bottom: 75px; transition: bottom 0.3s ease-in-out; }
 
@@ -312,7 +296,7 @@ body.mobile-bar-active #chat-widget-container { bottom: 75px; transition: bottom
         max-width: 100%;
         transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
         overflow: hidden;
-        max-height: 2000px; /* A large value to not clip content */
+        max-height: 2000px;
         opacity: 1;
     }
     #left-sidebar.collapsed, #right-sidebar.collapsed {
@@ -343,7 +327,6 @@ body.mobile-bar-active #chat-widget-container { bottom: 75px; transition: bottom
     }
 }
 
-/* --- THIS IS THE FIX for the Mobile Arrow --- */
 #mobile-filter-trigger .caret {
     transition: transform 0.3s ease;
 }
@@ -351,17 +334,9 @@ body.mobile-bar-active #chat-widget-container { bottom: 75px; transition: bottom
     transform: rotate(180deg);
 }
 
-/* --- MISC & Remaining Styles --- */
 #plan-filter-btn { background-color: #f0f8ff; font-weight: bold; }
 #plan-filter-btn.active { background-color: #cce5ff; border-color: #007bff; }
-#catalog-title {
-    font-size: 1.5em;
-    font-weight: bold;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #dee2e6;
-    display: none;
-}
+#catalog-title { font-size: 1.5em; font-weight: bold; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #dee2e6; display: none; }
 .event-type-card .event-card-content { display: flex; flex-direction: row; align-items: flex-start; gap: 15px; }
 .event-date-display { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; text-align: center; padding: 10px; min-width: 70px; }
 .event-date-display .month { display: block; font-size: 0.8em; font-weight: bold; color: #dc3545; }
