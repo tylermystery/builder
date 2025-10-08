@@ -159,14 +159,13 @@ async function initialize() {
                 const headerLogo = document.createElement('img');
                 headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/'); // 50px height version
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
-                headerLogo.style.height = '50px';
-                headerLogo.style.marginRight = '15px'; // Use margin-right for spacing
                 
                 const headerLeft = document.getElementById('header-left');
                 if (headerLeft) {
                     // Use prepend to add the logo BEFORE the title
                     headerLeft.prepend(headerLogo);
                 }
+
             }
         }
         // --- NEW FAVICON & HEADER LOGO LOGIC END ---
