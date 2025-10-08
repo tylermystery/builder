@@ -197,6 +197,38 @@ async function initialize() {
             }
         }
 
+        // PASTE this block inside the initialize function in: main.js
+// A good place is right after the shop-switcher-trigger event listener.
+
+        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
+            ui.showShopSwitcher();
+        });
+
+        // --- NEW FAVICON LOGIC (CLOUDİNARY) START ---
+        // Remove any existing favicon to prevent conflicts
+        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+        if (existingFavicon) {
+            existingFavicon.remove();
+        }
+
+        // Check if the active shop has a LogoTag field
+        const logoTag = activeShop.fields.LogoTag;
+        if (logoTag) {
+            // Use the existing API function to fetch the image URL from Cloudinary by its tag
+            const imageUrls = await api.fetchImagesByTags(logoTag);
+            if (imageUrls && imageUrls.length > 0) {
+                const favicon = document.createElement('link');
+                favicon.rel = 'icon';
+                // Create a 32x32 transformed version for the favicon for best compatibility
+                favicon.href = imageUrls[0].replace('/upload/', '/upload/c_scale,w_32/');
+                document.head.appendChild(favicon);
+            }
+        }
+        // --- NEW FAVICON LOGIC (CLOUDİNARY) END ---
+        
+        let shopSettings = {
+            shopType: activeShop.fields.ShopType || 'Events',
+        
         if (sessionId && !state.session.id) {
             await api.loadSessionFromAirtable(sessionId);
         }
