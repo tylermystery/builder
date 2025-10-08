@@ -13,12 +13,11 @@ body.modal-open {
 
 #main-header {
     border-bottom: 1px solid #dee2e6;
-    padding: 15px 20px; /* INCREASED vertical padding */
     position: sticky;
     top: 0;
     z-index: 1000;
     background-color: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .header-content {
@@ -27,6 +26,18 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 0 20px; /* Horizontal padding */
+    min-height: 80px; /* Guarantees vertical space for the logo */
+    box-sizing: border-box;
+}
+
+#header-left {
+    display: flex;
+    align-items: center;
+}
+
+#main-shop-title {
+    margin: 0;
 }
 
 /* --- THIS IS THE FIX (Mobile-First Layout) --- */
@@ -698,17 +709,4 @@ body.modal-open {
 #breadcrumbs span {
     font-weight: bold;
     color: #343a40;
-}
-
-/* ADD this to the end of: style.css */
-
-#header-left {
-    display: flex;
-    align-items: center;
-}
-
-/* ADD this rule to: style.css */
-
-#main-shop-title {
-    margin: 0;
 }
