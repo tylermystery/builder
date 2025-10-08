@@ -546,20 +546,31 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
                 // --- THIS IS THE FIX ---
-                // Search in both category and subcategory filters for a matching button.
-                let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
-                                      .find(btn => btn.textContent === parentName);
-                
-                if (!targetButton) {
-                    targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
-                                      .find(btn => btn.textContent === parentName);
-                }
+                // Find the button in either filter group
+                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
+                                     .find(btn => btn.textContent === parentName);
                 
                 if (targetButton) {
-                    // First, trigger the filter change in the main UI
-                    targetButton.click();
+                    const isCategory = !!targetButton.closest('#category-filters');
                     
-                    // Then, ensure the modal is closed and its state is removed from the URL
+                    if (isCategory) {
+                        // For main categories, the default .click() behavior is correct as it resets subcategories.
+                        targetButton.click();
+                    } else {
+                        // For subcategories, we override the default toggle behavior to ensure it's a "select only" action.
+                        // 1. Deactivate all other subcategory buttons.
+                        document.querySelectorAll('#subcategory-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                        
+                        // 2. Activate ONLY the target button.
+                        targetButton.classList.add('active');
+
+                        // 3. Manually trigger the URL update and re-filter the catalog.
+                        const activeSubcats = [targetButton.dataset.filter];
+                        updateUrl({ subcategory: activeSubcats.join(',') || null });
+                        applyFiltersAndSort(imageCache);
+                    }
+
+                    // Finally, close the modal now that the background has been updated.
                     if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
                         updateUrl({ openItem: null });
                         ui.hideDetailModal();
