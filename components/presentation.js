@@ -167,7 +167,11 @@ function handleKeyDown(e) {
         case 'ArrowUp': navigateToSlide(-1); break;
         case 'ArrowRight': cycleImage(1); break;
         case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape': history.back(); break;
+        case 'Escape': 
+            // --- THIS IS THE FIX ---
+            updateUrl({ view: null });
+            hidePresentationView();
+            break;
     }
 }
 
@@ -234,26 +238,28 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    closeBtn.addEventListener('click', () => history.back());
+    // --- THIS IS THE FIX ---
+    closeBtn.addEventListener('click', () => {
+        updateUrl({ view: null });
+        hidePresentationView();
+    });
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            history.back();
+            updateUrl({ view: null });
+            hidePresentationView();
         }
     });
-
+    // --- END FIX ---
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
-    
     summaryIdeasLink.addEventListener('click', () => {
         if (state.cart.items.size > 0) {
-             updateUrl({ view: 'present' }); // Keep URL in sync on sub-navigation
              showPresentationView('favorites');
         }
     });
     summaryLockedLink.addEventListener('click', () => {
         if (state.cart.lockedItems.size > 0) {
-            updateUrl({ view: 'present' }); // Keep URL in sync on sub-navigation
             showPresentationView('locked');
         }
     });
@@ -266,7 +272,7 @@ export function setupPresentationEventListeners() {
             const originalText = e.target.textContent;
             e.target.textContent = 'Copied!';
             setTimeout(() => {
-                e.target.textContent = originalText;
+               e.target.textContent = originalText;
             }, 1500);
         });
     });
