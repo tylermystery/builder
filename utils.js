@@ -70,13 +70,7 @@ export function debounce(func, delay = 300) {
  * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
  * A value of null or undefined will remove the parameter.
  */
-/**
- * Updates the browser's URL with new query parameters without reloading the page.
- * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
- * A value of null or undefined will remove the parameter.
- */
 export function updateUrl(paramsToUpdate) {
-    console.log('[updateUrl] Called with params:', paramsToUpdate);
     const url = new URL(window.location);
     const searchParams = url.searchParams;
 
@@ -89,23 +83,14 @@ export function updateUrl(paramsToUpdate) {
         }
     }
 
-    const newRelativeUrl = url.pathname + '?' + searchParams.toString();
-    const currentRelativeUrl = window.location.pathname + window.location.search;
+    const newUrl = url.pathname + '?' + searchParams.toString();
+    const currentUrl = window.location.pathname + window.location.search;
     
-    console.log(`[updateUrl] Comparing URLs:\n  CURRENT: ${currentRelativeUrl}\n  NEW:     ${newRelativeUrl}`);
-
-    if (currentRelativeUrl !== newRelativeUrl) {
-        const isJustClosingModal = paramsToUpdate.openItem === null && !paramsToUpdate.category && !paramsToUpdate.view;
-
-        if (isJustClosingModal) {
-             console.log('[updateUrl] Action: history.back()');
-             history.back();
-        } else {
-             console.log('[updateUrl] Action: history.pushState()');
-             history.pushState({}, '', url.href);
-        }
-    } else {
-        console.log('[updateUrl] Action: None (URL is the same)');
+    if (newUrl !== currentUrl) {
+        // --- THIS IS THE FIX ---
+        // Always use pushState to update the URL without triggering a full navigation
+        // or relying on a potentially non-existent browser history entry.
+        history.pushState({}, '', newUrl);
     }
 }
 
