@@ -241,15 +241,15 @@ export function setupPresentationEventListeners() {
     // --- THIS IS THE FIX ---
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
-        hidePresentationView();
+        hideItineraryModal();
     });
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
+    itineraryModal.addEventListener('click', (e) => {
+        if (e.target === itineraryModal) {
             updateUrl({ view: null });
-            hidePresentationView();
+            hideItineraryModal();
         }
     });
-    // --- END FIX ---
+
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
