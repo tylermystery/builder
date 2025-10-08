@@ -251,17 +251,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         rightSidebar?.classList.add('collapsed');
     }
 
-    safeAddEventListener('mobile-filter-trigger', 'click', (e) => {
+    safeAddEventListener('mobile-filter-trigger', 'click', () => {
         if (window.innerWidth < 1000) {
-            const leftSidebar = document.getElementById('left-sidebar');
             leftSidebar?.classList.toggle('collapsed');
-            // --- THIS IS THE FIX ---
-            // Also toggle a class on the button itself for styling
-            e.currentTarget.classList.toggle('expanded', !leftSidebar.classList.contains('collapsed'));
-            // --- END FIX ---
         }
     });
-
     safeAddEventListener('mobile-view-plan-btn', 'click', () => {
         const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
         rightSidebar?.classList.toggle('collapsed');
