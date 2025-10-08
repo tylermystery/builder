@@ -14,22 +14,27 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
+
 // --- THIS IS THE FIX ---
-// The manual close actions now trigger history.back()
-// which will fire popstate and let syncUiWithUrl handle the UI update.
+// This new function safely closes the modal by updating the URL state
+// and then hiding the UI, instead of using history.back().
+function closeDetailModal() {
+    updateUrl({ openItem: null });
+    hideDetailModal();
+}
+
 function handleEscapeKey(event) {
     if (event.key === 'Escape') {
-        history.back();
+        closeDetailModal();
     }
 }
 
 function handleOverlayClick(event) {
     if (event.target === modalOverlay) {
-        history.back();
+        closeDetailModal();
     }
 }
 // --- END FIX ---
-
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
@@ -108,7 +113,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = () => history.back(); // Use onclick to replace any old listener
+    closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
