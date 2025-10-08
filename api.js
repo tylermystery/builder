@@ -500,7 +500,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 
         const result = await response.json();
         console.log('[DEBUG] postChatMessage: SUCCESS! Airtable response:', result);
-
         const newMessageRecordId = result.records[0].id;
         if (newMessageRecordId) {
             await Promise.all([
@@ -510,6 +509,11 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                     body: JSON.stringify({ recordId: newMessageRecordId })
                 }),
                 fetch('/api/send-email-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: newMessageRecordId })
+                }),
+                fetch('/api/send-chat-to-admin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ recordId: newMessageRecordId })
