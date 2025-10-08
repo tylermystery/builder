@@ -132,7 +132,7 @@ async function initialize() {
             ui.showShopSwitcher();
         });
 
-// REPLACE the favicon logic block in: main.js
+// REPLACE the favicon/logo logic block in: main.js
 
         // --- NEW FAVICON & HEADER LOGO LOGIC START ---
         // Remove any existing favicon to prevent conflicts
@@ -157,18 +157,19 @@ async function initialize() {
 
                 // 2. Set the Header Logo (on-page icon)
                 const headerLogo = document.createElement('img');
-                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_40,c_scale/'); // 40px height version
+                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/'); // 50px height version
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
-                headerLogo.style.height = '40px';
-                headerLogo.style.marginLeft = '15px';
+                headerLogo.style.height = '50px'; // INCREASED height
+                headerLogo.style.marginRight = '15px'; // ADJUSTED margin for spacing
                 
                 const headerLeft = document.getElementById('header-left');
                 if (headerLeft) {
-                    headerLeft.appendChild(headerLogo);
+                    headerLeft.prepend(headerLogo); // MOVED logo to the left of the title
                 }
             }
         }
-        // --- NEW FAVICON & HEADER LOGO LOGIC END ---        
+        // --- NEW FAVICON & HEADER LOGO LOGIC END ---
+        
         // --- THIS IS THE FIX ---
         // The 'let' keyword is removed from the second declaration of shopSettings.
         const shopSettings = {
