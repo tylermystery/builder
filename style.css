@@ -13,7 +13,7 @@ body.modal-open {
 
 #main-header {
     border-bottom: 1px solid #dee2e6;
-    padding: 10px 20px;
+    padding: 15px 20px; /* INCREASED vertical padding */
     position: sticky;
     top: 0;
     z-index: 1000;
