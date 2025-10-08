@@ -87,12 +87,17 @@ export function setupItineraryEventListeners() {
         }
     });
 
-    closeBtn.addEventListener('click', hideItineraryModal);
+    closeBtn.addEventListener('click', () => {
+        updateUrl({ view: null });
+        hideItineraryModal();
+    });
     itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
+            updateUrl({ view: null });
             hideItineraryModal();
         }
     });
+    // --- END FIX ---
 }
 
 export function showItineraryModal() {
