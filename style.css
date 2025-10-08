@@ -706,3 +706,9 @@ body.modal-open {
     display: flex;
     align-items: center;
 }
+
+/* ADD this rule to: style.css */
+
+#main-shop-title {
+    margin: 0;
+}
