@@ -676,3 +676,26 @@ body.modal-open {
 .sso-btn:hover {
     background-color: #f8f8f8;
 }
+
+/* ADD this to the end of: style.css */
+
+#breadcrumbs {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 8px;
+    padding: 5px 0;
+}
+
+#breadcrumbs a.breadcrumb-link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+#breadcrumbs a.breadcrumb-link:hover {
+    text-decoration: underline;
+}
+
+#breadcrumbs span {
+    font-weight: bold;
+    color: #343a40;
+}
