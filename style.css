@@ -10,6 +10,7 @@ body {
 body.modal-open {
     overflow: hidden;
 }
+/* REPLACE all rules for #main-header, .header-content, #header-left, and #main-shop-title in: style.css */
 
 #main-header {
     border-bottom: 1px solid #dee2e6;
@@ -26,18 +27,26 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px; /* Horizontal padding */
-    min-height: 80px; /* Guarantees vertical space for the logo */
-    box-sizing: border-box;
+    /* Using padding here gives the content guaranteed breathing room */
+    padding: 1rem 1.25rem; /* Approx. 16px top/bottom */
 }
 
 #header-left {
     display: flex;
     align-items: center;
+    gap: 15px; /* Replaces the JS margin for cleaner spacing */
 }
 
 #main-shop-title {
+    /* This removes default browser margins that cause alignment issues */
     margin: 0;
+    line-height: 1.2;
+}
+
+/* Specifically targets the logo image for predictable behavior */
+#header-left > img {
+    height: 50px;
+    display: block;
 }
 
 /* --- THIS IS THE FIX (Mobile-First Layout) --- */
