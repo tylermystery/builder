@@ -71,6 +71,7 @@ function syncUiWithUrl() {
     }, 100);
 }
 
+
 async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
@@ -97,37 +98,6 @@ async function initialize() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session');
     let shopId = urlParams.get('shopId');
-    
-    // --- THIS IS THE FIX ---
-    // Handle user authentication and data fetching first
-    const jwt = localStorage.getItem('jwt');
-    if (jwt) {
-        try {
-            const payload = JSON.parse(atob(jwt.split('.')[1]));
-            if (payload.exp * 1000 > Date.now()) {
-                // Fetch the full, up-to-date user record from Airtable
-                const userRecord = await api.fetchUser(payload.userId);
-                if (userRecord) {
-                    const fullUser = {
-                        isAuthenticated: true,
-                        id: userRecord.id,
-                        name: userRecord.fields.Name,
-                        email: userRecord.fields.Email,
-                        phoneNumber: userRecord.fields.PhoneNumber,
-                        notificationFrequency: userRecord.fields.NotificationFrequency
-                    };
-                    setState({ session: { ...state.session, user: { ...state.session.user, ...fullUser } } });
-                }
-            } else {
-                localStorage.removeItem('jwt');
-            }
-        } catch (e) {
-            localStorage.removeItem('jwt');
-            console.error("Failed to parse JWT:", e);
-        }
-    }
-    // --- END FIX ---
-    
     let activeShop = null;
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
@@ -174,6 +144,23 @@ async function initialize() {
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); }
         ui.applyCartLabels(shopSettings.cartLabels);
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
+        
+        const jwt = localStorage.getItem('jwt');
+        if (jwt) {
+            try {
+                const payload = JSON.parse(atob(jwt.split('.')[1]));
+                if (payload.exp * 1000 > Date.now()) {
+                    setState({ 
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
+                    });
+                } else {
+                    localStorage.removeItem('jwt');
+                }
+            } catch (e) {
+                localStorage.removeItem('jwt');
+                console.error("Failed to parse JWT:", e);
+            }
+        }
         
         await populateUserPlans(state.session.user.id);
         const loginToken = urlParams.get('token');
