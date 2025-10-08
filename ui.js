@@ -381,22 +381,52 @@ export async function updateMobileBarAvailability() {
     }
 }
 
+// REPLACE the entire updateCatalogHeader function in: ui.js
+
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const titleEl = document.getElementById('catalog-title');
-    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
+    const planFilterBtn = document.getElementById('plan-filter-btn');
 
-    if (!breadcrumbsEl || !titleEl || !activeCategoryButton || activeCategoryButton.dataset.filter === 'all') {
-        if(titleEl) titleEl.style.display = 'none';
-        if(breadcrumbsEl) breadcrumbsEl.innerHTML = '';
+    if (!breadcrumbsEl || !titleEl) return;
+
+    // Reset previous state
+    breadcrumbsEl.innerHTML = '';
+    titleEl.style.display = 'none';
+
+    // Don't show breadcrumbs for the "My Plan" view
+    if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         return;
     }
-    
-    const categoryName = activeCategoryButton.textContent;
-    titleEl.textContent = categoryName;
-    titleEl.style.display = 'block';
 
-    breadcrumbsEl.innerHTML = `
-        <a href="#" class="parent-link" data-parent-name="All">All Categories</a> > <span>${categoryName}</span>
-    `;
+    const path = [];
+    let currentTitle = '';
+
+    // Always start with a clickable "All Categories" link
+    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
+
+    // Find the active category
+    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
+    if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
+        const categoryName = activeCategoryButton.textContent;
+        // The category link should also be clickable
+        path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeCategoryButton.dataset.filter}">${categoryName}</a>`);
+        currentTitle = categoryName;
+    }
+
+    // Find any active subcategories
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    if (activeSubcategoryNodes.length > 0) {
+        const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);
+        // The final part of the breadcrumb is just text, not a link
+        path.push(`<span>${subcatNames.join(' + ')}</span>`);
+        currentTitle = subcatNames.join(' + ');
+    }
+    
+    // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
+    if (path.length > 1) {
+        breadcrumbsEl.innerHTML = path.join(' &gt; ');
+        titleEl.textContent = currentTitle;
+        titleEl.style.display = 'block';
+    }
 }
