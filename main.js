@@ -13,7 +13,6 @@ import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
-
 async function populateUserPlans(userId) {
     if (userId) {
         const plans = await api.fetchPlansForUser(userId);
@@ -38,7 +37,6 @@ function syncUiWithUrl() {
 
     const categoryFilters = document.getElementById('category-filters');
     categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-
     if (view === 'plan') {
         document.getElementById('plan-filter-btn')?.classList.add('active');
     } else if (category) {
@@ -64,6 +62,7 @@ function syncUiWithUrl() {
             ui.showItineraryModal();
         } else if (openItemId) {
             const recordToOpen = state.records.all.find(r => r.id === openItemId);
+            
             if (recordToOpen) {
                 ui.showDetailModal(recordToOpen);
             }
@@ -132,7 +131,27 @@ async function initialize() {
         document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
             ui.showShopSwitcher();
         });
-        let shopSettings = {
+
+        // --- NEW FAVICON LOGIC (CLOUDİNARY) START ---
+        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+        if (existingFavicon) {
+            existingFavicon.remove();
+        }
+        const logoTag = activeShop.fields.LogoTag;
+        if (logoTag) {
+            const imageUrls = await api.fetchImagesByTags(logoTag);
+            if (imageUrls && imageUrls.length > 0) {
+                const favicon = document.createElement('link');
+                favicon.rel = 'icon';
+                favicon.href = imageUrls[0].replace('/upload/', '/upload/c_scale,w_32/');
+                document.head.appendChild(favicon);
+            }
+        }
+        // --- NEW FAVICON LOGIC (CLOUDİNARY) END ---
+        
+        // --- THIS IS THE FIX ---
+        // The 'let' keyword is removed from the second declaration of shopSettings.
+        const shopSettings = {
             shopType: activeShop.fields.ShopType || 'Events',
             enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
             paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
@@ -169,7 +188,7 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: loginToken })
+                     body: JSON.stringify({ token: loginToken })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error);
@@ -197,38 +216,6 @@ async function initialize() {
             }
         }
 
-        // PASTE this block inside the initialize function in: main.js
-// A good place is right after the shop-switcher-trigger event listener.
-
-        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
-            ui.showShopSwitcher();
-        });
-
-        // --- NEW FAVICON LOGIC (CLOUDİNARY) START ---
-        // Remove any existing favicon to prevent conflicts
-        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
-        if (existingFavicon) {
-            existingFavicon.remove();
-        }
-
-        // Check if the active shop has a LogoTag field
-        const logoTag = activeShop.fields.LogoTag;
-        if (logoTag) {
-            // Use the existing API function to fetch the image URL from Cloudinary by its tag
-            const imageUrls = await api.fetchImagesByTags(logoTag);
-            if (imageUrls && imageUrls.length > 0) {
-                const favicon = document.createElement('link');
-                favicon.rel = 'icon';
-                // Create a 32x32 transformed version for the favicon for best compatibility
-                favicon.href = imageUrls[0].replace('/upload/', '/upload/c_scale,w_32/');
-                document.head.appendChild(favicon);
-            }
-        }
-        // --- NEW FAVICON LOGIC (CLOUDİNARY) END ---
-        
-        let shopSettings = {
-            shopType: activeShop.fields.ShopType || 'Events',
-        
         if (sessionId && !state.session.id) {
             await api.loadSessionFromAirtable(sessionId);
         }
