@@ -699,3 +699,10 @@ body.modal-open {
     font-weight: bold;
     color: #343a40;
 }
+
+/* ADD this to the end of: style.css */
+
+#header-left {
+    display: flex;
+    align-items: center;
+}
