@@ -3,7 +3,6 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import { associateSessionWithUser } from './api.js';
-import { initializeSessionChat } from './chat.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -22,6 +21,7 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
+// --- NEW: Refactored function to handle a successful login from any method ---
 async function _handleSuccessfulLogin(payload) {
     if (state.session.id) {
         await associateSessionWithUser(state.session.id, payload.user.id);
@@ -57,9 +57,7 @@ export function showUserModal() {
         profileNameEl.textContent = user.name;
         profileEmailEl.textContent = user.email;
         profilePhoneInput.value = user.phoneNumber || '';
-        // --- THIS IS A FIX ---
-        profileNotificationsSelect.value = user.notificationFrequency === 'Real-Time' ? 'Real-Time' : 'None';
-        // --- END FIX ---
+        profileNotificationsSelect.value = user.notificationFrequency || 'None';
         prefsMessage.textContent = ''; 
         signinView.style.display = 'none';
         profileView.style.display = 'block';
@@ -173,8 +171,6 @@ export function handleSignOut() {
     setState({
         session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
     });
-    // Re-initialize chat to get a new anonymous identity
-    initializeSessionChat();
     updateUserProfileIcon();
     hideUserModal();
 }
@@ -203,14 +199,7 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- THIS IS A FIX ---
-    // Listen for the userLoggedIn event and re-initialize chat to update the user's identity.
-    document.addEventListener('userLoggedIn', () => {
-        log('Auth', 'userLoggedIn event detected, re-initializing chat.');
-        initializeSessionChat();
-    });
-    // --- END FIX ---
-
+    // --- NEW SSO EVENT LISTENERS ---
     const googleSsoBtn = document.getElementById('google-sso-btn');
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
@@ -221,6 +210,7 @@ export function setupAuthEventListeners() {
     netlifyIdentity.on('login', async (user) => {
         try {
             const netlifyJwt = user.token.access_token;
+            // Call a new serverless function to get our app-specific JWT
             const response = await fetch('/api/auth-social', {
                 method: 'POST',
                 headers: {
@@ -240,4 +230,5 @@ export function setupAuthEventListeners() {
             signinMessage.style.color = '#dc3545';
         }
     });
+    // --- END NEW SSO EVENT LISTENERS ---
 }
