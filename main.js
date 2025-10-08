@@ -132,23 +132,43 @@ async function initialize() {
             ui.showShopSwitcher();
         });
 
-        // --- NEW FAVICON LOGIC (CLOUDİNARY) START ---
+// REPLACE the favicon logic block in: main.js
+
+        // --- NEW FAVICON & HEADER LOGO LOGIC START ---
+        // Remove any existing favicon to prevent conflicts
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
         if (existingFavicon) {
             existingFavicon.remove();
         }
+
+        // Check if the active shop has a LogoTag field
         const logoTag = activeShop.fields.LogoTag;
         if (logoTag) {
+            // Use the existing API function to fetch the image URL from Cloudinary by its tag
             const imageUrls = await api.fetchImagesByTags(logoTag);
             if (imageUrls && imageUrls.length > 0) {
+                const logoUrl = imageUrls[0];
+
+                // 1. Set the Favicon (browser tab icon)
                 const favicon = document.createElement('link');
                 favicon.rel = 'icon';
-                favicon.href = imageUrls[0].replace('/upload/', '/upload/c_scale,w_32/');
+                favicon.href = logoUrl.replace('/upload/', '/upload/c_scale,w_32/'); // 32x32px version
                 document.head.appendChild(favicon);
+
+                // 2. Set the Header Logo (on-page icon)
+                const headerLogo = document.createElement('img');
+                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_40,c_scale/'); // 40px height version
+                headerLogo.alt = `${activeShop.fields.Name} Logo`;
+                headerLogo.style.height = '40px';
+                headerLogo.style.marginLeft = '15px';
+                
+                const headerLeft = document.getElementById('header-left');
+                if (headerLeft) {
+                    headerLeft.appendChild(headerLogo);
+                }
             }
         }
-        // --- NEW FAVICON LOGIC (CLOUDİNARY) END ---
-        
+        // --- NEW FAVICON & HEADER LOGO LOGIC END ---        
         // --- THIS IS THE FIX ---
         // The 'let' keyword is removed from the second declaration of shopSettings.
         const shopSettings = {
