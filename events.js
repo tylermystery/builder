@@ -545,10 +545,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
-                const targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn')).find(btn => btn.textContent === parentName);
+                // --- THIS IS THE FIX ---
+                // Search in both category and subcategory filters for a matching button.
+                let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
+                                      .find(btn => btn.textContent === parentName);
+                
+                if (!targetButton) {
+                    targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
+                                      .find(btn => btn.textContent === parentName);
+                }
+                
                 if (targetButton) {
+                    // First, trigger the filter change in the main UI
                     targetButton.click();
+                    
+                    // Then, ensure the modal is closed and its state is removed from the URL
                     if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
+                        updateUrl({ openItem: null });
                         ui.hideDetailModal();
                     }
                 }
