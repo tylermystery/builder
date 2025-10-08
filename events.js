@@ -473,8 +473,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (state.ui.isInitializing) return;
         const card = e.target.closest('.event-card');
         const heartIcon = e.target.closest('.heart-icon');
-        const saveShareBtn = e.target.closest('#save-share-btn');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const rsvpBtn = e.target.closest('.rsvp-btn');
         const favoriteItem = e.target.closest('.favorite-item');
         const removeBtn = favoriteItem?.querySelector('.remove-btn');
@@ -484,12 +482,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const parentLink = e.target.closest('.parent-link');
         const presentBtn = e.target.closest('.present-btn');
         const carouselNav = e.target.closest('.carousel-nav');
+
+        const saveShareBtn = e.target.closest('#save-share-btn');
+        const breadcrumbLink = e.target.closest('.breadcrumb-link');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
-                const originalText = saveShareBtn.textContent;
+                const originalText 
+ = saveShareBtn.textContent;
                 saveShareBtn.textContent = 'Copied!';
                 setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
             });
+        } else if (breadcrumbLink) {
+            e.preventDefault();
+            const filterValue = breadcrumbLink.dataset.filter;
+            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
+            if (targetButton) {
+                targetButton.click();
+            }
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
