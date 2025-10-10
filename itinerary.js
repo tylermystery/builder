@@ -7,6 +7,8 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
+import { getRecordPrice } from '../utils.js';
+import { log } from '../utils/debug.js';
 
 const Sortable = window.Sortable;
 
@@ -111,6 +113,9 @@ export function renderItineraryHeader() {
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 export async function renderItinerary() {
+    // --- DEBUG STATEMENT ---
+    log('Itinerary', 'Checking user object on render:', state.session.user);
+
     log('Itinerary', 'Rendering itinerary items.');
     lockedItemsContainer.innerHTML = '';
     favoritedItemsContainer.innerHTML = '';
@@ -120,6 +125,7 @@ export async function renderItinerary() {
     if (state.cart.items.size === 0) {
         favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
     }
+
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -127,6 +133,7 @@ export async function renderItinerary() {
             if (itemElement) lockedItemsContainer.appendChild(itemElement);
         }
     }
+
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
@@ -134,6 +141,20 @@ export async function renderItinerary() {
             if (itemElement) favoritedItemsContainer.appendChild(itemElement);
         }
     }
+
+    lockedItemsContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('price-override-input')) {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newPrice = parseFloat(e.target.value);
+            if (!isNaN(newPrice)) {
+                ui.updateLockedItemState(recordId, { overridePrice: newPrice });
+                ui.updateTotalCost();
+                ui.updateEventPlanSection();
+                triggerSave();
+            }
+        }
+    });
+
     document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -173,6 +194,7 @@ export async function renderItinerary() {
         });
     });
 }
+
 async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
