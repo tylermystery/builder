@@ -201,13 +201,24 @@ async function handlePaymentFormSubmit(event) {
         if (paymentIntent.status === 'succeeded') {
             log('Events', 'Payment succeeded.');
             const amountPaid = paymentIntent.amount / 100;
-            const newTotalAmountReceived = amountReceived + amountPaid;
-            let note = state.session.user.amountReceivedNote || '';
-            note += `\nPayment of $${amountPaid.toFixed(2)} received on ${new Date().toLocaleDateString()}.`;
+            
+            // --- THIS IS THE FIX ---
+            // Create a new payment object and add it to the history
+            const newPayment = {
+                amount: amountPaid,
+                date: new Date().toISOString(),
+                note: `Stripe Payment on ${new Date().toLocaleDateString()}`
+            };
+            const updatedPaymentHistory = [...state.session.user.paymentHistory, newPayment];
+            
+            // Call the new API function to update Airtable
+            await api.updatePaymentHistory(state.session.id, updatedPaymentHistory);
 
-            await api.updateSessionAmountReceived(state.session.id, newTotalAmountReceived, note.trim());
-            state.session.user.amountReceived = newTotalAmountReceived;
-            state.session.user.amountReceivedNote = note.trim();
+            // Update the local state
+            state.session.user.paymentHistory = updatedPaymentHistory;
+            state.session.user.amountReceived = updatedPaymentHistory.reduce((sum, p) => sum + p.amount, 0);
+            // --- END FIX ---
+
             ui.updateTotalCost();
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('checkout-summary-details').style.display = 'none';
@@ -215,7 +226,6 @@ async function handlePaymentFormSubmit(event) {
             document.querySelector('.terms-and-conditions').style.display = 'none';
             document.getElementById('payment-success-message').style.display = 'block';
 
-            ui.displayReservedStatus();
             setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
         }
     } catch (err) {
