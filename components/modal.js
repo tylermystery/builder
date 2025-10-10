@@ -373,13 +373,16 @@ export async function showCheckoutModal(shopSettings) {
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+
+        // --- THIS IS THE FIX ---
+        // Use the overridePrice if it exists, otherwise fall back to the calculated price.
+        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // --- END FIX ---
+
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
-
-        // --- THIS IS THE FIX ---
-        // Add a container for the note, if it exists.
+        
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
             noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
@@ -392,9 +395,9 @@ export async function showCheckoutModal(shopSettings) {
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
         `;
-        // --- END FIX ---
         summaryList.appendChild(listItem);
     }
+
     summaryDetailsEl.appendChild(summaryList);
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
