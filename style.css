@@ -260,10 +260,24 @@ body.modal-open {
     display: flex;
 }
 
-.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
+.modal-content, .itinerary-content, .presentation-content {
     pointer-events: auto;
     background: #ffffff;
     padding: 20px;
+}
+
+.checkout-modal-content {
+    background: #fff;
+    border-radius: 8px;
+    padding: 30px;
+    width: 100%;
+    max-width: 500px;
+    position: relative;
+    color: #333;
+    transform: scale(0.8);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    display: flex; /* ADD THIS LINE */
+    flex-direction: column; /* ADD THIS LINE */
 }
 
 .modal-close-btn {
@@ -801,3 +815,4 @@ body.modal-open {
     margin-left: auto; /* Pushes the controls to the right */
     flex-shrink: 0; /* Prevents the controls from shrinking */
 }
+
