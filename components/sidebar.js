@@ -161,18 +161,18 @@ export function updateTotalCost() {
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        // --- THIS IS THE FIX ---
-        // Use the overridePrice if it exists, otherwise fall back to the calculated price.
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-        // --- END FIX ---
         if (isNaN(unitPrice)) return;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
         subtotal += unitPrice * effectiveQuantity;
     });
+    
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = subtotal - amountReceived;
+    
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
+    
     if (amountReceived > 0) {
         amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
         amountPaidRowEl.style.display = 'flex';
@@ -190,6 +190,7 @@ export function updateTotalCost() {
 
     const isPlanEmpty = subtotal === 0;
     const isFullyPaid = totalDue <= 0.009;
+
     if (isPlanEmpty || isFullyPaid) {
         document.body.classList.remove('mobile-bar-active');
     } else {
@@ -197,23 +198,22 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
-    }
-    if (saveShareBtn) {
-        saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
-    }
-
-    // ADD this block to the end of the updateTotalCost function in: components/sidebar.js
-
-    if (checkoutBtn) {
-        checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
         // --- THIS IS THE FIX ---
-        const amountReceived = state.session.user.amountReceived || 0;
-        if (amountReceived > 0 && !isFullyPaid) {
+        checkoutBtn.style.display = 'block'; // Ensure it's visible by default
+        document.getElementById('total-breakdown').style.display = 'block';
+
+        if (isFullyPaid) {
+            // If fully paid, hide the button and show a success message
+            checkoutBtn.style.display = 'none';
+            if (amountReceived > 0) {
+                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+            }
+        } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
+            checkoutBtn.disabled = isPlanEmpty;
         } else {
-            // Fall back to the stored default text
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
+            checkoutBtn.disabled = isPlanEmpty;
         }
         // --- END FIX ---
     }
