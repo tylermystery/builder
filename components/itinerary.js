@@ -129,7 +129,8 @@ export function renderItineraryHeader() {
 
 // In: components/itinerary.js
 
-// 1. REPLACE the createItineraryItem function
+// REPLACE the createItineraryItem function in: components/itinerary.js
+
 async function createItineraryItem(record, itemInfo, type) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
@@ -140,21 +141,18 @@ async function createItineraryItem(record, itemInfo, type) {
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
 
-    // --- THIS IS THE FIX ---
     const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
     let priceHtml;
+
     if (state.session.user.isOwner && type === 'locked') {
-        // If user is an owner and item is in the plan, show an input
         priceHtml = `
             <div class="price-editor">
                 <label>Price:</label>
                 <input type="number" class="price-override-input" value="${price.toFixed(2)}" step="0.01" />
             </div>`;
     } else {
-        // Otherwise, show static text
         priceHtml = `<div class="price-display">$${price.toFixed(2)}</div>`;
     }
-    // --- END FIX ---
     
     const quantitySelector = `
         <div class="quantity-selector">
@@ -162,6 +160,9 @@ async function createItineraryItem(record, itemInfo, type) {
             <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
         </div>
     `;
+    
+    // --- THIS IS THE FIX ---
+    // The price, quantity, and actions are now wrapped in a single controls container
     itemElement.innerHTML = `
         <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -169,25 +170,29 @@ async function createItineraryItem(record, itemInfo, type) {
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
             <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
         </div>
-        ${priceHtml}
-        ${quantitySelector}
-        <div class="locked-item-actions">
-            <button class="remove-btn" title="Remove">×</button>
+        <div class="itinerary-item-controls">
+            ${priceHtml}
+            ${quantitySelector}
+            <div class="locked-item-actions">
+                <button class="remove-btn" title="Remove">×</button>
+            </div>
         </div>
     `;
+    // --- END FIX ---
+
     if (type === 'locked') {
         const editBtn = document.createElement('button');
         editBtn.className = 'edit-btn';
         editBtn.textContent = 'Edit';
         itemElement.querySelector('.locked-item-actions').prepend(editBtn);
         editBtn.addEventListener('click', () => {
+            log('Itinerary Item', `Edit button clicked. Opening detail modal for "${fields.Name}".`);
             ui.showDetailModal(record);
         });
     }
 
     return itemElement;
 }
-
 // 2. REPLACE the renderItinerary function
 export async function renderItinerary() {
     log('Itinerary', 'Rendering itinerary items.');
