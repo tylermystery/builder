@@ -719,3 +719,31 @@ body.modal-open {
     font-weight: bold;
     color: #343a40;
 }
+
+/* ADD this to the end of: style.css */
+
+.price-original {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+    margin-left: 5px;
+}
+
+.price-editor {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.price-editor label {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.price-override-input {
+    width: 70px;
+    padding: 4px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    text-align: right;
+}
