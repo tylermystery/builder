@@ -2,13 +2,11 @@
 
 import { state } from '../state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { updateUrl } from '../utils.js';
+import { updateUrl, getRecordPrice } from '../utils.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
-import { getRecordPrice } from '../utils.js';
-import { log } from '../utils/debug.js';
 
 const Sortable = window.Sortable;
 
@@ -18,6 +16,7 @@ const favoritedItemsContainer = document.getElementById('itinerary-favorited-ite
 const closeBtn = document.getElementById('itinerary-close-btn');
 
 let lockedSortable, favoritedSortable;
+
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Itinerary with SortableJS.');
     lockedSortable = new Sortable(lockedItemsContainer, {
@@ -77,18 +76,20 @@ export function setupItineraryEventListeners() {
         }
     });
 
-    // --- THIS IS THE FIX ---
-    closeBtn.addEventListener('click', () => history.back());
+    closeBtn.addEventListener('click', () => {
+        updateUrl({ view: null });
+        hideItineraryModal();
+    });
     itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
-            history.back();
+            updateUrl({ view: null });
+            hideItineraryModal();
         }
     });
-    // --- END FIX ---
 }
 
 export function showItineraryModal() {
-    // This function no longer calls updateUrl. The event listener in events.js does.
+    updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal.');
     renderItinerary();
     renderItineraryHeader();
@@ -98,7 +99,6 @@ export function showItineraryModal() {
 }
 
 export function hideItineraryModal() {
-    // This function now ONLY handles the UI.
     log('Itinerary', 'Hiding itinerary modal.');
     itineraryModal.classList.remove('active');
     setTimeout(() => {
@@ -107,11 +107,11 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
-// ... (rest of the file is the same) ...
 export function renderItineraryHeader() {
     document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
+
 export async function renderItinerary() {
     // --- DEBUG STATEMENT ---
     log('Itinerary', 'Checking user object on render:', state.session.user);
@@ -201,8 +201,23 @@ async function createItineraryItem(record, itemInfo, type) {
     itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
     itemElement.dataset.recordId = record.id;
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+    
     const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const selectedOption = options[itemInfo.selectedOptionIndex];
+
+    const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+    let priceHtml;
+
+    if (state.session.user.isOwner && type === 'locked') {
+        priceHtml = `
+            <div class="price-editor">
+                <label>Price:</label>
+                <input type="number" class="price-override-input" value="${price.toFixed(2)}" step="0.01" />
+            </div>`;
+    } else {
+        priceHtml = `<div class="price-display">$${price.toFixed(2)}</div>`;
+    }
+    
     const quantitySelector = `
         <div class="quantity-selector">
             <label>Qty:</label>
@@ -216,6 +231,7 @@ async function createItineraryItem(record, itemInfo, type) {
             ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
             <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
         </div>
+        ${priceHtml}
         ${quantitySelector}
         <div class="locked-item-actions">
             <button class="remove-btn" title="Remove">×</button>
@@ -227,8 +243,10 @@ async function createItineraryItem(record, itemInfo, type) {
         editBtn.textContent = 'Edit';
         itemElement.querySelector('.locked-item-actions').prepend(editBtn);
         editBtn.addEventListener('click', () => {
+            log('Itinerary Item', `Edit button clicked. Opening detail modal for "${fields.Name}".`);
             ui.showDetailModal(record);
         });
     }
+
     return itemElement;
 }
