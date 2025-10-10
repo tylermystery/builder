@@ -38,7 +38,7 @@ export let state = {
             name: '',
             email: '',
             amountReceived: 0,
-            amountReceivedNote: '',
+            paymentHistory: [], // Replaces amountReceivedNote
             rsvps: new Set(), // ADD THIS LINE
             isOwner: false,
             ownerDashboardId: null
