@@ -791,3 +791,13 @@ body.modal-open {
     font-style: italic;
     margin-top: 4px;
 }
+
+/* ADD this to the end of: style.css */
+
+.itinerary-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: auto; /* Pushes the controls to the right */
+    flex-shrink: 0; /* Prevents the controls from shrinking */
+}
