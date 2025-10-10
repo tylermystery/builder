@@ -6,6 +6,8 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
+import { getRecordPrice } from '../utils.js';
+
 
 // Get the SortableJS library from the global scope
 const Sortable = window.Sortable;
