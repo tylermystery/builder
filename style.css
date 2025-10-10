@@ -816,3 +816,9 @@ body.modal-open {
     flex-shrink: 0; /* Prevents the controls from shrinking */
 }
 
+/* ADD this rule to: style.css */
+
+.checkout-modal-content {
+    display: flex;
+    flex-direction: column;
+}
