@@ -125,11 +125,72 @@ export function renderItineraryHeader() {
     document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
+// In: components/itinerary.js
+
+// 1. REPLACE the createItineraryItem function
+async function createItineraryItem(record, itemInfo, type) {
+    const fields = record.fields;
+    const itemElement = document.createElement('div');
+    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
+    itemElement.dataset.recordId = record.id;
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+    
+    const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const selectedOption = options[itemInfo.selectedOptionIndex];
+
+    // --- THIS IS THE FIX ---
+    const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+    let priceHtml;
+    if (state.session.user.isOwner && type === 'locked') {
+        // If user is an owner and item is in the plan, show an input
+        priceHtml = `
+            <div class="price-editor">
+                <label>Price:</label>
+                <input type="number" class="price-override-input" value="${price.toFixed(2)}" step="0.01" />
+            </div>`;
+    } else {
+        // Otherwise, show static text
+        priceHtml = `<div class="price-display">$${price.toFixed(2)}</div>`;
+    }
+    // --- END FIX ---
+    
+    const quantitySelector = `
+        <div class="quantity-selector">
+            <label>Qty:</label>
+            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
+        </div>
+    `;
+    itemElement.innerHTML = `
+        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
+        <div class="locked-item-details">
+            <p class="locked-item-name">${fields.Name}</p>
+            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
+            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
+        </div>
+        ${priceHtml}
+        ${quantitySelector}
+        <div class="locked-item-actions">
+            <button class="remove-btn" title="Remove">×</button>
+        </div>
+    `;
+    if (type === 'locked') {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = 'Edit';
+        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
+        editBtn.addEventListener('click', () => {
+            ui.showDetailModal(record);
+        });
+    }
+
+    return itemElement;
+}
+
+// 2. REPLACE the renderItinerary function
 export async function renderItinerary() {
     log('Itinerary', 'Rendering itinerary items.');
     lockedItemsContainer.innerHTML = '';
     favoritedItemsContainer.innerHTML = '';
-
     if (state.cart.lockedItems.size === 0) {
         lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
     }
@@ -155,7 +216,23 @@ export async function renderItinerary() {
         }
     }
 
-    // Add event listeners for live editing
+    // --- THIS IS THE FIX ---
+    // Add a single event listener for all price override inputs
+    lockedItemsContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('price-override-input')) {
+            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
+            const newPrice = parseFloat(e.target.value);
+            if (!isNaN(newPrice)) {
+                ui.updateLockedItemState(recordId, { overridePrice: newPrice });
+                ui.updateTotalCost();
+                ui.updateEventPlanSection();
+                triggerSave();
+            }
+        }
+    });
+    // --- END FIX ---
+
+    // Add event listeners for live editing (quantity and notes)
     document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
         input.addEventListener('change', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -165,13 +242,11 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { quantity: newQuantity });
             }
-            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             triggerSave();
         });
     });
-
     document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
         textarea.addEventListener('input', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
@@ -181,17 +256,14 @@ export async function renderItinerary() {
             } else {
                 ui.updateItemState(recordId, { note: newNote });
             }
-            // FIX: Call the sidebar update function here to sync the main view
             ui.updateEventPlanSection();
             triggerSave();
         });
     });
-
     document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const recordId = e.target.closest('.itinerary-item').dataset.recordId;
             state.cart.lockedItems.delete(recordId);
-            // FIX: Call the sidebar update functions here to sync the main view
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateFavoritesCarousel();
@@ -199,50 +271,4 @@ export async function renderItinerary() {
             triggerSave();
         });
     });
-}
-
-// Helper function to create an individual itinerary item element
-async function createItineraryItem(record, itemInfo, type) {
-    const fields = record.fields;
-    const itemElement = document.createElement('div');
-    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
-    itemElement.dataset.recordId = record.id;
-    
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    
-    const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const selectedOption = options[itemInfo.selectedOptionIndex];
-    
-    const quantitySelector = `
-        <div class="quantity-selector">
-            <label>Qty:</label>
-            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
-        </div>
-    `;
-    
-    itemElement.innerHTML = `
-        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
-            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
-        </div>
-        ${quantitySelector}
-        <div class="locked-item-actions">
-            <button class="remove-btn" title="Remove">×</button>
-        </div>
-    `;
-    
-    // Add edit button only for locked items
-    if (type === 'locked') {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'edit-btn';
-        editBtn.textContent = 'Edit';
-        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
-        editBtn.addEventListener('click', () => {
-            ui.showDetailModal(record);
-        });
-    }
-
-    return itemElement;
 }
