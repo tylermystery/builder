@@ -152,7 +152,7 @@ function bindPresenceEvents() {
         
         // --- THIS IS THE FIX ---
         // If there's more than one person in the channel, auto-open the chat.
-        [cite_start]if (members.count > 1) { [cite: 348]
+        if (members.count > 1) {
             openChatWidget(true); // passing true keeps it open
         }
         // --- END FIX ---
