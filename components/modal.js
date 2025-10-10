@@ -361,11 +361,26 @@ export async function showCheckoutModal(shopSettings) {
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
+        const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
-        listItem.innerHTML = `<span>${record.fields.Name} (x${itemInfo.quantity})</span><span>$${itemTotal.toFixed(2)}</span>`;
+
+        // --- THIS IS THE FIX ---
+        // Add a container for the note, if it exists.
+        let noteHtml = '';
+        if (itemInfo.note && itemInfo.note.trim() !== '') {
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
+        }
+        
+        listItem.innerHTML = `
+            <div class="summary-item-details">
+                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity})</span>
+                ${noteHtml}
+            </div>
+            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+        `;
+        // --- END FIX ---
         summaryList.appendChild(listItem);
     }
     summaryDetailsEl.appendChild(summaryList);
