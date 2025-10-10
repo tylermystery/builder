@@ -42,6 +42,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
+// REPLACE the createLockedInItemElement function in: components/sidebar.js
+
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     const itemElement = document.createElement('div');
@@ -54,14 +56,23 @@ async function createLockedInItemElement(record, itemInfo) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
 
-    const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
+    // --- THIS IS THE FIX ---
+    const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
+    let priceDisplay = `$${price.toFixed(2)}`;
+    // If an override exists, show the original price for context
+    if (itemInfo.overridePrice != null) {
+        const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+    }
+    // --- END FIX ---
+
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ $${price.toFixed(2)} = <strong>$${total.toFixed(2)}</strong></p>
+            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
@@ -132,6 +143,8 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
+// REPLACE the updateTotalCost function in: components/sidebar.js
+
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -148,7 +161,10 @@ export function updateTotalCost() {
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        const unitPrice = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
+        // --- THIS IS THE FIX ---
+        // Use the overridePrice if it exists, otherwise fall back to the calculated price.
+        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // --- END FIX ---
         if (isNaN(unitPrice)) return;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
         subtotal += unitPrice * effectiveQuantity;
@@ -174,7 +190,6 @@ export function updateTotalCost() {
 
     const isPlanEmpty = subtotal === 0;
     const isFullyPaid = totalDue <= 0.009;
-
     if (isPlanEmpty || isFullyPaid) {
         document.body.classList.remove('mobile-bar-active');
     } else {
