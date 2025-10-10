@@ -645,3 +645,100 @@ export async function addRsvpToEvent(eventId, userId) {
         return null;
     }
 }
+
+// 1. ADD this new function to the end of: api.js
+
+export async function updatePaymentHistory(sessionId, paymentHistory) {
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    log('API', `Updating payment history for session ${sessionId}`);
+
+    // Calculate the new total from the payment history array
+    const newTotal = paymentHistory.reduce((sum, p) => sum + p.amount, 0);
+
+    const payload = {
+        fields: {
+            'Amount Received': newTotal,
+            'PaymentHistory': JSON.stringify(paymentHistory, null, 2) // Store as a formatted JSON string
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Airtable API Error: ${errorData.error.message}`);
+        }
+        log('API', `Successfully updated payment history for session ${sessionId}`);
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to update payment history:", error);
+        log('API', `Failed to update payment history: ${error.message}`);
+        return null;
+    }
+}
+
+// 2. REPLACE the loadSessionFromAirtable function in: api.js
+
+export async function loadSessionFromAirtable(sessionId) {
+    state.session.id = sessionId;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    log('API', `Loading session from URL: ${url}`);
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error('Could not fetch session data.');
+        }
+        const record = await response.json();
+        log('API', `Session loaded: ${record.fields.Name}`);
+     
+        if (record.fields.Store && record.fields.Store.length > 0) {
+            state.session.storeId = record.fields.Store[0];
+        }
+
+        state.session.isOwned = false;
+        
+        // --- THIS IS THE FIX ---
+        // Load the total amount and the detailed payment history
+        state.session.user.amountReceived = record.fields['Amount Received'] || 0;
+        try {
+            state.session.user.paymentHistory = JSON.parse(record.fields.PaymentHistory || '[]');
+        } catch (e) {
+            state.session.user.paymentHistory = [];
+        }
+        // --- END FIX ---
+
+        const sessionDataString = record.fields['Items with Variations'];
+        if (sessionDataString && sessionDataString.trim() !== '') {
+            try {
+                const savedState = JSON.parse(sessionDataString);
+                state.cart.items = new Map(Object.entries(savedState.favoritedItems || {}));
+                state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
+                
+                const reactionsObject = savedState.itemReactions || {};
+                state.session.reactions = new Map();
+                for (const recordId in reactionsObject) {
+                    state.session.reactions.set(recordId, new Map(Object.entries(reactionsObject[recordId])));
+                }
+                
+                state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
+                state.eventDetails.combined = new Map(Object.entries(savedState.favoritedDetails || {}));
+            } catch (jsonError) {
+                log('API', `Failed to parse session JSON: ${jsonError.message}`);
+            }
+        }
+        document.dispatchEvent(new CustomEvent('sessionReady'));
+    } catch (error) {
+        console.error("Failed to load session:", error);
+        log('API', `Failed to load session: ${error.message}`);
+        alert("Could not load the shared session.");
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
