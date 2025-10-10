@@ -3,7 +3,7 @@
 import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
-import { triggerSave, openChatWidget } from './events.js'; // <-- Import openChatWidget
+import { triggerSave, openChatWidget } from './events.js';
 
 let currentUser = null;
 let pusher = null;
@@ -77,6 +77,7 @@ function updatePresenceUI(members) {
                 state.session.userProfiles.set(profileId, profileName);
                 triggerSave();
             }
+ 
             const userElement = document.createElement('div');
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
             userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
@@ -113,6 +114,7 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
         const currentModalRecordId = document.getElementById('detail-modal-overlay')?.dataset.recordId;
         if (currentModalRecordId) {
             initializeItemChat(currentModalRecordId);
+     
         }
       });
       const banBtn = document.createElement('button');
@@ -150,7 +152,7 @@ function bindPresenceEvents() {
         
         // --- THIS IS THE FIX ---
         // If there's more than one person in the channel, auto-open the chat.
-        if (members.count > 1) {
+        [cite_start]if (members.count > 1) { [cite: 348]
             openChatWidget(true); // passing true keeps it open
         }
         // --- END FIX ---
@@ -201,6 +203,7 @@ export async function initializeSessionChat() {
             } else {
                 e.target.value = currentUser.name;
             }
+   
         });
     }
 
@@ -208,7 +211,6 @@ export async function initializeSessionChat() {
     if (messagesList) {
         messagesList.innerHTML = '';
         const records = await api.fetchChatMessages(sessionId);
-
         if (records.length > 0) {
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
@@ -225,7 +227,8 @@ export async function initializeSessionChat() {
             params: { 
                 user_id: currentUser.id,
                 user_name: currentUser.name
-            }
+         
+           }
         }
     });
     const channelName = `presence-session-${sessionId}`;
@@ -239,6 +242,7 @@ export async function initializeSessionChat() {
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
+    
             }
         }
     });
@@ -262,7 +266,6 @@ export async function sendMessage(message, recordId = null) {
         if (!sessionChatChannel || !currentUser) return;
         
         requestNotificationPermissionIfNeeded();
-
         const sessionId = state.session.id || 'default-session';
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list');
@@ -306,7 +309,8 @@ export async function initializeItemChat(recordId) {
                 user_name: currentUser.name
             }
         }
-    });
+ 
+       });
     const channelName = `presence-item-${recordId}`;
     const channel = pusher.subscribe(channelName);
     itemChatChannels.set(recordId, channel);
