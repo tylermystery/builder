@@ -747,3 +747,26 @@ body.modal-open {
     border-radius: 4px;
     text-align: right;
 }
+
+/* ADD this to the end of: style.css */
+
+.itinerary-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.itinerary-container {
+    flex-grow: 1;
+    min-height: 0; /* Important for flexbox scrolling in some browsers */
+}
+
+.itinerary-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.itinerary-list {
+    overflow-y: auto; /* This makes the lists scrollable */
+    flex-grow: 1;
+    padding: 5px;
+}
