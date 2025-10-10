@@ -339,6 +339,18 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
 
+    // --- NEW LOGIC START ---
+    // Dynamically set the total cost label based on payment history
+    const totalLabel = document.getElementById('checkout-total-label');
+    if (totalLabel) {
+        if (state.session.user.amountReceived > 0) {
+            totalLabel.textContent = 'Total Final Cost:';
+        } else {
+            totalLabel.textContent = 'Total Estimated Cost:';
+        }
+    }
+    // --- NEW LOGIC END ---
+
     if (!checkoutModalOverlay) return;
 
     const handleOverlayClick = (e) => {
