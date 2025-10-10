@@ -202,6 +202,24 @@ export function updateTotalCost() {
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
+
+    // ADD this block to the end of the updateTotalCost function in: components/sidebar.js
+
+    if (checkoutBtn) {
+        checkoutBtn.disabled = isPlanEmpty || isFullyPaid;
+        // --- THIS IS THE FIX ---
+        const amountReceived = state.session.user.amountReceived || 0;
+        if (amountReceived > 0 && !isFullyPaid) {
+            checkoutBtn.textContent = 'Pay Remainder';
+        } else {
+            // Fall back to the stored default text
+            checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
+        }
+        // --- END FIX ---
+    }
+    if (saveShareBtn) {
+        saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
+    }
 }
 
 export function displayReservedStatus() {
