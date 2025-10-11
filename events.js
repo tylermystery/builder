@@ -427,6 +427,33 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
+    safeAddEventListener('set-headcount-btn', 'click', () => {
+        const headcountValue = document.getElementById('headcount-custom').value;
+        if (headcountValue && parseInt(headcountValue, 10) > 0) {
+            const newHeadcount = parseInt(headcountValue, 10);
+            
+            // Update the central state
+            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, newHeadcount);
+            
+            // Update the UI in the right-hand panel to reflect the change
+            const eventHeadcountInput = document.getElementById('event-headcount-input');
+            if(eventHeadcountInput) eventHeadcountInput.value = newHeadcount;
+            
+            // Recalculate costs and trigger a save
+            ui.updateTotalCost();
+            triggerSave();
+        }
+    });
+    
+    // Listener for the main event plan headcount input
+    safeAddEventListener('event-headcount-input', 'change', (e) => {
+        if (state.ui.isInitializing) return;
+        const newHeadcount = parseInt(e.target.value, 10) || null;
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GUEST_COUNT, newHeadcount);
+        ui.updateTotalCost();
+        triggerSave();
+    });
+    
     mainDatePicker = flatpickr("#date-filter", {
         mode: "range",
         dateFormat: "M j, Y",
