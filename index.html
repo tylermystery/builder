@@ -1547,8 +1547,10 @@
                         <option value="250-plus">250+</option>
                         <option value="custom">Custom...</option>
                     </select>
-                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
-                </div>
+                    <div id="headcount-custom-group" style="display: none; display: flex; align-items: center; gap: 10px;">
+                        <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" autocomplete="off" style="flex-grow: 1;">
+                        <button id="set-headcount-btn" class="filter-btn" style="flex-shrink: 0;">Set</button>
+                    </div> 
                 <div class="filter-group">
                     <label for="location-filter">Location</label>
                     <select id="location-filter">
