@@ -239,7 +239,6 @@ recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
 // --- NEW LOGIC START ---
 // Gather the current criteria from the filters
-const mainDatePicker = window.flatpickr.get('#date-filter');
 const criteria = {
     headcount: parseInt(customHeadcount, 10) || null,
     startDate: mainDatePicker?.selectedDates[0] || null,
