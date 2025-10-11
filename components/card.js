@@ -93,8 +93,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                <div class="heart-icon" data-record-id="${record.id}"></div>
-            </div>
+<div class="card-header-icons">
+    <span class="availability-btn" title="Select a date range to check availability">📅</span>
+    <div class="heart-icon" data-record-id="${record.id}"></div>
+</div>            </div>
             <div class="event-card-content">
                 <div class="event-date-display">
                     <span class="month">${month}</span>
