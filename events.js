@@ -6,12 +6,12 @@ import * as ui from './ui.js';
 import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
-import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce, updateUrl } from './utils.js'; // <-- MODIFIED IMPORT
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus, getItemStatus } from './availability.js';
 
 
 let mainDatePicker = null;
@@ -101,45 +101,6 @@ export function triggerSave() {
             updateSaveShareButton();
         }
     }, 1500);
-}
-
-export async function updateAllCardAvailabilityIcons() {
-    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        document.querySelectorAll('.availability-btn').forEach(icon => {
-            if (icon._tippy) icon._tippy.destroy();
-            icon.title = 'Select a date range to check availability';
-            icon.textContent = '📅';
-        });
-        return;
-    }
-    const startDate = mainDatePicker.selectedDates[0];
-    const requestedEnd = mainDatePicker.selectedDates[1];
-    const cards = document.querySelectorAll('.event-card');
-    for (const card of cards) {
-        const recordId = card.dataset.recordId;
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record) continue;
-        
-        const busyTimes = await api.fetchCalendarForRecord(record);
-        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
-        const icon = card.querySelector('.availability-btn');
-        if (icon) {
-            if (icon._tippy) icon._tippy.destroy();
-            let statusIcon;
-            switch (rangeStatus.status) {
-                case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
-                case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
-                case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
-                default: statusIcon = '📅';
-            }
-            
-            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
-            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
-            tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
-            icon.title = rangeStatus.reason;
-            icon.textContent = statusIcon;
-        }
-    }
 }
 
 async function handlePaymentFormSubmit(event) {
@@ -278,6 +239,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     });
+
+    document.getElementById('filter-controls').addEventListener('change', () => {
+    applyFiltersAndSort(imageCache);
+    });
+    
     saveShareBtn = document.getElementById('save-share-btn');
     categoryFiltersContainer = document.getElementById('category-filters');
     subcategoryFiltersContainer = document.getElementById('subcategory-filters');
@@ -465,11 +431,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                 triggerSave();
-                await updateAllCardAvailabilityIcons();
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                 triggerSave();
-                await updateAllCardAvailabilityIcons();
                 await updateMobileBarAvailability();
             }
         },
