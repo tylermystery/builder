@@ -1452,7 +1452,100 @@
     
     <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
-    <div class="main-content">
+<div class="main-content">
+    
+    <div id="left-sidebar">
+        <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
+        <div id="filter-controls" data-active-filters="0">
+            <h3>Filters</h3>
+            <div class="filter-group">
+                <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+            </div>
+            <div class="filter-group">
+                <label>Categories</label>
+                <div id="category-filters" class="filter-btn-group"></div>
+            </div>
+            <div class="filter-group">
+                <label>Subcategories</label>
+                <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
+            </div>
+            <div id="date-filter-group" class="filter-group">
+                <label for="date-filter">Date & Time</label>
+                <input type="text" id="date-filter" placeholder="Select date and time range">
+                <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
+                    <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                    <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label for="headcount-filter">Headcount</label>
+                <select id="headcount-filter">
+                    <option value="any">Any Size</option>
+                    <option value="1-10">1-10</option>
+                    <option value="11-25">11-25</option>
+                    <option value="26-50">26-50</option>
+                    <option value="51-100">51-100</option>
+                    <option value="101-250">101-250</option>
+                    <option value="250-plus">250+</option>
+                    <option value="custom">Custom...</option>
+                </select>
+                <div id="headcount-custom-group" style="display: none; display: flex; align-items: center; gap: 10px;">
+                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" autocomplete="off" style="flex-grow: 1;">
+                    <button id="set-headcount-btn" class="filter-btn" style="flex-shrink: 0;">Set</button>
+                </div>
+            </div>
+            <div class="filter-group">
+                <label for="location-filter">Location</label>
+                <select id="location-filter">
+                    <option value="any">Any Location</option>
+                    <option value="sf">San Francisco</option>
+                    <option value="oakland">Oakland</option>
+                    <option value="peninsula">Peninsula</option>
+                    <option value="south-bay">South Bay</option>
+                    <option value="north-bay">North Bay</option>
+                    <option value="east-bay">East Bay</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="budget-filter">Budget</label>
+                <select id="budget-filter">
+                    <option value="any">Any Budget</option>
+                    <option value="budget-friendly">Budget-Friendly</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="executive">Executive</option>
+                    <option value="luxury">Luxury</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="status-filter">Status</label>
+                <select id="status-filter">
+                    <option value="Available">Available</option>
+                    <option value="all">Show All</option>
+                    <option value="Coming Soon">Coming Soon</option>
+                    <option value="Sold Out">Sold Out</option>
+                </select>
+            </div>
+            <button id="reset-filters-btn">Reset All Filters</button>
+        </div>
+    </div>
+    
+    <div id="catalog-area">
+        <div id="catalog-header">
+            <div id="breadcrumbs"></div>
+            <h2 id="catalog-title"></h2>
+        </div>
+        <div id="catalog-toolbar">
+            <select id="sort-by">
+                <option value="price-asc">Price (Low to High)</option>
+                <option value="price-desc">Price (High to Low)</option>
+                <option value="name-asc">Name (A-Z)</option>
+            </select>
+        </div>
+        <div id="catalog-container"></div>
+    </div>
+
     <div id="right-sidebar">
         <div id="event-plan-panel">
             <div class="event-name-group">
@@ -1470,9 +1563,7 @@
                 <label for="event-date-picker">Event Date</label>
                 <input type="text" id="event-date-picker" placeholder="Select date">
             </div>
-        
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-            
             <div id="favorites-section">
                 <div class="sidebar-header-group">
                     <h4>Ideas</h4>
@@ -1488,7 +1579,6 @@
                 <button id="itinerary-btn">Event Plan <span class="caret">▼</span></button>
                 <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
             </div>
-        
             <div id="cart-items-container">
                 <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
             </div>
@@ -1512,99 +1602,9 @@
                 <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
             </div>
         </div>
-        
-        <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
-        
-        <div id="left-sidebar">
-            <div id="filter-controls" data-active-filters="0">
-                <h3>Filters</h3>
-                <div class="filter-group">
-                    <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-                </div>
-                   <div class="filter-group">
-                    <label>Categories</label>
-                    <div id="category-filters" class="filter-btn-group"></div>
-                </div>
-                    <div class="filter-group">
-                    <label>Subcategories</label>
-                       <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
-                </div>
-                    <div id="date-filter-group" class="filter-group">
-                    <label for="date-filter">Date & Time</label>
-                    <input type="text" id="date-filter" placeholder="Select date and time range">
-                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
-                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
-                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
-                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
-                    </div>
-                </div>
-                <div class="filter-group">
-                    <label for="headcount-filter">Headcount</label>
-                    <select id="headcount-filter">
-                        <option value="any">Any Size</option>
-                        <option value="1-10">1-10</option>
-                        <option value="11-25">11-25</option>
-                        <option value="26-50">26-50</option>
-                        <option value="51-100">51-100</option>
-                        <option value="101-250">101-250</option>
-                        <option value="250-plus">250+</option>
-                        <option value="custom">Custom...</option>
-                    </select>
-                    <div id="headcount-custom-group" style="display: none; display: flex; align-items: center; gap: 10px;">
-                        <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" autocomplete="off" style="flex-grow: 1;">
-                        <button id="set-headcount-btn" class="filter-btn" style="flex-shrink: 0;">Set</button>
-                    </div> 
-                <div class="filter-group">
-                    <label for="location-filter">Location</label>
-                    <select id="location-filter">
-                        <option value="any">Any Location</option>
-                        <option value="sf">San Francisco</option>
-                        <option value="oakland">Oakland</option>
-                        <option value="peninsula">Peninsula</option>
-                        <option value="south-bay">South Bay</option>
-                        <option value="north-bay">North Bay</option>
-                        <option value="east-bay">East Bay</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="budget-filter">Budget</label>
-                    <select id="budget-filter">
-                        <option value="any">Any Budget</option>
-                        <option value="budget-friendly">Budget-Friendly</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="executive">Executive</option>
-                        <option value="luxury">Luxury</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label for="status-filter">Status</label>
-                    <select id="status-filter">
-                        <option value="Available">Available</option>
-                        <option value="all">Show All</option>
-                        <option value="Coming Soon">Coming Soon</option>
-                        <option value="Sold Out">Sold Out</option>
-                    </select>
-                </div>
-                <button id="reset-filters-btn">Reset All Filters</button>
-            </div>
-        </div>
-        
-        <div id="catalog-area">
-            <div id="catalog-header">
-                <div id="breadcrumbs"></div>
-                <h2 id="catalog-title"></h2>
-            </div>
-            <div id="catalog-toolbar">
-                <select id="sort-by">
-                    <option value="price-asc">Price (Low to High)</option>
-                    <option value="price-desc">Price (High to Low)</option>
-                    <option value="name-asc">Name (A-Z)</option>
-                </select>
-            </div>
-            <div id="catalog-container"></div>
-        </div>
     </div>
+
+</div>
 
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
