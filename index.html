@@ -1454,60 +1454,63 @@
 
     <div class="main-content">
     <div id="right-sidebar">
-    <div id="event-plan-panel">
-        <div class="event-name-group">
-            <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
-        </div>
-        <div class="toolbar-group">
-            <label for="header-goals">Goals / Notes</label>
-            <input type="text" id="header-goals" placeholder="What are the goals for your event?"
-    autocomplete="off">
-        </div>
-        <div class="toolbar-group">
-            <label for="event-date-picker">Event Date</label>
-            <input type="text" id="event-date-picker" placeholder="Select date">
-        </div>     
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-                
-                <div id="favorites-section">
-                    <div class="sidebar-header-group">
-                        <h4>Ideas</h4>
-                        <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
-                    </div>
-                    <div id="favorites-carousel-wrapper" style="position: relative;">
-                        <button class="carousel-nav left">◄</button>
-                        <div id="favorites-carousel"></div>
-                        <button class="carousel-nav right">►</button>
-                    </div>
-                </div>
+        <div id="event-plan-panel">
+            <div class="event-name-group">
+                <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
+            </div>
+            <div class="toolbar-group">
+                <label for="header-goals">Goals / Notes</label>
+                <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
+            </div>
+            <div class="toolbar-group">
+                <label for="event-headcount-input">Guest Count</label>
+                <input type="number" id="event-headcount-input" placeholder="Set headcount" min="1">
+            </div>
+            <div class="toolbar-group">
+                <label for="event-date-picker">Event Date</label>
+                <input type="text" id="event-date-picker" placeholder="Select date">
+            </div>
+        
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            
+            <div id="favorites-section">
                 <div class="sidebar-header-group">
-                    <button id="itinerary-btn">Event Plan <span class="caret">▼</span></button>
-                    <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
+                    <h4>Ideas</h4>
+                    <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
                 </div>
-    
-                <div id="cart-items-container">
-                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                <div id="favorites-carousel-wrapper" style="position: relative;">
+                    <button class="carousel-nav left">◄</button>
+                    <div id="favorites-carousel"></div>
+                    <button class="carousel-nav right">►</button>
                 </div>
-                <div id="cart-footer">
-                    <div id="total-breakdown">
-                        <div class="total-row subtotal-row">
-                            <span>Subtotal:</span>
-                            <span id="subtotal-cost">$0.00</span>
-                        </div>
-                        <div class="total-row amount-paid-row" style="display: none;">
-                            <span>Amount Paid:</span>
-                            <span id="amount-paid-cost">$0.00</span>
-                        </div>
-                        <hr class="total-divider" style="display: none;">
-                        <div class="total-row final-total-row">
-                            <strong>Total Due:</strong>
-                            <strong id="total-cost">$0.00</strong>
-                        </div>
+            </div>
+            <div class="sidebar-header-group">
+                <button id="itinerary-btn">Event Plan <span class="caret">▼</span></button>
+                <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
+            </div>
+        
+            <div id="cart-items-container">
+                <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+            </div>
+            <div id="cart-footer">
+                <div id="total-breakdown">
+                    <div class="total-row subtotal-row">
+                        <span>Subtotal:</span>
+                        <span id="subtotal-cost">$0.00</span>
                     </div>
-                    <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
-                    <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
+                    <div class="total-row amount-paid-row" style="display: none;">
+                        <span>Amount Paid:</span>
+                        <span id="amount-paid-cost">$0.00</span>
+                    </div>
+                    <hr class="total-divider" style="display: none;">
+                    <div class="total-row final-total-row">
+                        <strong>Total Due:</strong>
+                        <strong id="total-cost">$0.00</strong>
+                    </div>
                 </div>
-           </div>
+                <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
+                <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
+            </div>
         </div>
         
         <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
