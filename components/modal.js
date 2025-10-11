@@ -339,7 +339,7 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
 
-    // --- THIS IS THE LOGIC TO CONFIRM ---
+    // --- NEW LOGIC START ---
     // Dynamically set the total cost label based on payment history
     const totalLabel = document.getElementById('checkout-total-label');
     if (totalLabel) {
@@ -349,7 +349,7 @@ export async function showCheckoutModal(shopSettings) {
             totalLabel.textContent = 'Total Estimated Cost:';
         }
     }
-    // --- END LOGIC TO CONFIRM ---
+    // --- NEW LOGIC END ---
 
     if (!checkoutModalOverlay) return;
 
