@@ -183,7 +183,7 @@ function sortRecords(records, sortBy) {
     });
 }
 
-export async function applyFiltersAndSort(imageCache) {
+export async function applyFiltersAndSort(imageCache, mainDatePicker) {
     const catalogTitle = document.getElementById('catalog-title');
     const planFilterBtn = document.getElementById('plan-filter-btn');
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
