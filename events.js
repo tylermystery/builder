@@ -241,7 +241,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     document.getElementById('filter-controls').addEventListener('change', () => {
-    applyFiltersAndSort(imageCache);
+        applyFiltersAndSort(imageCache, mainDatePicker);
     });
     
     saveShareBtn = document.getElementById('save-share-btn');
