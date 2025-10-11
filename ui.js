@@ -89,6 +89,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         loadingMessage.style.display = 'none';
     }
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
+    tippy(catalogContainer.querySelectorAll('.availability-btn'), { allowHTML: true });
 }
 
 let mainGetItemState;
