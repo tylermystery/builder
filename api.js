@@ -183,12 +183,22 @@ export async function saveSessionToAirtable() {
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
-    if (Array.isArray(dateRange) && dateRange.length > 0) {
-        const startDate = new Date(dateRange[0]);
-        if (!isNaN(startDate.getTime())) {
-             formattedDate = startDate.toISOString();
+    let dateToFormat = null;
+    
+    if (Array.isArray(dateValue) && dateValue.length > 0) {
+        // Handle date range from the filter
+        dateToFormat = dateValue[0];
+    } else if (typeof dateValue === 'string') {
+        // Handle single date string from the event plan picker
+        dateToFormat = dateValue;
+    }
+    
+    if (dateToFormat) {
+        const dateObj = new Date(dateToFormat);
+        if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString();
         }
     }
     const allUserIds = Array.from(state.session.userProfiles.keys());
