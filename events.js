@@ -398,7 +398,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
-        document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
+        document.getElementById('headcount-custom-group').style.display = (e.target.value === 'custom') ? 'flex' : 'none';
         applyFiltersAndSort(imageCache);
     });
     safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
