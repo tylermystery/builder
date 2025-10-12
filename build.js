@@ -4,16 +4,13 @@ const path = require('path');
 // --- Configuration ---
 // The name of the standardized JSON output file.
 const JSON_OUTPUT_FILE = 'project_source.json';
-// The directory that Netlify is configured to deploy from (e.g., 'dist', 'build').
-const DEPLOY_DIR = 'dist';
+// The directory where output files will be written. We default to the project root ('.').
+const DEPLOY_DIR = '.'; 
 // Directories and files to exclude from the project source export.
 const IGNORE_LIST = [
     'node_modules',
     '.git',
-    // We explicitly exclude the deployment directory itself to prevent infinite recursion
-    // and to ensure the source file only contains development source, not build output.
-    DEPLOY_DIR, 
-    // We also exclude the specific output file names just in case they land in the root.
+    // We explicitly exclude the specific output file names to prevent infinite recursion.
     JSON_OUTPUT_FILE,
     'project_source' // Catch-all for old timestamped text exports.
 ];
@@ -91,7 +88,7 @@ function runTextExport(filePaths, timestamp) {
 
 /**
  * Executes the JSON export, using the new structured format for the CI/CD workflow.
- * The output is written to the DEPLOY_DIR so Netlify publishes it.
+ * The output is written to the DEPLOY_DIR (project root) so Netlify publishes it.
  * @param {Array<string>} filePaths - List of relative file paths to export.
  * @param {string} timestamp - Current ISO timestamp.
  */
@@ -124,7 +121,7 @@ function runJsonExport(filePaths, timestamp) {
     try {
         const jsonContent = JSON.stringify(exportData, null, 2); 
         
-        // --- CORRECTED OUTPUT PATH ---
+        // --- CORRECTED OUTPUT PATH: Write directly to root ---
         const finalOutputPath = path.join(DEPLOY_DIR, JSON_OUTPUT_FILE);
         fs.writeFileSync(finalOutputPath, jsonContent);
         
@@ -149,11 +146,7 @@ function buildSourceFile() {
     console.log('🚀 Starting build process with both Text and JSON exports...');
     console.log('============================================================');
     
-    // Ensure the deployment directory exists for output files
-    if (!fs.existsSync(DEPLOY_DIR)){
-        console.log(`\n⚙️ Creating deployment directory: ${DEPLOY_DIR}`);
-        fs.mkdirSync(DEPLOY_DIR);
-    }
+    // We no longer check for or create 'dist' as the deployment target is the project root ('.').
     
     const timestamp = new Date().toISOString();
     
