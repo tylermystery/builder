@@ -4,14 +4,18 @@ const path = require('path');
 // --- Configuration ---
 // The name of the standardized JSON output file.
 const JSON_OUTPUT_FILE = 'project_source.json';
+// The directory that Netlify is configured to deploy from (e.g., 'dist', 'build').
+const DEPLOY_DIR = 'dist';
 // Directories and files to exclude from the project source export.
 const IGNORE_LIST = [
     'node_modules',
     '.git',
-    // We explicitly exclude the output file to prevent infinite recursion.
+    // We explicitly exclude the deployment directory itself to prevent infinite recursion
+    // and to ensure the source file only contains development source, not build output.
+    DEPLOY_DIR, 
+    // We also exclude the specific output file names just in case they land in the root.
     JSON_OUTPUT_FILE,
-    // Catch-all for old timestamped text exports.
-    'project_source'
+    'project_source' // Catch-all for old timestamped text exports.
 ];
 const STARTING_DIRECTORY = '.'; // Start from the current directory.
 
@@ -51,6 +55,8 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
 
 /**
  * Executes the text export, using the old delimited format (for legacy/debugging).
+ * NOTE: This output remains in the root to avoid cluttering the deployment folder 
+ * with timestamped debug files.
  * @param {Array<string>} filePaths - List of relative file paths to export.
  * @param {string} timestamp - Current ISO timestamp.
  */
@@ -80,11 +86,12 @@ function runTextExport(filePaths, timestamp) {
     const outputContent = outputParts.join('\n');
     const outputFileName = `project_source - ${timestamp}.txt`;
     fs.writeFileSync(outputFileName, outputContent);
-    console.log(`\n✅ Text Build complete! Exported to: ${outputFileName}`);
+    console.log(`\n✅ Text Build complete! Exported to: ${outputFileName} (in project root).`);
 }
 
 /**
  * Executes the JSON export, using the new structured format for the CI/CD workflow.
+ * The output is written to the DEPLOY_DIR so Netlify publishes it.
  * @param {Array<string>} filePaths - List of relative file paths to export.
  * @param {string} timestamp - Current ISO timestamp.
  */
@@ -116,15 +123,18 @@ function runJsonExport(filePaths, timestamp) {
 
     try {
         const jsonContent = JSON.stringify(exportData, null, 2); 
-        fs.writeFileSync(JSON_OUTPUT_FILE, jsonContent);
+        
+        // --- CORRECTED OUTPUT PATH ---
+        const finalOutputPath = path.join(DEPLOY_DIR, JSON_OUTPUT_FILE);
+        fs.writeFileSync(finalOutputPath, jsonContent);
         
         // Verification step to ensure the file was written successfully
-        if (fs.existsSync(JSON_OUTPUT_FILE)) {
-             const fileSizeKB = (fs.statSync(JSON_OUTPUT_FILE).size / 1024).toFixed(2);
-             console.log(`\n✅ JSON Build complete! Exported to: ${JSON_OUTPUT_FILE} in the current directory.`);
-             console.log(`File size: ${fileSizeKB} KB. This file is ready for use by your automated workflow.`);
+        if (fs.existsSync(finalOutputPath)) {
+             const fileSizeKB = (fs.statSync(finalOutputPath).size / 1024).toFixed(2);
+             console.log(`\n✅ JSON Build complete! Exported to: ${finalOutputPath}.`);
+             console.log(`File size: ${fileSizeKB} KB. This file should now be included in your Netlify deployment.`);
         } else {
-             throw new Error(`Write failed: File ${JSON_OUTPUT_FILE} does not exist after write operation.`);
+             throw new Error(`Write failed: File ${finalOutputPath} does not exist after write operation.`);
         }
 
     } catch (error) {
@@ -138,6 +148,12 @@ function buildSourceFile() {
     console.log('============================================================');
     console.log('🚀 Starting build process with both Text and JSON exports...');
     console.log('============================================================');
+    
+    // Ensure the deployment directory exists for output files
+    if (!fs.existsSync(DEPLOY_DIR)){
+        console.log(`\n⚙️ Creating deployment directory: ${DEPLOY_DIR}`);
+        fs.mkdirSync(DEPLOY_DIR);
+    }
     
     const timestamp = new Date().toISOString();
     
