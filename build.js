@@ -2,15 +2,16 @@ const fs = require('fs');
 const path = require('path');
 
 // --- Configuration ---
-// Directories and files to exclude from the export.
-// We must exclude the output files themselves to avoid infinite recursion.
+// The name of the standardized JSON output file.
 const JSON_OUTPUT_FILE = 'project_source.json';
+// Directories and files to exclude from the project source export.
 const IGNORE_LIST = [
     'node_modules',
     '.git',
-    'build.js',             // Excludes this script itself.
-    JSON_OUTPUT_FILE,       // Excludes the structured JSON output.
-    'project_source'        // Catch-all for old timestamped text exports.
+    // We explicitly exclude the output file to prevent infinite recursion.
+    JSON_OUTPUT_FILE,
+    // Catch-all for old timestamped text exports.
+    'project_source'
 ];
 const STARTING_DIRECTORY = '.'; // Start from the current directory.
 
@@ -33,11 +34,15 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
             return;
         }
 
-        if (fs.statSync(fullPath).isDirectory()) {
-            arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
-        } else {
-            // Only add the relative path, replacing Windows backslashes with forward slashes
-            arrayOfFiles.push(relativePath.replace(/\\/g, '/'));
+        try {
+            if (fs.statSync(fullPath).isDirectory()) {
+                arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
+            } else {
+                // Only add the relative path, replacing Windows backslashes with forward slashes
+                arrayOfFiles.push(relativePath.replace(/\\/g, '/'));
+            }
+        } catch (error) {
+            console.error(`❌ Error accessing file system for ${fullPath}:`, error.message);
         }
     });
 
@@ -45,7 +50,7 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
 }
 
 /**
- * Executes the text export, using the old delimited format.
+ * Executes the text export, using the old delimited format (for legacy/debugging).
  * @param {Array<string>} filePaths - List of relative file paths to export.
  * @param {string} timestamp - Current ISO timestamp.
  */
@@ -79,7 +84,7 @@ function runTextExport(filePaths, timestamp) {
 }
 
 /**
- * Executes the JSON export, using the new structured format.
+ * Executes the JSON export, using the new structured format for the CI/CD workflow.
  * @param {Array<string>} filePaths - List of relative file paths to export.
  * @param {string} timestamp - Current ISO timestamp.
  */
@@ -112,8 +117,16 @@ function runJsonExport(filePaths, timestamp) {
     try {
         const jsonContent = JSON.stringify(exportData, null, 2); 
         fs.writeFileSync(JSON_OUTPUT_FILE, jsonContent);
-        console.log(`\n✅ JSON Build complete! Exported to: ${JSON_OUTPUT_FILE}`);
-        console.log(`This file is ready for use by your automated workflow.`);
+        
+        // Verification step to ensure the file was written successfully
+        if (fs.existsSync(JSON_OUTPUT_FILE)) {
+             const fileSizeKB = (fs.statSync(JSON_OUTPUT_FILE).size / 1024).toFixed(2);
+             console.log(`\n✅ JSON Build complete! Exported to: ${JSON_OUTPUT_FILE} in the current directory.`);
+             console.log(`File size: ${fileSizeKB} KB. This file is ready for use by your automated workflow.`);
+        } else {
+             throw new Error(`Write failed: File ${JSON_OUTPUT_FILE} does not exist after write operation.`);
+        }
+
     } catch (error) {
         console.error(`\n❌ Error writing output file ${JSON_OUTPUT_FILE}: ${error.message}`);
     }
