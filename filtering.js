@@ -169,15 +169,30 @@ function filterBySearchTerm(records, searchTerm) {
 
 function sortRecords(records, sortBy) {
     return records.sort((a, b) => {
-        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); // <-- UPDATED
-        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, "")); // <-- UPDATED
+        // --- START NEW LOGIC ---
+        // 1. Prioritize 'Featured' items
+        const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
+        const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
+
+        if (aIsFeatured && !bIsFeatured) {
+            return -1; // a comes first
+        }
+        if (!aIsFeatured && bIsFeatured) {
+            return 1; // b comes first
+        }
+        // --- END NEW LOGIC ---
+
+        // 2. Fallback to original user-selected sorting if statuses are the same
+        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
         const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+        
         switch (sortBy) {
             case 'price-asc': return aPrice - bPrice;
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
-            default: return 0;
+            default: return 0; // If both are featured, maintain their relative order or apply a default
         }
     });
 }
