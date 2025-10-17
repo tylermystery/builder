@@ -801,24 +801,3 @@ body.modal-open {
     margin-left: auto; /* Pushes the controls to the right */
     flex-shrink: 0; /* Prevents the controls from shrinking */
 }
-
-.card-header-icons {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    display: flex;
-    gap: 8px;
-    z-index: 10;
-}
-
-.availability-btn {
-    font-size: 24px;
-    cursor: help;
-    line-height: 1;
-}
-
-.heart-icon {
-    position: relative;
-    top: auto;
-    right: auto;
-}
