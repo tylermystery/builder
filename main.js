@@ -13,7 +13,6 @@ import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
-let mainDatePickerInstance = null; // <-- ADD THIS LINE
 async function populateUserPlans(userId) {
     if (userId) {
         const plans = await api.fetchPlansForUser(userId);
@@ -54,7 +53,7 @@ function syncUiWithUrl() {
         });
     }
 
-    applyFiltersAndSort(imageCache, mainDatePickerInstance);
+    applyFiltersAndSort(imageCache);
     
     setTimeout(() => {
         if (view === 'present') {
@@ -184,8 +183,7 @@ async function initialize() {
             shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels);
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); }
         ui.applyCartLabels(shopSettings.cartLabels);
-        const datePickers = initializeEventListeners(imageCache, window.flatpickr, shopSettings);
-        mainDatePickerInstance = datePickers.mainDatePicker;
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings);
         
         const jwt = localStorage.getItem('jwt');
         if (jwt) {
