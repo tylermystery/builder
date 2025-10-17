@@ -158,31 +158,21 @@ export function updateTotalCost() {
     if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
-    // Get the defined event headcount from the global state
-    const definedHeadcount = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT);
-
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
-        
-        let quantityForCalc = itemInfo.quantity;
-        // **NEW LOGIC**: If headcount is defined and item is 'per guest', use defined headcount
-        if (definedHeadcount && record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] === CONSTANTS.PRICING_TYPES.PER_GUEST) {
-            quantityForCalc = definedHeadcount;
-        }
-        
-        subtotal += unitPrice * quantityForCalc;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
+        subtotal += unitPrice * effectiveQuantity;
     });
-
+    
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = subtotal - amountReceived;
     
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
-
+    
     if (amountReceived > 0) {
         amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
         amountPaidRowEl.style.display = 'flex';
@@ -208,10 +198,12 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'block';
+        // --- THIS IS THE FIX ---
+        checkoutBtn.style.display = 'block'; // Ensure it's visible by default
         document.getElementById('total-breakdown').style.display = 'block';
-        
+
         if (isFullyPaid) {
+            // If fully paid, hide the button and show a success message
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
                 document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
@@ -223,6 +215,7 @@ export function updateTotalCost() {
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
             checkoutBtn.disabled = isPlanEmpty;
         }
+        // --- END FIX ---
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
