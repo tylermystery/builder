@@ -4,7 +4,6 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js'; // <-- UPDATED
-import { getItemStatus } from '../availability.js';
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
@@ -183,7 +182,7 @@ function sortRecords(records, sortBy) {
     });
 }
 
-export async function applyFiltersAndSort(imageCache, mainDatePicker) {
+export function applyFiltersAndSort(imageCache) {
     const catalogTitle = document.getElementById('catalog-title');
     const planFilterBtn = document.getElementById('plan-filter-btn');
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
@@ -235,28 +234,10 @@ export async function applyFiltersAndSort(imageCache, mainDatePicker) {
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
     recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
+    recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
-// --- NEW LOGIC START ---
-// Gather the current criteria from the filters
-const criteria = {
-    headcount: parseInt(customHeadcount, 10) || null,
-    startDate: mainDatePicker?.selectedDates[0] || null,
-    endDate: mainDatePicker?.selectedDates[1] || null
-};
-
-// Use Promise.all to run all status checks in parallel for better performance
-const recordsWithStatus = await Promise.all(recordsToDisplay.map(async record => {
-    const statusInfo = await getItemStatus(record, criteria);
-    // Return a new object that includes the original record data plus its new statusInfo
-    return { ...record, statusInfo };
-}));
-
-// Use the new array of records that now includes the status info
-state.records.filtered = recordsWithStatus;
-// --- NEW LOGIC END ---
-
-state.ui.recordsCurrentlyDisplayed = 0;
+    state.records.filtered = recordsToDisplay;
+    state.ui.recordsCurrentlyDisplayed = 0;
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
