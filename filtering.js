@@ -58,29 +58,19 @@ function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, active
 }
 
 function filterByStatus(records, statusFilter) {
-    if (statusFilter === 'all') return records;
-    return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
-}
-
-function filterByHeadcount(records, headcountFilter, customHeadcount) {
-    if (headcountFilter === 'any' && !customHeadcount) {
+    if (statusFilter === 'all') {
+        // If "Show All" is selected, return everything
         return records;
-    }
-
-    let filterMin = 0, filterMax = Infinity;
-    if (headcountFilter === 'custom') {
-        filterMin = parseInt(customHeadcount, 10) || 0;
-        filterMax = filterMin;
+    } else if (statusFilter === 'Available') {
+        [span_0](start_span)// If "Available" is selected, include both "Available" AND "Featured" items[span_0](end_span)
+        return records.filter(record =>
+            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Available' ||
+            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured'
+        );
     } else {
-        const [minStr, maxStr] = headcountFilter.split('-');
-        filterMin = parseInt(minStr, 10);
-        filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
+        // For any other specific status (like "Coming Soon", "Sold Out"), filter strictly
+        return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
     }
-    
-    return records.filter(record => {
-        const capacity = parseCapacity(record.fields['Capacity']);
-        return filterMin <= capacity.max && filterMax >= capacity.min;
-    });
 }
 
 function filterByLocation(records, locationFilter) {
