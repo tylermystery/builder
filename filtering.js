@@ -62,14 +62,18 @@ function filterByStatus(records, statusFilter) {
         // If "Show All" is selected, return everything
         return records;
     } else if (statusFilter === 'Available') {
-        [span_0](start_span)// If "Available" is selected, include both "Available" AND "Featured" items[span_0](end_span)
-        return records.filter(record =>
-            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Available' ||
-            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured'
-        );
+        // If "Available" is selected, include both "Available" AND "Featured" items
+        return records.filter(record => {
+            const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS]; // Get status once
+            // Check if status exists AND matches either "Available" or "Featured"
+            return status && (status === 'Available' || status === 'Featured');
+        });
     } else {
-        // For any other specific status (like "Coming Soon", "Sold Out"), filter strictly
-        return records.filter(record => record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter);
+        // For any other specific status, check if status exists AND matches the filter
+        return records.filter(record =>
+            record.fields[CONSTANTS.FIELD_NAMES.STATUS] && // Added check here too
+            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter
+        );
     }
 }
 
