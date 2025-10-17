@@ -199,12 +199,10 @@ export function applyFiltersAndSort(imageCache) {
 
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
         const itemIds = Array.from(state.cart.items.keys());
-        
         const allPlanRecordIds = [...lockedItemIds, ...itemIds];
         const recordsToDisplay = allPlanRecordIds.map(id =>
             state.records.all.find(record => record.id === id)
         ).filter(Boolean);
-
         state.records.filtered = recordsToDisplay;
         state.ui.recordsCurrentlyDisplayed = 0;
         ui.renderRecords(recordsToDisplay, imageCache, false).then(() => {
@@ -218,7 +216,8 @@ export function applyFiltersAndSort(imageCache) {
     }
 
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
+    const selectedCategory = activeCategoryButton ?
+        (activeCategoryButton.dataset.filter === 'all' ? 'all' : activeCategoryButton.textContent) : 'all';
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -233,8 +232,17 @@ export function applyFiltersAndSort(imageCache) {
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
     let recordsToDisplay = filterByCategoryAndSubcategory(recordsForCurrentStore, selectedCategory, activeSubcategories);
-    
+
+    // --- DEBUG START ---
+    console.log(`[DEBUG] Records BEFORE status filter ('${statusFilter}'):`, recordsToDisplay.length, recordsToDisplay.map(r => r.fields.Name + ':' + r.fields.Status));
+    // --- DEBUG END ---
+
     recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+
+    // --- DEBUG START ---
+    console.log(`[DEBUG] Records AFTER status filter ('${statusFilter}'):`, recordsToDisplay.length, recordsToDisplay.map(r => r.fields.Name + ':' + r.fields.Status));
+    // --- DEBUG END ---
+
     recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
     recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
     recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
