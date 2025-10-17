@@ -7,11 +7,6 @@ import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js'; // <-- UPDATED
 import { log } from '../utils/debug.js';
 
-function createStatusTooltip(statusInfo) {
-    if (!statusInfo || !statusInfo.reasons) return 'Availability status is unknown.';
-    return `<strong>Status: ${statusInfo.status.charAt(0).toUpperCase() + statusInfo.status.slice(1)}</strong><hr style="margin: 2px 0 5px;">${statusInfo.reasons.join('<br>')}`;
-}
-
 function getPlaceholderImage(imageUrls) {
     if (!imageUrls || imageUrls.length === 0) {
         return `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
@@ -47,15 +42,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
-    // NEW: Get status info from the record object passed in
-    const statusInfo = record.statusInfo || { icon: '📅', reasons: ['Select filters to check status.'] };
-    const tooltipContent = createStatusTooltip(statusInfo);
-
     const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrlToLoad = getPlaceholderImage(imageUrls);
 
     if (fields['Item Type'] === 'Grouping') {
-        // ... (The code for Grouping cards remains unchanged)
         const groupingCard = eventCard;
         groupingCard.className = 'event-card grouping-card';
         groupingCard.dataset.categoryName = fields.Name;
@@ -93,7 +83,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     }
 
     if (fields['Item Type'] === 'Event') {
-        // ... (The code for Event cards remains unchanged)
         eventCard.className = 'event-card event-type-card';
         const eventDate = fields.Date ? new Date(fields.Date) : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
@@ -101,12 +90,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
         const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                <div class="card-header-icons">
-                     <span class="availability-btn" data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}">${statusInfo.icon}</span>
-                     <div class="heart-icon" data-record-id="${record.id}"></div>
-                </div>
+                <div class="heart-icon" data-record-id="${record.id}"></div>
             </div>
             <div class="event-card-content">
                 <div class="event-date-display">
@@ -126,24 +113,19 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return eventCard;
     }
 
-    // --- Bookable Item Card ---
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
     const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
-
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-            <div class="card-header-icons">
-                <span class="availability-btn" data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}">${statusInfo.icon}</span>
-                <div class="heart-icon" data-record-id="${record.id}"></div>
-            </div>
+            <div class="heart-icon" data-record-id="${record.id}"></div>
         </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
