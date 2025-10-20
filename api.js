@@ -12,7 +12,7 @@ const SESSIONS_TABLE_NAME = 'Sessions';
 const STORES_TABLE_NAME = 'Stores';
 const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages';
 
-// --- NEW AI-RELATED CONSTANTS ---
+// --- NEW AI-RELATED CONSTANTS (Defined Once) ---
 const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery'; 
 const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
 // --------------------------------
@@ -362,8 +362,6 @@ export async function fetchImagesByTags(tags, retries = 2) {
 }
 
 // --- NEW FUNCTION TO FETCH CURATED IMAGES (WITH SAFETY) ---
-const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery';
-
 export async function fetchCuratedImagesByRecord(record) {
     // 1. Check if the Item record has links in the new 'Curated Images' field.
     const curatedLinks = record.fields[CONSTANTS.FIELD_NAMES.CURATED_IMAGES_LINK];
@@ -375,11 +373,9 @@ export async function fetchCuratedImagesByRecord(record) {
     }
 
     // 2. Build a formula to find all linked records in Image_Gallery
-    // Formula: OR(RECORD_ID()='recId1', RECORD_ID()='recId2', ...)
     const formula = `OR(${curatedLinks.map(id => `RECORD_ID()='${id}'`).join(',')})`;
 
     // 3. Prioritize images based on the 'isBestOf' flag (show the BestOf first)
-    // NOTE: This assumes 'isBestOf' is a checkbox/boolean field in Image_Gallery
     const sortParams = `&sort%5B0%5D%5Bfield%5D=isBestOf&sort%5B0%5D%5Bdirection%5D=desc`;
 
     const encodedFormula = encodeURIComponent(formula);
@@ -471,7 +467,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         return;
     }
 
-    const url = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
     const payload = {
         records: [{
             fields: {
