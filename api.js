@@ -367,15 +367,18 @@ export async function fetchCuratedImagesByRecord(record) {
     const curatedLinks = record.fields[CONSTANTS.FIELD_NAMES.CURATED_IMAGES_LINK];
 
     // CRITICAL SAFETY CHECK: If no links exist, return immediately without making the API call.
+    // This protects against breaking the live site when the new Curated Images field is empty.
     if (!curatedLinks || !Array.isArray(curatedLinks) || curatedLinks.length === 0) {
         log('API', `Safety Exit: No curated links found for ${record.id}.`);
         return [];
     }
 
     // 2. Build a formula to find all linked records in Image_Gallery
+    // Formula: OR(RECORD_ID()='recId1', RECORD_ID()='recId2', ...)
     const formula = `OR(${curatedLinks.map(id => `RECORD_ID()='${id}'`).join(',')})`;
 
     // 3. Prioritize images based on the 'isBestOf' flag (show the BestOf first)
+    // NOTE: We assume 'isBestOf' is a checkbox/boolean field in Image_Gallery
     const sortParams = `&sort%5B0%5D%5Bfield%5D=isBestOf&sort%5B0%5D%5Bdirection%5D=desc`;
 
     const encodedFormula = encodeURIComponent(formula);
