@@ -1,24 +1,12 @@
-// This file is built to be stable within the Netlify Functions runtime.
-
 const fetch = require('node-fetch');
-const Buffer = require('buffer').Buffer; // <-- CRITICAL FIX: Explicit Buffer import
-
 // NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and CLOUDINARY_CLOUD_NAME
 // are set as Netlify Environment Variables.
 const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, URL } = process.env;
 
-// Define authentication header using explicit Buffer access
-const CLOUDINARY_AUTH = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
+const CLOUDINARY_AUTH = 'Basic ' + Buffer.from(CLOUDINARY_API_KEY + ':' + CLOUDINARY_API_SECRET).toString('base64');
 const AI_PROCESSOR_URL = `${URL || 'http://localhost:8888'}/.netlify/functions/process-image-ai`;
 
-// =======================================================
-// CRITICAL FIX: TEMPORARILY DISABLE THE HANDLER TO FORCE DEPLOYMENT
-// We are commenting out the export to stop Netlify's bundler from crashing.
-// The code inside the export is preserved for future use.
-// exports.handler = async (event) => {
-// =======================================================
-exports.handler = async (event) => { // <-- NOTE: Re-enabling the export but wrapping the entire body.
-    console.log("Bulk trigger is currently disabled for deployment stability.");
+exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
     try {
