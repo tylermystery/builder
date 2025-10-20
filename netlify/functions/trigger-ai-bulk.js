@@ -3,181 +3,59 @@
 const fetch = require('node-fetch');
 const Buffer = require('buffer').Buffer; // <-- CRITICAL FIX: Explicit Buffer import
 
-// --- Environment Variables (Accessed via process.env) ---
-const { 
-    AIRTABLE_PAT, 
-    BASE_ID, 
-    GEMINI_API_KEY, 
-    CLOUDINARY_CLOUD_NAME, 
-    CLOUDINARY_API_KEY, 
-    CLOUDINARY_API_SECRET 
-} = process.env;
+// NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and CLOUDINARY_CLOUD_NAME
+// are set as Netlify Environment Variables.
+const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, URL } = process.env;
 
-const Airtable = {
-    IMAGE_GALLERY_TABLE: 'Image_Gallery', // New table for all images
-    ITEMS_TABLE: 'tblUA4uuS8IYlhKpD', // Existing Items table
-    CURATED_IMAGES_FIELD_NAME: 'Curated Images', // The new linked field in Items
-    IMAGE_TAGS_FIELD_NAME: 'Tags' // The comma-separated tags column in Image_Gallery
-};
+// Define authentication header using explicit Buffer access
+const CLOUDINARY_AUTH = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
+const AI_PROCESSOR_URL = `${URL || 'http://localhost:8888'}/.netlify/functions/process-image-ai`;
 
-// --- Cloudinary Helper ---
-async function getCloudinarySecureUrl(publicId) {
-    const auth = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
-    const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/upload/${publicId}`;
-    const response = await fetch(url, { headers: { 'Authorization': auth } });
-    if (!response.ok) {
-        throw new Error(`Cloudinary lookup failed for ${publicId}: ${response.status} ${response.statusText}`);
-    }
-    const data = await response.json();
-    return data.secure_url;
-}
-
-// --- Gemini Call Helper ---
-async function analyzeImageWithGemini(imageUrl) {
-    const prompt = `Analyze this TMT event photo. You must identify the specific TMT catalog item shown, assess image quality, group size, and location. Respond ONLY with a valid JSON object. Do not include markdown code blocks (e.g., \`\`\`json).`;
-    
-    // Schema definition for structured output
-    const responseSchema = {
-        type: "OBJECT",
-        properties: {
-            "catalogItemName": { "type": "STRING", "description": "The name of the TMT catalog item in the image (e.g., Fort Battle). If unknown, use 'Historical Activity'." },
-            "groupSizeTag": { "type": "STRING", "enum": ["Small", "Medium", "Large"], "description": "Group size in the photo: Small (1-10), Medium (11-25), Large (26+)." },
-            "locationTag": { "type": "STRING", "enum": ["Indoor", "Outdoor", "Hybrid"], "description": "The primary setting of the event: Indoor, Outdoor, or Hybrid." },
-            "qualityScore": { "type": "INTEGER", "description": "Rate image quality and brand fit on a scale of 1 to 10." },
-            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." }
-        },
-        required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"],
-        propertyOrdering: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
-    };
-
-    // Fetch the image buffer and convert it to Base64 
-    const imageResponse = await fetch(imageUrl);
-    const imageBuffer = await imageResponse.arrayBuffer();
-    
-    const payload = {
-        contents: [
-            {
-                role: "user",
-                parts: [
-                    { text: prompt },
-                    { 
-                        inlineData: { 
-                            // Assuming all cloudinary images are JPEG for simplicity; can be adjusted if needed
-                            mimeType: 'image/jpeg', 
-                            data: Buffer.from(imageBuffer).toString('base64') 
-                        } 
-                    }
-                ]
-            }
-        ],
-        generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: responseSchema
-        }
-    };
-    
-    // Use the non-streaming Gemini endpoint
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
-    
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        const errorBody = await response.json();
-        console.error("Gemini API Error Response:", errorBody);
-        throw new Error(`Gemini API call failed with status ${response.status}`);
-    }
-
-    const result = await response.json();
-    const jsonText = result.candidates[0].content.parts[0].text;
-    return JSON.parse(jsonText);
-
-}
-
-// --- Main Handler ---
 exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
-    
+
     try {
-        const { publicId } = JSON.parse(event.body);
-        if (!publicId) return { statusCode: 400, body: 'Missing publicId' };
+        const { tagFilter, maxAssets } = JSON.parse(event.body);
         
-        console.log(`Processing image: ${publicId}`);
+        // 1. Fetch assets from Cloudinary Admin API
+        const adminApiUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/image`;
+        const response = await fetch(`${adminApiUrl}?max_results=${maxAssets || 500}&tags=${tagFilter || ''}`, {
+            headers: { 'Authorization': CLOUDINARY_AUTH }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Cloudinary Admin API Error: ${errorData.error.message}`);
+        }
 
-        // 1. Fetch Cloudinary URL
-        const imageUrl = await getCloudinarySecureUrl(publicId);
+        const data = await response.json();
+        const assets = data.resources;
+        
+        console.log(`Starting bulk AI processing for ${assets.length} assets.`);
 
-        // 2. Analyze with Gemini
-        const aiData = await analyzeImageWithGemini(imageUrl);
-        const isBestOf = aiData.qualityScore >= 9;
+        const processPromises = assets.map(asset => 
+            // Internal call to the processing function
+            fetch(AI_PROCESSOR_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ publicId: asset.public_id })
+            })
+        );
+        
+        // Use Promise.allSettled to ensure one failure doesn't stop the whole batch
+        const results = await Promise.allSettled(processPromises);
+        const fulfilled = results.filter(r => r.status === 'fulfilled').length;
 
-        // 3. Find existing Item Record
-        const findItemUrl = `https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}?filterByFormula=({Name}='${aiData.catalogItemName}')&maxRecords=1`;
-        const itemRes = await fetch(findItemUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-        const itemData = await itemRes.json();
-        const catalogRecordId = itemData.records[0]?.id;
-
-        // 4. Create record in Image_Gallery
-        const galleryPayload = {
-            records: [{
-                fields: {
-                    PublicID: publicId,
-                    ImageURL: imageUrl,
-                    CatalogItemLink: catalogRecordId ? [catalogRecordId] : null,
-                    isBestOf: isBestOf,
-                    GroupSizeTag: aiData.groupSizeTag,
-                    LocationTag: aiData.locationTag,
-                    [Airtable.IMAGE_TAGS_FIELD_NAME]: aiData.imageTags,
-                }
-            }]
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ 
+                message: `Bulk job completed. Triggered processing for ${assets.length} assets. Successfully processed: ${fulfilled}.`,
+                processedCount: assets.length 
+            })
         };
 
-        const airtableUrl = `https://api.airtable.com/v0/${BASE_ID}/${Airtable.IMAGE_GALLERY_TABLE}`;
-        const createGalleryRes = await fetch(airtableUrl, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(galleryPayload)
-        });
-
-        if (!createGalleryRes.ok) {
-            console.error('Airtable Image_Gallery Creation Error:', await createGalleryRes.json());
-            throw new Error('Failed to create Image_Gallery record.');
-        }
-        
-        const createGalleryResponseData = await createGalleryRes.json();
-        const newGalleryRecordId = createGalleryResponseData.records[0].id;
-
-        // 5. Update the parent Item record to link to this new Image_Gallery record (Curated Images field)
-        if (catalogRecordId) {
-            const existingItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}?fields[]=${encodeURIComponent(Airtable.CURATED_IMAGES_FIELD_NAME)}`, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-            const existingItem = await existingItemRes.json();
-            const existingLinks = existingItem.fields[Airtable.CURATED_IMAGES_FIELD_NAME] || [];
-
-            const updateItemPayload = {
-                fields: {
-                    [Airtable.CURATED_IMAGES_FIELD_NAME]: [...existingLinks, newGalleryRecordId]
-                }
-            };
-            
-            const updateItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(updateItemPayload)
-            });
-
-            if (!updateItemRes.ok) {
-                 console.error('Airtable Item Link Update Error:', await updateItemRes.json());
-            }
-        }
-
-
-        return { statusCode: 200, body: JSON.stringify({ message: 'Image processed and tagged successfully.', publicId }) };
-
     } catch (error) {
-        console.error('AI Processing Fatal Error:', error.message);
-        return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+        console.error('Bulk Trigger Error:', error.message);
+        return { statusCode: 500, body: JSON.stringify({ error: `Bulk trigger failed: ${error.message}` }) };
     }
 };
