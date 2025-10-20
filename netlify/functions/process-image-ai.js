@@ -12,18 +12,41 @@ const Airtable = {
 };
 
 // --- Cloudinary Helper ---
+// REPLACE the getCloudinarySecureUrl function in: netlify/functions/process-image-ai.js
+
 async function getCloudinarySecureUrl(publicId) {
-    // This uses the REST API to get image details, but requires authentication
+    console.log(`[Debug] getCloudinarySecureUrl: Initiated for publicId: "${publicId}"`);
+
+    // 1. Check if critical environment variables are loaded
+    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
+        console.error("[Debug] CRITICAL: Cloudinary environment variables (CLOUD_NAME, API_KEY, or API_SECRET) are missing!");
+        // We throw an error here to stop the function and make the problem clear
+        throw new Error("Server configuration error: Missing Cloudinary credentials.");
+    }
+    
+    // 2. Construct the URL and log it
     const auth = 'Basic ' + Buffer.from(CLOUDINARY_API_KEY + ':' + CLOUDINARY_API_SECRET).toString('base64');
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/upload/${publicId}`;
+
+    console.log(`[Debug] getCloudinarySecureUrl: Attempting to fetch URL: ${url}`);
+    
+    // 3. Make the request and log the immediate response status
     const response = await fetch(url, { headers: { 'Authorization': auth } });
+    
+    console.log(`[Debug] getCloudinarySecureUrl: Received status ${response.status} from Cloudinary.`);
+
     if (!response.ok) {
+        // 4. If it fails, log the text body of the error from Cloudinary
+        const errorBody = await response.text();
+        console.error(`[Debug] getCloudinarySecureUrl: Cloudinary error response: ${errorBody}`);
+        // This is the original error that the user sees in the browser
         throw new Error(`Cloudinary lookup failed for ${publicId}: ${response.status} ${response.statusText}`);
     }
+    
+    // 5. If successful, proceed as normal
     const data = await response.json();
     return data.secure_url;
 }
-
 // --- Gemini Call Helper ---
 async function analyzeImageWithGemini(imageUrl) {
     const prompt = `Analyze this TMT event photo. You must identify the specific TMT catalog item shown, assess image quality, group size, and location. Respond ONLY with a valid JSON object. Do not include markdown code blocks (e.g., \`\`\`json).`;
