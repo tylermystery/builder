@@ -71,3 +71,18 @@
   to = "/.netlify/functions/send-chat-to-admin"
   status = 200
 
+# --- NEW AI/CURATION REDIRECTS ---
+[[redirects]]
+  from = "/api/process-image-ai"
+  to = "/.netlify/functions/process-image-ai"
+  status = 200
+
+[[redirects]]
+  from = "/api/trigger-ai-bulk"
+  to = "/.netlify/functions/trigger-ai-bulk"
+  status = 200
+
+[[redirects]]
+  from = "/api/generate-products"
+  to = "/.netlify/functions/generate-products"
+  status = 200
