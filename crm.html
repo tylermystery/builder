@@ -96,6 +96,20 @@
             <aside class="panel sessions-pane">
                 <h2>Active Sessions</h2>
                 <div id="session-list" class="session-list"></div>
+                <!-- NEW AI TOOL SECTION FOR QA -->
+                <h2 style="margin-top: 30px;">AI Image Tools</h2>
+                <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px;">
+                    <h3 style="border-bottom: none; padding-bottom: 0;">Test AI Processor</h3>
+                    <form id="test-ai-form">
+                        <label for="test-public-id" style="font-size: 0.9em; display: block; margin-bottom: 5px;">Cloudinary Public ID</label>
+                        <input type="text" id="test-public-id" placeholder="e.g., my/item/photo_01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px;" required>
+                        <button type="submit" id="trigger-single-ai" style="width: 100%; padding: 10px; background-color: var(--highlight-blue); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Process Single Image
+                        </button>
+                    </form>
+                    <p id="single-ai-status" style="margin-top: 10px; font-size: 0.9em; color: #7f8c8d;">Status: Ready</p>
+                </div>
+                <!-- END NEW AI TOOL SECTION -->                
             </aside>
 
             <main class="panel feed-pane">
