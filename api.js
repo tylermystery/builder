@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: api.js
+// REPLACE the entire contents of: api.js
 
 import { state } from './state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from './config.js';
@@ -12,12 +12,17 @@ const SESSIONS_TABLE_NAME = 'Sessions';
 const STORES_TABLE_NAME = 'Stores';
 const ITEM_MESSAGES_TABLE_NAME = 'ItemMessages';
 
+// --- NEW AI-RELATED CONSTANTS ---
+const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery'; 
+const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
+// --------------------------------
+
 export async function fetchPlansForUser(userId) {
     if (!userId) {
         return [];
     }
     const collaboratorField = CONSTANTS.FIELD_NAMES.COLLABORATOR_IDS_FIELD;
-    const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaboratorField}}), 0)`;
+    const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaborField}}), 0)`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
 
@@ -122,8 +127,7 @@ export async function loadSessionFromAirtable(sessionId) {
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON: ${jsonError.message}`);
             }
-        }
-        document.dispatchEvent(new CustomEvent('sessionReady'));
+        }\n        document.dispatchEvent(new CustomEvent('sessionReady'));
     } catch (error) {
         console.error("Failed to load session:", error);
         log('API', `Failed to load session: ${error.message}`);
@@ -182,8 +186,7 @@ export async function saveSessionToAirtable() {
         userProfiles: Object.fromEntries(state.session.userProfiles),
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
-    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
-    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;\n    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDate = new Date(dateRange[0]);
@@ -287,8 +290,6 @@ export async function fetchAllStores() {
     }
 }
 
-// ... (The rest of the functions: fetchCalendarForRecord, fetchImagesByTags, etc. remain the same) ...
-
 export async function fetchCalendarForRecord(record) {
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
@@ -320,7 +321,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
     try {
         let payload;
         if (Array.isArray(tags)) {
-            payload = { expression: tags.map(tag => `tags:"${tag}"`).join(' AND ') };
+            payload = { expression: tags.map(tag => `tags:\"${tag}\"`).join(' AND ') };
         } else {
             payload = { tag: tags };
         }
@@ -349,14 +350,62 @@ export async function fetchImagesByTags(tags, retries = 2) {
                 transformations = 'c_fit,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
-        });
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;\n        });
         return imageUrls;
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
         return null;
     }
 }
+
+// --- NEW FUNCTION TO FETCH CURATED IMAGES (WITH SAFETY) ---
+const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery';
+
+export async function fetchCuratedImagesByRecord(record) {
+    // 1. Check if the Item record has links in the new 'Curated Images' field.
+    const curatedLinks = record.fields[CONSTANTS.FIELD_NAMES.CURATED_IMAGES_LINK];
+
+    // CRITICAL SAFETY CHECK: If no links exist, return immediately without making the API call.
+    if (!curatedLinks || !Array.isArray(curatedLinks) || curatedLinks.length === 0) {
+        log('API', `Safety Exit: No curated links found for ${record.id}.`);
+        return [];
+    }
+
+    // 2. Build a formula to find all linked records in Image_Gallery
+    // Formula: OR(RECORD_ID()='recId1', RECORD_ID()='recId2', ...)
+    const formula = `OR(${curatedLinks.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+
+    // 3. Prioritize images based on the 'isBestOf' flag (show the BestOf first)
+    // NOTE: This assumes 'isBestOf' is a checkbox/boolean field in Image_Gallery
+    const sortParams = `&sort%5B0%5D%5Bfield%5D=isBestOf&sort%5B0%5D%5Bdirection%5D=desc`;
+
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${IMAGE_GALLERY_TABLE_NAME}?filterByFormula=${encodedFormula}${sortParams}`;
+
+    try {
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        if (!response.ok) {
+            const errorData = await response.json();
+             // IMPORTANT: Throw a caught error instead of letting it propagate up silently
+            throw new Error(`Airtable fetch error: ${errorData.error.message || 'Unknown Airtable Error'}`);
+        }
+        
+        const data = await response.json();
+        
+        // Extract the ImageURL field from the curated records
+        const imageUrls = data.records
+            .map(r => r.fields.ImageURL)
+            .filter(url => url);
+            
+        return imageUrls;
+        
+    } catch (error) {
+        console.error("Error fetching curated images:", error.message);
+        // Return an empty array on failure so the calling function can safely proceed
+        return [];
+    }
+}
+// ---------------------------------------------
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const cacheKey = record.id;
@@ -371,10 +420,19 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+
     if (isGrouping) {
         imageUrls = [ultimateFallbackUrl];
     } else {
-        imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+        // 1. ATTEMPT NEW CURATED FETCH 
+        // This is now safer due to the early exit check in fetchCuratedImagesByRecord
+        imageUrls = await fetchCuratedImagesByRecord(record);
+
+        // 2. FALLBACK TO OLD MEDIA TAGS IF NEW CURATED FIELD IS EMPTY 
+        if (!imageUrls || imageUrls.length === 0) {
+             log('API', `Fallback: No curated image found for ${record.id}, checking old Media Tags.`);
+             imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+        }
     }
 
     if (!imageUrls || imageUrls.length === 0) {
@@ -406,7 +464,7 @@ export async function fetchChatMessages(sessionId) {
 
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
-        console.error(`[DEBUG] postChatMessage: FAILED. Invalid sessionId provided: "${sessionId}". Cannot save message.`);
+        console.error(`[DEBUG] postChatMessage: FAILED. Invalid sessionId provided: \"${sessionId}\". Cannot save message.`);
         return;
     }
 
@@ -439,23 +497,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
         if (newMessageRecordId) {
-            await Promise.all([
-                fetch('/api/send-notification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ recordId: newMessageRecordId })
-                }),
-                fetch('/api/send-email-notification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ recordId: newMessageRecordId })
-                }),
-                fetch('/api/send-chat-to-admin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ recordId: newMessageRecordId })
-                })
-            ]);
+            await Promise.all([\n                fetch('/api/send-notification', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                }),\n                fetch('/api/send-email-notification', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                }),\n                fetch('/api/send-chat-to-admin', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                })\n            ]);
         }
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
