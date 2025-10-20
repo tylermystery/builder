@@ -1,6 +1,7 @@
 // This file is built to be stable within the Netlify Functions runtime.
 
 const fetch = require('node-fetch');
+const Buffer = require('buffer').Buffer; // <-- CRITICAL FIX: Explicit Buffer import
 
 // --- Environment Variables (Accessed via process.env) ---
 const { 
@@ -21,8 +22,6 @@ const Airtable = {
 
 // --- Cloudinary Helper ---
 async function getCloudinarySecureUrl(publicId) {
-    // We explicitly define the Buffer import to satisfy the bundler if needed, 
-    // although it is usually global. Using Buffer for basic Base64 encoding.
     const auth = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/upload/${publicId}`;
     const response = await fetch(url, { headers: { 'Authorization': auth } });
