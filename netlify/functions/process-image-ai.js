@@ -1,3 +1,5 @@
+// REPLACE the entire contents of: netlify/functions/process-image-ai.js
+
 const fetch = require('node-fetch');
 // NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and GEMINI_API_KEY
 // are set as Netlify Environment Variables.
@@ -6,7 +8,7 @@ const Airtable = {
     IMAGE_GALLERY_TABLE: 'Image_Gallery', // New table for all images
     ITEMS_TABLE: 'tblUA4uuS8IYlhKpD', // Existing Items table
     CURATED_IMAGES_FIELD_NAME: 'Curated Images', // The new linked field in Items
-    IMAGE_TAGS_FIELD_NAME: 'Tags' // <-- UPDATED: New generic tags field in Image_Gallery
+    IMAGE_TAGS_FIELD_NAME: 'Tags' // <-- NEW: The general tags column in Image_Gallery
 };
 
 // --- Cloudinary Helper ---
@@ -34,7 +36,7 @@ async function analyzeImageWithGemini(imageUrl) {
             "groupSizeTag": { "type": "STRING", "enum": ["Small", "Medium", "Large"], "description": "Group size in the photo: Small (1-10), Medium (11-25), Large (26+)." },
             "locationTag": { "type": "STRING", "enum": ["Indoor", "Outdoor", "Hybrid"], "description": "The primary setting of the event: Indoor, Outdoor, or Hybrid." },
             "qualityScore": { "type": "INTEGER", "description": "Rate image quality and brand fit on a scale of 1 to 10." },
-            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." } // Renamed field here
+            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." } // Aligned with the 'Tags' field data type
         },
         required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"],
         propertyOrdering: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
@@ -46,6 +48,7 @@ async function analyzeImageWithGemini(imageUrl) {
                 role: "user",
                 parts: [
                     { text: prompt },
+                    // Fetch the image data inline for the API call
                     { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } }
                 ]
             }
@@ -94,7 +97,7 @@ exports.handler = async (event) => {
         const aiData = await analyzeImageWithGemini(imageUrl);
         const isBestOf = aiData.qualityScore >= 9;
 
-        // 3. Find existing Item Record (only needed for linking, not direct updating yet)
+        // 3. Find existing Item Record
         const findItemUrl = `https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}?filterByFormula=({Name}='${aiData.catalogItemName}')&maxRecords=1`;
         const itemRes = await fetch(findItemUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
         const itemData = await itemRes.json();
@@ -110,7 +113,7 @@ exports.handler = async (event) => {
                     isBestOf: isBestOf,
                     GroupSizeTag: aiData.groupSizeTag,
                     LocationTag: aiData.locationTag,
-                    // Use the newly defined constant for the Tags field
+                    // Map the Gemini output field to the Airtable field name constant
                     [Airtable.IMAGE_TAGS_FIELD_NAME]: aiData.imageTags,
                 }
             }]
@@ -148,7 +151,7 @@ exports.handler = async (event) => {
             
             const updateItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updateItemPayload)
             });
 
