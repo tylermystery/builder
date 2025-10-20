@@ -6,6 +6,7 @@ const Airtable = {
     IMAGE_GALLERY_TABLE: 'Image_Gallery', // New table for all images
     ITEMS_TABLE: 'tblUA4uuS8IYlhKpD', // Existing Items table
     CURATED_IMAGES_FIELD_NAME: 'Curated Images', // The new linked field in Items
+    IMAGE_TAGS_FIELD_NAME: 'Tags' // <-- UPDATED: New generic tags field in Image_Gallery
 };
 
 // --- Cloudinary Helper ---
@@ -33,10 +34,10 @@ async function analyzeImageWithGemini(imageUrl) {
             "groupSizeTag": { "type": "STRING", "enum": ["Small", "Medium", "Large"], "description": "Group size in the photo: Small (1-10), Medium (11-25), Large (26+)." },
             "locationTag": { "type": "STRING", "enum": ["Indoor", "Outdoor", "Hybrid"], "description": "The primary setting of the event: Indoor, Outdoor, or Hybrid." },
             "qualityScore": { "type": "INTEGER", "description": "Rate image quality and brand fit on a scale of 1 to 10." },
-            "generalTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." }
+            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." } // Renamed field here
         },
-        required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "generalTags"],
-        propertyOrdering: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "generalTags"]
+        required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"],
+        propertyOrdering: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
     };
 
     const payload = {
@@ -109,7 +110,8 @@ exports.handler = async (event) => {
                     isBestOf: isBestOf,
                     GroupSizeTag: aiData.groupSizeTag,
                     LocationTag: aiData.locationTag,
-                    GeneralTags: aiData.generalTags,
+                    // Use the newly defined constant for the Tags field
+                    [Airtable.IMAGE_TAGS_FIELD_NAME]: aiData.imageTags,
                 }
             }]
         };
@@ -126,7 +128,9 @@ exports.handler = async (event) => {
             throw new Error('Failed to create Image_Gallery record.');
         }
         
-        const newGalleryRecordId = (await createGalleryRes.json()).records[0].id;
+        // IMPORTANT: We need to parse the response to get the newly created record ID
+        const createGalleryResponseData = await createGalleryRes.json();
+        const newGalleryRecordId = createGalleryResponseData.records[0].id;
 
         // 5. Update the parent Item record to link to this new Image_Gallery record (Curated Images field)
         if (catalogRecordId) {
