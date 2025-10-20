@@ -50,24 +50,43 @@ function saveArchivedState() {
 async function fetchAirtableData(tableName) {
     let allRecords = [];
     let offset = null;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${tableName}`;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${tableName}`; // Base URL
+    
     try {
         do {
-            const response = await fetch(`${url}?offset=${offset || ''}`, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-            if (!response.ok) throw new Error(`Failed to fetch from ${tableName}`);
+            // --- THIS IS THE FIX ---
+            // Construct the URL cleanly in each loop to prevent offset pollution.
+            let fetchUrl = baseUrl;
+            if (offset) {
+                // Ensure offset is a valid string and starts with 'itr' (Airtable's prefix)
+                if (typeof offset === 'string' && offset.startsWith('itr')) {
+                    fetchUrl = `${baseUrl}?offset=${offset}`;
+                } else {
+                    // If the offset is invalid, break the loop.
+                    console.warn(`Invalid Airtable offset detected for ${tableName}: ${offset}`);
+                    break; 
+                }
+            }
+            // --- END FIX ---
+
+            const response = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+            
+            if (!response.ok) {
+                // Log the exact failing URL for debugging
+                console.error(`Airtable API request failed for URL: ${fetchUrl}`);
+                throw new Error(`Failed to fetch from ${tableName} (Status: ${response.status})`);
+            }
+            
             const data = await response.json();
             allRecords = allRecords.concat(data.records);
-            offset = data.offset;
+            offset = data.offset; // Get new offset for the next loop
         } while (offset);
+        
         return allRecords;
     } catch (error) {
         console.error("Airtable fetch error:", error);
-        // CRITICAL FIX: The next line causes the whole page to stop rendering if Airtable fails.
-        // It must be wrapped in try/catch in the caller's functions (initializeDashboard in this case)
-        // or handled robustly. For now, since the page crashed, we just log and return empty data
-        // to allow the script to continue.
-        // loadingIndicator.textContent = `Error loading data: ${error.message}`;
-        return [];
+        // This will be caught by initializeDashboard's try/catch block
+        throw error;
     }
 }
 async function postChatMessage(sessionId, content) {
@@ -84,6 +103,7 @@ async function postChatMessage(sessionId, content) {
 
 // --- Message Analysis ---
 function analyzeMessageContent(content) {
+    if (!content) return ''; // Add safety check for undefined content
     const questionKeywords = ['?', 'how', 'what', 'when', 'where', 'why', 'can we', 'is it', 'tmt'];
     const followupKeywords = ['follow up', 'circle back', 'next steps', 'send me', 'proposal'];
     const lowerCaseContent = content.toLowerCase();
@@ -219,10 +239,8 @@ function renderChatPane(sessionId) {
 
 // --- Event Handlers & Initialization ---
 function handleSessionSelect(sessionId) {
-    // FIX: Add a check to ensure the session exists before trying to render it.
     if (!sessionMap.has(sessionId)) {
         console.warn(`Attempted to select a non-existent session: ${sessionId}`);
-        // Optionally, show a message to the user in the UI.
         planView.style.display = 'none';
         planViewPlaceholder.style.display = 'block';
         planViewPlaceholder.textContent = 'This session may have been deleted.';
@@ -256,7 +274,7 @@ function setupDragAndDrop() {
                     archivedSessionIds.add(sessionId);
                 } else {
                     archivedSessionIds.delete(sessionId);
-                    unreadArchivedSessions.delete(sessionId); // Mark as read when unarchived
+                    unreadArchivedSessions.delete(sessionId);
                 }
                 saveArchivedState();
                 renderSessionLists();
@@ -268,21 +286,19 @@ function setupDragAndDrop() {
 async function initializeDashboard() {
     loadArchivedState();
     
-    // We are deliberately catching errors here to prevent a failed network fetch 
-    // from crashing the entire dashboard load.
     try {
+        // This block will now fail gracefully if any fetch fails
         const [allSessionsData, allMessagesData, allCatalogItemsData, allTeammatesData] = await Promise.all([
             fetchAirtableData(SESSIONS_TABLE),
             fetchAirtableData(MESSAGES_TABLE),
             fetchAirtableData(CATALOG_TABLE),
-            fetchAirtableData(TEAMMATES_TABLE) // <-- NEW: Fetch teammates
+            fetchAirtableData(TEAMMATES_TABLE)
         ]);
 
-        // Assign fetched data to state variables
         allSessions = allSessionsData;
         allMessages = allMessagesData;
         allCatalogItems = allCatalogItemsData;
-        const allTeammates = allTeammatesData; // <-- NEW: Store teammates in a local const
+        const allTeammates = allTeammatesData;
 
         loadingIndicator.style.display = 'none';
 
@@ -302,7 +318,7 @@ async function initializeDashboard() {
         setupPusher();
         setupDragAndDrop();
 
-        // --- NEW: Teammate list rendering logic is now here ---
+        // --- Teammate list rendering logic ---
         const teammateListContainer = document.createElement('div');
         teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
         
@@ -314,112 +330,121 @@ async function initializeDashboard() {
             teammateListContainer.appendChild(link);
         });
         
-        // Add the list to a visible part of your CRM dashboard
         document.querySelector('.sessions-pane').appendChild(teammateListContainer);
-        // --- END NEW SECTION ---
+        // --- END ---
 
-        document.body.addEventListener('click', (e) => {
-            const sessionItem = e.target.closest('.session-list-item, .feed-item');
-            if (sessionItem) {
-                e.preventDefault();
-                // Ensure we don't try to handle teammate links as session links
-                if (sessionItem.href && sessionItem.href.includes('teammate.html')) {
-                    window.location.href = sessionItem.href;
-                } else {
-                    handleSessionSelect(sessionItem.dataset.sessionId);
-                }
-            }
-        });
-
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const content = chatInput.value.trim();
-            if (content && currentlySelectedSessionId) {
-                const tempMessageEl = document.createElement('div');
-                tempMessageEl.className = 'chat-message admin';
-                tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
-                chatMessagesContainer.appendChild(tempMessageEl);
-            
-                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-                
-                const messageToSend = chatInput.value;
-                chatInput.value = '';
-
-                await postChatMessage(currentlySelectedSessionId, messageToSend);
-                
-                const channel = pusherChannelMap.get(currentlySelectedSessionId);
-                
-                if (channel) {
-                    channel.trigger('client-new-message', {
-                        content: messageToSend,
-                        senderId: 'admin-dashboard',
-                        senderName: 'TMT Admin',
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }
-        });
-
-        document.getElementById('archive-toggle').addEventListener('click', () => {
-            archivePane.classList.toggle('expanded');
-        });
-
-        // --- NEW PHASE 1 QA LISTENER ---
-        const testAIForm = document.getElementById('test-ai-form');
-        const publicIdInput = document.getElementById('test-public-id');
-        const statusMessage = document.getElementById('single-ai-status');
-
-        if (testAIForm) {
-            testAIForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const publicId = publicIdInput.value.trim();
-
-                if (!publicId) {
-                    statusMessage.textContent = 'Status: Please enter a Public ID.';
-                    statusMessage.style.color = '#dc3545';
-                    return;
-                }
-
-                statusMessage.textContent = `Status: Processing ${publicId}... (Check Netlify logs for progress)`;
-                statusMessage.style.color = '#3498db';
-                document.getElementById('trigger-single-ai').disabled = true;
-
-                try {
-                    // Call the AI processing function directly
-                    const response = await fetch('/.netlify/functions/process-image-ai', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ publicId: publicId })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        statusMessage.textContent = `✅ SUCCESS: ${data.message}`;
-                        statusMessage.style.color = '#2ecc71';
-                        publicIdInput.value = '';
-                    } else {
-                        statusMessage.textContent = `❌ FAILURE: ${data.error}`;
-                        statusMessage.style.color = '#dc3545';
-                    }
-                } catch (error) {
-                    statusMessage.textContent = `❌ CRITICAL ERROR: Could not connect to API.`;
-                    statusMessage.style.color = '#dc3545';
-                    console.error('Manual AI Trigger Error:', error);
-                } finally {
-                    document.getElementById('trigger-single-ai').disabled = false;
-                }
-            });
-        }
-        // --- END NEW PHASE 1 QA EVENT LISTENER ---
     } catch (e) {
-        // Fallback for a catastrophic fetch failure
+        // --- THIS IS THE FIX ---
+        // If the Promise.all() fails (e.g., the Sessions 500 error), show the error to the user.
         console.error("Catastrophic error during Dashboard Initialization:", e);
-        loadingIndicator.textContent = `CRITICAL ERROR: Failed to load data from Airtable. Please check API keys or table configuration.`;
+        loadingIndicator.textContent = `CRITICAL ERROR: Failed to load data from Airtable (${e.message}). Please check API keys or table configuration.`;
+        loadingIndicator.style.color = '#dc3545';
+        // We stop execution here so the rest of the JS doesn't run on empty data
+        return; 
+    }
+
+    // --- All event listeners are moved *outside* the try/catch block ---
+    // They will only attach if the data load was successful.
+    
+    document.body.addEventListener('click', (e) => {
+        const sessionItem = e.target.closest('.session-list-item, .feed-item');
+        if (sessionItem) {
+            e.preventDefault();
+            if (sessionItem.href && sessionItem.href.includes('teammate.html')) {
+                window.location.href = sessionItem.href;
+            } else {
+                handleSessionSelect(sessionItem.dataset.sessionId);
+            }
+        }
+    });
+
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const content = chatInput.value.trim();
+        if (content && currentlySelectedSessionId) {
+            const tempMessageEl = document.createElement('div');
+            tempMessageEl.className = 'chat-message admin';
+            tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
+            chatMessagesContainer.appendChild(tempMessageEl);
+        
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+            
+            const messageToSend = chatInput.value;
+            chatInput.value = '';
+
+            await postChatMessage(currentlySelectedSessionId, messageToSend);
+            
+            const channel = pusherChannelMap.get(currentlySelectedSessionId);
+            
+            if (channel) {
+                channel.trigger('client-new-message', {
+                    content: messageToSend,
+                    senderId: 'admin-dashboard',
+                    senderName: 'TMT Admin',
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+    });
+
+    document.getElementById('archive-toggle').addEventListener('click', () => {
+        archivePane.classList.toggle('expanded');
+    });
+
+    // --- AI QA TESTER LISTENER ---
+    const testAIForm = document.getElementById('test-ai-form');
+    const publicIdInput = document.getElementById('test-public-id');
+    const statusMessage = document.getElementById('single-ai-status');
+
+    if (testAIForm) {
+        testAIForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const publicId = publicIdInput.value.trim();
+
+            if (!publicId) {
+                statusMessage.textContent = 'Status: Please enter a Public ID.';
+                statusMessage.style.color = '#dc3545';
+                return;
+            }
+
+            statusMessage.textContent = `Status: Processing ${publicId}... (Check Netlify logs for progress)`;
+            statusMessage.style.color = '#3498db';
+            document.getElementById('trigger-single-ai').disabled = true;
+
+            try {
+                // Call the AI processing function directly
+                const response = await fetch('/.netlify/functions/process-image-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ publicId: publicId })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusMessage.textContent = `✅ SUCCESS: ${data.message}`;
+                    statusMessage.style.color = '#2ecc71';
+                    publicIdInput.value = '';
+                } else {
+                    // This will now show the *actual* error from the function
+                    statusMessage.textContent = `❌ FAILURE: ${data.error}`;
+                    statusMessage.style.color = '#dc3545';
+                }
+            } catch (error) {
+                statusMessage.textContent = `❌ CRITICAL ERROR: Could not connect to API.`;
+                statusMessage.style.color = '#dc3545';
+                console.error('Manual AI Trigger Error:', error);
+            } finally {
+                document.getElementById('trigger-single-ai').disabled = false;
+            }
+        });
     }
 }
 
 function setupPusher() {
+    // Only setup Pusher if data loaded successfully
+    if (sessionMap.size === 0) return; 
+
     const pusher = new Pusher(PUSHER_KEY, {
         cluster: PUSHER_CLUSTER,
         authEndpoint: '/api/pusher-auth',
