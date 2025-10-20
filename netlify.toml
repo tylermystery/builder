@@ -86,3 +86,10 @@
   from = "/api/generate-products"
   to = "/.netlify/functions/generate-products"
   status = 200
+
+
+# Add this rule to netlify.toml
+[[redirects]]
+  from = "/api/hello"
+  to = "/.netlify/functions/hello-world"
+  status = 200
