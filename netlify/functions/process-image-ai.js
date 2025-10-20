@@ -8,7 +8,7 @@ const Airtable = {
     IMAGE_GALLERY_TABLE: 'Image_Gallery', // New table for all images
     ITEMS_TABLE: 'tblUA4uuS8IYlhKpD', // Existing Items table
     CURATED_IMAGES_FIELD_NAME: 'Curated Images', // The new linked field in Items
-    IMAGE_TAGS_FIELD_NAME: 'Tags' // <-- NEW: The general tags column in Image_Gallery
+    IMAGE_TAGS_FIELD_NAME: 'Tags' // The comma-separated tags column in Image_Gallery
 };
 
 // --- Cloudinary Helper ---
@@ -149,9 +149,10 @@ exports.handler = async (event) => {
                 }
             };
             
+            // CRITICAL FIX: Use AIRTABLE_PAT for the PATCH request, not PERSONAL_ACCESS_TOKEN
             const updateItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updateItemPayload)
             });
 
