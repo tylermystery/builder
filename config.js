@@ -18,7 +18,8 @@ export const CONSTANTS = {
         DURATION: 'Duration (hours)',
         PRICING_TYPE: 'Pricing Type',
         HEADCOUNT_MIN: 'Headcount min',
-        MEDIA_TAGS: 'Media Tags',
+        MEDIA_TAGS: 'Media Tags', // <-- ORIGINAL FIELD (LIVE SITE USES THIS)
+        CURATED_IMAGES_LINK: 'Curated Images', // <-- NEW FIELD FOR AI LINKS (SETUP IN AIRTABLE)
         CATEGORIES: 'Categories',
         SUBCATEGORIES: 'Subcategories',
         ICAL_URL: 'iCal URL',
