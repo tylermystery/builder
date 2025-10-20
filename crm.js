@@ -1,12 +1,14 @@
+// REPLACE the entire contents of: crm.js
+
 // --- Configuration ---
 const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const SESSIONS_TABLE = 'Sessions';
 const MESSAGES_TABLE = 'Messages';
 const CATALOG_TABLE = 'tblUA4uuS8IYlhKpD'; 
+const TEAMMATES_TABLE = 'Teammates';
 const PUSHER_KEY = '236f480714e5001590b5';
 const PUSHER_CLUSTER = 'us3';
-const TEAMMATES_TABLE = 'Teammates'; // <-- ADD THIS LINE
 const ARCHIVE_STORAGE_KEY = 'tmt-archived-sessions';
 
 // --- State ---
@@ -76,8 +78,7 @@ async function postChatMessage(sessionId, content) {
     } catch (error) { console.error("Error posting chat message:", error); }
 }
 
-// --- Message Analysis ---
-function analyzeMessageContent(content) {
+// --- Message Analysis ---\nfunction analyzeMessageContent(content) {
     const questionKeywords = ['?', 'how', 'what', 'when', 'where', 'why', 'can we', 'is it', 'tmt'];
     const followupKeywords = ['follow up', 'circle back', 'next steps', 'send me', 'proposal'];
     const lowerCaseContent = content.toLowerCase();
@@ -177,8 +178,7 @@ function renderEventPlan(sessionId) {
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
-        } else { planHtml += '<p>No favorited items.</p>'; }
-        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
+        } else { planHtml += '<p>No favorited items.</p>'; }\n        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
     } catch(e) {
         console.error("Error rendering plan:", e);
         planHtml += '<p>Could not load event plan details.</p>';
@@ -294,8 +294,7 @@ async function initializeDashboard() {
     setupPusher();
     setupDragAndDrop();
 
-    // --- NEW: Teammate list rendering logic is now here ---
-    const teammateListContainer = document.createElement('div');
+    // --- NEW: Teammate list rendering logic is now here ---\n    const teammateListContainer = document.createElement('div');
     teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
     
     allTeammates.forEach(tm => {
@@ -355,7 +354,8 @@ async function initializeDashboard() {
     document.getElementById('archive-toggle').addEventListener('click', () => {
         archivePane.classList.toggle('expanded');
     });
-        // --- NEW PHASE 1 QA  LISTENER ---
+
+    // --- NEW PHASE 1 QA LISTENER ---
     const testAIForm = document.getElementById('test-ai-form');
     const publicIdInput = document.getElementById('test-public-id');
     const statusMessage = document.getElementById('single-ai-status');
@@ -403,7 +403,6 @@ async function initializeDashboard() {
         });
     }
     // --- END NEW PHASE 1 QA EVENT LISTENER ---
-
 }
 
 function setupPusher() {
@@ -431,4 +430,3 @@ function setupPusher() {
 }
 
 initializeDashboard();
-
