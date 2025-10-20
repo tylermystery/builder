@@ -1,9 +1,12 @@
+// This file is built to be stable within the Netlify Functions runtime.
+
 const fetch = require('node-fetch');
 // NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and CLOUDINARY_CLOUD_NAME
 // are set as Netlify Environment Variables.
 const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, URL } = process.env;
 
-const CLOUDINARY_AUTH = 'Basic ' + Buffer.from(CLOUDINARY_API_KEY + ':' + CLOUDINARY_API_SECRET).toString('base64');
+// Define authentication header using explicit Buffer access
+const CLOUDINARY_AUTH = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
 const AI_PROCESSOR_URL = `${URL || 'http://localhost:8888'}/.netlify/functions/process-image-ai`;
 
 exports.handler = async (event) => {
