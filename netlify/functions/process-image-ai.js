@@ -1,28 +1,20 @@
-// This file is built to be stable within the Netlify Functions runtime.
+// REPLACE the entire contents of: netlify/functions/process-image-ai.js
 
 const fetch = require('node-fetch');
-const Buffer = require('buffer').Buffer; // <-- CRITICAL FIX: Explicit Buffer import
-
-// --- Environment Variables (Accessed via process.env) ---
-const { 
-    AIRTABLE_PAT, 
-    BASE_ID, 
-    GEMINI_API_KEY, 
-    CLOUDINARY_CLOUD_NAME, 
-    CLOUDINARY_API_KEY, 
-    CLOUDINARY_API_SECRET 
-} = process.env;
-
+// NOTE: We assume CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, and GEMINI_API_KEY
+// are set as Netlify Environment Variables.
+const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY, CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
 const Airtable = {
     IMAGE_GALLERY_TABLE: 'Image_Gallery', // New table for all images
     ITEMS_TABLE: 'tblUA4uuS8IYlhKpD', // Existing Items table
     CURATED_IMAGES_FIELD_NAME: 'Curated Images', // The new linked field in Items
-    IMAGE_TAGS_FIELD_NAME: 'Tags' // The comma-separated tags column in Image_Gallery
+    IMAGE_TAGS_FIELD_NAME: 'Tags' // <-- NEW: The general tags column in Image_Gallery
 };
 
 // --- Cloudinary Helper ---
 async function getCloudinarySecureUrl(publicId) {
-    const auth = 'Basic ' + Buffer.from(`${CLOUDINARY_API_KEY}:${CLOUDINARY_API_SECRET}`).toString('base64');
+    // This uses the REST API to get image details, but requires authentication
+    const auth = 'Basic ' + Buffer.from(CLOUDINARY_API_KEY + ':' + CLOUDINARY_API_SECRET).toString('base64');
     const url = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/resources/upload/${publicId}`;
     const response = await fetch(url, { headers: { 'Authorization': auth } });
     if (!response.ok) {
@@ -44,29 +36,20 @@ async function analyzeImageWithGemini(imageUrl) {
             "groupSizeTag": { "type": "STRING", "enum": ["Small", "Medium", "Large"], "description": "Group size in the photo: Small (1-10), Medium (11-25), Large (26+)." },
             "locationTag": { "type": "STRING", "enum": ["Indoor", "Outdoor", "Hybrid"], "description": "The primary setting of the event: Indoor, Outdoor, or Hybrid." },
             "qualityScore": { "type": "INTEGER", "description": "Rate image quality and brand fit on a scale of 1 to 10." },
-            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." }
+            "imageTags": { "type": "STRING", "description": "A comma-separated list of 10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." } // Aligned with the 'Tags' field data type
         },
         required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"],
         propertyOrdering: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
     };
 
-    // Fetch the image buffer and convert it to Base64 
-    const imageResponse = await fetch(imageUrl);
-    const imageBuffer = await imageResponse.arrayBuffer();
-    
     const payload = {
         contents: [
             {
                 role: "user",
                 parts: [
                     { text: prompt },
-                    { 
-                        inlineData: { 
-                            // Assuming all cloudinary images are JPEG for simplicity; can be adjusted if needed
-                            mimeType: 'image/jpeg', 
-                            data: Buffer.from(imageBuffer).toString('base64') 
-                        } 
-                    }
+                    // Fetch the image data inline for the API call
+                    { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } }
                 ]
             }
         ],
@@ -87,7 +70,7 @@ async function analyzeImageWithGemini(imageUrl) {
 
     if (!response.ok) {
         const errorBody = await response.json();
-        console.error("Gemini API Error Response:", errorBody);
+        console.error("Gemini API Error:", errorBody);
         throw new Error(`Gemini API call failed with status ${response.status}`);
     }
 
@@ -130,6 +113,7 @@ exports.handler = async (event) => {
                     isBestOf: isBestOf,
                     GroupSizeTag: aiData.groupSizeTag,
                     LocationTag: aiData.locationTag,
+                    // Map the Gemini output field to the Airtable field name constant
                     [Airtable.IMAGE_TAGS_FIELD_NAME]: aiData.imageTags,
                 }
             }]
@@ -143,33 +127,37 @@ exports.handler = async (event) => {
         });
 
         if (!createGalleryRes.ok) {
-            console.error('Airtable Image_Gallery Creation Error:', await createGalleryRes.json());
+            console.error('Airtable Error:', await createGalleryRes.json());
             throw new Error('Failed to create Image_Gallery record.');
         }
         
+        // IMPORTANT: We need to parse the response to get the newly created record ID
         const createGalleryResponseData = await createGalleryRes.json();
         const newGalleryRecordId = createGalleryResponseData.records[0].id;
 
         // 5. Update the parent Item record to link to this new Image_Gallery record (Curated Images field)
         if (catalogRecordId) {
+            // Fetch existing links to avoid overwriting them
             const existingItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}?fields[]=${encodeURIComponent(Airtable.CURATED_IMAGES_FIELD_NAME)}`, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
             const existingItem = await existingItemRes.json();
             const existingLinks = existingItem.fields[Airtable.CURATED_IMAGES_FIELD_NAME] || [];
 
             const updateItemPayload = {
                 fields: {
+                    // Append the new gallery record ID to the existing array of links
                     [Airtable.CURATED_IMAGES_FIELD_NAME]: [...existingLinks, newGalleryRecordId]
                 }
             };
             
             const updateItemRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${Airtable.ITEMS_TABLE}/${catalogRecordId}`, {
                 method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(updateItemPayload)
             });
 
             if (!updateItemRes.ok) {
-                 console.error('Airtable Item Link Update Error:', await updateItemRes.json());
+                 console.error('Airtable Link Update Error:', await updateItemRes.json());
+                 // Log error but continue, as the image record itself was created
             }
         }
 
@@ -177,7 +165,7 @@ exports.handler = async (event) => {
         return { statusCode: 200, body: JSON.stringify({ message: 'Image processed and tagged successfully.', publicId }) };
 
     } catch (error) {
-        console.error('AI Processing Fatal Error:', error.message);
+        console.error('AI Processing Error:', error.message);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
