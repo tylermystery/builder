@@ -62,7 +62,11 @@ async function fetchAirtableData(tableName) {
         return allRecords;
     } catch (error) {
         console.error("Airtable fetch error:", error);
-        loadingIndicator.textContent = `Error loading data: ${error.message}`;
+        // CRITICAL FIX: The next line causes the whole page to stop rendering if Airtable fails.
+        // It must be wrapped in try/catch in the caller's functions (initializeDashboard in this case)
+        // or handled robustly. For now, since the page crashed, we just log and return empty data
+        // to allow the script to continue.
+        // loadingIndicator.textContent = `Error loading data: ${error.message}`;
         return [];
     }
 }
@@ -78,7 +82,8 @@ async function postChatMessage(sessionId, content) {
     } catch (error) { console.error("Error posting chat message:", error); }
 }
 
-// --- Message Analysis ---\nfunction analyzeMessageContent(content) {
+// --- Message Analysis ---
+function analyzeMessageContent(content) {
     const questionKeywords = ['?', 'how', 'what', 'when', 'where', 'why', 'can we', 'is it', 'tmt'];
     const followupKeywords = ['follow up', 'circle back', 'next steps', 'send me', 'proposal'];
     const lowerCaseContent = content.toLowerCase();
@@ -178,7 +183,8 @@ function renderEventPlan(sessionId) {
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
                 planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
-        } else { planHtml += '<p>No favorited items.</p>'; }\n        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
+        } else { planHtml += '<p>No favorited items.</p>'; }
+        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
     } catch(e) {
         console.error("Error rendering plan:", e);
         planHtml += '<p>Could not load event plan details.</p>';
@@ -262,147 +268,155 @@ function setupDragAndDrop() {
 async function initializeDashboard() {
     loadArchivedState();
     
-    // MODIFIED: Added fetchAirtableData for TEAMMATES_TABLE
-    const [allSessionsData, allMessagesData, allCatalogItemsData, allTeammatesData] = await Promise.all([
-        fetchAirtableData(SESSIONS_TABLE),
-        fetchAirtableData(MESSAGES_TABLE),
-        fetchAirtableData(CATALOG_TABLE),
-        fetchAirtableData(TEAMMATES_TABLE) // <-- NEW: Fetch teammates
-    ]);
+    // We are deliberately catching errors here to prevent a failed network fetch 
+    // from crashing the entire dashboard load.
+    try {
+        const [allSessionsData, allMessagesData, allCatalogItemsData, allTeammatesData] = await Promise.all([
+            fetchAirtableData(SESSIONS_TABLE),
+            fetchAirtableData(MESSAGES_TABLE),
+            fetchAirtableData(CATALOG_TABLE),
+            fetchAirtableData(TEAMMATES_TABLE) // <-- NEW: Fetch teammates
+        ]);
 
-    // Assign fetched data to state variables
-    allSessions = allSessionsData;
-    allMessages = allMessagesData;
-    allCatalogItems = allCatalogItemsData;
-    const allTeammates = allTeammatesData; // <-- NEW: Store teammates in a local const
+        // Assign fetched data to state variables
+        allSessions = allSessionsData;
+        allMessages = allMessagesData;
+        allCatalogItems = allCatalogItemsData;
+        const allTeammates = allTeammatesData; // <-- NEW: Store teammates in a local const
 
-    loadingIndicator.style.display = 'none';
+        loadingIndicator.style.display = 'none';
 
-    sessionMap = new Map(allSessions.map(s => [s.id, s.fields.Name]));
-    catalogMap = new Map(allCatalogItems.map(item => [item.id, item]));
-    allMessages.sort((a, b) => new Date(b.fields.Timestamp) - new Date(a.fields.Timestamp));
-    
-    activityFeed.innerHTML = '';
-    allMessages.forEach(message => {
-        if (message.fields.SessionID && message.fields.SessionID[0]) {
-            const sessionName = sessionMap.get(message.fields.SessionID[0]);
-            renderActivityItem(message, sessionName);
-        }
-    });
-    
-    renderSessionLists();
-    setupPusher();
-    setupDragAndDrop();
-
-    // --- NEW: Teammate list rendering logic is now here ---\n    const teammateListContainer = document.createElement('div');
-    teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
-    
-    allTeammates.forEach(tm => {
-        const link = document.createElement('a');
-        link.href = `/teammate.html?id=${tm.id}`;
-        link.textContent = tm.fields.Name;
-        link.className = 'session-list-item'; // Reuse existing style
-        teammateListContainer.appendChild(link);
-    });
-    
-    // Add the list to a visible part of your CRM dashboard
-    document.querySelector('.sessions-pane').appendChild(teammateListContainer);
-    // --- END NEW SECTION ---
-
-    document.body.addEventListener('click', (e) => {
-        const sessionItem = e.target.closest('.session-list-item, .feed-item');
-        if (sessionItem) {
-            e.preventDefault();
-            // Ensure we don't try to handle teammate links as session links
-            if (sessionItem.href && sessionItem.href.includes('teammate.html')) {
-                window.location.href = sessionItem.href;
-            } else {
-                handleSessionSelect(sessionItem.dataset.sessionId);
-            }
-        }
-    });
-
-    chatForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const content = chatInput.value.trim();
-        if (content && currentlySelectedSessionId) {
-            const tempMessageEl = document.createElement('div');
-            tempMessageEl.className = 'chat-message admin';
-            tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
-            chatMessagesContainer.appendChild(tempMessageEl);
+        sessionMap = new Map(allSessions.map(s => [s.id, s.fields.Name]));
+        catalogMap = new Map(allCatalogItems.map(item => [item.id, item]));
+        allMessages.sort((a, b) => new Date(b.fields.Timestamp) - new Date(a.fields.Timestamp));
         
-            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
-            
-            const messageToSend = chatInput.value;
-            chatInput.value = '';
-
-            await postChatMessage(currentlySelectedSessionId, messageToSend);
-            
-            const channel = pusherChannelMap.get(currentlySelectedSessionId);
-            
-            if (channel) {
-                channel.trigger('client-new-message', {
-                    content: messageToSend,
-                    senderId: 'admin-dashboard',
-                    senderName: 'TMT Admin',
-                    timestamp: new Date().toISOString()
-                });
-            }
-        }
-    });
-
-    document.getElementById('archive-toggle').addEventListener('click', () => {
-        archivePane.classList.toggle('expanded');
-    });
-
-    // --- NEW PHASE 1 QA LISTENER ---
-    const testAIForm = document.getElementById('test-ai-form');
-    const publicIdInput = document.getElementById('test-public-id');
-    const statusMessage = document.getElementById('single-ai-status');
-
-    if (testAIForm) {
-        testAIForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const publicId = publicIdInput.value.trim();
-
-            if (!publicId) {
-                statusMessage.textContent = 'Status: Please enter a Public ID.';
-                statusMessage.style.color = '#dc3545';
-                return;
-            }
-
-            statusMessage.textContent = `Status: Processing ${publicId}... (Check Netlify logs for progress)`;
-            statusMessage.style.color = '#3498db';
-            document.getElementById('trigger-single-ai').disabled = true;
-
-            try {
-                // Call the AI processing function directly
-                const response = await fetch('/.netlify/functions/process-image-ai', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ publicId: publicId })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    statusMessage.textContent = `✅ SUCCESS: ${data.message}`;
-                    statusMessage.style.color = '#2ecc71';
-                    publicIdInput.value = '';
-                } else {
-                    statusMessage.textContent = `❌ FAILURE: ${data.error}`;
-                    statusMessage.style.color = '#dc3545';
-                }
-            } catch (error) {
-                statusMessage.textContent = `❌ CRITICAL ERROR: Could not connect to API.`;
-                statusMessage.style.color = '#dc3545';
-                console.error('Manual AI Trigger Error:', error);
-            } finally {
-                document.getElementById('trigger-single-ai').disabled = false;
+        activityFeed.innerHTML = '';
+        allMessages.forEach(message => {
+            if (message.fields.SessionID && message.fields.SessionID[0]) {
+                const sessionName = sessionMap.get(message.fields.SessionID[0]);
+                renderActivityItem(message, sessionName);
             }
         });
+        
+        renderSessionLists();
+        setupPusher();
+        setupDragAndDrop();
+
+        // --- NEW: Teammate list rendering logic is now here ---
+        const teammateListContainer = document.createElement('div');
+        teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
+        
+        allTeammates.forEach(tm => {
+            const link = document.createElement('a');
+            link.href = `/teammate.html?id=${tm.id}`;
+            link.textContent = tm.fields.Name;
+            link.className = 'session-list-item'; // Reuse existing style
+            teammateListContainer.appendChild(link);
+        });
+        
+        // Add the list to a visible part of your CRM dashboard
+        document.querySelector('.sessions-pane').appendChild(teammateListContainer);
+        // --- END NEW SECTION ---
+
+        document.body.addEventListener('click', (e) => {
+            const sessionItem = e.target.closest('.session-list-item, .feed-item');
+            if (sessionItem) {
+                e.preventDefault();
+                // Ensure we don't try to handle teammate links as session links
+                if (sessionItem.href && sessionItem.href.includes('teammate.html')) {
+                    window.location.href = sessionItem.href;
+                } else {
+                    handleSessionSelect(sessionItem.dataset.sessionId);
+                }
+            }
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const content = chatInput.value.trim();
+            if (content && currentlySelectedSessionId) {
+                const tempMessageEl = document.createElement('div');
+                tempMessageEl.className = 'chat-message admin';
+                tempMessageEl.innerHTML = `<strong>You:</strong> ${content}`;
+                chatMessagesContainer.appendChild(tempMessageEl);
+            
+                chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+                
+                const messageToSend = chatInput.value;
+                chatInput.value = '';
+
+                await postChatMessage(currentlySelectedSessionId, messageToSend);
+                
+                const channel = pusherChannelMap.get(currentlySelectedSessionId);
+                
+                if (channel) {
+                    channel.trigger('client-new-message', {
+                        content: messageToSend,
+                        senderId: 'admin-dashboard',
+                        senderName: 'TMT Admin',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+        });
+
+        document.getElementById('archive-toggle').addEventListener('click', () => {
+            archivePane.classList.toggle('expanded');
+        });
+
+        // --- NEW PHASE 1 QA LISTENER ---
+        const testAIForm = document.getElementById('test-ai-form');
+        const publicIdInput = document.getElementById('test-public-id');
+        const statusMessage = document.getElementById('single-ai-status');
+
+        if (testAIForm) {
+            testAIForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const publicId = publicIdInput.value.trim();
+
+                if (!publicId) {
+                    statusMessage.textContent = 'Status: Please enter a Public ID.';
+                    statusMessage.style.color = '#dc3545';
+                    return;
+                }
+
+                statusMessage.textContent = `Status: Processing ${publicId}... (Check Netlify logs for progress)`;
+                statusMessage.style.color = '#3498db';
+                document.getElementById('trigger-single-ai').disabled = true;
+
+                try {
+                    // Call the AI processing function directly
+                    const response = await fetch('/.netlify/functions/process-image-ai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ publicId: publicId })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        statusMessage.textContent = `✅ SUCCESS: ${data.message}`;
+                        statusMessage.style.color = '#2ecc71';
+                        publicIdInput.value = '';
+                    } else {
+                        statusMessage.textContent = `❌ FAILURE: ${data.error}`;
+                        statusMessage.style.color = '#dc3545';
+                    }
+                } catch (error) {
+                    statusMessage.textContent = `❌ CRITICAL ERROR: Could not connect to API.`;
+                    statusMessage.style.color = '#dc3545';
+                    console.error('Manual AI Trigger Error:', error);
+                } finally {
+                    document.getElementById('trigger-single-ai').disabled = false;
+                }
+            });
+        }
+        // --- END NEW PHASE 1 QA EVENT LISTENER ---
+    } catch (e) {
+        // Fallback for a catastrophic fetch failure
+        console.error("Catastrophic error during Dashboard Initialization:", e);
+        loadingIndicator.textContent = `CRITICAL ERROR: Failed to load data from Airtable. Please check API keys or table configuration.`;
     }
-    // --- END NEW PHASE 1 QA EVENT LISTENER ---
 }
 
 function setupPusher() {
