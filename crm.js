@@ -355,6 +355,55 @@ async function initializeDashboard() {
     document.getElementById('archive-toggle').addEventListener('click', () => {
         archivePane.classList.toggle('expanded');
     });
+        // --- NEW PHASE 1 QA  LISTENER ---
+    const testAIForm = document.getElementById('test-ai-form');
+    const publicIdInput = document.getElementById('test-public-id');
+    const statusMessage = document.getElementById('single-ai-status');
+
+    if (testAIForm) {
+        testAIForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const publicId = publicIdInput.value.trim();
+
+            if (!publicId) {
+                statusMessage.textContent = 'Status: Please enter a Public ID.';
+                statusMessage.style.color = '#dc3545';
+                return;
+            }
+
+            statusMessage.textContent = `Status: Processing ${publicId}... (Check Netlify logs for progress)`;
+            statusMessage.style.color = '#3498db';
+            document.getElementById('trigger-single-ai').disabled = true;
+
+            try {
+                // Call the AI processing function directly
+                const response = await fetch('/.netlify/functions/process-image-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ publicId: publicId })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    statusMessage.textContent = `✅ SUCCESS: ${data.message}`;
+                    statusMessage.style.color = '#2ecc71';
+                    publicIdInput.value = '';
+                } else {
+                    statusMessage.textContent = `❌ FAILURE: ${data.error}`;
+                    statusMessage.style.color = '#dc3545';
+                }
+            } catch (error) {
+                statusMessage.textContent = `❌ CRITICAL ERROR: Could not connect to API.`;
+                statusMessage.style.color = '#dc3545';
+                console.error('Manual AI Trigger Error:', error);
+            } finally {
+                document.getElementById('trigger-single-ai').disabled = false;
+            }
+        });
+    }
+    // --- END NEW PHASE 1 QA EVENT LISTENER ---
+
 }
 
 function setupPusher() {
