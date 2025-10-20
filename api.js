@@ -22,7 +22,7 @@ export async function fetchPlansForUser(userId) {
         return [];
     }
     const collaboratorField = CONSTANTS.FIELD_NAMES.COLLABORATOR_IDS_FIELD;
-    const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaborField}}), 0)`;
+    const formula = `IF({${collaboratorField}}, FIND('${userId}', {${collaboratorField}}), 0)`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
 
@@ -187,7 +187,8 @@ export async function saveSessionToAirtable() {
         userProfiles: Object.fromEntries(state.session.userProfiles),
         favoritedDetails: Object.fromEntries(state.eventDetails.combined) 
     };
-    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;\n    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `Session from ${new Date().toLocaleString()}`;
+    const dateRange = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
     if (Array.isArray(dateRange) && dateRange.length > 0) {
         const startDate = new Date(dateRange[0]);
@@ -351,7 +352,8 @@ export async function fetchImagesByTags(tags, retries = 2) {
                 transformations = 'c_fit,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
-            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;\n        });
+            return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+        });
         return imageUrls;
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
@@ -498,7 +500,23 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
         if (newMessageRecordId) {
-            await Promise.all([\n                fetch('/api/send-notification', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                }),\n                fetch('/api/send-email-notification', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                }),\n                fetch('/api/send-chat-to-admin', {\n                    method: 'POST',\n                    headers: { 'Content-Type': 'application/json' },\n                     body: JSON.stringify({ recordId: newMessageRecordId })\n                })\n            ]);
+            await Promise.all([
+                fetch('/api/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ recordId: newMessageRecordId })
+                }),
+                fetch('/api/send-email-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ recordId: newMessageRecordId })
+                }),
+                fetch('/api/send-chat-to-admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify({ recordId: newMessageRecordId })
+                })
+            ]);
         }
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
