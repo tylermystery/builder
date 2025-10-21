@@ -177,38 +177,61 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.appendChild(heartBtnContainer);
     
     modalOptionsContainer.innerHTML = '';
-    rawOptions.forEach((opt, index) => {
-        const optionButton = document.createElement('button');
-        optionButton.className = 'option-btn';
-        optionButton.dataset.optionIndex = index;
-        if (itemState.selectedOptionIndex === index) {
-            optionButton.classList.add('selected');
-        }
-        let priceModText = '';
-        if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
-        } else if (opt.priceChange !== null) {
-            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-        }
-        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
-        if (allRecordNames.has(opt.name)) {
-            optionButton.dataset.childName = opt.name;
-        } else {
-            optionButton.addEventListener('click', (e) => {
-                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-                e.currentTarget.classList.add('selected');
-                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                e.currentTarget.dispatchEvent(new CustomEvent('change', {
-                    bubbles: true,
-                    detail: { selectedOptionIndex: newIndex }
-                }));
-                modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
-                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
-            });
-        }
-        modalOptionsContainer.appendChild(optionButton);
-    });
+// REPLACE the rawOptions.forEach loop inside showDetailModal in: components/modal.js
+
+rawOptions.forEach((opt, index) => {
+    const optionButton = document.createElement('button');
+    optionButton.className = 'option-btn';
+    optionButton.dataset.optionIndex = index;
+    if (itemState.selectedOptionIndex === index) {
+        optionButton.classList.add('selected');
+    }
+    let priceModText = '';
+    if (opt.price !== null) {
+        priceModText = `$${opt.price.toFixed(2)}`;
+    } else if (opt.priceChange !== null) {
+        priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+    }
+    // Removed span tags around priceModText
+    optionButton.innerHTML = `${opt.name} ${priceModText}`;
+
+    // --- NEW LOGIC: Check if this option links to another item ---
+    const linkedRecord = state.records.all.find(r => r.fields.Name === opt.name && r.id !== record.id);
+
+    if (linkedRecord) {
+        // This option links to another item. Add a specific click handler.
+        optionButton.dataset.linkedRecordId = linkedRecord.id;
+        optionButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click event if modal closes quickly
+            log('Modal', `Option clicked, linking to item: ${linkedRecord.fields.Name}`);
+            closeDetailModal(); // Close current modal gracefully
+            // Use setTimeout to ensure the DOM updates before opening the new modal
+            setTimeout(() => {
+                showDetailModal(linkedRecord); // Open modal for the linked item
+            }, 50); // Small delay might be needed
+        });
+    } else {
+        // This is a standard variation option. Keep the original click handler.
+        optionButton.addEventListener('click', (e) => {
+            modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+            e.currentTarget.classList.add('selected');
+            const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
+            // Dispatch a change event for state update listener in events.js
+            e.currentTarget.dispatchEvent(new CustomEvent('change', {
+                bubbles: true,
+                detail: { selectedOptionIndex: newIndex }
+            }));
+            modalItemDescription.textContent = opt.description || record.fields.Description || '';
+            const newPrice = getRecordPrice(record, newIndex);
+            // Removed span tag around pricingTypeHTML
+            modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+        });
+    }
+    // --- END NEW LOGIC ---
+
+    modalOptionsContainer.appendChild(optionButton);
+});
+    
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
