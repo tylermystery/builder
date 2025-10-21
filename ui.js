@@ -401,61 +401,28 @@ export function updateCatalogHeader() {
 
     const path = [];
     let currentTitle = '';
-    const params = new URLSearchParams(window.location.search); // Get current URL params
-    const categoryParam = params.get('category');
-    const subcategoryParam = params.get('subcategory');
-    const groupingParam = params.get('grouping'); // Read the new grouping parameter
 
     // Always start with a clickable "All Categories" link
     path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
-    // Find the active category based on URL param or active button as fallback
-    let activeCategoryButton = null;
-    if (categoryParam) {
-        activeCategoryButton = document.querySelector(`#category-filters .filter-btn[data-filter="${categoryParam}"]`);
-    } else {
-        // Fallback if category param is missing but a button (not 'all') is active
-        activeCategoryButton = document.querySelector('#category-filters .filter-btn.active:not([data-filter="all"])');
-    }
-
-    if (activeCategoryButton) {
+    // Find the active category
+    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
+    if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
+        // The category link should also be clickable
         path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeCategoryButton.dataset.filter}">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
-    // Find the active subcategory based on URL param or active button
-     let activeSubcategoryButton = null;
-     if (subcategoryParam) {
-         // Handle multiple subcategories if needed, but for breadcrumbs, maybe just use the first?
-         const firstSubcat = subcategoryParam.split(',')[0];
-         activeSubcategoryButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter="${firstSubcat}"]`);
-     } else {
-         // Fallback if param missing
-         activeSubcategoryButton = document.querySelector('#subcategory-filters .filter-btn.active');
-     }
-
-    if (activeSubcategoryButton) {
-        const subcatName = activeSubcategoryButton.textContent;
-        // Subcategory link should likely reset grouping, so don't include grouping param in its link generation for now
-         path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeSubcategoryButton.dataset.filter}">${subcatName}</a>`); // Make subcategory clickable too
-        currentTitle = subcatName;
+    // Find any active subcategories
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    if (activeSubcategoryNodes.length > 0) {
+        const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);
+        // The final part of the breadcrumb is just text, not a link
+        path.push(`<span>${subcatNames.join(' + ')}</span>`);
+        currentTitle = subcatNames.join(' + ');
     }
-
-    // --- NEW: Add Grouping if present in URL ---
-    if (groupingParam) {
-        // --- THIS IS THE FIX: Add safety checks ---
-        const groupingRecord = state.records.all.find(r =>
-            r && r.fields && r.fields.Name && // Ensure record, fields, and Name exist
-            r.fields.Name.toLowerCase() === groupingParam
-        );
-        // --- END FIX ---
-        const groupingDisplayName = groupingRecord ? groupingRecord.fields.Name : groupingParam; // Fallback to param if record not found
-        path.push(`<span>${groupingDisplayName}</span>`); // Grouping is the final step, not clickable
-        currentTitle = groupingDisplayName;
-    }
-    // --- END NEW ---
-
+    
     // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
     if (path.length > 1) {
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
