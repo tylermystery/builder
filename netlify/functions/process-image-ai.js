@@ -45,36 +45,29 @@ async function getCloudinarySecureUrl(publicId) {
 
 // REPLACE the analyzeImageWithGemini function again
 
+// REPLACE the analyzeImageWithGemini function again
+
 async function analyzeImageWithGemini(imageUrl) {
     console.log(`[Debug] analyzeImageWithGemini: Analyzing URL: ${imageUrl.substring(0, 80)}...`);
      if (!GEMINI_API_KEY) {
         console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
         throw new Error("Server configuration error: Missing Gemini API Key.");
     }
-
-    // --- THIS IS THE FIX ---
-    // Modify the prompt slightly to be even more explicit about ONLY JSON output,
-    // since we can't force it with schema parameters on the v1 endpoint.
     const prompt = `Analyze this TMT event photo. Identify the specific TMT catalog item shown, assess image quality, group size, and location.
 Respond ONLY with a valid JSON object containing these exact fields: "catalogItemName" (string, use 'Historical Activity' if unknown), "groupSizeTag" (string enum: "Small", "Medium", "Large"), "locationTag" (string enum: "Indoor", "Outdoor", "Hybrid"), "qualityScore" (integer 1-10), "imageTags" (string, comma-separated keywords).
 Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before or after the JSON object.`;
-    // --- END FIX ---
-
-    // Define the schema locally for reference/validation if needed later, but don't send it.
-    const expectedSchemaStructure = { /* ... keep the schema definition here for reference ... */ };
 
     const payload = {
         contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } } ] } ],
-        // --- THIS IS THE FIX ---
-        // Remove generationConfig or ensure it doesn't contain the unsupported fields
-        // generationConfig: {} // Keep empty or remove entirely
-        // --- END FIX ---
+        // generationConfig removed as it caused issues with v1 endpoint
     };
 
-    // Use the stable v1 endpoint
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    // --- THIS IS THE FIX ---
+    // Change the model name in the URL to gemini-pro-vision
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`;
+    // --- END FIX ---
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to Gemini v1 endpoint (no schema enforcement)...`);
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to gemini-pro-vision model...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
@@ -83,14 +76,13 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
         console.error("[Debug] Gemini API Error Response Body:", errorBody);
         let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check the request payload."; // Removed schema mention
+        if (response.status === 400) errorMessage += ". Check the request payload.";
         if (response.status === 403) errorMessage += ". Check API key permissions.";
         if (response.status === 429) errorMessage += ". Rate limit exceeded.";
         throw new Error(errorMessage);
     }
 
     const result = await response.json();
-    // More robust checking for safety
     let jsonText = '';
     try {
         jsonText = result.candidates[0].content.parts[0].text;
@@ -98,10 +90,8 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
         throw new Error('Could not extract text from Gemini response. Structure might have changed or response was empty.');
     }
-
      console.log(`[Debug] analyzeImageWithGemini: Received text response from Gemini (expecting JSON).`);
     try {
-        // Attempt to parse the text response as JSON
         return JSON.parse(jsonText);
     } catch (e) {
         console.error("[Debug] Failed to parse JSON response from Gemini:", jsonText);
