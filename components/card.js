@@ -36,6 +36,8 @@ export function updateCardIcon(recordId) {
     });
 }
 
+// REPLACE the entire createInteractiveCard function in: components/card.js
+
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const eventCard = document.createElement('div');
@@ -45,10 +47,38 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
     const imageUrlToLoad = getPlaceholderImage(imageUrls);
 
+    // --- NEW: Define a placeholder href ---
+    // For Groupings, simulate a filter action link
+    // For others, simulate opening the item detail
+    let cardHref = '#'; // Default placeholder
     if (fields['Item Type'] === 'Grouping') {
-        const groupingCard = eventCard;
-        groupingCard.className = 'event-card grouping-card';
-        groupingCard.dataset.categoryName = fields.Name;
+        cardHref = `#filter/${encodeURIComponent(fields.Name?.toLowerCase() || 'unknown')}`;
+        eventCard.className = 'event-card grouping-card'; // Set class on outer div
+        eventCard.dataset.categoryName = fields.Name;
+    } else if (fields['Item Type'] === 'Event') {
+        cardHref = `#event/${record.id}`;
+        eventCard.className = 'event-card event-type-card'; // Set class on outer div
+    } else { // Bookable Item
+        cardHref = `#item/${record.id}`;
+        eventCard.className = 'event-card'; // Set class on outer div
+    }
+    // --- END NEW ---
+
+    // Create the anchor tag wrapper
+    const anchorWrapper = document.createElement('a');
+    anchorWrapper.href = cardHref;
+    // Prevent dragging behavior often associated with links over images/cards
+    anchorWrapper.draggable = false;
+    // Apply flex column to make anchor fill the card div, needed because anchor is now parent of content
+    anchorWrapper.style.display = 'flex';
+    anchorWrapper.style.flexDirection = 'column';
+    anchorWrapper.style.textDecoration = 'none'; // Remove link underline
+    anchorWrapper.style.color = 'inherit'; // Inherit text color
+    anchorWrapper.style.height = '100%'; // Ensure anchor fills height
+
+    // --- Build card content INSIDE the anchor ---
+
+    if (fields['Item Type'] === 'Grouping') {
         const groupingNameForFilter = fields.Name.toLowerCase();
         const childItems = allRecords.filter(r => {
             if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
@@ -69,32 +99,32 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `</div>`;
-        groupingCard.innerHTML = `
+
+        // Add innerHTML to the anchor tag now
+        anchorWrapper.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
                 <p class="description">${fields.Description || ''}</p>
             </div>
-            <div class="card-footer">
-                <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
+            <div class="card-footer" style="margin-top: auto;"> <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
-        return groupingCard;
-    }
+        // Append the filled anchor to the main card div
+        eventCard.appendChild(anchorWrapper);
 
-    if (fields['Item Type'] === 'Event') {
-        eventCard.className = 'event-card event-type-card';
+    } else if (fields['Item Type'] === 'Event') {
         const eventDate = fields.Date ? new Date(fields.Date) : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
-        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
-
-        eventCard.innerHTML = `
+        // Note: Buttons like RSVP need to remain OUTSIDE the anchor or have their clicks stopped
+        // For simplicity, we keep the structure but the main click is on the anchor.
+        // We'll add the heart icon separately.
+        anchorWrapper.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                <div class="heart-icon" data-record-id="${record.id}"></div>
-            </div>
+                </div>
             <div class="event-card-content">
                 <div class="event-date-display">
                     <span class="month">${month}</span>
@@ -105,51 +135,75 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                     <p class="description">${fields.Description || ''}</p>
                 </div>
             </div>
-            <div class="card-footer">
-                ${rsvpButtonHTML}
+            <div class="card-footer" style="margin-top: auto;">
+                 </div>
+        `;
+        eventCard.appendChild(anchorWrapper);
+        // Add RSVP button and Heart Icon outside the anchor to keep their specific listeners working
+        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        eventCard.querySelector('.card-footer').innerHTML = rsvpButtonHTML; // Add button here
+
+        const heartIconDiv = document.createElement('div');
+        heartIconDiv.className = 'heart-icon';
+        heartIconDiv.dataset.recordId = record.id;
+        eventCard.querySelector('.event-card-image-container').appendChild(heartIconDiv); // Add heart here
+
+
+    } else { // Bookable Item
+        const itemState = ui.getItemState(record.id);
+        const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const isLocked = state.cart.lockedItems.has(record.id);
+        const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+        const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+        const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+        // Note: Buttons/inputs need separate handling if inside an anchor.
+        // We add them separately after setting innerHTML for the main structure.
+        anchorWrapper.innerHTML = `
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                 </div>
+            <div class="event-card-content">
+                <h3>${fields.Name || 'Untitled Event'}</h3>
+                <p class="description">${fields.Description || ''}</p>
+            </div>
+            <div class="card-footer" style="margin-top: auto;">
+                <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+                <div class="actions-wrapper">
+                    </div>
             </div>
         `;
-        setTimeout(() => updateCardIcon(record.id), 0);
-        return eventCard;
-    }
+        eventCard.appendChild(anchorWrapper);
 
-    eventCard.className = 'event-card';
-    const itemState = ui.getItemState(record.id);
-    const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-    const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
-    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
-    const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
-    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
-    eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-            <div class="heart-icon" data-record-id="${record.id}"></div>
-        </div>
-        <div class="event-card-content">
-            <h3>${fields.Name || 'Untitled Event'}</h3>
-            <p class="description">${fields.Description || ''}</p>
-        </div>
-        <div class="card-footer">
-            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
-            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
-        </div>
-    `;
-    const plusBtn = eventCard.querySelector('.quantity-btn.plus');
-    const minusBtn = eventCard.querySelector('.quantity-btn.minus');
-    const quantityInput = eventCard.querySelector('.quantity-input');
-    if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            quantityInput.stepUp();
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        minusBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            quantityInput.stepDown();
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        });
+        // Add interactive elements (Heart, Quantity, Add Button) outside the anchor's innerHTML
+        // These elements need their own click listeners managed in events.js without triggering anchor nav
+        const heartIconDiv = document.createElement('div');
+        heartIconDiv.className = 'heart-icon';
+        heartIconDiv.dataset.recordId = record.id;
+        eventCard.querySelector('.event-card-image-container').appendChild(heartIconDiv); // Add heart here
+
+        const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+        const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+        const actionsWrapper = eventCard.querySelector('.actions-wrapper');
+        actionsWrapper.innerHTML = quantitySelectorHTML + addToPlanBtnHTML; // Add buttons here
+
+        // Re-attach listeners for quantity buttons as they were added dynamically
+        const plusBtn = actionsWrapper.querySelector('.quantity-btn.plus');
+        const minusBtn = actionsWrapper.querySelector('.quantity-btn.minus');
+        const quantityInput = actionsWrapper.querySelector('.quantity-input');
+        if (plusBtn && minusBtn && quantityInput) {
+            plusBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Stop click from propagating to anchor
+                e.preventDefault(); // Stop potential button default action
+                quantityInput.stepUp();
+                quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            minusBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Stop click from propagating to anchor
+                e.preventDefault(); // Stop potential button default action
+                quantityInput.stepDown();
+                quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        }
     }
 
     setTimeout(() => updateCardIcon(record.id), 0);
