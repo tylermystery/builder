@@ -43,38 +43,38 @@ async function getCloudinarySecureUrl(publicId) {
 
 // REPLACE the analyzeImageWithGemini function in: netlify/functions/process-image-ai.js (or ai_image_processor.js)
 
+// REPLACE the analyzeImageWithGemini function again
+
 async function analyzeImageWithGemini(imageUrl) {
     console.log(`[Debug] analyzeImageWithGemini: Analyzing URL: ${imageUrl.substring(0, 80)}...`);
      if (!GEMINI_API_KEY) {
         console.error("[Debug] CRITICAL: GEMINI_API_KEY is missing!");
         throw new Error("Server configuration error: Missing Gemini API Key.");
     }
-    const prompt = `Analyze this TMT event photo. You must identify the specific TMT catalog item shown, assess image quality, group size, and location. Respond ONLY with a valid JSON object. Do not include markdown code blocks (e.g., \\\`\\\`\\\`json).`;
 
-    const responseSchema = {
-        type: "OBJECT",
-        properties: {
-            "catalogItemName": { "type": "STRING", "description": "The name of the TMT catalog item in the image (e.g., Fort Battle). If unknown, use 'Historical Activity'." },
-            "groupSizeTag": { "type": "STRING", "enum": ["Small", "Medium", "Large"], "description": "Group size in the photo: Small (1-10), Medium (11-25), Large (26+)." },
-            "locationTag": { "type": "STRING", "enum": ["Indoor", "Outdoor", "Hybrid"], "description": "The primary setting of the event: Indoor, Outdoor, or Hybrid." },
-            "qualityScore": { "type": "INTEGER", "description": "Rate image quality and brand fit on a scale of 1 to 10." },
-            "imageTags": { "type": "STRING", "description": "A comma-separated list of 5-10 relevant visual keywords (e.g., laughter, blue sky, cannon, summer)." }
-        },
-        required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
-    };
+    // --- THIS IS THE FIX ---
+    // Modify the prompt slightly to be even more explicit about ONLY JSON output,
+    // since we can't force it with schema parameters on the v1 endpoint.
+    const prompt = `Analyze this TMT event photo. Identify the specific TMT catalog item shown, assess image quality, group size, and location.
+Respond ONLY with a valid JSON object containing these exact fields: "catalogItemName" (string, use 'Historical Activity' if unknown), "groupSizeTag" (string enum: "Small", "Medium", "Large"), "locationTag" (string enum: "Indoor", "Outdoor", "Hybrid"), "qualityScore" (integer 1-10), "imageTags" (string, comma-separated keywords).
+Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before or after the JSON object.`;
+    // --- END FIX ---
+
+    // Define the schema locally for reference/validation if needed later, but don't send it.
+    const expectedSchemaStructure = { /* ... keep the schema definition here for reference ... */ };
 
     const payload = {
         contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } } ] } ],
-        // generationConfig is optional when using responseSchema with v1 endpoint, but let's keep it for clarity
-        generationConfig: { responseMimeType: "application/json", responseSchema: responseSchema }
+        // --- THIS IS THE FIX ---
+        // Remove generationConfig or ensure it doesn't contain the unsupported fields
+        // generationConfig: {} // Keep empty or remove entirely
+        // --- END FIX ---
     };
 
-    // --- THIS IS THE FIX ---
-    // Change the API endpoint path from v1beta to v1
+    // Use the stable v1 endpoint
     const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
-    // --- END FIX ---
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to Gemini at stable v1 endpoint...`);
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to Gemini v1 endpoint (no schema enforcement)...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
@@ -82,26 +82,30 @@ async function analyzeImageWithGemini(imageUrl) {
         let errorBody = await response.text();
         try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
         console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        // Provide a more specific error message based on common Gemini errors
         let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check the request payload/schema.";
+        if (response.status === 400) errorMessage += ". Check the request payload."; // Removed schema mention
         if (response.status === 403) errorMessage += ". Check API key permissions.";
         if (response.status === 429) errorMessage += ". Rate limit exceeded.";
         throw new Error(errorMessage);
     }
 
     const result = await response.json();
-    if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || !result.candidates[0].content.parts[0].text) {
-         console.error('[Debug] Unexpected Gemini response structure:', JSON.stringify(result, null, 2));
-         throw new Error('Could not extract text from Gemini response. Structure might have changed.');
-    }
-    const jsonText = result.candidates[0].content.parts[0].text;
-     console.log(`[Debug] analyzeImageWithGemini: Received JSON text from Gemini.`);
+    // More robust checking for safety
+    let jsonText = '';
     try {
+        jsonText = result.candidates[0].content.parts[0].text;
+    } catch (e) {
+        console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
+        throw new Error('Could not extract text from Gemini response. Structure might have changed or response was empty.');
+    }
+
+     console.log(`[Debug] analyzeImageWithGemini: Received text response from Gemini (expecting JSON).`);
+    try {
+        // Attempt to parse the text response as JSON
         return JSON.parse(jsonText);
     } catch (e) {
         console.error("[Debug] Failed to parse JSON response from Gemini:", jsonText);
-        throw new Error("Gemini returned invalid JSON.");
+        throw new Error("Gemini did not return valid JSON despite the prompt.");
     }
 }
 
