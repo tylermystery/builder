@@ -71,12 +71,12 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
     };
 
     // --- THIS IS THE FIX ---
-    // Use the exact stable model ID from the documentation and the v1beta endpoint.
-    const modelId = "gemini-1.5-flash"; // Corrected model ID
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
+    // Use the exact stable model ID 'gemini-1.5-flash' with the stable v1 endpoint.
+    const modelId = "gemini-1.5-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
     // --- END FIX ---
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1beta...`);
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1 endpoint...`); // Updated log message
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
@@ -85,14 +85,14 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
         console.error("[Debug] Gemini API Error Response Body:", errorBody);
         let errorMessage = `Gemini API call failed with status ${response.status}`;
-        // Add specific hints based on status codes
         if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
         if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
-        if (response.status === 404) errorMessage += `. Model '${modelId}' not found or incompatible with v1beta endpoint. Verify model ID and API path.`;
+        if (response.status === 404) errorMessage += `. Model '${modelId}' not found or incompatible with v1 endpoint. Verify model ID and API path in GCP console/docs.`; // Updated log message
         if (response.status === 429) errorMessage += ". Rate limit exceeded.";
         throw new Error(errorMessage);
     }
 
+    // ... (Rest of the function remains the same: extracting response, parsing JSON) ...
     const result = await response.json();
     let jsonText = '';
     try {
@@ -109,6 +109,7 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         throw new Error("Gemini did not return valid JSON despite the prompt.");
     }
 }
+
 // --- Main Handler ---
 exports.handler = async (event) => {
     // --- THIS IS THE FIX ---
