@@ -637,29 +637,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } else if (card && !e.target.closest('.quantity-selector')) {
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-        
-            if (record && record.fields['Item Type'] === 'Grouping') {
-                const categoryName = record.fields.Name;
-                let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
-                                      .find(btn => btn.textContent === categoryName);
-                if (!targetButton) {
-                    targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
-                                        .find(btn => btn.textContent === categoryName);
-                }
-        
-                if (targetButton) {
-                    targetButton.click();
-                } else {
-                    ui.showDetailModal(record);
-                }
-        
-            } else if (record) {
-                ui.showDetailModal(record);
-            }
-        } else if (lockedItemCard) {
+        } else if (card && !e.target.closest('.quantity-selector
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
