@@ -480,263 +480,272 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         triggerSave();
     });
 
-    document.body.addEventListener('click', async (e) => {
-        // Prevent default for anchor tags used as buttons
-        if (e.target.tagName === 'A' && e.target.getAttribute('href') === '#') {
-            e.preventDefault();
+// REPLACE the entire document.body 'click' event listener function in: events.js
+
+document.body.addEventListener('click', async (e) => {
+    // --- NEW TOP-LEVEL DEBUG ---
+    log('Events - Body Click', 'Click detected on:', e.target);
+    // --- END NEW DEBUG ---
+
+    // Prevent default for anchor tags used as buttons
+    if (e.target.tagName === 'A' && e.target.getAttribute('href') === '#') {
+        e.preventDefault();
+    }
+
+    if (state.ui.isInitializing) return;
+
+    // --- Define potential click targets ---
+    const card = e.target.closest('.event-card');
+    const heartIcon = e.target.closest('.heart-icon');
+    const rsvpBtn = e.target.closest('.rsvp-btn');
+    const favoriteItem = e.target.closest('.favorite-item');
+    const removeBtn = favoriteItem?.querySelector('.remove-btn'); // Specifically target remove on favorites
+    const checkoutBtn = e.target.closest('#checkout-btn');
+    const lockedItemCard = e.target.closest('.locked-item-card');
+    const demoteBtn = e.target.closest('.demote-locked-item-btn'); // Specific button within locked item
+    const editBtn = e.target.closest('.locked-item-card .edit-btn'); // Specific button within locked item
+    const parentLink = e.target.closest('.parent-link');
+    const presentBtn = e.target.closest('.present-btn');
+    const carouselNav = e.target.closest('.carousel-nav');
+    const saveShareBtn = e.target.closest('#save-share-btn');
+    const breadcrumbLink = e.target.closest('.breadcrumb-link');
+    const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+
+    // --- Handle click targets with priority ---
+
+    if (saveShareBtn) {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            const originalText = saveShareBtn.textContent;
+            saveShareBtn.textContent = 'Copied!';
+            setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
+        });
+        return; // Stop processing
+    }
+
+    if (breadcrumbLink) {
+        log('Events - Breadcrumb', 'Breadcrumb link clicked.'); // DEBUG
+        const filterValue = breadcrumbLink.dataset.filter;
+        log('Events - Breadcrumb', `Attempting to find filter button with data-filter="${filterValue}"`); // DEBUG
+        // Ensure we only look within category filters for breadcrumbs
+        const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
+        if (targetButton) {
+            log('Events - Breadcrumb', `Found category button "${targetButton.textContent}". Clicking it.`); // DEBUG
+            targetButton.click();
+        } else {
+            log('Events - Breadcrumb', `WARN: No category filter button found for data-filter="${filterValue}".`); // DEBUG
         }
+        return; // Stop processing
+    }
 
-        if (state.ui.isInitializing) return;
 
-        // --- Define potential click targets ---
-        const card = e.target.closest('.event-card');
-        const heartIcon = e.target.closest('.heart-icon');
-        const rsvpBtn = e.target.closest('.rsvp-btn');
-        const favoriteItem = e.target.closest('.favorite-item');
-        const removeBtn = favoriteItem?.querySelector('.remove-btn'); // Specifically target remove on favorites
-        const checkoutBtn = e.target.closest('#checkout-btn');
-        const lockedItemCard = e.target.closest('.locked-item-card');
-        const demoteBtn = e.target.closest('.demote-locked-item-btn'); // Specific button within locked item
-        const editBtn = e.target.closest('.locked-item-card .edit-btn'); // Specific button within locked item
-        const parentLink = e.target.closest('.parent-link');
-        const presentBtn = e.target.closest('.present-btn');
-        const carouselNav = e.target.closest('.carousel-nav');
-        const saveShareBtn = e.target.closest('#save-share-btn');
-        const breadcrumbLink = e.target.closest('.breadcrumb-link');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+    if (checkoutBtn) {
+        ui.showCheckoutModal(shopSettings); // Assuming shopSettings is accessible here
+        return; // Stop processing
+    }
 
-        // --- Handle click targets with priority ---
-
-        if (saveShareBtn) {
-            navigator.clipboard.writeText(window.location.href).then(() => {
-                const originalText = saveShareBtn.textContent;
-                saveShareBtn.textContent = 'Copied!';
-                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
-            });
-            return; // Stop processing
+    if (rsvpBtn) {
+        e.stopPropagation();
+        if (!state.session.user.isAuthenticated) {
+            showUserModal();
+            return;
         }
+        const cardEl = rsvpBtn.closest('.event-card');
+        const recordId = cardEl.dataset.recordId;
+        rsvpBtn.disabled = true;
+        rsvpBtn.textContent = 'Saving...';
+        const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
+        if (updatedRecord) {
+            rsvpBtn.textContent = "You're Going! ✅";
+            const recordIndex = state.records.all.findIndex(r => r.id === recordId);
+            if (recordIndex > -1) {
+                state.records.all[recordIndex] = updatedRecord;
+            }
+        } else {
+            rsvpBtn.textContent = 'Error!';
+            setTimeout(() => {
+                rsvpBtn.textContent = 'RSVP';
+                rsvpBtn.disabled = false;
+            }, 2000);
+        }
+        return; // Stop processing (async but action complete)
+    }
 
-        if (breadcrumbLink) {
-            log('Events - Breadcrumb', 'Breadcrumb link clicked.'); // DEBUG
-            const filterValue = breadcrumbLink.dataset.filter;
-            log('Events - Breadcrumb', `Attempting to find filter button with data-filter="${filterValue}"`); // DEBUG
-            // Ensure we only look within category filters for breadcrumbs
-            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
+    if (presentBtn) {
+        const listType = presentBtn.dataset.listType;
+        ui.showPresentationView(listType);
+        return; // Stop processing
+    }
+
+    if (carouselNav) {
+        const carousel = document.getElementById('favorites-carousel');
+        if (carousel) {
+            const scrollAmount = 300;
+            const direction = carouselNav.classList.contains('right') ? 1 : -1;
+            carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+        }
+        return; // Stop processing
+    }
+
+    if (parentLink) {
+        e.stopPropagation();
+        log('Events - Parent Link (Modal)', 'Parent link inside modal clicked.'); // DEBUG
+        const parentName = parentLink.dataset.parentName;
+        log('Events - Parent Link (Modal)', `Searching for filter button matching parent name: "${parentName}"`); // DEBUG
+        if (parentName) {
+            const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
+                                  .find(btn => btn.textContent === parentName);
             if (targetButton) {
-                log('Events - Breadcrumb', `Found category button "${targetButton.textContent}". Clicking it.`); // DEBUG
-                targetButton.click();
-            } else {
-                log('Events - Breadcrumb', `WARN: No category filter button found for data-filter="${filterValue}".`); // DEBUG
-            }
-            return; // Stop processing
-        }
-
-        if (checkoutBtn) {
-            ui.showCheckoutModal(shopSettings); // Assuming shopSettings is accessible here
-            return; // Stop processing
-        }
-
-        if (rsvpBtn) {
-            e.stopPropagation();
-            if (!state.session.user.isAuthenticated) {
-                showUserModal();
-                return;
-            }
-            const cardEl = rsvpBtn.closest('.event-card');
-            const recordId = cardEl.dataset.recordId;
-            rsvpBtn.disabled = true;
-            rsvpBtn.textContent = 'Saving...';
-            const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
-            if (updatedRecord) {
-                rsvpBtn.textContent = "You're Going! ✅";
-                const recordIndex = state.records.all.findIndex(r => r.id === recordId);
-                if (recordIndex > -1) {
-                    state.records.all[recordIndex] = updatedRecord;
-                }
-            } else {
-                rsvpBtn.textContent = 'Error!';
-                setTimeout(() => {
-                    rsvpBtn.textContent = 'RSVP';
-                    rsvpBtn.disabled = false;
-                }, 2000);
-            }
-            return; // Stop processing (async but action complete)
-        }
-
-        if (presentBtn) {
-            const listType = presentBtn.dataset.listType;
-            ui.showPresentationView(listType);
-            return; // Stop processing
-        }
-
-        if (carouselNav) {
-            const carousel = document.getElementById('favorites-carousel');
-            if (carousel) {
-                const scrollAmount = 300;
-                const direction = carouselNav.classList.contains('right') ? 1 : -1;
-                carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
-            }
-            return; // Stop processing
-        }
-
-        if (parentLink) {
-            e.stopPropagation();
-            log('Events - Parent Link (Modal)', 'Parent link inside modal clicked.'); // DEBUG
-            const parentName = parentLink.dataset.parentName;
-            log('Events - Parent Link (Modal)', `Searching for filter button matching parent name: "${parentName}"`); // DEBUG
-            if (parentName) {
-                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
-                                      .find(btn => btn.textContent === parentName);
-                if (targetButton) {
-                    const isCategory = !!targetButton.closest('#category-filters');
-                    log('Events - Parent Link (Modal)', `Found button "${targetButton.textContent}". Is Category: ${isCategory}`); // DEBUG
-                    if (isCategory) {
-                        log('Events - Parent Link (Modal)', 'Handling as Category click.'); // DEBUG
-                        targetButton.click();
-                    } else {
-                        log('Events - Parent Link (Modal)', 'Handling as Subcategory click (activating only this one).'); // DEBUG
-                        document.querySelectorAll('#subcategory-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-                        targetButton.classList.add('active');
-                        const activeSubcats = [targetButton.dataset.filter];
-                        updateUrl({ subcategory: activeSubcats.join(',') || null });
-                        applyFiltersAndSort(imageCache); // Make sure imageCache is accessible
-                    }
-                    if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
-                        log('Events - Parent Link (Modal)', 'Closing modal after handling parent link.'); // DEBUG
-                        updateUrl({ openItem: null });
-                        ui.hideDetailModal(); // Use hide, not close, as URL is already updated
-                    }
+                const isCategory = !!targetButton.closest('#category-filters');
+                log('Events - Parent Link (Modal)', `Found button "${targetButton.textContent}". Is Category: ${isCategory}`); // DEBUG
+                if (isCategory) {
+                    log('Events - Parent Link (Modal)', 'Handling as Category click.'); // DEBUG
+                    targetButton.click();
                 } else {
-                    log('Events - Parent Link (Modal)', `WARN: No filter button found matching parent name "${parentName}".`); // DEBUG
+                    log('Events - Parent Link (Modal)', 'Handling as Subcategory click (activating only this one).'); // DEBUG
+                    document.querySelectorAll('#subcategory-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                    targetButton.classList.add('active');
+                    const activeSubcats = [targetButton.dataset.filter];
+                    updateUrl({ subcategory: activeSubcats.join(',') || null });
+                    applyFiltersAndSort(imageCache); // Make sure imageCache is accessible
+                }
+                if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
+                    log('Events - Parent Link (Modal)', 'Closing modal after handling parent link.'); // DEBUG
+                    updateUrl({ openItem: null });
+                    ui.hideDetailModal(); // Use hide, not close, as URL is already updated
                 }
             } else {
-                log('Events - Parent Link (Modal)', 'WARN: Parent link clicked, but data-parent-name attribute was empty.'); // DEBUG
+                log('Events - Parent Link (Modal)', `WARN: No filter button found matching parent name "${parentName}".`); // DEBUG
             }
-            return; // Stop processing
+        } else {
+            log('Events - Parent Link (Modal)', 'WARN: Parent link clicked, but data-parent-name attribute was empty.'); // DEBUG
         }
+        return; // Stop processing
+    }
 
 
-        if (heartIcon) {
-            e.stopPropagation();
-            const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (!state.cart.lockedItems.has(recordId)) {
-                if (state.cart.items.has(recordId)) {
-                    state.cart.items.delete(recordId);
-                } else {
-                    ui.updateItemState(recordId, {});
-                }
-                ui.updateCardIcon(recordId);
-                await debounce(ui.updateFavoritesCarousel, 300)();
-                triggerSave();
+    if (heartIcon) {
+        e.stopPropagation();
+        const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
+        if (!state.cart.lockedItems.has(recordId)) {
+            if (state.cart.items.has(recordId)) {
+                state.cart.items.delete(recordId);
+            } else {
+                ui.updateItemState(recordId, {});
             }
-            return; // Stop processing
-        }
-
-        if (addToPlanBtn) {
-            e.stopPropagation();
-            const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.lockedItems.has(recordId)) {
-                 // If already locked, likely the "Update Plan" button in modal - just close it
-                 if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
-                     ui.closeDetailModal(); // Use the safe close function
-                 }
-                return; // Stop processing
-            }
-            const itemInfo = ui.getItemState(recordId);
-            state.cart.lockedItems.set(recordId, itemInfo);
-            state.cart.items.delete(recordId);
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
+            triggerSave();
+        }
+        return; // Stop processing
+    }
+
+    if (addToPlanBtn) {
+        e.stopPropagation();
+        const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
+        if (state.cart.lockedItems.has(recordId)) {
+             // If already locked, likely the "Update Plan" button in modal - just close it
+             if (document.getElementById('detail-modal-overlay').classList.contains('active')) {
+                 ui.closeDetailModal(); // Use the safe close function
+             }
+            return; // Stop processing
+        }
+        const itemInfo = ui.getItemState(recordId);
+        state.cart.lockedItems.set(recordId, itemInfo);
+        state.cart.items.delete(recordId);
+        ui.updateCardIcon(recordId);
+        await debounce(ui.updateFavoritesCarousel, 300)();
+        await ui.updateEventPlanSection();
+        ui.updateTotalCost();
+        updateMobileBarAvailability();
+        triggerSave();
+        // Close modal if add button was clicked inside it
+        if (addToPlanBtn.id === 'modal-add-to-plan-btn') {
+            ui.closeDetailModal(); // Use the safe close function
+        }
+        return; // Stop processing
+    }
+
+    if (demoteBtn) {
+        e.stopPropagation();
+        const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
+        if (state.cart.lockedItems.has(recordId)) {
+            const itemInfo = state.cart.lockedItems.get(recordId);
+            state.cart.lockedItems.delete(recordId);
+            state.cart.items.set(recordId, itemInfo);
+            ui.updateCardIcon(recordId);
             await ui.updateEventPlanSection();
+            await ui.updateFavoritesCarousel();
             ui.updateTotalCost();
             updateMobileBarAvailability();
             triggerSave();
-            // Close modal if add button was clicked inside it
-            if (addToPlanBtn.id === 'modal-add-to-plan-btn') {
-                ui.closeDetailModal(); // Use the safe close function
-            }
-            return; // Stop processing
         }
+        return; // Stop processing
+    }
 
-        if (demoteBtn) {
-            e.stopPropagation();
-            const recordId = demoteBtn.closest('[data-record-id]').dataset.recordId;
-            if (state.cart.lockedItems.has(recordId)) {
-                const itemInfo = state.cart.lockedItems.get(recordId);
-                state.cart.lockedItems.delete(recordId);
-                state.cart.items.set(recordId, itemInfo);
-                ui.updateCardIcon(recordId);
-                await ui.updateEventPlanSection();
-                await ui.updateFavoritesCarousel();
-                ui.updateTotalCost();
-                updateMobileBarAvailability();
-                triggerSave();
-            }
-            return; // Stop processing
-        }
+    // Handle remove button specifically on favorite items
+    if (removeBtn && e.target === removeBtn) {
+        e.stopPropagation();
+        const recordId = favoriteItem.dataset.recordId;
+        state.cart.items.delete(recordId);
+        ui.updateCardIcon(recordId);
+        await debounce(ui.updateFavoritesCarousel, 300)();
+        triggerSave();
+        return; // Stop processing
+    }
 
-        // Handle remove button specifically on favorite items
-        if (removeBtn && e.target === removeBtn) {
-            e.stopPropagation();
-            const recordId = favoriteItem.dataset.recordId;
-            state.cart.items.delete(recordId);
-            ui.updateCardIcon(recordId);
-            await debounce(ui.updateFavoritesCarousel, 300)();
-            triggerSave();
-            return; // Stop processing
-        }
+    // --- General Card/Item Clicks (Lower Priority) ---
 
-        // --- General Card/Item Clicks (Lower Priority) ---
+    if (card && !e.target.closest('.quantity-selector, .add-to-plan-btn, .heart-icon, .rsvp-btn')) {
+        log('Events - Card Click', 'General card click detected.'); // DEBUG
+        const recordId = card.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
 
-        if (card && !e.target.closest('.quantity-selector, .add-to-plan-btn, .heart-icon, .rsvp-btn')) {
-            log('Events - Card Click', 'General card click detected.'); // DEBUG
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
+        if (record && record.fields['Item Type'] === 'Grouping') {
+            log('Events - Card Click', `Grouping card clicked: "${record.fields.Name}"`); // DEBUG
+            const categoryName = record.fields.Name;
+            // Find a matching button in either the main category or subcategory filters
+            const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
+                                  .find(btn => btn.textContent === categoryName);
 
-            if (record && record.fields['Item Type'] === 'Grouping') {
-                log('Events - Card Click', `Grouping card clicked: "${record.fields.Name}"`); // DEBUG
-                const categoryName = record.fields.Name;
-                // Find a matching button in either the main category or subcategory filters
-                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
-                                      .find(btn => btn.textContent === categoryName);
-
-                if (targetButton) {
-                    log('Events - Card Click', `Found target filter button for "${categoryName}". Clicking it.`); // DEBUG
-                    targetButton.click();
-                } else {
-                    // Log if no matching button was found - this indicates a potential mismatch
-                    log('Events - Card Click', `WARN: No filter button found for grouping "${categoryName}". Cannot filter.`); // DEBUG
-                }
-                // Groupings never open modal directly now
-
-            } else if (record) {
-                log('Events - Card Click', `Bookable/Event card clicked: "${record.fields.Name}". Opening modal.`); // DEBUG
-                ui.showDetailModal(record);
+            if (targetButton) {
+                log('Events - Card Click', `Found target filter button for "${categoryName}". Clicking it.`); // DEBUG
+                targetButton.click();
             } else {
-                log('Events - Card Click', `WARN: Clicked card, but record not found for ID: ${recordId}`); // DEBUG
+                // Log if no matching button was found - this indicates a potential mismatch
+                log('Events - Card Click', `WARN: No filter button found for grouping "${categoryName}". Cannot filter.`); // DEBUG
             }
-            return; // Stop processing
+            // Groupings never open modal directly now
+
+        } else if (record) {
+            log('Events - Card Click', `Bookable/Event card clicked: "${record.fields.Name}". Opening modal.`); // DEBUG
+            ui.showDetailModal(record);
+        } else {
+            log('Events - Card Click', `WARN: Clicked card, but record not found for ID: ${recordId}`); // DEBUG
         }
+        return; // Stop processing
+    }
 
 
-        // Handle clicks on locked items in the sidebar (but not edit/demote buttons)
-        if (lockedItemCard && !editBtn && !demoteBtn) {
-             const recordId = lockedItemCard.dataset.recordId;
-             const record = state.records.all.find(r => r.id === recordId);
-             if (record) ui.showDetailModal(record);
-            return; // Stop processing
-        }
+    // Handle clicks on locked items in the sidebar (but not edit/demote buttons)
+    if (lockedItemCard && !editBtn && !demoteBtn) {
+         const recordId = lockedItemCard.dataset.recordId;
+         const record = state.records.all.find(r => r.id === recordId);
+         if (record) ui.showDetailModal(record);
+        return; // Stop processing
+    }
 
-        // Handle clicks on favorite items in carousel (but not add/remove buttons)
-        if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
-            const recordId = favoriteItem.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
-            return; // Stop processing
-        }
+    // Handle clicks on favorite items in carousel (but not add/remove buttons)
+    if (favoriteItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
+        const recordId = favoriteItem.dataset.recordId;
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) ui.showDetailModal(record);
+        return; // Stop processing
+    }
 
-        // If no specific target matched above, do nothing.
-    });
+    // If no specific target matched above, do nothing.
+    log('Events - Body Click', 'Click did not match any specific handler.'); // DEBUG - Add this line
+});
+
 
     document.body.addEventListener('change', (e) => {
         if (state.ui.isInitializing) return;
