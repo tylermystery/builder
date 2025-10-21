@@ -637,7 +637,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.updateCardIcon(recordId);
             await debounce(ui.updateFavoritesCarousel, 300)();
             triggerSave();
-        } else if (card && !e.target.closest('.quantity-selector
+        } else if (card && !e.target.closest('.quantity-selector')) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (record) ui.showDetailModal(record);
