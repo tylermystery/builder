@@ -40,11 +40,6 @@ async function getCloudinarySecureUrl(publicId) {
     }
     return data.secure_url;
 }
-
-// REPLACE the analyzeImageWithGemini function in: netlify/functions/process-image-ai.js (or ai_image_processor.js)
-
-// REPLACE the analyzeImageWithGemini function again
-
 // REPLACE the analyzeImageWithGemini function again
 
 async function analyzeImageWithGemini(imageUrl) {
@@ -57,17 +52,31 @@ async function analyzeImageWithGemini(imageUrl) {
 Respond ONLY with a valid JSON object containing these exact fields: "catalogItemName" (string, use 'Historical Activity' if unknown), "groupSizeTag" (string enum: "Small", "Medium", "Large"), "locationTag" (string enum: "Indoor", "Outdoor", "Hybrid"), "qualityScore" (integer 1-10), "imageTags" (string, comma-separated keywords).
 Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before or after the JSON object.`;
 
+    // Fetch and encode image data
+    let base64ImageData;
+    try {
+        const imageResponse = await fetch(imageUrl);
+        if (!imageResponse.ok) throw new Error(`Failed to fetch image from Cloudinary: ${imageResponse.statusText}`);
+        const imageBuffer = await imageResponse.arrayBuffer();
+        base64ImageData = Buffer.from(imageBuffer).toString('base64');
+        console.log(`[Debug] analyzeImageWithGemini: Base64 image data length: ${base64ImageData.length}`);
+        if (base64ImageData.length < 100) console.warn("[Debug] analyzeImageWithGemini: Base64 image data seems very short.");
+    } catch (fetchError) {
+        console.error("[Debug] Error fetching or encoding image:", fetchError);
+        throw new Error(`Failed to process image data from ${imageUrl}: ${fetchError.message}`);
+    }
+
     const payload = {
-        contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } } ] } ],
-        // generationConfig removed as it caused issues with v1 endpoint
+        contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64ImageData } } ] } ],
     };
 
     // --- THIS IS THE FIX ---
-    // Change the model name in the URL to gemini-pro-vision
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${GEMINI_API_KEY}`;
+    // Use the exact stable model ID from the documentation and the v1beta endpoint.
+    const modelId = "gemini-1.5-flash"; // Corrected model ID
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
     // --- END FIX ---
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to gemini-pro-vision model...`);
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1beta...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
@@ -76,8 +85,10 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
         console.error("[Debug] Gemini API Error Response Body:", errorBody);
         let errorMessage = `Gemini API call failed with status ${response.status}`;
-        if (response.status === 400) errorMessage += ". Check the request payload.";
-        if (response.status === 403) errorMessage += ". Check API key permissions.";
+        // Add specific hints based on status codes
+        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
+        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
+        if (response.status === 404) errorMessage += `. Model '${modelId}' not found or incompatible with v1beta endpoint. Verify model ID and API path.`;
         if (response.status === 429) errorMessage += ". Rate limit exceeded.";
         throw new Error(errorMessage);
     }
@@ -90,7 +101,7 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         console.error('[Debug] Error extracting text from Gemini response structure:', JSON.stringify(result, null, 2));
         throw new Error('Could not extract text from Gemini response. Structure might have changed or response was empty.');
     }
-     console.log(`[Debug] analyzeImageWithGemini: Received text response from Gemini (expecting JSON).`);
+    console.log(`[Debug] analyzeImageWithGemini: Received text response from Gemini (expecting JSON).`);
     try {
         return JSON.parse(jsonText);
     } catch (e) {
@@ -98,7 +109,6 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         throw new Error("Gemini did not return valid JSON despite the prompt.");
     }
 }
-
 // --- Main Handler ---
 exports.handler = async (event) => {
     // --- THIS IS THE FIX ---
