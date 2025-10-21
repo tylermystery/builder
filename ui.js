@@ -444,8 +444,12 @@ export function updateCatalogHeader() {
 
     // --- NEW: Add Grouping if present in URL ---
     if (groupingParam) {
-        // Find the actual record to get the proper capitalization for display
-        const groupingRecord = state.records.all.find(r => r.fields.Name.toLowerCase() === groupingParam);
+        // --- THIS IS THE FIX: Add safety checks ---
+        const groupingRecord = state.records.all.find(r =>
+            r && r.fields && r.fields.Name && // Ensure record, fields, and Name exist
+            r.fields.Name.toLowerCase() === groupingParam
+        );
+        // --- END FIX ---
         const groupingDisplayName = groupingRecord ? groupingRecord.fields.Name : groupingParam; // Fallback to param if record not found
         path.push(`<span>${groupingDisplayName}</span>`); // Grouping is the final step, not clickable
         currentTitle = groupingDisplayName;
