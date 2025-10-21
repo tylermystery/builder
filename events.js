@@ -700,29 +700,67 @@ document.body.addEventListener('click', async (e) => {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
 
-        if (record && record.fields['Item Type'] === 'Grouping') {
-            log('Events - Card Click', `Grouping card clicked: "${record.fields.Name}"`); // DEBUG
-            const categoryName = record.fields.Name;
-            // Find a matching button in either the main category or subcategory filters
-            const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
-                                  .find(btn => btn.textContent === categoryName);
-
-            if (targetButton) {
-                log('Events - Card Click', `Found target filter button for "${categoryName}". Clicking it.`); // DEBUG
-                targetButton.click();
-            } else {
-                // Log if no matching button was found - this indicates a potential mismatch
-                log('Events - Card Click', `WARN: No filter button found for grouping "${categoryName}". Cannot filter.`); // DEBUG
-            }
-            // Groupings never open modal directly now
-
-        } else if (record) {
-            log('Events - Card Click', `Bookable/Event card clicked: "${record.fields.Name}". Opening modal.`); // DEBUG
-            ui.showDetailModal(record);
+    // REPLACE this specific block within the document.body click listener in: events.js
+    
+    if (record && record.fields['Item Type'] === 'Grouping') {
+        log('Events - Card Click', `Grouping card clicked: "${record.fields.Name}"`); // DEBUG
+        const groupingName = record.fields.Name;
+        const groupingNameLower = groupingName.toLowerCase();
+    
+        // Find the currently active MAIN category button (must be one)
+        const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
+        let parentCategoryFilter = 'all'; // Default if none active? Should usually be one.
+        if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
+            parentCategoryFilter = activeCategoryButton.dataset.filter;
+             log('Events - Card Click', `Parent category identified as: "${parentCategoryFilter}"`); // DEBUG
         } else {
-            log('Events - Card Click', `WARN: Clicked card, but record not found for ID: ${recordId}`); // DEBUG
+             log('Events - Card Click', `WARN: Could not identify a specific parent category, defaulting to 'all'. This might happen if 'All' was selected.`); // DEBUG
+             // Attempt to find the grouping's *actual* main category from its own data if possible
+             const groupingCategories = (record.fields.Categories || '').split(',').map(c => c.trim().toLowerCase());
+             if (groupingCategories.length > 0 && groupingCategories[0]) {
+                 parentCategoryFilter = groupingCategories[0];
+                  log('Events - Card Click', `Found parent category from grouping data: "${parentCategoryFilter}"`); // DEBUG
+             }
         }
-        return; // Stop processing
+    
+    
+        // Determine if the clicked grouping IS a main category or a subcategory
+        const isMainCategory = !!document.querySelector(`#category-filters .filter-btn[data-filter="${groupingNameLower}"]`);
+    
+        if (isMainCategory) {
+             log('Events - Card Click', `"${groupingName}" is a MAIN category. Updating URL and filtering.`); // DEBUG
+            // Update URL: Set category, clear subcategory
+            updateUrl({ category: groupingNameLower, subcategory: null, view: null });
+            // Manually update UI button states
+            categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`#category-filters .filter-btn[data-filter="${groupingNameLower}"]`)?.classList.add('active');
+            updateSubcategoryButtons(); // Update subcats based on new main category
+        } else {
+            // Assume it's a subcategory (or nested grouping acting like one)
+             log('Events - Card Click', `"${groupingName}" is treated as a SUBCATEGORY under "${parentCategoryFilter}". Updating URL and filtering.`); // DEBUG
+            // Update URL: Keep parent category, set this grouping as the ONLY subcategory
+            updateUrl({ category: parentCategoryFilter, subcategory: groupingNameLower, view: null });
+             // Manually update UI button states
+             // Ensure parent category is active
+             categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+             document.querySelector(`#category-filters .filter-btn[data-filter="${parentCategoryFilter}"]`)?.classList.add('active');
+             updateSubcategoryButtons(); // Update available subcats first
+             // Then activate only the clicked subcategory button
+             subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+             document.querySelector(`#subcategory-filters .filter-btn[data-filter="${groupingNameLower}"]`)?.classList.add('active');
+    
+        }
+    
+        // Trigger filtering with the new URL state
+        applyFiltersAndSort(imageCache); // Make sure imageCache is accessible
+    
+    } else if (record) { // This handles Bookable Items and Events
+        log('Events - Card Click', `Bookable/Event card clicked: "${record.fields.Name}". Opening modal.`); // DEBUG
+        ui.showDetailModal(record);
+    } else {
+        log('Events - Card Click', `WARN: Clicked card, but record not found for ID: ${recordId}`); // DEBUG
+    }
+    return; // Stop processing after handling a card click
     }
 
 
