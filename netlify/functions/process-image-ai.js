@@ -41,7 +41,8 @@ async function getCloudinarySecureUrl(publicId) {
     return data.secure_url;
 }
 
-// --- Gemini Call Helper (Includes debug logs) ---
+// REPLACE the analyzeImageWithGemini function in: netlify/functions/process-image-ai.js (or ai_image_processor.js)
+
 async function analyzeImageWithGemini(imageUrl) {
     console.log(`[Debug] analyzeImageWithGemini: Analyzing URL: ${imageUrl.substring(0, 80)}...`);
      if (!GEMINI_API_KEY) {
@@ -50,9 +51,6 @@ async function analyzeImageWithGemini(imageUrl) {
     }
     const prompt = `Analyze this TMT event photo. You must identify the specific TMT catalog item shown, assess image quality, group size, and location. Respond ONLY with a valid JSON object. Do not include markdown code blocks (e.g., \\\`\\\`\\\`json).`;
 
-    // --- THIS IS THE FIX ---
-    // Update the schema to match the expected field names in Airtable and the code logic.
-    // Make sure the enum values match potential outputs and Airtable field types.
     const responseSchema = {
         type: "OBJECT",
         properties: {
@@ -64,34 +62,35 @@ async function analyzeImageWithGemini(imageUrl) {
         },
         required: ["catalogItemName", "groupSizeTag", "locationTag", "qualityScore", "imageTags"]
     };
-    // --- END FIX ---
 
     const payload = {
         contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: Buffer.from(await (await fetch(imageUrl)).arrayBuffer()).toString('base64') } } ] } ],
+        // generationConfig is optional when using responseSchema with v1 endpoint, but let's keep it for clarity
         generationConfig: { responseMimeType: "application/json", responseSchema: responseSchema }
     };
+
     // --- THIS IS THE FIX ---
-    // Ensure you are using the correct model name. `gemini-pro` doesn't support inline images directly in this API structure.
-    // Use a model that supports multimodal input like 'gemini-1.5-flash-latest' or 'gemini-pro-vision' (older).
-    // Let's use gemini-1.5-flash-latest as it's current.
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+    // Change the API endpoint path from v1beta to v1
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
     // --- END FIX ---
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to Gemini...`);
+
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to Gemini at stable v1 endpoint...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
     if (!response.ok) {
-        // Log the detailed error response from Gemini
-        let errorBody = await response.text(); // Read as text first for flexibility
-        try {
-            errorBody = JSON.parse(errorBody); // Try parsing as JSON
-        } catch (e) { /* Ignore if not JSON */ }
+        let errorBody = await response.text();
+        try { errorBody = JSON.parse(errorBody); } catch (e) { /* Ignore */ }
         console.error("[Debug] Gemini API Error Response Body:", errorBody);
-        throw new Error(`Gemini API call failed with status ${response.status}`);
+        // Provide a more specific error message based on common Gemini errors
+        let errorMessage = `Gemini API call failed with status ${response.status}`;
+        if (response.status === 400) errorMessage += ". Check the request payload/schema.";
+        if (response.status === 403) errorMessage += ". Check API key permissions.";
+        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
+        throw new Error(errorMessage);
     }
 
     const result = await response.json();
-    // Add more robust checking for the Gemini response structure
     if (!result.candidates || !result.candidates[0] || !result.candidates[0].content || !result.candidates[0].content.parts || !result.candidates[0].content.parts[0].text) {
          console.error('[Debug] Unexpected Gemini response structure:', JSON.stringify(result, null, 2));
          throw new Error('Could not extract text from Gemini response. Structure might have changed.');
@@ -105,7 +104,6 @@ async function analyzeImageWithGemini(imageUrl) {
         throw new Error("Gemini returned invalid JSON.");
     }
 }
-
 
 // --- Main Handler ---
 exports.handler = async (event) => {
