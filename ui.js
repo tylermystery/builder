@@ -335,6 +335,7 @@ export function populateMyPlansDropdown() { // Removed 'plans' parameter
         const defaultOption = document.createElement('option');
         defaultOption.textContent = 'My Saved Plans...';
         defaultOption.disabled = true; // Initially disabled
+        defaultOption.value = '';
         defaultOption.selected = true; // Initially selected
         dropdown.appendChild(defaultOption);
 
