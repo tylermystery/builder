@@ -199,36 +199,4 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- NEW SSO EVENT LISTENERS ---
-    const googleSsoBtn = document.getElementById('google-sso-btn');
-    if (googleSsoBtn) {
-        googleSsoBtn.addEventListener('click', () => {
-            netlifyIdentity.open('login');
-        });
-    }
-
-    netlifyIdentity.on('login', async (user) => {
-        try {
-            const netlifyJwt = user.token.access_token;
-            // Call a new serverless function to get our app-specific JWT
-            const response = await fetch('/api/auth-social', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${netlifyJwt}`
-                }
-            });
-            if (!response.ok) throw new Error("Failed to sync social login.");
-
-            const appPayload = await response.json();
-            await _handleSuccessfulLogin(appPayload);
-            netlifyIdentity.close();
-
-        } catch (error) {
-            console.error("SSO login error:", error);
-            signinMessage.textContent = "Error logging in with Google. Please try again.";
-            signinMessage.style.color = '#dc3545';
-        }
-    });
-    // --- END NEW SSO EVENT LISTENERS ---
 }
