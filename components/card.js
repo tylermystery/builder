@@ -120,14 +120,19 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const unitPrice = getRecordPrice(record, itemState.selectedOptionIndex); // Renamed for clarity
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+    // Ensure quantity respects minimum on initial render
+    const initialQuantity = Math.max(itemState.quantity || 1, headcountMin);
+    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+
 
     // --- Updated Price HTML Logic ---
     let priceHTML = '';
-    if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) { // Added check for unitPrice > 0
+    if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) {
         const minimumTotalPrice = unitPrice * headcountMin;
-        const typeLabel = pricingType ? pricingType.toLowerCase() : 'items'; // Use 'items' as fallback
-        priceHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">for up to ${headcountMin} ${typeLabel}</span>`;
+        // --- Updated String Logic ---
+        const pluralTypeLabel = pricingType && pricingType.toLowerCase().includes('guest') ? 'guests' : 'items'; // Use 'guests' or 'items'
+        priceHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${headcountMin} ${pluralTypeLabel}</span>`;
+        // --- End Update ---
     } else if (typeof unitPrice === 'number') {
         const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
         priceHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
@@ -163,6 +168,16 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             e.stopPropagation();
             quantityInput.stepDown();
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+         // Add change listener to enforce min value directly on input change
+        quantityInput.addEventListener('change', (e) => {
+            e.stopPropagation(); // Prevent card click
+            const min = parseInt(e.target.min, 10);
+            if (parseInt(e.target.value, 10) < min) {
+                e.target.value = min; // Correct value if manually typed below min
+            }
+             // Ensure the event bubbles up for state updates in events.js
+            e.target.dispatchEvent(new CustomEvent('change', { bubbles: true }));
         });
     }
 
