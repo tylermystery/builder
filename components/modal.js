@@ -205,10 +205,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             : 'Price Varies';
     } else {
         const unitPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-        if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) { // Added > 0 check
+        if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) {
             const minimumTotalPrice = unitPrice * headcountMin;
-            const typeLabel = pricingType ? pricingType.toLowerCase() : 'items';
-            modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">for up to ${headcountMin} ${typeLabel}</span>`;
+            // --- Updated String Logic ---
+            const pluralTypeLabel = pricingType && pricingType.toLowerCase().includes('guest') ? 'guests' : 'items';
+            modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${headcountMin} ${pluralTypeLabel}</span>`;
+            // --- End Update ---
         } else if (typeof unitPrice === 'number') {
             const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
             modalItemPrice.innerHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
@@ -304,10 +306,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 const currentHeadcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1; // Re-fetch min count
                 const currentPricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]; // Re-fetch type
 
-                if (currentHeadcountMin > 1 && typeof updatedUnitPrice === 'number' && updatedUnitPrice > 0) { // Added > 0 check
+                if (currentHeadcountMin > 1 && typeof updatedUnitPrice === 'number' && updatedUnitPrice > 0) {
                     const minimumTotalPrice = updatedUnitPrice * currentHeadcountMin;
-                    const typeLabel = currentPricingType ? currentPricingType.toLowerCase() : 'items';
-                    modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">for up to ${currentHeadcountMin} ${typeLabel}</span>`;
+                     // --- Updated String Logic ---
+                    const pluralTypeLabel = currentPricingType && currentPricingType.toLowerCase().includes('guest') ? 'guests' : 'items';
+                    modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${currentHeadcountMin} ${pluralTypeLabel}</span>`;
+                    // --- End Update ---
                 } else if (typeof updatedUnitPrice === 'number') {
                     const pricingTypeHTML = currentPricingType ? `<span class="pricing-type"> / ${currentPricingType.toLowerCase()}</span>` : '';
                     modalItemPrice.innerHTML = `$${updatedUnitPrice.toFixed(2)}${pricingTypeHTML}`;
@@ -327,7 +331,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalItemNote.value = itemState.note;
         
         // Ensure quantity respects minimum
-        const currentQuantity = Math.max(itemState.quantity, headcountMin);
+        const currentQuantity = Math.max(itemState.quantity || 1, headcountMin);
         
         modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${currentQuantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         
@@ -338,6 +342,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (plusBtn && minusBtn && input) {
             plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
             minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+            // Add change listener to enforce min value directly on input change
+            input.addEventListener('change', (e) => {
+                 const min = parseInt(e.target.min, 10);
+                 if (parseInt(e.target.value, 10) < min) {
+                     e.target.value = min; // Correct value if manually typed below min
+                 }
+                  // Ensure the event bubbles up for state updates in events.js
+                 e.target.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+             });
         }
     } else {
         // Hide quantity, notes, and add-to-plan button for groupings
@@ -553,7 +566,9 @@ export async function showCheckoutModal(shopSettings) {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveQuantity = Math.max(itemInfo.quantity || 1, headcountMin);
         
-        const itemTotal = price * effectiveQuantity;
+        // Ensure price is a valid number before calculation
+        const validPrice = typeof price === 'number' && !isNaN(price) ? price : 0;
+        const itemTotal = validPrice * effectiveQuantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
         
@@ -573,6 +588,7 @@ export async function showCheckoutModal(shopSettings) {
         `;
         summaryList.appendChild(listItem);
     }
+
 
     summaryDetailsEl.appendChild(summaryList);
 
