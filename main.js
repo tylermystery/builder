@@ -84,7 +84,7 @@ async function initialize() {
                 // Update state and UI (assuming fetchPlans returns simple {id, name} array)
                 const simplePlans = plans.map(p => ({ id: p.id, name: p.fields.Name }));
                 setState({ session: { ...state.session, user: { ...state.session.user, associatedSessions: simplePlans } } });
-                ui.populateMyPlansDropdown(); 
+                ui.populateMyPlansDropdown(); // Corrected call
             });
         }
     });
@@ -97,13 +97,13 @@ async function initialize() {
     });
      document.addEventListener('userLoggedIn', () => {
         log('Main', '"userLoggedIn" event received.');
-        ui.populateMyPlansDropdown(); // Update dropdown with user's plans
+        ui.populateMyPlansDropdown(); // Corrected call
         // Re-initialize chat if needed (might already happen via sessionReady)
         initializeSessionChat(); 
     });
      document.addEventListener('userSignedOut', () => { // Assuming handleSignOut dispatches this
         log('Main', '"userSignedOut" event received.');
-        ui.populateMyPlansDropdown(); // Update dropdown for guest view
+        ui.populateMyPlansDropdown(); // Corrected call
     });
 
     ui.toggleLoading(true);
@@ -255,7 +255,7 @@ async function initialize() {
             }
         }
         
-        populateMyPlansDropdown(); // Populate based on initial auth state
+        ui.populateMyPlansDropdown(); // *** Corrected call *** Populate based on initial auth state
         
         // Handle magic link token verification if present
         const loginToken = urlParams.get('token');
@@ -284,7 +284,7 @@ async function initialize() {
                     await api.associateSessionWithUser(sessionId, data.user.id);
                 }
                 
-                populateMyPlansDropdown(); // Repopulate with fetched plans
+                ui.populateMyPlansDropdown(); // *** Corrected call *** Repopulate with fetched plans
                 
                 // Clean token from URL
                 const cleanUrl = new URL(window.location);
