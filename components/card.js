@@ -62,11 +62,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const imageResults = await Promise.all(imagePromises);
         const collageImages = imageResults.flatMap(res => res.imageUrls);
 
-        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
+        let imageContainerHTML = `<div class="event-card-image-container collage-container">`; // Removed lazy-load from container
         if (collageImages.length > 0) {
             imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
         } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
+            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`; // Keep lazy load on individual images
         }
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
@@ -81,6 +81,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         `;
         return groupingCard;
     }
+
 
     if (fields['Item Type'] === 'Event') {
         eventCard.className = 'event-card event-type-card';
@@ -116,12 +117,25 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    const unitPrice = getRecordPrice(record, itemState.selectedOptionIndex); // Renamed for clarity
+    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const isLocked = state.cart.lockedItems.has(record.id);
     const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
-    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
-    const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
+
+    // --- Updated Price HTML Logic ---
+    let priceHTML = '';
+    if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) { // Added check for unitPrice > 0
+        const minimumTotalPrice = unitPrice * headcountMin;
+        const typeLabel = pricingType ? pricingType.toLowerCase() : 'items'; // Use 'items' as fallback
+        priceHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">for up to ${headcountMin} ${typeLabel}</span>`;
+    } else if (typeof unitPrice === 'number') {
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+        priceHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
+    } else {
+        priceHTML = 'N/A'; // Handle cases where price might not be a number
+    }
+    // --- End Update ---
+
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
