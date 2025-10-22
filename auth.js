@@ -37,7 +37,8 @@ async function _handleSuccessfulLogin(payload) {
                 ...payload.user, 
                 isAuthenticated: true,
                 isOwner: payload.ownerData.isOwner,
-                ownerDashboardId: payload.ownerData.ownerDashboardId
+                ownerDashboardId: payload.ownerData.ownerDashboardId,
+                associatedSessions: payload.user.associatedSessions || [] // Add this line
             } 
         } 
     });
@@ -169,7 +170,7 @@ export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
     setState({
-        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
+        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null, associatedSessions: [] } } // Clear associatedSessions on sign out
     });
     updateUserProfileIcon();
     hideUserModal();
@@ -182,7 +183,7 @@ export function updateUserProfileIcon() {
         userProfileButton.title = `Logged in as ${state.session.user.name}`;
     } else {
         userProfileButton.classList.remove('signed-in');
-        userProfileButton.innerHTML = '&#128100;';
+        userProfileButton.innerHTML = '&#128100;'; // Person icon
         userProfileButton.title = 'Sign In / My Account';
     }
 }
@@ -198,5 +199,4 @@ export function setupAuthEventListeners() {
             hideUserModal();
         }
     });
-
 }
