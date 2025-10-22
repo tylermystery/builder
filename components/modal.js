@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js'; // <-- UPDATED
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -14,15 +14,38 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
+// --- Helper function to update modal price display ---
+function updateModalPriceDisplay(record, optionIndex, currentQuantity) {
+    const modalItemPrice = document.getElementById('modal-item-price');
+    if (!modalItemPrice || !record || !record.fields) return; // Safety checks
 
-// --- THIS IS THE FIX ---
-// This new function safely closes the modal by updating the URL state
-// and then hiding the UI, instead of using history.back().
-function closeDetailModal() {
-    updateUrl({ openItem: null }); // Remove the openItem param
-    hideDetailModal(); // Handle the UI hiding
+    const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const unitPrice = getRecordPrice(record, optionIndex); // Get current unit price
+
+    let priceHTML = '';
+    // Use Number.isFinite to check for valid numbers, allowing 0 price
+    if (headcountMin > 1 && currentQuantity <= headcountMin && Number.isFinite(unitPrice) && unitPrice >= 0) {
+        // Show minimum total price ONLY if quantity is AT OR BELOW the minimum (and price is valid)
+        const minimumTotalPrice = unitPrice * headcountMin;
+        const pluralTypeLabel = pricingType && pricingType.toLowerCase().includes('guest') ? 'guests' : 'items';
+        priceHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${headcountMin} ${pluralTypeLabel}</span>`;
+    } else if (Number.isFinite(unitPrice) && unitPrice >= 0) {
+        // Show unit price if no minimum OR quantity is ABOVE minimum (and price is valid)
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+        priceHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
+    } else {
+        priceHTML = 'N/A'; // Fallback for invalid price
+    }
+    modalItemPrice.innerHTML = priceHTML;
 }
+// --- End Helper ---
 
+
+function closeDetailModal() {
+    updateUrl({ openItem: null });
+    hideDetailModal();
+}
 
 function handleEscapeKey(event) {
     if (event.key === 'Escape') {
@@ -31,12 +54,11 @@ function handleEscapeKey(event) {
 }
 
 function handleOverlayClick(event) {
-    // Only close if the click is directly on the overlay, not its children
     if (event.target === modalOverlay) {
         closeDetailModal();
     }
 }
-// --- END FIX ---
+
 function updateCheckoutDisplay() {
     const fullTotalEl = document.getElementById('full-total-price');
     const finalTotal = parseFloat(fullTotalEl.dataset.total || 0);
@@ -72,11 +94,9 @@ function updateCheckoutDisplay() {
 
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
     const finalAmountToCharge = baseAmountToCharge + tipAmount;
-    
-    // Ensure amount is at least $0.50 for Stripe
-    depositPrice.textContent = (finalAmountToCharge >= 0.50) ? `$${finalAmountToCharge.toFixed(2)}` : '$0.00'; 
-    
-    // Disable payment button if amount is too low
+
+    depositPrice.textContent = (finalAmountToCharge >= 0.50) ? `$${finalAmountToCharge.toFixed(2)}` : '$0.00';
+
     const submitBtn = document.getElementById('payment-submit-btn');
     if (submitBtn) {
         submitBtn.disabled = finalAmountToCharge < 0.50;
@@ -87,14 +107,12 @@ function updateCheckoutDisplay() {
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
     let current = record;
-    // Limit loop to prevent infinite recursion in case of data error
-    let safetyCounter = 0; 
+    let safetyCounter = 0;
     while (current && current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] && safetyCounter < 10) {
         const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
         breadcrumbs.unshift(parentName);
-        // Find parent based on Name field matching the Parent Item field
         current = state.records.all.find(r => r.fields.Name === parentName);
-        if (!current) break; // Exit if parent not found
+        if (!current) break;
         safetyCounter++;
     }
     return breadcrumbs;
@@ -104,7 +122,7 @@ function getBreadcrumbs(record) {
 function resetModalState() {
     const elementsToClear = [
         'modal-item-name', 'modal-item-price', 'modal-item-description',
-        'modal-thumbnail-strip', 'modal-options-container', 
+        'modal-thumbnail-strip', 'modal-options-container',
         'modal-quantity-selector', 'modal-calendar-container', 'modal-breadcrumbs'
     ];
     elementsToClear.forEach(id => {
@@ -120,12 +138,11 @@ function resetModalState() {
 
     const imageEl = document.getElementById('modal-main-image');
     if (imageEl) imageEl.style.backgroundImage = '';
-    
-    // Reset specific display styles if necessary
+
     const actionsContainer = document.getElementById('modal-actions-container');
-    if (actionsContainer) actionsContainer.style.display = 'block'; // Default display
+    if (actionsContainer) actionsContainer.style.display = 'block';
     const notesContainer = document.getElementById('modal-notes-container');
-    if (notesContainer) notesContainer.style.display = 'block'; // Default display
+    if (notesContainer) notesContainer.style.display = 'block';
 
     log('Modal', 'Reset modal state.');
 }
@@ -134,11 +151,12 @@ function resetModalState() {
 export async function showDetailModal(record, startPhotoIndex = 0) {
     console.log('[showDetailModal] Called for item:', record.id);
     log('Modal', `Showing detail modal for "${record.fields.Name}"`);
-    updateUrl({ openItem: record.id }); // Update URL first
+    updateUrl({ openItem: record.id });
 
+    // --- Get DOM Elements ---
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
-    const modalItemPrice = document.getElementById('modal-item-price');
+    const modalItemPrice = document.getElementById('modal-item-price'); // Keep reference for helper
     const modalItemDescription = document.getElementById('modal-item-description');
     const modalMainImage = document.getElementById('modal-main-image');
     const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
@@ -152,51 +170,48 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
     const closeBtn = document.getElementById('modal-close-btn');
 
-    // Remove previous listeners before adding new ones
+    // --- Event Listeners ---
     closeBtn.removeEventListener('click', closeDetailModal);
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
-
-    // Add new listeners
     closeBtn.addEventListener('click', closeDetailModal);
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
-
+    // --- Reset & Setup ---
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
     currentItemChatRecordId = record.id;
-    
+
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
-    
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
+
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
-        addToPlanBtn.disabled = false; // Ensure button is enabled initially
+        addToPlanBtn.disabled = false;
     }
 
     // --- Image Loading ---
-    let imageUrls = []; // Initialize as empty array
+    let imageUrls = [];
     try {
         const imageData = await api.fetchImagesForRecord(record, state.records.all, new Map());
-        imageUrls = imageData.imageUrls || []; // Ensure it's an array even if null
+        imageUrls = imageData.imageUrls || [];
     } catch (error) {
         console.error("Failed to fetch images for modal:", error);
-        // Provide a fallback if needed, or leave imageUrls empty
     }
-    
+
+    // --- Basic Info ---
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
-    
+
+    // --- Price (Initial Display) ---
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
-
-    // --- New Price Logic ---
     const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-    const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const initialQuantity = Math.max(itemState.quantity || 1, headcountMin); // Determine initial quantity
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -204,27 +219,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`)
             : 'Price Varies';
     } else {
-        const unitPrice = getRecordPrice(record, itemState.selectedOptionIndex);
-        if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) {
-            const minimumTotalPrice = unitPrice * headcountMin;
-            // --- Updated String Logic ---
-            const pluralTypeLabel = pricingType && pricingType.toLowerCase().includes('guest') ? 'guests' : 'items';
-            modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${headcountMin} ${pluralTypeLabel}</span>`;
-            // --- End Update ---
-        } else if (typeof unitPrice === 'number') {
-            const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
-            modalItemPrice.innerHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
-        } else {
-             modalItemPrice.innerHTML = 'N/A';
-        }
+        // Call helper for initial price display
+        updateModalPriceDisplay(record, itemState.selectedOptionIndex, initialQuantity);
     }
-    // --- End Price Logic ---
 
     // --- Image Gallery Display ---
-    let currentPhotoIndex = startPhotoIndex < imageUrls.length ? startPhotoIndex : 0; // Ensure index is valid
+    let currentPhotoIndex = startPhotoIndex < imageUrls.length ? startPhotoIndex : 0;
     if (imageUrls.length > 0) {
         modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
-        modalThumbnailStrip.innerHTML = ''; // Clear previous thumbnails
+        modalThumbnailStrip.innerHTML = '';
         imageUrls.forEach((url, index) => {
             const thumb = document.createElement('div');
             thumb.className = 'thumbnail-img';
@@ -233,34 +236,30 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             thumb.addEventListener('click', () => {
                 currentPhotoIndex = index;
                 modalMainImage.style.backgroundImage = `url('${imageUrls[index]}')`;
-                // Update active thumbnail
                 modalThumbnailStrip.querySelector('.thumbnail-img.active')?.classList.remove('active');
                 thumb.classList.add('active');
             });
             modalThumbnailStrip.appendChild(thumb);
         });
     } else {
-        // Handle case with no images
-        modalMainImage.style.backgroundImage = ''; // Or set a placeholder
+        modalMainImage.style.backgroundImage = '';
         modalThumbnailStrip.innerHTML = '<p>No images available.</p>';
     }
 
     // --- Breadcrumbs & Header Actions ---
-    modalHeaderActions.innerHTML = ''; // Clear previous actions
+    modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
-    if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a href="#" class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' &gt; ');
-    } else {
-        modalBreadcrumbs.innerHTML = ''; // Clear if no breadcrumbs
-    }
+    modalBreadcrumbs.innerHTML = breadcrumbs.length > 0
+        ? breadcrumbs.map(name => `<a href="#" class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' &gt; ')
+        : '';
 
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-    
+
     // --- Options ---
-    modalOptionsContainer.innerHTML = ''; // Clear previous options
+    modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
@@ -281,174 +280,142 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (linkedRecord) {
             optionButton.dataset.linkedRecordId = linkedRecord.id;
             optionButton.addEventListener('click', (e) => {
-                e.stopPropagation(); 
+                e.stopPropagation();
                 log('Modal', `Option clicked, linking to item: ${linkedRecord.fields.Name}`);
-                closeDetailModal(); // Close current modal gracefully
-                setTimeout(() => {
-                    showDetailModal(linkedRecord); // Open modal for the linked item
-                }, 50); 
+                closeDetailModal();
+                setTimeout(() => showDetailModal(linkedRecord), 50);
             });
         } else {
             optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                
-                // Dispatch event BEFORE updating price display
+
                 e.currentTarget.dispatchEvent(new CustomEvent('change', {
                     bubbles: true,
                     detail: { selectedOptionIndex: newIndex }
                 }));
 
-                // --- Update Price Display Logic inside Option Listener ---
-                 modalItemDescription.textContent = opt.description || record.fields.Description || ''; // Update description too
-                const updatedUnitPrice = getRecordPrice(record, newIndex); // Get unit price for the NEW option
-                const currentHeadcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1; // Re-fetch min count
-                const currentPricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE]; // Re-fetch type
+                modalItemDescription.textContent = opt.description || record.fields.Description || '';
 
-                if (currentHeadcountMin > 1 && typeof updatedUnitPrice === 'number' && updatedUnitPrice > 0) {
-                    const minimumTotalPrice = updatedUnitPrice * currentHeadcountMin;
-                     // --- Updated String Logic ---
-                    const pluralTypeLabel = currentPricingType && currentPricingType.toLowerCase().includes('guest') ? 'guests' : 'items';
-                    modalItemPrice.innerHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${currentHeadcountMin} ${pluralTypeLabel}</span>`;
-                    // --- End Update ---
-                } else if (typeof updatedUnitPrice === 'number') {
-                    const pricingTypeHTML = currentPricingType ? `<span class="pricing-type"> / ${currentPricingType.toLowerCase()}</span>` : '';
-                    modalItemPrice.innerHTML = `$${updatedUnitPrice.toFixed(2)}${pricingTypeHTML}`;
-                } else {
-                    modalItemPrice.innerHTML = 'N/A';
-                }
-                // --- End Update ---
+                // Get current quantity from the input inside the modal
+                const quantityInput = modalQuantitySelector.querySelector('.quantity-input');
+                // Use headcountMin as fallback if input not found (e.g., during initial setup)
+                const currentModalQuantity = quantityInput ? parseInt(quantityInput.value, 10) : headcountMin;
+                // Update price display using the helper
+                updateModalPriceDisplay(record, newIndex, currentModalQuantity);
             });
         }
         modalOptionsContainer.appendChild(optionButton);
     });
-    
-    // --- Quantity & Notes (Show/Hide based on type) ---
+
+    // --- Quantity & Notes ---
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
-        
-        // Ensure quantity respects minimum
-        const currentQuantity = Math.max(itemState.quantity || 1, headcountMin);
-        
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${currentQuantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        
-        // Re-add event listeners for quantity buttons
+
+        // Use initialQuantity determined earlier for the input value
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
+
         if (plusBtn && minusBtn && input) {
             plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
             minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-            // Add change listener to enforce min value directly on input change
+
+            // Add change listener to quantity input to update price display
             input.addEventListener('change', (e) => {
+                const currentModalQuantity = parseInt(e.target.value, 10);
+                // Find currently selected option index
+                const selectedOptionBtn = modalOptionsContainer.querySelector('.option-btn.selected');
+                const currentOptionIndex = selectedOptionBtn ? parseInt(selectedOptionBtn.dataset.optionIndex, 10) : (itemState.selectedOptionIndex || 0); // Use state as fallback
+
+                // Enforce minimum value visually (browser might handle this via min attr, but belt-and-suspenders)
                  const min = parseInt(e.target.min, 10);
-                 if (parseInt(e.target.value, 10) < min) {
-                     e.target.value = min; // Correct value if manually typed below min
+                 if (currentModalQuantity < min) {
+                     e.target.value = min;
+                     // Update price based on the corrected minimum quantity
+                     updateModalPriceDisplay(record, currentOptionIndex, min);
+                 } else {
+                    // Update price display based on current option and NEW valid quantity
+                    updateModalPriceDisplay(record, currentOptionIndex, currentModalQuantity);
                  }
-                  // Ensure the event bubbles up for state updates in events.js
+                 // Ensure the state update event still bubbles up from events.js listener
                  e.target.dispatchEvent(new CustomEvent('change', { bubbles: true }));
-             });
+            });
         }
     } else {
-        // Hide quantity, notes, and add-to-plan button for groupings
         modalActionsContainer.style.display = 'none';
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
 
     // --- Calendar ---
-    modalCalendarContainer.innerHTML = ''; // Clear previous calendar
-    let calendarInstance = null; // To store flatpickr instance
+    modalCalendarContainer.innerHTML = '';
+    let calendarInstance = null;
     try {
         const busyTimes = await api.fetchCalendarForRecord(record);
         calendarInstance = window.flatpickr(modalCalendarContainer, {
             inline: true,
             showMonths: 1,
-            disable: [(date) => {
-                const status = getDayStatus(date, busyTimes, record);
-                return status.status === AVAILABILITY_STATUS.NONE;
-            }],
-            onDayCreate: function (dObj, dStr, fp, dayElem) {
-                 const day = dayElem.dateObj;
-                 const status = getDayStatus(day, busyTimes, record);
-                 let className = '';
-                 let tooltip = status.reason;
-                 if (status.status === AVAILABILITY_STATUS.FULL) {
-                     className = 'available-full';
-                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                     className = 'available-partial';
-                     tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                 } else { // Handles NONE and cases where status might be missing
-                     className = 'unavailable';
-                 }
-                 dayElem.classList.add(className);
-                 // Use setAttribute for tippy content
-                 dayElem.setAttribute('data-tippy-content', tooltip);
+            disable: [(date) => getDayStatus(date, busyTimes, record).status === AVAILABILITY_STATUS.NONE],
+            onDayCreate: (dObj, dStr, fp, dayElem) => {
+                const day = dayElem.dateObj;
+                const status = getDayStatus(day, busyTimes, record);
+                let className = status.status === AVAILABILITY_STATUS.FULL ? 'available-full'
+                              : status.status === AVAILABILITY_STATUS.PARTIAL ? 'available-partial'
+                              : 'unavailable';
+                let tooltip = status.status === AVAILABILITY_STATUS.PARTIAL
+                              ? `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`
+                              : status.reason;
+                dayElem.classList.add(className);
+                dayElem.setAttribute('data-tippy-content', tooltip);
             },
-            onReady: function (selectedDates, dateStr, instance) {
-                // Initialize Tippy after Flatpickr is ready
-                tippy(instance.calendarContainer.querySelectorAll('.flatpickr-day[data-tippy-content]'), { // Target only days with content
-                    content: reference => reference.getAttribute('data-tippy-content'),
-                    placement: 'top',
-                    theme: 'light', // Optional: Choose a theme
-                    allowHTML: true, // Allow HTML in tooltips if needed
+            onReady: (selectedDates, dateStr, instance) => {
+                tippy(instance.calendarContainer.querySelectorAll('.flatpickr-day[data-tippy-content]'), {
+                    content: ref => ref.getAttribute('data-tippy-content'),
+                    placement: 'top', theme: 'light', allowHTML: true,
                 });
             },
             onChange: (selectedDates) => {
                 if (selectedDates.length > 0) {
                     const eventDateInput = document.getElementById('event-date-picker');
-                    // Update main event date picker only if it exists
-                    if (eventDateInput && eventDateInput._flatpickr) {
-                        eventDateInput._flatpickr.setDate(selectedDates[0], true); // Trigger its change event
+                    if (eventDateInput?._flatpickr) {
+                        eventDateInput._flatpickr.setDate(selectedDates[0], true);
                     }
                 }
             }
         });
-        
-        // Set initial date on modal calendar if one exists in state
         const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
         if (eventDate) {
-             // Ensure eventDate is a valid date string or Date object
-             try {
+            try {
                 const dateToSet = Array.isArray(eventDate) ? new Date(eventDate[0]) : new Date(eventDate);
-                if (!isNaN(dateToSet.getTime())) { // Check if date is valid
-                    calendarInstance.setDate(dateToSet, false); // Don't trigger onChange
-                }
-            } catch (e) {
-                console.warn("Could not parse event date for modal calendar:", eventDate);
-            }
+                if (!isNaN(dateToSet.getTime())) calendarInstance.setDate(dateToSet, false);
+            } catch (e) { console.warn("Could not parse event date for modal calendar:", eventDate); }
         }
     } catch (error) {
         console.error("Failed to initialize calendar:", error);
         modalCalendarContainer.innerHTML = '<p>Could not load availability calendar.</p>';
     }
-    
-    // --- Final UI Updates ---
-    ui.updateCardIcon(record.id); // Update heart icon state
-    
-    // --- Display Modal ---
-    modalOverlay.classList.add('active');
-    modalOverlay.style.display = 'flex'; // Use flex to center
-    document.body.classList.add('modal-open'); // Prevent body scroll
 
-    // Initialize item chat (deferred slightly to ensure DOM is ready)
+    // --- Final UI Updates & Display ---
+    ui.updateCardIcon(record.id);
+    modalOverlay.classList.add('active');
+    modalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+
+    // --- Initialize Chat (Deferred) ---
     setTimeout(() => {
         const chatContainer = document.getElementById('modal-chat-container');
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
-        log('Modal Chat Init', { isAuthenticated: state.session.user.isAuthenticated, isChatEnabledOnItem, chatContainerExists: !!chatContainer });
-        
         if (state.session.user.isAuthenticated && chatContainer && isChatEnabledOnItem) {
-            log('Modal', 'All conditions met. Initializing item chat.');
-            chatContainer.style.display = 'flex'; // Use flex for column layout
+            chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
-        } else {
-            log('Modal', 'Hiding chat. Reason:', { isAuthenticated: state.session.user.isAuthenticated, isChatEnabledOnItem, chatContainerExists: !!chatContainer });
-            if (chatContainer) {
-                chatContainer.style.display = 'none'; // Hide if conditions not met
-            }
+        } else if (chatContainer) {
+            chatContainer.style.display = 'none';
         }
     }, 0);
 }
@@ -456,41 +423,33 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
-    // --- THIS IS THE FIX ---
-    // This function now ONLY handles the UI. It no longer touches the URL.
     const closeBtn = document.getElementById('modal-close-btn');
-    if (closeBtn) closeBtn.removeEventListener('click', closeDetailModal); // Clean up listener
+    if (closeBtn) closeBtn.removeEventListener('click', closeDetailModal);
     if (modalOverlay) modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
 
     if (currentItemChatRecordId) {
         log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        // Add any necessary cleanup for item chat here if needed
         currentItemChatRecordId = null;
     }
 
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
-        // Use transitionend event for smoother cleanup
         const handleTransitionEnd = () => {
              modalOverlay.style.display = 'none';
-             resetModalState(); // Reset content AFTER fade out
-             modalOverlay.removeEventListener('transitionend', handleTransitionEnd); // Clean up listener
+             resetModalState();
+             modalOverlay.removeEventListener('transitionend', handleTransitionEnd);
         };
         modalOverlay.addEventListener('transitionend', handleTransitionEnd);
-        
-        // Fallback timeout in case transitionend doesn't fire (e.g., if display changes immediately)
         setTimeout(() => {
-             if (modalOverlay.style.display !== 'none') { // Check if already hidden by event listener
+             if (modalOverlay.style.display !== 'none') {
                  modalOverlay.style.display = 'none';
                  resetModalState();
-                 modalOverlay.removeEventListener('transitionend', handleTransitionEnd); // Clean up listener just in case
+                 modalOverlay.removeEventListener('transitionend', handleTransitionEnd);
              }
-        }, 350); // Slightly longer than CSS transition (0.3s)
-
+        }, 350);
         document.body.classList.remove('modal-open');
     }
-    // --- END FIX ---
 }
 
 
@@ -518,70 +477,57 @@ export async function showCheckoutModal(shopSettings) {
     paymentForm.style.display = 'block';
     successMessage.style.display = 'none';
     cardErrors.textContent = '';
-    document.getElementById('customer-name').value = state.session.user.name || ''; // Pre-fill name if logged in
-    document.getElementById('customer-email').value = state.session.user.email || ''; // Pre-fill email if logged in
-    
-    // --- Dynamically set the total cost label based on payment history ---
+    document.getElementById('customer-name').value = state.session.user.name || '';
+    document.getElementById('customer-email').value = state.session.user.email || '';
+
     if (totalLabel) {
         totalLabel.textContent = (state.session.user.amountReceived > 0) ? 'Total Final Cost:' : 'Total Estimated Cost:';
     }
 
-    // --- Overlay Click Handler ---
     const handleCheckoutOverlayClick = (e) => {
-        if (e.target === checkoutModalOverlay) {
-            hideCheckoutModal();
-        }
+        if (e.target === checkoutModalOverlay) hideCheckoutModal();
     };
-    // Remove previous listener before adding
     checkoutModalOverlay.removeEventListener('click', handleCheckoutOverlayClick);
     checkoutModalOverlay.addEventListener('click', handleCheckoutOverlayClick);
-    // Store handler for removal in hideCheckoutModal
-    checkoutModalOverlay._eventListener = handleCheckoutOverlayClick; 
+    checkoutModalOverlay._eventListener = handleCheckoutOverlayClick;
 
-    // --- Close Button Handler ---
     if (checkoutCloseBtn) {
-        checkoutCloseBtn.removeEventListener('click', hideCheckoutModal); // Remove previous
+        checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
         checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     }
-    
-    // --- Build Summary ---
-    summaryDetailsEl.innerHTML = ''; // Clear previous summary
-    tipAmountInput.value = ''; // Reset tip
+
+    summaryDetailsEl.innerHTML = '';
+    tipAmountInput.value = '';
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
-    summaryList.id = 'checkout-summary-list'; // Add ID for potential styling
+    summaryList.id = 'checkout-summary-list';
 
-    // Ensure state.cart.lockedItems is iterable
     if (!(state.cart.lockedItems instanceof Map)) {
         console.error("state.cart.lockedItems is not a Map in showCheckoutModal");
-        return; // Prevent errors if state is corrupt
+        return;
     }
 
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
-        if (!record || !record.fields) continue; // Skip if record not found or has no fields
+        if (!record || !record.fields) continue;
 
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-        // Ensure quantity respects minimum headcount
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveQuantity = Math.max(itemInfo.quantity || 1, headcountMin);
-        
-        // Ensure price is a valid number before calculation
         const validPrice = typeof price === 'number' && !isNaN(price) ? price : 0;
         const itemTotal = validPrice * effectiveQuantity;
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
-        
+
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            // Basic sanitization: replace < and > to prevent HTML injection
             const sanitizedNote = itemInfo.note.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             noteHtml = `<small class="checkout-summary-note">Note: ${sanitizedNote}</small>`;
         }
-        
+
         listItem.innerHTML = `
             <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${effectiveQuantity})</span> 
+                <span class="summary-item-name">${record.fields.Name} (x${effectiveQuantity})</span>
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
@@ -589,64 +535,52 @@ export async function showCheckoutModal(shopSettings) {
         summaryList.appendChild(listItem);
     }
 
-
     summaryDetailsEl.appendChild(summaryList);
 
-    // --- Totals & Payment Choices ---
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    fullTotalEl.dataset.total = finalTotal; // Store raw total for calculations
+    fullTotalEl.dataset.total = finalTotal;
 
-    // Reset radio buttons and add listeners
     const paymentRadios = document.querySelectorAll('input[name="paymentChoice"]');
     paymentRadios.forEach(radio => {
-        radio.removeEventListener('change', updateCheckoutDisplay); // Remove previous listener
+        radio.removeEventListener('change', updateCheckoutDisplay);
         radio.addEventListener('change', updateCheckoutDisplay);
-        if (radio.value === 'deposit') radio.checked = true; // Default to deposit
+        if (radio.value === 'deposit') radio.checked = true;
     });
-    
-    // --- Terms ---
+
     if (termsContainer && currentShopSettings.terms) {
-        // Basic sanitization for terms
         const sanitizedTerms = currentShopSettings.terms.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, '<br>');
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${sanitizedTerms}</p>`;
-        termsContainer.style.display = 'block'; // Ensure it's visible
+        termsContainer.style.display = 'block';
     } else if (termsContainer) {
-         termsContainer.style.display = 'none'; // Hide if no terms
+         termsContainer.style.display = 'none';
     }
 
-    // --- Tip Listener ---
-    tipAmountInput.removeEventListener('input', updateCheckoutDisplay); // Remove previous
+    tipAmountInput.removeEventListener('input', updateCheckoutDisplay);
     tipAmountInput.addEventListener('input', updateCheckoutDisplay);
-    
-    // --- Initial Calculation ---
-    updateCheckoutDisplay(); // Calculate initial amount due
-    
-    // --- Stripe Initialization ---
+
+    updateCheckoutDisplay();
+
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
         const elements = stripe.elements();
         const cardElementContainer = document.getElementById('card-element');
-        if (cardElementContainer) cardElementContainer.innerHTML = ''; // Clear previous card element
-        
-        // Customize Stripe Element appearance if desired
-        const cardElement = elements.create('card', { 
-            // style: { base: { fontSize: '16px' } } 
-        }); 
-        cardElement.mount('#card-element');
-        checkoutModalOverlay.cardElement = cardElement; // Store reference
+        if (cardElementContainer) cardElementContainer.innerHTML = '';
 
-        // Show modal after setup
+        const cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+        checkoutModalOverlay.cardElement = cardElement;
+
         checkoutModalOverlay.style.display = 'flex';
         setTimeout(() => {
              checkoutModalOverlay.classList.add('active');
-             if(checkoutCloseBtn) checkoutCloseBtn.focus(); // Focus close button for accessibility
-        }, 10); // Small delay ensures transition triggers
+             if(checkoutCloseBtn) checkoutCloseBtn.focus();
+        }, 10);
         document.body.classList.add('modal-open');
 
     } catch (err) {
         console.error("Failed to initialize Stripe payment form:", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
-        hideCheckoutModal(); // Hide if Stripe fails
+        hideCheckoutModal();
     }
 }
 
@@ -654,10 +588,9 @@ export async function showCheckoutModal(shopSettings) {
 export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     if (checkoutModalOverlay) {
-        // --- Clean up event listeners ---
         if (checkoutModalOverlay._eventListener) {
             checkoutModalOverlay.removeEventListener('click', checkoutModalOverlay._eventListener);
-            delete checkoutModalOverlay._eventListener; // Remove stored handler
+            delete checkoutModalOverlay._eventListener;
         }
         const checkoutCloseBtn = document.getElementById('checkout-close-btn');
         if (checkoutCloseBtn) {
@@ -667,26 +600,22 @@ export function hideCheckoutModal() {
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.removeEventListener('change', updateCheckoutDisplay);
         });
-        
-        // --- Hide UI ---
+
         checkoutModalOverlay.classList.remove('active');
-        // Use transitionend for smoother hiding and cleanup
         const handleTransitionEnd = () => {
              checkoutModalOverlay.style.display = 'none';
-             // Optionally clear card element here if needed: checkoutModalOverlay.cardElement?.unmount();
              log('Modal', 'Checkout modal hidden.');
              checkoutModalOverlay.removeEventListener('transitionend', handleTransitionEnd);
         };
         checkoutModalOverlay.addEventListener('transitionend', handleTransitionEnd);
 
-        // Fallback timeout
         setTimeout(() => {
              if (checkoutModalOverlay.style.display !== 'none') {
                  checkoutModalOverlay.style.display = 'none';
                  log('Modal', 'Checkout modal hidden (timeout fallback).');
                  checkoutModalOverlay.removeEventListener('transitionend', handleTransitionEnd);
              }
-        }, 350); // Slightly longer than transition
+        }, 350);
 
         document.body.classList.remove('modal-open');
     }
