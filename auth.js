@@ -37,8 +37,7 @@ async function _handleSuccessfulLogin(payload) {
                 ...payload.user, 
                 isAuthenticated: true,
                 isOwner: payload.ownerData.isOwner,
-                ownerDashboardId: payload.ownerData.ownerDashboardId,
-                associatedSessions: payload.user.associatedSessions || [] // Add this line
+                ownerDashboardId: payload.ownerData.ownerDashboardId
             } 
         } 
     });
@@ -170,7 +169,7 @@ export function handleSignOut() {
     log('Auth', 'User signed out.');
     localStorage.removeItem('jwt');
     setState({
-        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null, associatedSessions: [] } } // Clear associatedSessions on sign out
+        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
     });
     updateUserProfileIcon();
     hideUserModal();
@@ -183,7 +182,7 @@ export function updateUserProfileIcon() {
         userProfileButton.title = `Logged in as ${state.session.user.name}`;
     } else {
         userProfileButton.classList.remove('signed-in');
-        userProfileButton.innerHTML = '&#128100;'; // Person icon
+        userProfileButton.innerHTML = '&#128100;';
         userProfileButton.title = 'Sign In / My Account';
     }
 }
@@ -199,4 +198,37 @@ export function setupAuthEventListeners() {
             hideUserModal();
         }
     });
+
+    // --- NEW SSO EVENT LISTENERS ---
+    const googleSsoBtn = document.getElementById('google-sso-btn');
+    if (googleSsoBtn) {
+        googleSsoBtn.addEventListener('click', () => {
+            netlifyIdentity.open('login');
+        });
+    }
+
+    netlifyIdentity.on('login', async (user) => {
+        try {
+            const netlifyJwt = user.token.access_token;
+            // Call a new serverless function to get our app-specific JWT
+            const response = await fetch('/api/auth-social', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${netlifyJwt}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to sync social login.");
+
+            const appPayload = await response.json();
+            await _handleSuccessfulLogin(appPayload);
+            netlifyIdentity.close();
+
+        } catch (error) {
+            console.error("SSO login error:", error);
+            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            signinMessage.style.color = '#dc3545';
+        }
+    });
+    // --- END NEW SSO EVENT LISTENERS ---
 }
