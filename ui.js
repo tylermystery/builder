@@ -45,9 +45,8 @@ export function toggleLoading(show) {
     const loadingMessage = document.getElementById('loading-message');
     const mainContent = document.querySelector('.main-content'); // Changed to class selector
     if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';
-    if (mainContent) mainContent.style.display = show ? 'none' : (window.innerWidth < 1000 ? 'flex' : 'grid'); // Adjusted for responsive display
+    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
-
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
@@ -81,8 +80,6 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         cards.forEach(card => {
             if (card) fragment.appendChild(card);
         });
-        // Introduce a small delay to allow the browser to render the chunk
-        await new Promise(resolve => setTimeout(resolve, 0));
     }
     catalogContainer.appendChild(fragment);
     
@@ -93,7 +90,6 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
-
 
 let mainGetItemState;
 export function initStateHelpers(helpers) {
@@ -108,10 +104,8 @@ export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
     }
-    // Ensure default includes overridePrice
-    return { quantity: 1, selectedOptionIndex: 0, note: '', overridePrice: null };
+    return { quantity: 1, selectedOptionIndex: 0, note: '' };
 }
-
 
 export function updateItemState(recordId, updates) {
     const existing = getItemState(recordId);
@@ -122,13 +116,8 @@ export function updateItemState(recordId, updates) {
 export function updateLockedItemState(recordId, updates) {
     const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);
     const newState = { ...existing, ...updates };
-    // Ensure overridePrice is explicitly handled or nulled if not present
-    if (!('overridePrice' in newState)) {
-        newState.overridePrice = null;
-    }
     state.cart.lockedItems.set(recordId, newState);
 }
-
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
@@ -147,12 +136,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
+    const notesLabelEl = document.querySelector('label[for="header-goals"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
+    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -165,11 +154,8 @@ export function applyCartLabels(labels) {
     const reserveButtonEl = document.getElementById('checkout-btn');
     if (reserveButtonEl && labels.reserveButtonText) {
         reserveButtonEl.textContent = labels.reserveButtonText;
-        // Store default text for reset later if needed
-        reserveButtonEl.dataset.defaultText = labels.reserveButtonText;
     }
 }
-
 
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
@@ -204,8 +190,7 @@ export async function updateLockedItemStatusIcons() {
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     if (!selectedDateISO) {
         document.querySelectorAll('.locked-item-status-icon').forEach(icon => {
-            icon.textContent = ''; // Clear icon if no date selected
-            if (icon._tippy) icon._tippy.destroy(); // Remove tooltip
+            icon.textContent = '';
         });
         return;
     }
@@ -221,46 +206,25 @@ export async function updateLockedItemStatusIcons() {
         if (!statusIconEl) {
             statusIconEl = document.createElement('span');
             statusIconEl.className = 'locked-item-status-icon';
-            // Prepend to actions for consistent placement
             item.querySelector('.locked-item-actions').prepend(statusIconEl);
         }
-        
-        // Remove previous status classes first
         statusIconEl.classList.remove('available-full', 'available-partial', 'unavailable');
-        
-        // Destroy existing tippy instance before setting new content
-        if (statusIconEl._tippy) {
-            statusIconEl._tippy.destroy();
-        }
-
-        let iconText = '';
-        let tooltipText = dayStatus.reason; // Default tooltip
-
         switch (dayStatus.status) {
             case AVAILABILITY_STATUS.FULL:
-                iconText = '✅';
+                statusIconEl.textContent = '✅';
                 statusIconEl.classList.add('available-full');
                 break;
             case AVAILABILITY_STATUS.PARTIAL:
-                iconText = '🟠';
+                statusIconEl.textContent = '🟠';
                 statusIconEl.classList.add('available-partial');
                 break;
             case AVAILABILITY_STATUS.NONE:
-                iconText = '❌';
+                statusIconEl.textContent = '❌';
                 statusIconEl.classList.add('unavailable');
                 break;
         }
-        statusIconEl.textContent = iconText;
-        
-        // Add tooltip using tippy.js
-        tippy(statusIconEl, {
-            content: tooltipText,
-            placement: 'top',
-            arrow: true
-        });
     }
 }
-
 
 function hideShopSwitcher() {
     const overlay = document.getElementById('shop-switcher-overlay');
@@ -292,21 +256,13 @@ export function showShopSwitcher() {
     overlay.style.display = 'flex';
     setTimeout(() => overlay.classList.add('active'), 10);
 
-    // Ensure listeners are only added once or correctly removed/re-added
-    const closeBtn = document.getElementById('shop-switcher-close-btn');
-    const overlayClickHandler = (e) => {
+    document.getElementById('shop-switcher-close-btn').addEventListener('click', hideShopSwitcher);
+    overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
             hideShopSwitcher();
-            overlay.removeEventListener('click', overlayClickHandler); // Clean up listener
         }
-    };
-    // Remove previous listener if it exists before adding a new one
-    closeBtn.removeEventListener('click', hideShopSwitcher); 
-    closeBtn.addEventListener('click', hideShopSwitcher);
-    overlay.removeEventListener('click', overlayClickHandler);
-    overlay.addEventListener('click', overlayClickHandler);
+    });
 }
-
 
 export function showToast(message, duration = 5000) {
     const toast = document.getElementById('toast-notification');
@@ -319,107 +275,113 @@ export function showToast(message, duration = 5000) {
     }
 }
 
-// REMOVED renderSessionDropdown as it's replaced by populateMyPlansDropdown
+export function renderSessionDropdown() {
+    const container = document.getElementById('session-manager-container');
+    const dropdown = document.getElementById('session-dropdown');
+    const user = state.session.user;
 
-export function populateMyPlansDropdown() { // Removed 'plans' parameter
+    if (!container || !dropdown || !user.isAuthenticated) {
+        if(container) container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    dropdown.innerHTML = '';
+
+    const sessions = user.associatedSessions || [];
+    const newPlanLink = document.createElement('a');
+    newPlanLink.href = window.location.pathname;
+    newPlanLink.textContent = '➕ Start New Plan';
+    dropdown.appendChild(newPlanLink);
+    const divider = document.createElement('div');
+    divider.className = 'divider';
+    dropdown.appendChild(divider);
+
+    if (sessions.length > 0) {
+        sessions.forEach(session => {
+            const link = document.createElement('a');
+            link.href = `/?session=${session.id}`;
+            link.textContent = session.name || 'Unnamed Plan';
+            if (state.session.id === session.id) {
+                link.classList.add('active-session');
+            }
+            dropdown.appendChild(link);
+        });
+    } else {
+        const noItems = document.createElement('span');
+        noItems.textContent = 'No saved plans yet.';
+        noItems.style.padding = '10px 15px';
+        noItems.style.fontSize = '0.9em';
+        noItems.style.color = '#6c757d';
+        dropdown.appendChild(noItems);
+    }
+}
+
+export function populateMyPlansDropdown(plans) {
     const container = document.getElementById('my-plans-container');
     const dropdown = document.getElementById('my-plans-dropdown');
     if (!container || !dropdown) return;
 
-    const associatedSessions = state.session.user.associatedSessions || []; // Read from state
-
-    dropdown.innerHTML = ''; // Clear existing options
+    dropdown.innerHTML = '';
     container.style.display = 'block';
 
     if (state.session.user.isAuthenticated) {
         const defaultOption = document.createElement('option');
         defaultOption.textContent = 'My Saved Plans...';
-        defaultOption.disabled = true; // Initially disabled
-        defaultOption.value = '';
-        defaultOption.selected = true; // Initially selected
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
         dropdown.appendChild(defaultOption);
 
         const newPlanOption = document.createElement('option');
         newPlanOption.textContent = '✨ Create a New Plan';
         newPlanOption.value = 'new';
         dropdown.appendChild(newPlanOption);
-
-        let currentSessionFound = false;
-        if (associatedSessions.length > 0) {
-            associatedSessions.forEach(session => { // Use associatedSessions
+        if (plans && plans.length > 0) {
+            plans.forEach(plan => {
                 const option = document.createElement('option');
-                option.value = session.id; // Use session.id
-                option.textContent = session.name || 'Untitled Plan'; // Use session.name
-                if (session.id === state.session.id) {
+                option.value = plan.id;
+                option.textContent = plan.fields.Name || 'Untitled Plan';
+                if (plan.id === state.session.id) {
                     option.selected = true;
-                    currentSessionFound = true; // Mark that the current session is in the list
+                    defaultOption.disabled = false;
+                    defaultOption.selected = false;
                 }
                 dropdown.appendChild(option);
             });
         }
-        
-        // If the current session is selected, re-enable and de-select the default option
-        if (currentSessionFound) {
-            defaultOption.disabled = false;
-            defaultOption.selected = false;
-        }
-
     } else {
-        // Option for guests to log in
         const guestOption = document.createElement('option');
-        guestOption.textContent = 'Sign In to Save & View Plans...';
-        guestOption.value = 'login-to-save'; // Use a specific value
+        guestOption.textContent = 'Save & View My Plans...';
+        guestOption.value = 'login-to-save';
         dropdown.appendChild(guestOption);
-        
-        // Add event listener specifically for the guest option
-        dropdown.addEventListener('change', (e) => {
-            if (e.target.value === 'login-to-save') {
-                // Trigger the sign-in modal
-                import('./auth.js').then(auth => auth.showUserModal());
-                // Reset dropdown visually
-                e.target.selectedIndex = 0; 
-            }
-        });
     }
 }
 
-
 export async function updateMobileBarAvailability() {
     const mobileBar = document.getElementById('mobile-summary-bar');
-    if (!mobileBar || window.innerWidth > 999) return; // Only run on mobile view
-
+    if (!mobileBar || window.innerWidth > 999) return;
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    
-    // Always remove previous classes first
     mobileBar.classList.remove('available', 'partial', 'unavailable');
 
-    // Only check availability if a date is selected AND there are locked items
     if (selectedDateISO && state.cart.lockedItems.size > 0) {
         const selectedDate = new Date(selectedDateISO);
-        // Get the full records for locked items
-        const lockedItems = Array.from(state.cart.lockedItems.keys())
-                                .map(recordId => state.records.all.find(r => r.id === recordId))
-                                .filter(Boolean); // Filter out any undefined records
-                                
-        // Only proceed if we actually found the locked item records
-        if (lockedItems.length > 0) {
-            const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
-            switch (overallStatus) {
-                case AVAILABILITY_STATUS.FULL:
-                    mobileBar.classList.add('available');
-                    break;
-                case AVAILABILITY_STATUS.PARTIAL:
-                    mobileBar.classList.add('partial');
-                    break;
-                case AVAILABILITY_STATUS.NONE:
-                    mobileBar.classList.add('unavailable');
-                    break;
-            }
+        const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
+        const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
+        switch (overallStatus) {
+            case AVAILABILITY_STATUS.FULL:
+                mobileBar.classList.add('available');
+                break;
+            case AVAILABILITY_STATUS.PARTIAL:
+                mobileBar.classList.add('partial');
+                break;
+            case AVAILABILITY_STATUS.NONE:
+                mobileBar.classList.add('unavailable');
+                break;
         }
-    } 
-    // If no date or no locked items, no class is added (defaults to base color)
+    }
 }
 
+// REPLACE the entire updateCatalogHeader function in: ui.js
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -441,7 +403,7 @@ export function updateCatalogHeader() {
     let currentTitle = '';
 
     // Always start with a clickable "All Categories" link
-    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Items</a>`); // Changed text
+    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
     // Find the active category
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
@@ -458,18 +420,13 @@ export function updateCatalogHeader() {
         const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);
         // The final part of the breadcrumb is just text, not a link
         path.push(`<span>${subcatNames.join(' + ')}</span>`);
-        // If a category was also selected, append subcategory; otherwise, use subcategory as title
-        currentTitle = currentTitle ? `${currentTitle} - ${subcatNames.join(' + ')}` : subcatNames.join(' + ');
+        currentTitle = subcatNames.join(' + ');
     }
     
-    // Only show the breadcrumbs and title if we have navigated deeper than "All Items"
+    // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
     if (path.length > 1) {
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
-    } else {
-        // If only "All Items" is active, maybe show a default title or nothing
-        titleEl.textContent = "All Items"; // Or keep it hidden
-        titleEl.style.display = 'block'; // Or 'none'
     }
 }
