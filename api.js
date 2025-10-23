@@ -394,10 +394,20 @@ export async function fetchCuratedImagesByRecord(record) {
         
         const data = await response.json();
         
-        // Extract the ImageURL field from the curated records
+// Extract the ImageURL field from the curated records
         const imageUrls = data.records
             .map(r => r.fields.ImageURL)
-            .filter(url => url);
+            .filter(url => url)
+            .map(url => {
+                // NEW STEP: Check if it's a Cloudinary URL
+                if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+                    const parts = url.split('/upload/');
+                    // Add f_auto (format auto) to convert HEIC to JPG/WebP
+                    // This is the entire fix for this function.
+                    return `${parts[0]}/upload/f_auto/${parts[1]}`;
+                }
+                return url; // Return original if not a Cloudinary URL
+            });
             
         return imageUrls;
         
