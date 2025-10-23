@@ -1,11 +1,9 @@
 // FILE: state.js
 /*
- * Version: 3.2.1
- * Last Modified: 2025-10-21
+ * Version: 3.2.0
+ * Last Modified: 2025-09-24
  *
  * Changelog:
- * v3.2.1 - 2025-10-21
- * - Added `associatedSessions` array to user state for My Plans dropdown.
  * v3.2.0 - 2025-09-24
  * - Added `flaggedUsers` and `bannedUsers` sets for moderation.
  * - Added a new Pusher channel map for item-specific chats.
@@ -41,10 +39,9 @@ export let state = {
             email: '',
             amountReceived: 0,
             paymentHistory: [], // Replaces amountReceivedNote
-            rsvps: new Set(),
+            rsvps: new Set(), // ADD THIS LINE
             isOwner: false,
-            ownerDashboardId: null,
-            associatedSessions: [], // Add this line
+            ownerDashboardId: null
         },
         userProfiles: new Map(),
         reactions: new Map(),
