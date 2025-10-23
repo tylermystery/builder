@@ -347,8 +347,8 @@ export async function fetchImagesByTags(tags, retries = 2) {
         }
         
         const imageUrls = data.resources.map(image => {
-            let transformations = 'c_fill,g_auto,w_600,h_520';
-            if (image.format === 'gif') {
+        // ADDED ,f_auto to the transformation string
+            let transformations = 'c_fill,g_auto,w_600,h_520,f_auto';            if (image.format === 'gif') {
                 transformations = 'c_fit,w_600,h_520';
             }
             const urlParts = image.secure_url.split('/upload/');
