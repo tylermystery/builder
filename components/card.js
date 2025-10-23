@@ -62,11 +62,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const imageResults = await Promise.all(imagePromises);
         const collageImages = imageResults.flatMap(res => res.imageUrls);
 
-        let imageContainerHTML = `<div class="event-card-image-container collage-container">`; // Removed lazy-load from container
+        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
             imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
         } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`; // Keep lazy load on individual images
+            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
@@ -81,7 +81,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         `;
         return groupingCard;
     }
-
 
     if (fields['Item Type'] === 'Event') {
         eventCard.className = 'event-card event-type-card';
@@ -117,30 +116,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-    const unitPrice = getRecordPrice(record, itemState.selectedOptionIndex); // Renamed for clarity
-    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const isLocked = state.cart.lockedItems.has(record.id);
-    // Ensure quantity respects minimum on initial render
-    const initialQuantity = Math.max(itemState.quantity || 1, headcountMin);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${initialQuantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-
-
-    // --- Updated Price HTML Logic ---
-    let priceHTML = '';
-    if (headcountMin > 1 && typeof unitPrice === 'number' && unitPrice > 0) {
-        const minimumTotalPrice = unitPrice * headcountMin;
-        // --- Updated String Logic ---
-        const pluralTypeLabel = pricingType && pricingType.toLowerCase().includes('guest') ? 'guests' : 'items'; // Use 'guests' or 'items'
-        priceHTML = `$${minimumTotalPrice.toFixed(2)} <span class="pricing-type">minimum for ${headcountMin} ${pluralTypeLabel}</span>`;
-        // --- End Update ---
-    } else if (typeof unitPrice === 'number') {
-        const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
-        priceHTML = `$${unitPrice.toFixed(2)}${pricingTypeHTML}`;
-    } else {
-        priceHTML = 'N/A'; // Handle cases where price might not be a number
-    }
-    // --- End Update ---
-
+    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
+    const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+    const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
@@ -168,16 +149,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             e.stopPropagation();
             quantityInput.stepDown();
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-         // Add change listener to enforce min value directly on input change
-        quantityInput.addEventListener('change', (e) => {
-            e.stopPropagation(); // Prevent card click
-            const min = parseInt(e.target.min, 10);
-            if (parseInt(e.target.value, 10) < min) {
-                e.target.value = min; // Correct value if manually typed below min
-            }
-             // Ensure the event bubbles up for state updates in events.js
-            e.target.dispatchEvent(new CustomEvent('change', { bubbles: true }));
         });
     }
 
