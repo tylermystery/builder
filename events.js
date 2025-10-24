@@ -312,6 +312,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         categoryFiltersContainer.prepend(planFilterBtn);
     }
 
+    // --- INSERT NEW CODE HERE ---
+    // --- Add My Likes Button ---
+    const likesFilterBtn = document.createElement('button');
+    likesFilterBtn.className = 'filter-btn';
+    likesFilterBtn.id = 'liked-items-filter-btn'; // Use the ID we planned
+    likesFilterBtn.textContent = '❤️ My Likes'; // Set the text
+    if (categoryFiltersContainer) {
+        // Prepend it right after the My Plan button
+        categoryFiltersContainer.prepend(likesFilterBtn);
+    }
+    // --- END NEW CODE ---
+
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
         const categories = categoryRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
