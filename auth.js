@@ -219,14 +219,36 @@ async function handleUpdateUserPrefs(e) {
     }
 }
 
+// FILE: auth.js (REPLACE handleSignOut function)
+
 export function handleSignOut() {
-    log('Auth', 'User signed out.');
-    localStorage.removeItem('jwt');
+    log('Auth', 'User signed out.'); //
+    localStorage.removeItem('jwt'); //
+    localStorage.removeItem('tempLikes'); // Clear any temporary likes on sign out
+
+    // Reset user state, including clearing likedItemIds
     setState({
-        session: { ...state.session, user: { isAuthenticated: false, id: null, name: '', email: '', isOwner: false, ownerDashboardId: null } }
+        session: {
+            ...state.session,
+            user: {
+                isAuthenticated: false, //
+                id: null, //
+                name: '', //
+                email: '', //
+                amountReceived: 0, // Reset financial info if needed
+                paymentHistory: [],
+                rsvps: new Set(),
+                isOwner: false, //
+                ownerDashboardId: null, //
+                likedItemIds: new Set() // Clear liked items
+            }
+        }
     });
-    updateUserProfileIcon();
-    hideUserModal();
+
+    updateUserProfileIcon(); //
+    hideUserModal(); //
+    populateUserPlans(null); // Clear/reset plans dropdown - Ensure accessible
+    applyFiltersAndSort(imageCache); // Re-apply filters for logged-out state - Ensure accessible
 }
 
 export function updateUserProfileIcon() {
