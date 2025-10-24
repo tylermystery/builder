@@ -968,8 +968,8 @@ export async function toggleUserLike(itemId) {
     log('API', `Toggling like for item ${itemId} for user ${state.session.user.id}`);
 
     try {
-        const response = await fetch('/api/toggle-like', {
-            method: 'POST',
+        const response = await fetch('/api/like-temp', { // Use temporary path
+        method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
