@@ -13,7 +13,7 @@ import { initializeItemChat } from './chat.js';
 // Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
-export * from './components/sidebar.js';
+export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, applyCartLabels, updateHeader as updateSidebarHeader } from './components/sidebar.js';
 export * from './utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
