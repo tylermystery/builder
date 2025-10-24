@@ -97,12 +97,12 @@ async function _handleSuccessfulLogin(payload) {
 
     // Trigger events and update UI
     document.dispatchEvent(new CustomEvent('userLoggedIn')); //
-    await populateUserPlans(payload.user.id); // Refresh user plans dropdown - Ensure populateUserPlans is imported or accessible
+    //await populateUserPlans(payload.user.id); // Refresh user plans dropdown - Ensure populateUserPlans is imported or accessible
     updateUserProfileIcon(); //
     hideUserModal(); //
 
     // Re-apply filters which might now include newly synced "My Likes"
-    applyFiltersAndSort(imageCache); // Ensure applyFiltersAndSort and imageCache are accessible
+    //applyFiltersAndSort(imageCache); // Ensure applyFiltersAndSort and imageCache are accessible
 }
 
 export function showUserModal() {
