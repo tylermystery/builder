@@ -22,54 +22,77 @@ async function populateUserPlans(userId) {
     }
 }
 
+// FILE: main.js (REPLACE syncUiWithUrl function)
+
 function syncUiWithUrl() {
-    console.log('[syncUiWithUrl] Fired. Current URL:', window.location.href);
-    const params = new URLSearchParams(window.location.search);
-    const category = params.get('category');
-    const subcategories = params.get('subcategory')?.split(',');
-    const openItemId = params.get('openItem');
-    const view = params.get('view');
-    console.log('[syncUiWithUrl] Parsed params:', { view, category, subcategories, openItemId });
+    console.log('[syncUiWithUrl] Fired. Current URL:', window.location.href); //
+    const params = new URLSearchParams(window.location.search); //
+    const category = params.get('category'); //
+    const subcategories = params.get('subcategory')?.split(','); //
+    const openItemId = params.get('openItem'); //
+    const view = params.get('view'); //
+    console.log('[syncUiWithUrl] Parsed params:', { view, category, subcategories, openItemId }); //
 
-    ui.hideDetailModal();
-    ui.hideItineraryModal();
-    ui.hidePresentationView();
+    // Close any open overlays first
+    ui.hideDetailModal(); //
+    ui.hideItineraryModal(); //
+    ui.hidePresentationView(); //
 
-    const categoryFilters = document.getElementById('category-filters');
-    categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    if (view === 'plan') {
-        document.getElementById('plan-filter-btn')?.classList.add('active');
-    } else if (category) {
-        document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active');
-    } else {
-        document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
+    // --- Sync Category/View Buttons ---
+    const categoryFilters = document.getElementById('category-filters'); //
+    if (categoryFilters) { // Add safety check
+        categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
+
+        // Determine which main filter button should be active
+        if (view === 'plan') {
+            document.getElementById('plan-filter-btn')?.classList.add('active'); //
+        } else if (view === 'likes') {
+            document.getElementById('liked-items-filter-btn')?.classList.add('active'); //
+        } else if (category) {
+            document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active'); //
+        } else {
+            // Default to 'All' if no specific view or category is set
+            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active'); //
+        }
     }
-    
-    const subcategoryFilters = document.getElementById('subcategory-filters');
-    subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-    if (subcategories) {
-        subcategories.forEach(subcat => {
-            subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active');
-        });
-    }
 
-    applyFiltersAndSort(imageCache);
-    
-    setTimeout(() => {
+    // --- Sync Subcategory Buttons ---
+    const subcategoryFilters = document.getElementById('subcategory-filters'); //
+     if (subcategoryFilters) { // Add safety check
+         // Make sure subcategories are generated based on the active category first
+         updateSubcategoryButtons(); // Ensure correct subcats are visible - Make sure this function is accessible
+
+         subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
+         if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
+             subcategories.forEach(subcat => {
+                 subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active'); //
+             });
+         }
+     }
+
+    // Re-apply filters based on the synced UI state
+    applyFiltersAndSort(imageCache); //
+
+    // --- Handle opening modals/views based on URL ---
+    // Use setTimeout to allow filters to apply and DOM to update first
+    setTimeout(() => { //
         if (view === 'present') {
-            ui.showPresentationView('favorites');
+            ui.showPresentationView('ideas'); // Changed from 'favorites'
         } else if (view === 'itinerary') {
-            ui.showItineraryModal();
+            ui.showItineraryModal(); //
         } else if (openItemId) {
-            const recordToOpen = state.records.all.find(r => r.id === openItemId);
-            
+            const recordToOpen = state.records.all.find(r => r.id === openItemId); //
             if (recordToOpen) {
-                ui.showDetailModal(recordToOpen);
+                ui.showDetailModal(recordToOpen); //
+            } else {
+                console.warn(`[syncUiWithUrl] Record ID ${openItemId} not found in state.records.all.`);
+                // Optionally remove invalid openItem param from URL
+                // updateUrl({ openItem: null });
             }
         }
-    }, 100);
+        // No specific action needed for view=likes or view=plan here, applyFiltersAndSort handles the main content area
+    }, 100); // Small delay
 }
-
 
 async function initialize() {
     log('Main', '1. Initialization started.');
