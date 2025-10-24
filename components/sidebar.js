@@ -105,32 +105,41 @@ export async function updateEventPlanSection() {
     ui.observeLazyImages(container);
 }
 
-export async function updateFavoritesCarousel() {
-    log('Sidebar', `Updating favorites carousel with ${state.cart.items.size} items.`);
-    const favoritesSection = document.getElementById('favorites-section');
-    const favoritesCarousel = document.getElementById('favorites-carousel');
-    if (!favoritesSection || !favoritesCarousel) return;
+// FILE: components/sidebar.js (Replace the function definition)
+
+export async function updateIdeasCarousel() { // Renamed from updateFavoritesCarousel
+    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`); // Updated log message
+    const ideasSection = document.getElementById('favorites-section'); // Consider renaming ID to 'ideas-section'
+    const ideasCarousel = document.getElementById('favorites-carousel'); // Consider renaming ID to 'ideas-carousel'
+    if (!ideasSection || !ideasCarousel) return;
 
     if (state.cart.items.size === 0) {
-        favoritesSection.style.display = 'none';
+        ideasSection.style.display = 'none'; // Hide if empty
         return;
     }
-    favoritesSection.style.display = 'block';
-    favoritesCarousel.innerHTML = '';
-    const imageCache = new Map();
+    ideasSection.style.display = 'block'; // Show if not empty
+    ideasCarousel.innerHTML = ''; // Clear existing items
+    const imageCache = new Map(); // Use a local cache for this render pass
+
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
             try {
+                // Assuming createFavoriteCardElement is the correct function for idea cards
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
-                if (card) favoritesCarousel.appendChild(card);
+                if (card) ideasCarousel.appendChild(card);
             } catch (error) {
-                console.error(`Failed to create favorite card for ${record.fields.Name}:`, error);
+                console.error(`Failed to create idea card for ${record.fields.Name}:`, error);
             }
         }
     }
-    ui.observeLazyImages(favoritesCarousel);
-    updateTotalCost();
+    // Ensure lazy loading is applied after adding new cards
+    if (typeof ui !== 'undefined' && ui.observeLazyImages) {
+         ui.observeLazyImages(ideasCarousel);
+    } else {
+         console.warn("ui.observeLazyImages not found during carousel update.");
+    }
+    // updateTotalCost(); // Recalculating total cost isn't necessary when only ideas change
 }
 
 export function updateHeader() {
