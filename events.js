@@ -349,39 +349,41 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
 
-    safeAddEventListener('category-filters', 'click', (e) => {
-        const planFilterBtn = document.getElementById('plan-filter-btn');
-        const clickedBtn = e.target.closest('.filter-btn');
-    
-        if (!clickedBtn) return;
-    
-        const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
-        
-        // <-- NEW URL LOGIC -->
-        if (isPlanFilterClick) {
-            updateUrl({ category: null, subcategory: null, view: 'plan' });
-        } else {
-            const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter;
-            updateUrl({ category: newCategory, subcategory: null, view: null });
-        }
-        // <-- END NEW URL LOGIC -->
-    
-        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-       
-        if (isPlanFilterClick) {
-            planFilterBtn.classList.add('active');
-            updateSubcategoryButtons(); 
-        } else {
-            if (planFilterBtn) {
-                planFilterBtn.classList.remove('active');
-            }
-            clickedBtn.classList.add('active');
-            updateSubcategoryButtons();
-        }
-        
-        applyFiltersAndSort(imageCache);
-    });
+// FILE: events.js (REPLACE #category-filters click listener)
 
+safeAddEventListener('category-filters', 'click', (e) => {
+    const planFilterBtn = document.getElementById('plan-filter-btn');
+    const likesFilterBtn = document.getElementById('liked-items-filter-btn'); // Get the new button
+    const clickedBtn = e.target.closest('.filter-btn');
+
+    if (!clickedBtn) return;
+
+    const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn'; //
+    const isLikesFilterClick = clickedBtn.id === 'liked-items-filter-btn'; //
+
+    // Deactivate all buttons first
+    categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
+
+    // Activate the clicked button
+    clickedBtn.classList.add('active'); //
+
+    // Update URL and Subcategories based on the clicked button type
+    if (isPlanFilterClick) {
+        updateUrl({ category: null, subcategory: null, view: 'plan' }); //
+        updateSubcategoryButtons(); //
+    } else if (isLikesFilterClick) {
+        updateUrl({ category: null, subcategory: null, view: 'likes' }); //
+        updateSubcategoryButtons(); // Ensure subcategories are reset/cleared
+    } else {
+        // Handle regular category/all clicks
+        const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter; //
+        updateUrl({ category: newCategory, subcategory: null, view: null }); //
+        updateSubcategoryButtons(); //
+    }
+
+    applyFiltersAndSort(imageCache); // Trigger filtering
+});
+    
     safeAddEventListener('subcategory-filters', 'click', (e) => {
         if (e.target.classList.contains('subcategory-filter-btn')) {
             e.target.classList.toggle('active');
