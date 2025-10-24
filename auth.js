@@ -21,33 +21,87 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
-// --- NEW: Refactored function to handle a successful login from any method ---
+// FILE: auth.js (REPLACE _handleSuccessfulLogin function)
+
+// Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
+    // Associate session if one exists before login
     if (state.session.id) {
-        await associateSessionWithUser(state.session.id, payload.user.id);
+        await associateSessionWithUser(state.session.id, payload.user.id); //
     }
-    
-    localStorage.setItem('jwt', payload.token);
-                
-    setState({ 
-        session: { 
-            ...state.session, 
-            user: { 
-                ...state.session.user, 
-                ...payload.user, 
-                isAuthenticated: true,
-                isOwner: payload.ownerData.isOwner,
-                ownerDashboardId: payload.ownerData.ownerDashboardId
-            } 
-        } 
+
+    localStorage.setItem('jwt', payload.token); //
+
+    // --- START LIKES INTEGRATION ---
+    const likedItemIds = payload.user.likedItemIds || []; // Get liked IDs from payload
+    const currentLikedItemIds = new Set(likedItemIds); // Initialize Set with persistent likes
+    let syncPromises = [];
+
+    // Sync temporary likes stored in localStorage
+    const tempLikesString = localStorage.getItem('tempLikes');
+    if (tempLikesString) {
+        try {
+            const tempLikes = JSON.parse(tempLikesString);
+            if (Array.isArray(tempLikes) && tempLikes.length > 0) {
+                console.log(`[Auth] Found ${tempLikes.length} temporary likes to sync.`);
+                tempLikes.forEach(itemId => {
+                    // Only sync if it's not already in the persistent list
+                    if (!currentLikedItemIds.has(itemId)) {
+                        console.log(`[Auth] Syncing temporary like for item: ${itemId}`);
+                        // Call toggleUserLike - it handles adding the like on the backend
+                        // We use .then() here to avoid awaiting each one individually,
+                        // allowing them to run concurrently but still handling errors.
+                        syncPromises.push(
+                            api.toggleUserLike(itemId)
+                                .then(result => {
+                                    if (result.success && result.liked) {
+                                        currentLikedItemIds.add(itemId); // Update local state immediately
+                                    }
+                                })
+                                .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err))
+                        );
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Auth] Error parsing temporary likes from localStorage:', e);
+        } finally {
+             localStorage.removeItem('tempLikes'); // Clear temp likes after attempting sync
+             console.log('[Auth] Cleared temporary likes from localStorage.');
+        }
+    }
+    // --- END LIKES INTEGRATION ---
+
+
+    // Wait for all sync operations to attempt completion (errors are logged individually)
+    await Promise.allSettled(syncPromises);
+    console.log('[Auth] Like sync process finished.');
+
+    // Update the main application state
+    setState({
+        session: {
+            ...state.session,
+            user: {
+                ...state.session.user, // Keep existing user details like payment history
+                ...payload.user, // Overwrite with basic user info from payload
+                isAuthenticated: true, //
+                isOwner: payload.ownerData.isOwner, //
+                ownerDashboardId: payload.ownerData.ownerDashboardId, //
+                likedItemIds: currentLikedItemIds // Set the final liked IDs Set
+            }
+        }
     });
 
-    console.log("User state after update:", state.session.user);
+    console.log("[Auth] User state after login and sync:", state.session.user);
 
-    document.dispatchEvent(new CustomEvent('userLoggedIn'));
-    
-    updateUserProfileIcon();
-    hideUserModal();
+    // Trigger events and update UI
+    document.dispatchEvent(new CustomEvent('userLoggedIn')); //
+    await populateUserPlans(payload.user.id); // Refresh user plans dropdown - Ensure populateUserPlans is imported or accessible
+    updateUserProfileIcon(); //
+    hideUserModal(); //
+
+    // Re-apply filters which might now include newly synced "My Likes"
+    applyFiltersAndSort(imageCache); // Ensure applyFiltersAndSort and imageCache are accessible
 }
 
 export function showUserModal() {
