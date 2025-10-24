@@ -93,3 +93,9 @@
   from = "/api/hello"
   to = "/.netlify/functions/hello-world"
   status = 200
+# Inside netlify.toml, add this block with the others
+
+[[redirects]]
+  from = "/api/toggle-like"
+  to = "/.netlify/functions/toggle-like"
+  status = 200
