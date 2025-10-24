@@ -430,3 +430,52 @@ export function updateCatalogHeader() {
         titleEl.style.display = 'block';
     }
 }
+
+// FILE: ui.js (ADD THIS FUNCTION)
+
+// --- Function to show login prompt for likes ---
+let promptTimeout;
+export function showLoginPromptForLikes() {
+    const profileButton = document.getElementById('user-profile-button');
+    if (!profileButton) return;
+
+    // Create prompt element if it doesn't exist
+    let promptElement = document.getElementById('login-prompt-likes');
+    if (!promptElement) {
+        promptElement = document.createElement('div');
+        promptElement.id = 'login-prompt-likes';
+        promptElement.style.position = 'absolute';
+        promptElement.style.bottom = '110%'; // Position above the button
+        promptElement.style.right = '0';
+        promptElement.style.backgroundColor = '#333';
+        promptElement.style.color = 'white';
+        promptElement.style.padding = '8px 12px';
+        promptElement.style.borderRadius = '4px';
+        promptElement.style.fontSize = '0.85em';
+        promptElement.style.whiteSpace = 'nowrap';
+        promptElement.style.opacity = '0';
+        promptElement.style.transition = 'opacity 0.3s ease';
+        promptElement.style.pointerEvents = 'none'; // Prevent interaction
+        promptElement.textContent = 'Log in to save your likes & get updates!';
+        // Append near the button (adjust based on your header structure if needed)
+        profileButton.parentNode.style.position = 'relative'; // Ensure parent allows absolute positioning
+        profileButton.parentNode.appendChild(promptElement);
+    }
+
+    // Clear previous timeout if prompt is shown again quickly
+    if (promptTimeout) clearTimeout(promptTimeout);
+
+    // Show the prompt
+    requestAnimationFrame(() => {
+         promptElement.style.opacity = '1';
+    });
+
+
+    // Hide after a delay
+    promptTimeout = setTimeout(() => {
+        promptElement.style.opacity = '0';
+        // Optional: Remove element after fade out if desired
+        // setTimeout(() => promptElement.remove(), 300);
+    }, 4000); // Show for 4 seconds
+}
+// --- END login prompt function ---
