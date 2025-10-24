@@ -329,7 +329,7 @@ export async function saveSessionToAirtable() {
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         // Link to the current store
-        "Store": state.ui.activeShopId ? [state.ui.activeShopId] : null
+        "Stores": state.ui.activeShopId ? [state.ui.activeShopId] : null
     };
     if (formattedDate) {
         fields["Date"] = formattedDate; // Ensure field name matches Airtable
