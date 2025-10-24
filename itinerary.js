@@ -43,7 +43,7 @@ export function setupItineraryEventListeners() {
                 }
             }
             ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateFavoritesCarousel();
+            ui.updateIdeasCarousel();
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
@@ -67,7 +67,7 @@ export function setupItineraryEventListeners() {
                 }
             }
             ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateFavoritesCarousel();
+            ui.updateIdeasCarousel();
             ui.updateTotalCost();
             ui.updateEventPlanSection();
             ui.updateEventPlanDateDisplay();
@@ -188,7 +188,7 @@ export async function renderItinerary() {
             state.cart.lockedItems.delete(recordId);
             ui.updateTotalCost();
             ui.updateEventPlanSection();
-            ui.updateFavoritesCarousel();
+            ui.updateIdeasCarousel();
             e.target.closest('.itinerary-item').remove();
             triggerSave();
         });
