@@ -633,3 +633,152 @@ export async function addRsvpToEvent(eventId, userId) {
         return null;
     }
 }
+
+Great! Let's move on to integrating the frontend for the "User Likes" feature.
+
+Here are the code changes for Phase 2, provided as complete file replacements or specific modification blocks.
+
+Step 2.1: State Management (state.js)
+Replace the entire contents of state.js with this:
+
+JavaScript
+
+// FILE: state.js (REPLACE ENTIRE FILE)
+/*
+ * Version: 3.3.0
+ * Last Modified: 2025-10-24
+ *
+ * Changelog:
+ * v3.3.0 - 2025-10-24
+ * - Added `likedItemIds` Set to state.session.user for persistent like tracking.
+ * v3.2.0 - 2025-09-24
+ * - Added `flaggedUsers` and `bannedUsers` sets for moderation.
+ * - Added a new Pusher channel map for item-specific chats.
+ * v3.1.0 - 2025-09-21
+ * - Added a `stores` object to the state to hold records from the new Stores table.
+ * v3.0.0 - 2025-09-20
+ * - Updated user session object to support full authentication state.
+ */
+
+export let state = {
+    stores: {
+        all: [],
+    },
+    records: {
+        all: [],
+        filtered: [],
+    },
+    cart: {
+        items: new Map(),       // "Ideas" (formerly Favorites), populated by "Save for Later"
+        lockedItems: new Map(), // "Event Plan"
+    },
+    eventDetails: {
+        combined: new Map(),
+    },
+    session: {
+        id: null,
+        isOwned: false,
+        storeId: null,
+        user: {
+            isAuthenticated: false,
+            id: null,
+            name: '',
+            email: '',
+            amountReceived: 0,
+            paymentHistory: [],
+            rsvps: new Set(),
+            isOwner: false,
+            ownerDashboardId: null,
+            likedItemIds: new Set(), // ADDED: Stores persistent liked item IDs
+        },
+        userProfiles: new Map(),
+        reactions: new Map(),
+        flaggedUsers: new Set(),
+        bannedUsers: new Set(),
+    },
+    calendar: {
+        busyTimes: new Map(),
+    },
+    ui: {
+        recordsCurrentlyDisplayed: 0,
+        isLoadingMore: false,
+        saveState: 'SAVED',
+        isInitializing: true,
+        activeShopId: null,
+    },
+};
+
+// Allows modules to update the state and trigger re-renders if needed
+export function setState(newState) {
+    // Basic merge, assumes newState is flat or carefully structured
+    // For nested updates like user properties, the caller should provide the full nested object
+    state = { ...state, ...newState };
+
+    // Example deep merge for session.user if needed (more robust but complex)
+    // if (newState.session && newState.session.user) {
+    //     state = {
+    //         ...state,
+    //         session: {
+    //             ...state.session,
+    //             user: {
+    //                 ...state.session.user,
+    //                 ...newState.session.user
+    //             }
+    //         }
+    //     };
+    //     // Handle other potential nested updates similarly
+    // } else {
+    //      state = { ...state, ...newState };
+    // }
+
+    // Optionally, trigger events or re-renders here if using a framework/library
+    // document.dispatchEvent(new CustomEvent('stateChanged'));
+}
+Step 2.2: API Layer (api.js)
+Add the following function to the end of api.js:
+
+JavaScript
+
+// FILE: api.js (ADD THIS FUNCTION)
+
+// --- NEW FUNCTION TO TOGGLE USER LIKE ---
+export async function toggleUserLike(itemId) {
+    if (!state.session.user.isAuthenticated || !state.session.user.id) {
+        log('API', 'User not authenticated. Cannot toggle like.');
+        throw new Error('You must be logged in to like items.');
+    }
+
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+        log('API', 'JWT token not found. Cannot toggle like.');
+        throw new Error('Authentication token missing.');
+    }
+
+    log('API', `Toggling like for item ${itemId} for user ${state.session.user.id}`);
+
+    try {
+        const response = await fetch('/api/toggle-like', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ itemId: itemId }) // Pass itemId in the body
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to toggle like (Status: ${response.status})`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully toggled like for item ${itemId}. New status: ${result.liked ? 'Liked' : 'Unliked'}`);
+        return result; // Should return { success: true, liked: boolean }
+
+    } catch (error) {
+        console.error("Error toggling like:", error);
+        log('API', `Failed to toggle like: ${error.message}`);
+        throw error; // Re-throw the error to be caught by the caller
+    }
+}
+// --- END NEW FUNCTION ---
