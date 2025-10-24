@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: main.js
+// FILE: main.js (REPLACE ENTIRE FILE)
 
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -7,22 +7,36 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
+import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
+// Corrected import line below:
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 
 const imageCache = new Map();
+
+// Make imageCache accessible (consider if a better pattern exists, e.g., passing via init)
+window.imageCache = imageCache; // Simple global access for now
+
 async function populateUserPlans(userId) {
-    if (userId) {
-        const plans = await api.fetchPlansForUser(userId);
-        ui.populateMyPlansDropdown(plans);
+    // Check if ui.populateMyPlansDropdown exists before calling
+    if (typeof ui.populateMyPlansDropdown === 'function') {
+        if (userId) {
+            const plans = await api.fetchPlansForUser(userId);
+            ui.populateMyPlansDropdown(plans); //
+        } else {
+            ui.populateMyPlansDropdown([]); //
+        }
     } else {
-        ui.populateMyPlansDropdown([]);
+        console.error("ui.populateMyPlansDropdown is not defined or imported correctly.");
     }
 }
 
-// FILE: main.js (REPLACE syncUiWithUrl function)
+
+// Ensure applyFiltersAndSort is accessible globally or passed correctly
+// Make applyFiltersAndSort accessible (consider if a better pattern exists)
+window.applyFiltersAndSort = applyFiltersAndSort;
+
 
 function syncUiWithUrl() {
     console.log('[syncUiWithUrl] Fired. Current URL:', window.location.href); //
@@ -60,7 +74,13 @@ function syncUiWithUrl() {
     const subcategoryFilters = document.getElementById('subcategory-filters'); //
      if (subcategoryFilters) { // Add safety check
          // Make sure subcategories are generated based on the active category first
-         updateSubcategoryButtons(); // Ensure correct subcats are visible - Make sure this function is accessible
+         // Check if updateSubcategoryButtons is defined before calling
+         if (typeof updateSubcategoryButtons === 'function') {
+              updateSubcategoryButtons(); // Ensure correct subcats are visible
+         } else {
+              console.error("updateSubcategoryButtons is not defined or imported correctly.");
+         }
+
 
          subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
          if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
@@ -71,7 +91,12 @@ function syncUiWithUrl() {
      }
 
     // Re-apply filters based on the synced UI state
-    applyFiltersAndSort(imageCache); //
+    // Check if applyFiltersAndSort is defined before calling
+    if (typeof applyFiltersAndSort === 'function') {
+        applyFiltersAndSort(imageCache); //
+    } else {
+         console.error("applyFiltersAndSort is not defined or imported correctly.");
+    }
 
     // --- Handle opening modals/views based on URL ---
     // Use setTimeout to allow filters to apply and DOM to update first
@@ -94,206 +119,292 @@ function syncUiWithUrl() {
     }, 100); // Small delay
 }
 
+
 async function initialize() {
-    log('Main', '1. Initialization started.');
-    ui.initStateHelpers({ getItemState: ui.getItemState });
-    document.addEventListener('planCreated', () => {
-        if (state.session.user.isAuthenticated) {
-            populateUserPlans(state.session.user.id);
+    log('Main', '1. Initialization started.'); //
+    ui.initStateHelpers({ getItemState: ui.getItemState }); //
+
+    // Add listener for custom event 'userLoggedIn' to refresh plans
+     document.addEventListener('userLoggedIn', () => {
+         log('Main', "'userLoggedIn' event caught, repopulating user plans.");
+         populateUserPlans(state.session.user.id);
+         // Optionally refresh other UI elements that depend on logged-in state
+         // e.g., re-apply filters if "My Likes" might change visibility
+         if (typeof applyFiltersAndSort === 'function') {
+              applyFiltersAndSort(imageCache);
+         }
+     });
+
+    document.addEventListener('planCreated', () => { //
+        if (state.session.user.isAuthenticated) { //
+            populateUserPlans(state.session.user.id); //
         }
     });
-    document.addEventListener('sessionReady', () => {
-        log('Main', '"sessionReady" event received, re-initializing session chat.');
-        initializeSessionChat();
+    document.addEventListener('sessionReady', () => { //
+        log('Main', '"sessionReady" event received, re-initializing session chat.'); //
+        // Check if initializeSessionChat is defined before calling
+        if (typeof initializeSessionChat === 'function') {
+             initializeSessionChat(); //
+        } else {
+             console.error("initializeSessionChat is not defined or imported correctly.");
+        }
+
+        // Update UI elements that depend on session data *after* it's loaded
+        ui.updateHeader();
+        ui.updateEventPlanSection();
+        ui.updateIdeasCarousel(); // Renamed from updateFavoritesCarousel
+        ui.updateTotalCost();
+        // Update liked icons for all visible cards now that session user state (likedItemIds) might be ready
+        document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
+             ui.updateCardIcon(card.dataset.recordId);
+        });
     });
-    ui.toggleLoading(true);
+
+    ui.toggleLoading(true); //
     try {
-        const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
-        state.stores.all = stores;
-        state.records.all = records;
+        // Fetch stores and items data first
+        const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]); //
+        // Immediately update state with essential catalog data
+        setState({ // Use setState for potential reactivity
+            stores: { all: stores },
+            records: { all: records }
+        });
+        log('Main', `Fetched ${stores.length} stores and ${records.length} items.`);
+
     } catch (error) {
-        console.error("Failed to load initial data:", error);
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}.</p>`;
-        return;
+        console.error("Failed to load initial store/item data:", error); //
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please refresh.</p>`; //
+        ui.toggleLoading(true); // Keep loading indicator on error
+        return; // Stop initialization
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const sessionId = urlParams.get('session');
-    let shopId = urlParams.get('shopId');
+    const urlParams = new URLSearchParams(window.location.search); //
+    const sessionId = urlParams.get('session'); //
+    let shopId = urlParams.get('shopId'); //
     let activeShop = null;
+
+    // --- Determine Active Shop (Simplified Logic) ---
+    // Priority: shopId URL param -> sessionId -> localStorage -> Default ('Tyler's Mystery Tours')
     if (shopId) {
-        activeShop = state.stores.all.find(s => s.id === shopId);
+        activeShop = state.stores.all.find(s => s.id === shopId); //
+        log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
     }
-    if (!activeShop && sessionId) {
-        await api.loadSessionFromAirtable(sessionId);
-        if (state.session.storeId) {
-            activeShop = state.stores.all.find(s => s.id === state.session.storeId);
-        }
+
+    // Load session *before* determining shop from session, as session load might set state.session.storeId
+    if (sessionId) {
+         log('Main', `Session ID found in URL: ${sessionId}. Loading session...`);
+         await api.loadSessionFromAirtable(sessionId); // This sets state.session.storeId if found
+         // Check again for shop based on loaded session's storeId ONLY if activeShop wasn't set by URL param
+         if (!activeShop && state.session.storeId) {
+              activeShop = state.stores.all.find(s => s.id === state.session.storeId);
+              log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
+         }
     }
+
     if (!activeShop) {
-        const lastVisitedShopId = localStorage.getItem('lastVisitedShopId');
+        const lastVisitedShopId = localStorage.getItem('lastVisitedShopId'); //
         if (lastVisitedShopId) {
-            activeShop = state.stores.all.find(s => s.id === lastVisitedShopId);
+            activeShop = state.stores.all.find(s => s.id === lastVisitedShopId); //
+             log('Main', `Using last visited shop from localStorage: ${lastVisitedShopId}. Found shop: ${!!activeShop}`);
         }
     }
+
     if (!activeShop) {
-        activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
+        // Fallback to default shop name
+        activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours"); //
+         log('Main', `Falling back to default shop 'Tyler's Mystery Tours'. Found shop: ${!!activeShop}`);
     }
+    // --- End Shop Determination ---
 
     if (activeShop) {
-        state.ui.activeShopId = activeShop.id;
-        localStorage.setItem('lastVisitedShopId', activeShop.id);
-        const titleElement = document.getElementById('main-shop-title');
-        titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
-        titleElement.style.cursor = 'pointer';
-        titleElement.addEventListener('click', (e) => {
-            if (e.target.id !== 'shop-switcher-trigger') {
-                window.location.href = `/?shopId=${activeShop.id}`;
-            }
-        });
-        document.getElementById('shop-switcher-trigger').addEventListener('click', () => {
-            ui.showShopSwitcher();
-        });
+        // Update state with active shop ID
+        setState({ ui: { ...state.ui, activeShopId: activeShop.id }}); //
+        localStorage.setItem('lastVisitedShopId', activeShop.id); //
+        log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
-// REPLACE the favicon/logo logic block in: main.js
-
-        // --- NEW FAVICON & HEADER LOGO LOGIC START ---
-        // Remove any existing favicon to prevent conflicts
-        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
-        if (existingFavicon) {
-            existingFavicon.remove();
-        }
-
-        // Check if the active shop has a LogoTag field
-        const logoTag = activeShop.fields.LogoTag;
-        if (logoTag) {
-            // Use the existing API function to fetch the image URL from Cloudinary by its tag
-            const imageUrls = await api.fetchImagesByTags(logoTag);
-            if (imageUrls && imageUrls.length > 0) {
-                const logoUrl = imageUrls[0];
-
-                // 1. Set the Favicon (browser tab icon)
-                const favicon = document.createElement('link');
-                favicon.rel = 'icon';
-                favicon.href = logoUrl.replace('/upload/', '/upload/c_scale,w_32/'); // 32x32px version
-                document.head.appendChild(favicon);
-
-                // 2. Set the Header Logo (on-page icon)
-                const headerLogo = document.createElement('img');
-                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/'); // 50px height version
-                headerLogo.alt = `${activeShop.fields.Name} Logo`;
-                
-                const headerLeft = document.getElementById('header-left');
-                if (headerLeft) {
-                    // Use prepend to add the logo BEFORE the title
-                    headerLeft.prepend(headerLogo);
+        // --- Initialize UI based on Shop ---
+        const titleElement = document.getElementById('main-shop-title'); //
+        if (titleElement) {
+            titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`; //
+            titleElement.style.cursor = 'pointer'; //
+            titleElement.addEventListener('click', (e) => { //
+                if (e.target.id !== 'shop-switcher-trigger') { //
+                    // Reset URL to shop base, clearing session/view params
+                    window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`; //
                 }
+            });
+            const switcherTrigger = document.getElementById('shop-switcher-trigger'); //
+            if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
+        }
 
+        // Favicon/Logo Logic (existing, ensure it runs correctly)
+        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'); //
+        if (existingFavicon) existingFavicon.remove(); //
+        const logoTag = activeShop.fields.LogoTag; //
+        if (logoTag) {
+            const imageUrls = await api.fetchImagesByTags(logoTag); //
+            if (imageUrls && imageUrls.length > 0) {
+                const logoUrl = imageUrls[0]; //
+                const favicon = document.createElement('link'); //
+                favicon.rel = 'icon'; //
+                favicon.href = logoUrl.replace('/upload/', '/upload/c_scale,w_32/'); //
+                document.head.appendChild(favicon); //
+                const headerLogo = document.createElement('img'); //
+                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/'); //
+                headerLogo.alt = `${activeShop.fields.Name} Logo`; //
+                const headerLeft = document.getElementById('header-left'); //
+                if (headerLeft) headerLeft.prepend(headerLogo); //
             }
         }
-        // --- NEW FAVICON & HEADER LOGO LOGIC END ---
-        
-        // --- THIS IS THE FIX ---
-        // The 'let' keyword is removed from the second declaration of shopSettings.
-        const shopSettings = {
-            shopType: activeShop.fields.ShopType || 'Events',
-            enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
-            paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
-            terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
-            cartLabels: {}
+
+        // --- Shop Settings & Event Listeners ---
+        const shopSettings = { //
+            shopType: activeShop.fields.ShopType || 'Events', //
+            enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'], //
+            paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly', //
+            terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.', //
+            cartLabels: {} //
         };
-        try {
-            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels);
-        } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); }
-        ui.applyCartLabels(shopSettings.cartLabels);
-        initializeEventListeners(imageCache, window.flatpickr, shopSettings);
-        
-        const jwt = localStorage.getItem('jwt');
+        try { //
+            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
+        } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); } //
+
+        ui.applyCartLabels(shopSettings.cartLabels); //
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Initialize main event listeners
+
+
+        // --- Authentication & User State ---
+        // Check for existing JWT first
+        const jwt = localStorage.getItem('jwt'); //
+        let initialUserId = null;
         if (jwt) {
             try {
-                const payload = JSON.parse(atob(jwt.split('.')[1]));
-                if (payload.exp * 1000 > Date.now()) {
-                    setState({ 
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email } }
+                const payload = JSON.parse(atob(jwt.split('.')[1])); //
+                if (payload.exp * 1000 > Date.now()) { // Check expiration
+                    // Fetch liked items separately if needed or rely on auth-verify/social payload
+                    // For now, just set basic auth state. Liked items loaded below or via login sync.
+                    setState({ //
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
+                    initialUserId = payload.userId;
+                     log('Main', `User authenticated via existing JWT: ${initialUserId}`);
+                     // We need the liked items NOW if the user is already logged in
+                     // Assuming liked items are NOT in basic JWT payload, fetch them if needed via auth functions
+                     // OR ensure auth-verify/social functions are always called if token exists?
+                     // Let's assume auth-verify/social will provide likes. If token is valid but from old session, likes might be missing.
+                     // A dedicated fetchUserLikes might be safer here.
+                     // Simplification: Rely on auth functions to provide likes. If JWT exists but no likes, they might appear slightly delayed.
+
                 } else {
-                    localStorage.removeItem('jwt');
+                    localStorage.removeItem('jwt'); //
+                     log('Main', 'Existing JWT expired.');
                 }
             } catch (e) {
-                localStorage.removeItem('jwt');
-                console.error("Failed to parse JWT:", e);
+                localStorage.removeItem('jwt'); //
+                console.error("Failed to parse existing JWT:", e); //
             }
         }
-        
-        await populateUserPlans(state.session.user.id);
-        const loginToken = urlParams.get('token');
+
+        // Handle magic link token verification (this also loads user data including likes)
+        const loginToken = urlParams.get('token'); //
         if (loginToken) {
+             log('Main', 'Magic link token found in URL, verifying...');
             try {
-                const response = await fetch('/api/auth-verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ token: loginToken })
+                const response = await fetch('/api/auth-verify', { //
+                    method: 'POST', //
+                    headers: { 'Content-Type': 'application/json' }, //
+                     body: JSON.stringify({ token: loginToken }) //
                 });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-                
-                localStorage.setItem('jwt', data.token);
-                setState({ 
-                    session: { 
-                        ...state.session, 
-                        user: { ...state.session.user, ...data.user, isAuthenticated: true, isOwner: data.ownerData.isOwner, ownerDashboardId: data.ownerData.ownerDashboardId } 
-                    } 
-                });
-                if (sessionId) {
-                    await api.associateSessionWithUser(sessionId, data.user.id);
-                }
-                await populateUserPlans(data.user.id);
-                const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('token');
-                window.history.replaceState({}, document.title, cleanUrl.toString());
-                updateUserProfileIcon();
+                const data = await response.json(); //
+                if (!response.ok) throw new Error(data.error || 'Token verification failed'); //
+
+                // Use the dedicated login handler which includes like sync
+                await _handleSuccessfulLogin(data); // This now handles state update, JWT storage, like sync
+                 log('Main', 'Magic link verification successful.');
+
+                // Clean token from URL
+                const cleanUrl = new URL(window.location); //
+                cleanUrl.searchParams.delete('token'); //
+                window.history.replaceState({}, document.title, cleanUrl.toString()); //
+                // UI updates are handled by _handleSuccessfulLogin
+
             } catch (error) {
-                alert(`Sign-in failed: ${error.message}`);
-                const cleanUrl = new URL(window.location);
-                cleanUrl.searchParams.delete('token');
-                window.history.replaceState({}, document.title, cleanUrl.toString());
+                console.error(`Sign-in via token failed: ${error.message}`); //
+                alert(`Sign-in failed: ${error.message}`); //
+                const cleanUrl = new URL(window.location); //
+                cleanUrl.searchParams.delete('token'); //
+                window.history.replaceState({}, document.title, cleanUrl.toString()); //
+                 // Ensure user state is reset if login fails mid-process
+                 handleSignOut(); // Use sign out to reset state cleanly
             }
+        } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
+            // If user is authenticated by JWT but likes weren't loaded (e.g., old JWT without likes)
+            // Attempt to fetch likes - Requires simulating auth-verify response or a new endpoint
+            log('Main', 'User authenticated by JWT, but no likes found. Consider fetching likes separately.');
+            // Placeholder: Call a hypothetical function to fetch likes if needed
+            // await fetchAndSetUserLikes(state.session.user.id);
         }
 
-        if (sessionId && !state.session.id) {
-            await api.loadSessionFromAirtable(sessionId);
+        // --- Post-Auth Initialization ---
+        await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
+
+        // Load session data *after* potential authentication and shop determination
+        // If sessionId was in URL but loadSession wasn't called yet (because shopId took precedence)
+        if (sessionId && state.session.id !== sessionId) {
+              log('Main', `Session ID ${sessionId} detected, loading session data now.`);
+              await api.loadSessionFromAirtable(sessionId); //
+        } else if (state.session.id) {
+             log('Main', `Session ${state.session.id} already loaded or initiated.`);
+             // Ensure UI reflects loaded session data even if load didn't happen in this exact sequence
+             ui.updateHeader(); //
+             ui.updateEventPlanSection(); //
+             ui.updateIdeasCarousel(); // Renamed
+             ui.updateTotalCost(); //
+        } else {
+             log('Main', 'No active session ID found.');
+             // Clear any potential stale plan UI if no session is active
+             ui.updateHeader();
+             ui.updateEventPlanSection();
+             ui.updateIdeasCarousel();
+             ui.updateTotalCost();
         }
 
-        if (state.session.id) {
-            ui.updateHeader();
-            ui.updateEventPlanSection();
-            ui.updateTotalCost();
-        }
 
-        let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available';
-        if (defaultFilterValue === 'Show All') {
-            defaultFilterValue = 'all';
-        }
-        document.getElementById('status-filter').value = defaultFilterValue;
+        // Set default status filter from shop settings
+        let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available'; //
+        if (defaultFilterValue === 'Show All') defaultFilterValue = 'all'; //
+        const statusFilterEl = document.getElementById('status-filter'); //
+        if (statusFilterEl) statusFilterEl.value = defaultFilterValue; //
 
-        ui.toggleLoading(false);
-        ui.updateFavoritesCarousel();
-        updateSaveShareButton();
-        
-        initializeChatEventListeners();
-        initializeSessionChat();
-        setupAuthEventListeners();
-        updateUserProfileIcon();
-        
-        syncUiWithUrl();
-        window.addEventListener('popstate', syncUiWithUrl);
+        // --- Final UI Setup ---
+        ui.toggleLoading(false); //
+        // ui.updateIdeasCarousel(); // Called within sessionReady or after session load now
+        updateSaveShareButton(); //
 
-        state.ui.isInitializing = false;
-        log('Main', 'Initialization complete.');
-        
+        initializeChatEventListeners(); //
+        // initializeSessionChat(); // Called within sessionReady now
+        setupAuthEventListeners(); //
+        updateUserProfileIcon(); //
+
+        syncUiWithUrl(); // Sync UI with URL parameters
+        window.addEventListener('popstate', syncUiWithUrl); // Handle browser back/forward
+
+        setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
+        log('Main', 'Initialization complete.'); //
+
     } else {
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display.</p>`;
+        console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
+        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. Please check configuration.</p>`; //
+        ui.toggleLoading(true); // Keep loading shown
     }
 }
 
-initialize();
+// Global error handler (optional but helpful)
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled Promise Rejection:', event.reason);
+    // Optionally show a generic error message to the user
+    // ui.showToast('An unexpected error occurred. Please try refreshing the page.');
+});
+
+
+initialize(); // Start the application
