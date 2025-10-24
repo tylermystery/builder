@@ -85,10 +85,10 @@ export async function associateSessionWithUser(sessionId, userId) {
         }
 
         // Update User with Associated Session
-        const currentSessions = userRecord.fields['Associated Sessions'] || [];
+        const currentSessions = userRecord.fields['Sessions 2'] || [];
          if (!currentSessions.includes(sessionId)) {
             const updatedSessions = [...currentSessions, sessionId];
-            const userPayload = { fields: { 'Associated Sessions': updatedSessions } };
+            const userPayload = { fields: { 'Sessions 2': updatedSessions } };
              const patchUserRes = await fetch(userUrl, {
                  method: 'PATCH',
                  headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
