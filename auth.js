@@ -33,6 +33,25 @@ async function _handleSuccessfulLogin(payload) {
 
     localStorage.setItem('jwt', payload.token); //
 
+    // --- MOVED STATE UPDATE HERE ---
+    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || []; // Get liked IDs initially
+    setState({
+        session: {
+            ...state.session,
+            user: {
+                ...state.session.user,
+                ...payload.user, // Apply basic user info
+                isAuthenticated: true, // Mark as authenticated NOW
+                isOwner: payload.ownerData.isOwner,
+                ownerDashboardId: payload.ownerData.ownerDashboardId,
+                // Initialize likedItemIds from payload *before* sync
+                likedItemIds: new Set(initialLikedItemIdsFromPayload)
+            }
+        }
+    });
+    console.log("[Auth] User state set immediately after login:", state.session.user);
+    // --- END MOVED STATE UPDATE ---
+
     // --- START LIKES INTEGRATION ---
     const likedItemIds = payload.user.likedItemIds || []; // Get liked IDs from payload
     const currentLikedItemIds = new Set(likedItemIds); // Initialize Set with persistent likes
