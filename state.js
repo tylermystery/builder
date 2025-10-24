@@ -1,9 +1,11 @@
-// FILE: state.js
+// FILE: state.js (REPLACE ENTIRE FILE)
 /*
- * Version: 3.2.0
- * Last Modified: 2025-09-24
+ * Version: 3.3.0
+ * Last Modified: 2025-10-24
  *
  * Changelog:
+ * v3.3.0 - 2025-10-24
+ * - Added `likedItemIds` Set to state.session.user for persistent like tracking.
  * v3.2.0 - 2025-09-24
  * - Added `flaggedUsers` and `bannedUsers` sets for moderation.
  * - Added a new Pusher channel map for item-specific chats.
@@ -22,8 +24,8 @@ export let state = {
         filtered: [],
     },
     cart: {
-        items: new Map(),
-        lockedItems: new Map(),
+        items: new Map(),       // "Ideas" (formerly Favorites), populated by "Save for Later"
+        lockedItems: new Map(), // "Event Plan"
     },
     eventDetails: {
         combined: new Map(),
@@ -32,21 +34,22 @@ export let state = {
         id: null,
         isOwned: false,
         storeId: null,
-        user: { 
+        user: {
             isAuthenticated: false,
             id: null,
             name: '',
             email: '',
             amountReceived: 0,
-            paymentHistory: [], // Replaces amountReceivedNote
-            rsvps: new Set(), // ADD THIS LINE
+            paymentHistory: [],
+            rsvps: new Set(),
             isOwner: false,
-            ownerDashboardId: null
+            ownerDashboardId: null,
+            likedItemIds: new Set(), // ADDED: Stores persistent liked item IDs
         },
         userProfiles: new Map(),
         reactions: new Map(),
-        flaggedUsers: new Set(), // New: Stores IDs of users with flagged content
-        bannedUsers: new Set(), // New: Stores IDs of banned users
+        flaggedUsers: new Set(),
+        bannedUsers: new Set(),
     },
     calendar: {
         busyTimes: new Map(),
@@ -62,5 +65,27 @@ export let state = {
 
 // Allows modules to update the state and trigger re-renders if needed
 export function setState(newState) {
+    // Basic merge, assumes newState is flat or carefully structured
+    // For nested updates like user properties, the caller should provide the full nested object
     state = { ...state, ...newState };
+
+    // Example deep merge for session.user if needed (more robust but complex)
+    // if (newState.session && newState.session.user) {
+    //     state = {
+    //         ...state,
+    //         session: {
+    //             ...state.session,
+    //             user: {
+    //                 ...state.session.user,
+    //                 ...newState.session.user
+    //             }
+    //         }
+    //     };
+    //     // Handle other potential nested updates similarly
+    // } else {
+    //      state = { ...state, ...newState };
+    // }
+
+    // Optionally, trigger events or re-renders here if using a framework/library
+    // document.dispatchEvent(new CustomEvent('stateChanged'));
 }
