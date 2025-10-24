@@ -99,3 +99,10 @@
   from = "/api/toggle-like"
   to = "/.netlify/functions/toggle-like"
   status = 200
+
+  # --- TEMPORARY WORKAROUND for toggle-like propagation ---
+[[redirects]]
+  from = "/api/like-temp"
+  to = "/.netlify/functions/toggle-like"
+  status = 200
+# --- END TEMPORARY WORKAROUND ---
