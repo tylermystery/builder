@@ -3,6 +3,7 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import { associateSessionWithUser } from './api.js';
+import * as api from './api.js';
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
