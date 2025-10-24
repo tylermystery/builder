@@ -85,10 +85,10 @@ export async function associateSessionWithUser(sessionId, userId) {
         }
 
         // Update User with Associated Session
-        const currentSessions = userRecord.fields['Sessions 2'] || [];
+        const currentSessions = userRecord.fields['Sessions 2'] || []; // Corrected field name 'Sessions 2'
          if (!currentSessions.includes(sessionId)) {
             const updatedSessions = [...currentSessions, sessionId];
-            const userPayload = { fields: {Sessions 2: updatedSessions } };
+            const userPayload = { fields: { 'Sessions 2': updatedSessions } }; // Corrected field name 'Sessions 2'
              const patchUserRes = await fetch(userUrl, {
                  method: 'PATCH',
                  headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
@@ -147,8 +147,8 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.user.paymentHistory = [];
 
 
-        if (record.fields.Store && record.fields.Store.length > 0) {
-            state.session.storeId = record.fields.Store[0];
+        if (record.fields['Shop Link'] && record.fields['Shop Link'].length > 0) { // Corrected field name 'Shop Link'
+            state.session.storeId = record.fields['Shop Link'][0]; // Corrected field name 'Shop Link'
             log('API', `Session belongs to Store ID: ${state.session.storeId}`);
         } else {
              log('API', 'Session not linked to a specific store.');
@@ -329,7 +329,7 @@ export async function saveSessionToAirtable() {
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         // Link to the current store
-        "Stores": state.ui.activeShopId ? [state.ui.activeShopId] : null
+        "Shop Link": state.ui.activeShopId ? [state.ui.activeShopId] : null // Corrected field name 'Shop Link'
     };
     if (formattedDate) {
         fields["Date"] = formattedDate; // Ensure field name matches Airtable
@@ -505,7 +505,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
             // Filter out empty strings and create expression for multiple tags
             const validTags = tags.map(t => String(t).trim()).filter(Boolean);
             if (validTags.length === 0) return [];
-            payload = { expression: validTags.map(tag => `tags:"${tag}"`).join(' AND ') };
+            payload = { expression: validTags.map(tag => `tags:\"${tag}\"`).join(' AND ') };
             log('API', `Fetching images by expression: ${payload.expression}`);
         } else {
             // Single tag
@@ -709,7 +709,7 @@ export async function fetchChatMessages(sessionId) {
 
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
-        console.error(`[API] postChatMessage Error: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
+        console.error(`[API] postChatMessage Error: Invalid sessionId provided: \"${sessionId}\". Cannot save message.`);
         return; // Prevent API call with invalid ID
     }
      if (!content || !content.trim()) {
@@ -757,25 +757,25 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error("SMS notification trigger failed:", err)),
+                }).catch(err => console.error(\"SMS notification trigger failed:\", err)),
 
                 fetch('/api/send-email-notification', { // Email via SendGrid
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error("Email notification trigger failed:", err)),
+                }).catch(err => console.error(\"Email notification trigger failed:\", err)),
 
                 fetch('/api/send-chat-to-admin', { // Admin email notification
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error("Admin chat notification trigger failed:", err))
+                }).catch(err => console.error(\"Admin chat notification trigger failed:\", err))
             ];
             await Promise.allSettled(notificationPromises);
             log('API', `Triggered all notifications for message ${newMessageRecordId}.`);
         }
     } catch (error) {
-        console.error("CRITICAL: Failed to save chat message to database.", error);
+        console.error(\"CRITICAL: Failed to save chat message to database.\", error);
         // Inform the user in a non-blocking way if possible
          if (typeof ui !== 'undefined' && ui.showToast) {
              ui.showToast(`Error: Could not send message. ${error.message}`);
@@ -792,7 +792,7 @@ export async function fetchItemChatMessages(itemId) {
           return [];
      }
     // Fetch messages linked specifically to this Item record
-    const formula = `FIND('${itemId}', ARRAYJOIN(ItemID))`; // Assuming ItemID field links to Items table
+    const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
@@ -816,7 +816,7 @@ export async function fetchItemChatMessages(itemId) {
 
 export async function postItemChatMessage(itemId, senderId, senderName, content) {
      if (!itemId || !itemId.startsWith('rec')) {
-        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: "${itemId}".`);
+        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: \"${itemId}\".`);
         return;
     }
     if (!content || !content.trim()) {
@@ -828,7 +828,7 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
     const payload = {
         records: [{
             fields: {
-                ItemID: [itemId], // Link to the Item record
+                'Item Link': [itemId], // Corrected field name 'Item Link'
                 SenderID: senderId,
                 SenderName: senderName,
                 Content: content.trim(),
@@ -969,7 +969,7 @@ export async function toggleUserLike(itemId) {
 
     try {
         const response = await fetch('/api/like-temp', { // Use temporary path
-        method: 'POST',
+            method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
