@@ -37,7 +37,7 @@ function getAvailableSubcategories(categoryRecord) {
     return subcategoryOptions.map(option => option.name).sort();
 }
 
-function updateSubcategoryButtons() {
+export function updateSubcategoryButtons() {
     if (!subcategoryFiltersContainer) return;
     subcategoryFiltersContainer.innerHTML = '';
     const categoryRecord = getCurrentCategoryRecord();
