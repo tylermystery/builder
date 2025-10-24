@@ -587,20 +587,89 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     }
                 }
             }
-        } else if (heartIcon) {
-            e.stopPropagation();
-            const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
-            if (!state.cart.lockedItems.has(recordId)) {
-                if (state.cart.items.has(recordId)) {
-                    state.cart.items.delete(recordId);
+// FILE: events.js (REPLACE the 'else if (heartIcon)' block)
+
+else if (heartIcon) {
+    e.stopPropagation();
+    const recordId = heartIcon.closest('[data-record-id]').dataset.recordId;
+    if (!recordId) return;
+
+    if (state.session.user.isAuthenticated) {
+        // --- LOGGED-IN USER ---
+        try {
+            // Disable icon temporarily to prevent double-clicks
+            heartIcon.style.pointerEvents = 'none';
+            // Optionally add a visual loading state here
+
+            const result = await api.toggleUserLike(recordId); // Call the API
+
+            // Update local state based on API response
+            if (result.success) {
+                if (result.liked) {
+                    state.session.user.likedItemIds.add(recordId);
+                    log('Events', `User liked item ${recordId}.`);
                 } else {
-                    ui.updateItemState(recordId, {});
+                    state.session.user.likedItemIds.delete(recordId);
+                    log('Events', `User unliked item ${recordId}.`);
                 }
-                ui.updateCardIcon(recordId);
-                await debounce(ui.updateFavoritesCarousel, 300)();
-                triggerSave();
+                // Update the icon visuals
+                ui.updateCardIcon(recordId); //
+                 // If the "My Likes" filter is active, refresh the view
+                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+                      applyFiltersAndSort(imageCache); //
+                 }
+            } else {
+                 // Handle cases where API returns success: false (if applicable)
+                 ui.showToast('Could not update like status. Please try again.');
             }
-        } else if (addToPlanBtn) {
+        } catch (error) {
+            log('Events', `Error toggling like: ${error.message}`);
+            ui.showToast(`Error: ${error.message}`); // Show error to user
+        } finally {
+            // Re-enable icon
+            heartIcon.style.pointerEvents = 'auto';
+            // Remove loading state if added
+        }
+
+    } else {
+        // --- LOGGED-OUT USER ---
+        log('Events', `Guest toggling temporary like for item ${recordId}.`);
+        let tempLikes = [];
+        try {
+            tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
+        } catch (e) {
+             console.error('Error parsing tempLikes from localStorage:', e);
+             localStorage.removeItem('tempLikes'); // Clear potentially corrupted data
+             tempLikes = [];
+        }
+
+        const tempLikesSet = new Set(tempLikes);
+        let currentlyLiked = false;
+
+        if (tempLikesSet.has(recordId)) {
+            tempLikesSet.delete(recordId);
+            currentlyLiked = false;
+        } else {
+            tempLikesSet.add(recordId);
+            currentlyLiked = true;
+        }
+
+        localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet))); // Save updated array
+        log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
+
+        // Update icon visually based on the temporary state
+        ui.updateCardIcon(recordId); //
+
+        // Show non-intrusive prompt if the item was just liked
+        if (currentlyLiked) {
+             ui.showLoginPromptForLikes(); // Needs implementation in ui.js
+        }
+         // If the "My Likes" filter is active, refresh the view
+         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+              applyFiltersAndSort(imageCache); //
+         }
+    }
+} else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]').dataset.recordId;
             if (state.cart.lockedItems.has(recordId)) {
