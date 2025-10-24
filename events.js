@@ -642,23 +642,61 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const record = state.records.all.find(r => r.id === recordId);
         
             if (record && record.fields['Item Type'] === 'Grouping') {
-                const categoryName = record.fields.Name;
-                let targetButton = Array.from(document.querySelectorAll('#category-filters .filter-btn'))
-                                      .find(btn => btn.textContent === categoryName);
-                if (!targetButton) {
-                    targetButton = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn'))
-                                        .find(btn => btn.textContent === categoryName);
-                }
-        
-                if (targetButton) {
-                    // If a matching filter button exists, click it to filter the catalog.
-                    targetButton.click();
+                // --- START NEW LOGIC ---
+                
+                const groupName = record.fields.Name;
+                const groupNameLower = groupName.toLowerCase();
+                const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]; //
+
+                if (!parentName) {
+                    // This is a TOP-LEVEL group (a "Category").
+                    // 1. Update the URL
+                    updateUrl({ category: groupNameLower, subcategory: null, view: null });
+                    
+                    // 2. Update the UI (buttons)
+                    if (categoryFiltersContainer) { //
+                        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                        const targetButton = categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`);
+                        if (targetButton) {
+                            targetButton.classList.add('active');
+                        }
+                    }
+                    updateSubcategoryButtons(); //
+
                 } else {
-                    // If no button is found, do nothing. This prevents the modal from opening.
-                    log('Events', `Grouping card "${categoryName}" clicked, but no matching filter button was found. Modal view suppressed.`);
+                    // This is a NESTED group (a "Subcategory").
+                    const parentNameLower = parentName.toLowerCase();
+                    
+                    // 1. Update the URL. We'll select *only* this subcategory.
+                    updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
+                    
+                    // 2. Update Category buttons
+                    if (categoryFiltersContainer) { //
+                        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                        const parentButton = categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${parentNameLower}"]`);
+                        if (parentButton) {
+                            parentButton.classList.add('active');
+                        }
+                    }
+                    
+                    // 3. Update Subcategory buttons
+                    updateSubcategoryButtons(); // Re-builds the subcat button list
+                    if (subcategoryFiltersContainer) { //
+                        subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                        const targetButton = subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`);
+                        if (targetButton) {
+                            targetButton.classList.add('active');
+                        }
+                    }
                 }
+                
+                // 4. Re-filter the catalog view
+                applyFiltersAndSort(imageCache); //
+                
+                // --- END NEW LOGIC ---
         
-            } else if (record) {                ui.showDetailModal(record);
+            } else if (record) {              
+                ui.showDetailModal(record);
             }
         } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
