@@ -15,24 +15,42 @@ function getPlaceholderImage(imageUrls) {
     return imageUrls[randomIndex];
 }
 
+// FILE: components/card.js (REPLACE updateCardIcon function)
+
 export function updateCardIcon(recordId) {
-    const isLocked = state.cart.lockedItems.has(recordId);
-    const isHearted = state.cart.items.has(recordId);
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-    const checkSVG = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-    document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => {
-        if (!icon) return;
-        if (isLocked) {
-            icon.className = 'heart-icon locked';
-            icon.innerHTML = checkSVG;
-        } else if (isHearted) {
-            icon.className = 'heart-icon hearted';
-            icon.innerHTML = heartSVG;
-        } else {
-            icon.className = 'heart-icon';
-            icon.innerHTML = heartSVG;
+    let isLiked = false;
+
+    // Determine liked status based on auth state
+    if (state.session.user.isAuthenticated) {
+        isLiked = state.session.user.likedItemIds.has(recordId); //
+    } else {
+        try {
+            const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]')); //
+            isLiked = tempLikes.has(recordId);
+        } catch (e) {
+            console.error('Error reading tempLikes for icon update:', e);
+            isLiked = false; // Default to not liked if localStorage fails
         }
-        icon.style.display = 'block';
+    }
+
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`; //
+
+    // Find all relevant heart icons (on cards and potentially in the modal)
+    document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => { //
+        if (!icon) return;
+
+        // Apply styles based only on the 'isLiked' status
+        if (isLiked) {
+            icon.className = 'heart-icon hearted'; // Apply liked style
+            icon.title = 'Unlike this item';
+        } else {
+            icon.className = 'heart-icon'; // Apply default style
+            icon.title = 'Like this item';
+        }
+        icon.innerHTML = heartSVG; // Ensure SVG is always present
+        icon.style.display = 'block'; // Ensure it's visible
+        // Remove pointer-events none - click handler manages interaction logic
+        icon.style.pointerEvents = 'auto';
     });
 }
 
