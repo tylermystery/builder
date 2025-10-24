@@ -651,13 +651,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
         
                 if (targetButton) {
+                    // If a matching filter button exists, click it to filter the catalog.
                     targetButton.click();
                 } else {
-                    ui.showDetailModal(record);
+                    // If no button is found, do nothing. This prevents the modal from opening.
+                    log('Events', `Grouping card "${categoryName}" clicked, but no matching filter button was found. Modal view suppressed.`);
                 }
         
-            } else if (record) {
-                ui.showDetailModal(record);
+            } else if (record) {                ui.showDetailModal(record);
             }
         } else if (lockedItemCard) {
             const recordId = lockedItemCard.dataset.recordId;
