@@ -22,7 +22,7 @@ export async function fetchPlansForUser(userId) {
         return [];
     }
     // Assuming 'Collaborators' field directly links to Users table
-    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`; // Corrected: Added {}
+    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
     const encodedFormula = encodeURIComponent(formula);
     // Fetch sessions where the user is a collaborator
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&fields%5B%5D=Name`; // Only fetch Name for dropdown
@@ -94,13 +94,15 @@ export async function associateSessionWithUser(sessionId, userId) {
                  headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
                  body: JSON.stringify(userPayload)
              });
-             if (!patchUserRes.ok) throw new Error(`Airtable API Error updating user associated sessions: ${await patchUserRes.text()}`);
-             log('API', `Successfully added session ${sessionId} to user ${userId}'s associated sessions.`);
+             // Log error but don't throw, as login can still proceed
+             if (!patchUserRes.ok) console.error(`Airtable API Error updating user associated sessions: ${await patchUserRes.text()}`);
+             else log('API', `Successfully added session ${sessionId} to user ${userId}'s associated sessions.`);
          } else {
               log('API', `Session ${sessionId} already associated with user ${userId}.`);
          }
 
     } catch (error) {
+        // Don't block login flow for this, just log the error
         console.error("Failed to associate session with user:", error);
         log('API', `Failed to associate session: ${error.message}`);
     }
@@ -115,8 +117,6 @@ export async function loadSessionFromAirtable(sessionId) {
     // Avoid reloading if already loaded
     if (state.session.id === sessionId) {
         log('API', `Session ${sessionId} is already loaded.`);
-        // Ensure sessionReady is fired if initialization depends on it even for reloads
-        // Check if cart/details exist before assuming ready
         if (state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0) {
              document.dispatchEvent(new CustomEvent('sessionReady'));
         }
@@ -147,18 +147,19 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.user.paymentHistory = [];
 
 
-        if (record.fields['Shop Link'] && record.fields['Shop Link'].length > 0) { // Corrected field name 'Shop Link'
-            state.session.storeId = record.fields['Shop Link'][0]; // Corrected field name 'Shop Link'
+        // --- THIS IS THE FIX for "Shop Link" ---
+        // Check for the field name from the error log.
+        // If it's different (e.g., "Store"), change "Shop Link" to "Store"
+        if (record.fields['Shop Link'] && record.fields['Shop Link'].length > 0) { 
+            state.session.storeId = record.fields['Shop Link'][0];
             log('API', `Session belongs to Store ID: ${state.session.storeId}`);
         } else {
-             log('API', 'Session not linked to a specific store.');
+             log('API', 'Session not linked to a specific store (Shop Link field is empty).');
         }
 
-        // Determine ownership (simple check: is the current user among collaborators?)
         state.session.isOwned = (record.fields.Collaborators || []).includes(state.session.user.id);
         log('API', `Session ownership for current user (${state.session.user.id}): ${state.session.isOwned}`);
 
-        // Load payment info
         state.session.user.amountReceived = record.fields['Amount Received'] || 0;
         try {
             state.session.user.paymentHistory = JSON.parse(record.fields.PaymentHistory || '[]');
@@ -168,12 +169,11 @@ export async function loadSessionFromAirtable(sessionId) {
         }
         log('API', `Loaded Amount Received: ${state.session.user.amountReceived}`);
 
-        // Load core session data: items, reactions, details
         const sessionDataString = record.fields['Items with Variations'];
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
-                state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {})); // Handle potential old name
+                state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
                 const reactionsObject = savedState.itemReactions || {};
@@ -183,13 +183,12 @@ export async function loadSessionFromAirtable(sessionId) {
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
-                state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {})); // Handle potential old name
+                state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
-                console.error("Session Data String:", sessionDataString); // Log the problematic string
-                 // Fallback to empty state to prevent app crash
+                console.error("Session Data String:", sessionDataString);
                  state.cart.items = new Map();
                  state.cart.lockedItems = new Map();
                  state.session.reactions = new Map();
@@ -200,12 +199,9 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
         }
 
-        // Ensure current user profile is added if not present
         if (state.session.user.isAuthenticated && state.session.user.id && !state.session.userProfiles.has(state.session.user.id)) {
              state.session.userProfiles.set(state.session.user.id, state.session.user.name || 'User');
              log('API', 'Added current authenticated user to session profiles.');
-             // Optionally trigger a save here if this modification should persist immediately
-             // triggerSave();
         }
 
         document.dispatchEvent(new CustomEvent('sessionReady'));
@@ -214,13 +210,9 @@ export async function loadSessionFromAirtable(sessionId) {
     } catch (error) {
         console.error(`Failed to load session ${sessionId}:`, error);
         log('API', `Failed to load session: ${error.message}`);
-        // Reset session ID if loading fails
         state.session.id = null;
         alert("Could not load the shared session. It might have been deleted or there was a network issue.");
-        // Clear session param from URL to avoid reload loop
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
-        // Optionally redirect to a default state or show an error message permanently
-        // window.location.href = '/'; // Example redirect
     }
 }
 
@@ -229,14 +221,12 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
     log('API', `Updating payment history for session ${sessionId}`);
 
-    // Ensure paymentHistory is an array
     const historyArray = Array.isArray(paymentHistory) ? paymentHistory : [];
     const newTotal = historyArray.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     const payload = {
         fields: {
             'Amount Received': newTotal,
-            // Store as a formatted JSON string in Airtable long text field
             'PaymentHistory': JSON.stringify(historyArray, null, 2)
         }
     };
@@ -255,7 +245,7 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
             throw new Error(`Airtable API Error updating payment history: ${errorData?.error?.message || response.statusText}`);
         }
         log('API', `Successfully updated payment history for session ${sessionId}. New total: ${newTotal}`);
-        return await response.json(); // Return the updated record
+        return await response.json();
     } catch (error) {
         console.error("Failed to update payment history:", error);
         log('API', `Failed to update payment history: ${error.message}`);
@@ -265,7 +255,6 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
 
 
 export async function saveSessionToAirtable() {
-    // Only save if there's actual data or if it's a new session needing an ID
     const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
     const hasDetails = state.eventDetails.combined.size > 0;
     const hasReactions = state.session.reactions.size > 0;
@@ -273,66 +262,61 @@ export async function saveSessionToAirtable() {
 
     if (!hasPlanData && !hasDetails && !hasReactions && !needsInitialSave) {
         log('API', 'saveSessionToAirtable: No changes or data to save, skipping.');
-        state.ui.saveState = 'SAVED'; // Ensure state is marked as saved
-        ui.updateSaveShareButton(); // Update button if needed - ensure accessible
-        return false; // Indicate no save occurred
+        state.ui.saveState = 'SAVED';
+        // Check if ui.updateSaveShareButton exists before calling
+        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) {
+            ui.updateSaveShareButton();
+        }
+        return false;
     }
 
     const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
     log('API', `saveSessionToAirtable: Triggered for ${sessionStatus}`);
-    state.ui.saveState = 'SAVING'; // ui.updateSaveShareButton() should be called by caller or here
+    state.ui.saveState = 'SAVING';
     if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
 
-
-    // Prepare reactions data for JSON storage
     const reactionsForSaving = {};
     for (const [recordId, userReactionsMap] of state.session.reactions.entries()) {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
 
-    // Consolidate data into the structure expected by Airtable
     const sessionData = {
-        ideasItems: Object.fromEntries(state.cart.items), // Use new name "ideasItems"
+        ideasItems: Object.fromEntries(state.cart.items),
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
         userProfiles: Object.fromEntries(state.session.userProfiles),
-        eventDetails: Object.fromEntries(state.eventDetails.combined) // Use new name "eventDetails"
+        eventDetails: Object.fromEntries(state.eventDetails.combined)
     };
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     let formattedDate = null;
-    // Handle both single date string (from date picker) and potential array (from older range picker)
     if (dateValue) {
         const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
         const dateObj = new Date(dateToFormat);
         if (!isNaN(dateObj.getTime())) {
-             // Store date only for Airtable Date field (no time component needed for simple date)
              formattedDate = dateObj.toISOString().split('T')[0];
         }
     }
 
-
-    // Get collaborator IDs (only valid Airtable record IDs)
     const allUserIds = Array.from(state.session.userProfiles.keys());
     const validCollaboratorIds = allUserIds.filter(id => id && typeof id === 'string' && id.startsWith('rec'));
-     // Ensure the current authenticated user is included if not already in profiles
      if (state.session.user.isAuthenticated && state.session.user.id && !validCollaboratorIds.includes(state.session.user.id)) {
           validCollaboratorIds.push(state.session.user.id);
      }
 
     const fields = {
         "Name": sessionName,
-        // Store the consolidated data in one field
-        "Items with Variations": JSON.stringify(sessionData, null, 2), // Pretty print for readability
+        "Items with Variations": JSON.stringify(sessionData, null, 2),
         "Collaborators": validCollaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
-        // Link to the current store
-        "Shop Link": state.ui.activeShopId ? [state.ui.activeShopId] : null // Corrected field name 'Shop Link'
+        // --- THIS IS THE FIX for "Shop Link" ---
+        // Change "Shop Link" to the exact name from your Airtable Sessions table
+        "Shop Link": state.ui.activeShopId ? [state.ui.activeShopId] : null 
     };
     if (formattedDate) {
-        fields["Date"] = formattedDate; // Ensure field name matches Airtable
+        fields["Date"] = formattedDate;
     }
 
     const payload = { fields };
@@ -344,7 +328,6 @@ export async function saveSessionToAirtable() {
         const response = await fetch(url, {
             method: method,
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-            // Airtable API expects slightly different structures for create vs update
             body: JSON.stringify(isUpdate ? payload : { records: [payload] })
         });
 
@@ -356,34 +339,31 @@ export async function saveSessionToAirtable() {
         const result = await response.json();
 
         if (!isUpdate && result.records && result.records.length > 0) {
-            // --- New Session Created ---
             const newSessionId = result.records[0].id;
             state.session.id = newSessionId;
-            state.session.isOwned = true; // User who creates it owns it
-            // Update URL bar without reloading
+            state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${newSessionId}${window.location.search.includes('shopId') ? `&shopId=${state.ui.activeShopId}` : ''}`);
             log('API', `New session created with ID: ${newSessionId}`);
-            // Ensure user is associated if logged in
             if(state.session.user.isAuthenticated && state.session.user.id) {
                  await associateSessionWithUser(newSessionId, state.session.user.id);
             }
-            document.dispatchEvent(new CustomEvent('sessionReady')); // Notify components session ID is available
-            document.dispatchEvent(new CustomEvent('planCreated')); // Notify header to refresh plans list
+            document.dispatchEvent(new CustomEvent('sessionReady'));
+            document.dispatchEvent(new CustomEvent('planCreated'));
         } else if (isUpdate) {
              log('API', `Successfully updated session ${state.session.id}`);
         }
 
         state.ui.saveState = 'SAVED';
-        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton(); // Update button state
-        return true; // Indicate success
+        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
+        return true;
 
     } catch (error) {
         console.error("Failed to save session:", error);
         log('API', `Failed to save session: ${error.message}`);
-        state.ui.saveState = 'SAVED'; // Reset state even on failure
-        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton(); // Update button state
-         alert(`Error saving your plan: ${error.message}. Please try again.`); // Inform user
-        return false; // Indicate failure
+        state.ui.saveState = 'SAVED';
+        if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
+         alert(`Error saving your plan: ${error.message}. Please try again.`);
+        return false;
     }
 }
 
@@ -391,16 +371,12 @@ export async function saveSessionToAirtable() {
 export async function fetchAllRecords() {
     let allRecords = [];
     let offset = null;
-    // Use TABLE_ID which refers to the Items table
     const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
     log('API', `Fetching items from base URL: ${baseUrl}`);
     try {
         do {
             let url = baseUrl;
-            // Add view parameter if you have a specific view for published items
-            // url += '?view=PublishedItemsView'; // Example view name
             if (offset) {
-                // Check if URL already has query params
                 url += (url.includes('?') ? '&' : '?') + `offset=${offset}`;
             }
 
@@ -418,11 +394,10 @@ export async function fetchAllRecords() {
         } while (offset);
 
         log('API', `Total item records fetched: ${allRecords.length}`);
-        // Filter out records without essential fields like 'Name' AFTER fetching all pages
         return allRecords.filter(record => record.fields && record.fields.Name);
     } catch (error) {
         console.error("Error fetching all item records:", error);
-        throw error; // Re-throw to be caught by initializer
+        throw error;
     }
 }
 
@@ -448,24 +423,22 @@ export async function fetchAllStores() {
             offset = data.offset;
         } while (offset);
         log('API', `Total stores fetched: ${records.length}`);
-        // Ensure stores have a Name before returning
         return records.filter(record => record.fields && record.fields.Name);
     } catch (error) {
         console.error("Error fetching all stores:", error);
-        throw error; // Re-throw
+        throw error;
     }
 }
 
 
 export async function fetchCalendarForRecord(record) {
-    if (!record || !record.fields) return []; // Safety check
+    if (!record || !record.fields) return [];
     const icalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
     if (!icalUrl) {
          log('API', `No iCal URL for record ${record.id}`);
-        return []; // No calendar to fetch
+        return [];
     }
 
-    // Check cache first
     if (state.calendar.busyTimes.has(icalUrl)) {
         log('API', `Cache hit for iCal URL: ${icalUrl}`);
         return state.calendar.busyTimes.get(icalUrl);
@@ -473,22 +446,19 @@ export async function fetchCalendarForRecord(record) {
      log('API', `Fetching calendar for ${record.fields.Name} from URL: ${icalUrl}`);
 
     try {
-        // Use the Netlify function proxy
         const proxyUrl = `/api/calendar?url=${encodeURIComponent(icalUrl)}`;
         const response = await fetch(proxyUrl);
         if (!response.ok) {
             throw new Error(`Calendar proxy function error: ${response.status} ${response.statusText}`);
         }
         const busyTimes = await response.json();
-        // Store in cache
         state.calendar.busyTimes.set(icalUrl, busyTimes);
          log('API', `Successfully fetched and cached ${busyTimes.length} busy times for ${icalUrl}`);
         return busyTimes;
     } catch (error) {
         console.error(`Failed to fetch/parse calendar for ${record.fields.Name} (${icalUrl}):`, error);
-        // Cache failure as empty array to avoid retrying constantly
         state.calendar.busyTimes.set(icalUrl, []);
-        return []; // Return empty on error
+        return [];
     }
 }
 
@@ -496,44 +466,39 @@ export async function fetchCalendarForRecord(record) {
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
         log('API', 'fetchImagesByTags: No valid tags provided.');
-        return []; // Return empty array for consistency
+        return [];
     }
 
     try {
         let payload;
         if (Array.isArray(tags)) {
-            // Filter out empty strings and create expression for multiple tags
             const validTags = tags.map(t => String(t).trim()).filter(Boolean);
             if (validTags.length === 0) return [];
             payload = { expression: validTags.map(tag => `tags:\"${tag}\"`).join(' AND ') };
             log('API', `Fetching images by expression: ${payload.expression}`);
         } else {
-            // Single tag
             const tagName = String(tags).trim();
             if (!tagName) return [];
             payload = { tag: tagName };
             log('API', `Fetching images by single tag: ${tagName}`);
         }
 
-        // Use the Netlify function proxy for Cloudinary
         const response = await fetch('/.netlify/functions/cloudinary', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        // Handle rate limiting (429 Too Many Requests) with retry logic
         if (response.status === 429 && retries > 0) {
             log('API', `Cloudinary rate limit hit, retrying in 500ms... (${retries} retries left)`);
-            await new Promise(res => setTimeout(res, 500)); // Wait 500ms
-            return fetchImagesByTags(tags, retries - 1); // Recurse with decremented retries
+            await new Promise(res => setTimeout(res, 500));
+            return fetchImagesByTags(tags, retries - 1);
         }
 
         if (!response.ok) {
             console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
-            // Log response body for more details if possible
             try { console.warn('Cloudinary error body:', await response.text()); } catch (e) {}
-            return []; // Return empty array on error
+            return [];
         }
 
         const data = await response.json();
@@ -543,17 +508,15 @@ export async function fetchImagesByTags(tags, retries = 2) {
         }
 
         const imageUrls = data.resources.map(image => {
-             // Define standard transformations, adjust for GIFs
-             let transformations = 'c_fill,g_auto,w_600,h_520,f_auto'; // Added f_auto
+             let transformations = 'c_fill,g_auto,w_600,h_520,f_auto';
              if (image.format === 'gif') {
-                 transformations = 'c_fit,w_600,h_520'; // Keep original GIF format, just fit dimensions
+                 transformations = 'c_fit,w_600,h_520';
              }
-             // Construct the transformed URL
              const urlParts = image.secure_url.split('/upload/');
              if (urlParts.length === 2) {
                 return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
              }
-             return image.secure_url; // Fallback to original URL if split fails
+             return image.secure_url;
         });
 
          log('API', `Found ${imageUrls.length} images from Cloudinary.`);
@@ -561,30 +524,24 @@ export async function fetchImagesByTags(tags, retries = 2) {
 
     } catch (error) {
         console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return []; // Return empty array on unexpected errors
+        return [];
     }
 }
 
 
 export async function fetchCuratedImagesByRecord(record) {
-    // 1. Check for linked records in the 'Curated Images' field
     const curatedLinks = record.fields[CONSTANTS.FIELD_NAMES.CURATED_IMAGES_LINK];
 
-    // Safety Check: If no links, exit early
     if (!curatedLinks || !Array.isArray(curatedLinks) || curatedLinks.length === 0) {
         log('API', `Safety Exit: No curated image links found for item ${record.id}.`);
         return [];
     }
     log('API', `Fetching ${curatedLinks.length} curated images for item ${record.id}`);
 
-    // 2. Build Airtable formula to fetch linked Image_Gallery records
     const formula = `OR(${curatedLinks.map(id => `RECORD_ID()='${id}'`).join(',')})`;
-
-    // 3. Define sorting parameters (prioritize 'isBestOf')
     const sortParams = `&sort%5B0%5D%5Bfield%5D=isBestOf&sort%5B0%5D%5Bdirection%5D=desc`;
-
     const encodedFormula = encodeURIComponent(formula);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${IMAGE_GALLERY_TABLE_NAME}?filterByFormula=${encodedFormula}${sortParams}&fields[]=ImageURL`; // Only fetch the ImageURL field
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${IMAGE_GALLERY_TABLE_NAME}?filterByFormula=${encodedFormula}${sortParams}&fields[]=ImageURL`;
 
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
@@ -599,23 +556,18 @@ export async function fetchCuratedImagesByRecord(record) {
              return [];
         }
 
-        // 4. Extract and transform ImageURLs
         const imageUrls = data.records
-            .map(r => r.fields.ImageURL) // Get the URL field
-            .filter(Boolean) // Filter out any potentially empty URLs
+            .map(r => r.fields.ImageURL)
+            .filter(Boolean)
             .map(url => {
-                // Apply f_auto transformation if it's a Cloudinary URL
                 if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
                     const parts = url.split('/upload/');
-                    if (parts.length === 2 && !parts[1].startsWith('f_auto/')) { // Avoid double adding
-                         // Add standard transformations including f_auto
+                    if (parts.length === 2 && !parts[1].startsWith('f_auto/')) {
                          const transformations = 'c_fill,g_auto,w_600,h_520,f_auto';
-                         // Reconstruct URL carefully, handling existing transformations if necessary
-                         // Basic approach: Assume no complex existing transforms, just add ours before the public ID part
                          return `${parts[0]}/upload/${transformations}/${parts[1]}`;
                      }
                 }
-                return url; // Return original URL otherwise
+                return url;
             });
 
          log('API', `Successfully fetched and processed ${imageUrls.length} curated image URLs.`);
@@ -623,57 +575,44 @@ export async function fetchCuratedImagesByRecord(record) {
 
     } catch (error) {
         console.error(`Error fetching curated images for item ${record.id}:`, error.message);
-        return []; // Return empty array on failure
+        return [];
     }
 }
 
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
-    if (!record || !record.id) return { imageUrls: [] }; // Safety check
+    if (!record || !record.id) return { imageUrls: [] };
 
     const cacheKey = record.id;
     if (imageCache.has(cacheKey)) {
-        // log('API', `Cache hit for images: ${record.id}`);
         return { imageUrls: imageCache.get(cacheKey) };
     }
-    // log('API', `Fetching images for record: ${record.fields.Name} (${record.id})`);
-
 
     const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
-    // Apply standard transformations + f_auto to the fallback
     const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto/${defaultImagePublicID}`;
 
     let imageUrls = [];
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    // Determine if it's a grouping item by checking if options link to other items
     const isGrouping = record.fields['Item Type'] === 'Grouping' || rawOptions.some(opt => childRecordNames.has(opt.name));
 
     if (isGrouping) {
          log('API', `Record ${record.id} identified as grouping, using fallback image.`);
-        // For groupings, often a single representative image or fallback is enough.
-        // Or, you could fetch images from the first few child items here if desired.
         imageUrls = [ultimateFallbackUrl];
     } else {
-        // 1. Attempt to fetch curated images first
         imageUrls = await fetchCuratedImagesByRecord(record);
-
-        // 2. If no curated images found, fallback to legacy Media Tags
         if (!imageUrls || imageUrls.length === 0) {
              log('API', `No curated images found for ${record.id}, falling back to Media Tags.`);
-             imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]); // fetchImagesByTags already adds f_auto
+             imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
         }
     }
 
-    // 3. If still no images, use the ultimate fallback
     if (!imageUrls || imageUrls.length === 0) {
         log('API', `No images found for ${record.id} after all checks, using ultimate fallback.`);
         imageUrls = [ultimateFallbackUrl];
     }
 
-    // Cache the result before returning
     imageCache.set(cacheKey, imageUrls);
-     // log('API', `Cached ${imageUrls.length} images for ${record.id}`);
     return { imageUrls };
 }
 
@@ -710,22 +649,21 @@ export async function fetchChatMessages(sessionId) {
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
         console.error(`[API] postChatMessage Error: Invalid sessionId provided: \"${sessionId}\". Cannot save message.`);
-        return; // Prevent API call with invalid ID
+        return;
     }
      if (!content || !content.trim()) {
          log('API', 'postChatMessage: Attempted to send empty message.');
-         return; // Don't send empty messages
+         return;
      }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
     const payload = {
         records: [{
             fields: {
-                SessionID: [sessionId], // Link to the Session record
-                SenderID: senderId,     // Could be user record ID or guest ID
-                SenderName: senderName, // Display name
-                Content: content.trim(),      // Trim whitespace
-                // Timestamp is handled automatically by Airtable 'Created time' field
+                SessionID: [sessionId],
+                SenderID: senderId,
+                SenderName: senderName,
+                Content: content.trim(),
             }
         }]
     };
@@ -749,23 +687,21 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         const newMessageRecordId = result.records[0].id;
          log('API', `Chat message saved with record ID: ${newMessageRecordId}`);
 
-        // Trigger notifications after successful save
         if (newMessageRecordId) {
-            // Use Promise.allSettled to trigger all notifications concurrently and log results/errors
             const notificationPromises = [
-                fetch('/api/send-notification', { // SMS via Twilio
+                fetch('/api/send-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
                 }).catch(err => console.error("SMS notification trigger failed:", err)),
 
-                fetch('/api/send-email-notification', { // Email via SendGrid
+                fetch('/api/send-email-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
                 }).catch(err => console.error("Email notification trigger failed:", err)),
 
-                fetch('/api/send-chat-to-admin', { // Admin email notification
+                fetch('/api/send-chat-to-admin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
@@ -776,7 +712,6 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         }
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
-        // Inform the user in a non-blocking way if possible
          if (typeof ui !== 'undefined' && ui.showToast) {
              ui.showToast(`Error: Could not send message. ${error.message}`);
          } else {
@@ -791,7 +726,6 @@ export async function fetchItemChatMessages(itemId) {
           log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
           return [];
      }
-    // Fetch messages linked specifically to this Item record
     const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
@@ -850,10 +784,8 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
              throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
         }
         log('API', `Successfully posted item chat message for ${itemId}.`);
-         // Optionally trigger notifications specific to item chats if needed
     } catch (error) {
         console.error(`Error posting item chat message for ${itemId}:`, error);
-         // Inform user?
          if (typeof ui !== 'undefined' && ui.showToast) {
             ui.showToast(`Error: Could not send message. ${error.message}`);
         }
@@ -862,32 +794,18 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
 
 
 export async function banUser(userId) {
-     // Placeholder/Simulation - In a real app, this would call a secure backend endpoint
-     // that verifies admin privileges and updates the User record in Airtable.
     log('API', `[MODERATION] Simulating API call to ban user: ${userId}`);
-    // Update local state immediately for UI feedback
     state.session.bannedUsers.add(userId);
-     // Persisting this requires changes to saveSessionToAirtable or a dedicated endpoint.
-     // For now, it's session-local.
-     // Optionally trigger a UI refresh if needed
-     // document.dispatchEvent(new CustomEvent('moderationStateChanged'));
 }
 
 
 export async function updateUserFlagStatus(userId, isFlagged) {
-     // Placeholder/Simulation - In a real app, this would call a secure backend endpoint
-     // that verifies admin privileges and updates the User record or a separate Flags table.
     log('API', `[MODERATION] Simulating API call to update flag for user: ${userId} to ${isFlagged}`);
-    // Update local state
     if (isFlagged) {
         state.session.flaggedUsers.add(userId);
     } else {
         state.session.flaggedUsers.delete(userId);
     }
-    // Persisting this requires changes to saveSessionToAirtable or a dedicated endpoint.
-    // For now, it's session-local.
-     // Optionally trigger a UI refresh if needed
-     // document.dispatchEvent(new CustomEvent('moderationStateChanged'));
 }
 
 
@@ -897,11 +815,9 @@ export async function addRsvpToEvent(eventId, userId) {
          return null;
     }
     log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
-    // Assuming TABLE_ID refers to the Items/Events table
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
 
     try {
-        // 1. Get current RSVPs
         const getResponse = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
@@ -911,19 +827,16 @@ export async function addRsvpToEvent(eventId, userId) {
         }
 
         const existingRecord = await getResponse.json();
-        // Assuming 'RSVPs' field links to Users table
         const rsvps = new Set(existingRecord.fields.RSVPs || []);
 
-        // 2. Add user if not already RSVP'd
         if (rsvps.has(userId)) {
              log('API', `User ${userId} already RSVP'd to event ${eventId}.`);
-             return existingRecord; // Return existing record, no change needed
+             return existingRecord;
         }
         rsvps.add(userId);
 
-        // 3. Update the record
         const rsvpPayload = {
-            fields: { 'RSVPs': Array.from(rsvps) } // Update the linked records field
+            fields: { 'RSVPs': Array.from(rsvps) }
         };
         const patchResponse = await fetch(url, {
             method: 'PATCH',
@@ -939,7 +852,7 @@ export async function addRsvpToEvent(eventId, userId) {
         }
 
         log('API', `Successfully added RSVP for user ${userId} to event ${eventId}`);
-        return await patchResponse.json(); // Return the updated event record
+        return await patchResponse.json();
 
     } catch (error) {
         console.error(`Failed to add RSVP for event ${eventId}:`, error);
@@ -952,7 +865,7 @@ export async function addRsvpToEvent(eventId, userId) {
 }
 
 
-// --- NEW FUNCTION TO TOGGLE USER LIKE ---
+// --- FUNCTION TO TOGGLE USER LIKE (Using combined endpoint) ---
 export async function toggleUserLike(itemId) {
     if (!state.session.user.isAuthenticated || !state.session.user.id) {
         log('API', 'User not authenticated. Cannot toggle like.');
@@ -965,21 +878,34 @@ export async function toggleUserLike(itemId) {
         throw new Error('Authentication token missing.');
     }
 
-    log('API', `Toggling like for item ${itemId} for user ${state.session.user.id}`);
+    log('API', `Toggling like for item ${itemId} via update-user-prefs`);
 
     try {
-        const response = await fetch('/api/like-temp', { // Use temporary path
+        // Call the KNOWN-WORKING endpoint
+        const response = await fetch('/api/update-user-prefs', { 
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ itemId: itemId }) // Pass itemId in the body
+            // Send the 'action' and 'itemId'
+            body: JSON.stringify({ 
+                action: 'toggle-like',
+                itemId: itemId 
+            }) 
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Failed to toggle like (Status: ${response.status})`);
+            // Try to parse error JSON, but handle empty/non-JSON responses
+            let errorText = response.statusText;
+            try {
+                const errorData = await response.json(); // This is line 981
+                errorText = errorData.error || errorText;
+            } catch (e) {
+                // This catch block handles the "Unexpected end of JSON input"
+                log('API', 'Could not parse error response as JSON.');
+            }
+            throw new Error(errorText || `Failed to toggle like (Status: ${response.status})`);
         }
 
         const result = await response.json();
