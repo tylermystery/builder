@@ -1,9 +1,8 @@
-// REPLACE THE ENTIRE CONTENTS OF: auth.js
+// FILE: auth.js (REPLACE ENTIRE FILE)
 
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import { associateSessionWithUser } from './api.js';
-import * as api from './api.js';
+import * as api from './api.js'; // Import api module
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -22,29 +21,25 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
-// FILE: auth.js (REPLACE _handleSuccessfulLogin function)
-
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
-    // Associate session if one exists before login
     if (state.session.id) {
-        await associateSessionWithUser(state.session.id, payload.user.id); //
+        await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
     }
 
-    localStorage.setItem('jwt', payload.token); //
+    localStorage.setItem('jwt', payload.token);
 
     // --- MOVED STATE UPDATE HERE ---
-    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || []; // Get liked IDs initially
+    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
     setState({
         session: {
             ...state.session,
             user: {
                 ...state.session.user,
-                ...payload.user, // Apply basic user info
-                isAuthenticated: true, // Mark as authenticated NOW
+                ...payload.user,
+                isAuthenticated: true,
                 isOwner: payload.ownerData.isOwner,
                 ownerDashboardId: payload.ownerData.ownerDashboardId,
-                // Initialize likedItemIds from payload *before* sync
                 likedItemIds: new Set(initialLikedItemIdsFromPayload)
             }
         }
@@ -52,12 +47,9 @@ async function _handleSuccessfulLogin(payload) {
     console.log("[Auth] User state set immediately after login:", state.session.user);
     // --- END MOVED STATE UPDATE ---
 
-    // --- START LIKES INTEGRATION ---
-    const likedItemIds = payload.user.likedItemIds || []; // Get liked IDs from payload
-    const currentLikedItemIds = new Set(likedItemIds); // Initialize Set with persistent likes
+    // --- START LIKES SYNC (Now runs *after* state is updated) ---
+    const currentLikedItemIds = state.session.user.likedItemIds;
     let syncPromises = [];
-
-    // Sync temporary likes stored in localStorage
     const tempLikesString = localStorage.getItem('tempLikes');
     if (tempLikesString) {
         try {
@@ -65,63 +57,40 @@ async function _handleSuccessfulLogin(payload) {
             if (Array.isArray(tempLikes) && tempLikes.length > 0) {
                 console.log(`[Auth] Found ${tempLikes.length} temporary likes to sync.`);
                 tempLikes.forEach(itemId => {
-                    // Only sync if it's not already in the persistent list
                     if (!currentLikedItemIds.has(itemId)) {
                         console.log(`[Auth] Syncing temporary like for item: ${itemId}`);
-                        // Call toggleUserLike - it handles adding the like on the backend
-                        // We use .then() here to avoid awaiting each one individually,
-                        // allowing them to run concurrently but still handling errors.
                         syncPromises.push(
-                            api.toggleUserLike(itemId)
+                            api.toggleUserLike(itemId) // Use imported api
                                 .then(result => {
                                     if (result.success && result.liked) {
-                                        currentLikedItemIds.add(itemId); // Update local state immediately
+                                        state.session.user.likedItemIds.add(itemId);
                                     }
                                 })
-                                .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err))
+                                .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err.message))
                         );
                     }
                 });
             }
         } catch (e) {
-            console.error('[Auth] Error parsing temporary likes from localStorage:', e);
+            console.error('[Auth] Error parsing/processing temporary likes from localStorage:', e);
         } finally {
-             localStorage.removeItem('tempLikes'); // Clear temp likes after attempting sync
+             localStorage.removeItem('tempLikes');
              console.log('[Auth] Cleared temporary likes from localStorage.');
         }
     }
-    // --- END LIKES INTEGRATION ---
+    // --- END LIKES SYNC ---
 
-
-    // Wait for all sync operations to attempt completion (errors are logged individually)
     await Promise.allSettled(syncPromises);
     console.log('[Auth] Like sync process finished.');
-
-    // Update the main application state
-    setState({
-        session: {
-            ...state.session,
-            user: {
-                ...state.session.user, // Keep existing user details like payment history
-                ...payload.user, // Overwrite with basic user info from payload
-                isAuthenticated: true, //
-                isOwner: payload.ownerData.isOwner, //
-                ownerDashboardId: payload.ownerData.ownerDashboardId, //
-                likedItemIds: currentLikedItemIds // Set the final liked IDs Set
-            }
-        }
-    });
-
-    console.log("[Auth] User state after login and sync:", state.session.user);
+    
+    console.log("[Auth] Final user state after sync:", state.session.user);
 
     // Trigger events and update UI
-    document.dispatchEvent(new CustomEvent('userLoggedIn')); //
-    //await populateUserPlans(payload.user.id); // Refresh user plans dropdown - Ensure populateUserPlans is imported or accessible
-    updateUserProfileIcon(); //
-    hideUserModal(); //
-
-    // Re-apply filters which might now include newly synced "My Likes"
-    //applyFiltersAndSort(imageCache); // Ensure applyFiltersAndSort and imageCache are accessible
+    document.dispatchEvent(new CustomEvent('userLoggedIn'));
+    // populateUserPlans and applyFiltersAndSort are removed from here
+    // They are handled by the 'userLoggedIn' listener in main.js
+    updateUserProfileIcon();
+    hideUserModal();
 }
 
 export function showUserModal() {
@@ -208,17 +177,35 @@ async function handleSignIn(e) {
     }
 }
 
+// --- THIS FUNCTION IS UPDATED ---
 async function handleUpdateUserPrefs(e) {
     e.preventDefault();
     prefsMessage.textContent = 'Saving...';
     prefsMessage.style.color = '#333';
+
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+        prefsMessage.textContent = 'Authentication error. Please sign out and in again.';
+        prefsMessage.style.color = '#dc3545';
+        return;
+    }
+
     const frequency = profileNotificationsSelect.value;
-    const userId = state.session.user.id;
+    const phone = profilePhoneInput.value; // Get phone value
+
     try {
         const response = await fetch('/api/update-user-prefs', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, frequency }),
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` // Send JWT token
+            },
+            // Send 'action' and prefs data
+            body: JSON.stringify({ 
+                action: 'update-prefs', // Specify the action
+                phone: phone, 
+                frequency: frequency 
+            }),
         });
         const data = await response.json();
         if (!response.ok) {
@@ -239,11 +226,9 @@ async function handleUpdateUserPrefs(e) {
     }
 }
 
-// FILE: auth.js (REPLACE handleSignOut function)
-
 export function handleSignOut() {
-    log('Auth', 'User signed out.'); //
-    localStorage.removeItem('jwt'); //
+    log('Auth', 'User signed out.');
+    localStorage.removeItem('jwt');
     localStorage.removeItem('tempLikes'); // Clear any temporary likes on sign out
 
     // Reset user state, including clearing likedItemIds
@@ -251,24 +236,25 @@ export function handleSignOut() {
         session: {
             ...state.session,
             user: {
-                isAuthenticated: false, //
-                id: null, //
-                name: '', //
-                email: '', //
-                amountReceived: 0, // Reset financial info if needed
+                isAuthenticated: false,
+                id: null,
+                name: '',
+                email: '',
+                amountReceived: 0,
                 paymentHistory: [],
                 rsvps: new Set(),
-                isOwner: false, //
-                ownerDashboardId: null, //
+                isOwner: false,
+                ownerDashboardId: null,
                 likedItemIds: new Set() // Clear liked items
             }
         }
     });
 
-    updateUserProfileIcon(); //
-    hideUserModal(); //
-    populateUserPlans(null); // Clear/reset plans dropdown - Ensure accessible
-    applyFiltersAndSort(imageCache); // Re-apply filters for logged-out state - Ensure accessible
+    updateUserProfileIcon();
+    hideUserModal();
+    
+    // Dispatch event so main.js can update plans dropdown and re-filter
+    document.dispatchEvent(new CustomEvent('userLoggedOut'));
 }
 
 export function updateUserProfileIcon() {
