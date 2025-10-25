@@ -35,33 +35,76 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-function filterByCategoryAndSubcategory(recordsInStore, selectedCategory, activeSubcategories) {
-    if (selectedCategory === 'all') {
-        // Show only top-level items (no Parent Item) in the "All" view
-        return recordsInStore.filter(r => !r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-    }
+// REPLACE the filterByCategoryAndSubcategory function in: filtering.js
 
+function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) { // Changed 'recordsInStore' to 'records' for clarity
+    // --- THIS IS THE FIX ---
+    // If 'all' is selected, don't filter by parent item; just pass through the current set of records.
+    // The search filter (applied earlier or later) will handle narrowing down if needed.
+    if (selectedCategory === 'all' || !selectedCategory) {
+        return records; // Pass through all records provided
+    }
+    // --- END FIX ---
+
+    // Original logic for specific category/subcategory filtering remains the same
     const selectedCategoryLower = selectedCategory.toLowerCase();
-    // Start with items matching the main category
-    let finalItems = recordsInStore.filter(record => {
+    let finalItems = records.filter(record => { // Changed 'recordsInStore' to 'records'
         const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase());
-        return itemCategories.includes(selectedCategoryLower);
+        // Check if the item explicitly belongs to the category OR if its parent belongs to the category
+        // (This handles showing items when drilling down)
+        const parentRecord = state.records.all.find(r => r.fields.Name === record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
+        const parentCategories = parentRecord ? (parentRecord.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '').split(',').map(cat => cat.trim().toLowerCase()) : [];
+
+        return itemCategories.includes(selectedCategoryLower) || parentCategories.includes(selectedCategoryLower);
     });
-    // If subcategories are selected, further filter the results
+
     if (activeSubcategories.length > 0) {
         finalItems = finalItems.filter(record => {
+            // An item matches if:
+            // 1. It directly belongs to one of the active subcategories OR
+            // 2. Its parent IS one of the active subcategories (meaning the item itself is the subcategory grouping)
             const itemSubcategories = (record.fields.Subcategories || '')
                 .split(',')
                 .map(sc => sc.trim().toLowerCase());
-            // Item must match at least one of the active subcategories
-            return activeSubcategories.some(activeSubcat => itemSubcategories.includes(activeSubcat));
+            const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
+
+            return activeSubcategories.some(activeSubcat =>
+                itemSubcategories.includes(activeSubcat) || // Direct match
+                parentNameLower === activeSubcat // Item's parent is the active subcategory
+            );
+        });
+         // Further refinement: If subcategories are selected, EXCLUDE items whose parent IS the main category
+         // unless the item itself matches the subcategory filter. This prevents showing ALL items under the main category.
+         finalItems = finalItems.filter(record => {
+             const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
+             if (parentNameLower === selectedCategoryLower) {
+                 // If parent is the main category, check if this item matches a subcat filter
+                 const itemSubcategories = (record.fields.Subcategories || '')
+                     .split(',')
+                     .map(sc => sc.trim().toLowerCase());
+                 return activeSubcategories.some(activeSubcat => itemSubcategories.includes(activeSubcat));
+             }
+             return true; // Keep if parent is not the main category (or no parent)
+         });
+    } else {
+        // If NO subcategories are selected, only show items whose parent IS the selected category
+        // OR items that directly belong to the category but have NO parent (top-level items in that category)
+        finalItems = finalItems.filter(record => {
+            const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
+             const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
+                .split(',')
+                .map(cat => cat.trim().toLowerCase());
+
+            return parentNameLower === selectedCategoryLower || (itemCategories.includes(selectedCategoryLower) && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
         });
     }
 
-    return finalItems; // Return items matching category and any selected subcategories
+
+    return finalItems;
 }
+
 
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') {
