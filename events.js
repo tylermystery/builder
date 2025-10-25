@@ -318,12 +318,52 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     likesFilterBtn.className = 'filter-btn';
     likesFilterBtn.id = 'liked-items-filter-btn'; // Use the ID we planned
     likesFilterBtn.textContent = '❤️ My Likes'; // Set the text
-    if (categoryFiltersContainer) {
-        // Prepend it right after the My Plan button
-        categoryFiltersContainer.prepend(likesFilterBtn);
-    }
-    // --- END NEW CODE ---
 
+    // --- START MODIFIED SECTION ---
+    if (categoryFiltersContainer) { // Check if the container exists
+        // --- My Plan Button ---
+        const planFilterBtn = document.createElement('button');
+        planFilterBtn.className = 'filter-btn';
+        planFilterBtn.id = 'plan-filter-btn';
+        planFilterBtn.textContent = '⭐ My Plan';
+        categoryFiltersContainer.prepend(planFilterBtn); // Add it first
+
+        // --- My Likes Button ---
+        const likesFilterBtn = document.createElement('button');
+        likesFilterBtn.className = 'filter-btn';
+        likesFilterBtn.id = 'liked-items-filter-btn';
+        likesFilterBtn.textContent = '❤️ My Likes';
+        // Prepend it *after* the My Plan button (so My Plan is leftmost)
+        categoryFiltersContainer.insertBefore(likesFilterBtn, planFilterBtn.nextSibling);
+
+        // --- All Button (Always add this one) ---
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn active'; // Default to active
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
+        categoryFiltersContainer.appendChild(allButton); // Append after prepended buttons
+
+        // --- Store-Specific Category Buttons ---
+        const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
+        if (currentStore && Array.isArray(currentStore.fields.Items)) {
+            const categoryRecordIds = currentStore.fields.Items;
+            const categories = categoryRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
+
+            categories.forEach((catRecord) => {
+                const button = document.createElement('button');
+                button.className = 'filter-btn category-filter-btn';
+                // Ensure filter value is lowercase and handles potential special characters safely if needed
+                button.dataset.filter = catRecord.fields.Name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+                button.textContent = catRecord.fields.Name;
+                categoryFiltersContainer.appendChild(button); // Append store categories
+            });
+        }
+        updateSubcategoryButtons(); // Ensure subcategories are updated based on the initial state ("All")
+    } else {
+        console.error("Could not find the category filters container ('#category-filters') to add buttons.");
+    }
+    // --- END MODIFIED SECTION ---
+    
     if (currentStore && Array.isArray(currentStore.fields.Items)) {
         const categoryRecordIds = currentStore.fields.Items;
         const categories = categoryRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
