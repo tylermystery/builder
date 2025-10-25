@@ -22,7 +22,7 @@ export async function fetchPlansForUser(userId) {
         return [];
     }
     // Assuming 'Collaborators' field directly links to Users table
-    const formula = `FIND('${userId}', ARRAYJOIN(Collaborators))`;
+    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`; // Corrected: Added {}
     const encodedFormula = encodeURIComponent(formula);
     // Fetch sessions where the user is a collaborator
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&fields%5B%5D=Name`; // Only fetch Name for dropdown
@@ -684,7 +684,6 @@ export async function fetchChatMessages(sessionId) {
          return [];
     }
     // Fetch messages linked specifically to this Session record
-    // Fetch messages linked specifically to this Session record
     const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`;
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
@@ -758,25 +757,25 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error(\"SMS notification trigger failed:\", err)),
+                }).catch(err => console.error("SMS notification trigger failed:", err)),
 
                 fetch('/api/send-email-notification', { // Email via SendGrid
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error(\"Email notification trigger failed:\", err)),
+                }).catch(err => console.error("Email notification trigger failed:", err)),
 
                 fetch('/api/send-chat-to-admin', { // Admin email notification
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                      body: JSON.stringify({ recordId: newMessageRecordId })
-                }).catch(err => console.error(\"Admin chat notification trigger failed:\", err))
+                }).catch(err => console.error("Admin chat notification trigger failed:", err))
             ];
             await Promise.allSettled(notificationPromises);
             log('API', `Triggered all notifications for message ${newMessageRecordId}.`);
         }
     } catch (error) {
-        console.error(\"CRITICAL: Failed to save chat message to database.\", error);
+        console.error("CRITICAL: Failed to save chat message to database.", error);
         // Inform the user in a non-blocking way if possible
          if (typeof ui !== 'undefined' && ui.showToast) {
              ui.showToast(`Error: Could not send message. ${error.message}`);
