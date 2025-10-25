@@ -37,72 +37,55 @@ function parseCapacity(capacityStr) {
 
 // REPLACE the filterByCategoryAndSubcategory function in: filtering.js
 
-function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) { // Changed 'recordsInStore' to 'records' for clarity
-    // --- THIS IS THE FIX ---
-    // If 'all' is selected, don't filter by parent item; just pass through the current set of records.
-    // The search filter (applied earlier or later) will handle narrowing down if needed.
+function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
+    // If 'all' or no category is selected, pass through all records.
     if (selectedCategory === 'all' || !selectedCategory) {
-        return records; // Pass through all records provided
+        return records;
     }
-    // --- END FIX ---
 
-    // Original logic for specific category/subcategory filtering remains the same
     const selectedCategoryLower = selectedCategory.toLowerCase();
-    let finalItems = records.filter(record => { // Changed 'recordsInStore' to 'records'
-        const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
+    let categoryFilteredRecords = [];
+
+    // --- NEW LOGIC: Check Categories, Parent Item, and Subcategories for the selected category ---
+    categoryFilteredRecords = records.filter(record => {
+        const fields = record.fields;
+        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+        const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase());
-        // Check if the item explicitly belongs to the category OR if its parent belongs to the category
-        // (This handles showing items when drilling down)
-        const parentRecord = state.records.all.find(r => r.fields.Name === record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-        const parentCategories = parentRecord ? (parentRecord.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '').split(',').map(cat => cat.trim().toLowerCase()) : [];
+        // Also check Subcategories field for the main category name (edge case)
+        const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
+            .split(',')
+            .map(sc => sc.trim().toLowerCase());
 
-        return itemCategories.includes(selectedCategoryLower) || parentCategories.includes(selectedCategoryLower);
+        return itemCategories.includes(selectedCategoryLower) || // Matches Category field
+               parentNameLower === selectedCategoryLower ||       // Matches Parent Item field
+               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower); // Matches Subcategories field
     });
+    // --- END NEW LOGIC ---
 
+    // If subcategories are selected, further filter the category results.
     if (activeSubcategories.length > 0) {
-        finalItems = finalItems.filter(record => {
-            // An item matches if:
-            // 1. It directly belongs to one of the active subcategories OR
-            // 2. Its parent IS one of the active subcategories (meaning the item itself is the subcategory grouping)
-            const itemSubcategories = (record.fields.Subcategories || '')
+        // --- NEW LOGIC: Check Subcategories and Parent Item for the selected subcategories ---
+        const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
+            const fields = record.fields;
+            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+            const itemSubcategories = (fields.Subcategories || '')
                 .split(',')
                 .map(sc => sc.trim().toLowerCase());
-            const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
 
+            // Keep if *any* active subcategory filter matches the item's Subcategories OR Parent Item
             return activeSubcategories.some(activeSubcat =>
-                itemSubcategories.includes(activeSubcat) || // Direct match
-                parentNameLower === activeSubcat // Item's parent is the active subcategory
+                itemSubcategories.includes(activeSubcat) || // Matches Subcategories field
+                parentNameLower === activeSubcat            // Matches Parent Item field
             );
         });
-         // Further refinement: If subcategories are selected, EXCLUDE items whose parent IS the main category
-         // unless the item itself matches the subcategory filter. This prevents showing ALL items under the main category.
-         finalItems = finalItems.filter(record => {
-             const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
-             if (parentNameLower === selectedCategoryLower) {
-                 // If parent is the main category, check if this item matches a subcat filter
-                 const itemSubcategories = (record.fields.Subcategories || '')
-                     .split(',')
-                     .map(sc => sc.trim().toLowerCase());
-                 return activeSubcategories.some(activeSubcat => itemSubcategories.includes(activeSubcat));
-             }
-             return true; // Keep if parent is not the main category (or no parent)
-         });
+         // --- END NEW LOGIC ---
+        return subcategoryFilteredRecords; // Return items matching category logic AND subcategory logic
     } else {
-        // If NO subcategories are selected, only show items whose parent IS the selected category
-        // OR items that directly belong to the category but have NO parent (top-level items in that category)
-        finalItems = finalItems.filter(record => {
-            const parentNameLower = (record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').toLowerCase();
-             const itemCategories = (record.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
-                .split(',')
-                .map(cat => cat.trim().toLowerCase());
-
-            return parentNameLower === selectedCategoryLower || (itemCategories.includes(selectedCategoryLower) && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]);
-        });
+        // If no subcategories are selected, return all items matching the broad category logic.
+        return categoryFilteredRecords;
     }
-
-
-    return finalItems;
 }
 
 
