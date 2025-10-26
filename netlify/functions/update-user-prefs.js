@@ -8,7 +8,7 @@ const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
 const USERS_TABLE = 'Users';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const LIKED_BY_FIELD = 'Liked By Users';
-const NAME_FIELD = 'Name'; // Add Name field constant
+const NAME_FIELD = 'Name'; // Keep Name field
 
 // --- Helper: Toggle Like Logic ---
 async function handleToggleLike(userId, itemId) {
@@ -23,15 +23,15 @@ async function handleToggleLike(userId, itemId) {
     console.log(`[func-combo] handleToggleLike: Using AIRTABLE_PAT (masked): ${maskedPAT}`);
     if (!AIRTABLE_PAT || !BASE_ID) console.error("[func-combo] CRITICAL: AIRTABLE_PAT or BASE_ID environment variable is missing!");
 
-    // --- FIX: Request 'Name' field alongside the linked record field ---
+    // --- FIX: Use single fields[] parameter with comma-separated names ---
     const fieldsToFetch = [
-        `fields[]=${encodeURIComponent(LIKED_BY_FIELD)}`,
-        `fields[]=${encodeURIComponent(NAME_FIELD)}` // Also request the Name field
+        encodeURIComponent(LIKED_BY_FIELD),
+        encodeURIComponent(NAME_FIELD)
     ];
-    const getItemUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${itemId}?${fieldsToFetch.join('&')}`;
+    const getItemUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${itemId}?fields[]=${fieldsToFetch.join(',')}`;
     // --- END FIX ---
 
-    console.log(`[func-combo] handleToggleLike: Fetching item URL: ${getItemUrl}`);
+    console.log(`[func-combo] handleToggleLike: Fetching item URL: ${getItemUrl}`); // Log the new URL format
     let itemRes;
     try {
         itemRes = await fetch(getItemUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
@@ -47,10 +47,9 @@ async function handleToggleLike(userId, itemId) {
         throw new Error(`Failed to fetch item ${itemId} from Airtable. Status: ${errorStatus}`);
     }
 
-    // --- Restore Original Logic ---
+    // --- Restore Original Logic (No longer debugging fetch) ---
     console.log(`[func-combo] handleToggleLike: Successfully fetched item ${itemId}. Status: ${itemRes.status}`);
     const itemRecord = await itemRes.json();
-    // Safely access the field, defaulting to an empty array
     const likedUserIds = itemRecord.fields?.[LIKED_BY_FIELD] || [];
     const userIndex = likedUserIds.indexOf(userId);
     let updatedUserIds;
@@ -96,7 +95,7 @@ async function handleToggleLike(userId, itemId) {
     console.log(`[func-combo] handleToggleLike: Successfully patched likes for item ${itemId}. New status: ${liked ? 'Liked' : 'Unliked'}`);
 
     return { success: true, liked: liked };
-     // --- End Restore Original Logic ---
+     // --- End Original Logic ---
 }
 
 // --- Helper: Update Prefs Logic ---
