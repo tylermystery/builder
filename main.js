@@ -120,6 +120,8 @@ function syncUiWithUrl() {
 }
 
 
+// REPLACE the entire initialize function in main.js with this:
+
 async function initialize() {
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
@@ -184,17 +186,14 @@ async function initialize() {
     let activeShop = null;
 
     // --- Determine Active Shop (Simplified Logic) ---
-    // Priority: shopId URL param -> sessionId -> localStorage -> Default ('Tyler's Mystery Tours')
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId); //
         log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
     }
 
-    // Load session *before* determining shop from session, as session load might set state.session.storeId
     if (sessionId) {
          log('Main', `Session ID found in URL: ${sessionId}. Loading session...`);
          await api.loadSessionFromAirtable(sessionId); // This sets state.session.storeId if found
-         // Check again for shop based on loaded session's storeId ONLY if activeShop wasn't set by URL param
          if (!activeShop && state.session.storeId) {
               activeShop = state.stores.all.find(s => s.id === state.session.storeId);
               log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
@@ -210,14 +209,12 @@ async function initialize() {
     }
 
     if (!activeShop) {
-        // Fallback to default shop name
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours"); //
          log('Main', `Falling back to default shop 'Tyler's Mystery Tours'. Found shop: ${!!activeShop}`);
     }
     // --- End Shop Determination ---
 
     if (activeShop) {
-        // Update state with active shop ID
         setState({ ui: { ...state.ui, activeShopId: activeShop.id }}); //
         localStorage.setItem('lastVisitedShopId', activeShop.id); //
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
@@ -229,7 +226,6 @@ async function initialize() {
             titleElement.style.cursor = 'pointer'; //
             titleElement.addEventListener('click', (e) => { //
                 if (e.target.id !== 'shop-switcher-trigger') { //
-                    // Reset URL to shop base, clearing session/view params
                     window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`; //
                 }
             });
@@ -237,7 +233,6 @@ async function initialize() {
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
         }
 
-        // Favicon/Logo Logic (existing, ensure it runs correctly)
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'); //
         if (existingFavicon) existingFavicon.remove(); //
         const logoTag = activeShop.fields.LogoTag; //
@@ -274,27 +269,17 @@ async function initialize() {
 
 
         // --- Authentication & User State ---
-        // Check for existing JWT first
         const jwt = localStorage.getItem('jwt'); //
         let initialUserId = null;
         if (jwt) {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1])); //
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
-                    // Fetch liked items separately if needed or rely on auth-verify/social payload
-                    // For now, just set basic auth state. Liked items loaded below or via login sync.
                     setState({ //
                         session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
-                     // We need the liked items NOW if the user is already logged in
-                     // Assuming liked items are NOT in basic JWT payload, fetch them if needed via auth functions
-                     // OR ensure auth-verify/social functions are always called if token exists?
-                     // Let's assume auth-verify/social will provide likes. If token is valid but from old session, likes might be missing.
-                     // A dedicated fetchUserLikes might be safer here.
-                     // Simplification: Rely on auth functions to provide likes. If JWT exists but no likes, they might appear slightly delayed.
-
                 } else {
                     localStorage.removeItem('jwt'); //
                      log('Main', 'Existing JWT expired.');
@@ -318,15 +303,12 @@ async function initialize() {
                 const data = await response.json(); //
                 if (!response.ok) throw new Error(data.error || 'Token verification failed'); //
 
-                // Use the dedicated login handler which includes like sync
                 await _handleSuccessfulLogin(data); // This now handles state update, JWT storage, like sync
                  log('Main', 'Magic link verification successful.');
 
-                // Clean token from URL
                 const cleanUrl = new URL(window.location); //
                 cleanUrl.searchParams.delete('token'); //
                 window.history.replaceState({}, document.title, cleanUrl.toString()); //
-                // UI updates are handled by _handleSuccessfulLogin
 
             } catch (error) {
                 console.error(`Sign-in via token failed: ${error.message}`); //
@@ -334,10 +316,10 @@ async function initialize() {
                 const cleanUrl = new URL(window.location); //
                 cleanUrl.searchParams.delete('token'); //
                 window.history.replaceState({}, document.title, cleanUrl.toString()); //
-                 // Ensure user state is reset if login fails mid-process
                  handleSignOut(); // Use sign out to reset state cleanly
             }
-// --- THIS IS THE MODIFIED BLOCK ---
+        
+        // --- THIS IS THE CORRECTED BLOCK ---
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
@@ -372,27 +354,23 @@ async function initialize() {
                 console.error('Failed to fetch user data on reload:', error.message);
                 // Don't block the app, just log the error. Likes will be out of sync.
             }
-        // --- END MODIFIED BLOCK ---
+        // --- END CORRECTED BLOCK ---
         }
 
         // --- Post-Auth Initialization ---
         await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
 
-        // Load session data *after* potential authentication and shop determination
-        // If sessionId was in URL but loadSession wasn't called yet (because shopId took precedence)
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);
               await api.loadSessionFromAirtable(sessionId); //
         } else if (state.session.id) {
              log('Main', `Session ${state.session.id} already loaded or initiated.`);
-             // Ensure UI reflects loaded session data even if load didn't happen in this exact sequence
              ui.updateHeader(); //
              ui.updateEventPlanSection(); //
              ui.updateIdeasCarousel(); // Renamed
              ui.updateTotalCost(); //
         } else {
              log('Main', 'No active session ID found.');
-             // Clear any potential stale plan UI if no session is active
              ui.updateHeader();
              ui.updateEventPlanSection();
              ui.updateIdeasCarousel();
@@ -408,11 +386,8 @@ async function initialize() {
 
         // --- Final UI Setup ---
         ui.toggleLoading(false); //
-        // ui.updateIdeasCarousel(); // Called within sessionReady or after session load now
         updateSaveShareButton(); //
-
         initializeChatEventListeners(); //
-        // initializeSessionChat(); // Called within sessionReady now
         setupAuthEventListeners(); //
         updateUserProfileIcon(); //
 
