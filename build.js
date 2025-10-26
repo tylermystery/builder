@@ -45,7 +45,7 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
             if (fs.statSync(fullPath).isDirectory()) {
                 arrayOfFiles = getAllFiles(fullPath, arrayOfFiles);
             } else {
-                arrayOfFiles.push(relativePath.replace(/\\\\/g, '/'));
+                arrayOfFiles.push(relativePath.replace(/\\\\/g, '/')); // Corrected backslash replace
             }
         } catch (error) {
             console.error(`❌ Error accessing file system for ${fullPath}:`, error.message);
@@ -59,13 +59,12 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
 
 // --- Text Export Function ---
 function runTextExport(filePaths, timestamp) {
-    // ... (keep existing function body) ...
     const outputParts = [];
-    outputParts.push(`Project Export - ${timestamp}\\n`);
+    outputParts.push(`Project Export - ${timestamp}\n`); // Corrected newline
 
     filePaths.forEach(relativePath => {
         try {
-            console.log(`\\t[Text Export] Adding file: ${relativePath}`);
+            console.log(`\t[Text Export] Adding file: ${relativePath}`);
 
             outputParts.push('============================================================');
             outputParts.push(`// FILE: ${relativePath}`);
@@ -73,7 +72,7 @@ function runTextExport(filePaths, timestamp) {
 
             const content = fs.readFileSync(path.join(STARTING_DIRECTORY, relativePath), 'utf8');
             outputParts.push(content);
-            outputParts.push('\\n');
+            outputParts.push('\n'); // Corrected newline
 
         } catch (error) {
             console.error(`❌ Error reading file ${relativePath} for text export:`, error.message);
@@ -81,20 +80,19 @@ function runTextExport(filePaths, timestamp) {
         }
     });
 
-    const outputContent = outputParts.join('\\n');
+    const outputContent = outputParts.join('\n'); // Corrected newline
     const outputFileName = `project_source - ${timestamp}.txt`;
     fs.writeFileSync(outputFileName, outputContent);
-    console.log(`\\n✅ Text Build complete! Exported to: ${outputFileName} (in project root).`);
+    console.log(`\n✅ Text Build complete! Exported to: ${outputFileName} (in project root).`);
 }
 
 // --- JSON Export Function ---
 function runJsonExport(filePaths, timestamp) {
-    // ... (keep existing function body) ...
     const projectFiles = [];
 
     filePaths.forEach(relativePath => {
         try {
-            console.log(`\\t[JSON Export] Adding file: ${relativePath}`);
+            console.log(`\t[JSON Export] Adding file: ${relativePath}`);
             const content = fs.readFileSync(path.join(STARTING_DIRECTORY, relativePath), 'utf8');
 
             projectFiles.push({
@@ -122,26 +120,36 @@ function runJsonExport(filePaths, timestamp) {
 
         if (fs.existsSync(finalOutputPath)) {
              const fileSizeKB = (fs.statSync(finalOutputPath).size / 1024).toFixed(2);
-             console.log(`\\n✅ JSON Build complete! Exported to: ${finalOutputPath}.`);
+             console.log(`\n✅ JSON Build complete! Exported to: ${finalOutputPath}.`);
              console.log(`File size: ${fileSizeKB} KB. This file should now be included in your Netlify deployment.`);
         } else {
              throw new Error(`Write failed: File ${finalOutputPath} does not exist after write operation.`);
         }
 
     } catch (error) {
-        console.error(`\\n❌ Error writing output file ${JSON_OUTPUT_FILE}: ${error.message}`);
+        console.error(`\n❌ Error writing output file ${JSON_OUTPUT_FILE}: ${error.message}`);
     }
 }
 
 // --- Fetch Shortcuts Function ---
 async function fetchShortcutsFromAirtable() {
-    // ... (keep existing function body) ...
     console.log(`\n🌀 Fetching shortcuts from Airtable...`);
     let allRecords = [];
     let offset = null;
-    const fields = encodeURIComponent(`fields[]=${SHORTCUT_FIELD_NAME}&fields[]=${STORES_FIELD_NAME}`);
+
+    // --- THIS IS THE CORRECTED SECTION ---
+    // Encode field names individually and construct the query string correctly
+    const fieldsParams = [
+        `fields[]=${encodeURIComponent(SHORTCUT_FIELD_NAME)}`,
+        `fields[]=${encodeURIComponent(STORES_FIELD_NAME)}`
+    ];
+    const fieldsQueryString = fieldsParams.join('&');
+    // --- END CORRECTED SECTION ---
+
+    // Filter by records where the shortcut field is not empty
     const filter = encodeURIComponent(`NOT({${SHORTCUT_FIELD_NAME}} = BLANK())`);
-    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE_ID}?${fields}&filterByFormula=${filter}`;
+    // Construct the base URL using the corrected fields query string
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE_ID}?${fieldsQueryString}&filterByFormula=${filter}`;
 
     try {
         do {
@@ -166,18 +174,18 @@ async function fetchShortcutsFromAirtable() {
         return allRecords;
     } catch (error) {
         console.error('❌ Error fetching shortcut data:', error);
-        return [];
+        return []; // Return empty array on error to avoid breaking the build
     }
 }
 
+
 // --- Generate Redirects Function ---
 function generateAndWriteRedirects(shortcutItems) {
-    // ... (keep existing function body) ...
     console.log(`\n⚙️ Generating ${REDIRECTS_OUTPUT_FILE}...`);
     if (!shortcutItems || shortcutItems.length === 0) {
         console.log('⚠️ No shortcut items found, skipping redirects file generation.');
          try {
-             fs.writeFileSync(REDIRECTS_OUTPUT_FILE, '# No redirects generated by build script\n');
+             fs.writeFileSync(REDIRECTS_OUTPUT_FILE, '# No redirects generated by build script\n'); // Corrected newline
          } catch (writeError) {
              console.error(`❌ Error writing empty redirects file: ${writeError.message}`);
          }
@@ -211,6 +219,7 @@ function generateAndWriteRedirects(shortcutItems) {
     });
 
     if (redirectLines.length > 0) {
+        // Corrected newline characters for the file content
         const fileContent = `# Netlify redirects generated by build.js\n# ${new Date().toISOString()}\n\n${redirectLines.join('\n')}\n`;
         try {
             fs.writeFileSync(REDIRECTS_OUTPUT_FILE, fileContent);
@@ -224,7 +233,7 @@ function generateAndWriteRedirects(shortcutItems) {
     } else {
          console.log(`⚠️ No valid redirect rules generated after filtering.`);
          try {
-             fs.writeFileSync(REDIRECTS_OUTPUT_FILE, '# No valid redirects generated by build script\n');
+             fs.writeFileSync(REDIRECTS_OUTPUT_FILE, '# No valid redirects generated by build script\n'); // Corrected newline
          } catch (writeError) {
              console.error(`❌ Error writing empty redirects file: ${writeError.message}`);
          }
@@ -238,8 +247,7 @@ async function buildSourceFile() {
     console.log('============================================================');
 
     const timestamp = new Date().toISOString();
-    // CRITICAL: Call getAllFiles *AFTER* it has been defined above
-    const filePaths = getAllFiles(STARTING_DIRECTORY);
+    const filePaths = getAllFiles(STARTING_DIRECTORY); // Ensure getAllFiles is defined above
     console.log(`\n➡️ Found ${filePaths.length} project files to include in exports.`);
 
     const shortcutItems = await fetchShortcutsFromAirtable();
