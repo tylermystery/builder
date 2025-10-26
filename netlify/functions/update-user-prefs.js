@@ -1,4 +1,4 @@
-// FILE: netlify/functions/update-user-prefs.js (REPLACE ENTIRE FILE)
+// REPLACE THE ENTIRE CONTENTS of netlify/functions/update-user-prefs.js with this:
 
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
@@ -8,6 +8,7 @@ const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
 const USERS_TABLE = 'Users';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const LIKED_BY_FIELD = 'Liked By Users';
+const NAME_FIELD = 'Name';
 
 // --- Helper: Toggle Like Logic ---
 async function handleToggleLike(userId, itemId) {
@@ -102,7 +103,6 @@ async function handleToggleLike(userId, itemId) {
 
 // --- Helper: Update Prefs Logic ---
 async function handleUpdatePrefs(userId, phone, frequency) {
-    // ... (This function remains unchanged) ...
      console.log(`[func-combo] handleUpdatePrefs: User ${userId} updating prefs. Freq: ${frequency}, Phone: ${phone}`);
     console.log(`[func-combo] handleUpdatePrefs: Using BASE_ID: ${BASE_ID}`);
     console.log(`[func-combo] handleUpdatePrefs: Using USERS_TABLE: ${USERS_TABLE}`);
@@ -161,6 +161,32 @@ async function handleUpdatePrefs(userId, phone, frequency) {
     };
 }
 
+// --- NEW HELPER: Get User Data (Likes) ---
+async function handleGetUserData(userId) {
+    console.log(`[func-combo] handleGetUserData: Fetching liked items for user ${userId}`);
+    
+    let likedItemIds = [];
+    const likedItemsFormula = `FIND('${userId}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
+    const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`; // Only get record IDs
+
+    console.log(`[func-combo] handleGetUserData: Fetching URL: ${likedItemsUrl}`);
+    const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+
+    if (likedItemsRes.ok) {
+        const likedItemsData = await likedItemsRes.json();
+        likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
+        console.log(`[func-combo] handleGetUserData: Found ${likedItemIds.length} liked items for user ${userId}.`);
+    } else {
+        const errorBody = await likedItemsRes.text();
+        console.warn(`[func-combo] handleGetUserData: Failed to fetch liked items for user ${userId}. Status: ${likedItemsRes.status}, Body: ${errorBody}`);
+        // Don't fail the request, just return empty list
+    }
+    
+    // Return the payload expected by the client
+    return { likedItemIds: likedItemIds };
+}
+// --- END NEW HELPER ---
+
 
 // --- Main Handler ---
 exports.handler = async (event) => {
@@ -169,18 +195,26 @@ exports.handler = async (event) => {
   try {
       body = JSON.parse(event.body);
   } catch (parseError) {
-       console.error('[func-combo] Error parsing request body:', parseError);
-       return {
-           statusCode: 400,
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ error: 'Invalid request body.' })
-       };
+       // --- MODIFICATION: Handle GET request with no body ---
+       if (event.httpMethod === 'GET') {
+           body = {}; // Create empty body for GET
+       } else {
+           console.error('[func-combo] Error parsing request body:', parseError);
+           return {
+               statusCode: 400,
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ error: 'Invalid request body.' })
+           };
+       }
+       // --- END MODIFICATION ---
   }
 
-  if (event.httpMethod !== 'POST') {
+  // --- MODIFICATION: Allow GET requests ---
+  if (event.httpMethod !== 'POST' && event.httpMethod !== 'GET') {
     console.log(`[func-combo] Method Not Allowed: ${event.httpMethod}`);
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
+  // --- END MODIFICATION ---
 
   const authHeader = event.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -200,21 +234,39 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { action } = body;
+    // --- MODIFICATION: Get action from query param for GET, body for POST ---
+    let action;
+    if (event.httpMethod === 'GET') {
+        action = event.queryStringParameters.action;
+    } else {
+        action = body.action;
+    }
+    // --- END MODIFICATION ---
+    
     console.log(`[func-combo] Action received: ${action}`);
 
     let result;
 
     if (action === 'toggle-like') {
+      if (event.httpMethod !== 'POST') throw new Error('toggle-like action requires POST method.');
       const { itemId } = body;
       if (!itemId) throw new Error('Missing itemId for toggle-like action.');
       result = await handleToggleLike(userId, itemId);
+
     } else if (action === 'update-prefs') {
+      if (event.httpMethod !== 'POST') throw new Error('update-prefs action requires POST method.');
       const { phone, frequency } = body;
        if (!['Real-Time', 'None'].includes(frequency)) {
           throw new Error(`Invalid frequency value: ${frequency}`);
        }
       result = await handleUpdatePrefs(userId, phone, frequency);
+
+    // --- MODIFICATION: Add new action handler ---
+    } else if (action === 'get-user-data') {
+      if (event.httpMethod !== 'GET') throw new Error('get-user-data action requires GET method.');
+      result = await handleGetUserData(userId);
+    // --- END MODIFICATION ---
+
     } else {
         console.warn(`[func-combo] Unknown action received: ${action}`);
         throw new Error(`Unknown action: ${action}`);
@@ -228,7 +280,7 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error(`[func-combo] Handler Error processing action '${body?.action || 'unknown'}':`, error);
+    console.error(`[func-combo] Handler Error processing action '${body?.action || event.queryStringParameters.action || 'unknown'}':`, error);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
