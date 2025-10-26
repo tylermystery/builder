@@ -323,7 +323,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
-        categoryFiltersContainer.appendChild(planFilterBtn); // Use appendChild consistently
+        categoryFiltersContainer.appendChild(planFilterBtn);
 
         // Add "My Likes" Button
         const likesFilterBtn = document.createElement('button');
@@ -332,38 +332,34 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         likesFilterBtn.textContent = '❤️ My Likes';
         categoryFiltersContainer.appendChild(likesFilterBtn);
 
-        // Add "All" Button (Always add this one)
+        // Add "All" Button
         const allButton = document.createElement('button');
-        // Set 'active' class based on initial URL state later in syncUiWithUrl
-        allButton.className = 'filter-btn category-filter-btn';
+        allButton.className = 'filter-btn category-filter-btn'; // Set 'active' class later via syncUiWithUrl
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
 
-        // Add Store-Specific Category Buttons (ONLY ONCE)
+        // Add Store-Specific Category Buttons
         const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
         if (currentStore && Array.isArray(currentStore.fields.Items)) {
             const categoryRecordIds = currentStore.fields.Items;
-            // Fetch category records ensuring they are valid
             const categories = categoryRecordIds
-                .map(id => state.records.all.find(record => record.id === id && record.fields['Item Type'] === 'Grouping' && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM])) // Ensure it's a top-level grouping
-                .filter(Boolean); // Filter out any undefined results
+                .map(id => state.records.all.find(record => record.id === id && record.fields['Item Type'] === 'Grouping' && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]))
+                .filter(Boolean);
 
-            // Sort categories alphabetically by name before adding buttons
             categories.sort((a, b) => (a.fields.Name || '').localeCompare(b.fields.Name || ''));
 
             categories.forEach((catRecord) => {
                 const button = document.createElement('button');
                 button.className = 'filter-btn category-filter-btn';
-                // Make dataset.filter lowercase and URL-friendly
-                button.dataset.filter = catRecord.fields.Name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                // --- THIS IS THE FIX ---
+                // Use only toLowerCase() to match filtering logic comparison
+                button.dataset.filter = catRecord.fields.Name.toLowerCase();
+                // --- END FIX ---
                 button.textContent = catRecord.fields.Name;
                 categoryFiltersContainer.appendChild(button);
             });
         }
-        // Initial subcategory update might be needed depending on URL state (handled by syncUiWithUrl)
-        // updateSubcategoryButtons(); // Moved to syncUiWithUrl
-
     } // End of check for categoryFiltersContainer
     // --- END CONSOLIDATED BUTTON GENERATION ---
 
@@ -385,7 +381,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const likesFilterBtn = document.getElementById('liked-items-filter-btn');
         const clickedBtn = e.target.closest('.filter-btn');
 
-        if (!clickedBtn) return;
+        if (!clickedBtn || !categoryFiltersContainer) return; // Added check for container
 
         const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
         const isLikesFilterClick = clickedBtn.id === 'liked-items-filter-btn';
@@ -433,7 +429,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         updateUrl({ category: null, subcategory: null, view: null });
         const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
         if (allButton) {
-            categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
         updateSubcategoryButtons();
@@ -575,7 +571,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ view: 'present' });
             ui.showPresentationView(listType);
         } else if (carouselNav) {
-            const carousel = document.getElementById('ideas-carousel');
+            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
             if (carousel) {
                 const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
@@ -727,7 +723,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
-                 const groupNameLower = groupName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                 // Use the same lowercase conversion as data-filter
+                 const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
                  if (!parentName) {
@@ -738,7 +735,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      }
                      updateSubcategoryButtons();
                  } else {
-                     const parentNameLower = parentName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                     // Use the same lowercase conversion as data-filter
+                     const parentNameLower = parentName.toLowerCase();
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                      if (categoryFiltersContainer) {
                          categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -817,6 +815,62 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     setupItineraryEventListeners();
 
     return { mainDatePicker, eventPlanDatePicker };
+}
+
+// ... (keep initializeChatEventListeners and openChatWidget functions) ...
+export function initializeChatEventListeners() {
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    if (messageForm) {
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value;
+            if (message.trim() === '') return;
+            sendMessage(message);
+            messageInput.value = '';
+        });
+    }
+
+    const chatToggleButton = document.getElementById('chat-toggle-button');
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    function toggleChatWindow(forceClose = false) {
+        if (chatWidgetContainer) {
+            if (forceClose) {
+                chatWidgetContainer.classList.remove('chat-open');
+            } else {
+                chatWidgetContainer.classList.toggle('chat-open');
+            }
+        }
+    }
+
+    if (chatToggleButton) {
+        chatToggleButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleChatWindow();
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+        if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
+            if (!remainOpenCheckbox || !remainOpenCheckbox.checked) {
+                toggleChatWindow(true);
+            }
+        }
+    });
+}
+
+export function openChatWidget(andKeepOpen = false) {
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    if (chatWidgetContainer) {
+        chatWidgetContainer.classList.add('chat-open');
+        if (andKeepOpen) {
+            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+            if (remainOpenCheckbox) {
+                remainOpenCheckbox.checked = true;
+            }
+        }
+    }
 }
 
 export function initializeChatEventListeners() {
