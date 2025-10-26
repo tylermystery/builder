@@ -1,4 +1,4 @@
-// FILE: netlify/functions/update-user-prefs.js (REPLACE ENTIRE FILE AGAIN)
+// FILE: netlify/functions/update-user-prefs.js (REPLACE ENTIRE FILE)
 
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
@@ -8,7 +8,6 @@ const { AIRTABLE_PAT, BASE_ID, JWT_SECRET } = process.env;
 const USERS_TABLE = 'Users';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const LIKED_BY_FIELD = 'Liked By Users';
-const NAME_FIELD = 'Name'; // Keep Name field constant, though not used in fetch now
 
 // --- Helper: Toggle Like Logic ---
 async function handleToggleLike(userId, itemId) {
@@ -16,7 +15,7 @@ async function handleToggleLike(userId, itemId) {
         throw new Error('Missing itemId for toggle-like action.');
     }
     console.log(`[func-combo] handleToggleLike: User ${userId} toggling like for item ${itemId}`);
-    // Environment variable check logs
+    // Environment variable check logs (kept for safety)
     console.log(`[func-combo] handleToggleLike: Using BASE_ID: ${BASE_ID}`);
     console.log(`[func-combo] handleToggleLike: Using ITEMS_TABLE: ${ITEMS_TABLE}`);
     console.log(`[func-combo] handleToggleLike: Using LIKED_BY_FIELD: ${LIKED_BY_FIELD}`);
@@ -24,37 +23,54 @@ async function handleToggleLike(userId, itemId) {
     console.log(`[func-combo] handleToggleLike: Using AIRTABLE_PAT (masked): ${maskedPAT}`);
     if (!AIRTABLE_PAT || !BASE_ID) console.error("[func-combo] CRITICAL: AIRTABLE_PAT or BASE_ID environment variable is missing!");
 
+    // --- FIX: Fetch the full item record (no fields[] parameter) ---
+    const getItemUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${itemId}`;
+    console.log(`[func-combo] handleToggleLike: Fetching item URL (all fields): ${getItemUrl}`);
+    // --- END FIX ---
 
-    // --- MODIFICATION: Skip the initial GET request entirely ---
-    console.log(`[func-combo] handleToggleLike: SKIPPING initial GET request for item ${itemId} to test PATCH directly.`);
+    let itemRes;
+    try {
+        itemRes = await fetch(getItemUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+    } catch (fetchError) {
+        console.error(`[func-combo] handleToggleLike: Network error during fetch item: ${fetchError.message}`);
+        throw new Error(`Network error fetching item ${itemId} from Airtable: ${fetchError.message}`);
+    }
 
-    // We don't know the current state, so we can't reliably toggle.
-    // FOR TESTING: Let's *assume* the user wants to LIKE the item and try adding them.
-    // If this PATCH works, we know the GET was the problem.
-    // If this PATCH fails, the issue might be deeper (PAT permissions, field name for PATCH).
+    if (!itemRes.ok) {
+        const errorStatus = itemRes.status;
+        const errorBody = await itemRes.text(); // Log full body for unexpected errors
+        console.error(`[func-combo] handleToggleLike: Airtable fetch item failed. Status: ${errorStatus}, Body: ${errorBody}`);
+        throw new Error(`Failed to fetch item ${itemId} from Airtable. Status: ${errorStatus}`);
+    }
 
-    // Construct the PATCH payload assuming we are ADDING the user.
-    // NOTE: This is NOT the final logic, just for testing the PATCH operation.
-    // A proper solution would require fetching the current state first.
-    const updatedUserIdsForPatchTest = [userId]; // Simplified payload just containing the current user
+    // --- Restore Original Logic ---
+    console.log(`[func-combo] handleToggleLike: Successfully fetched item ${itemId}. Status: ${itemRes.status}`);
+    const itemRecord = await itemRes.json();
+    // Safely access the field from the full record, defaulting to an empty array
+    const likedUserIds = itemRecord.fields?.[LIKED_BY_FIELD] || [];
+    console.log(`[func-combo] handleToggleLike: Current likedUserIds for item ${itemId}:`, likedUserIds); // Log current likes
+    const userIndex = likedUserIds.indexOf(userId);
+    let updatedUserIds;
+    let liked = false;
 
+    if (userIndex > -1) {
+        // User already liked it, remove them (unlike)
+        updatedUserIds = likedUserIds.filter(id => id !== userId);
+        liked = false;
+        console.log(`[func-combo] handleToggleLike: User ${userId} unliking item ${itemId}.`);
+    } else {
+        // User hasn't liked it, add them (like)
+        updatedUserIds = [...likedUserIds, userId];
+        liked = true;
+        console.log(`[func-combo] handleToggleLike: User ${userId} liking item ${itemId}.`);
+    }
+    console.log(`[func-combo] handleToggleLike: New updatedUserIds for item ${itemId}:`, updatedUserIds); // Log the list to be patched
+
+    // 3. Update the Item record
     const patchUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${itemId}`;
-    console.log(`[func-combo] handleToggleLike: Attempting direct PATCH to URL: ${patchUrl}`);
-    const payload = {
-        // --- IMPORTANT: Airtable PATCH for linked records requires specific structure ---
-        // We need to provide the *existing* links plus the new one, or just the new one
-        // Let's try just providing the current user ID. If the field already has links,
-        // this might OVERWRITE them. A safer approach fetches first, then merges.
-        // For debugging the PATCH itself, let's try adding the user relative to existing ones IF POSSIBLE,
-        // but we can't fetch them reliably right now.
-        // Let's stick to the simple (potentially overwriting) approach FOR DEBUGGING ONLY.
-        fields: {
-             [LIKED_BY_FIELD]: updatedUserIdsForPatchTest // Test adding ONLY the current user
-        }
-        // A potentially better (but untested without GET) PATCH payload might involve
-        // fetching *all* fields (if that works) and then constructing the PATCH more carefully.
-    };
-    console.log(`[func-combo] handleToggleLike: Patch payload (DEBUG - ADDS USER):`, JSON.stringify(payload));
+    console.log(`[func-combo] handleToggleLike: Patching item URL: ${patchUrl}`);
+    const payload = { fields: { [LIKED_BY_FIELD]: updatedUserIds } };
+    console.log(`[func-combo] handleToggleLike: Patch payload:`, JSON.stringify(payload));
 
     let patchRes;
     try {
@@ -75,20 +91,18 @@ async function handleToggleLike(userId, itemId) {
         const errorStatus = patchRes.status;
         const errorBody = await patchRes.text();
         console.error(`[func-combo] handleToggleLike: Airtable patch item failed. Status: ${errorStatus}, Body: ${errorBody}`);
-        // Provide a more specific error for the client based on PATCH failure
-        throw new Error(`Failed to update likes (PATCH) for item ${itemId} in Airtable. Status: ${errorStatus}`);
+        throw new Error(`Failed to update likes for item ${itemId} in Airtable. Status: ${errorStatus}`);
     }
 
-    // If PATCH succeeds, we still don't know the *actual* final state without the initial GET.
-    // Return a generic success for now, acknowledging the limitation.
-    console.log(`[func-combo] handleToggleLike: DEBUG PATCH successful for item ${itemId}.`);
-    // Cannot determine actual 'liked' state without initial GET. Returning true tentatively.
-    return { success: true, liked: true }; // Tentative response
+    console.log(`[func-combo] handleToggleLike: Successfully patched likes for item ${itemId}. New status: ${liked ? 'Liked' : 'Unliked'}`);
+
+    return { success: true, liked: liked }; // Return the actual new liked status
+     // --- End Original Logic ---
 }
 
 // --- Helper: Update Prefs Logic ---
-// ... (This function remains unchanged) ...
 async function handleUpdatePrefs(userId, phone, frequency) {
+    // ... (This function remains unchanged) ...
      console.log(`[func-combo] handleUpdatePrefs: User ${userId} updating prefs. Freq: ${frequency}, Phone: ${phone}`);
     console.log(`[func-combo] handleUpdatePrefs: Using BASE_ID: ${BASE_ID}`);
     console.log(`[func-combo] handleUpdatePrefs: Using USERS_TABLE: ${USERS_TABLE}`);
@@ -147,8 +161,8 @@ async function handleUpdatePrefs(userId, phone, frequency) {
     };
 }
 
+
 // --- Main Handler ---
-// ... (This function remains unchanged) ...
 exports.handler = async (event) => {
   console.log(`[func-combo] Handler invoked. Method: ${event.httpMethod}. Path: ${event.path}. Body length: ${event.body ? event.body.length : 'N/A'}`);
   let body;
