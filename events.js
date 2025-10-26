@@ -600,37 +600,58 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
             }
         }
+    // --- CORRECTLY PLACED HEART ICON LOGIC ---
         else if (heartIcon) {
             e.stopPropagation();
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
-
+    
+            console.log(`[Events] Heart icon clicked for record: ${recordId}`); // Log click
+    
             if (state.session.user.isAuthenticated) {
+                // --- LOGGED-IN USER ---
+                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds)); // Log state before
                 try {
-                    heartIcon.style.pointerEvents = 'none';
-                    const result = await api.toggleUserLike(recordId);
+                    heartIcon.style.pointerEvents = 'none'; // Prevent double-clicks
+                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
+                    const result = await api.toggleUserLike(recordId); // Call the API
+                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result); // Log API response
+    
                     if (result.success) {
+                        let actionTaken = ''; // For logging
                         if (result.liked) {
                             state.session.user.likedItemIds.add(recordId);
+                            actionTaken = 'liked';
                             log('Events', `User liked item ${recordId}.`);
                         } else {
                             state.session.user.likedItemIds.delete(recordId);
+                            actionTaken = 'unliked';
                             log('Events', `User unliked item ${recordId}.`);
                         }
-                        ui.updateCardIcon(recordId);
+                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds)); // Log state after
+                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
+                        ui.updateCardIcon(recordId); // Update visuals
+                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
+    
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            applyFiltersAndSort(imageCache);
+                            console.log('[Events] "My Likes" filter active, reapplying filters...');
+                            applyFiltersAndSort(imageCache); // Refresh if viewing likes
                         }
                     } else {
+                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
+                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error); // Log the actual error
                     log('Events', `Error toggling like: ${error.message}`);
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
-                    heartIcon.style.pointerEvents = 'auto';
+                    heartIcon.style.pointerEvents = 'auto'; // Re-enable
+                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
+                // --- LOGGED-OUT USER ---
+                 console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
                 let tempLikes = [];
                 try {
@@ -643,20 +664,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 let currentlyLiked = false;
                 if (tempLikesSet.has(recordId)) {
                     tempLikesSet.delete(recordId); currentlyLiked = false;
+                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
                 } else {
                     tempLikesSet.add(recordId); currentlyLiked = true;
+                     console.log(`[Events] Added ${recordId} to temporary likes.`);
                 }
                 localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
                 log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
-                ui.updateCardIcon(recordId);
+                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
+                ui.updateCardIcon(recordId); // Update visuals based on temp state
+                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
                 if (currentlyLiked) {
-                     ui.showLoginPromptForLikes();
+                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
+                     ui.showLoginPromptForLikes(); // Show login prompt
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      applyFiltersAndSort(imageCache);
+                      console.log('[Events] "My Likes" filter active, reapplying filters (logged out)...');
+                      applyFiltersAndSort(imageCache); // Refresh if viewing likes
                  }
             }
         }
+        // --- END HEART ICON LOGIC ---
+        
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
