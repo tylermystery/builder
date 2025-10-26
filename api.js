@@ -150,8 +150,8 @@ export async function loadSessionFromAirtable(sessionId) {
         // --- THIS IS THE FIX for "Shop Link" ---
         // Check for the field name from the error log.
         // If it's different (e.g., "Store"), change "Shop Link" to "Store"
-        if (record.fields['Shop Link'] && record.fields['Shop Link'].length > 0) { 
-            state.session.storeId = record.fields['Shop Link'][0];
+        if (record.fields['Stores'] && record.fields['Stores'].length > 0) { 
+            state.session.storeId = record.fields['Stores'][0];
             log('API', `Session belongs to Store ID: ${state.session.storeId}`);
         } else {
              log('API', 'Session not linked to a specific store (Shop Link field is empty).');
@@ -313,7 +313,7 @@ export async function saveSessionToAirtable() {
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         // --- THIS IS THE FIX for "Shop Link" ---
         // Change "Shop Link" to the exact name from your Airtable Sessions table
-        "Shop Link": state.ui.activeShopId ? [state.ui.activeShopId] : null 
+        "Stores": state.ui.activeShopId ? [state.ui.activeShopId] : null 
     };
     if (formattedDate) {
         fields["Date"] = formattedDate;
