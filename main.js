@@ -337,12 +337,42 @@ async function initialize() {
                  // Ensure user state is reset if login fails mid-process
                  handleSignOut(); // Use sign out to reset state cleanly
             }
+// --- THIS IS THE MODIFIED BLOCK ---
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
-            // If user is authenticated by JWT but likes weren't loaded (e.g., old JWT without likes)
-            // Attempt to fetch likes - Requires simulating auth-verify response or a new endpoint
-            log('Main', 'User authenticated by JWT, but no likes found. Consider fetching likes separately.');
-            // Placeholder: Call a hypothetical function to fetch likes if needed
-            // await fetchAndSetUserLikes(state.session.user.id);
+            // User authenticated by JWT, but likes weren't loaded. Fetch them now.
+            log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
+            try {
+                // Call the *existing* endpoint with a GET request and query parameter
+                const response = await fetch('/api/update-user-prefs?action=get-user-data', {
+                    method: 'GET', // Use GET
+                    headers: { 'Authorization': `Bearer ${jwt}` } // Use the existing JWT
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Failed to fetch user data (Status: ${response.status})`);
+                }
+                const userData = await response.json();
+                if (userData.likedItemIds) {
+                    setState({
+                        session: {
+                            ...state.session,
+                            user: {
+                                ...state.session.user,
+                                likedItemIds: new Set(userData.likedItemIds)
+                            }
+                        }
+                    });
+                    log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
+                    // Now that likes are loaded, update all visible card icons
+                    document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
+                        ui.updateCardIcon(card.dataset.recordId);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch user data on reload:', error.message);
+                // Don't block the app, just log the error. Likes will be out of sync.
+            }
+        // --- END MODIFIED BLOCK ---
         }
 
         // --- Post-Auth Initialization ---
