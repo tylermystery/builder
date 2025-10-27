@@ -222,19 +222,18 @@ async function initialize() {
         // --- Initialize UI based on Shop ---
         const titleElement = document.getElementById('main-shop-title'); //
         if (titleElement) {
-            // --- MODIFICATION START ---
-            // Get the custom title field, fall back to the store's Name field if empty or missing
+            // --- Get Main Title ---
             const shopTitleField = activeShop.fields['Shop Title'] || activeShop.fields.Name;
-
-            // Split potential multiple titles by '|', trim whitespace, and filter out empty strings
             const titles = shopTitleField.split('|').map(t => t.trim()).filter(Boolean);
+            const displayTitle = titles.length > 0 ? titles[0] : 'Shop'; // Default main title
 
-            // Use the first title found, or default to 'Shop' if the field was completely empty
-            const displayTitle = titles.length > 0 ? titles[0] : 'Shop';
+            // --- Get Superscript Label ---
+            const shopTypeLabelField = activeShop.fields['Shop Type Label'] || 'Shop'; // Default superscript
+            const labels = shopTypeLabelField.split('|').map(t => t.trim()).filter(Boolean);
+            const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
 
-            // Set the innerHTML using the determined displayTitle
-            titleElement.innerHTML = `${displayTitle} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
-            // --- MODIFICATION END ---
+            // --- Set innerHTML with both dynamic parts ---
+            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
 
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer'; //
@@ -246,7 +245,7 @@ async function initialize() {
             const switcherTrigger = document.getElementById('shop-switcher-trigger'); //
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
         }
-
+        
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'); //
         if (existingFavicon) existingFavicon.remove(); //
         const logoTag = activeShop.fields.LogoTag; //
