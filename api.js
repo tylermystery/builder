@@ -367,17 +367,61 @@ export async function saveSessionToAirtable() {
     }
 }
 
+// REPLACE this function in api.js (around line 348)
 
 export async function fetchAllRecords() {
     let allRecords = [];
     let offset = null;
-    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
-    log('API', `Fetching items from base URL: ${baseUrl}`);
+
+    // --- List ALL fields needed across the app ---
+    const fieldsToFetch = [
+        'Name',
+        'Price',
+        'Description',
+        'Options',
+        'Parent Item',
+        'Status',
+        // 'Duration (hours)', // Decide if you need this or the display one below
+        'Pricing Type',
+        'Headcount min',
+        'Media Tags',
+        'Curated Images',
+        'Categories',
+        'Subcategories',
+        'iCal URL',
+        'Lead Time (days)',
+        'Item Type',
+        'Stores',
+        'RSVPs',
+        'Date',
+        'Chat Enabled',
+        // New Modal Fields (Use your exact Airtable names)
+        'Duration', // Or 'Duration Display' if that's the correct field
+        'Capacity',
+        'Location Details',
+        'Additional Information',
+        'Ranking - Fun',
+        'Ranking - Competitive',
+        'Ranking - Family Friendly',
+        // Add ALL other ranking field names here, e.g.:
+        // 'Ranking - Strategy',
+        // 'Ranking - Physicality',
+        // --- Add any other fields used anywhere else ---
+    ];
+
+    // --- Build the fields query parameter ---
+    const fieldsQuery = fieldsToFetch.map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    // Add fields query to the base URL
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${fieldsQuery}`;
+    log('API', `Fetching items from base URL including specific fields.`); // Updated log
+
     try {
         do {
-            let url = baseUrl;
+            let url = baseUrl; // Start with base URL including fields
             if (offset) {
-                url += (url.includes('?') ? '&' : '?') + `offset=${offset}`;
+                // Append offset correctly
+                url += `&offset=${offset}`;
             }
 
             const response = await fetch(url, {
@@ -385,7 +429,7 @@ export async function fetchAllRecords() {
             });
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('Airtable Error fetching items:', errorData);
+                console.error(`Airtable Error fetching items (URL: ${url}):`, errorData); // Log failing URL
                 throw new Error(`Failed to fetch items from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
@@ -394,7 +438,11 @@ export async function fetchAllRecords() {
         } while (offset);
 
         log('API', `Total item records fetched: ${allRecords.length}`);
-        return allRecords.filter(record => record.fields && record.fields.Name);
+        // Log the fields of the first record fetched to verify
+        if (allRecords.length > 0) {
+            console.log('[API Debug] Fields received for first record:', Object.keys(allRecords[0].fields));
+        }
+        return allRecords.filter(record => record.fields && record.fields.Name); // Keep existing filter
     } catch (error) {
         console.error("Error fetching all item records:", error);
         throw error;
