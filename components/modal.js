@@ -14,7 +14,6 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-
 // --- THIS IS THE FIX ---
 // This new function safely closes the modal by updating the URL state
 // and then hiding the UI, instead of using history.back().
@@ -158,60 +157,76 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
-    // --- POPULATE ADDITIONAL DETAILS ---
+// --- POPULATE ADDITIONAL DETAILS (WITH DEBUG LOGGING) ---
     if (modalAdditionalDetails) {
         modalAdditionalDetails.innerHTML = ''; // Clear previous details
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
         const rankingsHtmlParts = []; // Store ranking HTML temporarily
 
+        console.log('[Modal Debug] Record Fields:', record.fields); // Log all fields for the item
+
         // 1. Process standard details
+        console.log('[Modal Debug] Processing Standard Details...');
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
+            console.log(`[Modal Debug]   - Checking Field: "${spec.fieldName}", Found Value:`, value); // Log field name and value found
             if (value) { // Only display if value exists
+                console.log(`[Modal Debug]     -> Adding "${spec.label}" to modal.`); // Confirm addition
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
-                // Use innerHTML to handle potential <br> tags from replacing newlines
                 detailItem.innerHTML = `
                     <span class="detail-label">${spec.label}</span>
                     <span class="detail-value">${String(value).replace(/\n/g, '<br>')}</span>
                 `;
                 fragment.appendChild(detailItem);
+            } else {
+                 console.log(`[Modal Debug]     -> Skipping "${spec.label}" (no value).`); // Confirm skip
             }
         });
 
         // 2. Process rankings
+        console.log('[Modal Debug] Processing Rankings...');
         rankingSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
+            console.log(`[Modal Debug]   - Checking Ranking Field: "${spec.fieldName}", Found Value:`, value, `(Type: ${typeof value})`); // Log ranking field, value, and type
             // Check if value is a number greater than 0
             if (typeof value === 'number' && value > 0) {
+                 console.log(`[Modal Debug]     -> Adding Ranking "${spec.label}" with value ${value} to modal.`); // Confirm addition
                 hasRankings = true;
-                // Create star rating string (assuming a max of 5 stars)
-                const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value)); // Ensure repeat count isn't negative
+                const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
                 rankingsHtmlParts.push(`
                     <div class="ranking-item">
                         <span class="ranking-label">${spec.label}:</span>
                         <span class="ranking-stars">${stars}</span>
                     </div>
                 `);
+            } else {
+                console.log(`[Modal Debug]     -> Skipping Ranking "${spec.label}" (value is not a positive number).`); // Confirm skip
             }
         });
 
         // 3. Append rankings if any exist, wrapped in a container
         if (hasRankings) {
+            console.log('[Modal Debug] Appending ranking container to fragment.');
             const rankingContainer = document.createElement('div');
-            rankingContainer.className = 'ranking-list detail-item'; // Use detail-item for grid layout
+            rankingContainer.className = 'ranking-list detail-item';
             rankingContainer.innerHTML = `
                 <span class="detail-label">Rankings</span>
                 ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
+        } else {
+             console.log('[Modal Debug] No rankings found to append.');
         }
 
         modalAdditionalDetails.appendChild(fragment); // Add all details to the DOM
+        console.log('[Modal Debug] Finished populating #modal-additional-details.');
+    } else {
+        console.error('[Modal Debug] CRITICAL: #modal-additional-details element not found!');
     }
     // --- END POPULATE ADDITIONAL DETAILS ---
-
+    
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
