@@ -448,8 +448,6 @@ export async function fetchAllRecords() {
         throw error;
     }
 }
-
-
 export async function fetchAllStores() {
     let records = [];
     let offset = null;
