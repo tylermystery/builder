@@ -400,13 +400,7 @@ export async function fetchAllRecords() {
         'Capacity',
         'Location Details',
         'Additional Information',
-        'Ranking - Fun',
-        'Ranking - Competitive',
-        'Ranking - Family Friendly',
-        // Add ALL other ranking field names here, e.g.:
-        // 'Ranking - Strategy',
-        // 'Ranking - Physicality',
-        // --- Add any other fields used anywhere else ---
+        'Rankings',
     ];
 
     // --- Build the fields query parameter ---
