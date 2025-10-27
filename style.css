@@ -832,3 +832,61 @@ body.modal-open {
 #marquee-banner-container:hover #marquee-text {
     animation-play-state: paused;
 }
+
+/* --- Modal Additional Details Styles --- */
+#modal-additional-details {
+    margin-top: 20px; /* Space above the section */
+    margin-bottom: 20px; /* Space below the section */
+    padding-top: 15px; /* Space inside */
+    border-top: 1px solid #eee; /* Separator line */
+    font-size: 0.9em; /* Slightly smaller text */
+    color: #495057; /* Dark grey text */
+    display: grid; /* Use grid for alignment */
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
+    gap: 15px; /* Space between items */
+}
+
+.detail-item {
+    line-height: 1.5;
+}
+
+.detail-label {
+    display: block;
+    font-weight: 600; /* Bold label */
+    color: #343a40; /* Slightly darker label text */
+    margin-bottom: 3px;
+    font-size: 0.85em; /* Smaller label */
+    text-transform: uppercase; /* Uppercase label */
+}
+
+.detail-value {
+    /* Style for the value text */
+}
+
+/* Specific styling for rankings */
+.ranking-list {
+    grid-column: 1 / -1; /* Make rankings span full width if needed */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px; /* Add some space above rankings */
+}
+
+.ranking-item {
+    background-color: #f8f9fa; /* Light background */
+    border: 1px solid #dee2e6;
+    border-radius: 15px; /* Pill shape */
+    padding: 3px 10px;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.ranking-label {
+    /* Style for the ranking name (e.g., "Fun") */
+}
+
+.ranking-stars {
+    color: #ffc107; /* Yellow stars */
+    margin-left: 5px;
+    font-size: 1.1em; /* Make stars slightly larger */
+}
