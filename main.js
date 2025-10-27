@@ -222,7 +222,21 @@ async function initialize() {
         // --- Initialize UI based on Shop ---
         const titleElement = document.getElementById('main-shop-title'); //
         if (titleElement) {
-            titleElement.innerHTML = `${activeShop.fields.Name} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`; //
+            // --- MODIFICATION START ---
+            // Get the custom title field, fall back to the store's Name field if empty or missing
+            const shopTitleField = activeShop.fields['Shop Title'] || activeShop.fields.Name;
+
+            // Split potential multiple titles by '|', trim whitespace, and filter out empty strings
+            const titles = shopTitleField.split('|').map(t => t.trim()).filter(Boolean);
+
+            // Use the first title found, or default to 'Shop' if the field was completely empty
+            const displayTitle = titles.length > 0 ? titles[0] : 'Shop';
+
+            // Set the innerHTML using the determined displayTitle
+            titleElement.innerHTML = `${displayTitle} <sup>Shop</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
+            // --- MODIFICATION END ---
+
+            // Keep existing event listeners
             titleElement.style.cursor = 'pointer'; //
             titleElement.addEventListener('click', (e) => { //
                 if (e.target.id !== 'shop-switcher-trigger') { //
