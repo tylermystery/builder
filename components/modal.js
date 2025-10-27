@@ -95,7 +95,7 @@ function resetModalState() {
 // REPLACE the entire showDetailModal function in: components/modal.js
 
 export async function showDetailModal(record, startPhotoIndex = 0) {
-    // --- Detail Configuration (ADJUST rankingSpecs fieldNames!) ---
+    // --- Detail Configuration (Only non-ranking fields now) ---
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -103,20 +103,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         { fieldName: 'Additional Information', label: 'Good to Know' },
         // Add more *non-ranking* fields here following the pattern
     ];
-
-    const rankingSpecs = [
-        // !!! IMPORTANT: Replace these fieldName values with your EXACT Airtable field names !!!
-        { fieldName: 'Ranking - Fun', label: 'Fun Factor' },
-        { fieldName: 'Ranking - Competitive', label: 'Competitiveness' },
-        { fieldName: 'Ranking - Family Friendly', label: 'Family Friendly' },
-        // Add more *ranking* fields here, e.g.:
-        // { fieldName: 'Ranking - Strategy', label: 'Strategy' },
-        // { fieldName: 'Ranking - Physicality', label: 'Physicality' },
-    ];
-    // --- END CONFIGURATION ---
+    // --- Ranking Specs array is REMOVED ---
 
     console.log('[showDetailModal] Called for item:', record.id);
-    log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
+    log('Modal', `Showing detail modal for \\\"${record.fields.Name}\\\"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
@@ -131,10 +121,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
-    const modalAdditionalDetails = document.getElementById('modal-additional-details'); // Get the new container
+    const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
-    console.log('[hideDetailModal] Called.');
+    console.log('[hideDetailModal] Called.'); // Note: This log seems misplaced, but keeping as per original
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
@@ -157,22 +147,22 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
-// --- POPULATE ADDITIONAL DETAILS (WITH DEBUG LOGGING) ---
+    // --- UPDATED: POPULATE ADDITIONAL DETAILS (Handles JSON Rankings) ---
     if (modalAdditionalDetails) {
         modalAdditionalDetails.innerHTML = ''; // Clear previous details
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
-        const rankingsHtmlParts = []; // Store ranking HTML temporarily
+        const rankingsHtmlParts = [];
 
-        console.log('[Modal Debug] Record Fields:', record.fields); // Log all fields for the item
+        console.log('[Modal Debug] Record Fields:', record.fields);
 
-        // 1. Process standard details
+        // 1. Process standard details (Same as before)
         console.log('[Modal Debug] Processing Standard Details...');
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
-            console.log(`[Modal Debug]   - Checking Field: "${spec.fieldName}", Found Value:`, value); // Log field name and value found
-            if (value) { // Only display if value exists
-                console.log(`[Modal Debug]     -> Adding "${spec.label}" to modal.`); // Confirm addition
+            console.log(`[Modal Debug]   - Checking Field: \"${spec.fieldName}\", Found Value:`, value);
+            if (value) {
+                console.log(`[Modal Debug]     -> Adding \"${spec.label}\" to modal.`);
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
                 detailItem.innerHTML = `
@@ -181,32 +171,56 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 `;
                 fragment.appendChild(detailItem);
             } else {
-                 console.log(`[Modal Debug]     -> Skipping "${spec.label}" (no value).`); // Confirm skip
+                 console.log(`[Modal Debug]     -> Skipping \"${spec.label}\" (no value).`);
             }
         });
 
-        // 2. Process rankings
-        console.log('[Modal Debug] Processing Rankings...');
-        rankingSpecs.forEach(spec => {
-            const value = record.fields[spec.fieldName];
-            console.log(`[Modal Debug]   - Checking Ranking Field: "${spec.fieldName}", Found Value:`, value, `(Type: ${typeof value})`); // Log ranking field, value, and type
-            // Check if value is a number greater than 0
-            if (typeof value === 'number' && value > 0) {
-                 console.log(`[Modal Debug]     -> Adding Ranking "${spec.label}" with value ${value} to modal.`); // Confirm addition
-                hasRankings = true;
-                const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
-                rankingsHtmlParts.push(`
-                    <div class="ranking-item">
-                        <span class="ranking-label">${spec.label}:</span>
-                        <span class="ranking-stars">${stars}</span>
-                    </div>
-                `);
-            } else {
-                console.log(`[Modal Debug]     -> Skipping Ranking "${spec.label}" (value is not a positive number).`); // Confirm skip
-            }
-        });
+        // 2. Process Rankings from JSON field
+        console.log('[Modal Debug] Processing JSON Rankings...');
+        const rankingsJsonString = record.fields['Rankings']; // Get the JSON string
+        console.log(`[Modal Debug]   - Found Rankings JSON String:`, rankingsJsonString);
+        if (rankingsJsonString) {
+            try {
+                const rankingsObject = JSON.parse(rankingsJsonString);
+                console.log(`[Modal Debug]   - Parsed Rankings Object:`, rankingsObject);
 
-        // 3. Append rankings if any exist, wrapped in a container
+                // Iterate through the key-value pairs in the parsed object
+                for (const label in rankingsObject) {
+                    if (Object.hasOwnProperty.call(rankingsObject, label)) {
+                        const value = rankingsObject[label];
+                        console.log(`[Modal Debug]     - Checking Ranking: \"${label}\", Value:`, value, `(Type: ${typeof value})`);
+
+                        // Check if value is a number greater than 0
+                        if (typeof value === 'number' && value > 0) {
+                            hasRankings = true;
+                            // Create star rating string (assuming a max of 5 stars)
+                            const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
+                            rankingsHtmlParts.push(`
+                                <div class="ranking-item">
+                                    <span class="ranking-label">${label}:</span>
+                                    <span class="ranking-stars">${stars}</span>
+                                </div>
+                            `);
+                            console.log(`[Modal Debug]       -> Added ranking: ${label}`);
+                        } else {
+                             console.log(`[Modal Debug]       -> Skipped ranking: ${label} (value not positive number).`);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
+                console.error(`[Modal Debug] Invalid JSON string was:`, rankingsJsonString);
+                // Optionally display an error message in the UI
+                const errorItem = document.createElement('div');
+                errorItem.className = 'detail-item';
+                errorItem.innerHTML = `<span class="detail-label">Rankings</span><span class="detail-value" style="color: red;">Error loading rankings</span>`;
+                fragment.appendChild(errorItem);
+            }
+        } else {
+             console.log('[Modal Debug]   - No Rankings JSON string found.');
+        }
+
+        // 3. Append rankings container if any rankings were successfully processed
         if (hasRankings) {
             console.log('[Modal Debug] Appending ranking container to fragment.');
             const rankingContainer = document.createElement('div');
@@ -217,7 +231,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             `;
             fragment.appendChild(rankingContainer);
         } else {
-             console.log('[Modal Debug] No rankings found to append.');
+             console.log('[Modal Debug] No valid rankings found to display.');
         }
 
         modalAdditionalDetails.appendChild(fragment); // Add all details to the DOM
@@ -225,8 +239,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } else {
         console.error('[Modal Debug] CRITICAL: #modal-additional-details element not found!');
     }
-    // --- END POPULATE ADDITIONAL DETAILS ---
-    
+    // --- END UPDATED DETAILS POPULATION ---
+
+    // ... (rest of the showDetailModal function remains the same) ...
+    // Price calculation, image gallery, options, quantity, calendar, chat init, etc.
+
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
@@ -235,10 +252,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
-        const range = getGroupPriceRange(record); // <-- UPDATED
+        const range = getGroupPriceRange(record);
         modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
-        const price = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
+        const price = getRecordPrice(record, itemState.selectedOptionIndex);
         modalItemPrice.innerHTML = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A') + pricingTypeHTML;
     }
 
@@ -286,7 +303,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
-            // This option is a link to another item
             optionButton.dataset.childName = opt.name;
             optionButton.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -300,7 +316,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 }
             });
         } else {
-            // This is a regular option (variation)
             optionButton.addEventListener('click', (e) => {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
@@ -310,7 +325,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     detail: { selectedOptionIndex: newIndex }
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
+                const newPrice = getRecordPrice(record, newIndex);
                 modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
         }
