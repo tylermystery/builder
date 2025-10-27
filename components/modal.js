@@ -93,9 +93,31 @@ function resetModalState() {
     log('Modal', 'Reset modal state.');
 }
 
+// REPLACE the entire showDetailModal function in: components/modal.js
+
 export async function showDetailModal(record, startPhotoIndex = 0) {
+    // --- Detail Configuration (ADJUST rankingSpecs fieldNames!) ---
+    const detailSpecs = [
+        { fieldName: 'Duration', label: 'Duration' },
+        { fieldName: 'Capacity', label: 'Capacity' },
+        { fieldName: 'Location Details', label: 'Location Info' },
+        { fieldName: 'Additional Information', label: 'Good to Know' },
+        // Add more *non-ranking* fields here following the pattern
+    ];
+
+    const rankingSpecs = [
+        // !!! IMPORTANT: Replace these fieldName values with your EXACT Airtable field names !!!
+        { fieldName: 'Ranking - Fun', label: 'Fun Factor' },
+        { fieldName: 'Ranking - Competitive', label: 'Competitiveness' },
+        { fieldName: 'Ranking - Family Friendly', label: 'Family Friendly' },
+        // Add more *ranking* fields here, e.g.:
+        // { fieldName: 'Ranking - Strategy', label: 'Strategy' },
+        // { fieldName: 'Ranking - Physicality', label: 'Physicality' },
+    ];
+    // --- END CONFIGURATION ---
+
     console.log('[showDetailModal] Called for item:', record.id);
-    log('Modal', `Showing detail modal for "${record.fields.Name}"`);
+    log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
@@ -110,6 +132,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalCalendarContainer = document.getElementById('modal-calendar-container');
     const modalActionsContainer = document.getElementById('modal-actions-container');
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
+    const modalAdditionalDetails = document.getElementById('modal-additional-details'); // Get the new container
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
     console.log('[hideDetailModal] Called.');
@@ -121,10 +144,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
     currentItemChatRecordId = record.id;
-    
+
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
-    
+
     const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
@@ -134,13 +157,67 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
-    
+
+    // --- POPULATE ADDITIONAL DETAILS ---
+    if (modalAdditionalDetails) {
+        modalAdditionalDetails.innerHTML = ''; // Clear previous details
+        const fragment = document.createDocumentFragment();
+        let hasRankings = false;
+        const rankingsHtmlParts = []; // Store ranking HTML temporarily
+
+        // 1. Process standard details
+        detailSpecs.forEach(spec => {
+            const value = record.fields[spec.fieldName];
+            if (value) { // Only display if value exists
+                const detailItem = document.createElement('div');
+                detailItem.className = 'detail-item';
+                // Use innerHTML to handle potential <br> tags from replacing newlines
+                detailItem.innerHTML = `
+                    <span class="detail-label">${spec.label}</span>
+                    <span class="detail-value">${String(value).replace(/\n/g, '<br>')}</span>
+                `;
+                fragment.appendChild(detailItem);
+            }
+        });
+
+        // 2. Process rankings
+        rankingSpecs.forEach(spec => {
+            const value = record.fields[spec.fieldName];
+            // Check if value is a number greater than 0
+            if (typeof value === 'number' && value > 0) {
+                hasRankings = true;
+                // Create star rating string (assuming a max of 5 stars)
+                const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value)); // Ensure repeat count isn't negative
+                rankingsHtmlParts.push(`
+                    <div class="ranking-item">
+                        <span class="ranking-label">${spec.label}:</span>
+                        <span class="ranking-stars">${stars}</span>
+                    </div>
+                `);
+            }
+        });
+
+        // 3. Append rankings if any exist, wrapped in a container
+        if (hasRankings) {
+            const rankingContainer = document.createElement('div');
+            rankingContainer.className = 'ranking-list detail-item'; // Use detail-item for grid layout
+            rankingContainer.innerHTML = `
+                <span class="detail-label">Rankings</span>
+                ${rankingsHtmlParts.join('')}
+            `;
+            fragment.appendChild(rankingContainer);
+        }
+
+        modalAdditionalDetails.appendChild(fragment); // Add all details to the DOM
+    }
+    // --- END POPULATE ADDITIONAL DETAILS ---
+
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record); // <-- UPDATED
@@ -169,80 +246,68 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\"parent-link\" data-parent-name=\"${name}\" title=\"Go to ${name}\">${name}</a>`).join(' > ');
     }
 
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
-    
-// REPLACE this part within the showDetailModal function in: components/modal.js
 
-// ... inside showDetailModal, after modalHeaderActions.appendChild(heartBtnContainer);
+    modalOptionsContainer.innerHTML = '';
+    rawOptions.forEach((opt, index) => {
+        const optionButton = document.createElement('button');
+        optionButton.className = 'option-btn';
+        optionButton.dataset.optionIndex = index;
+        if (itemState.selectedOptionIndex === index) {
+            optionButton.classList.add('selected');
+        }
+        let priceModText = '';
+        if (opt.price !== null) {
+            priceModText = `$${opt.price.toFixed(2)}`;
+        } else if (opt.priceChange !== null) {
+            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+        }
+        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
 
-modalOptionsContainer.innerHTML = '';
-rawOptions.forEach((opt, index) => {
-    const optionButton = document.createElement('button');
-    optionButton.className = 'option-btn';
-    optionButton.dataset.optionIndex = index;
-    if (itemState.selectedOptionIndex === index) {
-        optionButton.classList.add('selected');
-    }
-    let priceModText = '';
-    if (opt.price !== null) {
-        priceModText = `$${opt.price.toFixed(2)}`;
-    } else if (opt.priceChange !== null) {
-        priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-    }
-    optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        if (allRecordNames.has(opt.name)) {
+            // This option is a link to another item
+            optionButton.dataset.childName = opt.name;
+            optionButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const childName = e.currentTarget.dataset.childName;
+                const childRecord = state.records.all.find(r => r.fields.Name === childName);
+                if (childRecord) {
+                    log('Modal', `Navigating from option to item: ${childName}`);
+                    showDetailModal(childRecord);
+                } else {
+                    log('Modal', `Could not find record for child option: ${childName}`);
+                }
+            });
+        } else {
+            // This is a regular option (variation)
+            optionButton.addEventListener('click', (e) => {
+                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                e.currentTarget.classList.add('selected');
+                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
+                e.currentTarget.dispatchEvent(new CustomEvent('change', {
+                    bubbles: true,
+                    detail: { selectedOptionIndex: newIndex }
+                }));
+                modalItemDescription.textContent = opt.description || record.fields.Description || '';
+                const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
+                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+            });
+        }
+        modalOptionsContainer.appendChild(optionButton);
+    });
 
-    // --- THIS IS THE MODIFIED LOGIC ---
-    if (allRecordNames.has(opt.name)) {
-        // This option is a link to another item
-        optionButton.dataset.childName = opt.name;
-        optionButton.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent modal closing or other unintended clicks
-            const childName = e.currentTarget.dataset.childName;
-            const childRecord = state.records.all.find(r => r.fields.Name === childName);
-            if (childRecord) {
-                // Close the current modal cleanly before opening the new one
-                // We directly call showDetailModal again, which handles resetting and showing.
-                // No need to explicitly hide first, as showDetailModal resets.
-                log('Modal', `Navigating from option to item: ${childName}`);
-                showDetailModal(childRecord); // Recursively call to show the child item's modal
-            } else {
-                log('Modal', `Could not find record for child option: ${childName}`);
-            }
-        });
-    } else {
-        // This is a regular option (variation)
-        optionButton.addEventListener('click', (e) => {
-            modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-            e.currentTarget.classList.add('selected');
-            const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-            // Dispatch change event for state update
-            e.currentTarget.dispatchEvent(new CustomEvent('change', {
-                bubbles: true,
-                detail: { selectedOptionIndex: newIndex }
-            }));
-            modalItemDescription.textContent = opt.description || record.fields.Description || '';
-            const newPrice = getRecordPrice(record, newIndex); // <-- UPDATED
-            modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
-        });
-    }
-    // --- END MODIFIED LOGIC ---
-
-    modalOptionsContainer.appendChild(optionButton);
-});
-
-// ... rest of showDetailModal function
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -272,7 +337,7 @@ rawOptions.forEach((opt, index) => {
                 className = 'available-full';
             } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                 className = 'available-partial';
-                tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
             } else {
                 className = 'unavailable';
             }
@@ -300,9 +365,9 @@ rawOptions.forEach((opt, index) => {
     if (eventDate) {
         calendarInstance.setDate(new Date(eventDate), true);
     }
-    
+
     ui.updateCardIcon(record.id);
-    
+
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
