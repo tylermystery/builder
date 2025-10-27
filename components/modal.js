@@ -80,7 +80,8 @@ function resetModalState() {
         modalQuantitySelector: document.getElementById('modal-quantity-selector'),
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
-        modalBreadcrumbs: document.getElementById('modal-breadcrumbs')
+        modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
+        modalAdditionalDetails: document.getElementById('modal-additional-details') // ADD THIS
     };
     for (const key in elements) {
         if (elements[key]) {
