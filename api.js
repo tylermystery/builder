@@ -373,7 +373,7 @@ export async function fetchAllRecords() {
     let allRecords = [];
     let offset = null;
 
-    // --- List ALL fields needed across the app ---
+    // --- List ALL fields needed - MAKE SURE THESE MATCH AIRTABLE EXACTLY ---
     const fieldsToFetch = [
         'Name',
         'Price',
@@ -381,7 +381,6 @@ export async function fetchAllRecords() {
         'Options',
         'Parent Item',
         'Status',
-        // 'Duration (hours)', // Decide if you need this or the display one below
         'Pricing Type',
         'Headcount min',
         'Media Tags',
@@ -395,20 +394,26 @@ export async function fetchAllRecords() {
         'RSVPs',
         'Date',
         'Chat Enabled',
-        // New Modal Fields (Use your exact Airtable names)
-        'Duration', // Or 'Duration Display' if that's the correct field
+        // New Modal Fields (VERIFY THESE NAMES)
+        'Duration',
         'Capacity',
         'Location Details',
         'Additional Information',
-        'Rankings',
+        'Rankings'
+        // Add ALL other ranking field names from Airtable if you used individual fields before
+        // e.g., 'Ranking - Fun', 'Ranking - Competitive', etc.
+        // Add ALL other fields used anywhere else
     ];
+    // --- END OF FIELD LIST ---
 
     // --- Build the fields query parameter ---
     const fieldsQuery = fieldsToFetch.map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
 
-    // Add fields query to the base URL
+    // --- FIX: Add fieldsQuery *after* the question mark ---
     const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${fieldsQuery}`;
-    log('API', `Fetching items from base URL including specific fields.`); // Updated log
+    // --- END FIX ---
+
+    log('API', `Fetching items URL (with fields): ${baseUrl}`); // Log the full URL
 
     try {
         do {
@@ -418,12 +423,17 @@ export async function fetchAllRecords() {
                 url += `&offset=${offset}`;
             }
 
+            // Log the exact URL being fetched in each iteration
+            // console.log(`[API Fetch] Requesting URL: ${url}`);
+
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
             });
+
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error(`Airtable Error fetching items (URL: ${url}):`, errorData); // Log failing URL
+                // Log status and potentially body for debugging
+                const errorText = await response.text();
+                console.error(`Airtable Error fetching items (URL: ${url}): Status ${response.status}`, errorText);
                 throw new Error(`Failed to fetch items from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
@@ -432,16 +442,19 @@ export async function fetchAllRecords() {
         } while (offset);
 
         log('API', `Total item records fetched: ${allRecords.length}`);
-        // Log the fields of the first record fetched to verify
         if (allRecords.length > 0) {
+            // Log the actual fields received for the first record
             console.log('[API Debug] Fields received for first record:', Object.keys(allRecords[0].fields));
+        } else {
+            console.log('[API Debug] No records received from Airtable.');
         }
-        return allRecords.filter(record => record.fields && record.fields.Name); // Keep existing filter
+        return allRecords.filter(record => record.fields && record.fields.Name);
     } catch (error) {
         console.error("Error fetching all item records:", error);
-        throw error;
+        throw error; // Re-throw the error to be caught by the caller
     }
 }
+
 export async function fetchAllStores() {
     let records = [];
     let offset = null;
