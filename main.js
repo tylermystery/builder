@@ -277,9 +277,36 @@ async function initialize() {
             shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); } //
 
-        ui.applyCartLabels(shopSettings.cartLabels); //
-        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Initialize main event listeners
+// --- NEW MARQUEE LOGIC START ---
+        const marqueeContainer = document.getElementById('marquee-banner-container');
+        const marqueeTextElement = document.getElementById('marquee-text');
 
+        if (marqueeContainer && marqueeTextElement) {
+            // Prioritize 'Marquee Text' field, fall back to 'Description', else empty
+            const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
+
+            if (marqueeContent.trim()) { // Check if there's actual text
+                marqueeTextElement.textContent = marqueeContent; // Set the text
+
+                // Optional: Adjust speed based on text length for better readability
+                const textLength = marqueeContent.length;
+                // Simple formula: ~15 chars per second, minimum 10s, max 60s duration
+                const duration = Math.min(60, Math.max(10, textLength / 15));
+                marqueeTextElement.style.animationDuration = `${duration}s`;
+
+                marqueeContainer.style.display = 'block'; // Make the banner visible
+                log('Main', `Marquee activated with text (duration: ${duration}s).`);
+            } else {
+                marqueeContainer.style.display = 'none'; // Keep hidden if no text
+                log('Main', 'Marquee has no content, keeping it hidden.');
+            }
+        } else {
+            console.warn('Marquee container or text element not found.');
+        }
+        // --- NEW MARQUEE LOGIC END ---
+
+        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
 
         // --- Authentication & User State ---
         const jwt = localStorage.getItem('jwt'); //
