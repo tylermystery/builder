@@ -1,4 +1,5 @@
-/* REPLACE the entire contents of: style.css */
+/* In: style.css */
+/* Action: REPLACE THE ENTIRE FILE with this content. */
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
@@ -14,7 +15,6 @@ body {
 body.modal-open {
     overflow: hidden;
 }
-/* REPLACE all rules for #main-header, .header-content, #header-left, and #main-shop-title in: style.css */
 
 #main-header {
     border-bottom: 1px solid #dee2e6;
@@ -31,29 +31,25 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    /* Using padding here gives the content guaranteed breathing room */
-    padding: 1rem 1.25rem; /* Approx. 16px top/bottom */
+    padding: 1rem 1.25rem;
 }
 
 #header-left {
     display: flex;
     align-items: center;
-    gap: 15px; /* Replaces the JS margin for cleaner spacing */
+    gap: 15px;
 }
 
 #main-shop-title {
-    /* This removes default browser margins that cause alignment issues */
     margin: 0;
     line-height: 1.2;
 }
 
-/* Specifically targets the logo image for predictable behavior */
 #header-left > img {
     height: 50px;
     display: block;
 }
 
-/* --- THIS IS THE FIX (Mobile-First Layout) --- */
 .main-content {
     display: flex;
     flex-direction: column;
@@ -63,7 +59,6 @@ body.modal-open {
     padding: 20px;
 }
 
-/* --- THIS IS THE FIX (Desktop Grid Override) --- */
 @media (min-width: 1000px) {
     .main-content {
         display: grid;
@@ -80,10 +75,9 @@ body.modal-open {
 
 #event-plan-panel {
     position: sticky;
-    top: 85px; /* Height of main header + padding */
+    top: 85px; 
 }
 
-/* --- SIDEBARS & PANELS --- */
 #right-sidebar h3, #left-sidebar h3 {
     margin-top: 0;
     border-bottom: 1px solid #ccc;
@@ -138,7 +132,6 @@ body.modal-open {
     align-items: center;
 }
 
-/* --- FAVORITES CAROUSEL --- */
 #favorites-section {
     position: relative;
 }
@@ -169,7 +162,6 @@ body.modal-open {
     background-position: center;
 }
 
-/* --- CATALOG CARDS (Simplified) --- */
 #catalog-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -246,7 +238,6 @@ body.modal-open {
     font-weight: normal;
 }
 
-/* --- MODALS (Functional Layout) --- */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -334,7 +325,6 @@ body.modal-open {
     border-color: blue;
 }
 
-/* --- CHAT WIDGET (Layout) --- */
 #chat-widget-container {
     position: fixed;
     bottom: 20px;
@@ -388,12 +378,9 @@ body.modal-open {
 .message-wrapper.sent { align-self: flex-end; }
 .message-wrapper.received { align-self: flex-start; }
 
-/* --- Utility --- */
 .hidden {
     display: none;
 }
-
-/* --- MOBILE & RESPONSIVE STYLES --- */
 
 #mobile-summary-bar {
     position: fixed;
@@ -443,16 +430,7 @@ body.modal-open {
     border: none;
 }
 
-/* Main Media Query for Mobile Overrides */
 @media (max-width: 999px) {
-    /* --- THIS IS THE FIX --- */
-    /* This rule is no longer needed here because mobile-first is the default */
-    /*
-    .main-content {
-        display: flex;
-        flex-direction: column;
-    }
-    */
 
     #left-sidebar, #right-sidebar {
         max-width: 100%;
@@ -534,7 +512,6 @@ body.modal-open {
         transform: rotate(-90deg);
     }
 }
-
 @media (max-width: 999px) {
     .presentation-body {
         display: flex;
@@ -625,10 +602,7 @@ body.modal-open {
     justify-content: center;
 }
 
-/* ADD THIS to the end of your style.css file */
-
 @media (max-width: 768px) {
-    /* --- Detail Modal Mobile Layout --- */
     .modal-content {
         flex-direction: column;
         height: 95vh;
@@ -637,14 +611,14 @@ body.modal-open {
     }
 
     .modal-main-column {
-        flex: 1; /* Allow it to shrink and grow */
-        min-height: 250px; /* Ensure it doesn't collapse */
+        flex: 1;
+        min-height: 250px;
         border-right: none;
         border-bottom: 1px solid #eee;
     }
 
     .modal-sidebar-column {
-        flex: 1; /* Allow it to shrink and grow */
+        flex: 1;
         padding: 20px;
     }
 
@@ -657,8 +631,6 @@ body.modal-open {
         height: 50px;
     }
 }
-
-/* ADD THIS to the end of your style.css file */
 
 .sso-divider {
     display: flex;
@@ -701,8 +673,6 @@ body.modal-open {
     background-color: #f8f8f8;
 }
 
-/* ADD this to the end of: style.css */
-
 #breadcrumbs {
     font-size: 0.9em;
     color: #6c757d;
@@ -723,8 +693,6 @@ body.modal-open {
     font-weight: bold;
     color: #343a40;
 }
-
-/* ADD this to the end of: style.css */
 
 .price-original {
     font-size: 0.8em;
@@ -752,8 +720,6 @@ body.modal-open {
     text-align: right;
 }
 
-/* ADD this to the end of: style.css */
-
 .itinerary-content {
     display: flex;
     flex-direction: column;
@@ -761,7 +727,7 @@ body.modal-open {
 
 .itinerary-container {
     flex-grow: 1;
-    min-height: 0; /* Important for flexbox scrolling in some browsers */
+    min-height: 0;
 }
 
 .itinerary-column {
@@ -770,12 +736,10 @@ body.modal-open {
 }
 
 .itinerary-list {
-    overflow-y: auto; /* This makes the lists scrollable */
+    overflow-y: auto;
     flex-grow: 1;
     padding: 5px;
 }
-
-/* ADD this to the end of: style.css */
 
 #checkout-summary-details li {
     display: flex;
@@ -796,58 +760,52 @@ body.modal-open {
     margin-top: 4px;
 }
 
-/* ADD this to the end of: style.css */
-
 .itinerary-item-controls {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-left: auto; /* Pushes the controls to the right */
-    flex-shrink: 0; /* Prevents the controls from shrinking */
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
-/* --- Marquee Banner Styles --- */
 #marquee-banner-container {
-    background-color: #e9ecef; /* Light grey background */
-    color: #495057;           /* Darker grey text */
-    padding: 6px 0;           /* Vertical padding */
-    overflow: hidden;         /* Hides text outside the container */
-    white-space: nowrap;      /* Keeps the text on a single line */
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Subtle inner shadow */
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 6px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
     border-top: 1px solid #dee2e6;
     border-bottom: 1px solid #dee2e6;
 }
 
 #marquee-text {
-    display: inline-block;    /* Necessary for the animation */
-    padding-left: 100%;       /* Starts the text off-screen to the right */
-    animation: marquee-scroll 25s linear infinite; /* Adjust speed (seconds) */
-    font-size: 0.9em;         /* Slightly smaller text */
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee-scroll 25s linear infinite;
+    font-size: 0.9em;
     font-weight: 500;
 }
 
-/* The scrolling animation */
 @keyframes marquee-scroll {
     0%   { transform: translateX(0); }
-    100% { transform: translateX(-100%); } /* Moves text leftwards across its own width */
+    100% { transform: translateX(-100%); }
 }
 
-/* Optional: Pause animation when the user hovers over it */
 #marquee-banner-container:hover #marquee-text {
     animation-play-state: paused;
 }
 
-/* --- Modal Additional Details Styles --- */
 #modal-additional-details {
-    margin-top: 20px; /* Space above the section */
-    margin-bottom: 20px; /* Space below the section */
-    padding-top: 15px; /* Space inside */
-    border-top: 1px solid #eee; /* Separator line */
-    font-size: 0.9em; /* Slightly smaller text */
-    color: #495057; /* Dark grey text */
-    display: grid; /* Use grid for alignment */
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* Responsive columns */
-    gap: 15px; /* Space between items */
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    font-size: 0.9em;
+    color: #495057;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
 }
 
 .detail-item {
@@ -856,30 +814,29 @@ body.modal-open {
 
 .detail-label {
     display: block;
-    font-weight: 600; /* Bold label */
-    color: #343a40; /* Slightly darker label text */
+    font-weight: 600;
+    color: #343a40;
     margin-bottom: 3px;
-    font-size: 0.85em; /* Smaller label */
-    text-transform: uppercase; /* Uppercase label */
+    font-size: 0.85em;
+    text-transform: uppercase;
 }
 
 .detail-value {
     /* Style for the value text */
 }
 
-/* Specific styling for rankings */
 .ranking-list {
-    grid-column: 1 / -1; /* Make rankings span full width if needed */
+    grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-top: 5px; /* Add some space above rankings */
+    margin-top: 5px;
 }
 
 .ranking-item {
-    background-color: #f8f9fa; /* Light background */
+    background-color: #f8f9fa;
     border: 1px solid #dee2e6;
-    border-radius: 15px; /* Pill shape */
+    border-radius: 15px;
     padding: 3px 10px;
     font-size: 0.85em;
     white-space: nowrap;
@@ -890,13 +847,10 @@ body.modal-open {
 }
 
 .ranking-stars {
-    color: #ffc107; /* Yellow stars */
+    color: #ffc107;
     margin-left: 5px;
-    font-size: 1.1em; /* Make stars slightly larger */
+    font-size: 1.1em;
 }
-
-/* In: style.css */
-/* ADD this to the end of the file: */
 
 @keyframes gradientAnimation {
     0% {
