@@ -152,7 +152,8 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
-// REPLACE the updateTotalCost function in: components/sidebar.js
+/* In: components/sidebar.js */
+/* REPLACE the entire 'updateTotalCost' function with this: */
 
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
@@ -182,6 +183,12 @@ export function updateTotalCost() {
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     
+    // --- THIS IS THE NEWLY ADDED TRIGGER ---
+    if (typeof ui.updateDynamicBackground === 'function') {
+        ui.updateDynamicBackground();
+    }
+    // --- END ---
+    
     if (amountReceived > 0) {
         amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
         amountPaidRowEl.style.display = 'flex';
@@ -207,15 +214,14 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        // --- THIS IS THE FIX ---
-        checkoutBtn.style.display = 'block'; // Ensure it's visible by default
+        // --- THIS IS THE FIX ---\n        checkoutBtn.style.display = 'block'; // Ensure it's visible by default
         document.getElementById('total-breakdown').style.display = 'block';
 
         if (isFullyPaid) {
             // If fully paid, hide the button and show a success message
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
@@ -224,13 +230,12 @@ export function updateTotalCost() {
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
             checkoutBtn.disabled = isPlanEmpty;
         }
-        // --- END FIX ---
-    }
+        // --- END FIX ---\n    }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
 }
-
+    
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
