@@ -1,10 +1,11 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/sidebar.js
+// In: components/sidebar.js
+// Action: REPLACE THE ENTIRE FILE with this content.
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-import { parseOptions, getRecordPrice } from '../utils.js'; // <-- UPDATED
+import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -16,7 +17,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     
     itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
-    const price = getRecordPrice(record, itemInfo.selectedOptionIndex); // <-- UPDATED
+    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
         <strong>${fields.Name || 'Untitled'}</strong><br>
         <small>${fields.Description || 'No description.'}</small><br>
@@ -42,7 +43,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
-// REPLACE the createLockedInItemElement function in: components/sidebar.js
 
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
@@ -56,16 +56,13 @@ async function createLockedInItemElement(record, itemInfo) {
         optionName = options[itemInfo.selectedOptionIndex].name;
     }
 
-    // --- THIS IS THE FIX ---
     const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     let priceDisplay = `$${price.toFixed(2)}`;
-    // If an override exists, show the original price for context
     if (itemInfo.overridePrice != null) {
         const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
     }
-    // --- END FIX ---
 
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
@@ -105,8 +102,6 @@ export async function updateEventPlanSection() {
     ui.observeLazyImages(container);
 }
 
-// FILE: components/sidebar.js (Replace the function definition)
-
 export async function updateIdeasCarousel() { // Renamed from updateFavoritesCarousel
     log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`); // Updated log message
     const ideasSection = document.getElementById('favorites-section'); // Consider renaming ID to 'ideas-section'
@@ -139,7 +134,6 @@ export async function updateIdeasCarousel() { // Renamed from updateFavoritesCar
     } else {
          console.warn("ui.observeLazyImages not found during carousel update.");
     }
-    // updateTotalCost(); // Recalculating total cost isn't necessary when only ideas change
 }
 
 export function updateHeader() {
@@ -151,9 +145,6 @@ export function updateHeader() {
     const goalsInput = document.getElementById('header-goals');
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
-
-/* In: components/sidebar.js */
-/* REPLACE the entire 'updateTotalCost' function with this: */
 
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
@@ -214,14 +205,13 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        // --- THIS IS THE FIX ---\n        checkoutBtn.style.display = 'block'; // Ensure it's visible by default
+        checkoutBtn.style.display = 'block';
         document.getElementById('total-breakdown').style.display = 'block';
 
         if (isFullyPaid) {
-            // If fully paid, hide the button and show a success message
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
+                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
             }
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
@@ -230,12 +220,12 @@ export function updateTotalCost() {
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
             checkoutBtn.disabled = isPlanEmpty;
         }
-        // --- END FIX ---\n    }
+    }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
-}
-    
+} // <-- THIS IS THE MISSING BRACE THAT CAUSED THE ERROR
+
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
