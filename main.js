@@ -119,24 +119,28 @@ function syncUiWithUrl() {
     }, 100); // Small delay
 }
 
-
-// REPLACE the entire initialize function in main.js with this:
+// REPLACE the entire initialize function in: main.js
 
 async function initialize() {
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
 
-    // Add listener for custom event 'userLoggedIn' to refresh plans
+// REPLACE the 'userLoggedIn' listener in: main.js
+
      document.addEventListener('userLoggedIn', () => {
-         log('Main', "'userLoggedIn' event caught, repopulating user plans.");
+         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat."); //
          populateUserPlans(state.session.user.id);
-         // Optionally refresh other UI elements that depend on logged-in state
-         // e.g., re-apply filters if "My Likes" might change visibility
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
+         // --- CHAT FIX: Re-initialize chat to update user name ---
+         if (typeof initializeSessionChat === 'function') {
+            log('Main', 'User logged in, re-initializing session chat with new user info.');
+            initializeSessionChat(); 
+         }
+         // --- END CHAT FIX ---
      });
-
+    
     document.addEventListener('planCreated', () => { //
         if (state.session.user.isAuthenticated) { //
             populateUserPlans(state.session.user.id); //
@@ -219,6 +223,13 @@ async function initialize() {
         localStorage.setItem('lastVisitedShopId', activeShop.id); //
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
+        // --- CHAT FIX: Ensure guests have a session ID on load ---
+        if (!state.session.id) {
+            log('Main', 'No session ID found, creating new session for guest chat...');
+            await api.saveSessionToAirtable(); // This will create an ID and fire 'sessionReady'
+        }
+        // --- END CHAT FIX ---
+
         // --- Initialize UI based on Shop ---
         const titleElement = document.getElementById('main-shop-title'); //
         if (titleElement) {
@@ -246,7 +257,7 @@ async function initialize() {
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
         }
         
-        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'); //
+        const existingFavicon = document.querySelector('link[rel=\"icon\"], link[rel=\"shortcut icon\"]'); //
         if (existingFavicon) existingFavicon.remove(); //
         const logoTag = activeShop.fields.LogoTag; //
         if (logoTag) {
@@ -265,14 +276,14 @@ async function initialize() {
             }
         }
 
-        // --- Shop Settings & Event Listeners ---
+        // --- Shop Settings & Event Listeners ---\
         const shopSettings = { //
             shopType: activeShop.fields.ShopType || 'Events', //
             enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'], //
             paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly', //
             terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.', //
             cartLabels: {} //
-        };
+        };\
         try { //
             shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); } //
@@ -316,7 +327,7 @@ async function initialize() {
                 const payload = JSON.parse(atob(jwt.split('.')[1])); //
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
                     setState({ //
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\
                     });
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
@@ -405,16 +416,18 @@ async function initialize() {
               await api.loadSessionFromAirtable(sessionId); //
         } else if (state.session.id) {
              log('Main', `Session ${state.session.id} already loaded or initiated.`);
+             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---
+             // This ensures chat initializes even if loadSessionFromAirtable was skipped
+             if (typeof initializeSessionChat === 'function') {
+                 initializeSessionChat();
+             }
+             // --- END CHAT FIX ---
              ui.updateHeader(); //
              ui.updateEventPlanSection(); //
              ui.updateIdeasCarousel(); // Renamed
              ui.updateTotalCost(); //
         } else {
-             log('Main', 'No active session ID found.');
-             ui.updateHeader();
-             ui.updateEventPlanSection();
-             ui.updateIdeasCarousel();
-             ui.updateTotalCost();
+             log('Main', 'No active session ID found (this should not happen after the guest-session fix).');
         }
 
 
@@ -424,7 +437,7 @@ async function initialize() {
         const statusFilterEl = document.getElementById('status-filter'); //
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue; //
 
-        // --- Final UI Setup ---
+        // --- Final UI Setup ---\
         ui.toggleLoading(false); //
         updateSaveShareButton(); //
         initializeChatEventListeners(); //
