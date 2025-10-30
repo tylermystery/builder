@@ -125,10 +125,9 @@ async function initialize() {
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
 
-// REPLACE the 'userLoggedIn' listener in: main.js
-
-     document.addEventListener('userLoggedIn', () => {
-         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat."); //
+    // Add listener for custom event 'userLoggedIn' to refresh plans
+document.addEventListener('userLoggedIn', () => {
+         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat."); // Updated log
          populateUserPlans(state.session.user.id);
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
@@ -276,7 +275,7 @@ async function initialize() {
             }
         }
 
-        // --- Shop Settings & Event Listeners ---\
+        // --- Shop Settings & Event Listeners ---
         const shopSettings = { //
             shopType: activeShop.fields.ShopType || 'Events', //
             enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'], //
@@ -327,8 +326,10 @@ async function initialize() {
                 const payload = JSON.parse(atob(jwt.split('.')[1])); //
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
                     setState({ //
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\
+                        // --- SYNTAX ERROR FIX: Removed trailing backslash ---
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
+                    // --- END FIX ---
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
@@ -437,7 +438,7 @@ async function initialize() {
         const statusFilterEl = document.getElementById('status-filter'); //
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue; //
 
-        // --- Final UI Setup ---\
+        // --- Final UI Setup ---
         ui.toggleLoading(false); //
         updateSaveShareButton(); //
         initializeChatEventListeners(); //
