@@ -121,13 +121,15 @@ function syncUiWithUrl() {
 
 // REPLACE the entire initialize function in: main.js
 
+// REPLACE the entire initialize function in: main.js
+
 async function initialize() {
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
 
     // Add listener for custom event 'userLoggedIn' to refresh plans
-document.addEventListener('userLoggedIn', () => {
-         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat."); // Updated log
+     document.addEventListener('userLoggedIn', () => {
+         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat."); //
          populateUserPlans(state.session.user.id);
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
@@ -139,7 +141,7 @@ document.addEventListener('userLoggedIn', () => {
          }
          // --- END CHAT FIX ---
      });
-    
+
     document.addEventListener('planCreated', () => { //
         if (state.session.user.isAuthenticated) { //
             populateUserPlans(state.session.user.id); //
