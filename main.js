@@ -283,7 +283,7 @@ async function initialize() {
             paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly', //
             terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.', //
             cartLabels: {} //
-        };\
+        };
         try { //
             shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); } //
