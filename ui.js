@@ -1,4 +1,5 @@
-// REPLACE THE ENTIRE CONTENTS OF: ui.js
+// In: ui.js
+// Action: REPLACE THE ENTIRE FILE with this content.
 
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -13,7 +14,7 @@ import { initializeItemChat } from './chat.js';
 // Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
-export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js'; // Removed applyCartLabels from here
+export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
 export * from './utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
@@ -136,12 +137,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for="header-goals"]');
+    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
+    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -381,8 +382,6 @@ export async function updateMobileBarAvailability() {
     }
 }
 
-// REPLACE the entire updateCatalogHeader function in: ui.js
-
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const titleEl = document.getElementById('catalog-title');
@@ -394,7 +393,7 @@ export function updateCatalogHeader() {
     breadcrumbsEl.innerHTML = '';
     titleEl.style.display = 'none';
 
-    // Don't show breadcrumbs for the "My Plan" view
+    // Don't show breadcrumbs for the \"My Plan\" view
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         return;
     }
@@ -402,15 +401,15 @@ export function updateCatalogHeader() {
     const path = [];
     let currentTitle = '';
 
-    // Always start with a clickable "All Categories" link
-    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
+    // Always start with a clickable \"All Categories\" link
+    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     // Find the active category
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
         // The category link should also be clickable
-        path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeCategoryButton.dataset.filter}">${categoryName}</a>`);
+        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
@@ -423,15 +422,13 @@ export function updateCatalogHeader() {
         currentTitle = subcatNames.join(' + ');
     }
     
-    // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
+    // Only show the breadcrumbs and title if we have navigated deeper than \"All Categories\"
     if (path.length > 1) {
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
     }
 }
-
-// FILE: ui.js (ADD THIS FUNCTION)
 
 // --- Function to show login prompt for likes ---
 let promptTimeout;
@@ -474,93 +471,8 @@ export function showLoginPromptForLikes() {
     // Hide after a delay
     promptTimeout = setTimeout(() => {
         promptElement.style.opacity = '0';
-        // Optional: Remove element after fade out if desired
-        // setTimeout(() => promptElement.remove(), 300);
     }, 4000); // Show for 4 seconds
 }
 // --- END login prompt function ---
-/* In: ui.js */
-/* ADD this entire block to the end of the file: */
 
-/**
- * Simple hash function to convert a string to a positive integer.
- * This lets us map any category name to a color index.
- * @param {string} str The string to hash (e.g., "Team Building Workshop")
- * @returns {number} A positive integer.
- */
-function stringToHash(str) {
-    let hash = 0, i, chr;
-    if (!str || str.length === 0) return hash;
-    for (i = 0; i < str.length; i++) {
-        chr = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + chr;
-        hash |= 0; // Convert to 32bit integer
-    }
-    return Math.abs(hash);
-}
-
-// A list of vibrant, pre-approved "adventure-themed" color pairs.
-// This ensures we always get beautiful combinations.
-const VIBRANT_COLOR_PAIRS = [
-    ['#ff9a8b', '#ff6a88'], // Active: Red/Pink
-    ['#00c9a7', '#84fab0'], // Nature: Green/Teal
-    ['#fbc2eb', '#a6c1ee'], // Indulgent: Purple/Blue
-    ['#ff7e5f', '#feb47b'], // Discovery: Orange/Yellow
-    ['#a18cd1', '#fbc2eb'], // Calm: Lavender/Pink
-    ['#89f7fe', '#66a6ff'], // Default: Calm Blue/Cyan
-    ['#f6d365', '#fda085'], // Sunset: Gold/Orange
-    ['#c2e9fb', '#a1c4fd'], // Sky: Light Blue
-    ['#d4fc79', '#96e6a1'], // Fresh: Lime/Green
-    ['#fa709a', '#fee140']  // Vibrant: Hot Pink/Yellow
-];
-
-/**
- * Updates the body background with an animated gradient
- * based on the categories of items in the plan.
- * Dynamically assigns colors to categories using a hash.
- */
-export function updateDynamicBackground() {
-    log('UI', 'Updating dynamic background...');
-    let colors = [];
-    const defaultColors = VIBRANT_COLOR_PAIRS[5]; // Use the 'Calm Blue/Cyan' pair as default
-    
-    // 1. Check if the plan is empty
-    if (state.cart.lockedItems.size === 0) {
-        colors.push(...defaultColors);
-    } else {
-        const categoriesInPlan = new Set();
-        
-        // 2. Get all unique categories from the plan
-        for (const [recordId] of state.cart.lockedItems.entries()) {
-            const record = state.records.all.find(r => r.id === recordId);
-            const categoryString = record?.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '';
-            
-            categoryString.split(',')
-                .map(cat => cat.trim().toLowerCase())
-                .filter(Boolean)
-                .forEach(cat => categoriesInPlan.add(cat));
-        }
-        
-        // 3. If no categories found on items, use default
-        if (categoriesInPlan.size === 0) {
-             colors.push(...defaultColors);
-        } else {
-            // 4. Create a color list by hashing each unique category name
-            categoriesInPlan.forEach(catName => {
-                const hash = stringToHash(catName);
-                const colorIndex = hash % VIBRANT_COLOR_PAIRS.length;
-                colors.push(...VIBRANT_COLOR_PAIRS[colorIndex]);
-            });
-        }
-    }
-
-    // 5. De-dupe colors (to keep the array clean) and set the CSS
-    const uniqueColors = [...new Set(colors)];
-    const gradient = `linear-gradient(-45deg, ${uniqueColors.join(', ')})`;
-    
-    document.body.style.background = gradient;
-    
-    // 6. Reinforce animation properties
-    document.body.style.backgroundSize = '400% 400%';
-    document.body.style.animation = 'gradientAnimation 20s ease infinite';
-}
+// --- DELETED updateDynamicBackground, stringToHash, and VIBRANT_COLOR_PAIRS ---
