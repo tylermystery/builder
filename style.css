@@ -45,6 +45,33 @@ body.modal-open {
     padding: 1rem 1.25rem;
 }
 
+/* This is the new block for header stacking on mobile */
+@media (max-width: 999px) {
+    .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding-bottom: 5px; /* Adjust padding slightly for tighter look */
+    }
+
+    #header-left {
+        width: 100%;
+        justify-content: space-between; /* Ensures logo/title are aligned */
+    }
+
+    #header-right {
+        width: 100%;
+        display: flex; /* Re-enable flex for its own content */
+        justify-content: flex-end; /* Align saved plans/account button to the right */
+        align-items: center;
+    }
+    
+    #marquee-banner-container {
+        /* Marquee should fill the whole width below the title on mobile */
+        width: 100%; 
+    }
+}
+
 #header-left {
     display: flex;
     align-items: center;
