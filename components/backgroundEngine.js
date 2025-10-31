@@ -10,12 +10,13 @@ let canvas, ctx;
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
 let currentColors = [];
+let animationFrameId = null;
 
-// Default settings object - this will be updated by sliders
+// This object will be populated by the active plugin's controls
 let settings = {}; 
 
 // --- Color Generation Logic ---
-// (This lives in the engine, as all effects will use it)
+// This lives in the engine, as all effects will use it
 function stringToHash(str) {
     let hash = 0, i, chr;
     if (!str || str.length === 0) return hash;
@@ -43,7 +44,7 @@ const VIBRANT_COLOR_PAIRS = [
 // --- Animation Loop ---
 function animationLoop(timestamp) {
     if (!ctx || !currentEffect) {
-        requestAnimationFrame(animationLoop);
+        animationFrameId = requestAnimationFrame(animationLoop);
         return;
     }
     
@@ -54,7 +55,7 @@ function animationLoop(timestamp) {
     // Pass it everything it needs to draw a frame
     currentEffect.draw(ctx, canvas.width, canvas.height, deltaTime, currentColors, settings);
 
-    requestAnimationFrame(animationLoop);
+    animationFrameId = requestAnimationFrame(animationLoop);
 }
 
 // --- Public API Functions ---
@@ -68,12 +69,14 @@ export function updateColors() {
     let colors = [];
     const defaultColors = VIBRANT_COLOR_PAIRS[5]; // Default
     
-    if (!state.records.all || state.cart.lockedItems.size === 0) {
+    // Check if records are loaded. If not, state.records might be undefined
+    if (!state.records || !state.records.all || state.cart.lockedItems.size === 0) {
         colors.push(...defaultColors);
     } else {
         const categoriesInPlan = new Set();
         for (const [recordId] of state.cart.lockedItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
+            // Add a check here in case record isn't found (e.g., during initialization)
             const categoryString = record?.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '';
             
             categoryString.split(',')
@@ -94,6 +97,11 @@ export function updateColors() {
     }
     currentColors = [...new Set(colors)];
     log('BG-Engine', `Colors updated to: ${currentColors.join(', ')}`);
+    
+    // Pass new colors to the effect
+    if (currentEffect && typeof currentEffect.updateColors === 'function') {
+        currentEffect.updateColors(currentColors);
+    }
 }
 
 /**
@@ -104,28 +112,105 @@ export function updateSettings(newSettings) {
     settings = { ...settings, ...newSettings };
     // Pass the new settings to the active plugin
     if (currentEffect && typeof currentEffect.updateSettings === 'function') {
-        currentEffect.updateSettings(newSettings);
+        currentEffect.updateSettings(settings);
     }
     log('BG-Engine', 'Settings updated:', settings);
 }
 
 /**
- * Called by main.js to start the engine.
- * We pass in the *first* effect we want to load.
- * @param {object} initialEffect - The effect plugin object (e.g., from kaleidoscope.js)
+ * Loads a new effect, builds its controls, and starts it.
+ * @param {object} effect - The effect plugin object.
+ * @param {HTMLElement} controlsContainer - The div where sliders should be built.
  */
-export function initBackgroundEngine(initialEffect) {
-    canvas = document.getElementById('kaleidoscope-bg'); // We'll keep this ID for simplicity
+export function loadEffect(effect, controlsContainer) {
+    log('BG-Engine', `Loading effect: ${effect.name}`);
+    currentEffect = effect;
+    settings = {}; // Reset settings
+    controlsContainer.innerHTML = ''; // Clear old sliders
+
+    // 1. Initialize the effect
+    if (typeof currentEffect.init === 'function') {
+        currentEffect.init(ctx, canvas.width, canvas.height);
+    }
+
+    // 2. Get controls from the plugin and build them in the UI
+    if (typeof currentEffect.getControls === 'function') {
+        const controls = currentEffect.getControls();
+        controls.forEach(control => {
+            // Set default value in our engine's settings
+            settings[control.id] = control.defaultValue;
+
+            // Create the UI
+            const controlGroup = document.createElement('div');
+            controlGroup.className = 'form-row-slider'; // A new class for styling
+            
+            const label = document.createElement('label');
+            label.htmlFor = control.id;
+            label.textContent = `${control.label}: `;
+            
+            const valueSpan = document.createElement('span');
+            valueSpan.id = `${control.id}-value`;
+            valueSpan.textContent = control.defaultValue;
+            label.appendChild(valueSpan);
+
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.id = control.id;
+            slider.min = control.min;
+            slider.max = control.max;
+            slider.step = control.step;
+            slider.value = control.defaultValue;
+            
+            // Add listener to update engine
+            slider.addEventListener('input', (e) => {
+                const newValue = parseFloat(e.target.value);
+                valueSpan.textContent = newValue.toFixed(control.step < 1 ? 2 : 0);
+                updateSettings({ [control.id]: newValue });
+            });
+
+            controlGroup.appendChild(label);
+            controlGroup.appendChild(slider);
+            controlsContainer.appendChild(controlGroup);
+        });
+    }
+
+    // 3. Pass current colors to the new effect
+    if (typeof currentEffect.updateColors === 'function') {
+        currentEffect.updateColors(currentColors);
+    }
+}
+
+/**
+ * Called once by main.js to start the engine.
+ */
+export function initBackgroundEngine() {
+    canvas = document.getElementById('kaleidoscope-bg'); // We'll keep this ID
     if (!canvas) {
         console.error('Fatal: Background canvas not found.');
         return;
     }
-    ctx = canvas.getContext('2d');
+    
+    // Try to get a WebGL context for shaders, fall back to 2D
+    let gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (gl) {
+        log('BG-Engine', 'WebGL context acquired. 3D effects are enabled.');
+        ctx = gl; // ctx will be the WebGL context
+    } else {
+        log('BG-Engine', 'WebGL not supported. Falling back to 2D canvas context.');
+        ctx = canvas.getContext('2d');
+    }
     
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        // Tell the plugin about the resize
+        
+        // Handle context resizing
+        if (gl) {
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        } else {
+            ctx.globalAlpha = 0.4; // Default opacity for 2D effects
+        }
+
         if (currentEffect && typeof currentEffect.resize === 'function') {
             currentEffect.resize(canvas.width, canvas.height);
         }
@@ -136,30 +221,9 @@ export function initBackgroundEngine(initialEffect) {
     
     updateColors(); // Get initial colors
     
-    // Load and initialize the first plugin
-    currentEffect = initialEffect;
-    if (typeof currentEffect.init === 'function') {
-        currentEffect.init(ctx, canvas.width, canvas.height);
-    }
-
-    // Get default settings from the plugin
-    if (typeof currentEffect.getControls === 'function') {
-        const controls = currentEffect.getControls();
-        controls.forEach(control => {
-            settings[control.id] = control.defaultValue;
-        });
-    }
-    
-    // Start the animation
+    // Start the animation loop (no effect loaded yet)
     lastTimestamp = performance.now();
-    requestAnimationFrame(animationLoop);
-    log('BG-Engine', 'Engine Initialized with effect:', currentEffect.name);
-}
-
-// This function will be used in Step 6 to build the dynamic slider UI
-export function getControlsForCurrentEffect() {
-    if (currentEffect && typeof currentEffect.getControls === 'function') {
-        return currentEffect.getControls();
-    }
-    return [];
+    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    animationFrameId = requestAnimationFrame(animationLoop);
+    log('BG-Engine', 'Engine Initialized.');
 }
