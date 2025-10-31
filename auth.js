@@ -170,11 +170,14 @@ export function showUserModal() {
     console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
     console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
     if (effectSelect) {
-        console.log(`[auth.js]   - effectSelect.innerHTML is empty: ${effectSelect.innerHTML === ''} (Content: "${effectSelect.innerHTML}")`);
+        console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
     }
     // --- DEBUG ---
 
-    if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
+    // --- THIS IS THE FIX ---
+    // We check childElementCount, which is 0, instead of innerHTML, which was " ".
+    if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
+    // --- END FIX ---
         // --- DEBUG ---
         console.log('[auth.js] IF condition PASSED. Populating dropdown.');
         // --- DEBUG ---
