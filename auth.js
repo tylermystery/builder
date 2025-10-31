@@ -7,41 +7,10 @@ console.log('[auth.js] 0. File execution started.');
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js'; // Import api module
-import * as backgroundEngine from './components/backgroundEngine.js';
-
-// --- DEBUG ---
-console.log('[auth.js] 1. Importing effect plugins...');
-console.log('[auth.js] 1a. Importing kaleidoscopeEffect.js...');
-// --- DEBUG ---
-import kaleidoscopeEffect from './components/effects/kaleidoscope.js';
-// --- DEBUG ---
-console.log('[auth.js] 1b. Importing windEffect.js...');
-// --- DEBUG ---
-import windEffect from './components/effects/wind.js';
-// --- DEBUG ---
-console.log('[auth.js] 1c. Importing waterEffect.js...');
-// --- DEBUG ---
-import waterEffect from './components/effects/water.js';
-// --- DEBUG ---
-console.log('[auth.js] 1d. Importing fractalEffect.js...');
-// --- DEBUG ---
-import fractalEffect from './components/effects/fractal.js';
-// --- DEBUG ---
-console.log('[auth.js] 1e. Importing psychedelicEffect.js...');
-// --- DEBUG ---
-import psychedelicEffect from './components/effects/psychedelic.js';
-// --- DEBUG ---
-console.log('[auth.js] 1f. Importing vortexEffect.js...'); // <-- NEW
-// --- DEBUG ---
-import vortexEffect from './components/effects/vortex.js'; // <-- NEW
-// --- DEBUG ---
-console.log('[auth.js] 2. All effect plugins imported.');
-// --- DEBUG ---
-
+// --- REMOVED: All backgroundEngine and effect imports ---
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
-// ... (rest of DOM elements) ...
 const userModalCloseBtn = document.getElementById('user-modal-close-btn');
 const signinView = document.getElementById('signin-view');
 const profileView = document.getElementById('profile-view');
@@ -57,21 +26,13 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
-// --- List of available background effects ---
-const effects = [
-    { name: "Color Vortex", plugin: vortexEffect }, // <-- NEW
-    { name: "Psychedelic Flow", plugin: psychedelicEffect },
-    { name: "Kaleidoscope", plugin: kaleidoscopeEffect },
-    { name: "Wind", plugin: windEffect },
-    { name: "Water", plugin: waterEffect },
-    { name: "Fractal (Simple)", plugin: fractalEffect },
-];
+// --- REMOVED: 'effects' array ---
 
 // --- DEBUG ---
-console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
+console.log(`[auth.js] 3. File loaded (no effects to process).`);
 // --- DEBUG ---
 
-// ... (rest of _handleSuccessfulLogin is the same) ...
+// Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
     if (state.session.id) {
         await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
@@ -143,7 +104,6 @@ async function _handleSuccessfulLogin(payload) {
     hideUserModal();
 }
 
-
 export function showUserModal() {
     // --- DEBUG ---
     console.log('[auth.js] showUserModal() called.');
@@ -151,9 +111,7 @@ export function showUserModal() {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
     
-    // --- NEW: Get Effect UI Elements ---
-    const effectSelect = document.getElementById('effect-select');
-    const effectControlsContainer = document.getElementById('effect-controls-container');
+    // --- REMOVED: All "Fun Tweaks" element getters ---
 
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
@@ -176,67 +134,17 @@ export function showUserModal() {
         ownerDashboardLink.style.display = 'none';
     }
     
-    // --- MOVED: Populate Background Effects ---
-    // --- DEBUG ---
-    console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
-    console.log(`[auth.js] Checking IF condition...`);
-    console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
-    console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
-    if (effectSelect) {
-        console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
-    }
-    // --- DEBUG ---
-
-    if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
-        // --- DEBUG ---
-        console.log('[auth.js] IF condition PASSED. Populating dropdown.');
-        // --- DEBUG ---
-        log('Auth', 'Populating background effect tweaks for the first time.');
-        effects.forEach((effect, index) => {
-            // --- DEBUG ---
-            console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
-            // --- DEBUG ---
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = effect.name;
-            effectSelect.appendChild(option);
-        });
-        
-        // Add listener to the dropdown
-        effectSelect.addEventListener('change', (e) => {
-            const selectedEffect = effects[e.target.value];
-            if (selectedEffect) {
-                log('Auth', `User selected effect: ${selectedEffect.name}`);
-                backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
-            }
-        });
-        
-        // Load the default effect (Color Vortex) initially
-        // --- DEBUG ---
-        if (effects.length > 0 && effects[0].plugin) {
-            console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
-            backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
-        } else {
-            console.log('[auth.js] No effects found in array to load as default.');
-        }
-        // --- DEBUG ---
-    } else {
-        // --- DEBUG ---
-        console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
-        // --- DEBUG ---
-    }
-    // --- END: Moved Background Effects Logic ---
+    // --- REMOVED: All "Fun Tweaks" population logic ---
 
     userModalOverlay.classList.add('active');
     userModalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
-// ... (rest of hideUserModal, handleSignIn, handleUpdateUserPrefs, handleSignOut, updateUserProfileIcon, and setupAuthEventListeners are the same) ...
 function hideUserModal() {
     userModalOverlay.classList.remove('active');
     setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
-    document.body.classList.add('modal-open');
+    document.body.classList.remove('modal-open');
 }
 
 async function handleSignIn(e) {
