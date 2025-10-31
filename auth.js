@@ -211,7 +211,7 @@ export function showUserModal() {
 function hideUserModal() {
     userModalOverlay.classList.remove('active');
     setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
-    document.body.classList.remove('modal-open');
+    document.body.classList.add('modal-open');
 }
 
 async function handleSignIn(e) {
