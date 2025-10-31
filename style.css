@@ -2035,3 +2035,52 @@ hr.total-divider {
 #solid-bg.bg-active + #kaleidoscope-bg {
     display: none;
 }
+
+/* In: style.css */
+/* Action: Add these new rules at the end of the file */
+
+/* --- 12. NEW VORTEX BACKGROUND SYSTEM --- */
+
+#solid-bg.bg-effect-vortex {
+    display: block;
+    /* A 12-point colorful conic gradient. This creates the spiral.
+      The "from 90deg" starts it in a nice position.
+      The "at 50% 50%" centers it.
+    */
+    background: conic-gradient(
+      from 90deg at 50% 50%,
+      #ff9a8b 0%,
+      #ff6a88 16.66%,
+      #00c9a7 33.33%,
+      #84fab0 50%,
+      #fbc2eb 66.66%,
+      #a6c1ee 83.33%,
+      #ff9a8b 100%
+    );
+    
+    /* This is the "organic" part. We scale it up so the blur doesn't
+      create hard edges, and the blur(50px) blends the colors smoothly.
+    */
+    transform: scale(1.5);
+    filter: blur(50px);
+    
+    /* We control the animation speed with a CSS variable.
+      The 'spin' animation is simpler.
+    */
+    --vortex-speed: 20s;
+    animation: spin var(--vortex-speed) linear infinite;
+}
+
+/* A simpler spin animation */
+@keyframes spin {
+    from { transform: scale(1.5) rotate(0deg); }
+    to   { transform: scale(1.5) rotate(360deg); }
+}
+
+/* This class is added by JavaScript to create the "boost"
+  It forces the animation to be 10x faster for a short period.
+*/
+#solid-bg.bg-boost {
+    transition: animation-duration 0.2s ease-out;
+    animation-duration: 0.5s !important;
+}
