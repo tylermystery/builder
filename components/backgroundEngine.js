@@ -5,8 +5,7 @@ import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
-// --- Private Module Variables ---
-let canvas, ctx;
+// --- Private Module Variables ---\nlet canvas, ctx;
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
 let currentColors = [];
@@ -15,8 +14,7 @@ let animationFrameId = null;
 // This object will be populated by the active plugin's controls
 let settings = {}; 
 
-// --- Color Generation Logic ---
-// This lives in the engine, as all effects will use it
+// --- Color Generation Logic ---\n// This lives in the engine, as all effects will use it
 function stringToHash(str) {
     let hash = 0, i, chr;
     if (!str || str.length === 0) return hash;
@@ -41,8 +39,7 @@ const VIBRANT_COLOR_PAIRS = [
     ['#fa709a', '#fee140']  // Vibrant: Hot Pink/Yellow
 ];
 
-// --- Animation Loop ---
-function animationLoop(timestamp) {
+// --- Animation Loop ---\nfunction animationLoop(timestamp) {
     if (!ctx || !currentEffect) {
         animationFrameId = requestAnimationFrame(animationLoop);
         return;
@@ -58,9 +55,7 @@ function animationLoop(timestamp) {
     animationFrameId = requestAnimationFrame(animationLoop);
 }
 
-// --- Public API Functions ---
-
-/**
+// --- Public API Functions ---\n\n/**
  * Called by sidebar.js when the cart changes.
  * This updates the color palette for the animation.
  */
@@ -120,13 +115,19 @@ export function updateSettings(newSettings) {
 /**
  * Loads a new effect, builds its controls, and starts it.
  * @param {object} effect - The effect plugin object.
- * @param {HTMLElement} controlsContainer - The div where sliders should be built.
+ * @param {HTMLElement | null} controlsContainer - The div where sliders should be built (optional).
  */
 export function loadEffect(effect, controlsContainer) {
     log('BG-Engine', `Loading effect: ${effect.name}`);
     currentEffect = effect;
     settings = {}; // Reset settings
-    controlsContainer.innerHTML = ''; // Clear old sliders
+    
+    // --- THIS IS THE FIX ---
+    // Only clear the container if it's provided
+    if (controlsContainer) {
+        controlsContainer.innerHTML = ''; // Clear old sliders
+    }
+    // --- END FIX ---
 
     // 1. Initialize the effect
     if (typeof currentEffect.init === 'function') {
@@ -140,37 +141,42 @@ export function loadEffect(effect, controlsContainer) {
             // Set default value in our engine's settings
             settings[control.id] = control.defaultValue;
 
-            // Create the UI
-            const controlGroup = document.createElement('div');
-            controlGroup.className = 'form-row-slider'; // A new class for styling
-            
-            const label = document.createElement('label');
-            label.htmlFor = control.id;
-            label.textContent = `${control.label}: `;
-            
-            const valueSpan = document.createElement('span');
-            valueSpan.id = `${control.id}-value`;
-            valueSpan.textContent = control.defaultValue;
-            label.appendChild(valueSpan);
+            // --- THIS IS THE FIX ---
+            // Only build the UI if the container was provided
+            if (controlsContainer) {
+                // Create the UI
+                const controlGroup = document.createElement('div');
+                controlGroup.className = 'form-row-slider'; // A new class for styling
+                
+                const label = document.createElement('label');
+                label.htmlFor = control.id;
+                label.textContent = `${control.label}: `;
+                
+                const valueSpan = document.createElement('span');
+                valueSpan.id = `${control.id}-value`;
+                valueSpan.textContent = control.defaultValue;
+                label.appendChild(valueSpan);
 
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.id = control.id;
-            slider.min = control.min;
-            slider.max = control.max;
-            slider.step = control.step;
-            slider.value = control.defaultValue;
-            
-            // Add listener to update engine
-            slider.addEventListener('input', (e) => {
-                const newValue = parseFloat(e.target.value);
-                valueSpan.textContent = newValue.toFixed(control.step < 1 ? 2 : 0);
-                updateSettings({ [control.id]: newValue });
-            });
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.id = control.id;
+                slider.min = control.min;
+                slider.max = control.max;
+                slider.step = control.step;
+                slider.value = control.defaultValue;
+                
+                // Add listener to update engine
+                slider.addEventListener('input', (e) => {
+                    const newValue = parseFloat(e.target.value);
+                    valueSpan.textContent = newValue.toFixed(control.step < 1 ? 2 : 0);
+                    updateSettings({ [control.id]: newValue });
+                });
 
-            controlGroup.appendChild(label);
-            controlGroup.appendChild(slider);
-            controlsContainer.appendChild(controlGroup);
+                controlGroup.appendChild(label);
+                controlGroup.appendChild(slider);
+                controlsContainer.appendChild(controlGroup);
+            }
+            // --- END FIX ---
         });
     }
 
