@@ -11,7 +11,7 @@ import { log } from '../utils/debug.js';
 
 // --- Private Module Variables ---
 let canvas;
-let gl, ctx_2d; // We now store both possible contexts
+let gl, ctx_2d; // We will now get these in loadEffect
 let animationFrameId = null;
 let currentEffect = null; 
 
@@ -133,26 +133,41 @@ export function loadEffect(effect, controlsContainer) {
     settings = {}; // Reset 2D settings
     
     // --- NEW: Context Switching ---
-    // We must clear the canvas when switching, as the contexts interfere
+    // We must clear/reset the canvas when switching, as the contexts interfere
+    // A common trick is to reset the canvas dimensions
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
             
     if (currentEffect.type === 'webgl') {
-        if (!gl) gl = canvas.getContext('webgl'); // Ensure GL context
+        // --- DEBUG ---
+        console.log('[backgroundEngine.js] Effect type is WebGL. Getting WebGL context.');
+        // --- DEBUG ---
+        gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        ctx_2d = null; // Ensure 2D context is null
         if (gl && typeof currentEffect.init === 'function') {
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             currentEffect.init(gl);
             currentEffect.initialized = true;
+        } else if (!gl) {
+            console.error('Fatal: Could not get WebGL context for WebGL effect.');
         }
     } else if (currentEffect.type === 'canvas') {
-        if (!ctx_2d) ctx_2d = canvas.getContext('2d'); // Ensure 2D context
+        // --- DEBUG ---
+        console.log('[backgroundEngine.js] Effect type is Canvas 2D. Getting 2D context.');
+        // --- DEBUG ---
+        ctx_2d = canvas.getContext('2d');
+        gl = null; // Ensure WebGL context is null
         if (ctx_2d && typeof currentEffect.init === 'function') {
+            ctx_2d.globalAlpha = 0.4;
             currentEffect.init(ctx_2d, canvas.width, canvas.height);
             currentEffect.initialized = true;
+        } else if (!ctx_2d) {
+            console.error('Fatal: Could not get 2D context for Canvas effect.');
         }
     }
     // --- END NEW ---
 
-    // --- UI Control Logic (for 2D effects) ---
+    // --- UI Control Logic (for 2D/Canvas effects) ---
     if (controlsContainer) {
         controlsContainer.innerHTML = ''; // Clear old sliders
     }
@@ -217,28 +232,26 @@ export function initBackgroundEngine() {
         return;
     }
     
-    // --- NEW: Get BOTH contexts ---
-    // We try for WebGL first, as it's the preferred default
-    gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    ctx_2d = canvas.getContext('2d');
-    // --- END NEW ---
-    
-    if (!gl || !ctx_2d) {
-        console.error('Fatal: Could not get a valid canvas context (WebGL or 2D).');
-        canvas.style.display = 'none';
-        return;
-    }
+    // --- FIX: We no longer get contexts here. We just set up the loop. ---
     
     const resizeCanvas = () => {
+        // This resize will be used by loadEffect when it resets the context
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        // Resize for both contexts
-        if (gl) gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-        if (ctx_2d) ctx_2d.globalAlpha = 0.4;
+        
+        // Also call the effect's resize method if it exists
+        if (currentEffect && typeof currentEffect.resize === 'function') {
+            if (currentEffect.type === 'webgl' && gl) {
+                gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+                // WebGL effects typically don't need a special resize function
+            } else if (currentEffect.type === 'canvas' && ctx_2d) {
+                currentEffect.resize(canvas.width, canvas.height);
+            }
+        }
     };
 
     window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); // Set initial size
+    // Don't call resizeCanvas() yet, wait for loadEffect
     
     startTime = performance.now();
     lastTimestamp_2d = startTime;
@@ -246,6 +259,6 @@ export function initBackgroundEngine() {
     animationFrameId = requestAnimationFrame(animationLoop);
     log('BG-Engine', 'Hybrid WebGL/2D Engine Initialized.');
     // --- DEBUG ---
-    console.log('[backgroundEngine.js] initBackgroundEngine() FINISHED. Contexts are live.');
+    console.log('[backgroundEngine.js] initBackgroundEngine() FINISHED. Loop is live.');
     // --- DEBUG ---
 }
