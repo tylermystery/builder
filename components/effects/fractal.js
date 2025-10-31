@@ -68,7 +68,8 @@ const fractalEffect = {
         return [
             { id: "complexity", label: "Complexity", min: 1, max: 8, step: 1, defaultValue: 5 },
             { id: "zoom", label: "Zoom", min: 20, max: 150, step: 5, defaultValue: 80 },
-            { id: "spin", label: "Spin", min: 0.0, max: 1.0, step: 0.05, defaultValue: 0.1 }\n        ];
+            { id: "spin", label: "Spin", min: 0.0, max: 1.0, step: 0.05, defaultValue: 0.1 }
+        ];
     }
 };
 
