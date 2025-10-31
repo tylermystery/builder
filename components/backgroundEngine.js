@@ -11,14 +11,15 @@ import { log } from '../utils/debug.js';
 
 // --- Private Module Variables ---
 let canvas, ctx;
-// --- NEW ---
 let solidBgElement; // The new background div
-// --- END NEW ---
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin
 let currentColors = [];
 let animationFrameId = null;
 let settings = {}; 
+// --- NEW ---
+let boostTimeout = null; // To manage the boost effect
+// --- END NEW ---
 
 // (Color Generation Logic remains the same...)
 function stringToHash(str) {
@@ -48,10 +49,7 @@ const VIBRANT_COLOR_PAIRS = [
 
 // --- Animation Loop ---
 function animationLoop(timestamp) {
-    // --- MODIFIED ---
-    // Only run the loop if we have a canvas context AND the current effect is a 'canvas' type
     if (!ctx || !currentEffect || currentEffect.type !== 'canvas') {
-    // --- END MODIFIED ---
         animationFrameId = requestAnimationFrame(animationLoop);
         return;
     }
@@ -64,6 +62,31 @@ function animationLoop(timestamp) {
 }
 
 // --- Public API Functions ---
+
+// --- NEW PUBLIC FUNCTION ---
+/**
+ * Triggers a temporary "boost" effect on the background.
+ */
+export function triggerBoost() {
+    if (boostTimeout) {
+        clearTimeout(boostTimeout); // Clear previous timeout
+        solidBgElement.classList.remove('bg-boost');
+        // Force reflow to restart transition
+        void solidBgElement.offsetWidth; 
+    }
+    
+    log('BG-Engine', 'Triggering boost!');
+    solidBgElement.classList.add('bg-boost');
+
+    // Remove the boost class after the animation (0.5s) + transition (0.2s)
+    boostTimeout = setTimeout(() => {
+        solidBgElement.classList.remove('bg-boost');
+        boostTimeout = null;
+    }, 700); // 500ms anim + 200ms transition = 700ms
+}
+// --- END NEW FUNCTION ---
+
+
 export function updateColors() {
     log('BG-Engine', 'Updating colors...');
     let colors = [];
@@ -104,14 +127,14 @@ export function updateColors() {
 export function updateSettings(newSettings) {
     settings = { ...settings, ...newSettings };
     
-    // --- NEW ---
-    // Pass settings to CSS effects as well (e.g., animation speed)
+    // --- MODIFIED: Use CSS Variables ---
     if (currentEffect && currentEffect.type === 'css') {
         if (newSettings.speed) {
-            solidBgElement.style.animationDuration = `${newSettings.speed}s`;
+            // This is more flexible than changing animationDuration
+            solidBgElement.style.setProperty('--vortex-speed', `${newSettings.speed}s`);
         }
     }
-    // --- END NEW ---
+    // --- END MODIFIED ---
 
     if (currentEffect && typeof currentEffect.updateSettings === 'function') {
         currentEffect.updateSettings(settings);
@@ -128,19 +151,18 @@ export function loadEffect(effect, controlsContainer) {
     currentEffect = effect;
     settings = {}; 
 
-    // --- NEW: HYBRID SWITCH LOGIC ---
-    // Reset all backgrounds first
+    // --- HYBRID SWITCH LOGIC ---
     solidBgElement.className = '';
-    solidBgElement.style.animationDuration = ''; // Reset speed
-    canvas.style.display = 'block'; // Show canvas by default
+    // --- MODIFIED ---
+    solidBgElement.style.setProperty('--vortex-speed', ''); // Reset CSS var
+    // --- END MODIFIED ---
+    canvas.style.display = 'block'; 
 
     if (effect.type === 'css') {
-        // It's a CSS effect
-        solidBgElement.className = `${effect.cssClass} bg-active`; // Add 'bg-active' to hide canvas
-        canvas.style.display = 'none'; // Explicitly hide canvas
+        solidBgElement.className = `${effect.cssClass} bg-active`;
+        canvas.style.display = 'none'; 
     } else {
-        // It's a 'canvas' effect (or undefined, assume canvas)
-        currentEffect.type = 'canvas'; // Default to canvas
+        currentEffect.type = 'canvas'; 
         if (typeof currentEffect.init === 'function') {
             if (ctx) {
                 // --- DEBUG ---
@@ -155,13 +177,11 @@ export function loadEffect(effect, controlsContainer) {
             }
         }
     }
-    // --- END NEW ---
     
     if (controlsContainer) {
         controlsContainer.innerHTML = ''; // Clear old sliders
     }
 
-    // (This block is now moved *after* the CSS/Canvas switch)
     if (typeof currentEffect.getControls === 'function') {
         const controls = currentEffect.getControls();
         // --- DEBUG ---
@@ -170,11 +190,11 @@ export function loadEffect(effect, controlsContainer) {
         controls.forEach(control => {
             settings[control.id] = control.defaultValue;
 
-            // --- NEW: Apply default speed to CSS effect ---
+            // --- MODIFIED: Set default CSS Variable ---
             if (currentEffect.type === 'css' && control.id === 'speed') {
-                 solidBgElement.style.animationDuration = `${control.defaultValue}s`;
+                 solidBgElement.style.setProperty('--vortex-speed', `${control.defaultValue}s`);
             }
-            // --- END NEW ---
+            // --- END MODIFIED ---
 
             if (controlsContainer) {
                 const controlGroup = document.createElement('div');
@@ -230,9 +250,7 @@ export function initBackgroundEngine() {
     console.log('[backgroundEngine.js] initBackgroundEngine() called.');
     // --- DEBUG ---
     canvas = document.getElementById('kaleidoscope-bg');
-    // --- NEW ---
     solidBgElement = document.getElementById('solid-bg'); // Get the new div
-    // --- END NEW ---
 
     if (!canvas || !solidBgElement) {
         console.error('Fatal: Background canvas or solid-bg element not found.');
