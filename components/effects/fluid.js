@@ -63,16 +63,17 @@ const fsSource = `
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
-        // 5. Create the "full spectrum" colors (Standard HSL color cycling)
+// 5. Create the "full spectrum" colors with brighter and more uniform output
         float base_wave = n * 5.0 + u_time * 0.4; // Same base wave for swirl
-        // Use major phase shifts (approx 120 degrees) to cycle through R, G, B
-        // Retain the 'pow' function to keep the colors rich and deep (less bright/pastel)
-        const float PI_OVER_3 = 1.04719755; // 60 degrees (pi/3)
-        const float PI_2_OVER_3 = 2.0943951; // 120 degrees (2pi/3)
-
-        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.5); 
-        float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.8);
-        float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 2.2);
+        
+        // Define the standard 120-degree phase shift for full spectrum HSL cycling
+        const float PI_2_OVER_3 = 2.0943951; 
+        
+        // Use a much smaller exponent (1.1) for a brighter, more vibrant color.
+        // We'll also add a slight lift (+0.1) to boost brightness.
+        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.1) + 0.1; 
+        float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.1) + 0.1;
+        float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 1.1) + 0.1;
         
         // 6. Final color with a vignette (darker edges)
         float vignette = 1.0 - (radius * 0.8);
