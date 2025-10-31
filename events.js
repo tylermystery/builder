@@ -8,16 +8,17 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce, updateUrl } from './utils.js'; // <-- MODIFIED IMPORT
+import { debounce, updateUrl } from './utils.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
 // --- NEW ---
-import { triggerBoost } from './components/backgroundEngine.js'; // Import the boost function
+import { addEnergy } from './components/backgroundEngine.js'; // Import the boost function
 // --- END NEW ---
 
 let mainDatePicker = null;
+// ... (rest of variables are the same) ...
 let saveTimeout = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
@@ -206,8 +207,6 @@ async function handlePaymentFormSubmit(event) {
             log('Events', 'Payment succeeded.');
             const amountPaid = paymentIntent.amount / 100;
             
-            // --- THIS IS THE FIX ---
-            // Create a new payment object and add it to the history
             const newPayment = {
                 amount: amountPaid,
                 date: new Date().toISOString(),
@@ -215,13 +214,10 @@ async function handlePaymentFormSubmit(event) {
             };
             const updatedPaymentHistory = [...state.session.user.paymentHistory, newPayment];
             
-            // Call the new API function to update Airtable
             await api.updatePaymentHistory(state.session.id, updatedPaymentHistory);
 
-            // Update the local state
             state.session.user.paymentHistory = updatedPaymentHistory;
             state.session.user.amountReceived = updatedPaymentHistory.reduce((sum, p) => sum + p.amount, 0);
-            // --- END FIX ---
 
             ui.updateTotalCost();
             document.getElementById('payment-form').style.display = 'none';
@@ -311,37 +307,31 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     // --- START CONSOLIDATED BUTTON GENERATION ---
-    // Clear any existing buttons first (safer approach)
     if (categoryFiltersContainer) {
-        categoryFiltersContainer.innerHTML = ''; // Clear previous content
+        categoryFiltersContainer.innerHTML = ''; 
     } else {
         console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.");
-        // Stop further button logic if container is missing
     }
 
-    if (categoryFiltersContainer) { // Proceed only if container exists
-        // Add "My Plan" Button
+    if (categoryFiltersContainer) { 
         const planFilterBtn = document.createElement('button');
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
         categoryFiltersContainer.appendChild(planFilterBtn);
 
-        // Add "My Likes" Button
         const likesFilterBtn = document.createElement('button');
         likesFilterBtn.className = 'filter-btn';
         likesFilterBtn.id = 'liked-items-filter-btn';
         likesFilterBtn.textContent = '❤️ My Likes';
         categoryFiltersContainer.appendChild(likesFilterBtn);
 
-        // Add "All" Button
         const allButton = document.createElement('button');
-        allButton.className = 'filter-btn category-filter-btn'; // Set 'active' class later via syncUiWithUrl
+        allButton.className = 'filter-btn category-filter-btn'; 
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         categoryFiltersContainer.appendChild(allButton);
 
-        // Add Store-Specific Category Buttons
         const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
         if (currentStore && Array.isArray(currentStore.fields.Items)) {
             const categoryRecordIds = currentStore.fields.Items;
@@ -354,15 +344,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             categories.forEach((catRecord) => {
                 const button = document.createElement('button');
                 button.className = 'filter-btn category-filter-btn';
-                // --- THIS IS THE FIX ---
-                // Use only toLowerCase() to match filtering logic comparison
                 button.dataset.filter = catRecord.fields.Name.toLowerCase();
-                // --- END FIX ---
                 button.textContent = catRecord.fields.Name;
                 categoryFiltersContainer.appendChild(button);
             });
         }
-    } // End of check for categoryFiltersContainer
+    } 
     // --- END CONSOLIDATED BUTTON GENERATION ---
 
     const toggleFilter = (elementId, settingName) => {
@@ -383,7 +370,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const likesFilterBtn = document.getElementById('liked-items-filter-btn');
         const clickedBtn = e.target.closest('.filter-btn');
 
-        if (!clickedBtn || !categoryFiltersContainer) return; // Added check for container
+        if (!clickedBtn || !categoryFiltersContainer) return; 
 
         const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
         const isLikesFilterClick = clickedBtn.id === 'liked-items-filter-btn';
@@ -605,6 +592,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // --- CORRECTLY PLACED HEART ICON LOGIC ---
         else if (heartIcon) {
             e.stopPropagation();
+            // --- NEW ---
+            addEnergy(); // Add energy on heart click
+            // --- END NEW ---
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
     
@@ -694,8 +684,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!recordId) return;
 
             // --- NEW: TRIGGER BOOST ---
-            // We call this *before* the state update so it's immediate
-            triggerBoost();
+            addEnergy();
             // --- END NEW ---
 
             if (state.cart.lockedItems.has(recordId)) {
