@@ -227,7 +227,7 @@ export async function initializeSessionChat() {
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
+        //displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
         const records = await api.fetchChatMessages(sessionId);
         
         if (records.length > 0) {
