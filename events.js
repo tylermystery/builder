@@ -1,4 +1,5 @@
-// REPLACE THE ENTIRE CONTENTS OF: events.js
+// In: events.js
+// Action: REPLACE THE ENTIRE FILE
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -12,7 +13,9 @@ import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-
+// --- NEW ---
+import { triggerBoost } from './components/backgroundEngine.js'; // Import the boost function
+// --- END NEW ---
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -20,6 +23,7 @@ let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
 
+// ... (all functions from getCurrentCategoryRecord down to handlePaymentFormSubmit are identical) ...
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
@@ -237,8 +241,6 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-// REPLACE the entire initializeEventListeners function in events.js with this:
-
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -427,7 +429,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -530,7 +532,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (breadcrumbLink) {
             e.preventDefault();
             const filterValue = breadcrumbLink.dataset.filter;
-            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${filterValue}\"]`);
+            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
             if (targetButton) {
                 targetButton.click();
             }
@@ -691,6 +693,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
 
+            // --- NEW: TRIGGER BOOST ---
+            // We call this *before* the state update so it's immediate
+            triggerBoost();
+            // --- END NEW ---
+
             if (state.cart.lockedItems.has(recordId)) {
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                     updateUrl({ openItem: null });
@@ -760,7 +767,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
                      if (categoryFiltersContainer) {
                          categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`)?.classList.add('active');
                      }
                      updateSubcategoryButtons();
                  } else {
@@ -769,12 +776,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                      if (categoryFiltersContainer) {
                          categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${parentNameLower}\"]`)?.classList.add('active');
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${parentNameLower}"]`)?.classList.add('active');
                      }
                      updateSubcategoryButtons();
                      if (subcategoryFiltersContainer) {
                          subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
+                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`)?.classList.add('active');
                      }
                  }
                  applyFiltersAndSort(imageCache);
