@@ -3,9 +3,13 @@
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js'; // Import api module
+import * as backgroundEngine from './components/backgroundEngine.js';
+import kaleidoscopeEffect from './components/effects/kaleidoscope.js';
+import windEffect from './components/effects/wind.js';
+import waterEffect from './components/effects/water.js';
+import fractalEffect from './components/effects/fractal.js';
 
-// --- DOM Elements ---
-const userModalOverlay = document.getElementById('user-modal-overlay');
+// --- DOM Elements ---\nconst userModalOverlay = document.getElementById('user-modal-overlay');
 const userModalCloseBtn = document.getElementById('user-modal-close-btn');
 const signinView = document.getElementById('signin-view');
 const profileView = document.getElementById('profile-view');
@@ -21,6 +25,14 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
+// --- List of available background effects ---
+const effects = [
+    { name: "Kaleidoscope", plugin: kaleidoscopeEffect },
+    { name: "Wind", plugin: windEffect },
+    { name: "Water", plugin: waterEffect },
+    { name: "Fractal (Simple)", plugin: fractalEffect },
+];
+
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
     if (state.session.id) {
@@ -29,8 +41,7 @@ async function _handleSuccessfulLogin(payload) {
 
     localStorage.setItem('jwt', payload.token);
 
-    // --- MOVED STATE UPDATE HERE ---
-    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    // --- MOVED STATE UPDATE HERE ---\n    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
     setState({
         session: {
             ...state.session,
@@ -45,10 +56,7 @@ async function _handleSuccessfulLogin(payload) {
         }
     });
     console.log("[Auth] User state set immediately after login:", state.session.user);
-    // --- END MOVED STATE UPDATE ---
-
-    // --- START LIKES SYNC (Now runs *after* state is updated) ---
-    const currentLikedItemIds = state.session.user.likedItemIds;
+    // --- END MOVED STATE UPDATE ---\n\n    // --- START LIKES SYNC (Now runs *after* state is updated) ---\n    const currentLikedItemIds = state.session.user.likedItemIds;
     let syncPromises = [];
     const tempLikesString = localStorage.getItem('tempLikes');
     if (tempLikesString) {
@@ -78,9 +86,7 @@ async function _handleSuccessfulLogin(payload) {
              console.log('[Auth] Cleared temporary likes from localStorage.');
         }
     }
-    // --- END LIKES SYNC ---
-
-    await Promise.allSettled(syncPromises);
+    // --- END LIKES SYNC ---\n\n    await Promise.allSettled(syncPromises);
     console.log('[Auth] Like sync process finished.');
     
     console.log("[Auth] Final user state after sync:", state.session.user);
@@ -96,6 +102,11 @@ async function _handleSuccessfulLogin(payload) {
 export function showUserModal() {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
+    
+    // --- NEW: Get Effect UI Elements ---
+    const effectSelect = document.getElementById('effect-select');
+    const effectControlsContainer = document.getElementById('effect-controls-container');
+
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
         profileEmailEl.textContent = user.email;
@@ -110,6 +121,33 @@ export function showUserModal() {
         } else {
             ownerDashboardLink.style.display = 'none';
         }
+        
+        // --- NEW: Populate Background Effects ---
+        // Check if options are already populated to avoid re-adding
+        if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
+            log('Auth', 'Populating background effect tweaks for the first time.');
+            effects.forEach((effect, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = effect.name;
+                effectSelect.appendChild(option);
+            });
+            
+            // Add listener to the dropdown
+            effectSelect.addEventListener('change', (e) => {
+                const selectedEffect = effects[e.target.value];
+                if (selectedEffect) {
+                    log('Auth', `User selected effect: ${selectedEffect.name}`);
+                    backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
+                }
+            });
+            
+            // Load the default effect (Kaleidoscope) initially
+            // We assume the default <option> (value 0) is Kaleidoscope
+            backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
+        }
+        // --- END: Populate Background Effects ---
+
     } else {
         signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
         signinView.style.display = 'block';
@@ -177,8 +215,7 @@ async function handleSignIn(e) {
     }
 }
 
-// --- THIS FUNCTION IS UPDATED ---
-async function handleUpdateUserPrefs(e) {
+// --- THIS FUNCTION IS UPDATED ---\async function handleUpdateUserPrefs(e) {
     e.preventDefault();
     prefsMessage.textContent = 'Saving...';
     prefsMessage.style.color = '#333';
@@ -281,8 +318,7 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- NEW SSO EVENT LISTENERS ---
-    const googleSsoBtn = document.getElementById('google-sso-btn');
+    // --- NEW SSO EVENT LISTENERS ---\n    const googleSsoBtn = document.getElementById('google-sso-btn');
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
             netlifyIdentity.open('login');
@@ -312,5 +348,4 @@ export function setupAuthEventListeners() {
             signinMessage.style.color = '#dc3545';
         }
     });
-    // --- END NEW SSO EVENT LISTENERS ---
-}
+    // --- END NEW SSO EVENT LISTENERS ---\n}
