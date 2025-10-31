@@ -127,12 +127,10 @@ export function loadEffect(effect, controlsContainer) {
     currentEffect = effect;
     settings = {}; // Reset settings
     
-    // --- THIS IS THE FIX ---
     // Only clear the container if it's provided
     if (controlsContainer) {
         controlsContainer.innerHTML = ''; // Clear old sliders
     }
-    // --- END FIX ---
 
     // 1. Initialize the effect
     if (typeof currentEffect.init === 'function') {
@@ -146,7 +144,6 @@ export function loadEffect(effect, controlsContainer) {
             // Set default value in our engine's settings
             settings[control.id] = control.defaultValue;
 
-            // --- THIS IS THE FIX ---
             // Only build the UI if the container was provided
             if (controlsContainer) {
                 // Create the UI
@@ -181,7 +178,6 @@ export function loadEffect(effect, controlsContainer) {
                 controlGroup.appendChild(slider);
                 controlsContainer.appendChild(controlGroup);
             }
-            // --- END FIX ---
         });
     }
 
@@ -216,10 +212,8 @@ export function initBackgroundEngine() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         
-        // --- THIS IS THE FIX ---
         // Always set 2D context properties
         ctx.globalAlpha = 0.4; // Default opacity for 2D effects
-        // --- END FIX ---
 
         if (currentEffect && typeof currentEffect.resize === 'function') {
             currentEffect.resize(canvas.width, canvas.height);
