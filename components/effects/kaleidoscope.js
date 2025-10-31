@@ -1,5 +1,5 @@
 // In: components/effects/kaleidoscope.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
 console.log('[kaleidoscope.js] File execution started.');
@@ -25,11 +25,7 @@ class Particle {
         this.y = (Math.random() - 0.5) * this.canvasHeight;
         this.vx = (Math.random() - 0.5) * this.speed;
         this.vy = (Math.random() - 0.5) * this.speed;
-        // --- THIS IS THE FIX ---
-        // If this.colors is empty (which it was on init), this would always be white.
-        // Now, this.colors will be populated when the particle is created in the draw loop.
         this.color = this.colors[Math.floor(Math.random() * this.colors.length)] || '#FFFFFF';
-        // --- END FIX ---
         this.life = Math.random() * 100 + 100;
     }
 
@@ -57,20 +53,14 @@ class Particle {
 
 const kaleidoscopeEffect = {
     name: "Kaleidoscope",
+    type: "canvas", // <-- ADD THIS LINE
 
-    // --- THIS IS THE FIX ---
-    // Init just sets the alpha and empties the array.
-    // It no longer creates particles with an empty color list.
     init: (ctx, width, height) => {
         log('FX:Kaleidoscope', 'Initializing...');
         ctx.globalAlpha = 0.4;
         particles = [];
     },
-    // --- END FIX ---
 
-    // --- THIS IS THE FIX ---
-    // Particles are now created lazily inside the draw loop,
-    // so they receive the 'colors' array immediately.
     draw: (ctx, width, height, deltaTime, colors, currentSettings) => {
         settings = currentSettings;
         
@@ -97,7 +87,6 @@ const kaleidoscopeEffect = {
             ctx.rotate(i * sliceAngle);
             
             particles.forEach(p => {
-                // This line is now a safety check, but particles are created with colors now.
                 if (p.colors !== colors) p.colors = colors;
                 p.update(deltaTime);
                 p.draw(ctx);
@@ -110,7 +99,6 @@ const kaleidoscopeEffect = {
         }
         ctx.restore();
     },
-    // --- END FIX ---
 
     resize: (width, height) => {
         particles.forEach(p => {
