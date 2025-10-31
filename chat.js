@@ -176,6 +176,23 @@ function showNewMessageNotification(sender, message) {
   }
 }
 
+// --- NEW DEBUG FUNCTION ---
+function displayDebugMessage(message) {
+    if (console.log) { // Check if debug is theoretically possible
+        const messagesList = document.getElementById('messages-list');
+        if (messagesList) {
+            const debugEl = document.createElement('div');
+            debugEl.className = 'chat-message received'; // Use a standard message style
+            debugEl.style.color = '#dc3545';
+            debugEl.style.fontSize = '0.7em';
+            debugEl.innerHTML = `<strong>[DEBUG]</strong> ${message}`;
+            messagesList.appendChild(debugEl);
+            debugEl.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+}
+// --- END NEW DEBUG FUNCTION ---
+
 export async function initializeSessionChat() {
     if (pusher) {
         pusher.disconnect();
