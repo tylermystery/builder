@@ -1,6 +1,10 @@
 // In: components/effects/water.js
 // Action: Create this new file.
 
+// --- DEBUG ---
+console.log('[water.js] File execution started.');
+// --- DEBUG ---
+
 import { log } from '../../utils/debug.js';
 
 let ripples = [];
