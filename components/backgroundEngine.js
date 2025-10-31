@@ -137,6 +137,7 @@ export function loadEffect(effect, controlsContainer) {
         // Check if ctx exists before initializing.
         if (ctx) {
             currentEffect.init(ctx, canvas.width, canvas.height);
+            currentEffect.initialized = true; // Mark as initialized
         }
     }
 
