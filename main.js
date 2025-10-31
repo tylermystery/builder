@@ -1,5 +1,5 @@
 // In: main.js
-// Action: REPLACE THE ENTIRE FILE with this content.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
 console.log('[main.js] 0. File execution started.');
@@ -28,11 +28,11 @@ console.log('[main.js] 2. Successfully imported auth.js.');
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
 
 // --- DEBUG ---
-console.log('[main.js] 3. Importing kaleidoscopeEffect.js...');
+console.log('[main.js] 3. Importing psychedelicEffect.js...'); // <-- UPDATED
 // --- DEBUG ---
-import kaleidoscopeEffect from './components/effects/kaleidoscope.js'; // <-- IMPORT DEFAULT EFFECT
+import psychedelicEffect from './components/effects/psychedelic.js'; // <-- UPDATED
 // --- DEBUG ---
-console.log('[main.js] 4. Successfully imported kaleidoscopeEffect.js.');
+console.log('[main.js] 4. Successfully imported psychedelicEffect.js.'); // <-- UPDATED
 // --- DEBUG ---
 
 
@@ -482,12 +482,11 @@ async function initialize() {
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
         // --- THIS IS THE FIX ---
-        // Load the default effect *after* initializing the engine
-        // We pass 'null' for the controls container because we don't need to build sliders here.
+        // Load the new effect by default
         // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(kaleidoscopeEffect).');
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(psychedelicEffect).'); // <-- UPDATED
         // --- DEBUG ---
-        backgroundEngine.loadEffect(kaleidoscopeEffect, null);
+        backgroundEngine.loadEffect(psychedelicEffect, null); // <-- UPDATED
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
