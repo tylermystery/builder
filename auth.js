@@ -1,13 +1,34 @@
 // FILE: auth.js (REPLACE ENTIRE FILE)
 
+// --- DEBUG ---
+console.log('[auth.js] 0. File execution started.');
+// --- DEBUG ---
+
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js'; // Import api module
 import * as backgroundEngine from './components/backgroundEngine.js';
+
+// --- DEBUG ---
+console.log('[auth.js] 1. Importing effect plugins...');
+console.log('[auth.js] 1a. Importing kaleidoscopeEffect.js...');
+// --- DEBUG ---
 import kaleidoscopeEffect from './components/effects/kaleidoscope.js';
+// --- DEBUG ---
+console.log('[auth.js] 1b. Importing windEffect.js...');
+// --- DEBUG ---
 import windEffect from './components/effects/wind.js';
+// --- DEBUG ---
+console.log('[auth.js] 1c. Importing waterEffect.js...');
+// --- DEBUG ---
 import waterEffect from './components/effects/water.js';
+// --- DEBUG ---
+console.log('[auth.js] 1d. Importing fractalEffect.js...');
+// --- DEBUG ---
 import fractalEffect from './components/effects/fractal.js';
+// --- DEBUG ---
+console.log('[auth.js] 2. All effect plugins imported.');
+// --- DEBUG ---
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
@@ -33,6 +54,10 @@ const effects = [
     { name: "Water", plugin: waterEffect },
     { name: "Fractal (Simple)", plugin: fractalEffect },
 ];
+
+// --- DEBUG ---
+console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
+// --- DEBUG ---
 
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
@@ -107,6 +132,9 @@ async function _handleSuccessfulLogin(payload) {
 }
 
 export function showUserModal() {
+    // --- DEBUG ---
+    console.log('[auth.js] showUserModal() called.');
+    // --- DEBUG ---
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
     
@@ -138,9 +166,15 @@ export function showUserModal() {
     // --- MOVED: Populate Background Effects ---
     // This logic now runs for EVERYONE (guests + logged-in users)
     // Check if options are already populated to avoid re-adding
+    // --- DEBUG ---
+    console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
+    // --- DEBUG ---
     if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
         log('Auth', 'Populating background effect tweaks for the first time.');
         effects.forEach((effect, index) => {
+            // --- DEBUG ---
+            console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
+            // --- DEBUG ---
             const option = document.createElement('option');
             option.value = index;
             option.textContent = effect.name;
@@ -158,9 +192,14 @@ export function showUserModal() {
         
         // Load the default effect (Kaleidoscope) initially
         // We assume the default <option> (value 0) is Kaleidoscope
+        // --- DEBUG ---
         if (effects.length > 0 && effects[0].plugin) {
+            console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
             backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
+        } else {
+            console.log('[auth.js] No effects found in array to load as default.');
         }
+        // --- DEBUG ---
     }
     // --- END: Moved Background Effects Logic ---
 
@@ -362,3 +401,7 @@ export function setupAuthEventListeners() {
     });
     // --- END NEW SSO EVENT LISTENERS ---
 }
+
+// --- DEBUG ---
+console.log('[auth.js] 4. File execution finished. Exports are ready.');
+// --- DEBUG ---
