@@ -393,7 +393,7 @@ export function updateCatalogHeader() {
     breadcrumbsEl.innerHTML = '';
     titleEl.style.display = 'none';
 
-    // Don't show breadcrumbs for the \"My Plan\" view
+    // Don't show breadcrumbs for the "My Plan" view
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         return;
     }
@@ -401,15 +401,15 @@ export function updateCatalogHeader() {
     const path = [];
     let currentTitle = '';
 
-    // Always start with a clickable \"All Categories\" link
-    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
+    // Always start with a clickable "All Categories" link
+    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
     // Find the active category
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
         // The category link should also be clickable
-        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
+        path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeCategoryButton.dataset.filter}">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
@@ -422,7 +422,7 @@ export function updateCatalogHeader() {
         currentTitle = subcatNames.join(' + ');
     }
     
-    // Only show the breadcrumbs and title if we have navigated deeper than \"All Categories\"
+    // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
     if (path.length > 1) {
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
@@ -475,4 +475,4 @@ export function showLoginPromptForLikes() {
 }
 // --- END login prompt function ---
 
-// --- DELETED updateDynamicBackground, stringToHash, and VIBRANT_COLOR_PAIRS ---
+// --- DELETED old background functions: updateDynamicBackground, stringToHash, and VIBRANT_COLOR_PAIRS ---
