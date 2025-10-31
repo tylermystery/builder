@@ -1,5 +1,5 @@
 // In: components/effects/water.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
 console.log('[water.js] File execution started.');
@@ -41,6 +41,7 @@ class Ripple {
 
 const waterEffect = {
     name: "Water",
+    type: "canvas", // <-- ADD THIS LINE
 
     init: (ctx, width, height) => {
         log('FX:Water', 'Initializing...');
