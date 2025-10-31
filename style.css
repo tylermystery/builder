@@ -2027,3 +2027,72 @@ hr.total-divider {
   ]
 }
 }
+
+        /* --- NEW UI POLISHES --- */
+
+/* 1. Header Event Name Input */
+#header-event-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #2c3e50;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin-bottom: 5px;
+    /* Optional: Focus state looks cleaner without border */
+    outline: none;
+    box-shadow: none;
+}
+
+/* 2. My Plans Dropdown */
+#my-plans-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#my-plans-dropdown {
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#my-plans-dropdown:hover {
+    border-color: #007bff;
+    background-color: #e7f3ff;
+}
+
+/* 3. Event Plan Button (Sidebar) */
+#itinerary-btn {
+    /* Style to make it look like a prominent header/button hybrid */
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#itinerary-btn:hover {
+    color: #007bff;
+}
+
+/* 4. Plan Filter Button (Catalog Filters) */
+#plan-filter-btn {
+    /* The small 'Plan' button on the filter bar */
+    background-color: #f0f8ff;
+    font-weight: bold;
+    border-color: #cce5ff;
+}
+#plan-filter-btn.active {
+    background-color: #cce5ff;
+    border-color: #007bff;
+}
