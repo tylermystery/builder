@@ -28,11 +28,11 @@ console.log('[main.js] 2. Successfully imported auth.js.');
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
 
 // --- DEBUG ---
-console.log('[main.js] 3. Importing psychedelicEffect.js...'); // <-- UPDATED
+console.log('[main.js] 3. Importing vortexEffect.js...'); // <-- UPDATED
 // --- DEBUG ---
-import psychedelicEffect from './components/effects/psychedelic.js'; // <-- UPDATED
+import vortexEffect from './components/effects/vortex.js'; // <-- UPDATED
 // --- DEBUG ---
-console.log('[main.js] 4. Successfully imported psychedelicEffect.js.'); // <-- UPDATED
+console.log('[main.js] 4. Successfully imported vortexEffect.js.'); // <-- UPDATED
 // --- DEBUG ---
 
 
@@ -484,9 +484,9 @@ async function initialize() {
         // --- THIS IS THE FIX ---
         // Load the new effect by default
         // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(psychedelicEffect).'); // <-- UPDATED
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(vortexEffect).'); // <-- UPDATED
         // --- DEBUG ---
-        backgroundEngine.loadEffect(psychedelicEffect, null); // <-- UPDATED
+        backgroundEngine.loadEffect(vortexEffect, null); // <-- UPDATED
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
