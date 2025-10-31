@@ -27,12 +27,17 @@ console.log('[auth.js] 1d. Importing fractalEffect.js...');
 // --- DEBUG ---
 import fractalEffect from './components/effects/fractal.js';
 // --- DEBUG ---
+console.log('[auth.js] 1e. Importing psychedelicEffect.js...');
+// --- DEBUG ---
+import psychedelicEffect from './components/effects/psychedelic.js'; // <-- NEW IMPORT
+// --- DEBUG ---
 console.log('[auth.js] 2. All effect plugins imported.');
 // --- DEBUG ---
 
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
 const userModalCloseBtn = document.getElementById('user-modal-close-btn');
+// ... (rest of DOM elements are the same) ...
 const signinView = document.getElementById('signin-view');
 const profileView = document.getElementById('profile-view');
 const signinForm = document.getElementById('signin-form');
@@ -49,6 +54,7 @@ const prefsMessage = document.getElementById('prefs-message');
 
 // --- List of available background effects ---
 const effects = [
+    { name: "Psychedelic Flow", plugin: psychedelicEffect }, // <-- NEW EFFECT ADDED
     { name: "Kaleidoscope", plugin: kaleidoscopeEffect },
     { name: "Wind", plugin: windEffect },
     { name: "Water", plugin: waterEffect },
@@ -59,7 +65,7 @@ const effects = [
 console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
 // --- DEBUG ---
 
-// Refactored function to handle a successful login from any method
+// ... (rest of _handleSuccessfulLogin function is the same) ...
 async function _handleSuccessfulLogin(payload) {
     if (state.session.id) {
         await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
@@ -201,8 +207,7 @@ export function showUserModal() {
             }
         });
         
-        // Load the default effect (Kaleidoscope) initially
-        // We assume the default <option> (value 0) is Kaleidoscope
+        // Load the default effect (Psychedelic Flow) initially
         // --- DEBUG ---
         if (effects.length > 0 && effects[0].plugin) {
             console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
@@ -223,6 +228,7 @@ export function showUserModal() {
     document.body.classList.add('modal-open');
 }
 
+// ... (rest of hideUserModal, handleSignIn, handleUpdateUserPrefs, handleSignOut, updateUserProfileIcon, and setupAuthEventListeners are the same) ...
 function hideUserModal() {
     userModalOverlay.classList.remove('active');
     setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
@@ -279,7 +285,6 @@ async function handleSignIn(e) {
     }
 }
 
-// --- THIS FUNCTION IS UPDATED ---
 async function handleUpdateUserPrefs(e) {
     e.preventDefault();
     prefsMessage.textContent = 'Saving...';
@@ -416,6 +421,7 @@ export function setupAuthEventListeners() {
     });
     // --- END NEW SSO EVENT LISTENERS ---
 }
+
 
 // --- DEBUG ---
 console.log('[auth.js] 4. File execution finished. Exports are ready.');
