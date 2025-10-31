@@ -231,14 +231,14 @@ export async function initializeSessionChat() {
         const records = await api.fetchChatMessages(sessionId);
         
         if (records.length > 0) {
-            displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
+            //displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
                 const isSent = SenderID === currentUser.id;
                 addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
             });
         } else {
-            displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
+            //displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
         }
     }
   
