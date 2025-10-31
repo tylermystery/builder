@@ -2231,3 +2231,12 @@ hr.total-divider {
     background-color: #cce5ff;
     border-color: #007bff;
 }
+
+        /* APPEND the following block to the end of: style.css */
+
+/* --- Minimum Quantity Warning Style --- */
+.checkout-summary-note.min-qty-warning {
+    color: #dc3545; /* Red color for warning */
+    font-weight: bold;
+    display: block; /* Ensure it's on a new line */
+}
