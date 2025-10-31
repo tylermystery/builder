@@ -1,5 +1,5 @@
 // In: components/backgroundEngine.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
