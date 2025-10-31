@@ -14,6 +14,7 @@ import { initializeEventListeners, updateSaveShareButton, initializeChatEventLis
 import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
+import kaleidoscopeEffect from './components/effects/kaleidoscope.js'; // <-- IMPORT DEFAULT EFFECT
 
 const imageCache = new Map();
 
@@ -456,6 +457,12 @@ async function initialize() {
         log('Main', 'Initialization complete.'); //
 
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
+        
+        // --- THIS IS THE FIX ---
+        // Load the default effect *after* initializing the engine
+        // We pass 'null' for the controls container because we don't need to build sliders here.
+        backgroundEngine.loadEffect(kaleidoscopeEffect, null);
+        // --- END FIX ---
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
