@@ -164,12 +164,20 @@ export function showUserModal() {
     }
     
     // --- MOVED: Populate Background Effects ---
-    // This logic now runs for EVERYONE (guests + logged-in users)
-    // Check if options are already populated to avoid re-adding
     // --- DEBUG ---
     console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
+    console.log(`[auth.js] Checking IF condition...`);
+    console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
+    console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
+    if (effectSelect) {
+        console.log(`[auth.js]   - effectSelect.innerHTML is empty: ${effectSelect.innerHTML === ''} (Content: "${effectSelect.innerHTML}")`);
+    }
     // --- DEBUG ---
+
     if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition PASSED. Populating dropdown.');
+        // --- DEBUG ---
         log('Auth', 'Populating background effect tweaks for the first time.');
         effects.forEach((effect, index) => {
             // --- DEBUG ---
@@ -199,6 +207,10 @@ export function showUserModal() {
         } else {
             console.log('[auth.js] No effects found in array to load as default.');
         }
+        // --- DEBUG ---
+    } else {
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
         // --- DEBUG ---
     }
     // --- END: Moved Background Effects Logic ---
