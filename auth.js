@@ -128,39 +128,40 @@ export function showUserModal() {
         } else {
             ownerDashboardLink.style.display = 'none';
         }
-        
-        // --- NEW: Populate Background Effects ---
-        // Check if options are already populated to avoid re-adding
-        if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
-            log('Auth', 'Populating background effect tweaks for the first time.');
-            effects.forEach((effect, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = effect.name;
-                effectSelect.appendChild(option);
-            });
-            
-            // Add listener to the dropdown
-            effectSelect.addEventListener('change', (e) => {
-                const selectedEffect = effects[e.target.value];
-                if (selectedEffect) {
-                    log('Auth', `User selected effect: ${selectedEffect.name}`);
-                    backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
-                }
-            });
-            
-            // Load the default effect (Kaleidoscope) initially
-            // We assume the default <option> (value 0) is Kaleidoscope
-            backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
-        }
-        // --- END: Populate Background Effects ---
-
     } else {
         signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
         signinView.style.display = 'block';
         profileView.style.display = 'none';
         ownerDashboardLink.style.display = 'none';
     }
+    
+    // --- MOVED: Populate Background Effects ---
+    // This logic now runs for EVERYONE (guests + logged-in users)
+    // Check if options are already populated to avoid re-adding
+    if (effectSelect && effectControlsContainer && effectSelect.innerHTML === '') {
+        log('Auth', 'Populating background effect tweaks for the first time.');
+        effects.forEach((effect, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = effect.name;
+            effectSelect.appendChild(option);
+        });
+        
+        // Add listener to the dropdown
+        effectSelect.addEventListener('change', (e) => {
+            const selectedEffect = effects[e.target.value];
+            if (selectedEffect) {
+                log('Auth', `User selected effect: ${selectedEffect.name}`);
+                backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
+            }
+        });
+        
+        // Load the default effect (Kaleidoscope) initially
+        // We assume the default <option> (value 0) is Kaleidoscope
+        backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
+    }
+    // --- END: Moved Background Effects Logic ---
+
     userModalOverlay.classList.add('active');
     userModalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
