@@ -5,7 +5,8 @@ import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
-// --- Private Module Variables ---\nlet canvas, ctx;
+// --- Private Module Variables ---
+let canvas, ctx;
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
 let currentColors = [];
@@ -14,7 +15,8 @@ let animationFrameId = null;
 // This object will be populated by the active plugin's controls
 let settings = {}; 
 
-// --- Color Generation Logic ---\n// This lives in the engine, as all effects will use it
+// --- Color Generation Logic ---
+// This lives in the engine, as all effects will use it
 function stringToHash(str) {
     let hash = 0, i, chr;
     if (!str || str.length === 0) return hash;
@@ -39,7 +41,8 @@ const VIBRANT_COLOR_PAIRS = [
     ['#fa709a', '#fee140']  // Vibrant: Hot Pink/Yellow
 ];
 
-// --- Animation Loop ---\nfunction animationLoop(timestamp) {
+// --- Animation Loop ---
+function animationLoop(timestamp) {
     if (!ctx || !currentEffect) {
         animationFrameId = requestAnimationFrame(animationLoop);
         return;
@@ -55,7 +58,9 @@ const VIBRANT_COLOR_PAIRS = [
     animationFrameId = requestAnimationFrame(animationLoop);
 }
 
-// --- Public API Functions ---\n\n/**
+// --- Public API Functions ---
+
+/**
  * Called by sidebar.js when the cart changes.
  * This updates the color palette for the animation.
  */
