@@ -1,12 +1,15 @@
 // In: components/backgroundEngine.js
 // Action: REPLACE THE ENTIRE FILE
 
+// --- DEBUG ---
+console.log('[backgroundEngine.js] File execution started.');
+// --- DEBUG ---
+
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
-// --- Private Module Variables ---
-let canvas, ctx;
+// --- Private Module Variables ---\nlet canvas, ctx;
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
 let currentColors = [];
@@ -44,9 +47,17 @@ const VIBRANT_COLOR_PAIRS = [
 // --- Animation Loop ---
 function animationLoop(timestamp) {
     if (!ctx || !currentEffect) {
+        // --- DEBUG ---
+        // This log will be very noisy, but it will tell us if the loop is running but idle.
+        // console.log('[backgroundEngine.js] animationLoop: Skipping frame (no ctx or no currentEffect)');
+        // --- DEBUG ---
         animationFrameId = requestAnimationFrame(animationLoop);
         return;
     }
+    
+    // --- DEBUG ---
+    // console.log('[backgroundEngine.js] animationLoop: Drawing frame...');
+    // --- DEBUG ---
     
     const deltaTime = timestamp - lastTimestamp;
     lastTimestamp = timestamp;
@@ -123,6 +134,10 @@ export function updateSettings(newSettings) {
  * @param {HTMLElement | null} controlsContainer - The div where sliders should be built (optional).
  */
 export function loadEffect(effect, controlsContainer) {
+    // --- DEBUG ---
+    console.log(`[backgroundEngine.js] loadEffect() called with effect: ${effect ? effect.name : 'null'}`);
+    // --- DEBUG ---
+    
     log('BG-Engine', `Loading effect: ${effect.name}`);
     currentEffect = effect;
     settings = {}; // Reset settings
@@ -136,14 +151,24 @@ export function loadEffect(effect, controlsContainer) {
     if (typeof currentEffect.init === 'function') {
         // Check if ctx exists before initializing.
         if (ctx) {
+            // --- DEBUG ---
+            console.log(`[backgroundEngine.js] loadEffect: Calling init() for ${currentEffect.name}.`);
+            // --- DEBUG ---
             currentEffect.init(ctx, canvas.width, canvas.height);
             currentEffect.initialized = true; // Mark as initialized
+        } else {
+            // --- DEBUG ---
+            console.log(`[backgroundEngine.js] loadEffect: ctx is NOT ready. Skipping init for ${currentEffect.name}.`);
+            // --- DEBUG ---
         }
     }
 
     // 2. Get controls from the plugin and build them in the UI
     if (typeof currentEffect.getControls === 'function') {
         const controls = currentEffect.getControls();
+        // --- DEBUG ---
+        console.log(`[backgroundEngine.js] loadEffect: Building ${controls.length} controls for ${currentEffect.name}.`);
+        // --- DEBUG ---
         controls.forEach(control => {
             // Set default value in our engine's settings
             settings[control.id] = control.defaultValue;
@@ -193,6 +218,9 @@ export function loadEffect(effect, controlsContainer) {
     // 4. If init hasn't run yet (because ctx wasn't ready when loadEffect was first called), run it now.
     if (ctx && !currentEffect.initialized) { 
         if (typeof currentEffect.init === 'function') {
+            // --- DEBUG ---
+            console.log(`[backgroundEngine.js] loadEffect: Running *late* init() for ${currentEffect.name}.`);
+            // --- DEBUG ---
             currentEffect.init(ctx, canvas.width, canvas.height);
             currentEffect.initialized = true; // Mark as initialized
         }
@@ -203,6 +231,9 @@ export function loadEffect(effect, controlsContainer) {
  * Called once by main.js to start the engine.
  */
 export function initBackgroundEngine() {
+    // --- DEBUG ---
+    console.log('[backgroundEngine.js] initBackgroundEngine() called.');
+    // --- DEBUG ---
     canvas = document.getElementById('kaleidoscope-bg'); // We'll keep this ID
     if (!canvas) {
         console.error('Fatal: Background canvas not found.');
@@ -242,4 +273,7 @@ export function initBackgroundEngine() {
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     animationFrameId = requestAnimationFrame(animationLoop);
     log('BG-Engine', 'Engine Initialized.');
+    // --- DEBUG ---
+    console.log('[backgroundEngine.js] initBackgroundEngine() FINISHED. Canvas and loop are live.');
+    // --- DEBUG ---
 }
