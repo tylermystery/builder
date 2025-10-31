@@ -1,4 +1,5 @@
-// FILE: main.js (REPLACE ENTIRE FILE)
+// In: main.js
+// Action: REPLACE THE ENTIRE FILE with this content.
 
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
@@ -12,6 +13,7 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
+import * as kaleidoscope from './components/kaleidoscope.js'; // <-- NEW: STEP 4 IMPORT
 
 const imageCache = new Map();
 
@@ -63,10 +65,10 @@ function syncUiWithUrl() {
         } else if (view === 'likes') {
             document.getElementById('liked-items-filter-btn')?.classList.add('active'); //
         } else if (category) {
-            document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter=\"${category}\"]`)?.classList.add('active'); //
         } else {
             // Default to 'All' if no specific view or category is set
-            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter=\"all\"]`)?.classList.add('active'); //
         }
     }
 
@@ -85,7 +87,7 @@ function syncUiWithUrl() {
          subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
          if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
              subcategories.forEach(subcat => {
-                 subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active'); //
+                 subcategoryFilters.querySelector(`.filter-btn[data-filter=\"${subcat}\"]`)?.classList.add('active'); //
              });
          }
      }
@@ -119,7 +121,6 @@ function syncUiWithUrl() {
     }, 100); // Small delay
 }
 
-// REPLACE the entire initialize function in: main.js
 
 // REPLACE the entire initialize function in: main.js
 
@@ -440,7 +441,7 @@ async function initialize() {
         const statusFilterEl = document.getElementById('status-filter'); //
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue; //
 
-        // --- Final UI Setup ---
+        // --- Final UI Setup ---\
         ui.toggleLoading(false); //
         updateSaveShareButton(); //
         initializeChatEventListeners(); //
@@ -452,6 +453,8 @@ async function initialize() {
 
         setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
         log('Main', 'Initialization complete.'); //
+
+        kaleidoscope.initKaleidoscope(); // <-- NEW: STEP 4 INITIALIZE ENGINE
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
