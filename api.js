@@ -677,7 +677,7 @@ export async function fetchChatMessages(sessionId) {
     }
     // Fetch messages linked specifically to this Session record
 // --- REPAIR: Use the correct linked-record ID search formula ---
-    const formula = `FIND('${sessionId}', {SessionID})`; // Checks if the sessionId is present in the linked field
+    const formula = `FIND('${sessionId}', {SessionID_Rollup})`; // The correct formula is simply matching the ID against the linked field string/array representation.
     // --- END REPAIR ---
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
