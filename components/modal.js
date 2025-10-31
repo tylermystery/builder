@@ -14,22 +14,26 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-function closeDetailModal() {
+// --- Local Helpers (renamed to prevent export/local redeclaration clash) ---
+function _closeDetailModalHelper() {
     updateUrl({ openItem: null });
-    hideDetailModal();
+    _hideDetailModalUI();
 }
 
-function handleEscapeKey(event) {
+function _handleEscapeKey(event) {
     if (event.key === 'Escape') {
-        closeDetailModal();
+        _closeDetailModalHelper();
     }
 }
 
-function handleOverlayClick(event) {
+function _handleOverlayClick(event) {
     if (event.target === modalOverlay) {
-        closeDetailModal();
+        _closeDetailModalHelper();
     }
 }
+
+// NOTE: We rely on _hideDetailModalUI being the actual UI manipulator defined later.
+
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
@@ -43,7 +47,7 @@ function updateCheckoutDisplay() {
     // --- Tip Visibility Logic (Revised) ---
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
-        // Only allow tips if the payment is NOT an initial deposit (i.e., paying remainder or paying in full)
+        // Only allow tips if the payment is NOT an initial deposit 
         if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { 
             tipRow.style.display = 'none';
         } else {
@@ -133,9 +137,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     console.log('[hideDetailModal] Called.'); 
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = closeDetailModal;
-    modalOverlay.addEventListener('click', handleOverlayClick);
-    document.addEventListener('keydown', handleEscapeKey);
+    // Use local helper
+    closeBtn.onclick = _closeDetailModalHelper;
+    modalOverlay.addEventListener('click', _handleOverlayClick);
+    document.addEventListener('keydown', _handleEscapeKey);
 
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
@@ -374,7 +379,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                 }
@@ -418,7 +423,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem,
+            isChatEnabledOnItem: isChatChatEnabledOnItem,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
@@ -443,8 +448,8 @@ export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = null;
-    modalOverlay.removeEventListener('click', handleOverlayClick);
-    document.removeEventListener('keydown', handleEscapeKey);
+    modalOverlay.removeEventListener('click', _handleOverlayClick);
+    document.removeEventListener('keydown', _handleEscapeKey);
     if (currentItemChatRecordId) {
         log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
         currentItemChatRecordId = null;
@@ -512,10 +517,10 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        // --- NEW MINIMUM QUANTITY LOGIC ---
+        // --- FIXED MINIMUM QUANTITY LOGIC ---
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveQuantity = Math.max(itemInfo.quantity, headcountMin);
-        // --- END NEW LOGIC ---
+        // --- END FIXED LOGIC ---
 
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
 
@@ -532,9 +537,9 @@ export async function showCheckoutModal(shopSettings) {
         // --- NEW MINIMUM QUANTITY WARNING NOTE ---
         let quantityDisplay = `${itemInfo.quantity}`;
         if (itemInfo.quantity < headcountMin) {
-            const warningText = `*Minimum order of ${headcountMin} applied in total calculation.`;
+            const warningText = `*Minimum order of ${headcountMin} applied in calculation.`;
             noteHtml += `<small class="checkout-summary-note min-qty-warning">${warningText}</small>`;
-            quantityDisplay = `${itemInfo.quantity} (calc: ${effectiveQuantity})`; // Indicate the quantity used for calc
+            quantityDisplay = `${itemInfo.quantity} (calc: ${effectiveQuantity})`; // Display actual qty vs calculated qty
         }
         // --- END NEW NOTE ---
 
@@ -586,27 +591,6 @@ export async function showCheckoutModal(shopSettings) {
         console.error("Failed to initialize payment form:", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
-    }
-}
-
-export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.');
-    const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = null;
-    modalOverlay.removeEventListener('click', handleOverlayClick);
-    document.removeEventListener('keydown', handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
-    }
-
-    if (modalOverlay) {
-        modalOverlay.classList.remove('active');
-        setTimeout(() => {
-            modalOverlay.style.display = 'none';
-            resetModalState();
-        }, 300);
-        document.body.classList.remove('modal-open');
     }
 }
 
