@@ -63,14 +63,14 @@ const fsSource = `
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
-// 5. Create the "full spectrum" colors with brighter and more uniform output
-        float base_wave = n * 5.0 + u_time * 0.4; // Same base wave for swirl
+// 5. Create a soft, analogous color gradient by lowering the spatial frequency.
+        // Change the '5.0' multiplier to '1.5' for much broader, softer bands.
+        float base_wave = n * 1.5 + u_time * 0.4; // Slower spatial change, 2-3 adjacent colors visible
         
         // Define the standard 120-degree phase shift for full spectrum HSL cycling
         const float PI_2_OVER_3 = 2.0943951; 
         
-        // Use a much smaller exponent (1.1) for a brighter, more vibrant color.
-        // We'll also add a slight lift (+0.1) to boost brightness.
+        // Maintain brightness boost and exponent
         float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.1) + 0.1; 
         float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.1) + 0.1;
         float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 1.1) + 0.1;
