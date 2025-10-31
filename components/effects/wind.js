@@ -1,10 +1,6 @@
 // In: components/effects/wind.js
 // Action: Create this new file.
 
-// --- DEBUG ---
-console.log('[wind.js] File execution started.');
-// --- DEBUG ---
-
 import { log } from '../../utils/debug.js';
 
 let particles = [];
