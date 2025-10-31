@@ -7,7 +7,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
-import * as kaleidoscope from './kaleidoscope.js'; // <-- NEW: STEP 5 IMPORT
+import * as backgroundEngine from './backgroundEngine.js'; // <-- IMPORT NEW ENGINE
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -25,16 +25,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
-        <div class="card-actions">
-            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-            <button class="action-btn remove-btn" title="Remove">×</button>
-        </div>
-        <div class="favorite-item-overlay"
-            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
-        >
-            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
-        </div>
-    `;
+        <div class=\"card-actions\">\n            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>\n            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>\n        </div>\n        <div class=\"favorite-item-overlay\"\n            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"\n        >\n            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>\n        </div>\n    `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -62,22 +53,11 @@ async function createLockedInItemElement(record, itemInfo) {
     let priceDisplay = `$${price.toFixed(2)}`;
     if (itemInfo.overridePrice != null) {
         const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
-        </div>
-        <div class="locked-item-actions">
-            <button class="edit-btn">Edit</button>
-            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
-        </div>
-    `;
+        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}\" alt=\"${fields.Name}\">\n        <div class=\"locked-item-details\">\n            <p class=\"locked-item-name\">${fields.Name}</p>\n            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}\n            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>\n            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}\n        </div>\n        <div class=\"locked-item-actions\">\n            <button class=\"edit-btn\">Edit</button>\n            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>\n        </div>\n    `;
     return itemElement;
 }
 
@@ -89,7 +69,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
         return;
     }
 
@@ -176,8 +156,8 @@ export function updateTotalCost() {
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     
     // --- THIS IS THE MODIFIED TRIGGER ---
-    if (typeof kaleidoscope.updateColors === 'function') {
-        kaleidoscope.updateColors();
+    if (typeof backgroundEngine.updateColors === 'function') {
+        backgroundEngine.updateColors();
     }
     // --- END ---
     
@@ -213,7 +193,7 @@ export function updateTotalCost() {
         if (isFullyPaid) {
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
@@ -233,7 +213,7 @@ export function displayReservedStatus() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'none';
