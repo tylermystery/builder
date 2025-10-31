@@ -1,22 +1,48 @@
+// In: components/kaleidoscope.js
+// Action: Create this new file.
+
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
-// --- Canvas & Animation State ---
+// --- Private Module Variables ---
+
 let canvas, ctx;
 let particles = [];
 let lastTimestamp = 0;
-let angle = 0;
+let globalAngle = 0;
+let currentColors = [];
 
-// --- User-Controlled Settings ---
+// Default settings, will be controlled by sliders
 let settings = {
-    segments: 6,   // "Kaleidoscope" (2 to 12)
-    speed: 2,      // "Motion" (0.5 to 10)
-    spin: 0.05,    // "Spin" (0 to 1)
-    particleCount: 100 // Max number of lines
+    segments: 6,     // "Kaleidoscope" (2 to 12)
+    speed: 2,        // "Motion" (1 to 10)
+    spin: 0.0,       // "Spin" (0 to 1)
+    particleCount: 100, // Internal setting
+    opacity: 0.4,       // Master opacity
+    fade: 0.05         // How fast the trails fade
 };
 
 // --- Color Generation Logic (Moved from ui.js) ---
+
+/**
+ * Simple hash function to convert a string to a positive integer.
+ * This lets us map any category name to a color index.
+ * @param {string} str The string to hash
+ * @returns {number} A positive integer.
+ */
+function stringToHash(str) {
+    let hash = 0, i, chr;
+    if (!str || str.length === 0) return hash;
+    for (i = 0; i < str.length; i++) {
+        chr = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
+}
+
+// A list of vibrant, pre-approved "adventure-themed" color pairs.
 const VIBRANT_COLOR_PAIRS = [
     ['#ff9a8b', '#ff6a88'], // Active: Red/Pink
     ['#00c9a7', '#84fab0'], // Nature: Green/Teal
@@ -30,25 +56,108 @@ const VIBRANT_COLOR_PAIRS = [
     ['#fa709a', '#fee140']  // Vibrant: Hot Pink/Yellow
 ];
 
-function stringToHash(str) {
-    let hash = 0, i, chr;
-    if (!str || str.length === 0) return hash;
-    for (i = 0; i < str.length; i++) {
-        chr = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + chr;
-        hash |= 0;
+
+// --- Particle Class ---
+
+class Particle {
+    constructor() {
+        this.reset();
     }
-    return Math.abs(hash);
+
+    reset() {
+        if (!canvas) return;
+        // Start at a random point
+        this.x = (Math.random() - 0.5) * canvas.width;
+        this.y = (Math.random() - 0.5) * canvas.height;
+        // Give it a random velocity based on the "Motion" slider
+        this.vx = (Math.random() - 0.5) * settings.speed;
+        this.vy = (Math.random() - 0.5) * settings.speed;
+        // Give it a random color from our plan's palette
+        this.color = currentColors[Math.floor(Math.random() * currentColors.length)] || '#FFFFFF';
+        // Give it a random lifespan
+        this.life = Math.random() * 100 + 100;
+    }
+
+    update(deltaTime) {
+        // Adjust speed based on a 60fps frame (approx 16.67ms)
+        const speedMultiplier = deltaTime / 16.67; 
+        this.x += this.vx * speedMultiplier;
+        this.y += this.vy * speedMultiplier;
+        this.life -= 1 * speedMultiplier; // Make lifespan frame-rate independent
+
+        // Reset particle if it's dead or way off-screen
+        const bounds = canvas.width / 2;
+        if (this.life <= 0 || this.x < -bounds || this.x > bounds || this.y < -bounds || this.y > bounds) {
+            this.reset();
+        }
+    }
+
+    draw(context) {
+        context.strokeStyle = this.color;
+        context.lineWidth = 2;
+        context.beginPath();
+        // Draw a short line from its previous position to its new one
+        context.moveTo(this.x - this.vx, this.y - this.vy);
+        context.lineTo(this.x, this.y);
+        context.stroke();
+    }
 }
 
-/**
- * Gets the current color palette based on items in the plan.
- */
-function getColorPalette() {
-    let colors = [];
-    const defaultColors = VIBRANT_COLOR_PAIRS[5];
+// --- Animation Loop ---
+
+function draw(timestamp) {
+    if (!ctx) return; // Stop if canvas isn't ready
+    const deltaTime = timestamp - lastTimestamp;
+    lastTimestamp = timestamp;
+
+    // Clear the canvas with a faint trail effect
+    ctx.fillStyle = `rgba(255, 255, 255, ${settings.fade})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Center the coordinate system
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
     
-    if (state.cart.lockedItems.size === 0) {
+    // Apply global spin based on the "Spin" slider
+    // (deltaTime / 1000) converts ms to seconds, making spin speed consistent
+    globalAngle += settings.spin * (deltaTime / 1000); 
+    ctx.rotate(globalAngle);
+
+    const sliceAngle = (Math.PI * 2) / settings.segments;
+
+    for (let i = 0; i < settings.segments; i++) {
+        ctx.save();
+        ctx.rotate(i * sliceAngle);
+        
+        // Draw all particles
+        particles.forEach(p => {
+            p.update(deltaTime);
+            p.draw(ctx);
+        });
+
+        // Mirror (this is the core kaleidoscope/fractal effect)
+        ctx.scale(1, -1);
+        particles.forEach(p => p.draw(ctx));
+        
+        ctx.restore();
+    }
+
+    ctx.restore(); // Restore origin from center
+    requestAnimationFrame(draw);
+}
+
+// --- Public API Functions ---
+
+/**
+ * Called by sidebar.js when the cart changes.
+ * This updates the color palette for the animation.
+ */
+export function updateColors() {
+    log('Kaleidoscope', 'Updating colors based on plan...');
+    let colors = [];
+    const defaultColors = VIBRANT_COLOR_PAIRS[5]; // Default
+    
+    if (!state.records.all || state.cart.lockedItems.size === 0) {
         colors.push(...defaultColors);
     } else {
         const categoriesInPlan = new Set();
@@ -72,154 +181,48 @@ function getColorPalette() {
             });
         }
     }
-    return [...new Set(colors)];
-}
-
-let currentPalette = getColorPalette();
-
-/**
- * Public function to be called by sidebar.js when cart changes.
- */
-export function updateColors() {
-    currentPalette = getColorPalette();
-    log('Kaleidoscope', 'Updated color palette', currentPalette);
-}
-
-// --- Particle Class ---
-class Particle {
-    constructor() {
-        this.reset();
-    }
-
-    reset() {
-        this.x = Math.random() * canvas.width - canvas.width / 2;
-        this.y = Math.random() * canvas.height - canvas.height / 2;
-        this.vx = (Math.random() - 0.5) * settings.speed;
-        this.vy = (Math.random() - 0.5) * settings.speed;
-        this.life = Math.random() * 100 + 100;
-        this.color = currentPalette[Math.floor(Math.random() * currentPalette.length)];
-    }
-
-    update(deltaTime) {
-        this.x += this.vx * deltaTime * (settings.speed / 2);
-        this.y += this.vy * deltaTime * (settings.speed / 2);
-        this.life -= 0.1 * deltaTime;
-
-        // Reset particle if it's dead or off-screen
-        if (this.life <= 0 || 
-            this.x > canvas.width / 2 || this.x < -canvas.width / 2 ||
-            this.y > canvas.height / 2 || this.y < -canvas.height / 2) {
-            this.reset();
-        }
-    }
-
-    draw(ctx, segmentAngle) {
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.y);
-        ctx.lineTo(this.x - this.vx, this.y - this.vy); // Draw a short line
-        ctx.stroke();
-
-        // --- The Kaleidoscope Logic ---
-        // Draw the mirrored and rotated segments
-        for (let i = 1; i < settings.segments; i++) {
-            ctx.save();
-            ctx.rotate(i * segmentAngle);
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x - this.vx, this.y - this.vy);
-            ctx.stroke();
-            
-            // Draw the mirror image
-            ctx.scale(1, -1);
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x - this.vx, this.y - this.vy);
-            ctx.stroke();
-            
-            ctx.restore();
-        }
-    }
+    currentColors = [...new Set(colors)];
+    log('Kaleidoscope', `Colors updated to: ${currentColors.join(', ')}`);
 }
 
 /**
- * The main animation loop.
- */
-function animate(timestamp) {
-    if (!ctx) return; // Stop if canvas is gone
-    
-    const deltaTime = (timestamp - lastTimestamp) / 16.67; // Normalize to 60fps
-    lastTimestamp = timestamp;
-
-    // Clear canvas with a fade effect
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Center coordinate system
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    
-    // Apply global spin
-    angle += (settings.spin / 100) * deltaTime;
-    ctx.rotate(angle);
-
-    const segmentAngle = (Math.PI * 2) / settings.segments;
-
-    // Update and draw all particles
-    particles.forEach(p => {
-        p.update(deltaTime);
-        p.draw(ctx, segmentAngle);
-    });
-    
-    ctx.restore();
-    
-    requestAnimationFrame(animate);
-}
-
-/**
- * Public function to update settings from sliders.
+ * Called by event listeners in auth.js when sliders change.
+ * @param {object} newSettings - e.g., { segments: 8, speed: 3, spin: 0.1 }
  */
 export function updateKaleidoscopeSettings(newSettings) {
-    if (newSettings.segments) {
-        settings.segments = parseInt(newSettings.segments, 10);
-    }
-    if (newSettings.speed) {
-        settings.speed = parseFloat(newSettings.speed);
-    }
-    if (newSettings.spin) {
-        // Map spin slider (0-10) to a smaller rotation value
-        settings.spin = parseFloat(newSettings.spin) / 20; 
-    }
-    log('Kaleidoscope', 'Settings updated', settings);
+    settings = { ...settings, ...newSettings };
+    log('Kaleidoscope', 'Settings updated:', settings);
 }
 
 /**
- * Initializes the canvas and starts the animation.
+ * Called once by main.js to start the engine.
  */
 export function initKaleidoscope() {
     canvas = document.getElementById('kaleidoscope-bg');
     if (!canvas) {
-        console.error('Failed to find #kaleidoscope-bg canvas element.');
+        console.error('Fatal: Kaleidoscope canvas not found.');
         return;
     }
     ctx = canvas.getContext('2d');
-
-    function resizeCanvas() {
+    
+    const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-    }
+        ctx.globalAlpha = settings.opacity;
+    };
 
     window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    resizeCanvas(); // Set initial size
+    
+    updateColors(); // Get initial colors
 
-    // Create particles
+    // Create initial particles
     for (let i = 0; i < settings.particleCount; i++) {
         particles.push(new Particle());
     }
 
-    // Start the loop
+    // Start the animation
     lastTimestamp = performance.now();
-    requestAnimationFrame(animate);
+    requestAnimationFrame(draw);
     log('Kaleidoscope', 'Engine Initialized.');
 }
