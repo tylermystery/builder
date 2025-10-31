@@ -1,5 +1,5 @@
 // In: components/backgroundEngine.js
-// Action: REPLACE THE ENTIRE FILE
+// Action: Create this new file.
 
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
@@ -197,16 +197,13 @@ export function initBackgroundEngine() {
         return;
     }
     
-    // --- THIS IS THE FIX ---
-    // Always get a 2D context, as all current effects (Kaleidoscope, Wind, etc.)
-    // are built using the 2D canvas API (e.g., fillRect, strokeStyle).
+    // Always get a 2D context, as all current effects are 2D
     log('BG-Engine', 'Requesting 2D canvas context.');
     ctx = canvas.getContext('2d');
     if (!ctx) {
         console.error('Fatal: Could not get 2D canvas context.');
         return;
     }
-    // --- END FIX ---
     
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
