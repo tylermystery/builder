@@ -64,10 +64,11 @@ const fsSource = `
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
         // 5. Create the "tie-dye" colors
-        // We use sine waves based on the noise and time to create pulsing colors
-        float r = sin(n * 2.0 + u_time * 0.5) * 0.5 + 0.5;
-        float g = sin(n * 3.0 + u_time * 0.3) * 0.5 + 0.5;
-        float b = sin(n * 5.0 + u_time * 0.2) * 0.5 + 0.5;
+        // Use sine waves with phase shifts for rich, adjacent, earthy colors
+        float base_wave = n * 5.0 + u_time * 0.4; // More swirls, slightly slower pulse
+        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.5); // Rich Red/Orange
+        float g = pow(sin(base_wave + 0.6) * 0.5 + 0.5, 1.8); // Rich Yellow/Olive
+        float b = pow(sin(base_wave + 1.2) * 0.5 + 0.5, 2.2); // Richer/Darker Green/Teal/Blue
         
         // 6. Final color with a vignette (darker edges)
         float vignette = 1.0 - (radius * 0.8);
