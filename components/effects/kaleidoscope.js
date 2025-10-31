@@ -54,7 +54,9 @@ const kaleidoscopeEffect = {
         log('FX:Kaleidoscope', 'Initializing...');
         ctx.globalAlpha = 0.4;
         particles = [];
-        for (let i = 0; i < 100; i++) {
+        // Use settings.particleCount or a default
+        const count = settings.particleCount || 100;
+        for (let i = 0; i < count; i++) {
             particles.push(new Particle(width, height, [], settings.speed));
         }
     },
@@ -69,12 +71,13 @@ const kaleidoscopeEffect = {
         ctx.save();
         ctx.translate(width / 2, height / 2);
         
-        globalAngle += settings.spin * (deltaTime / 1000); 
+        globalAngle += (settings.spin || 0) * (deltaTime / 1000); 
         ctx.rotate(globalAngle);
 
-        const sliceAngle = (Math.PI * 2) / settings.segments;
+        const segments = settings.segments || 6;
+        const sliceAngle = (Math.PI * 2) / segments;
 
-        for (let i = 0; i < settings.segments; i++) {
+        for (let i = 0; i < segments; i++) {
             ctx.save();
             ctx.rotate(i * sliceAngle);
             
@@ -100,9 +103,12 @@ const kaleidoscopeEffect = {
     },
     
     updateSettings: (newSettings) => {
-        particles.forEach(p => {
-            p.speed = newSettings.speed;
-        });
+        // This is called when a slider moves
+        if (newSettings.speed) {
+            particles.forEach(p => {
+                p.speed = newSettings.speed;
+            });
+        }
     },
 
     getControls: () => {
