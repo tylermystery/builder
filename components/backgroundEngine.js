@@ -201,26 +201,25 @@ export function initBackgroundEngine() {
         return;
     }
     
-    // Try to get a WebGL context for shaders, fall back to 2D
-    let gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if (gl) {
-        log('BG-Engine', 'WebGL context acquired. 3D effects are enabled.');
-        ctx = gl; // ctx will be the WebGL context
-    } else {
-        log('BG-Engine', 'WebGL not supported. Falling back to 2D canvas context.');
-        ctx = canvas.getContext('2d');
+    // --- THIS IS THE FIX ---
+    // Always get a 2D context, as all current effects (Kaleidoscope, Wind, etc.)
+    // are built using the 2D canvas API (e.g., fillRect, strokeStyle).
+    log('BG-Engine', 'Requesting 2D canvas context.');
+    ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('Fatal: Could not get 2D canvas context.');
+        return;
     }
+    // --- END FIX ---
     
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         
-        // Handle context resizing
-        if (gl) {
-            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-        } else {
-            ctx.globalAlpha = 0.4; // Default opacity for 2D effects
-        }
+        // --- THIS IS THE FIX ---
+        // Always set 2D context properties
+        ctx.globalAlpha = 0.4; // Default opacity for 2D effects
+        // --- END FIX ---
 
         if (currentEffect && typeof currentEffect.resize === 'function') {
             currentEffect.resize(canvas.width, canvas.height);
