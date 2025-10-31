@@ -1,5 +1,5 @@
 // In: components/sidebar.js
-// Action: REPLACE THE ENTIRE FILE with this content.
+// Action: REPLACE THE ENTIRE FILE with this corrected content.
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -192,7 +192,8 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;\
+        // --- THIS IS THE FIXED LINE (REMOVED STRAY '\') ---
+        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
