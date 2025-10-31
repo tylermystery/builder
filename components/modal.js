@@ -14,7 +14,29 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-// --- Local Helpers (renamed to prevent export/local redeclaration clash) ---
+// --- Local UI Closure Function (FIXED: The actual UI logic is now here) ---
+function _hideDetailModalUI() {
+    const closeBtn = document.getElementById('modal-close-btn');
+    // Remove listeners when hiding to prevent memory leaks/double triggers
+    closeBtn.onclick = null;
+    modalOverlay.removeEventListener('click', _handleOverlayClick);
+    document.removeEventListener('keydown', _handleEscapeKey);
+    if (currentItemChatRecordId) {
+        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
+        currentItemChatRecordId = null;
+    }
+
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        setTimeout(() => {
+            modalOverlay.style.display = 'none';
+            resetModalState();
+        }, 300);
+        document.body.classList.remove('modal-open');
+    }
+}
+// --------------------------------------------------------------------------
+
 function _closeDetailModalHelper() {
     updateUrl({ openItem: null });
     _hideDetailModalUI();
@@ -31,8 +53,6 @@ function _handleOverlayClick(event) {
         _closeDetailModalHelper();
     }
 }
-
-// NOTE: We rely on _hideDetailModalUI being the actual UI manipulator defined later.
 
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
@@ -423,7 +443,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatChatEnabledOnItem,
+            isChatEnabledOnItem: isChatEnabledOnItem, // CORRECTED TYPO
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
@@ -444,25 +464,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }, 0);
 }
 
+// Exported function now simply calls the local UI manipulator
 export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.');
-    const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = null;
-    modalOverlay.removeEventListener('click', _handleOverlayClick);
-    document.removeEventListener('keydown', _handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
-    }
-
-    if (modalOverlay) {
-        modalOverlay.classList.remove('active');
-        setTimeout(() => {
-            modalOverlay.style.display = 'none';
-            resetModalState();
-        }, 300);
-        document.body.classList.remove('modal-open');
-    }
+    _hideDetailModalUI();
 }
 
 export async function showCheckoutModal(shopSettings) {
