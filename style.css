@@ -16,13 +16,16 @@ body.modal-open {
     overflow: hidden;
 }
 
+/* --- MODIFIED: Added Frosted Glass Effect --- */
 #main-header {
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
     position: sticky;
     top: 0;
     z-index: 1000;
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); /* For Safari */
 }
 
 .header-content {
@@ -84,13 +87,19 @@ body.modal-open {
     padding-bottom: 10px;
 }
 
+/* --- MODIFIED: Added Frosted Glass Effect --- */
 #filter-controls {
     display: flex;
     flex-direction: column;
     gap: 15px;
     position: relative;
-    border: 1px solid #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
     padding: 20px;
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); /* For Safari */
+    border-radius: 8px; /* Added border-radius */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Added subtle shadow */
 }
 
 .filter-group {
@@ -168,14 +177,28 @@ body.modal-open {
     gap: 25px;
 }
 
+/* --- MODIFIED: Added Frosted Glass Effect & Hover Transition --- */
 .event-card {
     display: flex;
     flex-direction: column;
     height: auto;
-    border: 1px solid #e0e0e0;
-    background-color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
     overflow: hidden;
+    border-radius: 10px; /* Added border-radius */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Softer shadow */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); /* For Safari */
+    transition: all 0.3s ease; /* For hover effect */
 }
+
+/* --- NEW: Added Fun Hover Interaction --- */
+.event-card:hover {
+    transform: scale(1.02);
+    background-color: rgba(255, 255, 255, 0.9); /* Become more solid */
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15); /* Lift off the page */
+}
+
 
 .event-card-image-container {
     height: 200px;
@@ -851,6 +874,20 @@ body.modal-open {
     margin-left: 5px;
     font-size: 1.1em;
 }
+
+/* --- MODIFIED: Added Frosted Glass Effect --- */
+#event-plan-panel {
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px); /* For Safari */
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
+}
+
 
 @keyframes gradientAnimation {
     0% {
