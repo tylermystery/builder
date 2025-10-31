@@ -17,6 +17,8 @@ The application is built on a modular architecture to ensure maintainability and
 - **components/card.js:** Responsible for creating and rendering all card-based elements.
 - **components/modal.js:** Manages the functionality of the detail and checkout modals.
 - **components/sidebar.js:** Controls the right-hand "Event Plan" panel and the "Favorites" carousel.
+- **components/backgroundEngine.js:** The central engine that manages the animated WebGL canvas background and its reactive "energy" state.
+- **components/effects/fluid.js:** The WebGL shader plugin that renders the "Fluid Energy" vortex.
 
 ## Serverless Functions (`netlify/functions/`)
 - **/api/process-email:** Receives email data from a webhook, uses the Gemini AI API to parse for sales information, and creates or updates records in the Airtable CRM.
@@ -27,3 +29,4 @@ The application is built on a modular architecture to ensure maintainability and
 
 ## Utility Modules
 - **utils/debug.js:** Provides a simple, toggleable logging system for development.
+- **utils/shader.js:** A minimal helper class to compile and run WebGL shader programs.
