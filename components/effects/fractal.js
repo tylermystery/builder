@@ -1,5 +1,5 @@
 // In: components/effects/fractal.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
 console.log('[fractal.js] File execution started.');
@@ -12,6 +12,7 @@ let angle = 0;
 
 const fractalEffect = {
     name: "Fractal (Simple)",
+    type: "canvas", // <-- ADD THIS LINE
 
     init: (ctx, width, height) => {
         log('FX:Fractal', 'Initializing...');
