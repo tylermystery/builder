@@ -1,10 +1,6 @@
 // In: main.js
 // Action: REPLACE THE ENTIRE FILE with this content.
 
-// --- DEBUG ---
-console.log('[main.js] 0. File execution started.');
-// --- DEBUG ---
-
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -16,25 +12,9 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 // Corrected import line below:
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
-
-// --- DEBUG ---
-console.log('[main.js] 1. Importing auth.js...');
-// --- DEBUG ---
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
-// --- DEBUG ---
-console.log('[main.js] 2. Successfully imported auth.js.');
-// --- DEBUG ---
-
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
-
-// --- DEBUG ---
-console.log('[main.js] 3. Importing kaleidoscopeEffect.js...');
-// --- DEBUG ---
 import kaleidoscopeEffect from './components/effects/kaleidoscope.js'; // <-- IMPORT DEFAULT EFFECT
-// --- DEBUG ---
-console.log('[main.js] 4. Successfully imported kaleidoscopeEffect.js.');
-// --- DEBUG ---
-
 
 const imageCache = new Map();
 
@@ -86,10 +66,10 @@ function syncUiWithUrl() {
         } else if (view === 'likes') {
             document.getElementById('liked-items-filter-btn')?.classList.add('active'); //
         } else if (category) {
-            document.querySelector(`#category-filters .filter-btn[data-filter=\\"${category}\\"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active'); //
         } else {
             // Default to 'All' if no specific view or category is set
-            document.querySelector(`#category-filters .filter-btn[data-filter=\\"all\\"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active'); //
         }
     }
 
@@ -108,7 +88,7 @@ function syncUiWithUrl() {
          subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
          if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
              subcategories.forEach(subcat => {
-                 subcategoryFilters.querySelector(`.filter-btn[data-filter=\\"${subcat}\\"]`)?.classList.add('active'); //
+                 subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active'); //
              });
          }
      }
@@ -146,9 +126,6 @@ function syncUiWithUrl() {
 // REPLACE the entire initialize function in: main.js
 
 async function initialize() {
-    // --- DEBUG ---
-    console.log('[main.js] 5. initialize() function called.');
-    // --- DEBUG ---
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
 
@@ -270,7 +247,7 @@ async function initialize() {
             const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
 
             // --- Set innerHTML with both dynamic parts ---
-            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id=\\"shop-switcher-trigger\\" style=\\"background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;\\">s</button>`;
+            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
 
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer'; //
@@ -283,8 +260,12 @@ async function initialize() {
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
         }
         
-        const existingFavicon = document.querySelector('link[rel=\\"icon\\\"], link[rel=\\"shortcut icon\\\"]'); //
+        // --- THIS IS THE FIX ---
+        // The invalid escaped quotes have been removed from the selector.
+        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]'); //
         if (existingFavicon) existingFavicon.remove(); //
+        // --- END FIX ---
+        
         const logoTag = activeShop.fields.LogoTag; //
         if (logoTag) {
             const imageUrls = await api.fetchImagesByTags(logoTag); //
@@ -351,12 +332,9 @@ async function initialize() {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1])); //
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
-                    // --- THIS IS THE FIX ---
-                    // The problematic comment and newline characters are removed.
                     setState({
                         session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
-                    // --- END FIX ---
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
@@ -477,23 +455,14 @@ async function initialize() {
 
         setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
         log('Main', 'Initialization complete.'); //
-        
-        // --- DEBUG ---
-        console.log('[main.js] 6. Calling backgroundEngine.initBackgroundEngine().');
-        // --- DEBUG ---
+
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
         // --- THIS IS THE FIX ---
         // Load the default effect *after* initializing the engine
         // We pass 'null' for the controls container because we don't need to build sliders here.
-        // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(kaleidoscopeEffect).');
-        // --- DEBUG ---
         backgroundEngine.loadEffect(kaleidoscopeEffect, null);
         // --- END FIX ---
-        // --- DEBUG ---
-        console.log('[main.js] 8. End of initialize() function.');
-        // --- DEBUG ---
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
