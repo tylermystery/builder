@@ -9,7 +9,9 @@ import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
-// --- Private Module Variables ---\nlet canvas, ctx;
+// --- Private Module Variables ---
+// FIX: This is now on its own line and will execute
+let canvas, ctx;
 let lastTimestamp = 0;
 let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
 let currentColors = [];
