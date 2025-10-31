@@ -1,5 +1,4 @@
-// In: components/sidebar.js
-// Action: REPLACE THE ENTIRE FILE with this corrected content.
+// REPLACE THE ENTIRE CONTENTS OF: components/sidebar.js
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -7,10 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
-// --- THIS IS THE FIX ---
-// The path is corrected from './components/backgroundEngine.js' to './backgroundEngine.js'
-import * as backgroundEngine from './backgroundEngine.js'; // <-- IMPORT NEW ENGINE
-// --- END FIX ---
+import * as backgroundEngine from './backgroundEngine.js';
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -106,25 +102,24 @@ export async function updateEventPlanSection() {
     ui.observeLazyImages(container);
 }
 
-export async function updateIdeasCarousel() { // Renamed from updateFavoritesCarousel
-    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`); // Updated log message
-    const ideasSection = document.getElementById('favorites-section'); // Consider renaming ID to 'ideas-section'
-    const ideasCarousel = document.getElementById('favorites-carousel'); // Consider renaming ID to 'ideas-carousel'
+export async function updateIdeasCarousel() { 
+    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`);
+    const ideasSection = document.getElementById('favorites-section');
+    const ideasCarousel = document.getElementById('favorites-carousel');
     if (!ideasSection || !ideasCarousel) return;
 
     if (state.cart.items.size === 0) {
-        ideasSection.style.display = 'none'; // Hide if empty
+        ideasSection.style.display = 'none';
         return;
     }
-    ideasSection.style.display = 'block'; // Show if not empty
-    ideasCarousel.innerHTML = ''; // Clear existing items
-    const imageCache = new Map(); // Use a local cache for this render pass
+    ideasSection.style.display = 'block';
+    ideasCarousel.innerHTML = '';
+    const imageCache = new Map();
 
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
             try {
-                // Assuming createFavoriteCardElement is the correct function for idea cards
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
                 if (card) ideasCarousel.appendChild(card);
             } catch (error) {
@@ -132,7 +127,6 @@ export async function updateIdeasCarousel() { // Renamed from updateFavoritesCar
             }
         }
     }
-    // Ensure lazy loading is applied after adding new cards
     if (typeof ui !== 'undefined' && ui.observeLazyImages) {
          ui.observeLazyImages(ideasCarousel);
     } else {
@@ -178,11 +172,9 @@ export function updateTotalCost() {
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     
-    // --- THIS IS THE MODIFIED TRIGGER ---
     if (typeof backgroundEngine.updateColors === 'function') {
         backgroundEngine.updateColors();
     }
-    // --- END ---
     
     if (amountReceived > 0) {
         amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
@@ -195,7 +187,6 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        // --- THIS IS THE FIXED LINE (REMOVED STRAY '\') ---
         mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
@@ -214,10 +205,10 @@ export function updateTotalCost() {
         document.getElementById('total-breakdown').style.display = 'block';
 
         if (isFullyPaid) {
-            checkoutBtn.style.display = 'none';
-            if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
-            }
+            // --- MODIFIED LOGIC: Keep button and change text ---
+            checkoutBtn.textContent = 'View Summary'; // New text
+            checkoutBtn.disabled = false; // Always enabled if paid
+            document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
             checkoutBtn.disabled = isPlanEmpty;
@@ -239,7 +230,10 @@ export function displayReservedStatus() {
         totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'none';
+        // When reserved/paid, the button should show View Summary
+        checkoutBtn.style.display = 'block'; 
+        checkoutBtn.textContent = 'View Summary';
+        checkoutBtn.disabled = false;
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = false;
