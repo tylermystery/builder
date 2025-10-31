@@ -676,7 +676,9 @@ export async function fetchChatMessages(sessionId) {
          return [];
     }
     // Fetch messages linked specifically to this Session record
-    const formula = `FIND('${sessionId}', ARRAYJOIN({SessionID}))`;
+// --- REPAIR: Use the correct linked-record ID search formula ---
+    const formula = `FIND('${sessionId}', {SessionID})`; // Checks if the sessionId is present in the linked field
+    // --- END REPAIR ---
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
