@@ -1,5 +1,5 @@
 // In: components/effects/wind.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
 console.log('[wind.js] File execution started.');
@@ -58,6 +58,7 @@ class Particle {
 
 const windEffect = {
     name: "Wind",
+    type: "canvas", // <-- ADD THIS LINE
 
     init: (ctx, width, height) => {
         log('FX:Wind', 'Initializing...');
