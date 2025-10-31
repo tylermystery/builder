@@ -10,18 +10,17 @@ import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
 // --- Private Module Variables ---
-// FIX: This is now on its own line and will execute
 let canvas, ctx;
+// --- NEW ---
+let solidBgElement; // The new background div
+// --- END NEW ---
 let lastTimestamp = 0;
-let currentEffect = null; // This will hold the active plugin (e.g., kaleidoscope)
+let currentEffect = null; // This will hold the active plugin
 let currentColors = [];
 let animationFrameId = null;
-
-// This object will be populated by the active plugin's controls
 let settings = {}; 
 
-// --- Color Generation Logic ---
-// This lives in the engine, as all effects will use it
+// (Color Generation Logic remains the same...)
 function stringToHash(str) {
     let hash = 0, i, chr;
     if (!str || str.length === 0) return hash;
@@ -46,50 +45,36 @@ const VIBRANT_COLOR_PAIRS = [
     ['#fa709a', '#fee140']  // Vibrant: Hot Pink/Yellow
 ];
 
+
 // --- Animation Loop ---
 function animationLoop(timestamp) {
-    if (!ctx || !currentEffect) {
-        // --- DEBUG ---
-        // This log will be very noisy, but it will tell us if the loop is running but idle.
-        // console.log('[backgroundEngine.js] animationLoop: Skipping frame (no ctx or no currentEffect)');
-        // --- DEBUG ---
+    // --- MODIFIED ---
+    // Only run the loop if we have a canvas context AND the current effect is a 'canvas' type
+    if (!ctx || !currentEffect || currentEffect.type !== 'canvas') {
+    // --- END MODIFIED ---
         animationFrameId = requestAnimationFrame(animationLoop);
         return;
     }
     
-    // --- DEBUG ---
-    // console.log('[backgroundEngine.js] animationLoop: Drawing frame...');
-    // --- DEBUG ---
-    
     const deltaTime = timestamp - lastTimestamp;
     lastTimestamp = timestamp;
 
-    // Call the active effect's draw function
-    // Pass it everything it needs to draw a frame
     currentEffect.draw(ctx, canvas.width, canvas.height, deltaTime, currentColors, settings);
-
     animationFrameId = requestAnimationFrame(animationLoop);
 }
 
 // --- Public API Functions ---
-
-/**
- * Called by sidebar.js when the cart changes.
- * This updates the color palette for the animation.
- */
 export function updateColors() {
     log('BG-Engine', 'Updating colors...');
     let colors = [];
     const defaultColors = VIBRANT_COLOR_PAIRS[5]; // Default
     
-    // Check if records are loaded. If not, state.records might be undefined
     if (!state.records || !state.records.all || state.cart.lockedItems.size === 0) {
         colors.push(...defaultColors);
     } else {
         const categoriesInPlan = new Set();
         for (const [recordId] of state.cart.lockedItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
-            // Add a check here in case record isn't found (e.g., during initialization)
             const categoryString = record?.fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '';
             
             categoryString.split(',')
@@ -111,30 +96,29 @@ export function updateColors() {
     currentColors = [...new Set(colors)];
     log('BG-Engine', `Colors updated to: ${currentColors.join(', ')}`);
     
-    // Pass new colors to the effect
     if (currentEffect && typeof currentEffect.updateColors === 'function') {
         currentEffect.updateColors(currentColors);
     }
 }
 
-/**
- * Called by event listeners in auth.js when sliders change.
- * @param {object} newSettings - e.g., { segments: 8, speed: 3, spin: 0.1 }
- */
 export function updateSettings(newSettings) {
     settings = { ...settings, ...newSettings };
-    // Pass the new settings to the active plugin
+    
+    // --- NEW ---
+    // Pass settings to CSS effects as well (e.g., animation speed)
+    if (currentEffect && currentEffect.type === 'css') {
+        if (newSettings.speed) {
+            solidBgElement.style.animationDuration = `${newSettings.speed}s`;
+        }
+    }
+    // --- END NEW ---
+
     if (currentEffect && typeof currentEffect.updateSettings === 'function') {
         currentEffect.updateSettings(settings);
     }
     log('BG-Engine', 'Settings updated:', settings);
 }
 
-/**
- * Loads a new effect, builds its controls, and starts it.
- * @param {object} effect - The effect plugin object.
- * @param {HTMLElement | null} controlsContainer - The div where sliders should be built (optional).
- */
 export function loadEffect(effect, controlsContainer) {
     // --- DEBUG ---
     console.log(`[backgroundEngine.js] loadEffect() called with effect: ${effect ? effect.name : 'null'}`);
@@ -142,44 +126,59 @@ export function loadEffect(effect, controlsContainer) {
     
     log('BG-Engine', `Loading effect: ${effect.name}`);
     currentEffect = effect;
-    settings = {}; // Reset settings
+    settings = {}; 
+
+    // --- NEW: HYBRID SWITCH LOGIC ---
+    // Reset all backgrounds first
+    solidBgElement.className = '';
+    solidBgElement.style.animationDuration = ''; // Reset speed
+    canvas.style.display = 'block'; // Show canvas by default
+
+    if (effect.type === 'css') {
+        // It's a CSS effect
+        solidBgElement.className = `${effect.cssClass} bg-active`; // Add 'bg-active' to hide canvas
+        canvas.style.display = 'none'; // Explicitly hide canvas
+    } else {
+        // It's a 'canvas' effect (or undefined, assume canvas)
+        currentEffect.type = 'canvas'; // Default to canvas
+        if (typeof currentEffect.init === 'function') {
+            if (ctx) {
+                // --- DEBUG ---
+                console.log(`[backgroundEngine.js] loadEffect: Calling init() for ${currentEffect.name}.`);
+                // --- DEBUG ---
+                currentEffect.init(ctx, canvas.width, canvas.height);
+                currentEffect.initialized = true;
+            } else {
+                // --- DEBUG ---
+                console.log(`[backgroundEngine.js] loadEffect: ctx is NOT ready. Skipping init for ${currentEffect.name}.`);
+                // --- DEBUG ---
+            }
+        }
+    }
+    // --- END NEW ---
     
-    // Only clear the container if it's provided
     if (controlsContainer) {
         controlsContainer.innerHTML = ''; // Clear old sliders
     }
 
-    // 1. Initialize the effect
-    if (typeof currentEffect.init === 'function') {
-        // Check if ctx exists before initializing.
-        if (ctx) {
-            // --- DEBUG ---
-            console.log(`[backgroundEngine.js] loadEffect: Calling init() for ${currentEffect.name}.`);
-            // --- DEBUG ---
-            currentEffect.init(ctx, canvas.width, canvas.height);
-            currentEffect.initialized = true; // Mark as initialized
-        } else {
-            // --- DEBUG ---
-            console.log(`[backgroundEngine.js] loadEffect: ctx is NOT ready. Skipping init for ${currentEffect.name}.`);
-            // --- DEBUG ---
-        }
-    }
-
-    // 2. Get controls from the plugin and build them in the UI
+    // (This block is now moved *after* the CSS/Canvas switch)
     if (typeof currentEffect.getControls === 'function') {
         const controls = currentEffect.getControls();
         // --- DEBUG ---
         console.log(`[backgroundEngine.js] loadEffect: Building ${controls.length} controls for ${currentEffect.name}.`);
         // --- DEBUG ---
         controls.forEach(control => {
-            // Set default value in our engine's settings
             settings[control.id] = control.defaultValue;
 
-            // Only build the UI if the container was provided
+            // --- NEW: Apply default speed to CSS effect ---
+            if (currentEffect.type === 'css' && control.id === 'speed') {
+                 solidBgElement.style.animationDuration = `${control.defaultValue}s`;
+            }
+            // --- END NEW ---
+
             if (controlsContainer) {
-                // Create the UI
                 const controlGroup = document.createElement('div');
-                controlGroup.className = 'form-row-slider'; // A new class for styling
+                controlGroup.className = 'form-row-slider';
                 
                 const label = document.createElement('label');
                 label.htmlFor = control.id;
@@ -198,7 +197,6 @@ export function loadEffect(effect, controlsContainer) {
                 slider.step = control.step;
                 slider.value = control.defaultValue;
                 
-                // Add listener to update engine
                 slider.addEventListener('input', (e) => {
                     const newValue = parseFloat(e.target.value);
                     valueSpan.textContent = newValue.toFixed(control.step < 1 ? 2 : 0);
@@ -212,52 +210,45 @@ export function loadEffect(effect, controlsContainer) {
         });
     }
 
-    // 3. Pass current colors to the new effect
     if (typeof currentEffect.updateColors === 'function') {
         currentEffect.updateColors(currentColors);
     }
     
-    // 4. If init hasn't run yet (because ctx wasn't ready when loadEffect was first called), run it now.
-    if (ctx && !currentEffect.initialized) { 
+    if (ctx && !currentEffect.initialized && currentEffect.type === 'canvas') { 
         if (typeof currentEffect.init === 'function') {
             // --- DEBUG ---
             console.log(`[backgroundEngine.js] loadEffect: Running *late* init() for ${currentEffect.name}.`);
             // --- DEBUG ---
             currentEffect.init(ctx, canvas.width, canvas.height);
-            currentEffect.initialized = true; // Mark as initialized
+            currentEffect.initialized = true;
         }
     }
 }
 
-/**
- * Called once by main.js to start the engine.
- */
 export function initBackgroundEngine() {
     // --- DEBUG ---
     console.log('[backgroundEngine.js] initBackgroundEngine() called.');
     // --- DEBUG ---
-    canvas = document.getElementById('kaleidoscope-bg'); // We'll keep this ID
-    if (!canvas) {
-        console.error('Fatal: Background canvas not found.');
+    canvas = document.getElementById('kaleidoscope-bg');
+    // --- NEW ---
+    solidBgElement = document.getElementById('solid-bg'); // Get the new div
+    // --- END NEW ---
+
+    if (!canvas || !solidBgElement) {
+        console.error('Fatal: Background canvas or solid-bg element not found.');
         return;
     }
     
-    // --- THIS IS THE FIX ---
-    // Always get a 2D context, as all current effects (Kaleidoscope, Wind, etc.)
-    // are built using the 2D canvas API (e.g., fillRect, strokeStyle).
     log('BG-Engine', 'Requesting 2D canvas context.');
     ctx = canvas.getContext('2d');
     if (!ctx) {
         console.error('Fatal: Could not get 2D canvas context.');
         return;
     }
-    // --- END FIX ---
     
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        
-        // Always set 2D context properties
         ctx.globalAlpha = 0.4; // Default opacity for 2D effects
 
         if (currentEffect && typeof currentEffect.resize === 'function') {
@@ -270,7 +261,6 @@ export function initBackgroundEngine() {
     
     updateColors(); // Get initial colors
     
-    // Start the animation loop (no effect loaded yet)
     lastTimestamp = performance.now();
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     animationFrameId = requestAnimationFrame(animationLoop);
