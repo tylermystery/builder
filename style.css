@@ -925,8 +925,14 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     font-size: 1.2em;
-    margin: 20px 0;
+    margin: 5px 0;
 }
+/* New style for the amount paid row */
+.checkout-total.amount-paid-row {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+/* END REPLACE */
 #payment-form .form-row {
     margin-bottom: 15px;
 }
