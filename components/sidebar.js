@@ -7,6 +7,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
+import * as kaleidoscope from './kaleidoscope.js'; // <-- NEW: STEP 5 IMPORT
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -174,9 +175,9 @@ export function updateTotalCost() {
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     
-    // --- THIS IS THE NEWLY ADDED TRIGGER ---
-    if (typeof ui.updateDynamicBackground === 'function') {
-        ui.updateDynamicBackground();
+    // --- THIS IS THE MODIFIED TRIGGER ---
+    if (typeof kaleidoscope.updateColors === 'function') {
+        kaleidoscope.updateColors();
     }
     // --- END ---
     
@@ -191,7 +192,7 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;\
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
@@ -224,7 +225,7 @@ export function updateTotalCost() {
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
-} // <-- THIS IS THE MISSING BRACE THAT CAUSED THE ERROR
+}
 
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
