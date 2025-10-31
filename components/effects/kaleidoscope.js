@@ -1,6 +1,10 @@
 // In: components/effects/kaleidoscope.js
 // Action: Create this new file.
 
+// --- DEBUG ---
+console.log('[kaleidoscope.js] File execution started.');
+// --- DEBUG ---
+
 import { log } from '../../utils/debug.js';
 
 let particles = [];
