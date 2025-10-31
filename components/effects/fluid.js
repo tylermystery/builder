@@ -76,7 +76,7 @@ const fsSource = `
         float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 1.1) + 0.1;
         
         // 6. Final color with a vignette (darker edges)
-        float vignette = 1.0 - (radius * 0.8);
+        float vignette = 1.0 - (radius * 0.5);
         gl_FragColor = vec4(r * vignette, g * vignette, b * vignette, 1.0);
     }
 `;
