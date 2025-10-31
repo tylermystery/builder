@@ -1,5 +1,5 @@
 // In: components/sidebar.js
-// Action: REPLACE THE ENTIRE FILE with this corrected content.
+// Action: REPLACE THE ENTIRE FILE
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -192,7 +192,6 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        // --- THIS IS THE FIXED LINE (REMOVED STRAY '\') ---
         mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
@@ -213,7 +212,7 @@ export function updateTotalCost() {
         if (isFullyPaid) {
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
@@ -233,7 +232,7 @@ export function displayReservedStatus() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'none';
