@@ -33,13 +33,30 @@ function handleOverlayClick(event) {
         closeDetailModal();
     }
 }
-// --- END FIX ---
+
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue;
+    
+    // Determine if this is an INITIAL DEPOSIT payment
+    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+    
+    // --- Tip Visibility Logic ---
+    const tipRow = document.querySelector('.tip-row');
+    if (tipRow) {
+        // Only allow tips if paying in full (either first time or remainder)
+        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { // Assuming deposit is less than full amount
+            // Hiding tip if user explicitly selects 'deposit' and deposit is less than full amount
+            tipRow.style.display = 'none';
+        } else {
+            tipRow.style.display = 'flex';
+        }
+    }
+    // --- End Tip Visibility Logic ---
+
     if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
