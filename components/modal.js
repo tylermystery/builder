@@ -471,17 +471,15 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
     
-    // --- NEW LOGIC START ---
+    // --- Amount Paid Initialization ---
     const totalLabel = document.getElementById('checkout-total-label');
-    const amountPaidRowEl = document.getElementById('checkout-amount-paid-row'); // Get the new element
-    const amountPaidEl = document.getElementById('checkout-amount-paid'); // Get the new element
+    const amountPaidRowEl = document.getElementById('checkout-amount-paid-row');
+    const amountPaidEl = document.getElementById('checkout-amount-paid');
 
     if (totalLabel) {
-        // Dynamically set the total cost label based on payment history
         totalLabel.textContent = 'Total Estimated Cost:';
     }
 
-    // Initialize Amount Paid Row
     const amountReceived = state.session.user.amountReceived || 0;
     if (amountReceived > 0) {
         if (amountPaidRowEl) amountPaidRowEl.style.display = 'flex';
@@ -489,7 +487,7 @@ export async function showCheckoutModal(shopSettings) {
     } else {
         if (amountPaidRowEl) amountPaidRowEl.style.display = 'none';
     }
-    // --- NEW LOGIC END ---
+    // --- End Amount Paid Initialization ---
 
     if (!checkoutModalOverlay) return;
 
@@ -514,20 +512,35 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
+        // --- NEW MINIMUM QUANTITY LOGIC ---
+        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const effectiveQuantity = Math.max(itemInfo.quantity, headcountMin);
+        // --- END NEW LOGIC ---
+
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
 
-        const itemTotal = price * itemInfo.quantity;
+        const itemTotal = price * effectiveQuantity; // Use effective quantity for final calculation
         finalTotal += itemTotal;
+        
         const listItem = document.createElement('li');
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
+            noteHtml += `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
         
+        // --- NEW MINIMUM QUANTITY WARNING NOTE ---
+        let quantityDisplay = `${itemInfo.quantity}`;
+        if (itemInfo.quantity < headcountMin) {
+            const warningText = `*Minimum order of ${headcountMin} applied in total calculation.`;
+            noteHtml += `<small class="checkout-summary-note min-qty-warning">${warningText}</small>`;
+            quantityDisplay = `${itemInfo.quantity} (calc: ${effectiveQuantity})`; // Indicate the quantity used for calc
+        }
+        // --- END NEW NOTE ---
+
         listItem.innerHTML = `
             <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity})</span>
+                <span class="summary-item-name">${record.fields.Name} (x${quantityDisplay})</span>
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
@@ -576,24 +589,22 @@ export async function showCheckoutModal(shopSettings) {
     }
 }
 
-export function hideCheckoutModal() {
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    if (checkoutModalOverlay) {
-        if (checkoutModalOverlay.removeEventListenerOnClick) {
-            checkoutModalOverlay.removeEventListenerOnClick();
-        }
-        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
-        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.removeEventListener('change', updateCheckoutDisplay);
-        });
-        checkoutModalOverlay.classList.remove('active');
+export function hideDetailModal() {
+    console.log('[hideDetailModal] Called.');
+    const closeBtn = document.getElementById('modal-close-btn');
+    closeBtn.onclick = null;
+    modalOverlay.removeEventListener('click', handleOverlayClick);
+    document.removeEventListener('keydown', handleEscapeKey);
+    if (currentItemChatRecordId) {
+        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
+        currentItemChatRecordId = null;
+    }
+
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
         setTimeout(() => {
-            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
-            if (checkoutCloseBtn) {
-                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
-            }
-            checkoutModalOverlay.style.display = 'none';
-            log('Modal', 'Checkout modal hidden.');
+            modalOverlay.style.display = 'none';
+            resetModalState();
         }, 300);
         document.body.classList.remove('modal-open');
     }
