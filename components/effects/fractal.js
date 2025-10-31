@@ -1,6 +1,10 @@
 // In: components/effects/fractal.js
 // Action: Create this new file.
 
+// --- DEBUG ---
+console.log('[fractal.js] File execution started.');
+// --- DEBUG ---
+
 import { log } from '../../utils/debug.js';
 
 let settings = {};
