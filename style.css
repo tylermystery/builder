@@ -1,19 +1,28 @@
-/* --- MERGED AND CORRECTED STYLESHEET --- */
+/* In: style.css */
+/* Action: REPLACE THE ENTIRE FILE with this content. */
 
+/* --- CORE LAYOUT & TYPOGRAPHY --- */
 body {
     padding-bottom: 150px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    
-    /* --- DYNAMIC BACKGROUND --- */
-    background: linear-gradient(-45deg, #89f7fe, #66a6ff); /* Default gradient */
-    background-size: 400% 400%;
-    animation: gradientAnimation 20s ease infinite;
-    transition: background 0.5s ease;
+    /* REMOVED background-color, set to transparent to see canvas */
+    background-color: transparent; 
 }
 
 body.modal-open {
     overflow: hidden;
 }
+
+/* --- NEW: KALEIDOSCOPE CANVAS --- */
+#kaleidoscope-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* Sits behind all content */
+}
+
 
 /* --- FROSTED GLASS: HEADER --- */
 #main-header {
@@ -52,8 +61,8 @@ body.modal-open {
     height: 50px;
     display: block;
 }
+/* --- END HEADER --- */
 
-/* --- END HEADER STYLES --- */
 
 #sticky-header {
     position: sticky;
@@ -286,13 +295,13 @@ body.modal-open {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     padding: 20px;
-    border-radius: 8px; /* Fixed typo */
+    border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    position: sticky; /* Make it stick */
-    top: 85px; /* Adjust based on header height */
+    position: sticky;
+    top: 85px;
 }
 
 #cart-items-container {
@@ -396,14 +405,14 @@ body.modal-open {
 /* --- FROSTED GLASS: EVENT CARD & HOVER --- */
 .event-card {
     position: relative;
-    border-radius: 10px; /* Fixed typo */
+    border-radius: 10px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     background-color: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #333;
-    overflow: hidden;
+    overflow: hidden; /* CRUCIAL for shimmer */
     cursor: pointer;
     display: flex;
     flex-direction: column;
@@ -415,6 +424,30 @@ body.modal-open {
     background-color: rgba(255, 255, 255, 0.9);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
+
+/* --- NEW: CARD SHIMMER EFFECT --- */
+.event-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%; /* Start off-screen */
+    width: 75%;
+    height: 100%;
+    background: linear-gradient(
+        90deg, 
+        rgba(255, 255, 255, 0) 0%, 
+        rgba(255, 255, 255, 0.4) 50%, 
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: skewX(-25deg); /* Angle the shimmer */
+    transition: left 0.7s ease-in-out;
+    z-index: 1; /* Sit above image but below content */
+}
+
+.event-card:hover::before {
+    left: 150%; /* Animate across and off-screen */
+}
+/* --- END SHIMMER EFFECT --- */
 
 .event-card-image-container {
     position: relative;
@@ -476,6 +509,8 @@ body.modal-open {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    z-index: 2; /* Ensure content is above shimmer */
+    position: relative; /* Ensure z-index applies */
 }
 .event-card-content h3 {
     margin: 0;
@@ -494,6 +529,8 @@ body.modal-open {
     justify-content: space-between;
     align-items: center;
     background-color: #f8f8f8;
+    z-index: 2; /* Ensure content is above shimmer */
+    position: relative; /* Ensure z-index applies */
 }
 .card-footer .price {
     font-weight: bold;
@@ -1104,7 +1141,7 @@ body.modal-open {
 }
 
 #chat-header {
-    background-color: #f1f1f1;
+    background-color: #f1f1ff1;
     padding: 10px;
     text-align: center;
     border-bottom: 1px solid #ddd;
@@ -1492,6 +1529,7 @@ hr.total-divider {
     border-top: 1px solid #e9ecef;
     margin: 5px 0;
 }
+/* Style for the hidden link */
 .footer-link {
     text-align: center;
     padding: 20px;
@@ -1956,7 +1994,7 @@ hr.total-divider {
 }
 
 .ranking-label {
-    /* Style for the ranking name (e.g., "Fun") */
+    /* Style for the ranking name (e.g., \"Fun\") */
 }
 
 .ranking-stars {
@@ -1965,7 +2003,6 @@ hr.total-divider {
     font-size: 1.1em;
 }
 
-/* --- BACKGROUND ANIMATION KEYFRAMES --- */
 @keyframes gradientAnimation {
     0% {
         background-position: 0% 50%;
@@ -1977,3 +2014,101 @@ hr.total-divider {
         background-position: 0% 50%;
     }
 }
+"
+    },
+    {
+      "path": "teammate.css",
+      "content": "body {\n    font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;\n    background-color: #f4f7f9;\n    color: #2c3e50;\n    margin: 0;\n    padding: 20px;\n}\n\n.profile-container {\n    max-width: 900px;\n    margin: 0 auto;\n    display: grid;\n    gap: 20px;\n}\n\n.card {\n    background-color: #fff;\n    padding: 25px;\n    border-radius: 8px;\n    box-shadow: 0 4px 12px rgba(0,0,0,0.1);\n}\n\n/* Profile Header Styles */\n#profile-header {\n    display: flex;\n    align-items: center;\n    gap: 20px;\n}\n.profile-picture {\n    width: 100px;\n    height: 100px;\n    border-radius: 50%;\n    object-fit: cover;\n    border: 3px solid #3498db;\n}\n.profile-info h1 {\n    margin: 0;\n    color: #2c3e50;\n}\n.profile-info p {\n    margin: 5px 0 0;\n    color: #7f8c8d;\n    font-size: 1.1em;\n}\n\n/* Performance Stats Styles */\n.stats-grid {\n    display: grid;\n    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));\n    gap: 20px;\n    text-align: center;\n}\n.stat-item .value {\n    font-size: 2.5em;\n    font-weight: bold;\n    color: #3498db;\n}\n.stat-item .label {\n    font-size: 0.9em;\n    color: #7f8c8d;\n}\n\n/* Event History Styles */\n#event-list .event-item {\n    display: grid;\n    grid-template-columns: 3fr 1fr 1fr;\n    gap: 15px;\n    padding: 15px 0;\n    border-bottom: 1px solid #e0e0e0;\n    align-items: center;\n}\n#event-list .event-item:last-child {\n    border-bottom: none;\n}\n.event-name {\n    font-weight: bold;\n}\n.event-role {\n    font-style: italic;\n    color: #555;\n}\n.event-rating {\n    font-size: 1.2em;\n    text-align: right;\n}\n\nfooter {\n    text-align: center;\n    margin-top: 20px;\n}\n"
+    },
+    {
+      "path": "teammate.html",
+      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Teammate Profile</title>\n    <link rel=\"stylesheet\" href=\"teammate.css\">\n</head>\n<body>\n    <div class=\"profile-container\">\n        <header id=\"profile-header\" class=\"card\">\n            <div id=\"loading-message\">Loading Teammate Data...</div>\n        </header>\n\n        <main>\n            <section id=\"performance-stats\" class=\"card\">\n                <h2>Performance Snapshot 🚀</h2>\n                <div class=\"stats-grid\">\n                    </div>\n            </section>\n\n            <section id=\"event-history\" class=\"card\">\n                <h2>Event & Sales History 📈</h2>\n                <div id=\"event-list\">\n                    </div>\n            </section>\n        </main>\n        <footer>\n            <a href=\"/crm.html\">← Back to CRM Dashboard</a>\n        </footer>\n    </div>\n    <script type=\"module\" src=\"teammate.js\"></script>\n</body>\n</html>\n"
+    },
+    {
+      "path": "teammate.js",
+      "content": "// Import the API functions we are about to add\nimport * as api from './api.js';\n\n// --- Helper Functions ---\nfunction renderProfileHeader(teammate) {\n    const header = document.getElementById('profile-header');\n    const avgRating = teammate.averageRating ? `${teammate.averageRating.toFixed(1)} ★` : 'No Ratings Yet';\n    header.innerHTML = `\n        <img src=\"${teammate.fields.ProfilePicture?.[0]?.url || 'https://via.placeholder.com/100'}\" alt=\"${teammate.fields.Name}\" class=\"profile-picture\">\n        <div class=\"profile-info\">\n            <h1>${teammate.fields.Name}</h1>\n            <p>${teammate.fields.Role} | Overall Rating: <strong>${avgRating}</strong></p>\n        </div>\n    `;\n}\n\nfunction renderPerformanceStats(stats) {\n    const container = document.querySelector('#performance-stats .stats-grid');\n    container.innerHTML = `\n        <div class=\"stat-item\">\n            <div class=\"value\">${stats.eventsSold}</div>\n            <div class=\"label\">Events Sold</div>\n        </div>\n        <div class=\"stat-item\">\n            <div class=\"value\">${stats.eventsHosted}</div>\n            <div class=\"label\">Events Hosted</div>\n        </div>\n        <div class=\"stat-item\">\n            <div class=\"value\">${stats.totalHours}</div>\n            <div class=\"label\">Hours Worked</div>\n        </div>\n        <div class=\"stat-item\">\n            <div class=\"value\">$${stats.totalSales.toLocaleString()}</div>\n            <div class=\"label\">Total Sales Value</div>\n        </div>\n    `;\n}\n\nfunction renderEventHistory(sessions, ratings) {\n    const container = document.getElementById('event-list');\n    if (sessions.length === 0) {\n        container.innerHTML = '<p>No event or sales history found.</p>';\n        return;\n    }\n    \n    let eventHtml = '';\n    sessions.forEach(session => {\n        const sessionRating = ratings.find(r => r.fields.Session[0] === session.id);\n        const ratingDisplay = sessionRating ? `${sessionRating.fields.RatingValue} ★` : 'N/A';\n        const role = session.role; // 'Sales' or 'Host'\n\n        eventHtml += `\n            <div class=\"event-item\">\n                <span class=\"event-name\">${session.fields.Name}</span>\n                <span class=\"event-role\">${role}</span>\n                <span class=\"event-rating\">${ratingDisplay}</span>\n            </div>\n        `;\n    });\n    container.innerHTML = eventHtml;\n}\n\n// --- Main Initialization ---\nasync function initializeProfilePage() {\n    const urlParams = new URLSearchParams(window.location.search);\n    const teammateId = urlParams.get('id');\n\n    if (!teammateId) {\n        document.getElementById('loading-message').textContent = 'Error: No teammate ID provided.';\n        return;\n    }\n\n    // Fetch all necessary data in parallel\n    const [teammate, soldSessions, hostedSessions, ratings] = await Promise.all([\n        api.fetchTeammateData(teammateId),\n        api.fetchSessionsForTeammate(teammateId, 'SalesLead'),\n        api.fetchSessionsForTeammate(teammateId, 'EventHost'),\n        api.fetchRatingsForTeammate(teammateId)\n    ]);\n\n    // --- Process and Calculate Data ---\n    const totalRatings = ratings.reduce((sum, r) => sum + r.fields.RatingValue, 0);\n    teammate.averageRating = ratings.length > 0 ? totalRatings / ratings.length : 0;\n    \n    soldSessions.forEach(s => s.role = 'Sales');\n    hostedSessions.forEach(s => s.role = 'Host');\n    const allSessions = [...soldSessions, ...hostedSessions].sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));\n\n    const totalSales = soldSessions.reduce((sum, s) => {\n        // NOTE: You'll need a \"Value\" or \"Price\" field on your Sessions table\n        return sum + (s.fields.Value || 0);\n    }, 0);\n    \n    // NOTE: For now, we get total hours from the Teammate table.\n    // Later, this would be a sum of `session.fields.HoursWorked`\n    const totalHours = teammate.fields.TotalHours || 0;\n\n    const stats = {\n        eventsSold: soldSessions.length,\n        eventsHosted: hostedSessions.length,\n        totalHours: totalHours,\n        totalSales: totalSales,\n    };\n\n    // --- Render UI Components ---\n    renderProfileHeader(teammate);\n    renderPerformanceStats(stats);\n    renderEventHistory(allSessions, ratings);\n}\n\n// Run the initialization function when the page loads\ndocument.addEventListener('DOMContentLoaded', initializeProfilePage);\n"
+    },
+    {
+      "path": "ui.js",
+      "content": "// REPLACE THE ENTIRE CONTENTS OF: ui.js\n\nimport { state } from './state.js';\nimport { CONSTANTS } from './config.js';\nimport { log } from './utils/debug.js';\nimport { createInteractiveCard } from './components/card.js';\nimport { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';\nimport { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';\nimport * as api from './api.js';\nimport { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';\nimport { initializeItemChat } from './chat.js';\n\n// Re-export functions from component modules\nexport * from './components/card.js';\nexport * from './components/modal.js';\nexport { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js'; // Removed applyCartLabels from here\nexport * from './utils.js';\nexport { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };\nexport { showPresentationView, hidePresentationView, setupPresentationEventListeners };\nexport { initializeItemChat };\n\nconst lazyLoadObserver = new IntersectionObserver((entries, observer) => {\n    entries.forEach(entry => {\n        if (entry.isIntersecting) {\n            const element = entry.target;\n            if (element.dataset.bgImage) {\n                element.style.backgroundImage = `url('${element.dataset.bgImage}')`;\n            }\n            if (element.dataset.src) {\n                element.src = element.dataset.src;\n            }\n            element.classList.remove('lazy-load');\n            observer.unobserve(element);\n        }\n    });\n}, { rootMargin: \"0px 0px 200px 0px\" });\n\nexport function observeLazyImages(container) {\n    const lazyElements = container.querySelectorAll('.lazy-load');\n    lazyElements.forEach(el => lazyLoadObserver.observe(el));\n}\n\nexport function toggleLoading(show) {\n    log('UI', `Toggling loading screen: ${show ? 'ON' : 'OFF'}`);\n    const loadingMessage = document.getElementById('loading-message');\n    const mainContent = document.querySelector('.main-content'); // Changed to class selector\n    if (loadingMessage) loadingMessage.style.display = show ? 'block' : 'none';\n    if (mainContent) mainContent.style.display = show ? 'none' : 'grid';\n}\n\nexport async function renderRecords(recordsToRender, imageCache, append = false) {\n    log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);\n    const catalogContainer = document.getElementById('catalog-container');\n    const loadingMessage = document.getElementById('loading-message');\n    if (!catalogContainer) {\n        console.error(\"UI ERROR: catalog-container element not found in the DOM!\");\n        return;\n    }\n    if (!append) {\n        catalogContainer.innerHTML = '';\n        if (loadingMessage) {\n            loadingMessage.style.display = 'block';\n        }\n    }\n    if (recordsToRender.length === 0 && !append) {\n        log('UI', \"No records to render, displaying 'No items to show.'\");\n        catalogContainer.innerHTML = \"<p style='text-align: center;'>No items to show.</p>\";\n        if (loadingMessage) {\n            loadingMessage.style.display = 'none';\n        }\n        return;\n    }\n\n    const fragment = document.createDocumentFragment();\n    const CHUNK_SIZE = 5;\n    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {\n        const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);\n        const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));\n        const cards = await Promise.all(cardPromises);\n        cards.forEach(card => {\n            if (card) fragment.appendChild(card);\n        });\n    }\n    catalogContainer.appendChild(fragment);\n    \n    observeLazyImages(catalogContainer);\n\n    if (loadingMessage) {\n        loadingMessage.style.display = 'none';\n    }\n    log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);\n}\n\nlet mainGetItemState;\nexport function initStateHelpers(helpers) {\n    mainGetItemState = helpers.getItemState;\n}\n\nexport function getMainGetItemState() {\n    return mainGetItemState;\n}\n\nexport function getItemState(recordId) {\n    if (state.cart.items.has(recordId)) {\n        return state.cart.items.get(recordId);\n    }\n    return { quantity: 1, selectedOptionIndex: 0, note: '' };\n}\n\nexport function updateItemState(recordId, updates) {\n    const existing = getItemState(recordId);\n    const newState = { ...existing, ...updates };\n    state.cart.items.set(recordId, newState);\n}\n\nexport function updateLockedItemState(recordId, updates) {\n    const existing = state.cart.lockedItems.get(recordId) || getItemState(recordId);\n    const newState = { ...existing, ...updates };\n    state.cart.lockedItems.set(recordId, newState);\n}\n\nexport function updateHeader() {\n    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';\n    document.title = eventName || 'Event Builder';\n    const eventNameInput = document.getElementById('header-event-name');\n    if (eventNameInput) {\n        eventNameInput.value = eventName || 'My Awesome Event';\n    }\n    const goalsInput = document.getElementById('header-goals');\n    if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';\n}\n\nexport function applyCartLabels(labels) {\n    const cartNameEl = document.getElementById('header-event-name');\n    if (cartNameEl && labels.cartNamePlaceholder) {\n        cartNameEl.value = labels.cartNamePlaceholder;\n    }\n\n    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');\n    if (notesLabelEl && labels.notesLabel) {\n        notesLabelEl.textContent = labels.notesLabel;\n    }\n\n    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');\n    if (dateLabelEl && labels.dateLabel) {\n        dateLabelEl.textContent = labels.dateLabel;\n    }\n    \n    const planTitleEl = document.getElementById('itinerary-btn');\n    if (planTitleEl && labels.planTitle) {\n        planTitleEl.textContent = labels.planTitle;\n    }\n\n    const reserveButtonEl = document.getElementById('checkout-btn');\n    if (reserveButtonEl && labels.reserveButtonText) {\n        reserveButtonEl.textContent = labels.reserveButtonText;\n    }\n}\n\nexport async function updateEventPlanDateDisplay() {\n    log('UI', 'Updating event plan date display.');\n    const dateInput = document.getElementById('event-date-picker');\n    if (!dateInput) return;\n    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);\n    if (!selectedDateISO) {\n        dateInput.value = 'Select a date';\n        dateInput.classList.remove('available-full', 'available-partial', 'unavailable');\n        return;\n    }\n    const selectedDate = new Date(selectedDateISO);\n    const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);\n    const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);\n    dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });\n    dateInput.classList.remove('available-full', 'available-partial', 'unavailable');\n    switch (overallStatus) {\n        case AVAILABILITY_STATUS.FULL:\n            dateInput.classList.add('available-full');\n            break;\n        case AVAILABILITY_STATUS.PARTIAL:\n            dateInput.classList.add('available-partial');\n            break;\n        case AVAILABILITY_STATUS.NONE:\n            dateInput.classList.add('unavailable');\n            break;\n    }\n}\n\nexport async function updateLockedItemStatusIcons() {\n    log('UI', 'Updating locked-in item status icons.');\n    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);\n    if (!selectedDateISO) {\n        document.querySelectorAll('.locked-item-status-icon').forEach(icon => {\n            icon.textContent = '';\n        });\n        return;\n    }\n    const selectedDate = new Date(selectedDateISO);\n    const lockedItems = document.querySelectorAll('.locked-item-card');\n    for (const item of lockedItems) {\n        const recordId = item.dataset.recordId;\n        const record = state.records.all.find(r => r.id === recordId);\n        if (!record) continue;\n        const busyTimes = await api.fetchCalendarForRecord(record);\n        const dayStatus = await getDayStatus(selectedDate, busyTimes, record);\n        let statusIconEl = item.querySelector('.locked-item-status-icon');\n        if (!statusIconEl) {\n            statusIconEl = document.createElement('span');\n            statusIconEl.className = 'locked-item-status-icon';\n            item.querySelector('.locked-item-actions').prepend(statusIconEl);\n        }\n        statusIconEl.classList.remove('available-full', 'available-partial', 'unavailable');\n        switch (dayStatus.status) {\n            case AVAILABILITY_STATUS.FULL:\n                statusIconEl.textContent = '✅';\n                statusIconEl.classList.add('available-full');\n                break;\n            case AVAILABILITY_STATUS.PARTIAL:\n                statusIconEl.textContent = '🟠';\n                statusIconEl.classList.add('available-partial');\n                break;\n            case AVAILABILITY_STATUS.NONE:\n                statusIconEl.textContent = '❌';\n                statusIconEl.classList.add('unavailable');\n                break;\n        }\n    }\n}\n\nfunction hideShopSwitcher() {\n    const overlay = document.getElementById('shop-switcher-overlay');\n    if (overlay) {\n        overlay.classList.remove('active');\n        setTimeout(() => {\n            overlay.style.display = 'none';\n        }, 300);\n    }\n}\n\nexport function showShopSwitcher() {\n    const overlay = document.getElementById('shop-switcher-overlay');\n    const listContainer = document.getElementById('shop-list-container');\n    if (!overlay || !listContainer) return;\n    const storeRecords = state.stores.all;\n    listContainer.innerHTML = ''; \n    storeRecords.forEach(record => {\n        const link = document.createElement('a');\n        link.href = `/?shopId=${record.id}`;\n        link.textContent = record.fields.Name;\n        link.style.display = 'block';\n        link.style.padding = '10px';\n        link.style.borderBottom = '1px solid #eee';\n        link.style.textDecoration = 'none';\n        link.style.color = '#007bff';\n        listContainer.appendChild(link);\n    });\n    overlay.style.display = 'flex';\n    setTimeout(() => overlay.classList.add('active'), 10);\n\n    document.getElementById('shop-switcher-close-btn').addEventListener('click', hideShopSwitcher);\n    overlay.addEventListener('click', (e) => {\n        if (e.target === overlay) {\n            hideShopSwitcher();\n        }\n    });\n}\n\nexport function showToast(message, duration = 5000) {\n    const toast = document.getElementById('toast-notification');\n    if (toast) {\n        toast.textContent = message;\n        toast.classList.add('show');\n        setTimeout(() => {\n            toast.classList.remove('show');\n        }, duration);\n    }\n}\n\nexport function renderSessionDropdown() {\n    const container = document.getElementById('session-manager-container');\n    const dropdown = document.getElementById('session-dropdown');\n    const user = state.session.user;\n\n    if (!container || !dropdown || !user.isAuthenticated) {\n        if(container) container.style.display = 'none';\n        return;\n    }\n\n    container.style.display = 'block';\n    dropdown.innerHTML = '';\n\n    const sessions = user.associatedSessions || [];\n    const newPlanLink = document.createElement('a');\n    newPlanLink.href = window.location.pathname;\n    newPlanLink.textContent = '➕ Start New Plan';\n    dropdown.appendChild(newPlanLink);\n    const divider = document.createElement('div');\n    divider.className = 'divider';\n    dropdown.appendChild(divider);\n\n    if (sessions.length > 0) {\n        sessions.forEach(session => {\n            const link = document.createElement('a');\n            link.href = `/?session=${session.id}`;\n            link.textContent = session.name || 'Unnamed Plan';\n            if (state.session.id === session.id) {\n                link.classList.add('active-session');\n            }\n            dropdown.appendChild(link);\n        });\n    } else {\n        const noItems = document.createElement('span');\n        noItems.textContent = 'No saved plans yet.';\n        noItems.style.padding = '10px 15px';\n        noItems.style.fontSize = '0.9em';\n        noItems.style.color = '#6c757d';\n        dropdown.appendChild(noItems);\n    }\n}\n\nexport function populateMyPlansDropdown(plans) {\n    const container = document.getElementById('my-plans-container');\n    const dropdown = document.getElementById('my-plans-dropdown');\n    if (!container || !dropdown) return;\n\n    dropdown.innerHTML = '';\n    container.style.display = 'block';\n\n    if (state.session.user.isAuthenticated) {\n        const defaultOption = document.createElement('option');\n        defaultOption.textContent = 'My Saved Plans...';\n        defaultOption.disabled = true;\n        defaultOption.selected = true;\n        dropdown.appendChild(defaultOption);\n\n        const newPlanOption = document.createElement('option');\n        newPlanOption.textContent = '✨ Create a New Plan';\n        newPlanOption.value = 'new';\n        dropdown.appendChild(newPlanOption);\n        if (plans && plans.length > 0) {\n            plans.forEach(plan => {\n                const option = document.createElement('option');\n                option.value = plan.id;\n                option.textContent = plan.fields.Name || 'Untitled Plan';\n                if (plan.id === state.session.id) {\n                    option.selected = true;\n                    defaultOption.disabled = false;\n                    defaultOption.selected = false;\n                }\n                dropdown.appendChild(option);\n            });\n        }\n    } else {\n        const guestOption = document.createElement('option');\n        guestOption.textContent = 'Save & View My Plans...';\n        guestOption.value = 'login-to-save';\n        dropdown.appendChild(guestOption);\n    }\n}\n\nexport async function updateMobileBarAvailability() {\n    const mobileBar = document.getElementById('mobile-summary-bar');\n    if (!mobileBar || window.innerWidth > 999) return;\n    const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);\n    mobileBar.classList.remove('available', 'partial', 'unavailable');\n\n    if (selectedDateISO && state.cart.lockedItems.size > 0) {\n        const selectedDate = new Date(selectedDateISO);\n        const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);\n        const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);\n        switch (overallStatus) {\n            case AVAILABILITY_STATUS.FULL:\n                mobileBar.classList.add('available');\n                break;\n            case AVAILABILITY_STATUS.PARTIAL:\n                mobileBar.classList.add('partial');\n                break;\n            case AVAILABILITY_STATUS.NONE:\n                mobileBar.classList.add('unavailable');\n                break;\n        }\n    }\n}\n\n// REPLACE the entire updateCatalogHeader function in: ui.js\n\nexport function updateCatalogHeader() {\n    const breadcrumbsEl = document.getElementById('breadcrumbs');\n    const titleEl = document.getElementById('catalog-title');\n    const planFilterBtn = document.getElementById('plan-filter-btn');\n\n    if (!breadcrumbsEl || !titleEl) return;\n\n    // Reset previous state\n    breadcrumbsEl.innerHTML = '';\n    titleEl.style.display = 'none';\n\n    // Don't show breadcrumbs for the \"My Plan\" view\n    if (planFilterBtn && planFilterBtn.classList.contains('active')) {\n        return;\n    }\n\n    const path = [];\n    let currentTitle = '';\n\n    // Always start with a clickable \"All Categories\" link\n    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);\n\n    // Find the active category\n    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');\n    if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {\n        const categoryName = activeCategoryButton.textContent;\n        // The category link should also be clickable\n        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);\n        currentTitle = categoryName;\n    }\n\n    // Find any active subcategories\n    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');\n    if (activeSubcategoryNodes.length > 0) {\n        const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);\n        // The final part of the breadcrumb is just text, not a link\n        path.push(`<span>${subcatNames.join(' + ')}</span>`);\n        currentTitle = subcatNames.join(' + ');\n    }\n    \n    // Only show the breadcrumbs and title if we have navigated deeper than \"All Categories\"\n    if (path.length > 1) {\n        breadcrumbsEl.innerHTML = path.join(' &gt; ');\n        titleEl.textContent = currentTitle;\n        titleEl.style.display = 'block';\n    }\n}\n\n// FILE: ui.js (ADD THIS FUNCTION)\n\n// --- Function to show login prompt for likes ---\nlet promptTimeout;\nexport function showLoginPromptForLikes() {\n    const profileButton = document.getElementById('user-profile-button');\n    if (!profileButton) return;\n\n    // Create prompt element if it doesn't exist\n    let promptElement = document.getElementById('login-prompt-likes');\n    if (!promptElement) {\n        promptElement = document.createElement('div');\n        promptElement.id = 'login-prompt-likes';\n        promptElement.style.position = 'absolute';\n        promptElement.style.bottom = '110%'; // Position above the button\n        promptElement.style.right = '0';\n        promptElement.style.backgroundColor = '#333';\n        promptElement.style.color = 'white';\n        promptElement.style.padding = '8px 12px';\n        promptElement.style.borderRadius = '4px';\n        promptElement.style.fontSize = '0.85em';\n        promptElement.style.whiteSpace = 'nowrap';\n        promptElement.style.opacity = '0';\n        promptElement.style.transition = 'opacity 0.3s ease';\n        promptElement.style.pointerEvents = 'none'; // Prevent interaction\n        promptElement.textContent = 'Log in to save your likes & get updates!';\n        // Append near the button (adjust based on your header structure if needed)\n        profileButton.parentNode.style.position = 'relative'; // Ensure parent allows absolute positioning\n        profileButton.parentNode.appendChild(promptElement);\n    }\n\n    // Clear previous timeout if prompt is shown again quickly\n    if (promptTimeout) clearTimeout(promptTimeout);\n\n    // Show the prompt\n    requestAnimationFrame(() => {\n         promptElement.style.opacity = '1';\n    });\n\n\n    // Hide after a delay\n    promptTimeout = setTimeout(() => {\n        promptElement.style.opacity = '0';\n        // Optional: Remove element after fade out if desired\n        // setTimeout(() => promptElement.remove(), 300);\n    }, 4000); // Show for 4 seconds\n}\n// --- END login prompt function ---\n"
+    },
+    {
+      "path": "utils/debug.js",
+      "content": "let isDebugMode = false;\n\nexport function setDebugMode(enabled) {\n    isDebugMode = enabled;\n}\n\nexport function log(prefix, ...args) {\n    if (isDebugMode) {\n        console.log(`[${prefix}]`, ...args);\n    }\n}\n\n"
+    },
+    {
+      "path": "utils.js",
+      "content": "// REPLACE THE ENTIRE CONTENTS OF: utils.js\n\nimport { log } from './utils/debug.js';\nimport { CONSTANTS } from './config.js';\nimport { state } from './state.js';\n\n/**\n * Parses the raw string from Airtable's 'Options' field into a structured array of objects.\n * This function handles various formats, including price changes, absolute prices,\n * durations, and descriptions.\n * @param {string} rawOptionsString The comma-separated string from the Airtable field.\n * @returns {Array<Object>} An array of option objects, each with standardized properties.\n */\nexport function parseOptions(rawOptionsString) {\n    if (!rawOptionsString || typeof rawOptionsString !== 'string') {\n        return [];\n    }\n    \n    const optionsArray = rawOptionsString.split(/\\r?\\n/).map(option => option.trim()).filter(Boolean);\n    return optionsArray.map(option => {\n        let name = option;\n        let price = null;\n        let priceChange = null;\n        let durationChange = null;\n        let description = null;\n\n        const parts = option.split(',').map(part => part.trim());\n        name = parts.shift() || '';\n        \n        parts.forEach(part => {\n            let match;\n            if (match = part.match(/price:\\s*(\\-?\\d+(\\.\\d{1,2})?)/i)) {\n                price = parseFloat(match[1]);\n            } else if (match = part.match(/price change:\\s*(\\-?\\d+(\\.\\d{1.2})?)/i)) {\n                priceChange = parseFloat(match[1]);\n            } else if (match = part.match(/duration change:\\s*(\\-?\\d+(\\.\\d{1,2})?)/i)) {\n                durationChange = parseFloat(match[1]);\n            } else if (match = part.match(/description:\\s*['\"]?([^\"']+)['\"]?/i)) {\n                description = match[1];\n            }\n        });\n\n        let namePriceMatch = name.match(/\\$(\\d+(\\.\\d{1,2})?)/);\n        if (namePriceMatch) {\n            price = parseFloat(namePriceMatch[1]);\n            name = name.replace(namePriceMatch[0], '').trim();\n        }\n\n        return {\n            name: name,\n            price: price,\n            priceChange: priceChange,\n            durationChange: durationChange,\n            description: description\n        };\n    });\n}\nexport function debounce(func, delay = 300) {\n    let timeout;\n    return (...args) => {\n        clearTimeout(timeout);\n        timeout = setTimeout(() => {\n            func.apply(this, args);\n        }, delay);\n    };\n}\n\n/**\n * Updates the browser's URL with new query parameters without reloading the page.\n * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.\n * A value of null or undefined will remove the parameter.\n */\nexport function updateUrl(paramsToUpdate) {\n    const url = new URL(window.location);\n    const searchParams = url.searchParams;\n\n    for (const key in paramsToUpdate) {\n        const value = paramsToUpdate[key];\n        if (value === null || value === undefined || value === '') {\n            searchParams.delete(key);\n        } else {\n            searchParams.set(key, value);\n        }\n    }\n\n    const newUrl = url.pathname + '?' + searchParams.toString();\n    const currentUrl = window.location.pathname + window.location.search;\n    \n    if (newUrl !== currentUrl) {\n        // --- THIS IS THE FIX ---\n        // Always use pushState to update the URL without triggering a full navigation\n        // or relying on a potentially non-existent browser history entry.\n        history.pushState({}, '', newUrl);\n    }\n}\n\n// --- NEWLY MOVED FUNCTIONS ---\n\nfunction getDescendantBookableItems(record, allRecords) {\n    let bookableItems = [];\n    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);\n    for (const child of children) {\n        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);\n        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));\n        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));\n        if (isGrouping) {\n            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));\n        } else {\n            bookableItems.push(child);\n        }\n    }\n    return bookableItems;\n}\n\nexport function getGroupPriceRange(record) {\n    const descendants = getDescendantBookableItems(record, state.records.all);\n    if (descendants.length === 0) return null;\n    let minPrice = Infinity, maxPrice = -Infinity;\n    descendants.forEach(item => {\n        const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);\n        if (options.length > 0) {\n            options.forEach((opt, index) => {\n                const price = getRecordPrice(item, index);\n                if (price > 0) {\n                    if (price < minPrice) minPrice = price;\n                    if (price > maxPrice) maxPrice = price;\n                }\n            });\n        } else {\n            const price = getRecordPrice(item);\n            if (price > 0) {\n                if (price < minPrice) minPrice = price;\n                if (price > maxPrice) maxPrice = price;\n            }\n        }\n    });\n    return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };\n}\nexport function getRecordPrice(record, optionIndex = null) {\n    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, \"\"));\n    if (optionIndex !== null) {\n        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);\n        const variation = options[optionIndex];\n        if (variation) {\n            if (variation.price !== null) return variation.price;\n            if (variation.priceChange !== null) price += variation.priceChange;\n        }\n    }\n    return isNaN(price) ? 0 : price;\n}\n"
+    }
+  ]
+}
+}
+You are 100% right to pump the brakes. "Psychedelic" is a very creative and fun goal, but it can mean a lot of things. My previous jump to a simple gradient was too basic, and the mouse-following idea is a common effect that might not be what you're imagining.
+
+Your ideas of **"prisms/fractals/spirals/kaleidoscope"** are much more on-target.
+
+Let's fully define this dynamic, incorporating your excellent feedback.
+
+### The New Dynamic: "The Kaleidoscope Engine"
+
+**The Core Goal:** To create a "living" background that is generative (like a kaleidoscope) and customizable. It will react to the **content** of the user's plan (by changing its color palette) and to the **user** (by letting them tweak the visuals).
+
+**The Visual Effect:**
+1.  **The Canvas:** We will place an HTML `<canvas>` element *behind* all your page content. This canvas will run a continuous, generative art animation. This is far more powerful than CSS for creating fractal or spiral effects.
+2.  **The "Kaleidoscope":** The animation will draw simple lines and shapes, but then **mirror and rotate** them in real-time, creating a true kaleidoscope effect.
+3.  **The Colors:** The colors of these shapes will be pulled directly from the **categories of the items in the user's plan**, just as we designed before. As items are added, new colors will be introduced into the animation.
+4.  **The "Frosted Glass":** All your panels (header, filter, plan) and the item cards will keep their `backdrop-filter: blur()`. This is now *even more important*, as it will blur the complex animation behind it into a beautiful, liquid-color effect.
+5.  **The Card Shimmer:** We will keep your idea for the card shimmer on hover. It's a great effect and will look fantastic on top of the blurred background.
+
+---
+
+### The Controls (In the User Profile Menu)
+
+This is your idea, and it's the most important part. We will add a new "Fun Tweaks" section inside the "My Account" modal (`#profile-view`). This keeps it hidden and special. It will have three sliders:
+
+1.  **"Kaleidoscope" Slider (Segments)**
+    * **What it controls:** The number of "mirrors" or segments in the kaleidoscope.
+    * **Effect:** At its lowest setting (e.g., 2), it will be a simple "Rorschach" blot reflection. At its highest (e.g., 12), it will become a complex, **"fractal" or "snowflake"** pattern.
+    * **Default:** `6` (a classic 6-point kaleidoscope).
+
+2.  **"Motion" Slider (Energy)**
+    * **What it controls:** How fast new lines and shapes are drawn and move across the canvas.
+    * **Effect:** At its lowest, it will be a very slow, ambient, "lava lamp" motion. At its highest, it will be a more energetic, **"prismatic"** effect with many fast-moving lines.
+    * **Default:** A slow, gentle pace.
+
+3.  **"Spin" Slider (Rotation)**
+    * **What it controls:** The rotation speed of the *entire* kaleidoscope pattern.
+    * **Effect:** At its lowest, it will be `0` (no spin). As you increase it, it will create a **"spiral" or "vortex"** effect, from a meditative drift to a full-on psychedelic spin.
+    * **Default:** `0` (No spin).
+
+---
+
+### The Implementation Plan
+
+When you are ready, here is the 6-step plan to build this. We will go one step at a time.
+
+1.  **Create a New File: `components/kaleidoscope.js`**
+    * This file will be our "engine." It will contain all the logic for drawing on the canvas, handling the animation loop, and managing the colors.
+
+2.  **Modify `index.html`**
+    * Add the `<canvas id="kaleidoscope-bg"></canvas>` element.
+    * Add the HTML for the three new sliders (Kaleidoscope, Motion, Spin) inside the `#profile-view` modal.
+    * **Remove** the old, broken `<style>` block completely.
+
+3.  **Modify `style.css`**
+    * We will start from your **original, working `style.css`** (from `project_source (3).json`).
+    * We will add all the new styles for the "frosted glass," the "card shimmer," the "kaleidoscope canvas," and the new "sliders."
+    * This will fix the layout issues you've been seeing.
+
+4.  **Modify `main.js`**
+    * We will import the new `kaleidoscope.js` file and add one line to `initialize()` to turn on the background.
+
+5.  **Modify `components/sidebar.js`**
+    * We will replace the old call to `updateDynamicBackground()` with a new call to `kaleidoscope.updateColors()` so the canvas reacts to the plan.
+
+6.  **Modify `auth.js`**
+    * We will add event listeners for the new sliders to connect them to the `kaleidoscope.js` engine.
+
+This plan achieves all your goals: it's more psychedelic, it's customizable via sliders, the controls are cleanly hidden in the profile menu, and it includes the card shimmer.
+
+This is a much more robust and exciting dynamic. Let me know when you're ready to proceed with **Step 1: Creating the `kaleidoscope.js` engine.**
