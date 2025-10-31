@@ -134,7 +134,7 @@ export function loadEffect(effect, controlsContainer) {
 
     // 1. Initialize the effect
     if (typeof currentEffect.init === 'function') {
-        // Check if ctx exists before initializing. If not, init will be called by initBackgroundEngine
+        // Check if ctx exists before initializing.
         if (ctx) {
             currentEffect.init(ctx, canvas.width, canvas.height);
         }
@@ -188,9 +188,9 @@ export function loadEffect(effect, controlsContainer) {
     if (typeof currentEffect.updateColors === 'function') {
         currentEffect.updateColors(currentColors);
     }
-
-    // 4. If init hasn't run yet (because ctx wasn't ready), run it now.
-    if (ctx && (!currentEffect.initialized || !controlsContainer)) { // Re-init if ctx is ready
+    
+    // 4. If init hasn't run yet (because ctx wasn't ready when loadEffect was first called), run it now.
+    if (ctx && !currentEffect.initialized) { 
         if (typeof currentEffect.init === 'function') {
             currentEffect.init(ctx, canvas.width, canvas.height);
             currentEffect.initialized = true; // Mark as initialized
