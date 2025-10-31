@@ -482,11 +482,11 @@ async function initialize() {
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
         // --- THIS IS THE FIX ---
-        // Load the new fluid effect
+        // Load the new fluid effect, passing 'null' for the controls container
         // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect).'); // <-- UPDATED
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); // <-- UPDATED
         // --- DEBUG ---
-        backgroundEngine.loadEffect(fluidEffect); // <-- UPDATED
+        backgroundEngine.loadEffect(fluidEffect, null); // <-- UPDATED
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
