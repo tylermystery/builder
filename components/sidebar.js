@@ -7,7 +7,10 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
+// --- THIS IS THE FIX ---
+// The path is corrected from './components/backgroundEngine.js' to './backgroundEngine.js'
 import * as backgroundEngine from './backgroundEngine.js'; // <-- IMPORT NEW ENGINE
+// --- END FIX ---
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
