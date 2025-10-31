@@ -45,32 +45,122 @@ body.modal-open {
     padding: 1rem 1.25rem;
 }
 
-/* This is the new block for header stacking on mobile */
+/* In: style.css (REPLACE THE ENTIRE @media (max-width: 999px) BLOCK) */
+
 @media (max-width: 999px) {
-    .header-content {
+    /* Main Content Layout Reset */
+    #left-sidebar, #right-sidebar {
+        max-width: 100%;
+        transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
+        overflow: hidden;
+        max-height: 2000px;
+        opacity: 1;
+    }
+    
+    #left-sidebar.collapsed, #right-sidebar.collapsed {
+        max-height: 0;
+        opacity: 0;
+        margin: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    #mobile-summary-bar, #mobile-show-filters-btn {
+        display: flex;
+    }
+
+    #mobile-show-filters-btn {
+        position: sticky;
+        top: 75px;
+        z-index: 999;
+    }
+    
+    .presentation-body {
+        display: flex;
         flex-direction: column;
+    }
+
+    .presentation-nav-arrow {
+        background: rgba(0,0,0,0.4);
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+    }
+
+    #mobile-summary-bar {
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    body.mobile-bar-active #mobile-summary-bar {
+        transform: translateY(0);
+    }
+    
+    body.mobile-bar-active #chat-widget-container {
+        bottom: 75px;
+        transition: bottom 0.3s ease-in-out;
+    }
+
+    /* --- FIX: SHOW MOBILE BUTTON ON MOBILE --- */
+    #mobile-filter-trigger {
+        display: flex;
+        width: 100%;
+        position: sticky;
+        top: 75px;
+        z-index: 998;
+        background-color: #6c757d;
+        color: white;
+        padding: 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 1em;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+
+    .caret {
+        transition: transform 0.3s ease;
+    }
+
+    .collapsed .caret {
+        transform: rotate(-90deg);
+    }
+
+    /* === NEW/FIXED HEADER STACKING LOGIC === */
+    .header-content {
+        flex-direction: column; /* Force stacks main header sections */
         align-items: flex-start;
-        gap: 10px;
-        padding-bottom: 5px; /* Adjust padding slightly for tighter look */
+        gap: 5px; /* Reduce gap since they are stacked */
+        padding-bottom: 5px; 
     }
 
     #header-left {
         width: 100%;
-        justify-content: space-between; /* Ensures logo/title are aligned */
-    }
-
-    #header-right {
-        width: 100%;
-        display: flex; /* Re-enable flex for its own content */
-        justify-content: flex-end; /* Align saved plans/account button to the right */
-        align-items: center;
+        /* Align image and title/marquee */
+        align-items: center; 
+        justify-content: flex-start;
+        order: 1; /* Title, Logo, Marquee is first */
     }
     
     #marquee-banner-container {
-        /* Marquee should fill the whole width below the title on mobile */
+        /* Marquee should fill the whole width below the title on mobile, which is contained in #header-left */
         width: 100%; 
+        order: 2; /* Marquee is second in the flow if it's placed inside #header-left */
+    }
+    
+    /* Ensure right side elements are grouped together and pushed to the right */
+    #header-right {
+        width: 100%;
+        display: flex; 
+        justify-content: flex-end; /* Push to the right edge */
+        align-items: center;
+        order: 3; /* My Plans and User button is third */
     }
 }
+/* --- (End of @media (max-width: 999px)) --- */
 
 #header-left {
     display: flex;
