@@ -23,17 +23,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <small>${fields.Description || 'No description.'}</small><br>
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
-    itemCard.innerHTML = `
-        <div class="card-actions">
-            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-            <button class="action-btn remove-btn" title="Remove">×</button>
-        </div>
-        <div class="favorite-item-overlay"
-            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
-        >
-            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
-        </div>
-    `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -154,7 +143,9 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
-    if (!totalCostEl || !subtotalCostEl) return;
+    const totalBreakdown = document.getElementById('total-breakdown'); // Ensure this element is retrieved
+    
+    if (!totalCostEl || !subtotalCostEl || !totalBreakdown) return;
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
@@ -176,13 +167,32 @@ export function updateTotalCost() {
         backgroundEngine.updateColors();
     }
     
+    // Reset total breakdown HTML before applying status logic
+    totalBreakdown.innerHTML = `
+        <div class="total-row subtotal-row">
+            <span>Subtotal:</span>
+            <span id="subtotal-cost">$${subtotal.toFixed(2)}</span>
+        </div>
+        <div class="total-row amount-paid-row" style="display: none;">
+            <span>Amount Paid:</span>
+            <span id="amount-paid-cost">$0.00</span>
+        </div>
+        <hr class="total-divider" style="display: none;">
+        <div class="total-row final-total-row">
+            <strong>Total Due:</strong>
+            <strong id="total-cost">$${totalDue.toFixed(2)}</strong>
+        </div>
+    `;
+
     if (amountReceived > 0) {
-        amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
-        amountPaidRowEl.style.display = 'flex';
-        totalDividerEl.style.display = 'block';
-    } else {
-        amountPaidRowEl.style.display = 'none';
-        totalDividerEl.style.display = 'none';
+        // Re-get the elements after reset
+        const currentAmountPaidCostEl = totalBreakdown.querySelector('#amount-paid-cost');
+        const currentAmountPaidRowEl = totalBreakdown.querySelector('.amount-paid-row');
+        const currentTotalDividerEl = totalBreakdown.querySelector('.total-divider');
+        
+        if (currentAmountPaidCostEl) currentAmountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        if (currentAmountPaidRowEl) currentAmountPaidRowEl.style.display = 'flex';
+        if (currentTotalDividerEl) currentTotalDividerEl.style.display = 'block';
     }
 
     if (mobileItemCountEl && mobileTotalCostEl) {
@@ -202,13 +212,14 @@ export function updateTotalCost() {
     
     if (checkoutBtn) {
         checkoutBtn.style.display = 'block';
-        document.getElementById('total-breakdown').style.display = 'block';
-
+        
         if (isFullyPaid) {
-            // --- MODIFIED LOGIC: Keep button and change text ---
-            checkoutBtn.textContent = 'View Summary'; // New text
-            checkoutBtn.disabled = false; // Always enabled if paid
-            document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+            // *** FIX APPLIED HERE: ONLY DISPLAY 'PAID IN FULL' IF PLAN IS NOT EMPTY ***
+            if (!isPlanEmpty) {
+                totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+            }
+            checkoutBtn.textContent = 'View Summary';
+            checkoutBtn.disabled = false;
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
             checkoutBtn.disabled = isPlanEmpty;
@@ -226,11 +237,11 @@ export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
+    
     if (totalBreakdown) {
         totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        // When reserved/paid, the button should show View Summary
         checkoutBtn.style.display = 'block'; 
         checkoutBtn.textContent = 'View Summary';
         checkoutBtn.disabled = false;
