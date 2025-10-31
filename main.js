@@ -13,7 +13,7 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
-import * as kaleidoscope from './components/kaleidoscope.js'; // <-- NEW: STEP 4 IMPORT
+import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
 
 const imageCache = new Map();
 
@@ -54,8 +54,7 @@ function syncUiWithUrl() {
     ui.hideItineraryModal(); //
     ui.hidePresentationView(); //
 
-    // --- Sync Category/View Buttons ---
-    const categoryFilters = document.getElementById('category-filters'); //
+    // --- Sync Category/View Buttons ---\n    const categoryFilters = document.getElementById('category-filters'); //
     if (categoryFilters) { // Add safety check
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
 
@@ -72,8 +71,7 @@ function syncUiWithUrl() {
         }
     }
 
-    // --- Sync Subcategory Buttons ---
-    const subcategoryFilters = document.getElementById('subcategory-filters'); //
+    // --- Sync Subcategory Buttons ---\n    const subcategoryFilters = document.getElementById('subcategory-filters'); //
      if (subcategoryFilters) { // Add safety check
          // Make sure subcategories are generated based on the active category first
          // Check if updateSubcategoryButtons is defined before calling
@@ -100,8 +98,7 @@ function syncUiWithUrl() {
          console.error("applyFiltersAndSort is not defined or imported correctly.");
     }
 
-    // --- Handle opening modals/views based on URL ---
-    // Use setTimeout to allow filters to apply and DOM to update first
+    // --- Handle opening modals/views based on URL ---\n    // Use setTimeout to allow filters to apply and DOM to update first
     setTimeout(() => { //
         if (view === 'present') {
             ui.showPresentationView('ideas'); // Changed from 'favorites'
@@ -135,13 +132,11 @@ async function initialize() {
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
-         // --- CHAT FIX: Re-initialize chat to update user name ---
-         if (typeof initializeSessionChat === 'function') {
+         // --- CHAT FIX: Re-initialize chat to update user name ---\n         if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat(); 
          }
-         // --- END CHAT FIX ---
-     });
+         // --- END CHAT FIX ---\n     });
 
     document.addEventListener('planCreated', () => { //
         if (state.session.user.isAuthenticated) { //
@@ -191,8 +186,7 @@ async function initialize() {
     let shopId = urlParams.get('shopId'); //
     let activeShop = null;
 
-    // --- Determine Active Shop (Simplified Logic) ---
-    if (shopId) {
+    // --- Determine Active Shop (Simplified Logic) ---\n    if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId); //
         log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
     }
@@ -218,35 +212,26 @@ async function initialize() {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours"); //
          log('Main', `Falling back to default shop 'Tyler's Mystery Tours'. Found shop: ${!!activeShop}`);
     }
-    // --- End Shop Determination ---
-
-    if (activeShop) {
+    // --- End Shop Determination ---\n\n    if (activeShop) {
         setState({ ui: { ...state.ui, activeShopId: activeShop.id }}); //
         localStorage.setItem('lastVisitedShopId', activeShop.id); //
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
-        // --- CHAT FIX: Ensure guests have a session ID on load ---
-        if (!state.session.id) {
+        // --- CHAT FIX: Ensure guests have a session ID on load ---\n        if (!state.session.id) {
             log('Main', 'No session ID found, creating new session for guest chat...');
             await api.saveSessionToAirtable(); // This will create an ID and fire 'sessionReady'
         }
-        // --- END CHAT FIX ---
-
-        // --- Initialize UI based on Shop ---
-        const titleElement = document.getElementById('main-shop-title'); //
+        // --- END CHAT FIX ---\n\n        // --- Initialize UI based on Shop ---\n        const titleElement = document.getElementById('main-shop-title'); //
         if (titleElement) {
-            // --- Get Main Title ---
-            const shopTitleField = activeShop.fields['Shop Title'] || activeShop.fields.Name;
+            // --- Get Main Title ---\n            const shopTitleField = activeShop.fields['Shop Title'] || activeShop.fields.Name;
             const titles = shopTitleField.split('|').map(t => t.trim()).filter(Boolean);
             const displayTitle = titles.length > 0 ? titles[0] : 'Shop'; // Default main title
 
-            // --- Get Superscript Label ---
-            const shopTypeLabelField = activeShop.fields['Shop Type Label'] || 'Shop'; // Default superscript
+            // --- Get Superscript Label ---\n            const shopTypeLabelField = activeShop.fields['Shop Type Label'] || 'Shop'; // Default superscript
             const labels = shopTypeLabelField.split('|').map(t => t.trim()).filter(Boolean);
             const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
 
-            // --- Set innerHTML with both dynamic parts ---
-            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
+            // --- Set innerHTML with both dynamic parts ---\n            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id=\"shop-switcher-trigger\" style=\"background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;\">s</button>`;
 
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer'; //
@@ -278,8 +263,7 @@ async function initialize() {
             }
         }
 
-        // --- Shop Settings & Event Listeners ---
-        const shopSettings = { //
+        // --- Shop Settings & Event Listeners ---\n        const shopSettings = { //
             shopType: activeShop.fields.ShopType || 'Events', //
             enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'], //
             paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly', //
@@ -290,8 +274,7 @@ async function initialize() {
             shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); } //
 
-// --- NEW MARQUEE LOGIC START ---
-        const marqueeContainer = document.getElementById('marquee-banner-container');
+// --- NEW MARQUEE LOGIC START ---\n        const marqueeContainer = document.getElementById('marquee-banner-container');
         const marqueeTextElement = document.getElementById('marquee-text');
 
         if (marqueeContainer && marqueeTextElement) {
@@ -316,24 +299,19 @@ async function initialize() {
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        // --- NEW MARQUEE LOGIC END ---
-
-        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
+        // --- NEW MARQUEE LOGIC END ---\n\n        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
         initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
 
-        // --- Authentication & User State ---
-        const jwt = localStorage.getItem('jwt'); //
+        // --- Authentication & User State ---\n        const jwt = localStorage.getItem('jwt'); //
         let initialUserId = null;
         if (jwt) {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1])); //
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
                     setState({ //
-                        // --- SYNTAX ERROR FIX: Removed trailing backslash ---
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
+                        // --- SYNTAX ERROR FIX: Removed trailing backslash ---\n                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
-                    // --- END FIX ---
-                    initialUserId = payload.userId;
+                    // --- END FIX ---\n                    initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
                     localStorage.removeItem('jwt'); //
@@ -374,8 +352,7 @@ async function initialize() {
                  handleSignOut(); // Use sign out to reset state cleanly
             }
         
-        // --- THIS IS THE CORRECTED BLOCK ---
-        } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
+        // --- THIS IS THE CORRECTED BLOCK ---\n        } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
             try {
@@ -409,24 +386,20 @@ async function initialize() {
                 console.error('Failed to fetch user data on reload:', error.message);
                 // Don't block the app, just log the error. Likes will be out of sync.
             }
-        // --- END CORRECTED BLOCK ---
-        }
+        // --- END CORRECTED BLOCK ---\n        }
 
-        // --- Post-Auth Initialization ---
-        await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
+        // --- Post-Auth Initialization ---\n        await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
 
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);
               await api.loadSessionFromAirtable(sessionId); //
         } else if (state.session.id) {
              log('Main', `Session ${state.session.id} already loaded or initiated.`);
-             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---
-             // This ensures chat initializes even if loadSessionFromAirtable was skipped
+             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---\n             // This ensures chat initializes even if loadSessionFromAirtable was skipped
              if (typeof initializeSessionChat === 'function') {
                  initializeSessionChat();
              }
-             // --- END CHAT FIX ---
-             ui.updateHeader(); //
+             // --- END CHAT FIX ---\n             ui.updateHeader(); //
              ui.updateEventPlanSection(); //
              ui.updateIdeasCarousel(); // Renamed
              ui.updateTotalCost(); //
@@ -441,8 +414,7 @@ async function initialize() {
         const statusFilterEl = document.getElementById('status-filter'); //
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue; //
 
-        // --- Final UI Setup ---\
-        ui.toggleLoading(false); //
+        // --- Final UI Setup ---\\\n        ui.toggleLoading(false); //
         updateSaveShareButton(); //
         initializeChatEventListeners(); //
         setupAuthEventListeners(); //
@@ -454,7 +426,7 @@ async function initialize() {
         setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
         log('Main', 'Initialization complete.'); //
 
-        kaleidoscope.initKaleidoscope(); // <-- NEW: STEP 4 INITIALIZE ENGINE
+        backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
