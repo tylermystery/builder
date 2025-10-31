@@ -2,7 +2,10 @@
 
 .
 ├── components/
+│   ├── backgroundEngine.js
 │   ├── card.js
+│   ├── effects/
+│   │   └── fluid.js
 │   ├── eventHub.js
 │   ├── itinerary.js
 │   ├── modal.js
@@ -23,7 +26,8 @@
 │       ├── send-notification.js
 │       └── update-user-prefs.js
 ├── utils/
-│   └── debug.js
+│   ├── debug.js
+│   └── shader.js
 ├── ARCHITECTURE.md
 ├── DIRECTORY_STRUCTURE.md
 ├── ROADMAP.md
