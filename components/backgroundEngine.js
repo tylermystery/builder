@@ -134,7 +134,10 @@ export function loadEffect(effect, controlsContainer) {
 
     // 1. Initialize the effect
     if (typeof currentEffect.init === 'function') {
-        currentEffect.init(ctx, canvas.width, canvas.height);
+        // Check if ctx exists before initializing. If not, init will be called by initBackgroundEngine
+        if (ctx) {
+            currentEffect.init(ctx, canvas.width, canvas.height);
+        }
     }
 
     // 2. Get controls from the plugin and build them in the UI
@@ -184,6 +187,14 @@ export function loadEffect(effect, controlsContainer) {
     // 3. Pass current colors to the new effect
     if (typeof currentEffect.updateColors === 'function') {
         currentEffect.updateColors(currentColors);
+    }
+
+    // 4. If init hasn't run yet (because ctx wasn't ready), run it now.
+    if (ctx && (!currentEffect.initialized || !controlsContainer)) { // Re-init if ctx is ready
+        if (typeof currentEffect.init === 'function') {
+            currentEffect.init(ctx, canvas.width, canvas.height);
+            currentEffect.initialized = true; // Mark as initialized
+        }
     }
 }
 
