@@ -1,6 +1,10 @@
 // In: main.js
 // Action: REPLACE THE ENTIRE FILE with this content.
 
+// --- DEBUG ---
+console.log('[main.js] 0. File execution started.');
+// --- DEBUG ---
+
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -12,14 +16,29 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 // Corrected import line below:
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
+
+// --- DEBUG ---
+console.log('[main.js] 1. Importing auth.js...');
+// --- DEBUG ---
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
+// --- DEBUG ---
+console.log('[main.js] 2. Successfully imported auth.js.');
+// --- DEBUG ---
+
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
+
+// --- DEBUG ---
+console.log('[main.js] 3. Importing kaleidoscopeEffect.js...');
+// --- DEBUG ---
 import kaleidoscopeEffect from './components/effects/kaleidoscope.js'; // <-- IMPORT DEFAULT EFFECT
+// --- DEBUG ---
+console.log('[main.js] 4. Successfully imported kaleidoscopeEffect.js.');
+// --- DEBUG ---
+
 
 const imageCache = new Map();
 
-// Make imageCache accessible (consider if a better pattern exists, e.g., passing via init)
-window.imageCache = imageCache; // Simple global access for now
+// Make imageCache accessible (consider if a better pattern exists, e.g., passing via init)\nwindow.imageCache = imageCache; // Simple global access for now
 
 async function populateUserPlans(userId) {
     // Check if ui.populateMyPlansDropdown exists before calling
@@ -66,10 +85,10 @@ function syncUiWithUrl() {
         } else if (view === 'likes') {
             document.getElementById('liked-items-filter-btn')?.classList.add('active'); //
         } else if (category) {
-            document.querySelector(`#category-filters .filter-btn[data-filter=\"${category}\"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter=\\"${category}\\"]`)?.classList.add('active'); //
         } else {
             // Default to 'All' if no specific view or category is set
-            document.querySelector(`#category-filters .filter-btn[data-filter=\"all\"]`)?.classList.add('active'); //
+            document.querySelector(`#category-filters .filter-btn[data-filter=\\"all\\"]`)?.classList.add('active'); //
         }
     }
 
@@ -88,7 +107,7 @@ function syncUiWithUrl() {
          subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); //
          if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
              subcategories.forEach(subcat => {
-                 subcategoryFilters.querySelector(`.filter-btn[data-filter=\"${subcat}\"]`)?.classList.add('active'); //
+                 subcategoryFilters.querySelector(`.filter-btn[data-filter=\\"${subcat}\\"]`)?.classList.add('active'); //
              });
          }
      }
@@ -126,6 +145,9 @@ function syncUiWithUrl() {
 // REPLACE the entire initialize function in: main.js
 
 async function initialize() {
+    // --- DEBUG ---
+    console.log('[main.js] 5. initialize() function called.');
+    // --- DEBUG ---
     log('Main', '1. Initialization started.'); //
     ui.initStateHelpers({ getItemState: ui.getItemState }); //
 
@@ -247,7 +269,7 @@ async function initialize() {
             const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
 
             // --- Set innerHTML with both dynamic parts ---
-            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id=\"shop-switcher-trigger\" style=\"background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;\">s</button>`;
+            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id=\\"shop-switcher-trigger\\" style=\\"background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;\\">s</button>`;
 
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer'; //
@@ -260,7 +282,7 @@ async function initialize() {
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher()); //
         }
         
-        const existingFavicon = document.querySelector('link[rel=\"icon\"], link[rel=\"shortcut icon\"]'); //
+        const existingFavicon = document.querySelector('link[rel=\\"icon\\\"], link[rel=\\"shortcut icon\\\"]'); //
         if (existingFavicon) existingFavicon.remove(); //
         const logoTag = activeShop.fields.LogoTag; //
         if (logoTag) {
@@ -317,12 +339,8 @@ async function initialize() {
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        // --- NEW MARQUEE LOGIC END ---
-
-        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
-        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
-
-        // --- Authentication & User State ---
+        // --- NEW MARQUEE LOGIC END ---\n\n        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line\n\n        // --- Authentication & User State ---
         const jwt = localStorage.getItem('jwt'); //
         let initialUserId = null;
         if (jwt) {
@@ -331,9 +349,7 @@ async function initialize() {
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
                     // --- THIS IS THE FIX ---
                     // The problematic comment and newline characters are removed.
-                    setState({
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
-                    });
+                    setState({\n                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\n                    });
                     // --- END FIX ---
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
@@ -376,8 +392,7 @@ async function initialize() {
                  handleSignOut(); // Use sign out to reset state cleanly
             }
         
-        // --- THIS IS THE CORRECTED BLOCK ---
-        } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
+        // --- THIS IS THE CORRECTED BLOCK ---\n        } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
             try {
@@ -411,10 +426,7 @@ async function initialize() {
                 console.error('Failed to fetch user data on reload:', error.message);
                 // Don't block the app, just log the error. Likes will be out of sync.
             }
-        // --- END CORRECTED BLOCK ---
-        }
-
-        // --- Post-Auth Initialization ---
+        // --- END CORRECTED BLOCK ---\n        }\n\n        // --- Post-Auth Initialization ---
         await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
 
         if (sessionId && state.session.id !== sessionId) {
@@ -455,14 +467,23 @@ async function initialize() {
 
         setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
         log('Main', 'Initialization complete.'); //
-
+        
+        // --- DEBUG ---
+        console.log('[main.js] 6. Calling backgroundEngine.initBackgroundEngine().');
+        // --- DEBUG ---
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
         // --- THIS IS THE FIX ---
         // Load the default effect *after* initializing the engine
         // We pass 'null' for the controls container because we don't need to build sliders here.
+        // --- DEBUG ---
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(kaleidoscopeEffect).');
+        // --- DEBUG ---
         backgroundEngine.loadEffect(kaleidoscopeEffect, null);
         // --- END FIX ---
+        // --- DEBUG ---
+        console.log('[main.js] 8. End of initialize() function.');
+        // --- DEBUG ---
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed."); //
