@@ -1,902 +1,471 @@
-/* In: style.css */
-/* Action: REPLACE THE ENTIRE FILE with this content. */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Catalog</title>
+    <link rel="icon" href="data:;" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    padding-bottom: 150px;
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body>
+    <div id="toast-notification"></div>
+
+    <header id="main-header">
+        <div class="header-content">
+            <div id="header-left">
+                <h1 id="main-shop-title"></h1>
+               <div id="marquee-banner-container" style="display: none;"> <div id="marquee-text"></div>
+            </div>
+            </div>
+            <div id="header-right">
+                <div id="my-plans-container" style="display: none;">
+                    <select id="my-plans-dropdown"></select>
+                </div>
+                <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
+            </div>
+        </div>
+    </header>
     
-    /* --- DYNAMIC BACKGROUND --- */
-    background: linear-gradient(-45deg, #89f7fe, #66a6ff); /* Default gradient */
-    background-size: 400% 400%;
-    animation: gradientAnimation 20s ease infinite;
-    transition: background 0.5s ease; /* Smoothly fades between color changes */
-}
+    <div id="loading-message" style="text-align: center; padding: 40px;">Loading catalog...</div>
 
-body.modal-open {
-    overflow: hidden;
-}
-
-/* --- MODIFIED: Added Frosted Glass Effect --- */
-#main-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px); /* For Safari */
-}
-
-.header-content {
-    max-width: 1800px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.25rem;
-}
-
-#header-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-#main-shop-title {
-    margin: 0;
-    line-height: 1.2;
-}
-
-#header-left > img {
-    height: 50px;
-    display: block;
-}
-
-.main-content {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-    max-width: 1800px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-@media (min-width: 1000px) {
-    .main-content {
-        display: grid;
-        grid-template-columns: 300px 1fr 380px;
-    }
-    #left-sidebar { grid-column: 1 / 2; }
-    #catalog-area { grid-column: 2 / 3; }
-    #right-sidebar { grid-column: 3 / 4; }
-}
-
-#right-sidebar, #left-sidebar {
-    position: relative;
-}
-
-#event-plan-panel {
-    position: sticky;
-    top: 85px; 
-}
-
-#right-sidebar h3, #left-sidebar h3 {
-    margin-top: 0;
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 10px;
-}
-
-/* --- MODIFIED: Added Frosted Glass Effect --- */
-#filter-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
-    padding: 20px;
-    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px); /* For Safari */
-    border-radius: 8px; /* Added border-radius */
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Added subtle shadow */
-}
-
-.filter-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.filter-btn-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.filter-btn {
-    padding: 8px;
-    border: 1px solid #ccc;
-    cursor: pointer;
-    background: none;
-}
-
-.filter-btn.active {
-    border: 2px solid blue;
-}
-
-#cart-items-container {
-    flex-grow: 1;
-}
-
-#cart-footer {
-    margin-top: 20px;
-    padding-top: 15px;
-    border-top: 2px solid #ccc;
-}
-
-#cart-footer .total-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-#favorites-section {
-    position: relative;
-}
-
-#favorites-carousel {
-    display: flex;
-    gap: 15px;
-    overflow-x: auto;
-    padding-bottom: 5px;
-    scroll-behavior: smooth;
-}
-
-.carousel-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 10;
-}
-.carousel-nav.left { left: -20px; }
-.carousel-nav.right { right: -20px; }
-
-.favorite-item {
-    position: relative;
-    flex: 0 0 100px;
-    height: 100px;
-    border: 1px solid #ccc;
-    background-size: cover;
-    background-position: center;
-}
-
-#catalog-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 25px;
-}
-
-/* --- MODIFIED: Added Frosted Glass Effect & Hover Transition --- */
-.event-card {
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
-    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
-    overflow: hidden;
-    border-radius: 10px; /* Added border-radius */
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Softer shadow */
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px); /* For Safari */
-    transition: all 0.3s ease; /* For hover effect */
-}
-
-/* --- NEW: Added Fun Hover Interaction --- */
-.event-card:hover {
-    transform: scale(1.02);
-    background-color: rgba(255, 255, 255, 0.9); /* Become more solid */
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15); /* Lift off the page */
-}
-
-
-.event-card-image-container {
-    height: 200px;
-    width: 100%;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-}
-
-.event-card-content {
-    padding: 16px;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.event-card-content h3 {
-    margin: 0 0 8px 0;
-    font-size: 1.2em;
-}
-
-.event-card-content p.description {
-    margin: 0;
-    font-size: 0.9em;
-    line-height: 1.5;
-    flex-grow: 1;
-}
-
-.card-footer {
-    padding: 12px 16px;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 12px;
-}
-
-.actions-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    flex-shrink: 0;
-}
-
-.quantity-selector {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
-}
-
-.card-footer .price {
-    font-weight: bold;
-    font-size: 1.2em;
-    line-height: 1.2;
-}
-
-.card-footer .price .pricing-type {
-    display: block;
-    font-size: 0.7em;
-    font-weight: normal;
-}
-
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal-overlay.active {
-    display: flex;
-}
-
-.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
-    pointer-events: auto;
-    background: #ffffff;
-    padding: 20px;
-}
-
-.modal-close-btn {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background: none;
-    border: none;
-    font-size: 2em;
-    cursor: pointer;
-    z-index: 1010;
-}
-
-.modal-content {
-    display: flex;
-    flex-direction: row;
-    width: 90%;
-    max-width: 1000px;
-    height: 90vh;
-    max-height: 650px;
-    padding: 0;
-}
-
-.modal-main-column {
-    flex: 6;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #ccc;
-}
-
-.modal-sidebar-column {
-    flex: 4;
-    padding: 30px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-#modal-main-image {
-    flex-grow: 1;
-    background-size: cover;
-    background-position: center;
-}
-
-#modal-thumbnail-strip {
-    flex-shrink: 0;
-    padding: 10px;
-    border-top: 1px solid #ccc;
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-}
-
-.thumbnail-img {
-    width: 80px;
-    height: 60px;
-    background-size: cover;
-    background-position: center;
-    cursor: pointer;
-    border: 2px solid transparent;
-}
-
-.thumbnail-img.active {
-    border-color: blue;
-}
-
-#chat-widget-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1050;
-}
-
-#chat-window {
-    width: 350px;
-    height: 500px;
-    border: 1px solid #ccc;
-    background: white;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    z-index: 1000;
-    visibility: hidden;
-}
-
-#chat-widget-container.chat-open #chat-window {
-    visibility: visible;
-}
-
-#messages-container {
-    flex-grow: 1;
-    padding: 10px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-#message-form {
-    border-top: 1px solid #ccc;
-    padding: 10px;
-    display: flex;
-    gap: 10px;
-}
-
-#message-input {
-    flex-grow: 1;
-}
-
-.message-wrapper {
-    display: flex;
-    flex-direction: column;
-    max-width: 85%;
-}
-.message-wrapper.sent { align-self: flex-end; }
-.message-wrapper.received { align-self: flex-start; }
-
-.hidden {
-    display: none;
-}
-
-#mobile-summary-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #343a40;
-    color: white;
-    display: none;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 15px;
-    z-index: 998;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
-    transition: background-color 0.3s ease;
-}
-#mobile-summary-bar.available { background-color: #28a745; }
-#mobile-summary-bar.partial { background-color: #fd7e14; }
-#mobile-summary-bar.unavailable { background-color: #dc3545; }
-
-#mobile-bar-info {
-    display: flex;
-    flex-direction: column;
-    font-size: 0.9em;
-}
-
-#mobile-bar-total-cost {
-    font-weight: bold;
-    font-size: 1.1em;
-}
-
-#mobile-view-plan-btn, #mobile-show-filters-btn {
-    padding: 10px 20px;
-    font-weight: bold;
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-    border: 1px solid white;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-#mobile-show-filters-btn {
-    display: none;
-    margin-bottom: 20px;
-    width: 100%;
-    background-color: #6c757d;
-    border: none;
-}
-
-@media (max-width: 999px) {
-
-    #left-sidebar, #right-sidebar {
-        max-width: 100%;
-        transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
-        overflow: hidden;
-        max-height: 2000px;
-        opacity: 1;
-    }
+    <div class="main-content">
+<div id="right-sidebar">
+            <div id="event-plan-panel">
+                <div class="event-name-group">
+                    <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
+                </div>
+                <div class="toolbar-group">
+                    <label for="header-goals">Goals / Notes</label>
+                    <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
+                </div>
+                <div class="toolbar-group">
+                    <label for="event-date-picker">Event Date</label>
+                    <input type="text" id="event-date-picker" placeholder="Select date">
+                </div>
+     
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                
+                <div id="favorites-section">
+                    <div class="sidebar-header-group">
+                        <h4>Ideas</h4>
+                        <button class="present-btn" data-list-type="favorites" title="Present Ideas">▶️</button>
+                    </div>
+                    <div id="favorites-carousel-wrapper" style="position: relative;">
+                        <button class="carousel-nav left">◄</button>
+                        <div id="favorites-carousel"></div>
+                        <button class="carousel-nav right">►</button>
+                    </div>
+                </div>
+                <div class="sidebar-header-group">
+                    <button id="itinerary-btn">Event Plan <span class="caret">▼</span></button>
+                    <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
+                </div>
     
-    #left-sidebar.collapsed, #right-sidebar.collapsed {
-        max-height: 0;
-        opacity: 0;
-        margin: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-    }
+                <div id="cart-items-container">
+                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                </div>
+                <div id="cart-footer">
+                    <div id="total-breakdown">
+                        <div class="total-row subtotal-row">
+                            <span>Subtotal:</span>
+                            <span id="subtotal-cost">$0.00</span>
+                        </div>
+                        <div class="total-row amount-paid-row" style="display: none;">
+                            <span>Amount Paid:</span>
+                            <span id="amount-paid-cost">$0.00</span>
+                        </div>
+                        <hr class="total-divider" style="display: none;">
+                        <div class="total-row final-total-row">
+                            <strong>Total Due:</strong>
+                            <strong id="total-cost">$0.00</strong>
+                        </div>
+                    </div>
+                    <button id="checkout-btn" disabled data-tooltip="Add items to enable checkout">Reserve</button>
+                    <button id="save-share-btn" disabled data-tooltip="Add items or details to enable sharing">🔗 Copy Link</button>
+                </div>
+           </div>
+        </div>
+        
+        <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
+        
+        <div id="left-sidebar">
+            <div id="filter-controls" data-active-filters="0">
+                <h3>Filters</h3>
+                <div class="filter-group">
+                    <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+                </div>
+                   <div class="filter-group">
+                    <label>Categories</label>
+                    <div id="category-filters" class="filter-btn-group"></div>
+                </div>
+                    <div class="filter-group">
+                    <label>Subcategories</label>
+                       <div id="subcategory-filters" class="filter-btn-group" style="min-height: 20px;"></div>
+                </div>
+                    <div id="date-filter-group" class="filter-group">
+                    <label for="date-filter">Date & Time</label>
+                    <input type="text" id="date-filter" placeholder="Select date and time range">
+                    <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
+                        <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
+                        <button class="filter-btn" data-date-quick="this-week">This Week</button>
+                        <button class="filter-btn" data-date-quick="next-2-weeks">Next 2 Weeks</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label for="headcount-filter">Headcount</label>
+                    <select id="headcount-filter">
+                        <option value="any">Any Size</option>
+                        <option value="1-10">1-10</option>
+                        <option value="11-25">11-25</option>
+                        <option value="26-50">26-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-250">101-250</option>
+                        <option value="250-plus">250+</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    <input type="number" id="headcount-custom" placeholder="Enter headcount" min="1" style="display: none;" autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label for="location-filter">Location</label>
+                    <select id="location-filter">
+                        <option value="any">Any Location</option>
+                        <option value="sf">San Francisco</option>
+                        <option value="oakland">Oakland</option>
+                        <option value="peninsula">Peninsula</option>
+                        <option value="south-bay">South Bay</option>
+                        <option value="north-bay">North Bay</option>
+                        <option value="east-bay">East Bay</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="budget-filter">Budget</label>
+                    <select id="budget-filter">
+                        <option value="any">Any Budget</option>
+                        <option value="budget-friendly">Budget-Friendly</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="executive">Executive</option>
+                        <option value="luxury">Luxury</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter">
+                        <option value="Available">Available</option>
+                        <option value="all">Show All</option>
+                        <option value="Coming Soon">Coming Soon</option>
+                        <option value="Sold Out">Sold Out</option>
+                    </select>
+                </div>
+                <button id="reset-filters-btn">Reset All Filters</button>
+            </div>
+        </div>
+        
+        <div id="catalog-area">
+            <div id="catalog-header">
+                <div id="breadcrumbs"></div>
+                <h2 id="catalog-title"></h2>
+            </div>
+            <div id="catalog-toolbar">
+                <select id="sort-by">
+                    <option value="price-asc">Price (Low to High)</option>
+                    <option value="price-desc">Price (High to Low)</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                </select>
+            </div>
+            <div id="catalog-container"></div>
+        </div>
+    </div>
 
-    #mobile-summary-bar, #mobile-show-filters-btn {
-        display: flex;
-    }
+    <div id="detail-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="modal-main-column">
+                <div id="modal-main-image"></div>
+                <div id="modal-thumbnail-strip"></div>
+            </div>
+<div class="modal-sidebar-column">
+                <div id="modal-header-actions"></div>
 
-    #mobile-show-filters-btn {
-        position: sticky;
-        top: 75px;
-        z-index: 999;
-    }
+                <div id="modal-breadcrumbs"></div>
+
+                <h2 id="modal-item-name"></h2>
+
+                <p id="modal-item-price" class="price"></p>
+
+                <p id="modal-item-description"></p>
+
+                <div id="modal-options-container"></div>
+
+                <div id="modal-quantity-selector"></div>
+
+                <div id="modal-calendar-container" style="margin-bottom: 20px;"></div> <div id="modal-notes-container">
+                    <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
+                </div>
+
+                <div id="modal-actions-container">
+                    <button id="modal-add-to-plan-btn" class="primary-action-btn" data-tooltip="Select options to add to plan">Add to Plan</button>
+                </div>
+
+                <div id="modal-additional-details" class="details-section">
+                    </div>
+
+                <div id="modal-chat-container">
+                  <h4>Item Chat</h4>
+                  <div id="messages-list-item" class="messages-list"></div>
+                  <form id="message-form-item">
+                    <input type="text" id="message-input-item" placeholder="Type a message..." autocomplete="off">
+                    <button type="submit">Send</button>
+                  </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
     
-    .presentation-body {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .presentation-nav-arrow {
-        background: rgba(0,0,0,0.4);
-        width: 32px;
-        height: 32px;
-        font-size: 16px;
-    }
-
-    #mobile-summary-bar {
-        transform: translateY(100%);
-        transition: transform 0.3s ease-in-out;
-    }
+    <div id="checkout-modal-overlay" class="modal-overlay">
+        <div class="checkout-modal-content">
+            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3>Checkout Summary</h3>
+            <div id="checkout-summary-details">
+                <p>This is a summary of the items in your plan.</p>
+            </div>
+            <hr>
+            <div class="checkout-total-deposit-section">
+                <div class="checkout-total">
+                    <span>Total Estimated Cost:</span>
+                    <span id="checkout-total-label">Total Estimated Cost:</span>
+                    <span id="full-total-price">$0.00</span>
+                </div>
+                <div class="tip-row">
+                    <label for="tip-amount">Add Tip:</label>
+                    <input type="number" id="tip-amount" placeholder="$0.00" min="0" step="0.01">
+                </div>
+                <div class="checkout-deposit">
+                    <span id="deposit-label">Amount Due Today:</span>
+                    <span id="deposit-price">$0.00</span>
+                </div>
+            </div>
+            <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+                <h4 style="margin-top: 0;">Payment Option</h4>
+                <div style="display: flex; justify-content: space-around;">
+                    <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
+                    <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
+                </div>
+            </div>
+            <div class="terms-and-conditions"></div>
+            <form id="payment-form">
+                <div class="form-row">
+                    <label for="customer-name">Full Name</label>
+                    <input type="text" id="customer-name" required autocomplete="cc-name">
+                </div>
+                <div class="form-row">
+                    <label for="customer-email">Email Address</label>
+                    <input type="email" id="customer-email" required autocomplete="email">
+                </div>
+                <div class="form-row">
+                    <label for="card-element">Credit or debit card</label>
+                    <div id="card-element"></div>
+                    <div id="card-errors" role="alert"></div>
+                </div>
+                <button id="payment-submit-btn" class="primary-action-btn" type="submit">
+                    <span class="button-text">Pay Now</span>
+                    <span class="spinner" style="display: none;">Processing...</span>
+                </button>
+            </form>
+            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
+                <h3 style="color: #28a745;">✅ Payment Successful!</h3>
+                <p>Your items are reserved. This window will close shortly.</p>
+            </div>
+        </div>
+    </div>
     
-    body.mobile-bar-active #mobile-summary-bar {
-        transform: translateY(0);
-    }
+    <div id="itinerary-modal-overlay" class="modal-overlay">
+        <div class="modal-content itinerary-content">
+            <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="itinerary-modal-header">
+                <div class="itinerary-header-item">
+                    <label for="itinerary-event-name">Event Name</label>
+                   <input type="text" id="itinerary-event-name" value="Enter Event Name" autocomplete="off">
+                </div>
+                <div class="itinerary-header-item">
+                    <label for="itinerary-goals">Goals / Notes</label>
+                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
+                </div>
+                <div class="itinerary-header-item">
+                    <label for="itinerary-date-picker">Date & Time</label>
+                    <input type="text" id="itinerary-date-picker" placeholder="Select date range">
+                </div>
+            </div>
+            <div class="itinerary-container">
+                <div class="itinerary-column">
+                    <h3>Event Plan</h3>
+                    <p class="description">Drag items to change their order.</p>
+                    <div id="itinerary-locked-items" class="itinerary-list"></div>
+                </div>
+                <div class="itinerary-column">
+                    <h3>Ideas</h3>
+                    <p class="description">Move items here to add them to your plan.</p>
+                    <div id="itinerary-favorited-items" class="itinerary-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-widget-container">
+        <button id="chat-toggle-button">
+            💬
+            <span id="presence-counter">0</span>
+        </button>
+        <div id="chat-window">
+            <div id="chat-header">
+               <p>Session Chat (<span id="whos-here-count">0</span>)</p>
+                <div class="user-identity">
+                   <label for="chat-user-name">Your Name:</label>
+                    <input type="text" id="chat-user-name" autocomplete="off">
+                </div>
+                <div class="chat-options">
+                    <input type="checkbox" id="chat-remain-open-checkbox">
+                    <label for="chat-remain-open-checkbox">Keep open</label>
+                </div>
+            </div>
+            <div id="whos-here-list"></div>
+            <div id="messages-container">
+                <div id="messages-list"></div>
+            </div>
+            <div id="typing-indicator"></div>
+            <form id="message-form">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <button type="submit">Send</button>
+            </form>
+        </div>
+    </div>
     
-    body.mobile-bar-active #chat-widget-container {
-        bottom: 75px;
-        transition: bottom 0.3s ease-in-out;
-    }
-}
-@media (max-width: 999px) {
-    #mobile-filter-trigger {
-        display: flex;
-        width: 100%;
-        position: sticky;
-        top: 75px;
-        z-index: 998;
-        background-color: #6c757d;
-        color: white;
-        padding: 15px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 1em;
-        font-weight: bold;
-        margin-bottom: 15px;
-    }
+    <div id="presentation-modal-overlay" class="modal-overlay">
+        <div class="presentation-content">
+            <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="presentation-summary-header">
+                <div class="summary-item"><strong>Event:</strong> <span id="summary-event-name"></span></div>
+                <div class="summary-item"><strong>Notes:</strong> <span id="summary-event-notes"></span></div>
+                <div class="summary-item"><strong>Date:</strong> <span id="summary-event-date"></span></div>
+                <div class="summary-links">
+                    <button id="summary-ideas-link" class="summary-link-btn"></button>
+                    <button id="summary-locked-link" class="summary-link-btn"></button>
+                </div>
+            </div>
+            <div class="presentation-header">
+                <h2 id="presentation-title"></h2>
+                <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
+                <span id="presentation-counter"></span>
+            </div>
+            <div class="presentation-body">
+                <div id="presentation-gallery-column">
+                    <div id="presentation-main-image"></div>
+                    <div id="presentation-thumbnail-strip"></div>
+                </div>
+                <div id="presentation-details-column">
+                    <h3 id="presentation-item-name"></h3>
+                    <p id="presentation-item-price"></p>
+                    <p id="presentation-item-description"></p>
+                    <div id="presentation-item-options"></div>
+                    <div id="presentation-reactions">
+                        <div id="reaction-buttons" class="reaction-bar-buttons"></div>
+                        <div id="reaction-summary" class="reaction-summary-display"></div>
+                    </div>
+                    <div id="presentation-item-note-container">
+                        <h4>Note:</h4>
+                        <p id="presentation-item-note"></p>
+                    </div>
+                </div>
+            </div>
+            <button class="presentation-nav-arrow up" id="presentation-prev-item-btn" title="Previous Item (Up Arrow)">▲</button>
+            <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
+        </div>
+    </div>
 
-    .caret {
-        transition: transform 0.3s ease;
-    }
+    <div id="user-modal-overlay" class="modal-overlay">
+        <div class="checkout-modal-content" style="max-width: 400px;">
+            <button id="user-modal-close-btn" class="modal-close-btn" title="Close">×</button>
+        <div id="signin-view">
+            <h3>Sign In or Create Account</h3>
+            <p>Enter your email to sign in. Once logged in, your plans are saved to your account automatically!</p>
+            <form id="signin-form">
+               <div class="form-row">
+                    <label for="signin-email">Email Address</label>
+                    <input type="email" id="signin-email" required autocomplete="email">
+                </div>
+                <button class="primary-action-btn" type="submit">Send Magic Link</button>
+            </form>
+            <p id="signin-message"></p>
+        
+            <div class="sso-divider">
+                <span>OR</span>
+            </div>
+            <button id="google-sso-btn" class="sso-btn">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;"><path d="M16.51 8.1H9.18V11.16H13.25C13.04 12.56 12.08 13.81 10.63 14.73V16.88H13.01C15.13 15.01 16.51 11.9 16.51 8.1Z" fill="#4285F4"></path><path d="M9.18 17.5C11.59 17.5 13.6 16.7 15.01 15.38L12.63 13.73C11.85 14.28 10.63 14.69 9.18 14.69C6.93 14.69 5.02 13.25 4.3 11.25H1.83V13.38C3.25 15.88 6.09 17.5 9.18 17.5Z" fill="#34A853"></path><path d="M4.3 11.25C4.12 10.75 4.03 10.21 4.03 9.63C4.03 9.05 4.12 8.51 4.3 8.01V5.88H1.83C1.09 7.22 0.63 8.63 0.63 10.13C0.63 11.63 1.09 13.04 1.83 14.38L4.3 11.25Z" fill="#FBBC05"></path><path d="M9.18 4.5C10.51 4.5 11.68 4.97 12.68 5.88L15.08 3.48C13.6 2.09 11.59 1.5 9.18 1.5C6.09 1.5 3.25 3.12 1.83 5.62L4.3 7.75C5.02 5.75 6.93 4.5 9.18 4.5Z" fill="#EA4335"></path></svg>
+                Sign In with Google
+            </button>
+            </div>
 
-    .collapsed .caret {
-        transform: rotate(-90deg);
-    }
-}
-@media (max-width: 999px) {
-    .presentation-body {
-        display: flex;
-        flex-direction: column;
-    }
+            <div id="profile-view" style="display: none;">
+                <h3>My Account</h3>
+                <form id="user-prefs-form">
+                    <div class="profile-details">
+                        <p><strong>Name:</strong> <span id="profile-name"></span></p>
+                        <p><strong>Email:</strong> <span id="profile-email"></span></p>
+                        <div class="form-row" style="margin-top: 20px; display: none;">
+                            <label for="profile-phone">Phone Number (for SMS alerts)</label>
+                            <input type="tel" id="profile-phone" autocomplete="tel" placeholder="(555) 123-4567">
+                        </div>
+                        <div class="form-row">
+                            <label for="profile-notifications">Email Notifications</label>
+                            <select id="profile-notifications">
+                                <option value="Real-Time">On</option>
+                                <option value="None">Off</option>
+                            </select>
+                        </div>
+                        <button class="primary-action-btn" type="submit" style="margin-top: 15px;">Save Preferences</button>
+                        <p id="prefs-message" style="margin-top: 10px; min-height: 1em;"></p>
+                        <a href="#" id="owner-dashboard-link" class="primary-action-btn" style="display: none; margin-top: 15px; text-align: center; text-decoration: none; background-color: #555;">Store Dashboard</a>
+                    </div>
+                </form>
+                <hr>
+                <button id="signout-btn" class="primary-action-btn" style="background-color: #dc3545;">Sign Out</button>
+            </div>
+        </div>
+    </div>
 
-    .presentation-nav-arrow {
-        background: rgba(0,0,0,0.4);
-        width: 32px;
-        height: 32px;
-        font-size: 16px;
-    }
-}
+    <div class="footer-link">
+        <a href="/crm-login.html">Admin Dashboard</a>
+    </div>
+  
+    <div id="shop-switcher-overlay" class="modal-overlay">
+        <div class="checkout-modal-content" style="max-width: 500px;">
+            <button id="shop-switcher-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3>Select a Shop</h3>
+            <div id="shop-list-container"></div>
+        </div>
+    </div>
 
-#plan-filter-btn {
-    background-color: #f0f8ff;
-    font-weight: bold;
-}
+    <div id="mobile-summary-bar">
+        <div id="mobile-bar-info">
+            <span id="mobile-bar-item-count">0 items</span>
+            <span id="mobile-bar-total-cost">$0.00</span>
+        </div>
+        <button id="mobile-view-plan-btn">View Plan</button>
+    </div>
+        
+    <script type="module" src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
-#plan-filter-btn.active {
-    background-color: #cce5ff;
-    border-color: #007bff;
-}
-
-#catalog-title {
-    font-size: 1.5em;
-    font-weight: bold;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #dee2e6;
-    display: none;
-}
-
-.event-type-card .event-card-content {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 15px;
-}
-
-.event-date-display {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    text-align: center;
-    padding: 10px;
-    min-width: 70px;
-}
-
-.event-date-display .month {
-    display: block;
-    font-size: 0.8em;
-    font-weight: bold;
-    color: #dc3545;
-}
-
-.event-date-display .day {
-    display: block;
-    font-size: 1.8em;
-    font-weight: bold;
-    color: #343a40;
-    line-height: 1.1;
-}
-
-.event-details {
-    flex-grow: 1;
-}
-
-.event-details h3 {
-    margin-top: 0;
-}
-
-.collage-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    height: 200px;
-}
-
-.collage-image {
-    width: 100%;
-    height: 100%;
-    background-size: cover;
-    background-position: center;
-}
-
-.grouping-card .card-footer {
-    justify-content: center;
-}
-
-@media (max-width: 768px) {
-    .modal-content {
-        flex-direction: column;
-        height: 95vh;
-        width: 95vw;
-        max-height: none;
-    }
-
-    .modal-main-column {
-        flex: 1;
-        min-height: 250px;
-        border-right: none;
-        border-bottom: 1px solid #eee;
-    }
-
-    .modal-sidebar-column {
-        flex: 1;
-        padding: 20px;
-    }
-
-    #modal-thumbnail-strip {
-        padding: 8px;
-    }
-
-    .thumbnail-img {
-        width: 65px;
-        height: 50px;
-    }
-}
-
-.sso-divider {
-    display: flex;
-    align-items: center;
-    text-align: center;
-    margin: 20px 0;
-    color: #aaa;
-    font-size: 0.8em;
-    text-transform: uppercase;
-}
-.sso-divider::before, .sso-divider::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid #eee;
-}
-.sso-divider:not(:empty-्_)::before {
-    margin-right: .5em;
-}
-.sso-divider:not(:empty-्_)::after {
-    margin-left: .5em;
-}
-
-.sso-btn {
-    width: 100%;
-    padding: 12px;
-    font-size: 1em;
-    font-weight: 500;
-    border-radius: 5px;
-    cursor: pointer;
-    border: 1px solid #ccc;
-    background-color: #fff;
-    color: #333;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
-}
-
-.sso-btn:hover {
-    background-color: #f8f8f8;
-}
-
-#breadcrumbs {
-    font-size: 0.9em;
-    color: #6c757d;
-    margin-bottom: 8px;
-    padding: 5px 0;
-}
-
-#breadcrumbs a.breadcrumb-link {
-    color: #007bff;
-    text-decoration: none;
-}
-
-#breadcrumbs a.breadcrumb-link:hover {
-    text-decoration: underline;
-}
-
-#breadcrumbs span {
-    font-weight: bold;
-    color: #343a40;
-}
-
-.price-original {
-    font-size: 0.8em;
-    color: #6c757d;
-    font-style: italic;
-    margin-left: 5px;
-}
-
-.price-editor {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.price-editor label {
-    font-size: 0.8em;
-    color: #6c757d;
-}
-
-.price-override-input {
-    width: 70px;
-    padding: 4px;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    text-align: right;
-}
-
-.itinerary-content {
-    display: flex;
-    flex-direction: column;
-}
-
-.itinerary-container {
-    flex-grow: 1;
-    min-height: 0;
-}
-
-.itinerary-column {
-    display: flex;
-    flex-direction: column;
-}
-
-.itinerary-list {
-    overflow-y: auto;
-    flex-grow: 1;
-    padding: 5px;
-}
-
-#checkout-summary-details li {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.summary-item-details {
-    display: flex;
-    flex-direction: column;
-    padding-right: 10px;
-}
-
-.checkout-summary-note {
-    font-size: 0.8em;
-    color: #6c757d;
-    font-style: italic;
-    margin-top: 4px;
-}
-
-.itinerary-item-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-left: auto;
-    flex-shrink: 0;
-}
-
-#marquee-banner-container {
-    background-color: #e9ecef;
-    color: #495057;
-    padding: 6px 0;
-    overflow: hidden;
-    white-space: nowrap;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
-    border-top: 1px solid #dee2e6;
-    border-bottom: 1px solid #dee2e6;
-}
-
-#marquee-text {
-    display: inline-block;
-    padding-left: 100%;
-    animation: marquee-scroll 25s linear infinite;
-    font-size: 0.9em;
-    font-weight: 500;
-}
-
-@keyframes marquee-scroll {
-    0%   { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
-}
-
-#marquee-banner-container:hover #marquee-text {
-    animation-play-state: paused;
-}
-
-#modal-additional-details {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    padding-top: 15px;
-    border-top: 1px solid #eee;
-    font-size: 0.9em;
-    color: #495057;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-}
-
-.detail-item {
-    line-height: 1.5;
-}
-
-.detail-label {
-    display: block;
-    font-weight: 600;
-    color: #343a40;
-    margin-bottom: 3px;
-    font-size: 0.85em;
-    text-transform: uppercase;
-}
-
-.detail-value {
-    /* Style for the value text */
-}
-
-.ranking-list {
-    grid-column: 1 / -1;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 5px;
-}
-
-.ranking-item {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 15px;
-    padding: 3px 10px;
-    font-size: 0.85em;
-    white-space: nowrap;
-}
-
-.ranking-label {
-    /* Style for the ranking name (e.g., "Fun") */
-}
-
-.ranking-stars {
-    color: #ffc107;
-    margin-left: 5px;
-    font-size: 1.1em;
-}
-
-/* --- MODIFIED: Added Frosted Glass Effect --- */
-#event-plan-panel {
-    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent */
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px); /* For Safari */
-    border: 1px solid rgba(255, 255, 255, 0.2); /* Lighter border */
-}
-
-
-@keyframes gradientAnimation {
-    0% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    100% {
-        background-position: 0% 50%;
-    }
-}
+</body>
+</html>
