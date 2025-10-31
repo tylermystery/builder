@@ -63,12 +63,16 @@ const fsSource = `
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
-        // 5. Create the "tie-dye" colors
-        // Use sine waves with phase shifts for rich, adjacent, earthy colors
-        float base_wave = n * 5.0 + u_time * 0.4; // More swirls, slightly slower pulse
-        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.5); // Rich Red/Orange
-        float g = pow(sin(base_wave + 0.6) * 0.5 + 0.5, 1.8); // Rich Yellow/Olive
-        float b = pow(sin(base_wave + 1.2) * 0.5 + 0.5, 2.2); // Richer/Darker Green/Teal/Blue
+        // 5. Create the "full spectrum" colors (Standard HSL color cycling)
+        float base_wave = n * 5.0 + u_time * 0.4; // Same base wave for swirl
+        // Use major phase shifts (approx 120 degrees) to cycle through R, G, B
+        // Retain the 'pow' function to keep the colors rich and deep (less bright/pastel)
+        const float PI_OVER_3 = 1.04719755; // 60 degrees (pi/3)
+        const float PI_2_OVER_3 = 2.0943951; // 120 degrees (2pi/3)
+
+        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.5); 
+        float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.8);
+        float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 2.2);
         
         // 6. Final color with a vignette (darker edges)
         float vignette = 1.0 - (radius * 0.8);
