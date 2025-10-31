@@ -9,7 +9,8 @@ import windEffect from './components/effects/wind.js';
 import waterEffect from './components/effects/water.js';
 import fractalEffect from './components/effects/fractal.js';
 
-// --- DOM Elements ---\nconst userModalOverlay = document.getElementById('user-modal-overlay');
+// --- DOM Elements ---
+const userModalOverlay = document.getElementById('user-modal-overlay');
 const userModalCloseBtn = document.getElementById('user-modal-close-btn');
 const signinView = document.getElementById('signin-view');
 const profileView = document.getElementById('profile-view');
@@ -41,7 +42,8 @@ async function _handleSuccessfulLogin(payload) {
 
     localStorage.setItem('jwt', payload.token);
 
-    // --- MOVED STATE UPDATE HERE ---\n    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    // --- MOVED STATE UPDATE HERE ---
+    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
     setState({
         session: {
             ...state.session,
@@ -56,7 +58,10 @@ async function _handleSuccessfulLogin(payload) {
         }
     });
     console.log("[Auth] User state set immediately after login:", state.session.user);
-    // --- END MOVED STATE UPDATE ---\n\n    // --- START LIKES SYNC (Now runs *after* state is updated) ---\n    const currentLikedItemIds = state.session.user.likedItemIds;
+    // --- END MOVED STATE UPDATE ---
+
+    // --- START LIKES SYNC (Now runs *after* state is updated) ---
+    const currentLikedItemIds = state.session.user.likedItemIds;
     let syncPromises = [];
     const tempLikesString = localStorage.getItem('tempLikes');
     if (tempLikesString) {
@@ -86,7 +91,9 @@ async function _handleSuccessfulLogin(payload) {
              console.log('[Auth] Cleared temporary likes from localStorage.');
         }
     }
-    // --- END LIKES SYNC ---\n\n    await Promise.allSettled(syncPromises);
+    // --- END LIKES SYNC ---
+
+    await Promise.allSettled(syncPromises);
     console.log('[Auth] Like sync process finished.');
     
     console.log("[Auth] Final user state after sync:", state.session.user);
@@ -215,7 +222,8 @@ async function handleSignIn(e) {
     }
 }
 
-// --- THIS FUNCTION IS UPDATED ---\async function handleUpdateUserPrefs(e) {
+// --- THIS FUNCTION IS UPDATED ---
+async function handleUpdateUserPrefs(e) {
     e.preventDefault();
     prefsMessage.textContent = 'Saving...';
     prefsMessage.style.color = '#333';
@@ -318,7 +326,8 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- NEW SSO EVENT LISTENERS ---\n    const googleSsoBtn = document.getElementById('google-sso-btn');
+    // --- NEW SSO EVENT LISTENERS ---
+    const googleSsoBtn = document.getElementById('google-sso-btn');
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
             netlifyIdentity.open('login');
@@ -348,4 +357,5 @@ export function setupAuthEventListeners() {
             signinMessage.style.color = '#dc3545';
         }
     });
-    // --- END NEW SSO EVENT LISTENERS ---\n}
+    // --- END NEW SSO EVENT LISTENERS ---
+}
