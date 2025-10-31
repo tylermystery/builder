@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js'; // <-- UPDATED
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -14,9 +14,6 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-// --- THIS IS THE FIX ---
-// This new function safely closes the modal by updating the URL state
-// and then hiding the UI, instead of using history.back().
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -33,7 +30,6 @@ function handleOverlayClick(event) {
         closeDetailModal();
     }
 }
-
 function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
@@ -44,12 +40,11 @@ function updateCheckoutDisplay() {
     // Determine if this is an INITIAL DEPOSIT payment
     const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
     
-    // --- Tip Visibility Logic ---
+    // --- Tip Visibility Logic (Revised) ---
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
-        // Only allow tips if paying in full (either first time or remainder)
-        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { // Assuming deposit is less than full amount
-            // Hiding tip if user explicitly selects 'deposit' and deposit is less than full amount
+        // Only allow tips if the payment is NOT an initial deposit (i.e., paying remainder or paying in full)
+        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { 
             tipRow.style.display = 'none';
         } else {
             tipRow.style.display = 'flex';
@@ -97,7 +92,7 @@ function resetModalState() {
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalAdditionalDetails: document.getElementById('modal-additional-details') // ADD THIS
+        modalAdditionalDetails: document.getElementById('modal-additional-details')
     };
     for (const key in elements) {
         if (elements[key]) {
@@ -109,21 +104,16 @@ function resetModalState() {
     log('Modal', 'Reset modal state.');
 }
 
-// REPLACE the entire showDetailModal function in: components/modal.js
-
 export async function showDetailModal(record, startPhotoIndex = 0) {
-    // --- Detail Configuration (Only non-ranking fields now) ---
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
         { fieldName: 'Location Details', label: 'Location Info' },
         { fieldName: 'Additional Information', label: 'Good to Know' },
-        // Add more *non-ranking* fields here following the pattern
     ];
-    // --- Ranking Specs array is REMOVED ---
 
     console.log('[showDetailModal] Called for item:', record.id);
-    log('Modal', `Showing detail modal for \\\"${record.fields.Name}\\\"`);
+    log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
@@ -141,7 +131,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
-    console.log('[hideDetailModal] Called.'); // Note: This log seems misplaced, but keeping as per original
+    console.log('[hideDetailModal] Called.'); 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
@@ -166,14 +156,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // --- UPDATED: POPULATE ADDITIONAL DETAILS (Handles JSON Rankings) ---
     if (modalAdditionalDetails) {
-        modalAdditionalDetails.innerHTML = ''; // Clear previous details
+        modalAdditionalDetails.innerHTML = '';
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
         const rankingsHtmlParts = [];
 
         console.log('[Modal Debug] Record Fields:', record.fields);
 
-        // 1. Process standard details (Same as before)
+        // 1. Process standard details
         console.log('[Modal Debug] Processing Standard Details...');
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
@@ -194,23 +184,20 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         // 2. Process Rankings from JSON field
         console.log('[Modal Debug] Processing JSON Rankings...');
-        const rankingsJsonString = record.fields['Rankings']; // Get the JSON string
+        const rankingsJsonString = record.fields['Rankings'];
         console.log(`[Modal Debug]   - Found Rankings JSON String:`, rankingsJsonString);
         if (rankingsJsonString) {
             try {
                 const rankingsObject = JSON.parse(rankingsJsonString);
                 console.log(`[Modal Debug]   - Parsed Rankings Object:`, rankingsObject);
 
-                // Iterate through the key-value pairs in the parsed object
                 for (const label in rankingsObject) {
                     if (Object.hasOwnProperty.call(rankingsObject, label)) {
                         const value = rankingsObject[label];
                         console.log(`[Modal Debug]     - Checking Ranking: \"${label}\", Value:`, value, `(Type: ${typeof value})`);
 
-                        // Check if value is a number greater than 0
                         if (typeof value === 'number' && value > 0) {
                             hasRankings = true;
-                            // Create star rating string (assuming a max of 5 stars)
                             const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
                             rankingsHtmlParts.push(`
                                 <div class="ranking-item">
@@ -227,7 +214,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             } catch (error) {
                 console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
                 console.error(`[Modal Debug] Invalid JSON string was:`, rankingsJsonString);
-                // Optionally display an error message in the UI
                 const errorItem = document.createElement('div');
                 errorItem.className = 'detail-item';
                 errorItem.innerHTML = `<span class="detail-label">Rankings</span><span class="detail-value" style="color: red;">Error loading rankings</span>`;
@@ -251,22 +237,19 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
              console.log('[Modal Debug] No valid rankings found to display.');
         }
 
-        modalAdditionalDetails.appendChild(fragment); // Add all details to the DOM
+        modalAdditionalDetails.appendChild(fragment);
         console.log('[Modal Debug] Finished populating #modal-additional-details.');
     } else {
         console.error('[Modal Debug] CRITICAL: #modal-additional-details element not found!');
     }
     // --- END UPDATED DETAILS POPULATION ---
 
-    // ... (rest of the showDetailModal function remains the same) ...
-    // Price calculation, image gallery, options, quantity, calendar, chat init, etc.
-
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -295,7 +278,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\"parent-link\" data-parent-name=\"${name}\" title=\"Go to ${name}\">${name}</a>`).join(' > ');
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
     }
 
     const heartBtnContainer = document.createElement('div');
@@ -317,7 +300,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -354,7 +337,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -367,11 +350,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
 
 // --- Calendar Initialization (with conditional display) ---
-    modalCalendarContainer.innerHTML = ''; // Clear previous calendar
-    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]; // Get iCal URL
+    modalCalendarContainer.innerHTML = '';
+    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
     if (iCalUrl) {
-        modalCalendarContainer.style.display = 'block'; // Show container if URL exists
+        modalCalendarContainer.style.display = 'block';
         log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
 
         const busyTimes = await api.fetchCalendarForRecord(record);
@@ -420,7 +403,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             calendarInstance.setDate(new Date(eventDate), true);
         }
     } else {
-        modalCalendarContainer.style.display = 'none'; // Hide container if no URL
+        modalCalendarContainer.style.display = 'none';
         log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
     }
     // --- End Calendar Logic ---
@@ -458,10 +441,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
-    // --- THIS IS THE FIX ---
-    // This function now ONLY handles the UI. It no longer touches the URL.
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = null; // Remove the listener
+    closeBtn.onclick = null;
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
     if (currentItemChatRecordId) {
@@ -477,7 +458,6 @@ export function hideDetailModal() {
         }, 300);
         document.body.classList.remove('modal-open');
     }
-    // --- END FIX ---
 }
 
 export async function showCheckoutModal(shopSettings) {
@@ -490,16 +470,24 @@ export async function showCheckoutModal(shopSettings) {
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
-
+    
     // --- NEW LOGIC START ---
-    // Dynamically set the total cost label based on payment history
     const totalLabel = document.getElementById('checkout-total-label');
+    const amountPaidRowEl = document.getElementById('checkout-amount-paid-row'); // Get the new element
+    const amountPaidEl = document.getElementById('checkout-amount-paid'); // Get the new element
+
     if (totalLabel) {
-        if (state.session.user.amountReceived > 0) {
-            totalLabel.textContent = 'Total Final Cost:';
-        } else {
-            totalLabel.textContent = 'Total Estimated Cost:';
-        }
+        // Dynamically set the total cost label based on payment history
+        totalLabel.textContent = 'Total Estimated Cost:';
+    }
+
+    // Initialize Amount Paid Row
+    const amountReceived = state.session.user.amountReceived || 0;
+    if (amountReceived > 0) {
+        if (amountPaidRowEl) amountPaidRowEl.style.display = 'flex';
+        if (amountPaidEl) amountPaidEl.textContent = `-$${amountReceived.toFixed(2)}`;
+    } else {
+        if (amountPaidRowEl) amountPaidRowEl.style.display = 'none';
     }
     // --- NEW LOGIC END ---
 
@@ -526,10 +514,7 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        // --- THIS IS THE FIX ---
-        // Use the overridePrice if it exists, otherwise fall back to the calculated price.
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-        // --- END FIX ---
 
         const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
@@ -554,7 +539,7 @@ export async function showCheckoutModal(shopSettings) {
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
-    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+    if (currentShopSettings.paymentOptions === 'DepositOrFull' && amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.addEventListener('change', updateCheckoutDisplay);
