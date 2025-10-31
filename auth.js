@@ -29,15 +29,20 @@ import fractalEffect from './components/effects/fractal.js';
 // --- DEBUG ---
 console.log('[auth.js] 1e. Importing psychedelicEffect.js...');
 // --- DEBUG ---
-import psychedelicEffect from './components/effects/psychedelic.js'; // <-- NEW IMPORT
+import psychedelicEffect from './components/effects/psychedelic.js';
+// --- DEBUG ---
+console.log('[auth.js] 1f. Importing vortexEffect.js...'); // <-- NEW
+// --- DEBUG ---
+import vortexEffect from './components/effects/vortex.js'; // <-- NEW
 // --- DEBUG ---
 console.log('[auth.js] 2. All effect plugins imported.');
 // --- DEBUG ---
 
+
 // --- DOM Elements ---
 const userModalOverlay = document.getElementById('user-modal-overlay');
+// ... (rest of DOM elements) ...
 const userModalCloseBtn = document.getElementById('user-modal-close-btn');
-// ... (rest of DOM elements are the same) ...
 const signinView = document.getElementById('signin-view');
 const profileView = document.getElementById('profile-view');
 const signinForm = document.getElementById('signin-form');
@@ -54,7 +59,8 @@ const prefsMessage = document.getElementById('prefs-message');
 
 // --- List of available background effects ---
 const effects = [
-    { name: "Psychedelic Flow", plugin: psychedelicEffect }, // <-- NEW EFFECT ADDED
+    { name: "Color Vortex", plugin: vortexEffect }, // <-- NEW
+    { name: "Psychedelic Flow", plugin: psychedelicEffect },
     { name: "Kaleidoscope", plugin: kaleidoscopeEffect },
     { name: "Wind", plugin: windEffect },
     { name: "Water", plugin: waterEffect },
@@ -65,7 +71,7 @@ const effects = [
 console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
 // --- DEBUG ---
 
-// ... (rest of _handleSuccessfulLogin function is the same) ...
+// ... (rest of _handleSuccessfulLogin is the same) ...
 async function _handleSuccessfulLogin(payload) {
     if (state.session.id) {
         await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
@@ -137,6 +143,7 @@ async function _handleSuccessfulLogin(payload) {
     hideUserModal();
 }
 
+
 export function showUserModal() {
     // --- DEBUG ---
     console.log('[auth.js] showUserModal() called.');
@@ -180,10 +187,7 @@ export function showUserModal() {
     }
     // --- DEBUG ---
 
-    // --- THIS IS THE FIX ---
-    // We check childElementCount, which is 0, instead of innerHTML, which was " ".
     if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
-    // --- END FIX ---
         // --- DEBUG ---
         console.log('[auth.js] IF condition PASSED. Populating dropdown.');
         // --- DEBUG ---
@@ -207,7 +211,7 @@ export function showUserModal() {
             }
         });
         
-        // Load the default effect (Psychedelic Flow) initially
+        // Load the default effect (Color Vortex) initially
         // --- DEBUG ---
         if (effects.length > 0 && effects[0].plugin) {
             console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
