@@ -28,11 +28,11 @@ console.log('[main.js] 2. Successfully imported auth.js.');
 import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
 
 // --- DEBUG ---
-console.log('[main.js] 3. Importing vortexEffect.js...'); // <-- UPDATED
+console.log('[main.js] 3. Importing fluidEffect.js...'); // <-- UPDATED
 // --- DEBUG ---
-import vortexEffect from './components/effects/vortex.js'; // <-- UPDATED
+import fluidEffect from './components/effects/fluid.js'; // <-- UPDATED
 // --- DEBUG ---
-console.log('[main.js] 4. Successfully imported vortexEffect.js.'); // <-- UPDATED
+console.log('[main.js] 4. Successfully imported fluidEffect.js.'); // <-- UPDATED
 // --- DEBUG ---
 
 
@@ -482,11 +482,11 @@ async function initialize() {
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
         // --- THIS IS THE FIX ---
-        // Load the new effect by default
+        // Load the new fluid effect
         // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(vortexEffect).'); // <-- UPDATED
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect).'); // <-- UPDATED
         // --- DEBUG ---
-        backgroundEngine.loadEffect(vortexEffect, null); // <-- UPDATED
+        backgroundEngine.loadEffect(fluidEffect); // <-- UPDATED
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
