@@ -227,16 +227,21 @@ export async function initializeSessionChat() {
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
+        displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
         const records = await api.fetchChatMessages(sessionId);
+        
         if (records.length > 0) {
+            displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
                 const isSent = SenderID === currentUser.id;
                 addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
             });
+        } else {
+            displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
         }
     }
-    
+  
     pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
