@@ -838,7 +838,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     setupItineraryEventListeners();
-
+    setupCalendarEventListeners();
     return { mainDatePicker, eventPlanDatePicker };
 }
 
