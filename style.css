@@ -2240,3 +2240,58 @@ hr.total-divider {
     font-weight: bold;
     display: block; /* Ensure it's on a new line */
 }
+
+        /* --- NEW CALENDAR VIEW STYLES --- */
+#calendar-view-btn {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #2c3e50;
+    margin-left: 10px;
+    padding: 0;
+    transition: color 0.2s;
+}
+
+#calendar-view-btn:hover {
+    color: #007bff;
+}
+
+#calendar-modal-overlay .modal-content {
+    display: flex;
+    flex-direction: column;
+}
+
+#calendar-body {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    flex-grow: 1;
+    overflow-y: hidden;
+    padding: 10px 0;
+}
+
+#event-calendar {
+    /* Container for the actual calendar widget */
+    border-right: 1px solid #eee;
+    padding-right: 20px;
+    overflow-y: auto;
+}
+
+#event-details-panel {
+    overflow-y: auto;
+}
+
+#daily-event-list {
+    list-style: none;
+    padding: 0;
+}
+
+/* Style for events the user has RSVP'd to */
+.event-item-rsvpd {
+    font-weight: bold;
+    border-left: 4px solid #28a745;
+    padding-left: 8px;
+    margin-bottom: 5px;
+}
+/* --- END NEW CALENDAR VIEW STYLES --- */
