@@ -1,5 +1,4 @@
-// In: events.js
-// Action: REPLACE THE ENTIRE FILE
+// REPLACE THE ENTIRE CONTENTS OF: events.js
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -13,19 +12,15 @@ import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-// --- NEW ---
 import { addEnergy } from './components/backgroundEngine.js'; // Import the boost function
-// --- END NEW ---
-// --- FIX: ADD MISSING CALENDAR IMPORT ---
-import { setupCalendarEventListeners } from './components/calendarView.js'; 
-// --- END FIX ---
+import { updateProcessingFeeDisplay } from './components/modal.js'; // Import the new fee update function
+
 let mainDatePicker = null;
 let saveTimeout = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
 
-// ... (all functions from getCurrentCategoryRecord down to handlePaymentFormSubmit are identical) ...
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
     const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
@@ -148,6 +143,8 @@ export async function updateAllCardAvailabilityIcons() {
     }
 }
 
+
+// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -162,8 +159,12 @@ async function handlePaymentFormSubmit(event) {
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
 
-    const { stripe, cardElement } = ui.getStripeContext();
-    if (!stripe || !cardElement) {
+    // Get the Stripe context and Elements object stored on the modal overlay
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    const stripeElements = checkoutModalOverlay?.stripeElements; 
+    const stripe = ui.getStripeContext().stripe; // Retrieve stripe instance
+    
+    if (!stripe || !stripeElements) { 
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
@@ -172,35 +173,77 @@ async function handlePaymentFormSubmit(event) {
     }
     
     try {
+        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---
+        // We rely on the core logic here, which will also update the stripeElements object with the new clientSecret
         const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
         const amountReceived = state.session.user.amountReceived || 0;
         const totalDue = finalTotal - amountReceived;
         const isFirstPayment = amountReceived === 0;
-        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+        
+        // This logic calculates the amount before the fee, including deposit/full choice
+        let baseAmountToCharge = totalDue;
+        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
+        
+        if (amountReceived === 0) {
+            const shopSettings = state.stores.all.find(s => s.id === state.ui.activeShopId)?.fields;
+            if (shopSettings?.PaymentOptions === 'DepositOrFull' && choice === 'full') {
+                 baseAmountToCharge = finalTotal;
+            } else {
+                 baseAmountToCharge = finalTotal * 0.35;
+            }
+        }
+        
         const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-        const finalAmountToCharge = baseAmountToCharge + tipAmount;
-        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
-        if (finalAmountInCents < 50) {
+        const finalAmountToChargeBeforeFee = baseAmountToCharge + tipAmount;
+
+        const amountInCentsBeforeFee = Math.round(finalAmountToChargeBeforeFee * 100);
+        if (amountInCentsBeforeFee < 50) {
             throw new Error("Final amount is too low to process.");
         }
 
+        // We call updateProcessingFeeDisplay one last time to ensure a fresh clientSecret reflecting the exact amount + tip + fee is generated and applied to the elements.
+        await updateProcessingFeeDisplay(); 
+        
+        // 2. Submit Payment Element to collect payment method details
+        const { error: submitError } = await stripeElements.submit();
+        if (submitError) {
+             throw new Error(submitError.message);
+        }
+
+        // 3. Extract the final clientSecret from the latest intent created by updateProcessingFeeDisplay
+        // This is a direct fetch since the clientSecret is not exposed globally by the Payment Element
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: finalAmountInCents }),
+            body: JSON.stringify({ amount: amountInCentsBeforeFee }),
         });
-        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
+
+        if (!intentResponse.ok) throw new Error('Could not refresh payment intent.');
         const paymentIntentData = await intentResponse.json();
         const clientSecret = paymentIntentData.clientSecret;
+        
+        // 4. Confirm the Payment Intent with the Elements object
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
-        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-            payment_method: {
-                card: cardElement,
-                billing_details: { name: customerName, email: customerEmail },
+        
+        const { error, paymentIntent } = await stripe.confirmPayment({
+            elements: stripeElements, // Use the Elements object for confirmation
+            clientSecret: clientSecret,
+            confirmParams: {
+                // Return URL is necessary for asynchronous payment methods (PayPal, ACH, etc.)
+                return_url: `${window.location.origin}/`, 
+                payment_method_data: {
+                    billing_details: {
+                        name: customerName, 
+                        email: customerEmail 
+                    }
+                }
             },
+            redirect: 'if_required', // Handles redirection for off-session payments
         });
+
         if (error) {
+            console.error('Stripe Payment Confirmation Error:', error);
             throw new Error(error.message);
         }
 
@@ -228,6 +271,8 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('payment-success-message').style.display = 'block';
 
             setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+        } else {
+             log('Events', `Payment status is ${paymentIntent.status}. No immediate action needed if user was redirected.`);
         }
     } catch (err) {
         log('Events', `Stripe payment error: ${err.message}`);
@@ -237,6 +282,8 @@ async function handlePaymentFormSubmit(event) {
         spinner.style.display = 'none';
     }
 }
+// --- END MODIFIED handlePaymentFormSubmit ---
+
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
@@ -561,7 +608,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ view: 'present' });
             ui.showPresentationView(listType);
         } else if (carouselNav) {
-            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
+            const carousel = document.getElementById('favorites-carousel');
             if (carousel) {
                 const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
@@ -590,28 +637,24 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
             }
         }
-    // --- CORRECTLY PLACED HEART ICON LOGIC ---
         else if (heartIcon) {
             e.stopPropagation();
-            // --- NEW ---
             addEnergy(); // Add energy on heart click
-            // --- END NEW ---
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
     
-            console.log(`[Events] Heart icon clicked for record: ${recordId}`); // Log click
+            console.log(`[Events] Heart icon clicked for record: ${recordId}`);
     
             if (state.session.user.isAuthenticated) {
-                // --- LOGGED-IN USER ---
-                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds)); // Log state before
+                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
                 try {
-                    heartIcon.style.pointerEvents = 'none'; // Prevent double-clicks
+                    heartIcon.style.pointerEvents = 'none';
                     console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
-                    const result = await api.toggleUserLike(recordId); // Call the API
-                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result); // Log API response
+                    const result = await api.toggleUserLike(recordId);
+                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
     
                     if (result.success) {
-                        let actionTaken = ''; // For logging
+                        let actionTaken = '';
                         if (result.liked) {
                             state.session.user.likedItemIds.add(recordId);
                             actionTaken = 'liked';
@@ -621,30 +664,29 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                             actionTaken = 'unliked';
                             log('Events', `User unliked item ${recordId}.`);
                         }
-                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds)); // Log state after
+                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
                         console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
-                        ui.updateCardIcon(recordId); // Update visuals
+                        ui.updateCardIcon(recordId);
                         console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
     
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
                             console.log('[Events] "My Likes" filter active, reapplying filters...');
-                            applyFiltersAndSort(imageCache); // Refresh if viewing likes
+                            applyFiltersAndSort(imageCache);
                         }
                     } else {
                          console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
-                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error); // Log the actual error
+                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
                     log('Events', `Error toggling like: ${error.message}`);
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
-                    heartIcon.style.pointerEvents = 'auto'; // Re-enable
+                    heartIcon.style.pointerEvents = 'auto';
                      console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
-                // --- LOGGED-OUT USER ---
-                 console.log('[Events] User is logged out. Handling temporary like.');
+                console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
                 let tempLikes = [];
                 try {
@@ -665,28 +707,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
                 log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
                  console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
-                ui.updateCardIcon(recordId); // Update visuals based on temp state
+                ui.updateCardIcon(recordId);
                  console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
                 if (currentlyLiked) {
                      console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
-                     ui.showLoginPromptForLikes(); // Show login prompt
+                     ui.showLoginPromptForLikes();
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
                       console.log('[Events] "My Likes" filter active, reapplying filters (logged out)...');
-                      applyFiltersAndSort(imageCache); // Refresh if viewing likes
+                      applyFiltersAndSort(imageCache);
                  }
             }
         }
-        // --- END HEART ICON LOGIC ---
         
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
 
-            // --- NEW: TRIGGER BOOST ---
             addEnergy();
-            // --- END NEW ---
 
             if (state.cart.lockedItems.has(recordId)) {
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
@@ -749,7 +788,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
-                 // Use the same lowercase conversion as data-filter
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
@@ -761,7 +799,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      }
                      updateSubcategoryButtons();
                  } else {
-                     // Use the same lowercase conversion as data-filter
                      const parentNameLower = parentName.toLowerCase();
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                      if (categoryFiltersContainer) {
@@ -839,11 +876,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     setupItineraryEventListeners();
-    setupCalendarEventListeners();
+
     return { mainDatePicker, eventPlanDatePicker };
 }
 
-// ... (keep initializeChatEventListeners and openChatWidget functions) ...
 export function initializeChatEventListeners() {
     const messageForm = document.getElementById('message-form');
     const messageInput = document.getElementById('message-input');
