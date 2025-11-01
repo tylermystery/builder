@@ -1,5 +1,28 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
+// Define a simplified fee structure for demonstration (adjust these rates)
+// Standard Card: 2.9% + $0.30
+// ACH Direct Debit: 0.8% (capped at $5.00)
+// Wallet (Apple/Google Pay): Typically same as card (2.9% + $0.30)
+function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
+  const baseAmount = baseAmountInCents / 100;
+  let fee = 0;
+
+  switch (paymentMethodType) {
+    case 'ach_debit':
+      // 0.8%, capped at $5.00
+      fee = Math.min(baseAmount * 0.008, 5.00);
+      return Math.round(fee * 100); // Return in cents
+    case 'card':
+    case 'google_pay':
+    case 'apple_pay':
+    default:
+      // Standard card/wallet fee: 2.9% + $0.30
+      fee = baseAmount * 0.029 + 0.30;
+      return Math.round(fee * 100); // Return in cents
+  }
+}
+
 exports.handler = async (event) => {
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error('Stripe secret key is not configured.');
@@ -13,33 +36,43 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  let amount;
+  let baseAmountInCents, paymentMethodType;
   try {
     const body = JSON.parse(event.body);
-    amount = body.amount;
+    baseAmountInCents = body.amount; // This is the subtotal + tip (excluding fee)
+    // Client must send the selected payment type for accurate fee calculation
+    paymentMethodType = body.paymentMethodType || 'card'; 
   } catch (error) {
     console.error('Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
   }
   
-  if (typeof amount !== 'number' || amount < 50) {
+  if (typeof baseAmountInCents !== 'number' || baseAmountInCents < 50) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: `Invalid amount specified: ${amount}` }),
+      body: JSON.stringify({ error: `Invalid amount specified: ${baseAmountInCents}` }),
     };
   }
 
   try {
+    // Calculate the fee and the new total amount (including fee)
+    const processingFeeInCents = calculateProcessingFee(baseAmountInCents, paymentMethodType);
+    const finalAmountInCents = baseAmountInCents + processingFeeInCents;
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount,
+      amount: finalAmountInCents, // Charge the full amount including the fee
       currency: 'usd',
-      // --- THIS IS THE CORRECTED LINE ---
-      payment_method_types: ['card'], 
+      // Allow Stripe to determine the best method types based on the user's element display
+      automatic_payment_methods: { enabled: true }, 
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ clientSecret: paymentIntent.client_secret }),
+      body: JSON.stringify({ 
+          clientSecret: paymentIntent.client_secret,
+          // --- NEW: Return the calculated fee ---
+          processingFeeInCents: processingFeeInCents 
+      }),
     };
   } catch (error) {
     console.error('Stripe API error:', error.message);
