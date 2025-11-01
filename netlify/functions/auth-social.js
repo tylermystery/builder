@@ -9,6 +9,9 @@ const USERS_TABLE = 'Users';
 const SESSIONS_TABLE = 'Sessions';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Your Items table ID/Name
 const LIKED_BY_FIELD = 'Liked By Users'; // Exact field name from Airtable
+// --- NEW CONSTANT ---
+const RSVPS_FIELD = 'RSVPs'; // Exact field name from Airtable Items table
+// --- END NEW CONSTANT ---
 const OWNED_STORE_FIELD = 'OwnedStore';
 const OWNER_DASHBOARD_ID_FIELD = 'OwnerDashboardID';
 const ASSOCIATED_SESSIONS_FIELD = 'Associated Sessions';
@@ -113,31 +116,50 @@ exports.handler = async (event, context) => {
     }
     // --- END NEW LIKES FETCH ---
 
-    // 6. Generate Session JWT
+  // In: netlify/functions/auth-social.js (after existing LIKES FETCH block, before JWT generation)
+
+    // --- START NEW RSVPS FETCH (Copied from auth-verify) ---
+    // 6. Fetch RSVP'd Item IDs (Events)
+    let rsvpdItemIds = [];
+    // Formula component: FIND('recUserIdXYZ', ARRAYJOIN({RSVPs})) > 0
+    const rsvpdItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${RSVPS_FIELD}}))`;
+    // We only need the record IDs, so don't request any specific fields.
+    const rsvpdItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(rsvpdItemsFormula)}&fields[]=`;
+
+    console.log(`[auth-social] Fetching RSVP'd items for user ${userRecord.id}...`);
+    const rsvpdItemsRes = await fetch(rsvpdItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+
+    if (rsvpdItemsRes.ok) {
+        const rsvpdItemsData = await rsvpdItemsRes.json();
+        rsvpdItemIds = rsvpdItemsData.records ? rsvpdItemsData.records.map(rec => rec.id) : [];
+        console.log(`[auth-social] Found ${rsvpdItemIds.length} RSVP'd items.`);
+    } else {
+        console.warn(`[auth-social] Failed to fetch RSVP'd items for user ${userRecord.id}. Status: ${rsvpdItemsRes.status}`);
+    }
+    // --- END NEW RSVPS FETCH ---
+
+    // 7. Generate Session JWT
     const userPayloadForToken = {
-        userId: userRecord.id,
-        name: userRecord.fields[NAME_FIELD],
-        email: userRecord.fields[EMAIL_FIELD],
-        isOwner: ownerData.isOwner
+// ... existing payload ...
     };
     const sessionToken = jwt.sign(userPayloadForToken, JWT_SECRET, { expiresIn: '30d' });
 
-    // 7. Return Response to Client (Consistent with auth-verify)
+    // 8. Return Response to Client
     return {
         statusCode: 200,
         body: JSON.stringify({
             token: sessionToken,
             user: {
-                id: userRecord.id,
-                name: userRecord.fields[NAME_FIELD],
-                email: userRecord.fields[EMAIL_FIELD],
-                associatedSessions: associatedSessions,
-                likedItemIds: likedItemIds // Include the fetched liked item IDs here
+// ... existing user payload ...
+                likedItemIds: likedItemIds,
+                rsvpdItemIds: rsvpdItemIds // NEW: Include the fetched RSVP item IDs here
             },
             ownerData: ownerData
         }),
     };
-  } catch (error) {
+    } catch (error) {
+// ... existing catch block ...
+
     console.error('[auth-social] Function Error:', error);
     return {
         statusCode: 500,
