@@ -75,15 +75,17 @@ export async function updateProcessingFeeDisplay() {
     const elements = checkoutModalOverlay?.stripeElements;
     
     // --- CRITICAL FIX START: Reliably get the selected payment method type ---
-    let selectedPaymentMethod = 'card'; 
+    let selectedPaymentMethod = 'card'; // Default fallback
     if (elements) {
          try {
-             // We await getValue() to pull the current payment method type selected by the user.
+             // Use getValue() to pull the current payment method type selected by the user.
+             // This is the definitive way to get the method type before confirmation.
              const valueResult = await elements.getElement('payment').getValue();
              if (valueResult.value?.type) {
                  selectedPaymentMethod = valueResult.value.type;
              }
          } catch (e) {
+             // This is expected if the element is not yet fully rendered/valid, stick with 'card'.
              log('Stripe', 'Warning: Could not get live payment method type from Stripe Element, defaulting to card.', e);
          }
     }
@@ -547,16 +549,6 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
 
-    // Dynamically set the total cost label based on payment history
-    const totalLabel = document.getElementById('checkout-total-label');
-    if (totalLabel) {
-        if (state.session.user.amountReceived > 0) {
-            totalLabel.textContent = 'Total Final Cost:';
-        } else {
-            totalLabel.textContent = 'Total Estimated Cost:';
-        }
-    }
-
     if (!checkoutModalOverlay) return;
 
     const handleOverlayClick = (e) => {
@@ -611,6 +603,17 @@ export async function showCheckoutModal(shopSettings) {
     fullTotalEl.dataset.total = finalTotal;
 
 
+    // Dynamically set the total cost label based on payment history
+    const totalLabel = document.getElementById('checkout-total-label');
+    if (totalLabel) {
+        if (state.session.user.amountReceived > 0) {
+            totalLabel.textContent = 'Total Final Cost:';
+        } else {
+            totalLabel.textContent = 'Total Estimated Cost:';
+        }
+    }
+
+
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
@@ -663,29 +666,33 @@ export async function showCheckoutModal(shopSettings) {
         const paymentIntentData = await intentResponse.json();
         const clientSecret = paymentIntentData.clientSecret;
 
-        // Initialize Stripe
+        // 3. Initialize Stripe
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        // Use a real clientSecret here! This resolves the original IntegrationError.
         const elements = stripe.elements({ clientSecret, appearance: { theme: 'stripe' } }); 
         
         const cardElementContainer = document.getElementById('card-element');
         if (cardElementContainer) cardElementContainer.innerHTML = '';
         
-        // Create and mount the unified Payment Element
+        // 4. Create and mount the unified Payment Element
         const paymentElement = elements.create('payment');
         paymentElement.mount('#card-element');
         
-        // Store elements instance and update display
+        // 5. Store elements instance and update display
         checkoutModalOverlay.stripeElements = elements;
         checkoutModalOverlay.paymentElement = paymentElement;
         
-        // This calculates the initial fee and final payment amount.
+        // 6. This recalculates the fee and final payment amount.
+        // We call it once to set the correct initial fee and amount.
         await updateProcessingFeeDisplay(); 
 
-        // Attach listeners
+        // 7. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
         tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
+        
+        // Listen to the Stripe Element change event to update the fee when method changes
         paymentElement.on('change', () => updateProcessingFeeDisplay()); 
         
-        // Final UI show
+        // 8. Final UI show
         document.getElementById('payment-form').style.display = 'block';
         document.querySelector('.checkout-total-deposit-section').style.display = 'block';
         checkoutModalOverlay.classList.add('active');
