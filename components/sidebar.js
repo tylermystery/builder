@@ -50,24 +50,15 @@ async function createLockedInItemElement(record, itemInfo) {
     let priceDisplay = `$${price.toFixed(2)}`;
     if (itemInfo.overridePrice != null) {
         const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
-        </div>
-        <div class="locked-item-actions">
-            <button class="edit-btn">Edit</button>
-            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
-        </div>
-    `;
+        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}\" alt=\"${fields.Name}\">
+        <div class=\"locked-item-details\">\n            <p class=\"locked-item-name\">${fields.Name}</p>\n            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}\n            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>\n            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}\n        </div>\n        <div class=\"locked-item-actions\">\n            <button class=\"edit-btn\">Edit</button>\n            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>\n        </div>\n    `;
     return itemElement;
 }
+
 
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
@@ -77,7 +68,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
         return;
     }
 
@@ -91,7 +82,7 @@ export async function updateEventPlanSection() {
     ui.observeLazyImages(container);
 }
 
-export async function updateIdeasCarousel() { 
+export async function updateIdeasCarousel() {
     log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`);
     const ideasSection = document.getElementById('favorites-section');
     const ideasCarousel = document.getElementById('favorites-carousel');
@@ -143,7 +134,7 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
-    const totalBreakdown = document.getElementById('total-breakdown'); // Ensure this element is retrieved
+    const totalBreakdown = document.getElementById('total-breakdown'); 
     
     if (!totalCostEl || !subtotalCostEl || !totalBreakdown) return;
 
@@ -169,19 +160,7 @@ export function updateTotalCost() {
     
     // Reset total breakdown HTML before applying status logic
     totalBreakdown.innerHTML = `
-        <div class="total-row subtotal-row">
-            <span>Subtotal:</span>
-            <span id="subtotal-cost">$${subtotal.toFixed(2)}</span>
-        </div>
-        <div class="total-row amount-paid-row" style="display: none;">
-            <span>Amount Paid:</span>
-            <span id="amount-paid-cost">$0.00</span>
-        </div>
-        <hr class="total-divider" style="display: none;">
-        <div class="total-row final-total-row">
-            <strong>Total Due:</strong>
-            <strong id="total-cost">$${totalDue.toFixed(2)}</strong>
-        </div>
+        <div class=\"total-row subtotal-row\">\n            <span>Subtotal:</span>\n            <span id=\"subtotal-cost\">$${subtotal.toFixed(2)}</span>\n        </div>\n        <div class=\"total-row amount-paid-row\" style=\"display: none;\">\n            <span>Amount Paid:</span>\n            <span id=\"amount-paid-cost\">$0.00</span>\n        </div>\n        <hr class=\"total-divider\" style=\"display: none;\">\n        <div class=\"total-row final-total-row\">\n            <strong>Total Due:</strong>\n            <strong id=\"total-cost\">$${totalDue.toFixed(2)}</strong>\n        </div>
     `;
 
     if (amountReceived > 0) {
@@ -211,22 +190,32 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'block';
-        
-        if (isFullyPaid) {
-            // *** FIX APPLIED HERE: ONLY DISPLAY 'PAID IN FULL' IF PLAN IS NOT EMPTY ***
-            if (!isPlanEmpty) {
-                totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+        // --- START FIX: Ensure button is always enabled if plan is not empty ---
+        const hasContent = state.cart.lockedItems.size > 0;
+
+        if (hasContent) {
+            checkoutBtn.style.display = 'block';
+            checkoutBtn.disabled = false; // Always enable if content exists
+
+            if (isFullyPaid) {
+                // Display 'Paid in Full' status and set button text to 'View Summary'
+                totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
+                checkoutBtn.textContent = 'View Summary';
+                checkoutBtn.dataset.defaultText = 'View Summary'; // Set default text for consistency
+            } else if (amountReceived > 0) {
+                checkoutBtn.textContent = 'Pay Remainder';
+                checkoutBtn.dataset.defaultText = 'Reserve';
+            } else {
+                checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
+                checkoutBtn.dataset.defaultText = 'Reserve';
             }
-            checkoutBtn.textContent = 'View Summary';
-            checkoutBtn.disabled = false;
-        } else if (amountReceived > 0) {
-            checkoutBtn.textContent = 'Pay Remainder';
-            checkoutBtn.disabled = isPlanEmpty;
         } else {
+            // Plan is empty
+            checkoutBtn.style.display = 'block';
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-            checkoutBtn.disabled = isPlanEmpty;
+            checkoutBtn.disabled = true;
         }
+        // --- END FIX ---
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
@@ -239,11 +228,11 @@ export function displayReservedStatus() {
     const totalBreakdown = document.getElementById('total-breakdown');
     
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'block'; 
-        checkoutBtn.textContent = 'View Summary';
+        checkoutBtn.textContent = 'View Summary'; // Changed from 'Reserve' to 'View Summary'
         checkoutBtn.disabled = false;
     }
     if (saveShareBtn) {
