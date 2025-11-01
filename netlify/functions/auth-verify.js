@@ -9,6 +9,8 @@ const USERS_TABLE = 'Users';
 const SESSIONS_TABLE = 'Sessions';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Your Items table ID/Name
 const LIKED_BY_FIELD = 'Liked By Users'; // Exact field name from Airtable
+// --- NEW CONSTANT ---
+const RSVPS_FIELD = 'RSVPs'; // Exact field name from Airtable Items table
 const OWNED_STORE_FIELD = 'OwnedStore';
 const OWNER_DASHBOARD_ID_FIELD = 'OwnerDashboardID';
 const ASSOCIATED_SESSIONS_FIELD = 'Associated Sessions';
