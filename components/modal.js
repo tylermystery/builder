@@ -44,7 +44,7 @@ function handleOverlayClick(event) {
 // --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
 export async function updateProcessingFeeDisplay() {
     const fullTotalEl = document.getElementById('full-total-price');
-    const finalTotal = parseFloat(fullTotalEl?.dataset.total || 0); // Total BEFORE tip/fee
+    const finalTotal = parseFloat(fullTotalEl?.dataset.total || 0); // Read the current (recalculated) total from the element
     const tipAmount = parseFloat(document.getElementById('tip-amount')?.value) || 0;
     const amountReceived = state.session.user.amountReceived || 0;
     
@@ -75,17 +75,15 @@ export async function updateProcessingFeeDisplay() {
     const elements = checkoutModalOverlay?.stripeElements;
     
     // --- CRITICAL FIX START: Reliably get the selected payment method type ---
-    let selectedPaymentMethod = 'card'; // Default fallback
+    let selectedPaymentMethod = 'card'; 
     if (elements) {
          try {
-             // Use getValue() to pull the current payment method type selected by the user.
-             // This is the definitive way to get the method type before confirmation.
+             // We await getValue() to pull the current payment method type selected by the user.
              const valueResult = await elements.getElement('payment').getValue();
              if (valueResult.value?.type) {
                  selectedPaymentMethod = valueResult.value.type;
              }
          } catch (e) {
-             // This is expected if the element is not yet fully rendered/valid, stick with 'card'.
              log('Stripe', 'Warning: Could not get live payment method type from Stripe Element, defaulting to card.', e);
          }
     }
@@ -495,7 +493,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatChatEnabledOnItem,
+            isChatEnabledOnItem: isChatEnabledOnItem,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
@@ -537,7 +535,7 @@ export function hideDetailModal() {
     }
 }
 
-// --- MODIFIED: showCheckoutModal for Payment Element (Initial Intent Fetch Moved to Start) ---
+// --- MODIFIED: showCheckoutModal for Payment Element (Final Total Calculation Fix) ---
 export async function showCheckoutModal(shopSettings) {
     currentShopSettings = shopSettings;
     log('Modal', 'Showing checkout modal.');
@@ -574,39 +572,45 @@ export async function showCheckoutModal(shopSettings) {
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
+    // 1. RE-CALCULATE FINAL TOTAL (CRITICAL FIX FOR ZERO AMOUNT BUG)
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
+
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        // Ensure we fetch the latest state values for the total
+        const itemState = state.cart.lockedItems.get(recordId) || {};
+        const price = itemState.overridePrice ?? getRecordPrice(record, itemState.selectedOptionIndex);
 
-        const itemTotal = price * itemInfo.quantity;
+        const itemTotal = price * (itemState.quantity || 1);
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
         
         let noteHtml = '';
-        if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
+        if (itemState.note && itemState.note.trim() !== '') {
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemState.note}</small>`;
         }
         
         listItem.innerHTML = `
             <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity})</span>
+                <span class="summary-item-name">${record.fields.Name} (x${itemState.quantity || 1})</span>
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
     }
-
     summaryDetailsEl.appendChild(summaryList);
 
+    // Update the DOM element with the now-calculated total
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
+
+
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
@@ -620,40 +624,36 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
     }
 
-    // --- CRITICAL FIX START: Check if plan is empty BEFORE initializing Stripe ---
+    // 2. CRITICAL CHECK: If plan is empty, stop here and show the error/placeholder UI
     if (finalTotal <= 0) {
         log('Modal', 'Checkout plan is empty, showing modal placeholder.');
         document.getElementById('payment-form').style.display = 'none';
         document.querySelector('.checkout-total-deposit-section').style.display = 'none';
         document.querySelector('.terms-and-conditions').style.display = 'none';
         
-        // Show an alternative message if needed, e.g., "Please add items to your plan."
         summaryDetailsEl.innerHTML = '<p style="text-align: center; color: #dc3545;">Please add items to your locked plan before checking out.</p>';
 
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => { checkoutModalOverlay.style.display = 'flex'; }, 0);
         document.body.classList.add('modal-open');
 
-        // Prevent Stripe initialization errors on $0 total
         return; 
     }
-    // --- CRITICAL FIX END ---
 
 
-    // --- NEW LOGIC: Initialize Stripe Elements with a REAL initial Client Secret ---
+    // 3. Initialize Stripe Elements with a REAL initial Client Secret
     try {
-        // 1. Calculate initial amount before fee
         const amountReceived = state.session.user.amountReceived || 0;
         const totalDue = finalTotal - amountReceived;
         let amountInCentsBeforeFee = Math.round(totalDue * 100);
         
-        // 2. Fetch the FIRST Payment Intent (This includes the first fee calculation and real client secret)
+        // Fetch the FIRST Payment Intent 
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
-                paymentMethodType: 'card' // Default to card for initial intent calculation
+                paymentMethodType: 'card' // Initial default
             }),
         });
         if (!intentResponse.ok) {
@@ -663,33 +663,29 @@ export async function showCheckoutModal(shopSettings) {
         const paymentIntentData = await intentResponse.json();
         const clientSecret = paymentIntentData.clientSecret;
 
-        // 3. Initialize Stripe Elements with the REAL Client Secret
+        // Initialize Stripe
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-        // Use a real clientSecret here! This resolves the original IntegrationError.
         const elements = stripe.elements({ clientSecret, appearance: { theme: 'stripe' } }); 
         
         const cardElementContainer = document.getElementById('card-element');
         if (cardElementContainer) cardElementContainer.innerHTML = '';
         
-        // 4. Create and mount the unified Payment Element
+        // Create and mount the unified Payment Element
         const paymentElement = elements.create('payment');
         paymentElement.mount('#card-element');
         
-        // 5. Store elements instance and update display
+        // Store elements instance and update display
         checkoutModalOverlay.stripeElements = elements;
         checkoutModalOverlay.paymentElement = paymentElement;
         
-        // 6. This recalculates the fee and total due based on the initial default state (no tip, deposit vs full)
-        // We call it once to set the correct initial fee and amount.
+        // This calculates the initial fee and final payment amount.
         await updateProcessingFeeDisplay(); 
 
-        // 7. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
+        // Attach listeners
         tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
-        
-        // Listen to the Stripe Element change event to update the fee when method changes
         paymentElement.on('change', () => updateProcessingFeeDisplay()); 
         
-        // 8. Final UI show
+        // Final UI show
         document.getElementById('payment-form').style.display = 'block';
         document.querySelector('.checkout-total-deposit-section').style.display = 'block';
         checkoutModalOverlay.classList.add('active');
@@ -724,7 +720,6 @@ export function hideCheckoutModal() {
             if (checkoutCloseBtn) {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
-            checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
         }, 300);
         document.body.classList.remove('modal-open');
