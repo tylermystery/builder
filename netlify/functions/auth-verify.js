@@ -125,35 +125,52 @@ exports.handler = async (event) => {
             console.warn(`[auth-verify] Failed to fetch liked items for user ${userRecord.id}. Status: ${likedItemsRes.status}`);
             // Don't fail the login, just proceed without liked items if the fetch fails
         }
-        // --- END NEW LIKES FETCH ---
+  
+// In: netlify/functions/auth-verify.js (after existing LIKES FETCH block, before JWT generation)
 
-        // 6. Generate Session JWT
+        // --- START NEW RSVPS FETCH ---
+        // 6. Fetch RSVP'd Item IDs (Events)
+        let rsvpdItemIds = [];
+        // Formula component: FIND('recUserIdXYZ', ARRAYJOIN({RSVPs})) > 0
+        const rsvpdItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${RSVPS_FIELD}}))`;
+        // We only need the record IDs, so don't request any specific fields.
+        const rsvpdItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(rsvpdItemsFormula)}&fields[]=`;
+
+        console.log(`[auth-verify] Fetching RSVP'd items for user ${userRecord.id}...`);
+        const rsvpdItemsRes = await fetch(rsvpdItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+
+        if (rsvpdItemsRes.ok) {
+            const rsvpdItemsData = await rsvpdItemsRes.json();
+            rsvpdItemIds = rsvpdItemsData.records ? rsvpdItemsData.records.map(rec => rec.id) : [];
+            console.log(`[auth-verify] Found ${rsvpdItemIds.length} RSVP'd items.`);
+        } else {
+            console.warn(`[auth-verify] Failed to fetch RSVP'd items for user ${userRecord.id}. Status: ${rsvpdItemsRes.status}`);
+        }
+        // --- END NEW RSVPS FETCH ---
+
+        // 7. Generate Session JWT
         const userPayloadForToken = {
-            userId: userRecord.id,
-            name: userRecord.fields[NAME_FIELD],
-            email: userRecord.fields[EMAIL_FIELD],
-            isOwner: ownerData.isOwner
-            // We don't include likedItemIds in the JWT itself to keep it smaller,
-            // but we will return it alongside the token.
+// ... existing payload ...
         };
-        const sessionToken = jwt.sign(userPayloadForToken, JWT_SECRET, { expiresIn: '30d' });
+// ... existing JWT logic ...
 
-        // 7. Return Response to Client
+        // 8. Return Response to Client
         return {
             statusCode: 200,
             body: JSON.stringify({
                 token: sessionToken,
                 user: {
-                    id: userRecord.id,
-                    name: userRecord.fields[NAME_FIELD],
-                    email: userRecord.fields[EMAIL_FIELD],
-                    associatedSessions: associatedSessions,
-                    likedItemIds: likedItemIds // Include the fetched liked item IDs here
+// ... existing user payload ...
+                    likedItemIds: likedItemIds,
+                    rsvpdItemIds: rsvpdItemIds // NEW: Include the fetched RSVP item IDs here
                 },
                 ownerData: ownerData
             }),
         };
     } catch (error) {
+// ... existing catch block ...
+
+
         console.error('[auth-verify] Function Error:', error);
         return {
             statusCode: 500,
