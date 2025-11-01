@@ -579,12 +579,37 @@ export async function showCheckoutModal(shopSettings) {
     
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-        const elements = stripe.elements();
-        const cardElementContainer = document.getElementById('card-element');
-        if (cardElementContainer) cardElementContainer.innerHTML = '';
-        const cardElement = elements.create('card');
-        cardElement.mount('#card-element');
-        checkoutModalOverlay.cardElement = cardElement;
+        
+        // --- REFACTOR: Replace elements.create('card') with the Payment Element ---
+        const appearance = { /* Optional: customize appearance */ };
+        
+        // 1. Fetch the Client Secret first (same call as before)
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // You may need to update the intent to support more currencies/methods
+            body: JSON.stringify({ amount: finalAmountInCents }), 
+        });
+        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
+        const paymentIntentData = await intentResponse.json();
+        const clientSecret = paymentIntentData.clientSecret;
+
+        // 2. Initialize and Mount the Payment Element
+        const elements = stripe.elements({ clientSecret, appearance });
+        
+        // Replace the existing card element container ID
+        const paymentElementContainer = document.getElementById('card-element');
+        if (paymentElementContainer) paymentElementContainer.innerHTML = '';
+        
+        const paymentElement = elements.create('payment');
+        paymentElement.mount('#card-element'); 
+        
+        // Store 'elements' and 'paymentElement' instead of 'cardElement'
+        checkoutModalOverlay.stripeElements = elements;
+        checkoutModalOverlay.paymentElement = paymentElement;
+        // --- END REFACTOR ---
+        
+        // ... existing UI show logic ...
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
