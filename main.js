@@ -16,6 +16,7 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 // Corrected import line below:
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
+import { setupCalendarEventListeners } from './components/calendarView.js'; // NEW IMPORT
 
 // --- DEBUG ---
 console.log('[main.js] 1. Importing auth.js...');
@@ -468,6 +469,7 @@ async function initialize() {
         updateSaveShareButton();
         initializeChatEventListeners();
         setupAuthEventListeners();
+        setupCalendarEventListeners(); // NEW: Setup Calendar Button/Modal listeners
         updateUserProfileIcon();
 
         syncUiWithUrl(); // Sync UI with URL parameters
