@@ -42,6 +42,10 @@ function handleOverlayClick(event) {
     }
 }
 
+// In: components/modal.js (REPLACING ONLY updateProcessingFeeDisplay)
+
+// ... existing code in components/modal.js ...
+
 // --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
 export async function updateProcessingFeeDisplay() {
     const fullTotalEl = document.getElementById('full-total-price');
@@ -74,29 +78,26 @@ export async function updateProcessingFeeDisplay() {
     
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const elements = checkoutModalOverlay?.stripeElements;
-    const paymentElement = checkoutModalOverlay?.paymentElement;
     
-    // --- FIX: Extract the actual payment method type from the Payment Element instance ---
-    // This value defaults to 'card' if the element hasn't loaded or selected anything yet.
-    let selectedPaymentMethod = 'card';
-    if (paymentElement && elements) {
+    // --- FIX: Read the selected payment type by waiting for the result of elements.getElement().getValue()
+    // NOTE: This call is the key to getting the live selected payment method type.
+    let selectedPaymentMethod = 'card'; // Default fallback
+    if (elements) {
          try {
-             // Use inspect method to get the payment method type if available.
-             const inspect = await paymentElement.dangerouslyGet// @ts-ignore
-             const details = inspect?.getPaymentMethodDetails();
-             if (details?.type) {
-                 selectedPaymentMethod = details.type;
+             // We must await getValue() because it interacts with the Stripe iframe
+             const valueResult = await elements.getElement('payment').getValue();
+             if (valueResult.value?.type) {
+                 selectedPaymentMethod = valueResult.value.type;
              }
          } catch (e) {
-             // Fall back to 'card' or the default if inspecting fails
-             log('Stripe', 'Could not get payment method type from element on change:', e);
+             log('Stripe', 'Failed to get live payment method type, defaulting to card.', e);
          }
     }
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
     // --- END FIX ---
 
     try {
-        // We only proceed if the amount is valid (already checked in showCheckoutModal, but re-check for safety)
+        // We only proceed if the amount is valid 
         if (amountInCentsBeforeFee <= 0) {
             document.getElementById('processing-fee-cost').textContent = `$0.00`;
             document.querySelector('.processing-fee-row').style.display = 'none';
@@ -110,7 +111,7 @@ export async function updateProcessingFeeDisplay() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
-                paymentMethodType: selectedPaymentMethod 
+                paymentMethodType: selectedPaymentMethod // Now sends the live selected type
             }),
         });
         if (!intentResponse.ok) throw new Error('Fee calculation failed.');
@@ -146,15 +147,9 @@ export async function updateProcessingFeeDisplay() {
         document.getElementById('processing-fee-cost').textContent = `$${fee.toFixed(2)}`;
         document.querySelector('.processing-fee-row').style.display = 'none';
         document.getElementById('deposit-price').textContent = `$${amountToChargeBeforeFee.toFixed(2)}`;
-
-        // Attempt to keep the form functional if the error wasn't critical
-        if (elements) {
-             elements.update({ clientSecret: 'pi_dummy_client_secret' });
-        }
     }
 }
 // --- END MODIFIED FUNCTION ---
-
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
