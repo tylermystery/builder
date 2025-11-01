@@ -15,7 +15,7 @@ const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
 // --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
-const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
+const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
 // This helper function safely inserts the fee row into the DOM
 (function insertProcessingFeeRow() {
     const section = document.querySelector('.checkout-total-deposit-section');
@@ -23,7 +23,8 @@ const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" sty
         section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
     }
 })();
-// --- END NEW GLOBAL ---\n
+// --- END NEW GLOBAL ---
+
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -77,16 +78,17 @@ export async function updateProcessingFeeDisplay() {
     
     // --- FIX: Extract the actual payment method type from the Payment Element instance ---
     // This value defaults to 'card' if the element hasn't loaded or selected anything yet.
-    // In a real scenario, we check the type selected by the Payment Element UI.
     let selectedPaymentMethod = 'card';
     if (paymentElement && elements) {
          try {
-             // The payment element object has an internal `value` method to expose info
-             const paymentMethodData = await elements.getElement('payment').getPaymentMethodData({ details: 'auto' });
-             if (paymentMethodData.paymentMethod?.type) {
-                 selectedPaymentMethod = paymentMethodData.paymentMethod.type;
+             // Use inspect method to get the payment method type if available.
+             const inspect = await paymentElement.dangerouslyGet// @ts-ignore
+             const details = inspect?.getPaymentMethodDetails();
+             if (details?.type) {
+                 selectedPaymentMethod = details.type;
              }
          } catch (e) {
+             // Fall back to 'card' or the default if inspecting fails
              log('Stripe', 'Could not get payment method type from element on change:', e);
          }
     }
@@ -94,6 +96,14 @@ export async function updateProcessingFeeDisplay() {
     // --- END FIX ---
 
     try {
+        // We only proceed if the amount is valid (already checked in showCheckoutModal, but re-check for safety)
+        if (amountInCentsBeforeFee <= 0) {
+            document.getElementById('processing-fee-cost').textContent = `$0.00`;
+            document.querySelector('.processing-fee-row').style.display = 'none';
+            document.getElementById('deposit-price').textContent = `$0.00`;
+            return;
+        }
+
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
@@ -131,12 +141,13 @@ export async function updateProcessingFeeDisplay() {
 
     } catch (err) {
         console.error('Failed to update processing fee:', err);
-        // Fallback if API fails: use a dummy fee to allow testing to continue
+        // Fallback if API fails: try to reset UI cleanly
         const fee = 0; 
         document.getElementById('processing-fee-cost').textContent = `$${fee.toFixed(2)}`;
         document.querySelector('.processing-fee-row').style.display = 'none';
         document.getElementById('deposit-price').textContent = `$${amountToChargeBeforeFee.toFixed(2)}`;
 
+        // Attempt to keep the form functional if the error wasn't critical
         if (elements) {
              elements.update({ clientSecret: 'pi_dummy_client_secret' });
         }
@@ -617,6 +628,26 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
     }
 
+    // --- CRITICAL FIX START: Check if plan is empty BEFORE initializing Stripe ---
+    if (finalTotal <= 0) {
+        log('Modal', 'Checkout plan is empty, showing modal placeholder.');
+        document.getElementById('payment-form').style.display = 'none';
+        document.querySelector('.checkout-total-deposit-section').style.display = 'none';
+        document.querySelector('.terms-and-conditions').style.display = 'none';
+        
+        // Show an alternative message if needed, e.g., "Please add items to your plan."
+        summaryDetailsEl.innerHTML = '<p style="text-align: center; color: #dc3545;">Please add items to your locked plan before checking out.</p>';
+
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => { checkoutModalOverlay.style.display = 'flex'; }, 0);
+        document.body.classList.add('modal-open');
+
+        // Prevent Stripe initialization errors on $0 total
+        return; 
+    }
+    // --- CRITICAL FIX END ---
+
+
     // --- NEW LOGIC: Initialize Stripe Elements with a REAL initial Client Secret ---
     try {
         // 1. Calculate initial amount before fee
@@ -656,6 +687,7 @@ export async function showCheckoutModal(shopSettings) {
         checkoutModalOverlay.paymentElement = paymentElement;
         
         // 6. This recalculates the fee and total due based on the initial default state (no tip, deposit vs full)
+        // We know this will succeed now because we have the real clientSecret and the amount is > 0.
         await updateProcessingFeeDisplay(); 
 
         // 7. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
@@ -667,6 +699,8 @@ export async function showCheckoutModal(shopSettings) {
         // --- END FIX ---
         
         // 8. Final UI show
+        document.getElementById('payment-form').style.display = 'block';
+        document.querySelector('.checkout-total-deposit-section').style.display = 'block';
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
