@@ -14,83 +14,113 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-// --- Local UI Closure Function (FIXED: The actual UI logic is now here) ---
-function _hideDetailModalUI() {
-    const closeBtn = document.getElementById('modal-close-btn');
-    // Remove listeners when hiding to prevent memory leaks/double triggers
-    closeBtn.onclick = null;
-    modalOverlay.removeEventListener('click', _handleOverlayClick);
-    document.removeEventListener('keydown', _handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
+// --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
+const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
+// This helper function safely inserts the fee row into the DOM
+(function insertProcessingFeeRow() {
+    const section = document.querySelector('.checkout-total-deposit-section');
+    if (section) {
+        section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
     }
+})();
+// --- END NEW GLOBAL ---
 
-    if (modalOverlay) {
-        modalOverlay.classList.remove('active');
-        setTimeout(() => {
-            modalOverlay.style.display = 'none';
-            resetModalState();
-        }, 300);
-        document.body.classList.remove('modal-open');
-    }
-}
-// --------------------------------------------------------------------------
-
-function _closeDetailModalHelper() {
+function closeDetailModal() {
     updateUrl({ openItem: null });
-    _hideDetailModalUI();
+    hideDetailModal();
 }
 
-function _handleEscapeKey(event) {
+function handleEscapeKey(event) {
     if (event.key === 'Escape') {
-        _closeDetailModalHelper();
+        closeDetailModal();
     }
 }
 
-function _handleOverlayClick(event) {
+function handleOverlayClick(event) {
     if (event.target === modalOverlay) {
-        _closeDetailModalHelper();
+        closeDetailModal();
     }
 }
 
-function updateCheckoutDisplay() {
-    const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+// --- NEW FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
+export async function updateProcessingFeeDisplay() {
+    const fullTotalEl = document.getElementById('full-total-price');
+    const finalTotal = parseFloat(fullTotalEl.dataset.total || 0); // Total BEFORE tip/fee
+    const tipAmount = parseFloat(document.getElementById('tip-amount')?.value) || 0;
     const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = finalTotal - amountReceived;
-    const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
-    let baseAmountToCharge = totalDue;
     
-    // Determine if this is an INITIAL DEPOSIT payment
-    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
-    
-    // --- Tip Visibility Logic (Revised) ---
-    const tipRow = document.querySelector('.tip-row');
-    if (tipRow) {
-        // Only allow tips if the payment is NOT an initial deposit 
-        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { 
-            tipRow.style.display = 'none';
-        } else {
-            tipRow.style.display = 'flex';
-        }
-    }
-    // --- End Tip Visibility Logic ---
+    // Determine base amount due (Deposit vs. Full)
+    const totalDueBeforeFee = finalTotal - amountReceived;
+    let amountToChargeBeforeFee = totalDueBeforeFee;
+    const isFirstPayment = amountReceived === 0;
 
-    if (amountReceived === 0) {
-        if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
-            baseAmountToCharge = finalTotal;
-            document.getElementById('deposit-label').textContent = 'Full Amount Due:';
+    if (isFirstPayment) {
+        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
+        const isFullPayment = currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full';
+
+        if (!isFullPayment) {
+             // 35% Deposit
+             amountToChargeBeforeFee = finalTotal * 0.35;
         } else {
-            baseAmountToCharge = finalTotal * 0.35;
-            document.getElementById('deposit-label').textContent = '35% Deposit Due:';
+             // Full Amount
+             amountToChargeBeforeFee = finalTotal;
         }
-    } else {
-        document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
-    const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-    const finalAmountToCharge = baseAmountToCharge + tipAmount;
-    document.getElementById('deposit-price').textContent = `$${finalAmountToCharge.toFixed(2)}`;
+    
+    // Add tip to the amount to charge
+    amountToChargeBeforeFee += tipAmount;
+
+    const amountInCentsBeforeFee = Math.round(amountToChargeBeforeFee * 100);
+    
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    const elements = checkoutModalOverlay?.stripeElements;
+    
+    // Temporarily assume 'card' if no payment method selection has happened yet
+    // The Stripe Element's `change` event listener handles this in subsequent calls.
+    const selectedPaymentMethod = 'card'; 
+
+    try {
+        // Step 1: Request the fee calculation and clientSecret from the server
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                amount: amountInCentsBeforeFee, 
+                paymentMethodType: selectedPaymentMethod 
+            }),
+        });
+        if (!intentResponse.ok) throw new Error('Fee calculation failed.');
+        const paymentIntentData = await intentResponse.json();
+        const feeInCents = paymentIntentData.processingFeeInCents;
+        const clientSecret = paymentIntentData.clientSecret;
+        const fee = feeInCents / 100;
+
+        // Step 2: Update the UI with the fee
+        const feeEl = document.getElementById('processing-fee-cost');
+        const feeRowEl = document.querySelector('.processing-fee-row');
+        
+        if (fee > 0) {
+            feeEl.textContent = `$${fee.toFixed(2)}`;
+            feeRowEl.style.display = 'flex';
+        } else {
+            feeRowEl.style.display = 'none';
+        }
+
+        // Step 3: Update the Final Due amount (including the fee)
+        const totalDueWithFee = amountToChargeBeforeFee + fee;
+        document.getElementById('deposit-price').textContent = `$${totalDueWithFee.toFixed(2)}`;
+        
+        // Step 4: Re-initialize Stripe elements with the new clientSecret
+        if (elements && clientSecret) {
+            elements.update({ clientSecret: clientSecret });
+        }
+
+    } catch (err) {
+        console.error('Failed to update processing fee:', err);
+    }
 }
+// --- END NEW FUNCTION ---
+
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
@@ -155,12 +185,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
 
-    console.log('[hideDetailModal] Called.'); 
+    console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    // Use local helper
-    closeBtn.onclick = _closeDetailModalHelper;
-    modalOverlay.addEventListener('click', _handleOverlayClick);
-    document.addEventListener('keydown', _handleEscapeKey);
+    closeBtn.onclick = closeDetailModal;
+    modalOverlay.addEventListener('click', handleOverlayClick);
+    document.addEventListener('keydown', handleEscapeKey);
 
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
@@ -179,7 +208,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
-    // --- UPDATED: POPULATE ADDITIONAL DETAILS (Handles JSON Rankings) ---
     if (modalAdditionalDetails) {
         modalAdditionalDetails.innerHTML = '';
         const fragment = document.createDocumentFragment();
@@ -192,9 +220,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         console.log('[Modal Debug] Processing Standard Details...');
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
-            console.log(`[Modal Debug]   - Checking Field: \"${spec.fieldName}\", Found Value:`, value);
+            console.log(`[Modal Debug]   - Checking Field: "${spec.fieldName}", Found Value:`, value);
             if (value) {
-                console.log(`[Modal Debug]     -> Adding \"${spec.label}\" to modal.`);
+                console.log(`[Modal Debug]     -> Adding "${spec.label}" to modal.`);
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
                 detailItem.innerHTML = `
@@ -203,7 +231,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 `;
                 fragment.appendChild(detailItem);
             } else {
-                 console.log(`[Modal Debug]     -> Skipping \"${spec.label}\" (no value).`);
+                 console.log(`[Modal Debug]     -> Skipping "${spec.label}" (no value).`);
             }
         });
 
@@ -219,7 +247,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 for (const label in rankingsObject) {
                     if (Object.hasOwnProperty.call(rankingsObject, label)) {
                         const value = rankingsObject[label];
-                        console.log(`[Modal Debug]     - Checking Ranking: \"${label}\", Value:`, value, `(Type: ${typeof value})`);
+                        console.log(`[Modal Debug]     - Checking Ranking: "${label}", Value:`, value, `(Type: ${typeof value})`);
 
                         if (typeof value === 'number' && value > 0) {
                             hasRankings = true;
@@ -267,7 +295,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } else {
         console.error('[Modal Debug] CRITICAL: #modal-additional-details element not found!');
     }
-    // --- END UPDATED DETAILS POPULATION ---
 
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
@@ -374,7 +401,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalQuantitySelector.innerHTML = '';
     }
 
-// --- Calendar Initialization (with conditional display) ---
+    // --- Calendar Initialization (with conditional display) ---
     modalCalendarContainer.innerHTML = '';
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
@@ -431,7 +458,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalCalendarContainer.style.display = 'none';
         log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
     }
-    // --- End Calendar Logic ---
 
     ui.updateCardIcon(record.id);
 
@@ -443,7 +469,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem, // CORRECTED TYPO
+            isChatEnabledOnItem: isChatEnabledOnItem,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
@@ -464,11 +490,28 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }, 0);
 }
 
-// Exported function now simply calls the local UI manipulator
 export function hideDetailModal() {
-    _hideDetailModalUI();
+    console.log('[hideDetailModal] Called.');
+    const closeBtn = document.getElementById('modal-close-btn');
+    closeBtn.onclick = null;
+    modalOverlay.removeEventListener('click', handleOverlayClick);
+    document.removeEventListener('keydown', handleEscapeKey);
+    if (currentItemChatRecordId) {
+        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
+        currentItemChatRecordId = null;
+    }
+
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        setTimeout(() => {
+            modalOverlay.style.display = 'none';
+            resetModalState();
+        }, 300);
+        document.body.classList.remove('modal-open');
+    }
 }
 
+// --- MODIFIED: showCheckoutModal for Payment Element ---
 export async function showCheckoutModal(shopSettings) {
     currentShopSettings = shopSettings;
     log('Modal', 'Showing checkout modal.');
@@ -479,24 +522,16 @@ export async function showCheckoutModal(shopSettings) {
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
-    
-    // --- Amount Paid Initialization ---
+
+    // Dynamically set the total cost label based on payment history
     const totalLabel = document.getElementById('checkout-total-label');
-    const amountPaidRowEl = document.getElementById('checkout-amount-paid-row');
-    const amountPaidEl = document.getElementById('checkout-amount-paid');
-
     if (totalLabel) {
-        totalLabel.textContent = 'Total Estimated Cost:';
+        if (state.session.user.amountReceived > 0) {
+            totalLabel.textContent = 'Total Final Cost:';
+        } else {
+            totalLabel.textContent = 'Total Estimated Cost:';
+        }
     }
-
-    const amountReceived = state.session.user.amountReceived || 0;
-    if (amountReceived > 0) {
-        if (amountPaidRowEl) amountPaidRowEl.style.display = 'flex';
-        if (amountPaidEl) amountPaidEl.textContent = `-$${amountReceived.toFixed(2)}`;
-    } else {
-        if (amountPaidRowEl) amountPaidRowEl.style.display = 'none';
-    }
-    // --- End Amount Paid Initialization ---
 
     if (!checkoutModalOverlay) return;
 
@@ -521,35 +556,20 @@ export async function showCheckoutModal(shopSettings) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        // --- FIXED MINIMUM QUANTITY LOGIC ---
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const effectiveQuantity = Math.max(itemInfo.quantity, headcountMin);
-        // --- END FIXED LOGIC ---
-
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
 
-        const itemTotal = price * effectiveQuantity; // Use effective quantity for final calculation
+        const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
-        
         const listItem = document.createElement('li');
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml += `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
         
-        // --- NEW MINIMUM QUANTITY WARNING NOTE ---
-        let quantityDisplay = `${itemInfo.quantity}`;
-        if (itemInfo.quantity < headcountMin) {
-            const warningText = `*Minimum order of ${headcountMin} applied in calculation.`;
-            noteHtml += `<small class="checkout-summary-note min-qty-warning">${warningText}</small>`;
-            quantityDisplay = `${itemInfo.quantity} (calc: ${effectiveQuantity})`; // Display actual qty vs calculated qty
-        }
-        // --- END NEW NOTE ---
-
         listItem.innerHTML = `
             <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${quantityDisplay})</span>
+                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity})</span>
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
@@ -561,10 +581,10 @@ export async function showCheckoutModal(shopSettings) {
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
-    if (currentShopSettings.paymentOptions === 'DepositOrFull' && amountReceived === 0) {
+    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.addEventListener('change', updateCheckoutDisplay);
+            radio.addEventListener('change', updateProcessingFeeDisplay);
         });
     } else {
         paymentChoiceContainer.style.display = 'none';
@@ -574,42 +594,36 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
     }
 
-    updateCheckoutDisplay();
-    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
+    // --- NEW LOGIC FOR PAYMENT ELEMENT INITIALIZATION ---
+    tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
     
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
         
-        // --- REFACTOR: Replace elements.create('card') with the Payment Element ---
-        const appearance = { /* Optional: customize appearance */ };
+        // 1. Initialize Stripe Elements shell (we use a placeholder secret until we have the real fee calc)
+        const elements = stripe.elements({ clientSecret: 'pi_dummy_client_secret', appearance: { theme: 'stripe' } }); 
         
-        // 1. Fetch the Client Secret first (same call as before)
-        const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // You may need to update the intent to support more currencies/methods
-            body: JSON.stringify({ amount: finalAmountInCents }), 
-        });
-        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
-        const paymentIntentData = await intentResponse.json();
-        const clientSecret = paymentIntentData.clientSecret;
-
-        // 2. Initialize and Mount the Payment Element
-        const elements = stripe.elements({ clientSecret, appearance });
+        const cardElementContainer = document.getElementById('card-element');
+        if (cardElementContainer) cardElementContainer.innerHTML = '';
         
-        // Replace the existing card element container ID
-        const paymentElementContainer = document.getElementById('card-element');
-        if (paymentElementContainer) paymentElementContainer.innerHTML = '';
-        
+        // 2. Create the unified Payment Element
         const paymentElement = elements.create('payment');
-        paymentElement.mount('#card-element'); 
+        paymentElement.mount('#card-element');
         
-        // Store 'elements' and 'paymentElement' instead of 'cardElement'
+        // 3. Store both for use in submission and fee update
         checkoutModalOverlay.stripeElements = elements;
         checkoutModalOverlay.paymentElement = paymentElement;
-        // --- END REFACTOR ---
         
-        // ... existing UI show logic ...
+        // 4. Attach listener to trigger fee recalculation if payment method changes
+        paymentElement.on('change', (event) => {
+             // Re-run fee calculation any time the user interacts with the payment element
+             updateProcessingFeeDisplay(); 
+        });
+
+        // 5. Initial fetch of the clientSecret and display of fees/amount due
+        await updateProcessingFeeDisplay(); 
+
+        // 6. Final UI show
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
@@ -622,8 +636,33 @@ export async function showCheckoutModal(shopSettings) {
         hideCheckoutModal();
     }
 }
+// --- END MODIFIED showCheckoutModal ---
+
+export function hideCheckoutModal() {
+    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
+    if (checkoutModalOverlay) {
+        if (checkoutModalOverlay.removeEventListenerOnClick) {
+            checkoutModalOverlay.removeEventListenerOnClick();
+        }
+        document.getElementById('tip-amount')?.removeEventListener('input', updateProcessingFeeDisplay);
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
+            radio.removeEventListener('change', updateProcessingFeeDisplay);
+        });
+        checkoutModalOverlay.classList.remove('active');
+        setTimeout(() => {
+            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
+            if (checkoutCloseBtn) {
+                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
+            }
+            checkoutModalOverlay.style.display = 'none';
+            log('Modal', 'Checkout modal hidden.');
+        }, 300);
+        document.body.classList.remove('modal-open');
+    }
+}
 
 export function getStripeContext() {
-    const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
-    return { stripe, cardElement };
+    // We now rely on the stripeElements being stored on the overlay for submission
+    const elements = document.getElementById('checkout-modal-overlay')?.stripeElements;
+    return { stripe, elements };
 }
