@@ -16,9 +16,10 @@ import { showUserModal } from './auth.js';
 // --- NEW ---
 import { addEnergy } from './components/backgroundEngine.js'; // Import the boost function
 // --- END NEW ---
-
+// --- FIX: ADD MISSING CALENDAR IMPORT ---
+import { setupCalendarEventListeners } from './components/calendarView.js'; 
+// --- END FIX ---
 let mainDatePicker = null;
-// ... (rest of variables are the same) ...
 let saveTimeout = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
