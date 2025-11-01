@@ -28,6 +28,7 @@
                 <h1 id="main-shop-title"></h1>
                <div id="marquee-banner-container" style="display: none;"> <div id="marquee-text"></div>
             </div>
+                <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
             </div>
             <div id="header-right">
                 <div id="my-plans-container" style="display: none;">
@@ -470,7 +471,21 @@
         </div>
         <button id="mobile-view-plan-btn">View Plan</button>
     </div>
-        
+
+<div id="calendar-modal-overlay" class="modal-overlay">
+        <div class="modal-content" style="max-width: 900px; height: 90vh;">
+            <button id="calendar-close-btn" class="modal-close-btn" title="Close">×</button>
+            <h3 style="margin-top: 10px;">Upcoming Events Calendar</h3>
+            <div id="calendar-body">
+                <div id="event-calendar"></div>
+                <div id="event-details-panel">
+                    <h4>Events on Selected Day:</h4>
+                    <ul id="daily-event-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script type="module" src="main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
