@@ -61,8 +61,13 @@ async function _handleSuccessfulLogin(payload) {
 
     localStorage.setItem('jwt', payload.token);
 
+    // In: auth.js (inside _handleSuccessfulLogin, around line 55)
+
     // --- MOVED STATE UPDATE HERE ---
     const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    // NEW: Extract RSVPs from payload
+    const initialRsvpdItemIds = payload.user.rsvpdItemIds || []; 
+    
     setState({
         session: {
             ...state.session,
@@ -72,12 +77,14 @@ async function _handleSuccessfulLogin(payload) {
                 isAuthenticated: true,
                 isOwner: payload.ownerData.isOwner,
                 ownerDashboardId: payload.ownerData.ownerDashboardId,
-                likedItemIds: new Set(initialLikedItemIdsFromPayload)
+                likedItemIds: new Set(initialLikedItemIdsFromPayload),
+                rsvps: new Set(initialRsvpdItemIds) // NEW: Load persistent RSVPs into state
             }
         }
     });
     console.log("[Auth] User state set immediately after login:", state.session.user);
     // --- END MOVED STATE UPDATE ---
+
 
     // --- START LIKES SYNC (Now runs *after* state is updated) ---
     const currentLikedItemIds = state.session.user.likedItemIds;
