@@ -15,7 +15,7 @@ const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
 // --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
-const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
+const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
 // This helper function safely inserts the fee row into the DOM
 (function insertProcessingFeeRow() {
     const section = document.querySelector('.checkout-total-deposit-section');
@@ -23,8 +23,7 @@ const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style
         section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
     }
 })();
-// --- END NEW GLOBAL ---
-
+// --- END NEW GLOBAL ---\n
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -41,10 +40,6 @@ function handleOverlayClick(event) {
         closeDetailModal();
     }
 }
-
-// In: components/modal.js (REPLACING ONLY updateProcessingFeeDisplay)
-
-// ... existing code in components/modal.js ...
 
 // --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
 export async function updateProcessingFeeDisplay() {
@@ -79,22 +74,23 @@ export async function updateProcessingFeeDisplay() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const elements = checkoutModalOverlay?.stripeElements;
     
-    // --- FIX: Read the selected payment type by waiting for the result of elements.getElement().getValue()
-    // NOTE: This call is the key to getting the live selected payment method type.
+    // --- CRITICAL FIX START: Reliably get the selected payment method type ---
     let selectedPaymentMethod = 'card'; // Default fallback
     if (elements) {
          try {
-             // We must await getValue() because it interacts with the Stripe iframe
+             // Use getValue() to pull the current payment method type selected by the user.
+             // This is the definitive way to get the method type before confirmation.
              const valueResult = await elements.getElement('payment').getValue();
              if (valueResult.value?.type) {
                  selectedPaymentMethod = valueResult.value.type;
              }
          } catch (e) {
-             log('Stripe', 'Failed to get live payment method type, defaulting to card.', e);
+             // This is expected if the element is not yet fully rendered/valid, stick with 'card'.
+             log('Stripe', 'Warning: Could not get live payment method type from Stripe Element, defaulting to card.', e);
          }
     }
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- END FIX ---
+    // --- CRITICAL FIX END ---
 
     try {
         // We only proceed if the amount is valid 
@@ -111,7 +107,7 @@ export async function updateProcessingFeeDisplay() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
-                paymentMethodType: selectedPaymentMethod // Now sends the live selected type
+                paymentMethodType: selectedPaymentMethod 
             }),
         });
         if (!intentResponse.ok) throw new Error('Fee calculation failed.');
@@ -142,7 +138,7 @@ export async function updateProcessingFeeDisplay() {
 
     } catch (err) {
         console.error('Failed to update processing fee:', err);
-        // Fallback if API fails: try to reset UI cleanly
+        // Fallback logic
         const fee = 0; 
         document.getElementById('processing-fee-cost').textContent = `$${fee.toFixed(2)}`;
         document.querySelector('.processing-fee-row').style.display = 'none';
@@ -150,6 +146,7 @@ export async function updateProcessingFeeDisplay() {
     }
 }
 // --- END MODIFIED FUNCTION ---
+
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
@@ -498,7 +495,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem,
+            isChatEnabledOnItem: isChatChatEnabledOnItem,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
@@ -668,6 +665,7 @@ export async function showCheckoutModal(shopSettings) {
 
         // 3. Initialize Stripe Elements with the REAL Client Secret
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        // Use a real clientSecret here! This resolves the original IntegrationError.
         const elements = stripe.elements({ clientSecret, appearance: { theme: 'stripe' } }); 
         
         const cardElementContainer = document.getElementById('card-element');
@@ -682,16 +680,14 @@ export async function showCheckoutModal(shopSettings) {
         checkoutModalOverlay.paymentElement = paymentElement;
         
         // 6. This recalculates the fee and total due based on the initial default state (no tip, deposit vs full)
-        // We know this will succeed now because we have the real clientSecret and the amount is > 0.
+        // We call it once to set the correct initial fee and amount.
         await updateProcessingFeeDisplay(); 
 
         // 7. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
         tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
         
-        // --- IMPORTANT FIX: Listen to the Stripe Element change event ---
-        // This event fires when the user selects a different payment method (e.g., switches to ACH).
+        // Listen to the Stripe Element change event to update the fee when method changes
         paymentElement.on('change', () => updateProcessingFeeDisplay()); 
-        // --- END FIX ---
         
         // 8. Final UI show
         document.getElementById('payment-form').style.display = 'block';
