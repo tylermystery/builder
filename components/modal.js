@@ -15,7 +15,7 @@ const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
 // --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
-const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
+const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
 // This helper function safely inserts the fee row into the DOM
 (function insertProcessingFeeRow() {
     const section = document.querySelector('.checkout-total-deposit-section');
@@ -23,8 +23,7 @@ const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style
         section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
     }
 })();
-// --- END NEW GLOBAL ---
-
+// --- END NEW GLOBAL ---\n
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -42,7 +41,7 @@ function handleOverlayClick(event) {
     }
 }
 
-// --- NEW FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
+// --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
 export async function updateProcessingFeeDisplay() {
     const fullTotalEl = document.getElementById('full-total-price');
     const finalTotal = parseFloat(fullTotalEl?.dataset.total || 0); // Total BEFORE tip/fee
@@ -74,10 +73,25 @@ export async function updateProcessingFeeDisplay() {
     
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const elements = checkoutModalOverlay?.stripeElements;
-
-    // The payment method type is assumed to be 'card' or another default for the intent creation
-    // as the Payment Element's selection doesn't drive this logic, only the server's response.
-    const selectedPaymentMethod = 'card'; // Placeholder or actual detection logic needed here if fees change mid-flow
+    const paymentElement = checkoutModalOverlay?.paymentElement;
+    
+    // --- FIX: Extract the actual payment method type from the Payment Element instance ---
+    // This value defaults to 'card' if the element hasn't loaded or selected anything yet.
+    // In a real scenario, we check the type selected by the Payment Element UI.
+    let selectedPaymentMethod = 'card';
+    if (paymentElement && elements) {
+         try {
+             // The payment element object has an internal `value` method to expose info
+             const paymentMethodData = await elements.getElement('payment').getPaymentMethodData({ details: 'auto' });
+             if (paymentMethodData.paymentMethod?.type) {
+                 selectedPaymentMethod = paymentMethodData.paymentMethod.type;
+             }
+         } catch (e) {
+             log('Stripe', 'Could not get payment method type from element on change:', e);
+         }
+    }
+    log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
+    // --- END FIX ---
 
     try {
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
@@ -123,13 +137,12 @@ export async function updateProcessingFeeDisplay() {
         document.querySelector('.processing-fee-row').style.display = 'none';
         document.getElementById('deposit-price').textContent = `$${amountToChargeBeforeFee.toFixed(2)}`;
 
-        // If elements exist, try to update with a dummy secret to keep it alive (less likely to work)
         if (elements) {
              elements.update({ clientSecret: 'pi_dummy_client_secret' });
         }
     }
 }
-// --- END NEW FUNCTION ---
+// --- END MODIFIED FUNCTION ---
 
 
 function getBreadcrumbs(record) {
@@ -411,7 +424,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalQuantitySelector.innerHTML = '';
     }
 
-    // --- Calendar Initialization (with conditional display) ---\n    modalCalendarContainer.innerHTML = '';
+    // --- Calendar Initialization (with conditional display) ---
+    modalCalendarContainer.innerHTML = '';
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
     if (iCalUrl) {
@@ -641,14 +655,18 @@ export async function showCheckoutModal(shopSettings) {
         checkoutModalOverlay.stripeElements = elements;
         checkoutModalOverlay.paymentElement = paymentElement;
         
-        // This recalculates the fee and total due based on the initial default state (no tip, deposit vs full)
+        // 6. This recalculates the fee and total due based on the initial default state (no tip, deposit vs full)
         await updateProcessingFeeDisplay(); 
 
-        // 6. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
+        // 7. Attach listener to trigger fee recalculation if user changes Tip or Payment Choice
         tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
-        paymentElement.on('change', () => updateProcessingFeeDisplay()); // Re-run fee display on PM change
         
-        // 7. Final UI show
+        // --- IMPORTANT FIX: Listen to the Stripe Element change event ---
+        // This event fires when the user selects a different payment method (e.g., switches to ACH).
+        paymentElement.on('change', () => updateProcessingFeeDisplay()); 
+        // --- END FIX ---
+        
+        // 8. Final UI show
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
@@ -673,7 +691,7 @@ export function hideCheckoutModal() {
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.removeEventListener('change', updateProcessingFeeDisplay);
         });
-        // Remove Stripe Payment Element change listener (if it were easier, but handling in show is sufficient)
+        // Note: The Payment Element's 'change' listener is removed when the element instance is garbage collected.
 
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
