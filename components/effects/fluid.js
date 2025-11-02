@@ -1,8 +1,8 @@
 // In: components/effects/fluid.js
-// Action: Create this new file.
+// Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
-console.log('[fluid.js] File execution started.');
+console.log('[fluid.js] File execution started. (Progress-Controlled)');
 // --- DEBUG ---
 
 import { Shader } from '../../utils/shader.js';
@@ -20,12 +20,13 @@ const vsSource = `
 `;
 
 // 2. Fragment Shader (The "Vortex" / "Tie-Dye")
-// This code runs for every single pixel on the screen.
+// We replace the reliance on u_time for color with u_progress.
 const fsSource = `
     precision mediump float;
     uniform vec2 u_resolution;
     uniform float u_time;
-    uniform float u_energy; // Our new "wormhole" variable
+    uniform float u_energy; 
+    uniform float u_progress; // NEW: Controls the base color of the spectrum (0.0 to 1.0)
 
     // This is a function that creates organic-looking "noise"
     float random(vec2 st) {
@@ -40,12 +41,10 @@ const fsSource = `
         float b = random(i + vec2(1.0, 0.0));
         float c = random(i + vec2(0.0, 1.0));
         float d = random(i + vec2(1.0, 1.0));
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.y * u.x;
+        vec2 u = f * f * (3.0 - 2.0 * f);\n        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.y * u.x;
     }
 
-    void main() {
-        // 1. Normalize coordinates (from 0.0 to 1.0)
+    void main() {\n        // 1. Normalize coordinates (from 0.0 to 1.0)
         vec2 st = gl_FragCoord.xy / u_resolution.xy;
         st.x *= u_resolution.x / u_resolution.y; // Fix aspect ratio
 
@@ -57,15 +56,15 @@ const fsSource = `
         float radius = length(centered_st);
 
         // 4. Create the "vortex"
-        // We add the time and angle, and use the "noise" function.
-        // The "energy" makes the time go faster and the swirl tighter.
+        // The vortex movement still depends on time and the energy boost.
         float vortex_speed = u_time * (0.2 + u_energy * 2.0);
         float vortex_twist = u_energy * 5.0;
         float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
 
-// 5. Create a soft, analogous color gradient by lowering the spatial frequency.
-        // Change the '5.0' multiplier to '1.5' for much broader, softer bands.
-        float base_wave = n * 1.5 + u_time * 0.4; // Slower spatial change, 2-3 adjacent colors visible
+        // 5. Calculate Color from Progress
+        // We use the progress variable to define the base hue.
+        // The noise still creates the fluid bands, but they shift based on u_progress.
+        float base_wave = n * 1.5 + u_progress * 10.0; // Use progress for base hue offset
         
         // Define the standard 120-degree phase shift for full spectrum HSL cycling
         const float PI_2_OVER_3 = 2.0943951; 
@@ -96,7 +95,8 @@ const fluidEffect = {
         shader = new Shader(gl, vsSource, fsSource);
     }, 
 
-    draw: (gl, width, height, time, energy) => {
+    // MODIFIED: Added 'progress' to the draw function
+    draw: (gl, width, height, time, energy, progress) => { 
         if (!shader) return;
 
         shader.use();
@@ -105,6 +105,7 @@ const fluidEffect = {
         gl.uniform2f(shader.getUniformLocation("u_resolution"), width, height);
         gl.uniform1f(shader.getUniformLocation("u_time"), time);
         gl.uniform1f(shader.getUniformLocation("u_energy"), energy);
+        gl.uniform1f(shader.getUniformLocation("u_progress"), progress); // NEW: Pass progress
         
         // Draw the full-screen rectangle
         gl.drawArrays(gl.TRIANGLES, 0, 6);
