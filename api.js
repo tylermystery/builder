@@ -483,6 +483,46 @@ export async function fetchAllStores() {
     }
 }
 
+// In: api.js (Add this function near fetchAllStores)
+
+/**
+ * Fetches name and relevant title information for a given array of store IDs.
+ * @param {string[]} storeIds - Array of Airtable Store record IDs.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of store objects.
+ */
+export async function fetchStoreDetailsByIds(storeIds) {
+    if (!storeIds || storeIds.length === 0) {
+        return [];
+    }
+
+    const formula = `OR(${storeIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+    const encodedFormula = encodeURIComponent(formula);
+    // Fetch only the Name and Shop Title
+    const fieldsQuery = `fields%5B%5D=Name&fields%5B%5D=Shop%20Title`; 
+    
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${STORES_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching store details:', errorText);
+            throw new Error('Failed to fetch store details from Airtable.');
+        }
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} store details.`);
+        return data.records.map(record => ({
+            id: record.id,
+            name: record.fields.Name,
+            shopTitle: record.fields['Shop Title']
+        }));
+    } catch (error) {
+        console.error("Error fetching store details:", error);
+        return [];
+    }
+}
 
 export async function fetchCalendarForRecord(record) {
     if (!record || !record.fields) return [];
