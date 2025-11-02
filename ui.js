@@ -238,13 +238,32 @@ function hideShopSwitcher() {
     }
 }
 
+// In: ui.js (around line 347)
+// REPLACE the entire showShopSwitcher function with this:
+
 export function showShopSwitcher() {
     const overlay = document.getElementById('shop-switcher-overlay');
     const listContainer = document.getElementById('shop-list-container');
+    // --- NEW: Get the modal title element ---
+    const modalTitleEl = overlay?.querySelector('.checkout-modal-content h3');
+    // --- END NEW ---
+    
     if (!overlay || !listContainer) return;
+
+    // --- NEW: Set the branded title and styles ---
+    if (modalTitleEl) {
+        modalTitleEl.innerHTML = `www.whatthefun.wtf <sup>fun finder</sup>`;
+        modalTitleEl.style.fontSize = '1.5em';
+        modalTitleEl.style.fontWeight = 'bold';
+    } else {
+        console.warn('Shop switcher modal title element not found for branding.');
+    }
+    // --- END NEW ---
+
     const storeRecords = state.stores.all;
     listContainer.innerHTML = ''; 
     storeRecords.forEach(record => {
+// ... rest of function remains the same ...
         const link = document.createElement('a');
         link.href = `/?shopId=${record.id}`;
         link.textContent = record.fields.Name;
