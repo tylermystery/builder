@@ -2,10 +2,10 @@
 // Action: REPLACE THE ENTIRE FILE
 
 // --- DEBUG ---
-console.log('[backgroundEngine.js] File execution started.');
+console.log('[backgroundEngine.js] File execution started. (Progress Engine)');
 // --- DEBUG ---
 
-import { state } from '../state.js';
+import { state, setState } from '../state.js'; // Import setState
 import { CONSTANTS } from '../config.js';
 import { log } from '../utils/debug.js';
 
@@ -31,6 +31,8 @@ function animationLoop(timestamp) {
         return;
     }
 
+    const currentProgress = state.ui.currentProgress; // Get the progress
+
     // --- NEW: Hybrid Loop ---
     if (currentEffect.type === 'webgl') {
         // --- WebGL (Fluid) Path ---
@@ -44,7 +46,8 @@ function animationLoop(timestamp) {
         currentEnergy *= 0.95; 
         if (currentEnergy < 0.01) currentEnergy = 0.0;
         
-        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy);
+        // MODIFIED: Pass currentProgress to the draw function
+        currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, currentProgress);
 
     } else if (currentEffect.type === 'canvas') {
         // --- Canvas 2D (Fractal) Path ---
@@ -55,6 +58,7 @@ function animationLoop(timestamp) {
         const deltaTime = timestamp - lastTimestamp_2d;
         lastTimestamp_2d = timestamp;
 
+        // 2D effects don't use progress, but we still draw them
         currentEffect.draw(ctx_2d, canvas.width, canvas.height, deltaTime, currentColors, settings);
     }
     // --- END Hybrid Loop ---
@@ -71,6 +75,32 @@ function animationLoop(timestamp) {
 export function addEnergy() {
     log('BG-Engine', 'Adding energy boost!');
     currentEnergy = 1.0; // Set energy to max
+}
+
+/**
+ * Public API: Updates the color progress variable based on user action.
+ * @param {number} weight - The positive or negative value to add to progress.
+ */
+export function updateProgress(weight) {
+    let newProgress = state.ui.currentProgress + weight;
+    
+    // Clamp the value between 0.0 and 1.0
+    newProgress = Math.min(1.0, Math.max(0.0, newProgress));
+
+    if (newProgress !== state.ui.currentProgress) {
+        log('BG-Engine', `Progress updated: ${state.ui.currentProgress.toFixed(3)} -> ${newProgress.toFixed(3)} (Weight: ${weight})`);
+        setState({
+            ui: {
+                ...state.ui,
+                currentProgress: newProgress
+            }
+        });
+        
+        // Optional: Add a subtle energy boost on forward progress to make it pop
+        if (weight > 0) {
+            currentEnergy = Math.min(1.0, currentEnergy + weight * 5); 
+        }
+    }
 }
 
 // This function is for 2D effects (like Fractal)
