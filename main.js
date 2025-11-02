@@ -276,12 +276,20 @@ async function initialize() {
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer';
             titleElement.addEventListener('click', (e) => {
+                // Keep existing behavior: navigating to the active shop home if the title is clicked
                 if (e.target.id !== 'shop-switcher-trigger') {
                     window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;
                 }
             });
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher());
+
+            // --- NEW: Add listener for the prominent WTF button ---
+            const parentCollectiveTrigger = document.getElementById('parent-collective-trigger');
+            if (parentCollectiveTrigger) parentCollectiveTrigger.addEventListener('click', () => {
+                // For now, reuse the existing shop switcher modal
+                ui.showShopSwitcher();
+            });
         }
         
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
