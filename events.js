@@ -12,7 +12,6 @@ import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-// MODIFIED: Import BOTH functions from backgroundEngine
 import * as backgroundEngine from './components/backgroundEngine.js'; 
 import { updateProcessingFeeDisplay } from './components/modal.js';
 
@@ -38,7 +37,7 @@ function updateProgressForAction(actionName) {
             break;
         case 'unlike':
             weight = -0.015; // Medium Negative
-            break;
+            break;\
         case 'increase-qty':
         case 'option-change':
             weight = 0.005; // Minor Positive
@@ -50,7 +49,7 @@ function updateProgressForAction(actionName) {
         case 'filter-change':
             weight = 0.002; // Tiny Positive boost for engagement
             break;
-        default:
+        default:\
             weight = 0.0;
     }
     if (weight !== 0.0) {
@@ -144,13 +143,13 @@ export function triggerSave() {
 
 export async function updateAllCardAvailabilityIcons() {
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        document.querySelectorAll('.availability-btn').forEach(icon => {
+        document.querySelectorAll('.availability-btn').forEach(icon => {\
             if (icon._tippy) icon._tippy.destroy();
             icon.title = 'Select a date range to check availability';
             icon.textContent = '📅';
         });
         return;
-    }
+    }\
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
     const cards = document.querySelectorAll('.event-card');
@@ -172,17 +171,16 @@ export async function updateAllCardAvailabilityIcons() {
                 default: statusIcon = '📅';
             }
             
-            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
-            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;\
+            const tooltipContent = `<div style=\"text-align: left;\"><strong>${dateRangeString}</strong><hr style=\"margin: 2px 0 5px;\"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
-        }
-    }
+        }\
+    }\
 }
 
-
-// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---
+// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---\
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -208,19 +206,18 @@ async function handlePaymentFormSubmit(event) {
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
         return;
-    }
+    }\
     
     try {
-        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---
+        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---\
         // We rely on the core logic here, which will also update the stripeElements object with the new clientSecret
-        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
-        const amountReceived = state.session.user.amountReceived || 0;
-        const totalDue = finalTotal - amountReceived;
-        const isFirstPayment = amountReceived === 0;
-        
+        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);\
+        const amountReceived = state.session.user.amountReceived || 0;\
+        const totalDue = finalTotal - amountReceived;\
+        \
         // This logic calculates the amount before the fee, including deposit/full choice
         let baseAmountToCharge = totalDue;
-        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
+        const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
         
         if (amountReceived === 0) {
             const shopSettings = state.stores.all.find(s => s.id === state.ui.activeShopId)?.fields;
@@ -229,15 +226,15 @@ async function handlePaymentFormSubmit(event) {
             } else {
                  baseAmountToCharge = finalTotal * 0.35;
             }
-        }
+        }\
         
         const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
         const finalAmountToChargeBeforeFee = baseAmountToCharge + tipAmount;
 
         const amountInCentsBeforeFee = Math.round(finalAmountToChargeBeforeFee * 100);
         if (amountInCentsBeforeFee < 50) {
-            throw new Error("Final amount is too low to process.");
-        }
+            throw new Error(\"Final amount is too low to process.\");
+        }\
 
         // We call updateProcessingFeeDisplay one last time to ensure a fresh clientSecret reflecting the exact amount + tip + fee is generated and applied to the elements.
         await updateProcessingFeeDisplay(); 
@@ -246,7 +243,7 @@ async function handlePaymentFormSubmit(event) {
         const { error: submitError } = await stripeElements.submit();
         if (submitError) {
              throw new Error(submitError.message);
-        }
+        }\
 
         // 3. Extract the final clientSecret from the latest intent created by updateProcessingFeeDisplay
         // This is a direct fetch since the clientSecret is not exposed globally by the Payment Element
@@ -283,7 +280,7 @@ async function handlePaymentFormSubmit(event) {
         if (error) {
             console.error('Stripe Payment Confirmation Error:', error);
             throw new Error(error.message);
-        }
+        }\
 
         if (paymentIntent.status === 'succeeded') {
             log('Events', 'Payment succeeded.');
@@ -309,25 +306,24 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('payment-success-message').style.display = 'block';
 
             setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
-        } else {
+        } else {\
              log('Events', `Payment status is ${paymentIntent.status}. No immediate action needed if user was redirected.`);
-        }
+        }\
     } catch (err) {
         log('Events', `Stripe payment error: ${err.message}`);
         cardErrors.textContent = err.message;
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
-    }
+    }\
 }
-// --- END MODIFIED handlePaymentFormSubmit ---
-
+// --- END MODIFIED handlePaymentFormSubmit ---\
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
-        else console.warn(`Element with ID "${selector}" not found.`);
+        else console.warn(`Element with ID \"${selector}\" not found.`);
     };
 
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
@@ -378,7 +374,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             setDebugMode(debugEnabled);
             log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
         });
-    }
+    });
 
     let scrollTimeout;
     window.addEventListener('scroll', () => {
@@ -392,11 +388,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }, 100);
     });
 
-    // --- START CONSOLIDATED BUTTON GENERATION ---
+    // --- START CONSOLIDATED BUTTON GENERATION (Same as before) ---\
     if (categoryFiltersContainer) {
         categoryFiltersContainer.innerHTML = ''; 
     } else {
-        console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.");
+        console.error(\"CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.\");
     }
 
     if (categoryFiltersContainer) { 
@@ -434,9 +430,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 button.textContent = catRecord.fields.Name;
                 categoryFiltersContainer.appendChild(button);
             });
-        }
+        }\
     } 
-    // --- END CONSOLIDATED BUTTON GENERATION ---
+    // --- END CONSOLIDATED BUTTON GENERATION ---\
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
@@ -523,7 +519,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -542,9 +538,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
-    mainDatePicker = flatpickr("#date-filter", {
-        mode: "range",
-        dateFormat: "M j, Y",
+    mainDatePicker = flatpickr(\"#date-filter\", {\
+        mode: \"range\",
+        dateFormat: \"M j, Y\",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
@@ -559,7 +555,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 triggerSave();
                 await updateAllCardAvailabilityIcons();
                 await updateMobileBarAvailability();
-            }
+            }\
             updateProgressForAction('filter-change');
         },
     });
@@ -583,7 +579,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             case 'next-2-weeks':
                 endDate.setDate(today.getDate() + 14);
                 break;
-        }
+        }\
         mainDatePicker.setDate([startDate, endDate], true);
         updateProgressForAction('filter-change');
     });
@@ -631,7 +627,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (breadcrumbLink) {
             e.preventDefault();
             const filterValue = breadcrumbLink.dataset.filter;
-            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
+            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${filterValue}\"]`);
             if (targetButton) {
                 targetButton.click();
             }
@@ -652,7 +648,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             try {
                 const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
                 if (updatedRecord) {
-                    rsvpBtn.textContent = "You're Going! ✅";
+                    rsvpBtn.textContent = \"You're Going! ✅\";
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
                     updateProgressForAction('add-to-plan'); // RSVP is a major commitment
@@ -660,7 +656,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     throw new Error('RSVP update failed.');
                 }
             } catch (error) {
-                console.error("RSVP Error:", error);
+                console.error(\"RSVP Error:\", error);
                 ui.showToast(`RSVP Error: ${error.message}`);
                 rsvpBtn.textContent = 'Error!';
                 setTimeout(() => {
@@ -683,7 +679,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
-                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
+                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]\
                                      .find(btn => btn.textContent === parentName);
                 if (targetButton) {
                     const isCategory = !!targetButton.closest('#category-filters');
@@ -770,7 +766,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
                       applyFiltersAndSort(imageCache);
                  }
-            }
+            }\
         }
         
         else if (addToPlanBtn) {
@@ -850,11 +846,20 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
+                 // --- NEW REDIRECT LOGIC ---
+                 const linkedStore = state.stores.all.find(s => s.fields.Name === groupName);
+                 if (!parentName && linkedStore) {
+                     log('Events', `Grouping "${groupName}" matches a Store name. Redirecting to store.`);
+                     window.location.href = `/?shopId=${linkedStore.id}`;
+                     return; // Stop further execution
+                 }
+                 // --- END NEW REDIRECT LOGIC ---
+
                  if (!parentName) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
                      if (categoryFiltersContainer) {
                          categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`)?.classList.add('active');
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
                      }
                      updateSubcategoryButtons();
                  } else {
@@ -862,12 +867,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                      if (categoryFiltersContainer) {
                          categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter="${parentNameLower}"]`)?.classList.add('active');
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${parentNameLower}\"]`)?.classList.add('active');
                      }
                      updateSubcategoryButtons();
                      if (subcategoryFiltersContainer) {
                          subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter="${groupNameLower}"]`)?.classList.add('active');
+                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
                      }
                  }
                  applyFiltersAndSort(imageCache);
@@ -932,28 +937,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             triggerSave();
         }
     });
-    const eventPlanDatePicker = flatpickr("#event-date-picker", {
-        dateFormat: "M j, Y",
+    const eventPlanDatePicker = flatpickr(\"#event-date-picker\", {\
+        dateFormat: \"M j, Y\",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
             } else {
                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-            }
+            }\
             await ui.updateEventPlanDateDisplay();
             await ui.updateLockedItemStatusIcons();
             await updateMobileBarAvailability();
             triggerSave();
             updateProgressForAction('filter-change');
-        }
+        }\
     });
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
     ui.setupPresentationEventListeners();
-    safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+    safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);\
 
     setupItineraryEventListeners();
 
@@ -983,15 +988,15 @@ export function initializeChatEventListeners() {
             } else {
                 chatWidgetContainer.classList.toggle('chat-open');
             }
-        }
-    }
+        }\
+    }\
 
     if (chatToggleButton) {
         chatToggleButton.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleChatWindow();
         });
-    }
+    }\
 
     document.addEventListener('click', (event) => {
         const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
@@ -999,7 +1004,7 @@ export function initializeChatEventListeners() {
             if (!remainOpenCheckbox || !remainOpenCheckbox.checked) {
                 toggleChatWindow(true);
             }
-        }
+        }\
     });
 }
 
