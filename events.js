@@ -519,7 +519,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
