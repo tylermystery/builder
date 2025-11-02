@@ -1,9 +1,14 @@
 // FILE: state.js (REPLACE ENTIRE FILE)
 /*
- * Version: 3.3.0
- * Last Modified: 2025-10-24
+ * Version: 3.4.1
+ * Last Modified: 2025-11-01
  *
  * Changelog:
+ * v3.4.1 - 2025-11-01
+ * - FIX: Implemented a specific deep-merge for the 'ui' property to prevent 'toFixed of undefined' errors 
+ * when updating nested state variables (like currentProgress) that rely on the previous state.
+ * v3.4.0 - 2025-11-01
+ * - Added 'currentProgress' to state.ui for the background color engine.
  * v3.3.0 - 2025-10-24
  * - Added `likedItemIds` Set to state.session.user for persistent like tracking.
  * v3.2.0 - 2025-09-24
@@ -60,32 +65,41 @@ export let state = {
         saveState: 'SAVED',
         isInitializing: true,
         activeShopId: null,
+        currentProgress: 0.0, // NEW: Background color progress (0.0 to 1.0)
     },
 };
 
 // Allows modules to update the state and trigger re-renders if needed
 export function setState(newState) {
-    // Basic merge, assumes newState is flat or carefully structured
-    // For nested updates like user properties, the caller should provide the full nested object
-    state = { ...state, ...newState };
+    let updatedState = { ...state, ...newState };
 
-    // Example deep merge for session.user if needed (more robust but complex)
-    // if (newState.session && newState.session.user) {
-    //     state = {
-    //         ...state,
-    //         session: {
-    //             ...state.session,
-    //             user: {
-    //                 ...state.session.user,
-    //                 ...newState.session.user
-    //             }
-    //         }
-    //     };
-    //     // Handle other potential nested updates similarly
-    // } else {
-    //      state = { ...state, ...newState };
-    // }
+    // FIX: Deep merge for UI properties to ensure continuity
+    if (newState.ui) {
+        updatedState.ui = { 
+            ...state.ui, 
+            ...newState.ui 
+        };
+    }
+    
+    // Also ensuring deep merge for session.user is always safe
+    if (newState.session && newState.session.user) {
+        updatedState.session = {
+            ...state.session,
+            ...newState.session,
+            user: {
+                ...state.session.user,
+                ...newState.session.user
+            }
+        };
+    } else if (newState.session) {
+        // Handle session updates without user data
+        updatedState.session = {
+            ...state.session,
+            ...newState.session,
+        };
+    }
 
-    // Optionally, trigger events or re-renders here if using a framework/library
+
+    state = updatedState;
     // document.dispatchEvent(new CustomEvent('stateChanged'));
 }
