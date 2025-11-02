@@ -21,7 +21,7 @@ let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
 
-// --- NEW FUNCTION: Progress Logic ---
+// --- NEW FUNCTION: Progress Logic (Cleaned) ---
 function updateProgressForAction(actionName) {
     let weight = 0.0;
     // Define weights based on action commitment
@@ -37,7 +37,7 @@ function updateProgressForAction(actionName) {
             break;
         case 'unlike':
             weight = -0.015; // Medium Negative
-            break;
+            break; // <-- CLEANED: Removed stray '\'
         case 'increase-qty':
         case 'option-change':
             weight = 0.005; // Minor Positive
@@ -49,7 +49,7 @@ function updateProgressForAction(actionName) {
         case 'filter-change':
             weight = 0.002; // Tiny Positive boost for engagement
             break;
-        default:
+        default: // <-- CLEANED: Removed stray '\'
             weight = 0.0;
     }
     if (weight !== 0.0) {
@@ -878,7 +878,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  applyFiltersAndSort(imageCache);
 
             } else {
-                ui.showDetailModal(record);
+                // Pass false for the last argument (isFromBrowserHistory) as this is a new click from the catalog card
+                ui.showDetailModal(record, 0, false, false); 
                 updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
