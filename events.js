@@ -37,7 +37,7 @@ function updateProgressForAction(actionName) {
             break;
         case 'unlike':
             weight = -0.015; // Medium Negative
-            break; // <-- CLEANED: Removed stray '\'
+            break; 
         case 'increase-qty':
         case 'option-change':
             weight = 0.005; // Minor Positive
@@ -49,7 +49,7 @@ function updateProgressForAction(actionName) {
         case 'filter-change':
             weight = 0.002; // Tiny Positive boost for engagement
             break;
-        default: // <-- CLEANED: Removed stray '\'
+        default: 
             weight = 0.0;
     }
     if (weight !== 0.0) {
@@ -217,7 +217,7 @@ async function handlePaymentFormSubmit(event) {
         
         // This logic calculates the amount before the fee, including deposit/full choice
         let baseAmountToCharge = totalDue;
-        const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
+        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
         
         if (amountReceived === 0) {
             const shopSettings = state.stores.all.find(s => s.id === state.ui.activeShopId)?.fields;
@@ -519,7 +519,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -538,9 +538,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
-    mainDatePicker = flatpickr(\"#date-filter\", {
-        mode: \"range\",
-        dateFormat: \"M j, Y\",
+    mainDatePicker = flatpickr("#date-filter", {
+        mode: "range",
+        dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
@@ -938,8 +938,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             triggerSave();
         }
     });
-    const eventPlanDatePicker = flatpickr(\"#event-date-picker\", {
-        dateFormat: \"M j, Y\",
+    const eventPlanDatePicker = flatpickr("#event-date-picker", {
+        dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
