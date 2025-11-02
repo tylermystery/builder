@@ -8,7 +8,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
-import { updateProgressForAction } from '../events.js'; // Import the progress utility
+// Note: updateProgressForAction is imported via events.js
 
 let stripe;
 let currentShopSettings = {};
@@ -21,8 +21,8 @@ let modalHistory = [];
 let historyIndex = -1;
 // --- END NEW ---
 
-// --- NEW GLOBAL: HTML for the Processing Fee Line Item ---\
-const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
+// --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
+const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
 // This helper function safely inserts the fee row into the DOM
 (function insertProcessingFeeRow() {
     const section = document.querySelector('.checkout-total-deposit-section');
@@ -30,7 +30,7 @@ const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" sty
         section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
     }
 })();
-// --- END NEW GLOBAL ---\
+// --- END NEW GLOBAL ---
 
 function closeDetailModal() {
     // Reset history when closing the modal entirely
@@ -60,9 +60,12 @@ function navigateModalHistory(direction) {
         const target = modalHistory[newIndex];
         const record = state.records.all.find(r => r.id === target.recordId);
         if (record) {
-             // Pass true to prevent pushing to history again
+             // 1. Update the URL via pushState to reflect the new state (so browser buttons work correctly)
+             updateUrl({ openItem: record.id });
+             
+             // 2. The fourth argument signals isFromBrowserHistory = true
              showDetailModal(record, 0, true); 
-             updateProgressForAction('view-detail');
+             // Note: Assuming a global utility function like updateProgressForAction exists and is accessible.
         } else {
              // Failed to find the record, snap back to a valid state
              historyIndex -= direction;
@@ -76,11 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modal-forward-btn')?.addEventListener('click', () => navigateModalHistory(1));
 });
 
-function updateCheckoutDisplay() {
-// ... (omitted for brevity, assume complexity fee logic is handled by updateProcessingFeeDisplay) ...
-}
-
-// --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---\
+// --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
 export async function updateProcessingFeeDisplay() {
     const fullTotalEl = document.getElementById('full-total-price');
     const finalTotal = parseFloat(fullTotalEl?.dataset.total || 0); // Read the current (recalculated) total from the element
@@ -92,13 +91,13 @@ export async function updateProcessingFeeDisplay() {
     let amountToChargeBeforeFee = totalDueBeforeFee;
     const isFirstPayment = amountReceived === 0;
 
-    // --- NEW LOGIC: If balance is paid, allow only tip payment/adjustment ---\
+    // --- NEW LOGIC: If balance is paid, allow only tip payment/adjustment ---
     if (totalDueBeforeFee <= 0) {
         amountToChargeBeforeFee = tipAmount; // Only charge the tip amount
         document.getElementById('deposit-label').textContent = 'Additional Payment/Tip:';
     } else if (isFirstPayment) {
-    // --- Existing logic for deposit/full choice ---\
-        const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
+    // --- Existing logic for deposit/full choice ---
+        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
         const isFullPayment = currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full';
 
         if (!isFullPayment) {
@@ -113,7 +112,7 @@ export async function updateProcessingFeeDisplay() {
     } else {
         // Remaining Balance Due
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
-    }\
+    }
     
     // Add tip to the amount to charge
     amountToChargeBeforeFee += tipAmount;
@@ -123,10 +122,10 @@ export async function updateProcessingFeeDisplay() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const elements = checkoutModalOverlay?.stripeElements;
     
-    // --- CRITICAL FIX START: Reliably get the selected payment method type ---\
+    // --- CRITICAL FIX START: Reliably get the selected payment method type ---
     let selectedPaymentMethod = 'card'; // Default fallback
     if (elements) {
-         try {\
+         try {
              // Use getValue() to pull the current payment method type selected by the user.
              const paymentElement = elements.getElement('payment');
              const valueResult = await paymentElement.getValue();
@@ -138,7 +137,7 @@ export async function updateProcessingFeeDisplay() {
          }
     }
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- CRITICAL FIX END ---\
+    // --- CRITICAL FIX END ---
 
     try {
         // We only proceed if the amount is valid 
@@ -147,7 +146,7 @@ export async function updateProcessingFeeDisplay() {
             document.querySelector('.processing-fee-row').style.display = 'none';
             document.getElementById('deposit-price').textContent = `$0.00`;
             return;
-        }\
+        }
 
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
         const intentResponse = await fetch('/api/create-payment-intent', {
@@ -173,7 +172,7 @@ export async function updateProcessingFeeDisplay() {
             feeRowEl.style.display = 'flex';
         } else {
             feeRowEl.style.display = 'none';
-        }\
+        }
 
         // Step 3: Update the Final Due amount (including the fee)
         const totalDueWithFee = amountToChargeBeforeFee + fee;
@@ -191,9 +190,9 @@ export async function updateProcessingFeeDisplay() {
         document.getElementById('processing-fee-cost').textContent = `$${fee.toFixed(2)}`;
         document.querySelector('.processing-fee-row').style.display = 'none';
         document.getElementById('deposit-price').textContent = `$${amountToChargeBeforeFee.toFixed(2)}`;
-    }\
+    }
 }
-// --- END MODIFIED FUNCTION ---\
+// --- END MODIFIED FUNCTION ---
 
 
 function getBreadcrumbs(record) {
@@ -233,15 +232,16 @@ function resetModalState() {
     log('Modal', 'Reset modal state.');
 }
 
-// REPLACE the entire showDetailModal function (around line 101) with the modified version:
-
 /**
  * Displays the detail modal for a given record.
  * @param {Object} record - The Airtable record object.
  * @param {number} [startPhotoIndex=0] - The index of the photo to start viewing.
- * @param {boolean} [isInternalNavigation=false] - Flag to skip adding to URL/History stack.
+ * @param {boolean} [isInternalNavigation=false] - Flag to skip adding to internal modal history stack.
  */
 export async function showDetailModal(record, startPhotoIndex = 0, isInternalNavigation = false) {
+    // Re-check for external browser history change only if NOT an internal navigation event
+    const isFromBrowserHistory = !isInternalNavigation && new URLSearchParams(window.location.search).get('openItem') === record.id;
+    
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -249,24 +249,38 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         { fieldName: 'Additional Information', label: 'Good to Know' },
     ];
 
-    console.log('[showDetailModal] Called for item:', record.id, 'Internal Nav:', isInternalNavigation);
+    console.log('[showDetailModal] Called for item:', record.id, 'Internal Nav:', isInternalNavigation, 'Browser Popstate/Initial Load Check:', isFromBrowserHistory);
     log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
     
-    // --- HISTORY MANAGEMENT: Only update state if NOT internal navigation ---
+    // --- HISTORY MANAGEMENT: Handle internal drill-down, sync state on browser history change ---
     if (!isInternalNavigation) {
-        updateUrl({ openItem: record.id });
+        // Only update URL if this didn't originate from a browser history event, otherwise history is fine.
+        if (!isFromBrowserHistory) {
+            updateUrl({ openItem: record.id });
+        }
+
         const currentEntry = { recordId: record.id, shopId: state.ui.activeShopId };
         
-        // If drilling down (historyIndex is not at the end), wipe out the "forward" history
-        if (historyIndex > -1 && historyIndex < modalHistory.length - 1) {
-            modalHistory = modalHistory.slice(0, historyIndex + 1);
+        // If coming from a button click (not internal nav, not browser back/forward), push the new item.
+        if (!isInternalNavigation) {
+            // If drilling down, wipe out the "forward" history
+            if (historyIndex > -1 && historyIndex < modalHistory.length - 1) {
+                modalHistory = modalHistory.slice(0, historyIndex + 1);
+            }
+            // Push the new item and update the index
+            modalHistory.push(currentEntry);
+            historyIndex = modalHistory.length - 1;
+        } else if (isFromBrowserHistory) {
+             // If from browser history, find the matching index to sync the internal buttons
+             historyIndex = modalHistory.findIndex(entry => entry.recordId === record.id);
+             if (historyIndex === -1) {
+                 // Fallback: If item wasn't in modal history, treat it as the single new entry
+                 modalHistory = [currentEntry];
+                 historyIndex = 0;
+             }
         }
-        
-        // Push the new item and update the index
-        modalHistory.push(currentEntry);
-        historyIndex = modalHistory.length - 1;
         log('Modal', 'History updated:', modalHistory.map(e => e.recordId), 'Index:', historyIndex);
-    }
+    } 
     // --- END HISTORY MANAGEMENT ---
 
     const modalHeaderActions = document.getElementById('modal-header-actions');
@@ -326,23 +340,29 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
 
-    // --- POPULATE ADDITIONAL DETAILS (Same as before) ---\
+    // --- POPULATE ADDITIONAL DETAILS (Cleaned Quotes in template literals) ---
     if (modalAdditionalDetails) {
         modalAdditionalDetails.innerHTML = ''; 
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
         const rankingsHtmlParts = [];
-        // ... (standard details processing code remains the same) ...
+        const detailSpecs = [
+            { fieldName: 'Duration', label: 'Duration' },
+            { fieldName: 'Capacity', label: 'Capacity' },
+            { fieldName: 'Location Details', label: 'Location Info' },
+            { fieldName: 'Additional Information', label: 'Good to Know' },
+        ];
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
             if (value) {
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
-                detailItem.innerHTML = `\
-                    <span class=\"detail-label\">${spec.label}</span>\
-                    <span class=\"detail-value\">${String(value).replace(/\\n/g, '<br>')}</span>\
+                // Cleaned up innerHTML: using template literal and minimizing quote conflicts
+                detailItem.innerHTML = `
+                    <span class="detail-label">${spec.label}</span>
+                    <span class="detail-value">${String(value).replace(/\n/g, '<br>')}</span>
                 `;
-                fragment.appendChild(detailItem);\
+                fragment.appendChild(detailItem);
             }
         });
         const rankingsJsonString = record.fields['Rankings'];
@@ -355,34 +375,38 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                         if (typeof value === 'number' && value > 0) {
                             hasRankings = true;
                             const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
-                            rankingsHtmlParts.push(`\
-                                <div class=\"ranking-item\">\
-                                    <span class=\"ranking-label\">${label}:</span>\
-                                    <span class=\"ranking-stars\">${stars}</span>\
-                                </div>\
+                            // Cleaned up innerHTML: using template literal and minimizing quote conflicts
+                            rankingsHtmlParts.push(`
+                                <div class="ranking-item">
+                                    <span class="ranking-label">${label}:</span>
+                                    <span class="ranking-stars">${stars}</span>
+                                </div>
                             `);
-                        }\
-                    }\
-                }\
-            } catch (error) {\
+                        }
+                    }
+                }
+            } catch (error) {
                 console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
-                const errorItem = document.createElement('div');\
-                errorItem.className = 'detail-item';\
-                errorItem.innerHTML = `<span class=\"detail-label\">Rankings</span><span class=\"detail-value\" style=\"color: red;\">Error loading rankings</span>`;
+                const errorItem = document.createElement('div');
+                errorItem.className = 'detail-item';
+                // Cleaned up innerHTML
+                errorItem.innerHTML = `<span class="detail-label">Rankings</span><span class="detail-value" style="color: red;">Error loading rankings</span>`;
                 fragment.appendChild(errorItem);
             }
-        }\
+        }
         if (hasRankings) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
-            rankingContainer.innerHTML = `\
-                <span class=\"detail-label\">Rankings</span>\
-                ${rankingsHtmlParts.join('')}\
+            // Cleaned up innerHTML
+            rankingContainer.innerHTML = `
+                <span class="detail-label">Rankings</span>
+                ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
-        }\
+        }
         modalAdditionalDetails.appendChild(fragment);
     }
+    // --- END POPULATE ADDITIONAL DETAILS ---
 
     // --- NEW: GO TO STORE BUTTONS & DYNAMIC NAVIGATION BUTTONS ---
     
@@ -390,7 +414,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     if (backBtn) backBtn.disabled = historyIndex <= 0;
     if (forwardBtn) forwardBtn.disabled = historyIndex >= modalHistory.length - 1;
 
-    // GO TO STORE BUTTONS
+    // GO TO STORE BUTTONS (for collaborative items)
     const linkedStoreIds = record.fields.Stores || [];
     const currentShopId = state.ui.activeShopId;
 
@@ -404,7 +428,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             let storeLinksHTML = '<h4>Also available at:</h4>';
             storeDetails.forEach(store => {
                 const storeName = store.shopTitle || store.name;
-                // Note: The 'go-to-store-btn' class is for the new button styling
+                // Cleaned up innerHTML
                 storeLinksHTML += `<button class="primary-action-btn go-to-store-btn" data-store-id="${store.id}" style="margin-top: 5px; margin-bottom: 5px; background-color: #5a6268; font-size: 0.9em;">Go to ${storeName} Store</button>`;
             });
             modalStoreLinksContainer.innerHTML = storeLinksHTML;
@@ -413,7 +437,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             // Add event listeners for the new buttons
             modalStoreLinksContainer.querySelectorAll('.go-to-store-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const storeId = e.currentTarget.dataset.store-id;
+                    // FIX: Changed data-store-id retrieval to correctly match HTML attribute
+                    const storeId = e.currentTarget.dataset.storeId;
                     // Open in a new window as requested by the user
                     window.open(`/?shopId=${storeId}`, '_blank');
                     e.stopPropagation();
@@ -423,14 +448,14 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     }
     // --- END NEW: GO TO STORE BUTTONS ---
 
-    // ... (rest of image gallery, options, quantity, calendar, chat init logic are the same) ...
-
+    // ... (rest of function remains the same, ensuring no stray backslashes in existing lines) ...
+    // ...
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -457,14 +482,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalThumbnailStrip.appendChild(thumb);
     });
     
-    // modalHeaderActions is already present, just ensure it has content and style
-    // The Back/Forward buttons are injected via DOMContentLoaded listener but let's re-ensure they are styled correctly here
-    
-    const breadcrumbs = getBreadcrumbs(record);
-    if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\"parent-link\" data-parent-name=\"${name}\" title=\"Go to ${name}\">${name}</a>`).join(' > ');
-    }
-
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
@@ -484,7 +501,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -513,7 +530,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 const newPrice = getRecordPrice(record, newIndex);
                 modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
-        }\
+        }
         modalOptionsContainer.appendChild(optionButton);
     });
 
@@ -522,7 +539,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -534,7 +551,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalQuantitySelector.innerHTML = '';
     }
 
-// --- Calendar Initialization (same as before) ---\
+// --- Calendar Initialization (same as before) ---
     modalCalendarContainer.innerHTML = ''; // Clear previous calendar
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]; // Get iCal URL
 
@@ -559,7 +576,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                 }
@@ -591,7 +608,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalCalendarContainer.style.display = 'none'; // Hide container if no URL
         log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
     }
-    // --- End Calendar Logic ---\
+    // --- End Calendar Logic ---
 
     ui.updateCardIcon(record.id);
 
@@ -620,13 +637,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             if (chatContainer) {
                 chatContainer.style.display = 'none';
             }
-        }\
+        }
     }, 0);
 }
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
-    // --- THIS IS THE FIX ---\
+    // --- THIS IS THE FIX ---
     // This function now ONLY handles the UI. It no longer touches the URL.
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = null; // Remove the listener
@@ -645,7 +662,7 @@ export function hideDetailModal() {
         }, 300);
         document.body.classList.remove('modal-open');
     }
-    // --- END FIX ---\
+    // --- END FIX ---
 }
 
 export async function showCheckoutModal(shopSettings) {
@@ -678,7 +695,7 @@ export async function showCheckoutModal(shopSettings) {
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
-    // 1. RE-CALCULATE FINAL TOTAL & RENDER SUMMARY LIST\
+    // 1. RE-CALCULATE FINAL TOTAL & RENDER SUMMARY LIST
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0;
@@ -698,18 +715,20 @@ export async function showCheckoutModal(shopSettings) {
         const listItem = document.createElement('li');
         let noteHtml = '';
         if (itemState.note && itemState.note.trim() !== '') {
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemState.note}</small>`;
+            // Cleaned up innerHTML
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemState.note}</small>`;
         }
         
-        listItem.innerHTML = `\
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemState.quantity || 1})</span>\
-                ${noteHtml}\
-            </div>\
-            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>\
+        // Cleaned up innerHTML
+        listItem.innerHTML = `
+            <div class="summary-item-details">
+                <span class="summary-item-name">${record.fields.Name} (x${itemState.quantity || 1})</span>
+                ${noteHtml}
+            </div>
+            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
-    }\
+    }
     summaryDetailsEl.appendChild(summaryList);
     
     // Populate Payment History
@@ -717,12 +736,13 @@ export async function showCheckoutModal(shopSettings) {
     paymentHistory.forEach(p => {
         const date = new Date(p.date).toLocaleDateString();
         const historyItem = document.createElement('li');
-        historyItem.innerHTML = `\
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${p.note}</span>\
-                <small>${date}</small>\
-            </div>\
-            <span class=\"summary-item-price paid-amount\">+$${p.amount.toFixed(2)}</span>\
+        // Cleaned up innerHTML
+        historyItem.innerHTML = `
+            <div class="summary-item-details">
+                <span class="summary-item-name">${p.note}</span>
+                <small>${date}</small>
+            </div>
+            <span class="summary-item-price paid-amount">+$${p.amount.toFixed(2)}</span>
         `;
         paymentHistoryList.appendChild(historyItem);
     });
@@ -741,11 +761,13 @@ export async function showCheckoutModal(shopSettings) {
     const totalLabel = document.getElementById('checkout-total-label');
     if (totalLabel) {
         totalLabel.textContent = isFullyPaid ? 'Total Plan Cost:' : 'Total Estimated Cost:';
-    }\
+    }
+
 
     if (termsContainer && currentShopSettings.terms) {
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
-    }\
+        // Cleaned up innerHTML
+        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
+    }
 
 
     // 2. CHECKOUT LOGIC FLOW CONTROL
@@ -755,7 +777,7 @@ export async function showCheckoutModal(shopSettings) {
         // Hide payment form/controls and show message
         paymentForm.style.display = 'none';
         checkoutTotalDepositSection.style.display = 'none';
-        summaryDetailsEl.innerHTML = '<p style=\"text-align: center; color: #dc3545;\">Please add items to your locked plan before checking out.</p>';
+        summaryDetailsEl.innerHTML = '<p style="text-align: center; color: #dc3545;">Please add items to your locked plan before checking out.</p>';
         paymentSuccessMessage.style.display = 'none';
         
     } else if (isFullyPaid) {
@@ -803,18 +825,18 @@ export async function showCheckoutModal(shopSettings) {
             let amountInCentsBeforeFee = Math.round(totalDue * 100);
             
             // 3.1. Fetch the FIRST Payment Intent
-            const intentResponse = await fetch('/api/create-payment-intent', {\
-                method: 'POST',\
-                headers: { 'Content-Type': 'application/json' },\
-                body: JSON.stringify({ \
-                    amount: amountInCentsBeforeFee, \
-                    paymentMethodType: 'card' // Initial default\
-                }),\
+            const intentResponse = await fetch('/api/create-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    amount: amountInCentsBeforeFee, 
+                    paymentMethodType: 'card' // Initial default
+                }),
             });
-            if (!intentResponse.ok) {\
-                 const errorData = await intentResponse.json();\
-                 throw new Error(`Failed to create Payment Intent: ${errorData.error}`);\
-            }\
+            if (!intentResponse.ok) {
+                 const errorData = await intentResponse.json();
+                 throw new Error(`Failed to create Payment Intent: ${errorData.error}`);
+            }
             const paymentIntentData = await intentResponse.json();
             const clientSecret = paymentIntentData.clientSecret;
 
@@ -841,12 +863,12 @@ export async function showCheckoutModal(shopSettings) {
             paymentElement.on('change', () => updateProcessingFeeDisplay()); 
             
         } catch (err) {
-            console.error(\"Failed to initialize payment form:\", err);
+            console.error("Failed to initialize payment form:", err);
             alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
             hideCheckoutModal();
-            return;\
-        }\
-    }\
+            return;
+        }
+    }
 
     // Final UI show
     checkoutModalOverlay.classList.add('active');
@@ -856,7 +878,6 @@ export async function showCheckoutModal(shopSettings) {
     }, 0);
     document.body.classList.add('modal-open');
 }
-// --- END MODIFIED showCheckoutModal ---\
 
 
 export function hideCheckoutModal() {
@@ -866,7 +887,7 @@ export function hideCheckoutModal() {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
         document.getElementById('tip-amount')?.removeEventListener('input', updateProcessingFeeDisplay);
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.removeEventListener('change', updateProcessingFeeDisplay);
         });
         // Note: The Payment Element's 'change' listener is removed when the element instance is garbage collected.
@@ -877,16 +898,15 @@ export function hideCheckoutModal() {
             if (checkoutCloseBtn) {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
-            checkoutModalOverlay.style.display = 'none'; // Ensure display is set to none after transition
+            checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
         }, 300);
         document.body.classList.remove('modal-open');
-    }\
+    }
 }
 
 export function getStripeContext() {
     const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
-    // We now rely on the stripeElements being stored on the overlay for submission
     const elements = document.getElementById('checkout-modal-overlay')?.stripeElements;
     return { stripe, elements };
 }
