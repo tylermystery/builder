@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: events.js
+// In: events.js (REPLACE THE ENTIRE FILE)
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -12,14 +12,52 @@ import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-import { addEnergy } from './components/backgroundEngine.js'; // Import the boost function
-import { updateProcessingFeeDisplay } from './components/modal.js'; // Import the new fee update function
+// MODIFIED: Import BOTH functions from backgroundEngine
+import * as backgroundEngine from './components/backgroundEngine.js'; 
+import { updateProcessingFeeDisplay } from './components/modal.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
+
+// --- NEW FUNCTION: Progress Logic ---
+function updateProgressForAction(actionName) {
+    let weight = 0.0;
+    // Define weights based on action commitment
+    switch (actionName) {
+        case 'add-to-plan':
+            weight = 0.05; // Major Positive
+            break;
+        case 'remove-from-plan':
+            weight = -0.05; // Major Negative
+            break;
+        case 'like':
+            weight = 0.015; // Medium Positive
+            break;
+        case 'unlike':
+            weight = -0.015; // Medium Negative
+            break;
+        case 'increase-qty':
+        case 'option-change':
+            weight = 0.005; // Minor Positive
+            break;
+        case 'decrease-qty':
+            weight = -0.005; // Minor Negative
+            break;
+        case 'view-detail':
+        case 'filter-change':
+            weight = 0.002; // Tiny Positive boost for engagement
+            break;
+        default:
+            weight = 0.0;
+    }
+    if (weight !== 0.0) {
+        backgroundEngine.updateProgress(weight);
+    }
+}
+// --- END NEW FUNCTION ---
 
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
@@ -437,6 +475,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ category: newCategory, subcategory: null, view: null });
             updateSubcategoryButtons();
         }
+        
+        // PROGRESS: Apply small boost for navigating/exploring
+        updateProgressForAction('filter-change');
 
         applyFiltersAndSort(imageCache);
     });
@@ -447,19 +488,37 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const activeSubcats = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn.active'))
                                      .map(btn => btn.dataset.filter);
             updateUrl({ subcategory: activeSubcats.join(',') || null });
+            // PROGRESS: Apply small boost for navigating/exploring
+            updateProgressForAction('filter-change');
             applyFiltersAndSort(imageCache);
         }
     });
 
-    safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
-    safeAddEventListener('name-filter', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
-    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+    safeAddEventListener('status-filter', 'change', () => {
+        updateProgressForAction('filter-change');
+        applyFiltersAndSort(imageCache)
+    });
+    safeAddEventListener('name-filter', 'input', debounce(() => {
+        updateProgressForAction('filter-change');
+        applyFiltersAndSort(imageCache)
+    }, 300));
+    safeAddEventListener('headcount-custom', 'input', debounce(() => {
+        updateProgressForAction('filter-change');
+        applyFiltersAndSort(imageCache)
+    }, 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
         document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
+        updateProgressForAction('filter-change');
         applyFiltersAndSort(imageCache);
     });
-    safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
-    safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('location-filter', 'change', () => {
+        updateProgressForAction('filter-change');
+        applyFiltersAndSort(imageCache);
+    });
+    safeAddEventListener('budget-filter', 'change', () => {
+        updateProgressForAction('filter-change');
+        applyFiltersAndSort(imageCache);
+    });
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
@@ -479,6 +538,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         document.getElementById('budget-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
         if (mainDatePicker) mainDatePicker.clear();
+        updateProgressForAction('filter-change'); // Small boost for starting fresh
         applyFiltersAndSort(imageCache);
     });
 
@@ -500,6 +560,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 await updateAllCardAvailabilityIcons();
                 await updateMobileBarAvailability();
             }
+            updateProgressForAction('filter-change');
         },
     });
 
@@ -524,17 +585,20 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 break;
         }
         mainDatePicker.setDate([startDate, endDate], true);
+        updateProgressForAction('filter-change');
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
+        updateProgressForAction('filter-change');
     });
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
+        updateProgressForAction('filter-change');
     });
 
     document.body.addEventListener('click', async (e) => {
@@ -591,6 +655,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     rsvpBtn.textContent = "You're Going! ✅";
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
+                    updateProgressForAction('add-to-plan'); // RSVP is a major commitment
                 } else {
                     throw new Error('RSVP update failed.');
                 }
@@ -639,54 +704,47 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
         else if (heartIcon) {
             e.stopPropagation();
-            addEnergy(); // Add energy on heart click
+            backgroundEngine.addEnergy(); // Add energy on heart click
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
     
-            console.log(`[Events] Heart icon clicked for record: ${recordId}`);
+            let likedBeforeClick;
+            if (state.session.user.isAuthenticated) {
+                likedBeforeClick = state.session.user.likedItemIds.has(recordId);
+            } else {
+                const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
+                likedBeforeClick = tempLikes.has(recordId);
+            }
+
+            console.log(`[Events] Heart icon clicked for record: ${recordId}. Was liked: ${likedBeforeClick}`);
     
             if (state.session.user.isAuthenticated) {
-                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
                 try {
                     heartIcon.style.pointerEvents = 'none';
-                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
                     const result = await api.toggleUserLike(recordId);
-                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
-    
+                    
                     if (result.success) {
-                        let actionTaken = '';
                         if (result.liked) {
                             state.session.user.likedItemIds.add(recordId);
-                            actionTaken = 'liked';
-                            log('Events', `User liked item ${recordId}.`);
+                            updateProgressForAction('like');
                         } else {
                             state.session.user.likedItemIds.delete(recordId);
-                            actionTaken = 'unliked';
-                            log('Events', `User unliked item ${recordId}.`);
+                            updateProgressForAction('unlike');
                         }
-                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
-                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
                         ui.updateCardIcon(recordId);
-                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
-    
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            console.log('[Events] "My Likes" filter active, reapplying filters...');
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
-                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
-                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
                     log('Events', `Error toggling like: ${error.message}`);
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
                     heartIcon.style.pointerEvents = 'auto';
-                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
-                console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
                 let tempLikes = [];
                 try {
@@ -696,25 +754,20 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      localStorage.removeItem('tempLikes'); tempLikes = [];
                 }
                 const tempLikesSet = new Set(tempLikes);
-                let currentlyLiked = false;
+                
                 if (tempLikesSet.has(recordId)) {
-                    tempLikesSet.delete(recordId); currentlyLiked = false;
-                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
+                    tempLikesSet.delete(recordId); 
+                    updateProgressForAction('unlike');
                 } else {
-                    tempLikesSet.add(recordId); currentlyLiked = true;
-                     console.log(`[Events] Added ${recordId} to temporary likes.`);
+                    tempLikesSet.add(recordId);
+                    updateProgressForAction('like');
+                    ui.showLoginPromptForLikes();
                 }
+
                 localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
-                log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
-                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
                 ui.updateCardIcon(recordId);
-                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
-                if (currentlyLiked) {
-                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
-                     ui.showLoginPromptForLikes();
-                }
+
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      console.log('[Events] "My Likes" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
             }
@@ -725,7 +778,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
 
-            addEnergy();
+            backgroundEngine.addEnergy(); // Existing energy boost
+            updateProgressForAction('add-to-plan'); // PROGRESS: Major positive boost
 
             if (state.cart.lockedItems.has(recordId)) {
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
@@ -766,6 +820,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.lockedItems.delete(recordId);
             state.cart.items.set(recordId, itemInfo);
 
+            updateProgressForAction('remove-from-plan'); // PROGRESS: Major negative weight
             ui.updateCardIcon(recordId);
             await ui.updateEventPlanSection();
             await ui.updateIdeasCarousel();
@@ -779,6 +834,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             state.cart.items.delete(recordId);
 
+            updateProgressForAction('unlike'); // PROGRESS: Treat as un-hearting
             await ui.updateIdeasCarousel();
             triggerSave();
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
@@ -787,6 +843,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
 
             if (record.fields['Item Type'] === 'Grouping') {
+                 // Existing grouping logic...
+                 // PROGRESS: Treat category/group navigation as a filter change
+                 updateProgressForAction('filter-change');
                  const groupName = record.fields.Name;
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
@@ -815,15 +874,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             } else {
                 ui.showDetailModal(record);
+                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
+            if (record) {
+                ui.showDetailModal(record);
+                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
+            }
         } else if (ideaItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
             const recordId = ideaItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-             if (record) ui.showDetailModal(record);
+             if (record) {
+                ui.showDetailModal(record);
+                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
+             }
         }
     }); // End of body click listener
 
@@ -835,13 +901,26 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const recordId = container.dataset.recordId;
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
+        
         if (target.matches('.quantity-input')) {
-            updates.quantity = parseInt(target.value, 10);
+            const oldValue = parseInt(ui.getItemState(recordId).quantity, 10);
+            const newValue = parseInt(target.value, 10);
+            updates.quantity = newValue;
+            // PROGRESS: Check for increase or decrease
+            if (newValue > oldValue) {
+                updateProgressForAction('increase-qty');
+            } else if (newValue < oldValue) {
+                updateProgressForAction('decrease-qty');
+            }
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
+            // PROGRESS: Slight boost for adding a note
+            if (updates.note.trim().length > 0) updateProgressForAction('filter-change');
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+             updateProgressForAction('option-change'); // PROGRESS: Option change boost
         }
+        
         if (Object.keys(updates).length > 0) {
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
@@ -866,6 +945,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateLockedItemStatusIcons();
             await updateMobileBarAvailability();
             triggerSave();
+            updateProgressForAction('filter-change');
         }
     });
     safeAddEventListener('itinerary-btn', 'click', () => {
@@ -890,6 +970,7 @@ export function initializeChatEventListeners() {
             if (message.trim() === '') return;
             sendMessage(message);
             messageInput.value = '';
+            updateProgressForAction('filter-change'); // Small boost for starting a chat
         });
     }
 
