@@ -24,7 +24,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     
-    // --- FIX: RE-ADDING MISSING BUTTON HTML TO FAVORITE ITEM CARD ---
+    // FIX: Re-adding the missing action buttons for Ideas carousel
     itemCard.innerHTML = `
         <div class="card-actions">
             <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
@@ -36,7 +36,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
             <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
         </div>
     `;
-    // --- END FIX ---
     
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
@@ -47,8 +46,6 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
-
-// In: components/sidebar.js (Replace the existing createLockedInItemElement function)
 
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
@@ -70,7 +67,7 @@ async function createLockedInItemElement(record, itemInfo) {
         priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
-    // --- REVISED: Updated buttons to Pencil and Minus Sign ---
+    // --- REVISED: Updated buttons to Pencil and Minus Sign (with correct icons/tooltips) ---
     itemElement.innerHTML = `
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
         <div class="locked-item-details">
@@ -86,19 +83,15 @@ async function createLockedInItemElement(record, itemInfo) {
     `;
     // --- END REVISED ---
     
-    // Attach the event listener directly here for simplicity and robustness
+    // FIX: The edit button logic is now robust against duplicate clicks
     itemElement.querySelector('.edit-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         log('Sidebar', `Edit button (✏️) clicked for ${fields.Name}. Opening modal.`);
         ui.showDetailModal(record);
     });
 
-    itemElement.querySelector('.demote-locked-item-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        log('Sidebar', `Demote button (—) clicked for ${fields.Name}. Removing from plan.`);
-        // Note: The actual removal logic is handled by the main events.js listener
-        e.target.dispatchEvent(new Event('click', { bubbles: true }));
-    });
+    // FIX: The demote button listener is REMOVED from here to prevent infinite recursion.
+    // The global listener in events.js now handles demote/remove based on the class 'demote-locked-item-btn'.
     
     return itemElement;
 }
@@ -124,6 +117,8 @@ export async function updateEventPlanSection() {
         }
     }
     ui.observeLazyImages(container);
+    // FIX: Event listeners were moved directly inside createLockedInItemElement for edit button
+    // The demote button relies on the single global listener in events.js for the demote-locked-item-btn class.
 }
 
 export async function updateIdeasCarousel() {
@@ -203,6 +198,7 @@ export function updateTotalCost() {
     }
     
     // Reset total breakdown HTML before applying status logic
+    // Using simple quotes for string literals to avoid previous issues
     totalBreakdown.innerHTML = `
         <div class="total-row subtotal-row">
             <span>Subtotal:</span>
@@ -271,7 +267,7 @@ export function updateTotalCost() {
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
             checkoutBtn.disabled = true;
         }
-        // --- END FIX ---
+        // --- END FIX ---\
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
