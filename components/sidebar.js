@@ -23,6 +23,21 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <small>${fields.Description || 'No description.'}</small><br>
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
+    
+    // --- FIX: RE-ADDING MISSING BUTTON HTML TO FAVORITE ITEM CARD ---
+    itemCard.innerHTML = `
+        <div class="card-actions">
+            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
+            <button class="action-btn remove-btn" title="Remove from Ideas">×</button>
+        </div>
+        <div class="favorite-item-overlay"
+            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
+        >
+            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
+        </div>
+    `;
+    // --- END FIX ---
+    
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -32,6 +47,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
+
+// In: components/sidebar.js (Replace the existing createLockedInItemElement function)
 
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
@@ -50,12 +67,39 @@ async function createLockedInItemElement(record, itemInfo) {
     let priceDisplay = `$${price.toFixed(2)}`;
     if (itemInfo.overridePrice != null) {
         const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
+    // --- REVISED: Updated buttons to Pencil and Minus Sign ---
     itemElement.innerHTML = `
-        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}\" alt=\"${fields.Name}\">
-        <div class=\"locked-item-details\">\n            <p class=\"locked-item-name\">${fields.Name}</p>\n            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}\n            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>\n            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}\n        </div>\n        <div class=\"locked-item-actions\">\n            <button class=\"edit-btn\">Edit</button>\n            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>\n        </div>\n    `;
+        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
+        <div class="locked-item-details">
+            <p class="locked-item-name">${fields.Name}</p>
+            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
+            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
+            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+        </div>
+        <div class="locked-item-actions">
+            <button class="edit-btn" title="Edit Item Details">✏️</button>
+            <button class="demote-locked-item-btn" title="Demote to Ideas (Minus Sign)">—</button>
+        </div>
+    `;
+    // --- END REVISED ---
+    
+    // Attach the event listener directly here for simplicity and robustness
+    itemElement.querySelector('.edit-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        log('Sidebar', `Edit button (✏️) clicked for ${fields.Name}. Opening modal.`);
+        ui.showDetailModal(record);
+    });
+
+    itemElement.querySelector('.demote-locked-item-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        log('Sidebar', `Demote button (—) clicked for ${fields.Name}. Removing from plan.`);
+        // Note: The actual removal logic is handled by the main events.js listener
+        e.target.dispatchEvent(new Event('click', { bubbles: true }));
+    });
+    
     return itemElement;
 }
 
@@ -68,7 +112,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
+        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         return;
     }
 
@@ -160,7 +204,19 @@ export function updateTotalCost() {
     
     // Reset total breakdown HTML before applying status logic
     totalBreakdown.innerHTML = `
-        <div class=\"total-row subtotal-row\">\n            <span>Subtotal:</span>\n            <span id=\"subtotal-cost\">$${subtotal.toFixed(2)}</span>\n        </div>\n        <div class=\"total-row amount-paid-row\" style=\"display: none;\">\n            <span>Amount Paid:</span>\n            <span id=\"amount-paid-cost\">$0.00</span>\n        </div>\n        <hr class=\"total-divider\" style=\"display: none;\">\n        <div class=\"total-row final-total-row\">\n            <strong>Total Due:</strong>\n            <strong id=\"total-cost\">$${totalDue.toFixed(2)}</strong>\n        </div>
+        <div class="total-row subtotal-row">
+            <span>Subtotal:</span>
+            <span id="subtotal-cost">$${subtotal.toFixed(2)}</span>
+        </div>
+        <div class="total-row amount-paid-row" style="display: none;">
+            <span>Amount Paid:</span>
+            <span id="amount-paid-cost">$0.00</span>
+        </div>
+        <hr class="total-divider" style="display: none;">
+        <div class="total-row final-total-row">
+            <strong>Total Due:</strong>
+            <strong id="total-cost">$${totalDue.toFixed(2)}</strong>
+        </div>
     `;
 
     if (amountReceived > 0) {
@@ -199,7 +255,7 @@ export function updateTotalCost() {
 
             if (isFullyPaid) {
                 // Display 'Paid in Full' status and set button text to 'View Summary'
-                totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
+                totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
                 checkoutBtn.textContent = 'View Summary';
                 checkoutBtn.dataset.defaultText = 'View Summary'; // Set default text for consistency
             } else if (amountReceived > 0) {
@@ -228,7 +284,7 @@ export function displayReservedStatus() {
     const totalBreakdown = document.getElementById('total-breakdown');
     
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'block'; 
