@@ -177,6 +177,23 @@ body.modal-open {
     display: block;
 }
 
+#parent-collective-trigger {
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 0.8em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-right: 15px; /* Space between WTF and main title/logo */
+}
+
+#parent-collective-trigger:hover {
+    background-color: #0056b3;
+}
+
 /* --- 3. CORE LAYOUT (FIX) --- */
 .main-content {
     display: flex;
