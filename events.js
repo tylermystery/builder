@@ -180,7 +180,7 @@ export async function updateAllCardAvailabilityIcons() {
     }
 }
 
-// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---\
+// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -209,11 +209,11 @@ async function handlePaymentFormSubmit(event) {
     }
     
     try {
-        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---\
+        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---
         // We rely on the core logic here, which will also update the stripeElements object with the new clientSecret
-        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);\
-        const amountReceived = state.session.user.amountReceived || 0;\
-        const totalDue = finalTotal - amountReceived;\
+        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+        const amountReceived = state.session.user.amountReceived || 0;
+        const totalDue = finalTotal - amountReceived;
         
         // This logic calculates the amount before the fee, including deposit/full choice
         let baseAmountToCharge = totalDue;
@@ -226,7 +226,7 @@ async function handlePaymentFormSubmit(event) {
             } else {
                  baseAmountToCharge = finalTotal * 0.35;
             }
-        }\
+        }
         
         const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
         const finalAmountToChargeBeforeFee = baseAmountToCharge + tipAmount;
@@ -234,7 +234,7 @@ async function handlePaymentFormSubmit(event) {
         const amountInCentsBeforeFee = Math.round(finalAmountToChargeBeforeFee * 100);
         if (amountInCentsBeforeFee < 50) {
             throw new Error("Final amount is too low to process.");
-        }\
+        }
 
         // We call updateProcessingFeeDisplay one last time to ensure a fresh clientSecret reflecting the exact amount + tip + fee is generated and applied to the elements.
         await updateProcessingFeeDisplay(); 
@@ -243,7 +243,7 @@ async function handlePaymentFormSubmit(event) {
         const { error: submitError } = await stripeElements.submit();
         if (submitError) {
              throw new Error(submitError.message);
-        }\
+        }
 
         // 3. Extract the final clientSecret from the latest intent created by updateProcessingFeeDisplay
         // This is a direct fetch since the clientSecret is not exposed globally by the Payment Element
@@ -280,7 +280,7 @@ async function handlePaymentFormSubmit(event) {
         if (error) {
             console.error('Stripe Payment Confirmation Error:', error);
             throw new Error(error.message);
-        }\
+        }
 
         if (paymentIntent.status === 'succeeded') {
             log('Events', 'Payment succeeded.');
@@ -308,16 +308,16 @@ async function handlePaymentFormSubmit(event) {
             setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
         } else {
              log('Events', `Payment status is ${paymentIntent.status}. No immediate action needed if user was redirected.`);
-        }\
+        }
     } catch (err) {
         log('Events', `Stripe payment error: ${err.message}`);
         cardErrors.textContent = err.message;
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
         spinner.style.display = 'none';
-    }\
+    }
 }
-// --- END MODIFIED handlePaymentFormSubmit ---\
+// --- END MODIFIED handlePaymentFormSubmit ---
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
@@ -388,11 +388,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }, 100);
     });
 
-    // --- START CONSOLIDATED BUTTON GENERATION (Same as before) ---\
+    // --- START CONSOLIDATED BUTTON GENERATION (Same as before) ---
     if (categoryFiltersContainer) {
         categoryFiltersContainer.innerHTML = ''; 
     } else {
-        console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.\");
+        console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.");
     }
 
     if (categoryFiltersContainer) { 
@@ -430,9 +430,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 button.textContent = catRecord.fields.Name;
                 categoryFiltersContainer.appendChild(button);
             });
-        }\
+        }
     } 
-    // --- END CONSOLIDATED BUTTON GENERATION ---\
+    // --- END CONSOLIDATED BUTTON GENERATION ---
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
@@ -538,9 +538,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
-    mainDatePicker = flatpickr(\"#date-filter\", {
-        mode: \"range\",
-        dateFormat: \"M j, Y\",
+    mainDatePicker = flatpickr("#date-filter", {
+        mode: "range",
+        dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
             if (selectedDates.length > 0) {
