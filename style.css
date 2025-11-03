@@ -5031,3 +5031,48 @@ hr.total-divider {
 }
 /* --- (End of @media (max-width: 999px)) --- */
 /* --- END OF FILE --- */
+
+/* --- FIX: Collage Card Styles --- */
+.collage-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 100%; /* Make it fill the .event-card-image-container height */
+}
+
+.collage-image {
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+}
+
+/* --- FIX: Marquee Banner Styles --- */
+#marquee-banner-container {
+    width: 100%;
+    overflow: hidden; /* Clips the text as it moves */
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+#marquee-text {
+    /* Apply the animation here */
+    animation-name: scroll;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    
+    /* Required for a single-line scroll */
+    white-space: nowrap;
+    padding: 8px 0;
+    will-change: transform; /* Performance hint for the browser */
+}
+
+/* Define the scrolling animation */
+@keyframes scroll {
+    0% {
+        transform: translateX(100%);
+    }
+    100% {
+        transform: translateX(-100%);
+    }
+}
