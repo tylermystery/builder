@@ -15,6 +15,9 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
+// --- NEW: Store the last selected payment type ---
+let currentStripePaymentType = 'card'; 
+
 // --- NEW MODAL HISTORY STATE ---
 // Stores { recordId: string, shopId: string }
 let modalHistory = []; 
@@ -122,26 +125,15 @@ export async function updateProcessingFeeDisplay() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const elements = checkoutModalOverlay?.stripeElements;
     
-    // --- CRITICAL FIX START: Reliably get the selected payment method type ---
-    let selectedPaymentMethod = 'card'; // Default fallback
-    if (elements) {
-         try {
-             // Use getValue() to pull the current payment method type selected by the user.
-             const paymentElement = elements.getElement('payment');
-             const valueResult = await paymentElement.getValue();
-             if (valueResult.value?.type) {
-                 selectedPaymentMethod = valueResult.value.type;
-             }
-             // 🐛 DEBUG: Log the detected payment type in the browser console
-             console.log(`[Stripe Debug] Detected Payment Type: ${selectedPaymentMethod}`);
-         } catch (e) {
-             // 🐛 DEBUG: Log error if getValue() fails
-             console.error('[Stripe Debug] Error calling getValue() on Payment Element:', e);
-             log('Stripe', 'Warning: Could not get live payment method type from Stripe Element, defaulting to card.', e);
-         }
-    }
+    // --- ⬇️ THIS IS THE FIX ⬇️ ---
+    // We removed the failing try/catch block that called `paymentElement.getValue()`
+    // and now just use the module-level variable `currentStripePaymentType`.
+    let selectedPaymentMethod = currentStripePaymentType || 'card'; // Use the stored value
+    
+    // 🐛 DEBUG: Log the payment type being used for this calculation
+    console.log(`[Stripe Debug] Using stored Payment Type: ${selectedPaymentMethod}`);
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- CRITICAL FIX END ---
+    // --- ⬆️ END OF FIX ⬆️ ---
 
     try {
         // We only proceed if the amount is valid 
@@ -154,7 +146,7 @@ export async function updateProcessingFeeDisplay() {
 
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
         const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST', // <-- THIS IS THE FIX (Removed stray '\')
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
@@ -868,7 +860,18 @@ export async function showCheckoutModal(shopSettings) {
 
             // 3.6. Attach listeners
             tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
-            paymentElement.on('change', () => updateProcessingFeeDisplay()); 
+
+            // --- ⬇️ THIS IS THE FIX ⬇️ ---
+            // We now get the event object from the listener...
+            paymentElement.on('change', (event) => {
+                // ...and save the type to our module-level variable...
+                if (event.value && event.value.type) {
+                    currentStripePaymentType = event.value.type;
+                }
+                // ...then call the update function.
+                updateProcessingFeeDisplay();
+            });
+            // --- ⬆️ END OF FIX ⬆️ ---
             
         } catch (err) {
             console.error("Failed to initialize payment form:", err);
@@ -898,6 +901,10 @@ export function hideCheckoutModal() {
         document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
             radio.removeEventListener('change', updateProcessingFeeDisplay);
         });
+        
+        // --- NEW: Reset the stored payment type on close ---
+        currentStripePaymentType = 'card';
+
         // Note: The Payment Element's 'change' listener is removed when the element instance is garbage collected.
 
         checkoutModalOverlay.classList.remove('active');
