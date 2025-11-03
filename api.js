@@ -556,6 +556,9 @@ export async function fetchCalendarForRecord(record) {
 }
 
 
+// In: api.js
+// REPLACE the fetchImagesByTags function (around line 520)
+
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
         log('API', 'fetchImagesByTags: No valid tags provided.');
@@ -567,7 +570,7 @@ export async function fetchImagesByTags(tags, retries = 2) {
         if (Array.isArray(tags)) {
             const validTags = tags.map(t => String(t).trim()).filter(Boolean);
             if (validTags.length === 0) return [];
-            payload = { expression: validTags.map(tag => `tags:\"${tag}\"`).join(' AND ') };
+            payload = { expression: validTags.map(tag => `tags:\\\"${tag}\\\"`).join(' AND ') };
             log('API', `Fetching images by expression: ${payload.expression}`);
         } else {
             const tagName = String(tags).trim();
@@ -601,10 +604,16 @@ export async function fetchImagesByTags(tags, retries = 2) {
         }
 
         const imageUrls = data.resources.map(image => {
-             let transformations = 'c_fill,g_auto,w_600,h_520,f_auto';
+             // --- THIS IS THE FIX ---
+             // We force the format to JPG (f_jpg) instead of auto (f_auto).
+             // This ensures HEIC and other formats are converted.
+             // We also keep the GIF-specific rule.
+             let transformations = 'c_fill,g_auto,w_600,h_520,f_jpg'; // Changed f_auto to f_jpg
              if (image.format === 'gif') {
                  transformations = 'c_fit,w_600,h_520';
              }
+             // --- END FIX ---
+
              const urlParts = image.secure_url.split('/upload/');
              if (urlParts.length === 2) {
                 return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
@@ -621,6 +630,9 @@ export async function fetchImagesByTags(tags, retries = 2) {
     }
 }
 
+
+// In: api.js
+// REPLACE the fetchCuratedImagesByRecord function (around line 580)
 
 export async function fetchCuratedImagesByRecord(record) {
     const curatedLinks = record.fields[CONSTANTS.FIELD_NAMES.CURATED_IMAGES_LINK];
@@ -656,7 +668,10 @@ export async function fetchCuratedImagesByRecord(record) {
                 if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
                     const parts = url.split('/upload/');
                     if (parts.length === 2 && !parts[1].startsWith('f_auto/')) {
-                         const transformations = 'c_fill,g_auto,w_600,h_520,f_auto';
+                         // --- THIS IS THE FIX ---
+                         // Changed f_auto to f_jpg to force conversion of HEIC/other files
+                         const transformations = 'c_fill,g_auto,w_600,h_520,f_jpg';
+                         // --- END FIX ---
                          return `${parts[0]}/upload/${transformations}/${parts[1]}`;
                      }
                 }
@@ -671,7 +686,6 @@ export async function fetchCuratedImagesByRecord(record) {
         return [];
     }
 }
-
 
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     if (!record || !record.id) return { imageUrls: [] };
