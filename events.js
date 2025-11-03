@@ -374,7 +374,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             setDebugMode(debugEnabled);
             log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
         });
-    });
+    }
 
     let scrollTimeout;
     window.addEventListener('scroll', () => {
@@ -519,7 +519,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -878,7 +878,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  applyFiltersAndSort(imageCache);
 
             } else {
-                ui.showDetailModal(record);
+                // Pass false for the last argument (isFromBrowserHistory) as this is a new click from the catalog card
+                ui.showDetailModal(record, 0, false, false); 
                 updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
@@ -937,7 +938,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             triggerSave();
         }
     });
-    const eventPlanDatePicker = flatpickr("#date-filter", {
+    const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
             if (state.ui.isInitializing) return;
