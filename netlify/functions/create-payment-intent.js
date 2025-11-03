@@ -12,13 +12,18 @@ function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
   let fee = 0;
 
   switch (paymentMethodType) {
+    // --- ⬇️ THIS IS THE FIX ⬇️ ---
+    // Added 'us_bank_account' to match the Stripe Element's output for ACH
     case 'ach_debit':
+    case 'us_bank_account':
       // ACH Direct Debit: 0.8%, capped at $5.00
       fee = baseAmount * 0.008;
       // Apply max cap of $5.00.
       fee = Math.min(fee, 5.00); 
       break;
       
+    // Added 'cashapp' for clarity, though it would hit default anyway
+    case 'cashapp':
     case 'card':
     case 'google_pay':
     case 'apple_pay':
@@ -28,6 +33,7 @@ function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
       const percentageRate = 0.029; // 2.9%
       fee = baseAmount * percentageRate + fixedFee;
       break;
+    // --- ⬆️ END OF FIX ⬆️ ---
   }
   
   const feeInCents = Math.round(fee * 100);
