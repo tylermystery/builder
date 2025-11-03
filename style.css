@@ -1,6 +1,4 @@
-/* ---
-CORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES
---- */
+/* ---\nCORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES\n--- */
 
 /* --- 1. CORE BODY & KALEIDOSCOPE CANVAS --- */
 body {
@@ -43,6 +41,7 @@ body.modal-open {
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.25rem;
+    gap: 20px; /* Added gap for spacing */
 }
 
 /* In: style.css (REPLACE THE ENTIRE @media (max-width: 999px) BLOCK) */
@@ -132,32 +131,35 @@ body.modal-open {
     /* === NEW/FIXED HEADER STACKING LOGIC === */
     .header-content {
         flex-direction: column; /* Force stacks main header sections */
-        align-items: flex-start;
-        gap: 5px; /* Reduce gap since they are stacked */
-        padding-bottom: 5px; 
+        align-items: stretch; /* Make all sections full width */
+        gap: 10px; /* A bit more gap for stacked items */
+        padding-bottom: 10px; 
     }
 
     #header-left {
         width: 100%;
-        /* Align image and title/marquee */
         align-items: center; 
-        justify-content: flex-start;
-        order: 1; /* Title, Logo, Marquee is first */
+        justify-content: flex-start; /* Keep logo/name to the left */
+        order: 1; /* First item */
     }
     
+    /* NEW: Center section styles */
+    #header-center {
+        width: 100%;
+        order: 2; /* Second item */
+    }
+
     #marquee-banner-container {
-        /* Marquee should fill the whole width below the title on mobile, which is contained in #header-left */
         width: 100%; 
-        order: 2; /* Marquee is second in the flow if it's placed inside #header-left */
+        /* order: 2; (no longer needed, parent #header-center has the order) */
     }
     
-    /* Ensure right side elements are grouped together and pushed to the right */
     #header-right {
         width: 100%;
         display: flex; 
         justify-content: flex-end; /* Push to the right edge */
         align-items: center;
-        order: 3; /* My Plans and User button is third */
+        order: 3; /* Third item */
     }
 }
 /* --- (End of @media (max-width: 999px)) --- */
@@ -166,6 +168,22 @@ body.modal-open {
     display: flex;
     align-items: center;
     gap: 15px;
+    flex-shrink: 0; /* Don't shrink logo/title */
+}
+
+/* --- NEW: #header-center --- */
+#header-center {
+    flex-grow: 1; /* Allow marquee to take up space */
+    min-width: 200px; /* Prevent it from collapsing too much */
+    overflow: hidden; /* Needed for marquee */
+}
+
+/* --- NEW: #header-right --- */
+#header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0; /* Don't shrink buttons */
 }
 
 #main-shop-title {
@@ -1716,13 +1734,27 @@ hr.total-divider {
     /* ADD THIS BLOCK FOR HEADER STACKING */
     .header-content {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch; /* Make all sections full width */
         gap: 10px; /* Space between the stacked elements */
+        padding-bottom: 10px;
     }
 
+    /* This rule already exists, but ensure it has order: 1 */
+    #header-left {
+        order: 1;
+    }
+    
+    /* NEW rule for mobile center */
+    #header-center {
+        width: 100%;
+        order: 2;
+    }
+
+    /* This rule already exists, but ensure it has order: 3 */
     #header-right {
         width: 100%;
         justify-content: flex-end;
+        order: 3;
     }
 }
 /* --- (End of @media (max-width: 999px)) --- */
@@ -1987,6 +2019,7 @@ hr.total-divider {
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
     border-top: 1px solid #dee2e6;
     border-bottom: 1px solid #dee2e6;
+    border-radius: 8px; /* Added rounded corners */
 }
 
 #marquee-text {
