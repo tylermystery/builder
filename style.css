@@ -1,4 +1,6 @@
-/* ---\nCORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES\n--- */
+/* ---
+CORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES
+--- */
 
 /* --- 1. CORE BODY & KALEIDOSCOPE CANVAS --- */
 body {
@@ -160,48 +162,22 @@ body.modal-open {
 }
 /* --- (End of @media (max-width: 999px)) --- */
 
-/* --- HEADER FIXES (WTF Placement and Centering) --- */
 #header-left {
     display: flex;
     align-items: center;
     gap: 15px;
 }
 
-#parent-collective-trigger {
-    /* STYLING FOR WTF BUTTON (MOVED FAR LEFT) */
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: 1.5em; 
-    font-weight: bold;
-    cursor: pointer;
-    color: #2c3e50;
-    
-    /* NEW: Use order to place it at the beginning of the flex container */
-    order: -2; 
-    margin-right: 15px; 
-    flex-shrink: 0;
-    transition: color 0.2s;
-}
-
-#parent-collective-trigger:hover {
-    color: #007bff;
-}
-
 #main-shop-title {
     margin: 0;
     line-height: 1.2;
     color: #2c3e50;
-    flex-grow: 1; /* Pushes the title to take up remaining space */
-    text-align: center; /* Center the title visually */
 }
 
 #header-left > img {
     height: 50px;
     display: block;
-    order: -1; /* Place image before title, after WTF button */
 }
-/* --- END HEADER FIXES --- */
 
 /* --- 3. CORE LAYOUT (FIX) --- */
 .main-content {
@@ -393,28 +369,6 @@ body.modal-open {
     font-size: 1.1em;
     color: #333;
 }
-
-/* --- NEW FIX: Event Plan Button Styling (Text-like title) --- */
-#itinerary-btn {
-    background: none;
-    border: none;
-    padding: 0;
-    /* Match Total Due font size/weight */
-    font-size: 1.4em; 
-    font-weight: bold; 
-    color: #333;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    text-align: left;
-    width: 100%;
-}
-#itinerary-btn:hover {
-    color: #007bff;
-}
-/* --- END NEW FIX --- */
-
 #cart-footer button {
     width: 100%;
     padding: 12px;
@@ -486,7 +440,6 @@ body.modal-open {
     height: 24px;
     font-size: 16px;
     line-height: 24px;
-    text-align: center;
     cursor: pointer;
     padding: 0;
     font-weight: bold;
@@ -512,7 +465,7 @@ body.modal-open {
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    height: 100%; /* <-- FIX 1: This standardizes card heights */
+    height: 100%; /* <-- FIX #1: This makes all cards in a row the same height */
 }
 
 .event-card:hover {
@@ -570,8 +523,6 @@ body.modal-open {
     line-height: 28px;
     text-align: center;
     cursor: pointer;
-    padding: 0;
-    font-weight: bold;
 }
 .heart-icon {
     position: absolute;
@@ -955,10 +906,6 @@ body.modal-open {
     color: #333;
     transform: scale(0.8);
     transition: transform 0.3s ease, opacity 0.3s ease;
-    /* --- FIX START: Allow content to scroll vertically --- */
-    overflow-y: auto; 
-    max-height: 95vh;
-    /* --- FIX END --- */
 }
 .modal-overlay.active .checkout-modal-content {
     transform: scale(1);
@@ -979,14 +926,8 @@ body.modal-open {
     display: flex;
     justify-content: space-between;
     font-size: 1.2em;
-    margin: 5px 0;
+    margin: 20px 0;
 }
-/* New style for the amount paid row */
-.checkout-total.amount-paid-row {
-    font-size: 0.9em;
-    color: #6c757d;
-}
-/* END REPLACE */
 #payment-form .form-row {
     margin-bottom: 15px;
 }
@@ -1068,13 +1009,7 @@ body.modal-open {
     margin-left: auto;
 }
 .itinerary-item .remove-btn {
-    background: none;
-    border: none;
-    color: #999;
     font-size: 1.2em;
-    line-height: 1;
-    padding: 0 5px;
-    cursor: pointer;
 }
 .itinerary-modal-header {
     display: flex;
@@ -1698,7 +1633,6 @@ hr.total-divider {
 }
 
 @media (max-width: 999px) {
-    /* Main Content Layout Reset */
     #left-sidebar, #right-sidebar {
         max-width: 100%;
         transition: max-height 0.4s ease-out, opacity 0.3s ease, margin 0.4s ease, padding 0.4s ease;
@@ -1792,14 +1726,72 @@ hr.total-divider {
     }
 }
 /* --- (End of @media (max-width: 999px)) --- */
-/* --- END OF FILE --- */
 
-/* --- FIX: Collage Card Styles --- */
+
+#plan-filter-btn {
+    background-color: #f0f8ff;
+    font-weight: bold;
+    border-color: #cce5ff; /* Added from snippet */
+}
+
+#plan-filter-btn.active {
+    background-color: #cce5ff;
+    border-color: #007bff;
+}
+
+#catalog-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #dee2e6;
+    display: none;
+}
+
+.event-type-card .event-card-content {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.event-date-display {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    text-align: center;
+    padding: 10px;
+    min-width: 70px;
+}
+
+.event-date-display .month {
+    display: block;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #dc3545;
+}
+
+.event-date-display .day {
+    display: block;
+    font-size: 1.8em;
+    font-weight: bold;
+    color: #343a40;
+    line-height: 1.1;
+}
+
+.event-details {
+    flex-grow: 1;
+}
+
+.event-details h3 {
+    margin-top: 0;
+}
+
 .collage-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
-    height: 100%; /* Make it fill the .event-card-image-container height */
+    height: 200px;
 }
 
 .collage-image {
@@ -1809,39 +1801,391 @@ hr.total-divider {
     background-position: center;
 }
 
-/* --- FIX 2: This makes groupings with only one image fill the entire container --- */
+/* --- FIX #2: This makes groupings with only one image fill the entire container --- */
 .collage-image:only-child {
     grid-column: span 2;
     grid-row: span 2;
 }
 
 
-/* --- FIX: Marquee Banner Styles --- */
-#marquee-banner-container {
+.grouping-card .card-footer {
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        flex-direction: column;
+        height: 95vh;
+        width: 95vw;
+        max-height: none;
+    }
+
+    .modal-main-column {
+        flex: 1;
+        min-height: 250px;
+        border-right: none;
+        border-bottom: 1px solid #eee;
+    }
+
+    .modal-sidebar-column {
+        flex: 1;
+        padding: 20px;
+    }
+
+    #modal-thumbnail-strip {
+        padding: 8px;
+    }
+
+    .thumbnail-img {
+        width: 65px;
+        height: 50px;
+    }
+}
+
+.sso-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: #aaa;
+    font-size: 0.8em;
+    text-transform: uppercase;
+}
+.sso-divider::before, .sso-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #eee;
+}
+.sso-divider:not(:empty-्_)::before {
+    margin-right: .5em;
+}
+.sso-divider:not(:empty-्_)::after {
+    margin-left: .5em;
+}
+
+.sso-btn {
     width: 100%;
-    overflow: hidden; /* Clips the text as it moves */
-    background: rgba(0, 0, 0, 0.05);
+    padding: 12px;
+    font-size: 1em;
+    font-weight: 500;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.sso-btn:hover {
+    background-color: #f8f8f8;
+}
+
+#breadcrumbs {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 8px;
+    padding: 5px 0;
+}
+
+#breadcrumbs a.breadcrumb-link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+#breadcrumbs a.breadcrumb-link:hover {
+    text-decoration: underline;
+}
+
+#breadcrumbs span {
+    font-weight: bold;
+    color: #343a40;
+}
+
+.price-original {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+    margin-left: 5px;
+}
+
+.price-editor {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.price-editor label {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+.price-override-input {
+    width: 70px;
+    padding: 4px;
+    border: 1px solid #ced4da;
     border-radius: 4px;
+    text-align: right;
+}
+
+.itinerary-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.itinerary-container {
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.itinerary-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.itinerary-list {
+    overflow-y: auto;
+    flex-grow: 1;
+    padding: 5px;
+}
+
+#checkout-summary-details li {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.summary-item-details {
+    display: flex;
+    flex-direction: column;
+    padding-right: 10px;
+}
+
+.checkout-summary-note {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 4px;
+}
+
+.itinerary-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+#marquee-banner-container {
+    background-color: #e9ecef;
+    color: #495057;
+    padding: 6px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    border-top: 1px solid #dee2e6;
+    border-bottom: 1px solid #dee2e6;
 }
 
 #marquee-text {
-    /* Apply the animation here */
-    animation-name: scroll;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
-    
-    /* Required for a single-line scroll */
-    white-space: nowrap;
-    padding: 8px 0;
-    will-change: transform; /* Performance hint for the browser */
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee-scroll 25s linear infinite;
+    font-size: 0.9em;
+    font-weight: 500;
 }
 
-/* Define the scrolling animation */
-@keyframes scroll {
-    0% {
-        transform: translateX(100%);
-    }
-    100% {
-        transform: translateX(-100%);
-    }
+@keyframes marquee-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+#marquee-banner-container:hover #marquee-text {
+    animation-play-state: paused;
+}
+
+#modal-additional-details {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    font-size: 0.9em;
+    color: #495057;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.detail-item {
+    line-height: 1.5;
+}
+
+.detail-label {
+    display: block;
+    font-weight: 600;
+    color: #343a40;
+    margin-bottom: 3px;
+    font-size: 0.85em;
+    text-transform: uppercase;
+}
+
+.detail-value {
+    /* Style for the value text */
+}
+
+.ranking-list {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.ranking-item {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 15px;
+    padding: 3px 10px;
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.ranking-label {
+    /* Style for the ranking name (e.g., \"Fun\") */
+}
+
+.ranking-stars {
+    color: #ffc107;
+    margin-left: 5px;
+    font-size: 1.1em;
+}
+
+/* --- 9. SLIDER STYLES (Kept for now) --- */
+/* We are removing the UI, but the styles can stay just in case */
+/* Style for the 'Fun Tweaks' <select> dropdown */
+.form-row select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background-color: #fff;
+}
+/* Container for each dynamic slider */
+.form-row-slider {
+    margin-top: 10px;
+}
+/* Label for the slider (e.g., \"Kaleidoscope: 6\") */
+.form-row-slider label {
+    font-size: 0.9em !important;
+    font-weight: normal !important;
+    margin-top: 5px;
+    color: #333 !important;
+}
+/* The slider <input type=\"range\"> */
+.form-row-slider input[type=\"range\"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #ddd;
+    border-radius: 5px;
+    outline: none;
+    opacity: 0.7;
+    transition: opacity .2s;
+    margin-top: 5px;
+    padding: 0; /* Override defaults */
+}
+.form-row-slider input[type=\"range\"]:hover {
+    opacity: 1;
+}
+.form-row-slider input[type=\"range\"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.form-row-slider input[type=\"range\"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+}
+.form-row {\
+    margin-bottom: 15px;\
+}\
+.form-row label {\
+    display: block;\
+    margin-bottom: 5px;\
+    font-size: 0.9em;\
+    color: #666;\
+    font-weight: 500;\
+}\
+.form-row input[type=\"range\"] {\
+    width: 100%;\
+}\
+/* --- END SLIDER STYLES --- */\
+\
+/* --- REMOVED: All #solid-bg, .bg-effect-*, @keyframes rules --- */\
+
+/* --- NEW UI POLISHES (Restored) --- */
+
+/* 1. Header Event Name Input */
+#header-event-name {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #2c3e50;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin-bottom: 5px;
+    /* Optional: Focus state looks cleaner without border */
+    outline: none;
+    box-shadow: none;
+}
+
+/* 2. My Plans Dropdown */
+#my-plans-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#my-plans-dropdown {
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#my-plans-dropdown:hover {
+    border-color: #007bff;
+    background-color: #e7f3ff;
+}
+
+/* 3. Event Plan Button (Sidebar) */
+#itinerary-btn {
+    /* Style to make it look like a prominent header/button hybrid */
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+#itinerary-btn:hover {
+    color: #007bff;
 }
