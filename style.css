@@ -167,9 +167,44 @@ body.modal-open {
 #header-left {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 15px; /* This will space out the WTF button, logo, and title */
     flex-shrink: 0; /* Don't shrink logo/title */
 }
+
+/* --- NEW: Styles for WTF Button --- */
+#parent-collective-trigger {
+    background-color: #343a40; /* Dark grey/black */
+    color: white;
+    border: none;
+    border-radius: 8px; /* Rounded square */
+    font-weight: bold;
+    font-size: 1.1em;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0; /* Don't shrink */
+}
+
+#parent-collective-trigger:hover {
+    background-color: #007bff; /* TMT blue on hover */
+}
+
+/* --- NEW: Styles for Logo Container and Image --- */
+#shop-logo-container {
+    flex-shrink: 0; /* Don't shrink logo */
+    display: flex; /* To center image if needed */
+    align-items: center;
+    height: 44px; /* Match the button height */
+}
+
+#shop-logo-container img {
+    height: 100%; /* Fill the container's height */
+    width: auto; /* Maintain aspect ratio */
+    display: block;
+    object-fit: contain; /* Ensure logo isn't stretched */
+}
+
 
 /* --- NEW: #header-center --- */
 #header-center {
@@ -190,12 +225,17 @@ body.modal-open {
     margin: 0;
     line-height: 1.2;
     color: #2c3e50;
+    cursor: pointer; /* Added from main.js logic */
 }
 
+/* REMOVED old rule */
+/*
 #header-left > img {
     height: 50px;
     display: block;
 }
+*/
+
 
 /* --- 3. CORE LAYOUT (FIX) --- */
 .main-content {
@@ -2222,3 +2262,4 @@ hr.total-divider {
 #itinerary-btn:hover {
     color: #007bff;
 }
+
