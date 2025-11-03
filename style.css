@@ -362,6 +362,70 @@ body.modal-open {
     color: #721c24 !important;
     text-decoration: line-through;
 }
+
+/* --- NEW CALENDAR STYLES --- */
+.flatpickr-day.has-event {
+    /* Add a subtle dot for non-rsvp'd events */
+    background-color: #e7f3ff;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+.flatpickr-day.rsvpd-event-day {
+    /* Make RSVP'd events stand out */
+    background-color: #28a745 !important;
+    color: white !important;
+    border-color: #1e7e34 !important;
+}
+
+#calendar-body {
+    display: flex;
+    gap: 20px;
+    height: calc(100% - 50px); /* Fill remaining modal height */
+}
+
+#event-calendar {
+    flex: 2; /* Calendar takes 2/3 width */
+    height: 100%;
+}
+
+#event-details-panel {
+    flex: 1; /* List takes 1/3 width */
+    border-left: 1px solid #dee2e6;
+    padding-left: 20px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+#daily-event-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9em;
+}
+
+#daily-event-list li {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+#daily-event-list li.event-item-clickable {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#daily-event-list li.event-item-clickable:hover {
+    background-color: #f8f9fa;
+}
+
+#daily-event-list li.event-item-rsvpd {
+    font-weight: bold;
+    color: #28a745;
+}
+
+/* --- END NEW CALENDAR STYLES --- */
+
+
 .flatpickr-calendar.inline {
     width: 100%;
     box-shadow: none;
@@ -2262,4 +2326,5 @@ hr.total-divider {
 #itinerary-btn:hover {
     color: #007bff;
 }
+
 
