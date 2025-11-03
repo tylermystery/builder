@@ -22,7 +22,7 @@ let historyIndex = -1;
 // --- END NEW ---
 
 // --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
-const PROCESSING_FEE_ROW_HTML = `<div class="total-row processing-fee-row" style="display: none;"><span>Processing Fee:</span><span id="processing-fee-cost">$0.00</span></div>`;
+const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
 // This helper function safely inserts the fee row into the DOM
 (function insertProcessingFeeRow() {
     const section = document.querySelector('.checkout-total-deposit-section');
@@ -97,7 +97,7 @@ export async function updateProcessingFeeDisplay() {
         document.getElementById('deposit-label').textContent = 'Additional Payment/Tip:';
     } else if (isFirstPayment) {
     // --- Existing logic for deposit/full choice ---
-        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
+        const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
         const isFullPayment = currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full';
 
         if (!isFullPayment) {
@@ -132,12 +132,16 @@ export async function updateProcessingFeeDisplay() {
              if (valueResult.value?.type) {
                  selectedPaymentMethod = valueResult.value.type;
              }
+             // 🐛 DEBUG: Log the detected payment type in the browser console
+             console.log(`[Stripe Debug] Detected Payment Type: ${selectedPaymentMethod}`);
          } catch (e) {
+             // 🐛 DEBUG: Log error if getValue() fails
+             console.error('[Stripe Debug] Error calling getValue() on Payment Element:', e);
              log('Stripe', 'Warning: Could not get live payment method type from Stripe Element, defaulting to card.', e);
          }
     }
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- CRITICAL FIX END ---
+    // --- CRITICAL FIX END ---\n
 
     try {
         // We only proceed if the amount is valid 
@@ -150,13 +154,17 @@ export async function updateProcessingFeeDisplay() {
 
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
         const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
+            method: 'POST',\
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
                 paymentMethodType: selectedPaymentMethod 
             }),
         });
+        
+        // 🐛 DEBUG: Log the fetch status in the browser console
+        console.log(`[Stripe Debug] Sent fetch request. Server response status: ${intentResponse.status}`);
+        
         if (!intentResponse.ok) throw new Error('Fee calculation failed.');
         const paymentIntentData = await intentResponse.json();
         const feeInCents = paymentIntentData.processingFeeInCents;
@@ -263,7 +271,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         
         // If coming from a button click (not internal nav, not browser back/forward), push the new item.
         if (!isInternalNavigation) {
-            // If drilling down, wipe out the "forward" history
+            // If drilling down, wipe out the \"forward\" history
             if (historyIndex > -1 && historyIndex < modalHistory.length - 1) {
                 modalHistory = modalHistory.slice(0, historyIndex + 1);
             }
@@ -359,8 +367,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 detailItem.className = 'detail-item';
                 // Cleaned up innerHTML: using template literal and minimizing quote conflicts
                 detailItem.innerHTML = `
-                    <span class="detail-label">${spec.label}</span>
-                    <span class="detail-value">${String(value).replace(/\n/g, '<br>')}</span>
+                    <span class=\"detail-label\">${spec.label}</span>
+                    <span class=\"detail-value\">${String(value).replace(/\n/g, '<br>')}</span>
                 `;
                 fragment.appendChild(detailItem);
             }
@@ -377,9 +385,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                             const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
                             // Cleaned up innerHTML: using template literal and minimizing quote conflicts
                             rankingsHtmlParts.push(`
-                                <div class="ranking-item">
-                                    <span class="ranking-label">${label}:</span>
-                                    <span class="ranking-stars">${stars}</span>
+                                <div class=\"ranking-item\">\
+                                    <span class=\"ranking-label\">${label}:</span>
+                                    <span class=\"ranking-stars\">${stars}</span>
                                 </div>
                             `);
                         }
@@ -390,16 +398,16 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 const errorItem = document.createElement('div');
                 errorItem.className = 'detail-item';
                 // Cleaned up innerHTML
-                errorItem.innerHTML = `<span class="detail-label">Rankings</span><span class="detail-value" style="color: red;">Error loading rankings</span>`;
+                errorItem.innerHTML = `<span class=\"detail-label\">Rankings</span><span class=\"detail-value\" style=\"color: red;\">Error loading rankings</span>`;
                 fragment.appendChild(errorItem);
             }
-        }
-        if (hasRankings) {
+        }\
+        if (hasRankings) {\
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
             // Cleaned up innerHTML
             rankingContainer.innerHTML = `
-                <span class="detail-label">Rankings</span>
+                <span class=\"detail-label\">Rankings</span>
                 ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
@@ -426,10 +434,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             const storeDetails = await api.fetchStoreDetailsByIds(otherStoreIds);
             
             let storeLinksHTML = '<h4>Also available at:</h4>';
-            storeDetails.forEach(store => {
-                const storeName = store.shopTitle || store.name;
+            storeDetails.forEach(store => {\
+                const storeName = store.shopTitle || store.name;\
                 // Cleaned up innerHTML
-                storeLinksHTML += `<button class="primary-action-btn go-to-store-btn" data-store-id="${store.id}" style="margin-top: 5px; margin-bottom: 5px; background-color: #5a6268; font-size: 0.9em;">Go to ${storeName} Store</button>`;
+                storeLinksHTML += `<button class=\"primary-action-btn go-to-store-btn\" data-store-id=\"${store.id}\" style=\"margin-top: 5px; margin-bottom: 5px; background-color: #5a6268; font-size: 0.9em;\">Go to ${storeName} Store</button>`;
             });
             modalStoreLinksContainer.innerHTML = storeLinksHTML;
             modalStoreLinksContainer.style.marginBottom = '20px';
@@ -455,7 +463,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -488,7 +496,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     modalHeaderActions.appendChild(heartBtnContainer);
 
     modalOptionsContainer.innerHTML = '';
-    rawOptions.forEach((opt, index) => {
+    rawOptions.forEach((opt, index) => {\
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
         optionButton.dataset.optionIndex = index;
@@ -501,7 +509,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -539,7 +547,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -716,16 +724,16 @@ export async function showCheckoutModal(shopSettings) {
         let noteHtml = '';
         if (itemState.note && itemState.note.trim() !== '') {
             // Cleaned up innerHTML
-            noteHtml = `<small class="checkout-summary-note">Note: ${itemState.note}</small>`;
+            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemState.note}</small>`;
         }
         
         // Cleaned up innerHTML
         listItem.innerHTML = `
-            <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${itemState.quantity || 1})</span>
+            <div class=\"summary-item-details\">
+                <span class=\"summary-item-name\">${record.fields.Name} (x${itemState.quantity || 1})</span>
                 ${noteHtml}
             </div>
-            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
     }
@@ -738,11 +746,11 @@ export async function showCheckoutModal(shopSettings) {
         const historyItem = document.createElement('li');
         // Cleaned up innerHTML
         historyItem.innerHTML = `
-            <div class="summary-item-details">
-                <span class="summary-item-name">${p.note}</span>
+            <div class=\"summary-item-details\">
+                <span class=\"summary-item-name\">${p.note}</span>
                 <small>${date}</small>
             </div>
-            <span class="summary-item-price paid-amount">+$${p.amount.toFixed(2)}</span>
+            <span class=\"summary-item-price paid-amount\">+$${p.amount.toFixed(2)}</span>
         `;
         paymentHistoryList.appendChild(historyItem);
     });
@@ -777,7 +785,7 @@ export async function showCheckoutModal(shopSettings) {
         // Hide payment form/controls and show message
         paymentForm.style.display = 'none';
         checkoutTotalDepositSection.style.display = 'none';
-        summaryDetailsEl.innerHTML = '<p style="text-align: center; color: #dc3545;">Please add items to your locked plan before checking out.</p>';
+        summaryDetailsEl.innerHTML = '<p style=\"text-align: center; color: #dc3545;\">Please add items to your locked plan before checking out.</p>';
         paymentSuccessMessage.style.display = 'none';
         
     } else if (isFullyPaid) {
@@ -887,7 +895,7 @@ export function hideCheckoutModal() {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
         document.getElementById('tip-amount')?.removeEventListener('input', updateProcessingFeeDisplay);
-        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
+        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
             radio.removeEventListener('change', updateProcessingFeeDisplay);
         });
         // Note: The Payment Element's 'change' listener is removed when the element instance is garbage collected.
