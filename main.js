@@ -243,7 +243,7 @@ async function initialize() {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
          log('Main', `Falling back to default shop 'Tyler's Mystery Tours'. Found shop: ${!!activeShop}`);
     }
-    // --- End Shop Determination ---\
+    // --- End Shop Determination ---
 
     if (activeShop) {
         setState({ ui: { ...state.ui, activeShopId: activeShop.id }});
@@ -255,7 +255,7 @@ async function initialize() {
             log('Main', 'No session ID found, creating new session for guest chat...');
             await api.saveSessionToAirtable(); // This will create an ID and fire 'sessionReady'
         }
-        // --- END CHAT FIX ---\
+        // --- END CHAT FIX ---
 
         // --- Initialize UI based on Shop ---
         const titleElement = document.getElementById('main-shop-title');
@@ -278,7 +278,7 @@ async function initialize() {
             titleElement.addEventListener('click', (e) => {
                 // Keep existing behavior: navigating to the active shop home if the title is clicked
                 if (e.target.id !== 'shop-switcher-trigger') {
-                    window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;\
+                    window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;
                 }
             });
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
@@ -292,7 +292,7 @@ async function initialize() {
             });
         }
         
-        const existingFavicon = document.querySelector('link[rel="icon\"], link[rel=\"shortcut icon\"]');
+        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
         if (existingFavicon) existingFavicon.remove();
         
         const logoTag = activeShop.fields.LogoTag;
@@ -361,7 +361,7 @@ async function initialize() {
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        // --- NEW MARQUEE LOGIC END ---\
+        // --- NEW MARQUEE LOGIC END ---
         ui.applyCartLabels(shopSettings.cartLabels); // Existing line
         initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
 
@@ -373,7 +373,7 @@ async function initialize() {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
                     setState({
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\
+                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
@@ -395,7 +395,7 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ token: loginToken })\
+                     body: JSON.stringify({ token: loginToken })
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Token verification failed');
@@ -416,7 +416,7 @@ async function initialize() {
                  handleSignOut(); // Use sign out to reset state cleanly
             }
         
-        // --- THIS IS THE CORRECTED BLOCK ---\
+        // --- THIS IS THE CORRECTED BLOCK ---
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
@@ -451,10 +451,10 @@ async function initialize() {
                 console.error('Failed to fetch user data on reload:', error.message);
                 // Don't block the app, just log the error. Likes will be out of sync.
             }
-        // --- END CORRECTED BLOCK ---\
+        // --- END CORRECTED BLOCK ---
         }
 
-        // --- Post-Auth Initialization ---\
+        // --- Post-Auth Initialization ---
         await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
 
         if (sessionId && state.session.id !== sessionId) {
@@ -462,12 +462,12 @@ async function initialize() {
               await api.loadSessionFromAirtable(sessionId);
         } else if (state.session.id) {
              log('Main', `Session ${state.session.id} already loaded or initiated.`);
-             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---\
+             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---
              // This ensures chat initializes even if loadSessionFromAirtable was skipped
              if (typeof initializeSessionChat === 'function') {
                  initializeSessionChat();
              }
-             // --- END CHAT FIX ---\
+             // --- END CHAT FIX ---
              ui.updateHeader();
              ui.updateEventPlanSection();
              ui.updateIdeasCarousel(); // Renamed
@@ -483,7 +483,7 @@ async function initialize() {
         const statusFilterEl = document.getElementById('status-filter');
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue;
 
-        // --- Final UI Setup ---\
+        // --- Final UI Setup ---
         ui.toggleLoading(false);
         updateSaveShareButton();
         initializeChatEventListeners();
@@ -497,21 +497,21 @@ async function initialize() {
         setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
         log('Main', 'Initialization complete.');
 
-        // --- DEBUG ---\
+        // --- DEBUG ---
         console.log('[main.js] 6. Calling backgroundEngine.initBackgroundEngine().');
-        // --- DEBUG ---\
+        // --- DEBUG ---
         backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
         
-        // --- THIS IS THE FIX ---\
+        // --- THIS IS THE FIX ---
         // Load the new fluid effect, passing 'null' for the controls container
-        // --- DEBUG ---\
+        // --- DEBUG ---
         console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); // <-- UPDATED
-        // --- DEBUG ---\
+        // --- DEBUG ---
         backgroundEngine.loadEffect(fluidEffect, null); // <-- UPDATED
-        // --- END FIX ---\
-        // --- DEBUG ---\
+        // --- END FIX ---
+        // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
-        // --- DEBUG ---\
+        // --- DEBUG ---
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed.");
