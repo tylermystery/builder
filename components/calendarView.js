@@ -12,15 +12,34 @@ const closeBtn = document.getElementById('calendar-close-btn');
 let fullEventList = []; // Stores all upcoming events fetched from the server
 let calendarInstance = null;
 
-// --- DUMMY FUNCTION (To be replaced by serverless call) ---
+// --- UPDATED: This function now fetches real data from the state ---
 async function fetchUpcomingEvents() {
-    log('Calendar', 'Simulating fetch of upcoming events...');
-    // In the next step, this function will call the actual Netlify function to parse events
+    log('Calendar', 'Fetching all public events from state...');
     
-    // For now, return an empty list to avoid breaking the UI
-    return []; 
+    // Use the already-loaded records from the main app state
+    if (!state.records.all || state.records.all.length === 0) {
+        log('Calendar', 'Records not loaded yet.');
+        return [];
+    }
+
+    const eventItems = state.records.all.filter(record => 
+        record.fields['Item Type'] === 'Event' && record.fields.Date
+    );
+
+    log('Calendar', `Found ${eventItems.length} public events.`);
+
+    // Map to the format our calendar logic will use
+    return eventItems.map(record => {
+        return {
+            recordId: record.id,
+            name: record.fields.Name || 'Unnamed Event',
+            // Get the date (and make sure it's just the date part, not time)
+            date: new Date(record.fields.Date).toISOString().split('T')[0], 
+            record: record // Keep a reference to the full record
+        };
+    });
 }
-// --- END DUMMY FUNCTION ---
+// --- END UPDATED FUNCTION ---
 
 /**
  * Initializes the calendar widget with events and handles interaction.
@@ -53,22 +72,27 @@ async function renderCalendar() {
                 const isUserRsvpd = dayEvents.some(event => state.session.user.rsvps.has(event.recordId));
                 if (isUserRsvpd) {
                     dayElem.classList.add('rsvpd-event-day');
+                    dayElem.setAttribute('title', dayElem.getAttribute('title') + ' (You RSVP\'d)');
                 }
             }
         },
         
         onChange: function(selectedDates) {
             if (selectedDates.length > 0) {
+                // Show events for the *first* selected date (flatpickr multiple mode)
                 const selectedDay = selectedDates[0];
                 renderDailyEvents(selectedDay);
+                // Reselect the date to keep it highlighted
+                calendarInstance.setDate(selectedDay, true);
             } else {
                  dailyEventList.innerHTML = '<li>Select a date to see details.</li>';
             }
         }
     });
     
-    // Select today's date by default if no date is already selected
+    // Select today's date by default to populate the right panel
     calendarInstance.setDate(new Date(), true);
+    renderDailyEvents(new Date());
 }
 
 function getEventsForDay(date) {
@@ -92,12 +116,30 @@ function renderDailyEvents(date) {
     events.forEach(event => {
         const listItem = document.createElement('li');
         listItem.textContent = event.name; 
+        listItem.dataset.recordId = event.recordId; // Store the ID
+        listItem.classList.add('event-item-clickable'); // Add class for styling
         
         // Highlight if user has RSVP'd
         if (state.session.user.rsvps.has(event.recordId)) {
              listItem.classList.add('event-item-rsvpd');
              listItem.textContent += ' (RSVP\'d)';
         }
+
+        // --- ADDED: On-click logic ---
+        listItem.addEventListener('click', () => {
+            log('Calendar', `Event item clicked: ${event.name}`);
+            // Find the full record from our pre-fetched list
+            const fullRecord = event.record;
+            if (fullRecord) {
+                // Show the modal for this event
+                ui.showDetailModal(fullRecord);
+                // Hide the calendar modal
+                hideCalendarModal();
+            } else {
+                log('Calendar', 'Error: Could not find full record for this event.');
+            }
+        });
+        // --- END ADDED ---
         
         dailyEventList.appendChild(listItem);
     });
@@ -130,3 +172,4 @@ export function hideCalendarModal() {
     }, 300);
     document.body.classList.remove('modal-open');
 }
+
