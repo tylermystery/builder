@@ -1,12 +1,13 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// File: netlify/functions/create-payment-intent.js
-
 // Define a simplified fee structure for demonstration (adjust these rates)
 // Standard Card: 2.9% + $0.30
 // ACH Direct Debit: 0.8% (capped at $5.00)
 // Wallet (Apple/Google Pay): Typically same as card (2.9% + $0.30)
 function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
+  // 🐛 DEBUG: Log the input to the calculation function
+  console.log(`[FeeCalc] Starting calculation for type: ${paymentMethodType}, amount: ${baseAmountInCents} cents.`);
+  
   const baseAmount = baseAmountInCents / 100;
   let fee = 0;
 
@@ -14,11 +15,10 @@ function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
     case 'ach_debit':
       // ACH Direct Debit: 0.8%, capped at $5.00
       fee = baseAmount * 0.008;
-      // Apply min and max caps based on Stripe's standard: 
-      // Note: While Stripe has no min, we use the max cap of $5.00.
+      // Apply max cap of $5.00.
       fee = Math.min(fee, 5.00); 
-      return Math.round(fee * 100); // Return in cents
-
+      break;
+      
     case 'card':
     case 'google_pay':
     case 'apple_pay':
@@ -27,12 +27,16 @@ function calculateProcessingFee(baseAmountInCents, paymentMethodType) {
       const fixedFee = 0.30;
       const percentageRate = 0.029; // 2.9%
       fee = baseAmount * percentageRate + fixedFee;
-      return Math.round(fee * 100); // Return in cents
+      break;
   }
+  
+  const feeInCents = Math.round(fee * 100);
+  // 🐛 DEBUG: Log the final calculated fee
+  console.log(`[FeeCalc] Final fee calculated: ${feeInCents} cents (Rate: ${(fee*100/baseAmount).toFixed(2)}%)`);
+  return feeInCents;
 }
 
 exports.handler = async (event) => {
-    // ... rest of the function remains the same
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error('Stripe secret key is not configured.');
     return {
@@ -55,6 +59,9 @@ exports.handler = async (event) => {
     console.error('Error parsing request body:', error);
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid request body.' }) };
   }
+  
+  // 🐛 DEBUG: Log the request received by the handler
+  console.log(`[Handler] Received request. Base amount: ${baseAmountInCents} cents, Payment Type: ${paymentMethodType}`);
   
   if (typeof baseAmountInCents !== 'number' || baseAmountInCents < 50) {
     return {
