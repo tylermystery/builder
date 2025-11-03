@@ -141,7 +141,7 @@ export async function updateProcessingFeeDisplay() {
          }
     }
     log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- CRITICAL FIX END ---\n
+    // --- CRITICAL FIX END ---
 
     try {
         // We only proceed if the amount is valid 
@@ -154,7 +154,7 @@ export async function updateProcessingFeeDisplay() {
 
         // Step 1: Request the fee calculation and a NEW clientSecret from the server
         const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',\
+            method: 'POST', // <-- THIS IS THE FIX (Removed stray '\')
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 amount: amountInCentsBeforeFee, 
@@ -385,7 +385,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                             const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
                             // Cleaned up innerHTML: using template literal and minimizing quote conflicts
                             rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">\
+                                <div class=\"ranking-item\">
                                     <span class=\"ranking-label\">${label}:</span>
                                     <span class=\"ranking-stars\">${stars}</span>
                                 </div>
@@ -401,8 +401,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 errorItem.innerHTML = `<span class=\"detail-label\">Rankings</span><span class=\"detail-value\" style=\"color: red;\">Error loading rankings</span>`;
                 fragment.appendChild(errorItem);
             }
-        }\
-        if (hasRankings) {\
+        }
+        if (hasRankings) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
             // Cleaned up innerHTML
@@ -434,8 +434,8 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             const storeDetails = await api.fetchStoreDetailsByIds(otherStoreIds);
             
             let storeLinksHTML = '<h4>Also available at:</h4>';
-            storeDetails.forEach(store => {\
-                const storeName = store.shopTitle || store.name;\
+            storeDetails.forEach(store => {
+                const storeName = store.shopTitle || store.name;
                 // Cleaned up innerHTML
                 storeLinksHTML += `<button class=\"primary-action-btn go-to-store-btn\" data-store-id=\"${store.id}\" style=\"margin-top: 5px; margin-bottom: 5px; background-color: #5a6268; font-size: 0.9em;\">Go to ${storeName} Store</button>`;
             });
@@ -496,7 +496,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     modalHeaderActions.appendChild(heartBtnContainer);
 
     modalOptionsContainer.innerHTML = '';
-    rawOptions.forEach((opt, index) => {\
+    rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
         optionButton.className = 'option-btn';
         optionButton.dataset.optionIndex = index;
