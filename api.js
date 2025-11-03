@@ -687,6 +687,9 @@ export async function fetchCuratedImagesByRecord(record) {
     }
 }
 
+// In: api.js
+// REPLACE the entire fetchImagesForRecord function (around line 638)
+
 export async function fetchImagesForRecord(record, allRecords, imageCache) {
     if (!record || !record.id) return { imageUrls: [] };
 
@@ -695,34 +698,53 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         return { imageUrls: imageCache.get(cacheKey) };
     }
 
-    const defaultImagePublicID = 'ww71meppejsewxsxr4x7.jpg';
-    const ultimateFallbackUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto/${defaultImagePublicID}`;
+    // --- NEW: DYNAMIC FALLBACK LOGIC (as you suggested) ---
+    // This function will now be called if all image fetches fail.
+    // It overlays the failing tag name onto a placeholder image for easy debugging.
+    const getDynamicFallbackUrl = (record) => {
+        const mediaTag = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || "NO_TAG_DEFINED";
+        
+        // URL-encode the text to be overlaid. \n becomes a new line.
+        const encodedTag = encodeURIComponent(`Failed Media Tag:\n${mediaTag}`);
+        
+        // A generic grey placeholder public ID
+        const placeholderPublicID = 'v1/samples/solid_color'; 
+        
+        // Cloudinary URL with text overlay:
+        // w_600,h_520,c_fill: Base canvas
+        // co_rgb:FFFFFF,b_rgb:00000080: Overlay text (white, 80% black background)
+        // l_text:Arial_32_bold:...,g_center: Place text in the center
+        return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/w_600,h_520,c_fill,g_auto,co_rgb:808080/l_text:Arial_32_bold:${encodedTag},co_rgb:FFFFFF,b_rgb:00000080,g_center/${placeholderPublicID}.jpg`;
+    };
+    // --- END DYNAMIC FALLBACK LOGIC ---
 
     let imageUrls = [];
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
-    const isGrouping = record.fields['Item Type'] === 'Grouping' || rawOptions.some(opt => childRecordNames.has(opt.name));
 
-    if (isGrouping) {
-         log('API', `Record ${record.id} identified as grouping, using fallback image.`);
-        imageUrls = [ultimateFallbackUrl];
-    } else {
-        imageUrls = await fetchCuratedImagesByRecord(record);
-        if (!imageUrls || imageUrls.length === 0) {
-             log('API', `No curated images found for ${record.id}, falling back to Media Tags.`);
-             imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
-        }
-    }
-
+    // --- THIS IS THE FIX ---
+    // We REMOVED the faulty 'isGrouping' check that was here.
+    // Now, we *always* try to find images for *every* item, letting the
+    // 'createInteractiveCard' function decide later if it wants a collage or a single image.
+    
+    // Step 1: Try to get 'Curated Images' (the new AI-linked field)
+    // Per your request, this is NOT the primary method, but we leave the logic in place.
+    imageUrls = await fetchCuratedImagesByRecord(record);
+    
+    // Step 2: If no curated images, fall back to 'Media Tags' (the old way)
     if (!imageUrls || imageUrls.length === 0) {
-        log('API', `No images found for ${record.id} after all checks, using ultimate fallback.`);
-        imageUrls = [ultimateFallbackUrl];
+         log('API', `No curated images found for ${record.id}, falling back to Media Tags.`);
+         imageUrls = await fetchImagesByTags(record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS]);
+    }
+    // --- END FIX ---
+
+    // Step 3: If *still* no images, use the new dynamic fallback
+    if (!imageUrls || imageUrls.length === 0) {
+        log('API', `No images found for ${record.id} after all checks, using DYNAMIC fallback.`);
+        imageUrls = [getDynamicFallbackUrl(record)];
     }
 
     imageCache.set(cacheKey, imageUrls);
     return { imageUrls };
 }
-
 
 export async function fetchChatMessages(sessionId) {
     if (!sessionId || !sessionId.startsWith('rec')) {
