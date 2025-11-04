@@ -16,7 +16,6 @@ import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 // Corrected import line below:
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
 import { initializeSessionChat } from './chat.js';
-import { setupCalendarEventListeners } from './components/calendarView.js'; // NEW IMPORT
 
 // --- DEBUG ---
 console.log('[main.js] 1. Importing auth.js...');
@@ -87,10 +86,10 @@ function syncUiWithUrl() {
         } else if (view === 'likes') {
             document.getElementById('liked-items-filter-btn')?.classList.add('active');
         } else if (category) {
-            document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active');
+            document.querySelector(`#category-filters .filter-btn[data-filter=\"${category}\"]`)?.classList.add('active');
         } else {
             // Default to 'All' if no specific view or category is set
-            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
+            document.querySelector(`#category-filters .filter-btn[data-filter=\"all\"]`)?.classList.add('active');
         }
     }
 
@@ -109,7 +108,7 @@ function syncUiWithUrl() {
          subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
          if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
              subcategories.forEach(subcat => {
-                 subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active');
+                 subcategoryFilters.querySelector(`.filter-btn[data-filter=\"${subcat}\"]`)?.classList.add('active');
              });
          }
      }
@@ -122,7 +121,7 @@ function syncUiWithUrl() {
          console.error("applyFiltersAndSort is not defined or imported correctly.");
     }
 
-    // --- Handle opening modals/views based on URL ---
+    // --- Handle opening modals/views based on URL --
     // Use setTimeout to allow filters to apply and DOM to update first
     setTimeout(() => {
         if (view === 'present') {
@@ -271,28 +270,20 @@ async function initialize() {
             const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
 
             // --- Set innerHTML with both dynamic parts ---
-            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
+            titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id=\"shop-switcher-trigger\" style=\"background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;\">s</button>`;
 
             // Keep existing event listeners
             titleElement.style.cursor = 'pointer';
             titleElement.addEventListener('click', (e) => {
-                // Keep existing behavior: navigating to the active shop home if the title is clicked
                 if (e.target.id !== 'shop-switcher-trigger') {
                     window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;
                 }
             });
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher());
-
-            // --- NEW: Add listener for the prominent WTF button ---
-            const parentCollectiveTrigger = document.getElementById('parent-collective-trigger');
-            if (parentCollectiveTrigger) parentCollectiveTrigger.addEventListener('click', () => {
-                // For now, reuse the existing shop switcher modal
-                ui.showShopSwitcher();
-            });
         }
         
-        const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+        const existingFavicon = document.querySelector('link[rel=\"icon\"], link[rel=\"shortcut icon\"]');
         if (existingFavicon) existingFavicon.remove();
         
         const logoTag = activeShop.fields.LogoTag;
@@ -307,19 +298,8 @@ async function initialize() {
                 const headerLogo = document.createElement('img');
                 headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/');
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
-                
-                // --- MODIFIED LOGO INSERTION LOGIC ---
-                // Insert logo into its dedicated container to ensure correct order
-                const logoContainer = document.getElementById('shop-logo-container');
-                if (logoContainer) {
-                    logoContainer.innerHTML = ''; // Clear previous
-                    logoContainer.appendChild(headerLogo);
-                } else {
-                    // Fallback just in case, though it shouldn't be needed
-                    const headerLeft = document.getElementById('header-left');
-                    if (headerLeft) headerLeft.prepend(headerLogo);
-                }
-                // --- END MODIFIED LOGIC ---
+                const headerLeft = document.getElementById('header-left');
+                if (headerLeft) headerLeft.prepend(headerLogo);
             }
         }
 
@@ -361,7 +341,7 @@ async function initialize() {
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        // --- NEW MARQUEE LOGIC END ---
+        // --- NEW MARQUEE LOGIC END --
         ui.applyCartLabels(shopSettings.cartLabels); // Existing line
         initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
 
@@ -372,9 +352,7 @@ async function initialize() {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
-                    setState({
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
-                    });
+                    setState({\n                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\n                    });
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
@@ -395,8 +373,7 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ token: loginToken })
-                });
+                     body: JSON.stringify({ token: loginToken })\n                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Token verification failed');
 
@@ -432,15 +409,7 @@ async function initialize() {
                 }
                 const userData = await response.json();
                 if (userData.likedItemIds) {
-                    setState({
-                        session: {
-                            ...state.session,
-                            user: {
-                                ...state.session.user,
-                                likedItemIds: new Set(userData.likedItemIds)
-                            }
-                        }
-                    });
+                    setState({\n                        session: {\n                            ...state.session,\n                            user: {\n                                ...state.session.user,\n                                likedItemIds: new Set(userData.likedItemIds)\n                            }\n                        }\n                    });
                     log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
                     // Now that likes are loaded, update all visible card icons
                     document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
@@ -487,8 +456,15 @@ async function initialize() {
         ui.toggleLoading(false);
         updateSaveShareButton();
         initializeChatEventListeners();
+        
+        // --- THIS IS THE FIX ---
+        // Initialize the Netlify Identity widget BEFORE setting up auth listeners
+        if (window.netlifyIdentity) {
+            window.netlifyIdentity.init();
+        }
+        // --- END FIX ---
+
         setupAuthEventListeners();
-        setupCalendarEventListeners(); // NEW: Setup Calendar Button/Modal listeners
         updateUserProfileIcon();
 
         syncUiWithUrl(); // Sync UI with URL parameters
