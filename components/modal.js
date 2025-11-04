@@ -9,10 +9,10 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../a
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- Recommendation Engine v1.0: Helper Functions ---
+// --- Recommendation Engine v1.1: Helper Functions ---
 
 /**
- * [v1.0] Scans goal text for matching ranking keywords.
+ * [v1.1] Scans goal text for matching ranking keywords.
  * @param {string} text - The user's "Goals/Notes" text.
  * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
  */
@@ -45,13 +45,15 @@ function findGoalsInText(text) {
 }
 
 /**
- * [v1.0] Calculates the "health" of the event to find missing categories.
- * @returns {Array<string>} A list of missing categories (e.g., ["Food/Drink", "Extras"])
+ * [v1.1] Calculates the "health" of the event to find missing "Pillar" categories.
+ * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
  */
 function calculateMissingCategories() {
+    // Your 4 Pillars
     const requiredCategories = {
         "Activity": false,
         "Food/Drink": false,
+        "Venue": false,
         "Extras": false,
     };
 
@@ -60,11 +62,15 @@ function calculateMissingCategories() {
         if (!record) continue;
         const itemCategories = (record.fields.Categories || '').toLowerCase();
 
+        // Check against our "required" list
         if (itemCategories.includes('activity')) {
             requiredCategories["Activity"] = true;
         }
         if (itemCategories.includes('food/drink') || itemCategories.includes('food')) {
             requiredCategories["Food/Drink"] = true;
+        }
+        if (itemCategories.includes('venue')) {
+            requiredCategories["Venue"] = true;
         }
         if (itemCategories.includes('extras')) {
             requiredCategories["Extras"] = true;
@@ -81,7 +87,7 @@ function calculateMissingCategories() {
 }
 
 /**
- * [v1.0] Gets the combined "Ranking Profile" for all items currently in the plan.
+ * [v1.1] Gets the combined "Ranking Profile" for all items currently in the plan.
  * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
  */
 function getPlanRankingProfile() {
@@ -104,7 +110,7 @@ function getPlanRankingProfile() {
 
 
 /**
- * [v1.0] Generates the full HTML "Intelligent Blurb" based on goals, breadth, and item type.
+ * [v1.1] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
  */
@@ -122,43 +128,50 @@ function generateRecommendationBlurb(record) {
     
     let blurbs = new Set(); // Use a Set to avoid duplicate reasons
 
-    // --- Brain 1: The "Complement" Brain (Goal Matching) ---
+    // --- Brain 1: Goal & Search Match (The "Intent") ---
+    // A. Goal Match
+    if (matchedGoals.length > 0 && Object.keys(itemRankings).length > 0) {
+        matchedGoals.forEach(goal => {
+            if (itemRankings[goal] && itemRankings[goal] >= 4) { // Rank of 4 or 5
+                blurbs.add(`This is a top match for your <strong>"${goal}"</strong> goal.`);
+            }
+        });
+    }
+    // B. Search Match
+    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
+        blurbs.add(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
+    }
+
+    // --- Brain 2: Breadth Match (The "4 Pillars") ---
+    if (missingCategories.length > 0) {
+        if (missingCategories.includes("Activity") && itemCategories.includes("activity")) {
+            blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
+        } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
+            blurbs.add("This adds a <strong>Food/Drink</strong> component to your event.");
+        } else if (missingCategories.includes("Venue") && itemCategories.includes("venue")) {
+            blurbs.add("This adds a <strong>Venue</strong> to house your event.");
+        } else if (missingCategories.includes("Extras") && itemCategories.includes("extras")) {
+            blurbs.add("This adds <strong>Extras</strong> to round out your event.");
+        }
+    }
+
+    // --- Brain 3: Depth Match (The "Complement") ---
     if (matchedGoals.length > 0 && Object.keys(itemRankings).length > 0) {
         matchedGoals.forEach(goal => {
             // If the item has this goal ranking...
             if (itemRankings[goal] && itemRankings[goal] >= 4) {
                 // ...and the plan *doesn't* have this goal yet...
                 if (!planProfile[goal]) {
-                    blurbs.add(`This adds the <strong>"${goal}"</strong> element your plan is missing.`);
-                } else {
-                    // ...or the plan *does* have it, but it's a good match anyway.
-                    blurbs.add(`This is a top match for your <strong>"${goal}"</strong> goal.`);
+                    // This is a more specific reason, so remove the generic "Goal Match" one
+                    blurbs.delete(`This is a top match for your <strong>"${goal}"</strong> goal.`);
+                    // And add the "Depth" one
+                    blurbs.add(`This is a great complement! It adds the <strong>"${goal}"</strong> element your plan is missing.`);
                 }
             }
         });
     }
-
-    // --- Brain 2: The "Search" Brain (Fallback) ---
-    // Only run if we didn't find a strong goal match
-    if (blurbs.size === 0 && searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
-        blurbs.add(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
-    }
-
-    // --- Brain 3: The "Breadth" Brain (Event Health) ---
-    if (missingCategories.length > 0) {
-        if (missingCategories.includes("Activity") && itemCategories.includes("activity")) {
-            blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
-        } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
-            blurbs.add("This adds a <strong>Food/Drink</strong> option to your event.");
-        } else if (missingCategories.includes("Extras") && itemCategories.includes("extras")) {
-            blurbs.add("This adds <strong>Extras</strong> to round out your event.");
-        }
-    }
-
-    // --- Brain 4: The "Concierge" Brain (Partner Pitch) ---
-    if (record.fields.ServiceType === 'Partner Activity') {
-        blurbs.add("As a partner item, our expert team will handle all booking and logistics for you.");
-    }
+    
+    // NOTE: The "Partner" (Brain 4) logic is omitted as requested.
 
     // Build the final blurb
     if (blurbs.size > 0) {
@@ -172,7 +185,7 @@ function generateRecommendationBlurb(record) {
 
     return null;
 }
-// --- END OF Recommendation Engine v1.0 ---
+// --- END OF Recommendation Engine v1.1 ---
 
 
 let stripe;
