@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/modal.js
+// REPLACE THE ENTIRE CONTENTS of components/modal.js
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -8,37 +8,157 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
-// Note: updateProgressForAction is imported via events.js
+
+// --- 1. ADD THESE THREE NEW HELPER FUNCTIONS ---
+
+/**
+ * Scans goal text for matching ranking keywords.
+ * @param {string} text - The user's "Goals/Notes" text.
+ * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
+ */
+function findGoalsInText(text) {
+    if (!text) return [];
+    const lowerText = text.toLowerCase();
+    const foundGoals = new Set();
+    
+    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
+    const GOAL_KEYWORDS = {
+        "fun": "Fun",
+        "art": "Art",
+        "artistic": "Art",
+        "celebration": "Celebration",
+        "celebrate": "Celebration",
+        "competitive": "Competitive",
+        "compete": "Competitive",
+        "team-build": "Team-Build",
+        "team build": "Team-Build",
+        "bonding": "Bonding"
+        // Add more keyword-to-goal mappings here
+    };
+
+    for (const keyword in GOAL_KEYWORDS) {
+        if (lowerText.includes(keyword)) {
+            foundGoals.add(GOAL_KEYWORDS[keyword]); // Add the proper-cased Goal
+        }
+    }
+    return Array.from(foundGoals); // Return unique goals
+}
+
+/**
+ * Calculates the "health" of the event to find missing categories.
+ * @returns {Array<string>} A list of missing categories (e.g., ["Food/Drink", "Extras"])
+ */
+function calculateMissingCategories() {
+    const requiredCategories = {
+        "Activity": false,
+        "Food/Drink": false,
+        "Extras": false,
+    };
+
+    for (const recordId of state.cart.lockedItems.keys()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+        const itemCategories = (record.fields.Categories || '').toLowerCase();
+
+        if (itemCategories.includes('activity')) {
+            requiredCategories["Activity"] = true;
+        }
+        if (itemCategories.includes('food/drink') || itemCategories.includes('food')) {
+            requiredCategories["Food/Drink"] = true;
+        }
+        if (itemCategories.includes('extras')) {
+            requiredCategories["Extras"] = true;
+        }
+    }
+
+    let suggestions = [];
+    for (const category in requiredCategories) {
+        if (!requiredCategories[category]) {
+            suggestions.push(category); // Add the *missing* category
+        }
+    }
+    return suggestions;
+}
+
+/**
+ * Generates the full HTML "Intelligent Blurb" based on goals, breadth, and item type.
+ * @param {object} record - The item record being displayed.
+ * @returns {string | null} The HTML string for the blurb, or null.
+ */
+function generateRecommendationBlurb(record) {
+    const goalText = document.getElementById('header-goals').value;
+    const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+    const matchedGoals = findGoalsInText(goalText);
+    const missingCategories = calculateMissingCategories();
+    
+    const rankings = JSON.parse(record.fields['Rankings'] || '{}');
+    const itemCategories = (record.fields.Categories || '').toLowerCase();
+    
+    let blurbs = [];
+
+    // 1. Goal Match Logic
+    let matchedGoalRanks = [];
+    if (matchedGoals.length > 0 && Object.keys(rankings).length > 0) {
+        matchedGoals.forEach(goal => {
+            if (rankings[goal] && rankings[goal] >= 4) { // Rank of 4 or 5
+                matchedGoalRanks.push(`<strong>"${goal}"</strong>`);
+            }
+        });
+    }
+    if (matchedGoalRanks.length > 0) {
+        blurbs.push(`This is a top match for your goal${matchedGoalRanks.length > 1 ? 's' : ''} of ${matchedGoalRanks.join(' and ')}.`);
+    }
+
+    // 2. Search Match Logic
+    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || record.fields.Description.toLowerCase().includes(searchTerm))) {
+        // Only add this if we don't *also* have a goal match (to avoid redundancy)
+        if (matchedGoalRanks.length === 0) {
+            blurbs.push(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
+        }
+    }
+
+    // 3. Breadth/Health Match Logic
+    if (missingCategories.length > 0) {
+        if (missingCategories.includes("Activity") && itemCategories.includes("activity")) {
+            blurbs.push("This adds a core <strong>Activity</strong> to your plan.");
+        } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
+            blurbs.push("This adds a <strong>Food/Drink</strong> option to your event.");
+        } else if (missingCategories.includes("Extras") && itemCategories.includes("extras")) {
+            blurbs.push("This adds <strong>Extras</strong> to round out your event.");
+        }
+    }
+
+    // 4. Partner Pitch Logic
+    if (record.fields.ServiceType === 'Partner Activity') {
+        blurbs.push("As a partner item, our expert team will handle all booking and logistics for you.");
+    }
+
+    // Build the final blurb
+    if (blurbs.length > 0) {
+        // Start with the "Recommended" title
+        let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
+        // Add each reason as a list item
+        blurbs.forEach(blurb => {
+            finalBlurb += `<li style='margin-bottom: 3px;'>${blurb}</li>`;
+        });
+        finalBlurb += "</ul>";
+        return finalBlurb;
+    }
+
+    return null;
+}
+// --- END OF NEW HELPER FUNCTIONS ---
+
 
 let stripe;
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-// --- NEW: Store the last selected payment type ---
-let currentStripePaymentType = 'card'; 
-
-// --- NEW MODAL HISTORY STATE ---
-// Stores { recordId: string, shopId: string }
-let modalHistory = []; 
-let historyIndex = -1;
-// --- END NEW ---
-
-// --- NEW GLOBAL: HTML for the Processing Fee Line Item ---
-const PROCESSING_FEE_ROW_HTML = `<div class=\"total-row processing-fee-row\" style=\"display: none;\"><span>Processing Fee:</span><span id=\"processing-fee-cost\">$0.00</span></div>`;
-// This helper function safely inserts the fee row into the DOM
-(function insertProcessingFeeRow() {
-    const section = document.querySelector('.checkout-total-deposit-section');
-    if (section) {
-        section.insertAdjacentHTML('afterbegin', PROCESSING_FEE_ROW_HTML);
-    }
-})();
-// --- END NEW GLOBAL ---
-
+// --- THIS IS THE FIX ---
+// This new function safely closes the modal by updating the URL state
+// and then hiding the UI, instead of using history.back().
 function closeDetailModal() {
-    // Reset history when closing the modal entirely
-    modalHistory = [];
-    historyIndex = -1;
     updateUrl({ openItem: null });
     hideDetailModal();
 }
@@ -55,145 +175,44 @@ function handleOverlayClick(event) {
     }
 }
 
-// --- NEW: Modal Navigation Handler ---
-function navigateModalHistory(direction) {
-    const newIndex = historyIndex + direction;
-    if (newIndex >= 0 && newIndex < modalHistory.length) {
-        historyIndex = newIndex;
-        const target = modalHistory[newIndex];
-        const record = state.records.all.find(r => r.id === target.recordId);
-        if (record) {
-             // 1. Update the URL via pushState to reflect the new state (so browser buttons work correctly)
-             updateUrl({ openItem: record.id });
-             
-             // 2. The fourth argument signals isFromBrowserHistory = true
-             showDetailModal(record, 0, true); 
-             // Note: Assuming a global utility function like updateProgressForAction exists and is accessible.
+function updateCheckoutDisplay() {
+    const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = finalTotal - amountReceived;
+    const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
+    let baseAmountToCharge = totalDue;
+    
+    // Determine if this is an INITIAL DEPOSIT payment
+    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+    
+    // --- Tip Visibility Logic --
+    const tipRow = document.querySelector('.tip-row');
+    if (tipRow) {
+        // Only allow tips if paying in full (either first time or remainder)
+        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { // Assuming deposit is less than full amount
+            // Hiding tip if user explicitly selects 'deposit' and deposit is less than full amount
+            tipRow.style.display = 'none';
         } else {
-             // Failed to find the record, snap back to a valid state
-             historyIndex -= direction;
+            tipRow.style.display = 'flex';
         }
     }
-}
+    // --- End Tip Visibility Logic ---
 
-// Attach global listeners for modal navigation buttons
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('modal-back-btn')?.addEventListener('click', () => navigateModalHistory(-1));
-    document.getElementById('modal-forward-btn')?.addEventListener('click', () => navigateModalHistory(1));
-});
-
-// --- MODIFIED FUNCTION: Fetches the fee from the server and updates the UI (Fee is returned in cents) ---
-export async function updateProcessingFeeDisplay() {
-    const fullTotalEl = document.getElementById('full-total-price');
-    const finalTotal = parseFloat(fullTotalEl?.dataset.total || 0); // Read the current (recalculated) total from the element
-    const tipAmount = parseFloat(document.getElementById('tip-amount')?.value) || 0;
-    const amountReceived = state.session.user.amountReceived || 0;
-    
-    // Determine base amount due (Deposit vs. Full)
-    const totalDueBeforeFee = finalTotal - amountReceived;
-    let amountToChargeBeforeFee = totalDueBeforeFee;
-    const isFirstPayment = amountReceived === 0;
-
-    // --- NEW LOGIC: If balance is paid, allow only tip payment/adjustment ---
-    if (totalDueBeforeFee <= 0) {
-        amountToChargeBeforeFee = tipAmount; // Only charge the tip amount
-        document.getElementById('deposit-label').textContent = 'Additional Payment/Tip:';
-    } else if (isFirstPayment) {
-    // --- Existing logic for deposit/full choice ---
-        const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
-        const isFullPayment = currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full';
-
-        if (!isFullPayment) {
-             // 35% Deposit
-             amountToChargeBeforeFee = finalTotal * 0.35;
-             document.getElementById('deposit-label').textContent = '35% Deposit Due:';
+    if (amountReceived === 0) {
+        if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
+            baseAmountToCharge = finalTotal;
+            document.getElementById('deposit-label').textContent = 'Full Amount Due:';
         } else {
-             // Full Amount
-             amountToChargeBeforeFee = finalTotal;
-             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
+            baseAmountToCharge = finalTotal * 0.35;
+            document.getElementById('deposit-label').textContent = '35% Deposit Due:';
         }
     } else {
-        // Remaining Balance Due
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
-    
-    // Add tip to the amount to charge
-    amountToChargeBeforeFee += tipAmount;
-
-    const amountInCentsBeforeFee = Math.round(amountToChargeBeforeFee * 100);
-    
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    const elements = checkoutModalOverlay?.stripeElements;
-    
-    // --- ⬇️ THIS IS THE FIX ⬇️ ---
-    // We removed the failing try/catch block that called `paymentElement.getValue()`
-    // and now just use the module-level variable `currentStripePaymentType`.
-    let selectedPaymentMethod = currentStripePaymentType || 'card'; // Use the stored value
-    
-    // 🐛 DEBUG: Log the payment type being used for this calculation
-    console.log(`[Stripe Debug] Using stored Payment Type: ${selectedPaymentMethod}`);
-    log('Stripe', `Recalculating fee for method type: ${selectedPaymentMethod}`);
-    // --- ⬆️ END OF FIX ⬆️ ---
-
-    try {
-        // We only proceed if the amount is valid 
-        if (amountInCentsBeforeFee <= 0) {
-            document.getElementById('processing-fee-cost').textContent = `$0.00`;
-            document.querySelector('.processing-fee-row').style.display = 'none';
-            document.getElementById('deposit-price').textContent = `$0.00`;
-            return;
-        }
-
-        // Step 1: Request the fee calculation and a NEW clientSecret from the server
-        const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                amount: amountInCentsBeforeFee, 
-                paymentMethodType: selectedPaymentMethod 
-            }),
-        });
-        
-        // 🐛 DEBUG: Log the fetch status in the browser console
-        console.log(`[Stripe Debug] Sent fetch request. Server response status: ${intentResponse.status}`);
-        
-        if (!intentResponse.ok) throw new Error('Fee calculation failed.');
-        const paymentIntentData = await intentResponse.json();
-        const feeInCents = paymentIntentData.processingFeeInCents;
-        const clientSecret = paymentIntentData.clientSecret;
-        const fee = feeInCents / 100;
-
-        // Step 2: Update the UI with the fee
-        const feeEl = document.getElementById('processing-fee-cost');
-        const feeRowEl = document.querySelector('.processing-fee-row');
-        
-        if (fee > 0) {
-            feeEl.textContent = `$${fee.toFixed(2)}`;
-            feeRowEl.style.display = 'flex';
-        } else {
-            feeRowEl.style.display = 'none';
-        }
-
-        // Step 3: Update the Final Due amount (including the fee)
-        const totalDueWithFee = amountToChargeBeforeFee + fee;
-        document.getElementById('deposit-price').textContent = `$${totalDueWithFee.toFixed(2)}`;
-        
-        // Step 4: Update the existing Stripe Elements instance with the new Client Secret
-        if (elements && clientSecret) {
-            elements.update({ clientSecret: clientSecret });
-        }
-
-    } catch (err) {
-        console.error('Failed to update processing fee:', err);
-        // Fallback logic
-        const fee = 0; 
-        document.getElementById('processing-fee-cost').textContent = `$${fee.toFixed(2)}`;
-        document.querySelector('.processing-fee-row').style.display = 'none';
-        document.getElementById('deposit-price').textContent = `$${amountToChargeBeforeFee.toFixed(2)}`;
-    }
+    const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
+    const finalAmountToCharge = baseAmountToCharge + tipAmount;
+    document.getElementById('deposit-price').textContent = `$${finalAmountToCharge.toFixed(2)}`;
 }
-// --- END MODIFIED FUNCTION ---
-
 
 function getBreadcrumbs(record) {
     const breadcrumbs = [];
@@ -207,6 +226,7 @@ function getBreadcrumbs(record) {
     return breadcrumbs;
 }
 
+// --- THIS FUNCTION IS MODIFIED ---
 function resetModalState() {
     const elements = {
         modalItemName: document.getElementById('modal-item-name'),
@@ -219,29 +239,28 @@ function resetModalState() {
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalAdditionalDetails: document.getElementById('modal-additional-details')
+        modalAdditionalDetails: document.getElementById('modal-additional-details'),
+        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb') // --- ADDED THIS ---
     };
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
             else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
+            else if (key === 'modalRecommendationBlurb') { // --- ADDED THIS ---
+                elements[key].innerHTML = '';
+                elements[key].style.display = 'none';
+            }
             else elements[key].innerHTML = '';
         }
     }
-    document.getElementById('modal-store-links')?.remove(); // Remove dynamic store links container
     log('Modal', 'Reset modal state.');
 }
+// --- END MODIFICATION ---
 
-/**
- * Displays the detail modal for a given record.
- * @param {Object} record - The Airtable record object.
- * @param {number} [startPhotoIndex=0] - The index of the photo to start viewing.
- * @param {boolean} [isInternalNavigation=false] - Flag to skip adding to internal modal history stack.
- */
-export async function showDetailModal(record, startPhotoIndex = 0, isInternalNavigation = false) {
-    // Re-check for external browser history change only if NOT an internal navigation event
-    const isFromBrowserHistory = !isInternalNavigation && new URLSearchParams(window.location.search).get('openItem') === record.id;
-    
+
+// --- THIS FUNCTION IS MODIFIED ---
+export async function showDetailModal(record, startPhotoIndex = 0) {
+    // --- Detail Configuration (Only non-ranking fields now) ---
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -249,40 +268,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         { fieldName: 'Additional Information', label: 'Good to Know' },
     ];
 
-    console.log('[showDetailModal] Called for item:', record.id, 'Internal Nav:', isInternalNavigation, 'Browser Popstate/Initial Load Check:', isFromBrowserHistory);
+    console.log('[showDetailModal] Called for item:', record.id);
     log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
-    
-    // --- HISTORY MANAGEMENT: Handle internal drill-down, sync state on browser history change ---
-    if (!isInternalNavigation) {
-        // Only update URL if this didn't originate from a browser history event, otherwise history is fine.
-        if (!isFromBrowserHistory) {
-            updateUrl({ openItem: record.id });
-        }
-
-        const currentEntry = { recordId: record.id, shopId: state.ui.activeShopId };
-        
-        // If coming from a button click (not internal nav, not browser back/forward), push the new item.
-        if (!isInternalNavigation) {
-            // If drilling down, wipe out the \"forward\" history
-            if (historyIndex > -1 && historyIndex < modalHistory.length - 1) {
-                modalHistory = modalHistory.slice(0, historyIndex + 1);
-            }
-            // Push the new item and update the index
-            modalHistory.push(currentEntry);
-            historyIndex = modalHistory.length - 1;
-        } else if (isFromBrowserHistory) {
-             // If from browser history, find the matching index to sync the internal buttons
-             historyIndex = modalHistory.findIndex(entry => entry.recordId === record.id);
-             if (historyIndex === -1) {
-                 // Fallback: If item wasn't in modal history, treat it as the single new entry
-                 modalHistory = [currentEntry];
-                 historyIndex = 0;
-             }
-        }
-        log('Modal', 'History updated:', modalHistory.map(e => e.recordId), 'Index:', historyIndex);
-    } 
-    // --- END HISTORY MANAGEMENT ---
-
+    updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
     const modalItemPrice = document.getElementById('modal-item-price');
@@ -299,31 +287,16 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
     
-    // Get Navigation Buttons (now defined in index.html)
-    const backBtn = document.getElementById('modal-back-btn');
-    const forwardBtn = document.getElementById('modal-forward-btn');
-    
-    // --- Store Links Container (Need to create it if missing) ---
-    let modalStoreLinksContainer = document.getElementById('modal-store-links');
-    if (!modalStoreLinksContainer) {
-        modalStoreLinksContainer = document.createElement('div');
-        modalStoreLinksContainer.id = 'modal-store-links';
-        // Insert before modalAdditionalDetails
-        modalAdditionalDetails.parentNode.insertBefore(modalStoreLinksContainer, modalAdditionalDetails);
-    }
-    modalStoreLinksContainer.innerHTML = ''; // Clear previous links
-    // --- End Store Links Container ---
+    // --- ADD THIS VARIABLE ---
+    const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
 
-
-    log('Modal', 'Setting up modal listeners.');
+    console.log('[hideDetailModal] Called.'); // Note: This log seems misplaced, but keeping as per original
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
-    document.removeEventListener('keydown', handleEscapeKey); // Ensure only one listener is active
     document.addEventListener('keydown', handleEscapeKey);
 
-
-    resetModalState(); // Reset UI elements *before* populating
+    resetModalState(); // This now also resets the blurb
     modalOverlay.dataset.recordId = record.id;
     currentItemChatRecordId = record.id;
 
@@ -336,35 +309,55 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
 
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+    // --- MODIFY THIS BLOCK for custom items ---
+    let imageUrls = [];
+    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+        const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        imageUrls = fetchedUrls;
+    }
+    if (imageUrls.length === 0) {
+        // Use the placeholder function from card.js (via ui.js)
+        imageUrls = [ui.getPlaceholderImage([])]; 
+    }
+    // --- END MODIFICATION ---
+
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
+    
+    // --- ADD THIS "RECOMMENDATION BLURB" LOGIC ---
+    try {
+        const blurbHtml = generateRecommendationBlurb(record);
+        if (blurbHtml && modalRecBlurb) {
+            modalRecBlurb.innerHTML = blurbHtml;
+            modalRecBlurb.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('Failed to generate recommendation blurb:', e);
+    }
+    // --- END "RECOMMENDATION BLURB" LOGIC ---
 
-    // --- POPULATE ADDITIONAL DETAILS (Cleaned Quotes in template literals) ---
+    // --- UPDATED: POPULATE ADDITIONAL DETAILS (Handles JSON Rankings) ---
     if (modalAdditionalDetails) {
-        modalAdditionalDetails.innerHTML = ''; 
+        modalAdditionalDetails.innerHTML = ''; // Clear previous details
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
         const rankingsHtmlParts = [];
-        const detailSpecs = [
-            { fieldName: 'Duration', label: 'Duration' },
-            { fieldName: 'Capacity', label: 'Capacity' },
-            { fieldName: 'Location Details', label: 'Location Info' },
-            { fieldName: 'Additional Information', label: 'Good to Know' },
-        ];
+
+        // 1. Process standard details
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
             if (value) {
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
-                // Cleaned up innerHTML: using template literal and minimizing quote conflicts
                 detailItem.innerHTML = `
                     <span class=\"detail-label\">${spec.label}</span>
-                    <span class=\"detail-value\">${String(value).replace(/\n/g, '<br>')}</span>
+                    <span class=\"detail-value\">${String(value).replace(/\\n/g, '<br>')}</span>
                 `;
                 fragment.appendChild(detailItem);
             }
         });
+
+        // 2. Process Rankings from JSON field
         const rankingsJsonString = record.fields['Rankings'];
         if (rankingsJsonString) {
             try {
@@ -374,10 +367,9 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                         const value = rankingsObject[label];
                         if (typeof value === 'number' && value > 0) {
                             hasRankings = true;
-                            const stars = '★'.repeat(value) + '☆'.repeat(Math.max(0, 5 - value));
-                            // Cleaned up innerHTML: using template literal and minimizing quote conflicts
+                            const stars = '★'.repeat(Math.round(value)) + '☆'.repeat(Math.max(0, 5 - Math.round(value)));
                             rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">
+                                <div class=\"ranking-item\">\
                                     <span class=\"ranking-label\">${label}:</span>
                                     <span class=\"ranking-stars\">${stars}</span>
                                 </div>
@@ -387,17 +379,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 }
             } catch (error) {
                 console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
-                const errorItem = document.createElement('div');
-                errorItem.className = 'detail-item';
-                // Cleaned up innerHTML
-                errorItem.innerHTML = `<span class=\"detail-label\">Rankings</span><span class=\"detail-value\" style=\"color: red;\">Error loading rankings</span>`;
-                fragment.appendChild(errorItem);
             }
         }
+
+        // 3. Append rankings container
         if (hasRankings) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
-            // Cleaned up innerHTML
             rankingContainer.innerHTML = `
                 <span class=\"detail-label\">Rankings</span>
                 ${rankingsHtmlParts.join('')}
@@ -406,65 +394,32 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         }
         modalAdditionalDetails.appendChild(fragment);
     }
-    // --- END POPULATE ADDITIONAL DETAILS ---
+    // --- END UPDATED DETAILS POPULATION ---
 
-    // --- NEW: GO TO STORE BUTTONS & DYNAMIC NAVIGATION BUTTONS ---
-    
-    // Update Navigation Buttons state
-    if (backBtn) backBtn.disabled = historyIndex <= 0;
-    if (forwardBtn) forwardBtn.disabled = historyIndex >= modalHistory.length - 1;
-
-    // GO TO STORE BUTTONS (for collaborative items)
-    const linkedStoreIds = record.fields.Stores || [];
-    const currentShopId = state.ui.activeShopId;
-
-    // Check for collaborative items (linked to more than one store, excluding the current one)
-    if (linkedStoreIds.length > 1) {
-        const otherStoreIds = linkedStoreIds.filter(id => id !== currentShopId);
-        
-        if (otherStoreIds.length > 0) {
-            const storeDetails = await api.fetchStoreDetailsByIds(otherStoreIds);
-            
-            let storeLinksHTML = '<h4>Also available at:</h4>';
-            storeDetails.forEach(store => {
-                const storeName = store.shopTitle || store.name;
-                // Cleaned up innerHTML
-                storeLinksHTML += `<button class=\"primary-action-btn go-to-store-btn\" data-store-id=\"${store.id}\" style=\"margin-top: 5px; margin-bottom: 5px; background-color: #5a6268; font-size: 0.9em;\">Go to ${storeName} Store</button>`;
-            });
-            modalStoreLinksContainer.innerHTML = storeLinksHTML;
-            modalStoreLinksContainer.style.marginBottom = '20px';
-
-            // Add event listeners for the new buttons
-            modalStoreLinksContainer.querySelectorAll('.go-to-store-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    // FIX: Changed data-store-id retrieval to correctly match HTML attribute
-                    const storeId = e.currentTarget.dataset.storeId;
-                    // Open in a new window as requested by the user
-                    window.open(`/?shopId=${storeId}`, '_blank');
-                    e.stopPropagation();
-                });
-            });
-        }
-    }
-    // --- END NEW: GO TO STORE BUTTONS ---
-
-    // ... (rest of function remains the same, ensuring no stray backslashes in existing lines) ...
-    // ...
+    // --- THIS BLOCK IS MODIFIED for custom items ---
+    // Price calculation
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    const isGrouping = rawOptions.some(opt => allRecordNames.has(opt.name));
+    // Custom items can't be groupings
+    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && rawOptions.some(opt => allRecordNames.has(opt.name)); 
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class=\\\"pricing-type\\\"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
         modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
-        modalItemPrice.innerHTML = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+        let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
+        // Add (Est.) for custom items
+        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
+            priceText += ' (Est.)';
+        }
+        modalItemPrice.innerHTML = priceText + pricingTypeHTML;
     }
 
+    // Image gallery
     let currentPhotoIndex = startPhotoIndex;
     modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
     modalThumbnailStrip.innerHTML = '';
@@ -481,12 +436,21 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         });
         modalThumbnailStrip.appendChild(thumb);
     });
-    
+
+    // Breadcrumbs
+    modalHeaderActions.innerHTML = '';
+    const breadcrumbs = getBreadcrumbs(record);
+    if (breadcrumbs.length > 0) {
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\\\"parent-link\\\" data-parent-name=\\\"${name}\\\" title=\\\"Go to ${name}\\\">${name}</a>`).join(' > ');
+    }
+
+    // Heart icon
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
 
+    // Options
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -501,7 +465,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class=\\\"price-mod\\\">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -511,7 +475,6 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                 const childRecord = state.records.all.find(r => r.fields.Name === childName);
                 if (childRecord) {
                     log('Modal', `Navigating from option to item: ${childName}`);
-                    // When drilling down from an option, call showDetailModal without isInternalNavigation = true
                     showDetailModal(childRecord);
                 } else {
                     log('Modal', `Could not find record for child option: ${childName}`);
@@ -534,12 +497,13 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalOptionsContainer.appendChild(optionButton);
     });
 
+    // Quantity / Notes
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class=\\\"quantity-selector\\\" data-record-id=\\\"${record.id}\\\"><button class=\\\"quantity-btn minus\\\" aria-label=\\\"Decrease quantity\\\">-</button><input type=\\\"number\\\" class=\\\"quantity-input\\\" value=\\\"${itemState.quantity}\\\" min=\\\"${headcountMin}\\\"><button class=\\\"quantity-btn plus\\\" aria-label=\\\"Increase quantity\\\">+</button></div>`;
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -551,12 +515,12 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         modalQuantitySelector.innerHTML = '';
     }
 
-// --- Calendar Initialization (same as before) ---
-    modalCalendarContainer.innerHTML = ''; // Clear previous calendar
-    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL]; // Get iCal URL
+    // Calendar
+    modalCalendarContainer.innerHTML = '';
+    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
-    if (iCalUrl) {
-        modalCalendarContainer.style.display = 'block'; // Show container if URL exists
+    if (iCalUrl) { // This will be false for all custom/dummy items
+        modalCalendarContainer.style.display = 'block';
         log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
 
         const busyTimes = await api.fetchCalendarForRecord(record);
@@ -576,7 +540,7 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                 }
@@ -605,10 +569,10 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
             calendarInstance.setDate(new Date(eventDate), true);
         }
     } else {
-        modalCalendarContainer.style.display = 'none'; // Hide container if no URL
+        modalCalendarContainer.style.display = 'none';
         log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
     }
-    // --- End Calendar Logic ---
+    // --- END MODIFICATION BLOCK ---
 
     ui.updateCardIcon(record.id);
 
@@ -640,11 +604,11 @@ export async function showDetailModal(record, startPhotoIndex = 0, isInternalNav
         }
     }, 0);
 }
+// --- END MODIFIED FUNCTION ---
+
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
-    // --- THIS IS THE FIX ---
-    // This function now ONLY handles the UI. It no longer touches the URL.
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = null; // Remove the listener
     modalOverlay.removeEventListener('click', handleOverlayClick);
@@ -662,7 +626,6 @@ export function hideDetailModal() {
         }, 300);
         document.body.classList.remove('modal-open');
     }
-    // --- END FIX ---
 }
 
 export async function showCheckoutModal(shopSettings) {
@@ -675,10 +638,15 @@ export async function showCheckoutModal(shopSettings) {
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
-    const paymentForm = document.getElementById('payment-form');
-    const paymentSuccessMessage = document.getElementById('payment-success-message');
-    const checkoutTotalDepositSection = document.querySelector('.checkout-total-deposit-section');
 
+    const totalLabel = document.getElementById('checkout-total-label');
+    if (totalLabel) {
+        if (state.session.user.amountReceived > 0) {
+            totalLabel.textContent = 'Total Final Cost:';
+        } else {
+            totalLabel.textContent = 'Total Estimated Cost:';
+        }
+    }
 
     if (!checkoutModalOverlay) return;
 
@@ -695,201 +663,75 @@ export async function showCheckoutModal(shopSettings) {
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
-    // 1. RE-CALCULATE FINAL TOTAL & RENDER SUMMARY LIST
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0;
     const summaryList = document.createElement('ul');
-    const paymentHistoryList = document.createElement('ul');
-    paymentHistoryList.innerHTML = '<h4>Payment History</h4>';
-
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
 
-        const itemState = state.cart.lockedItems.get(recordId) || {};
-        const price = itemState.overridePrice ?? getRecordPrice(record, itemState.selectedOptionIndex);
-        const itemTotal = price * (itemState.quantity || 1);
+        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+
+        const itemTotal = price * itemInfo.quantity;
         finalTotal += itemTotal;
-        
         const listItem = document.createElement('li');
+        
         let noteHtml = '';
-        if (itemState.note && itemState.note.trim() !== '') {
-            // Cleaned up innerHTML
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemState.note}</small>`;
+        if (itemInfo.note && itemInfo.note.trim() !== '') {
+            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
         }
         
-        // Cleaned up innerHTML
         listItem.innerHTML = `
-            <div class=\"summary-item-details\">
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemState.quantity || 1})</span>
+            <div class=\"summary-item-details\">\
+                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity})</span>
                 ${noteHtml}
             </div>
             <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
     }
-    summaryDetailsEl.appendChild(summaryList);
-    
-    // Populate Payment History
-    const paymentHistory = state.session.user.paymentHistory || [];
-    paymentHistory.forEach(p => {
-        const date = new Date(p.date).toLocaleDateString();
-        const historyItem = document.createElement('li');
-        // Cleaned up innerHTML
-        historyItem.innerHTML = `
-            <div class=\"summary-item-details\">
-                <span class=\"summary-item-name\">${p.note}</span>
-                <small>${date}</small>
-            </div>
-            <span class=\"summary-item-price paid-amount\">+$${p.amount.toFixed(2)}</span>
-        `;
-        paymentHistoryList.appendChild(historyItem);
-    });
 
-    // Update the DOM element with the now-calculated total
+    summaryDetailsEl.appendChild(summaryList);
+
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
-
-    const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = finalTotal - amountReceived;
-    const isPlanEmpty = finalTotal <= 0;
-    const isFullyPaid = totalDue <= 0.009;
-
-
-    // Dynamically set the total cost label
-    const totalLabel = document.getElementById('checkout-total-label');
-    if (totalLabel) {
-        totalLabel.textContent = isFullyPaid ? 'Total Plan Cost:' : 'Total Estimated Cost:';
+    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
+        paymentChoiceContainer.style.display = 'block';
+        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+            radio.addEventListener('change', updateCheckoutDisplay);
+        });
+    } else {
+        paymentChoiceContainer.style.display = 'none';
     }
-
 
     if (termsContainer && currentShopSettings.terms) {
-        // Cleaned up innerHTML
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
+        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
-
-    // 2. CHECKOUT LOGIC FLOW CONTROL
-
-    if (isPlanEmpty) {
-        log('Modal', 'Checkout plan is empty, showing modal placeholder.');
-        // Hide payment form/controls and show message
-        paymentForm.style.display = 'none';
-        checkoutTotalDepositSection.style.display = 'none';
-        summaryDetailsEl.innerHTML = '<p style=\"text-align: center; color: #dc3545;\">Please add items to your locked plan before checking out.</p>';
-        paymentSuccessMessage.style.display = 'none';
-        
-    } else if (isFullyPaid) {
-        log('Modal', 'Plan is fully paid, showing payment history and additional tip option.');
-        // Display payment history
-        summaryDetailsEl.appendChild(paymentHistoryList);
-        
-        // Hide payment choice (deposit/full)
-        paymentChoiceContainer.style.display = 'none';
-        
-        // Ensure tip section is set up for ADDITIONAL PAYMENT
-        const tipRow = document.querySelector('.tip-row');
-        tipRow.style.display = 'flex'; 
-
-        // Change the main section to accommodate tip/extra payment
-        paymentForm.style.display = 'block'; // Keep the form visible for tip/extra payment
-        paymentSuccessMessage.style.display = 'none';
-
-        // Update the form's total display fields manually
-        document.getElementById('deposit-label').textContent = 'Additional Payment/Tip:';
-        tipAmountInput.placeholder = '$0.00';
-        tipAmountInput.value = '';
-
-        // Recalculate display amount based only on tip for initial load
-        await updateProcessingFeeDisplay(); 
-
-    } else {
-        log('Modal', 'Plan has balance due, proceeding to payment initialization.');
-        
-        // Display payment choice if applicable
-        if (currentShopSettings.paymentOptions === 'DepositOrFull' && amountReceived === 0) {
-            paymentChoiceContainer.style.display = 'block';
-        } else {
-            paymentChoiceContainer.style.display = 'none';
-        }
-        
-        paymentForm.style.display = 'block';
-        checkoutTotalDepositSection.style.display = 'block';
-        paymentSuccessMessage.style.display = 'none';
-
-
-        // 3. Initialize Stripe Elements
-        try {
-            const totalDue = finalTotal - amountReceived;
-            let amountInCentsBeforeFee = Math.round(totalDue * 100);
-            
-            // 3.1. Fetch the FIRST Payment Intent
-            const intentResponse = await fetch('/api/create-payment-intent', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    amount: amountInCentsBeforeFee, 
-                    paymentMethodType: 'card' // Initial default
-                }),
-            });
-            if (!intentResponse.ok) {
-                 const errorData = await intentResponse.json();
-                 throw new Error(`Failed to create Payment Intent: ${errorData.error}`);
-            }
-            const paymentIntentData = await intentResponse.json();
-            const clientSecret = paymentIntentData.clientSecret;
-
-            // 3.2. Initialize Stripe
-            stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-            const elements = stripe.elements({ clientSecret, appearance: { theme: 'stripe' } }); 
-            
-            const cardElementContainer = document.getElementById('card-element');
-            if (cardElementContainer) cardElementContainer.innerHTML = '';
-            
-            // 3.3. Create and mount the unified Payment Element
-            const paymentElement = elements.create('payment');
-            paymentElement.mount('#card-element');
-            
-            // 3.4. Store elements instance and update display
-            checkoutModalOverlay.stripeElements = elements;
-            checkoutModalOverlay.paymentElement = paymentElement;
-            
-            // 3.5. Calculate initial fee and final payment amount.
-            await updateProcessingFeeDisplay(); 
-
-            // 3.6. Attach listeners
-            tipAmountInput.addEventListener('input', updateProcessingFeeDisplay);
-
-            // --- ⬇️ THIS IS THE FIX ⬇️ ---
-            // We now get the event object from the listener...
-            paymentElement.on('change', (event) => {
-                // ...and save the type to our module-level variable...
-                if (event.value && event.value.type) {
-                    currentStripePaymentType = event.value.type;
-                }
-                // ...then call the update function.
-                updateProcessingFeeDisplay();
-            });
-            // --- ⬆️ END OF FIX ⬆️ ---
-            
-        } catch (err) {
-            console.error("Failed to initialize payment form:", err);
-            alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
-            hideCheckoutModal();
-            return;
-        }
+    updateCheckoutDisplay();
+    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
+    
+    try {
+        stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+        const elements = stripe.elements();
+        const cardElementContainer = document.getElementById('card-element');
+        if (cardElementContainer) cardElementContainer.innerHTML = '';
+        const cardElement = elements.create('card');
+        cardElement.mount('#card-element');
+        checkoutModalOverlay.cardElement = cardElement;
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => {
+            checkoutModalOverlay.style.display = 'flex';
+            if(checkoutCloseBtn) checkoutCloseBtn.focus();
+        }, 0);
+        document.body.classList.add('modal-open');
+    } catch (err) {
+        console.error("Failed to initialize payment form:", err);
+        alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
+        hideCheckoutModal();
     }
-
-    // Final UI show
-    checkoutModalOverlay.classList.add('active');
-    setTimeout(() => {
-        checkoutModalOverlay.style.display = 'flex';
-        if(checkoutCloseBtn) checkoutCloseBtn.focus();
-    }, 0);
-    document.body.classList.add('modal-open');
 }
-
 
 export function hideCheckoutModal() {
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
@@ -897,16 +739,10 @@ export function hideCheckoutModal() {
         if (checkoutModalOverlay.removeEventListenerOnClick) {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
-        document.getElementById('tip-amount')?.removeEventListener('input', updateProcessingFeeDisplay);
+        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
         document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
-            radio.removeEventListener('change', updateProcessingFeeDisplay);
+            radio.removeEventListener('change', updateCheckoutDisplay);
         });
-        
-        // --- NEW: Reset the stored payment type on close ---
-        currentStripePaymentType = 'card';
-
-        // Note: The Payment Element's 'change' listener is removed when the element instance is garbage collected.
-
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
             const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -922,6 +758,5 @@ export function hideCheckoutModal() {
 
 export function getStripeContext() {
     const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
-    const elements = document.getElementById('checkout-modal-overlay')?.stripeElements;
-    return { stripe, elements };
+    return { stripe, cardElement };
 }
