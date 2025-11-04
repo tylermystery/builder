@@ -1,10 +1,10 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/card.js
+// REPLACE THE ENTIRE CONTENTS of components/card.js
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice } from '../utils.js'; // <-- UPDATED
+import { getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 function getPlaceholderImage(imageUrls) {
@@ -15,53 +15,57 @@ function getPlaceholderImage(imageUrls) {
     return imageUrls[randomIndex];
 }
 
-// FILE: components/card.js (REPLACE updateCardIcon function)
-
 export function updateCardIcon(recordId) {
     let isLiked = false;
 
-    // Determine liked status based on auth state
     if (state.session.user.isAuthenticated) {
-        isLiked = state.session.user.likedItemIds.has(recordId); //
+        isLiked = state.session.user.likedItemIds.has(recordId);
     } else {
         try {
-            const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]')); //
+            const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
             isLiked = tempLikes.has(recordId);
         } catch (e) {
             console.error('Error reading tempLikes for icon update:', e);
-            isLiked = false; // Default to not liked if localStorage fails
+            isLiked = false;
         }
     }
 
-    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`; //
+    const heartSVG = `<svg viewBox=\"0 0 24 24\"><path d=\"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z\"></path></svg>`;
 
-    // Find all relevant heart icons (on cards and potentially in the modal)
-    document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`).forEach(icon => { //
+    document.querySelectorAll(`.event-card[data-record-id=\"${recordId}\"] .heart-icon, #modal-heart-btn[data-record-id=\"${recordId}\"]`).forEach(icon => {
         if (!icon) return;
 
-        // Apply styles based only on the 'isLiked' status
         if (isLiked) {
-            icon.className = 'heart-icon hearted'; // Apply liked style
+            icon.className = 'heart-icon hearted';
             icon.title = 'Unlike this item';
         } else {
-            icon.className = 'heart-icon'; // Apply default style
+            icon.className = 'heart-icon';
             icon.title = 'Like this item';
         }
-        icon.innerHTML = heartSVG; // Ensure SVG is always present
-        icon.style.display = 'block'; // Ensure it's visible
-        // Remove pointer-events none - click handler manages interaction logic
+        icon.innerHTML = heartSVG;
+        icon.style.display = 'block';
         icon.style.pointerEvents = 'auto';
     });
 }
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
-    log('Card', `Creating card for "${record.fields.Name}"`);
+    log('Card', `Creating card for \"${record.fields.Name}\"`);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
-    const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
-    const imageUrlToLoad = getPlaceholderImage(imageUrls);
+    // --- MODIFY THIS BLOCK to handle custom items ---
+    let imageUrlToLoad;
+    // Check if it's a ghost card or custom-added item
+    if (record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) {
+        // Use the default placeholder image
+        imageUrlToLoad = getPlaceholderImage([]);
+    } else {
+        // Otherwise, fetch images as normal
+        const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+        imageUrlToLoad = getPlaceholderImage(imageUrls);
+    }
+    // --- END MODIFICATION ---
 
     if (fields['Item Type'] === 'Grouping') {
         const groupingCard = eventCard;
@@ -80,21 +84,21 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const imageResults = await Promise.all(imagePromises);
         const collageImages = imageResults.flatMap(res => res.imageUrls);
 
-        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
+        let imageContainerHTML = `<div class=\"event-card-image-container collage-container\">`;
         if (collageImages.length > 0) {
-            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
+            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class=\"collage-image lazy-load\" data-bg-image=\"${url}\"></div>`).join('');
         } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
+            imageContainerHTML += `<div class=\"collage-image lazy-load\" data-bg-image=\"${imageUrlToLoad}\"></div>`;
         }
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
             ${imageContainerHTML}
-            <div class="event-card-content">
+            <div class=\"event-card-content\">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
-                <p class="description">${fields.Description || ''}</p>
+                <p class=\"description\">${fields.Description || ''}</p>
             </div>
-            <div class="card-footer">
-                <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
+            <div class=\"card-footer\">
+                <button class=\"card-action-btn view-options-btn\">View Collection (${childItems.length})</button>
             </div>
         `;
         return groupingCard;
@@ -107,23 +111,23 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const day = eventDate ? eventDate.getDate() : '??';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
-        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        const rsvpButtonHTML = `<button class=\"card-action-btn rsvp-btn\" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
 
         eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                <div class="heart-icon" data-record-id="${record.id}"></div>
+            <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">\
+                <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
             </div>
-            <div class="event-card-content">
-                <div class="event-date-display">
-                    <span class="month">${month}</span>
-                    <span class="day">${day}</span>
+            <div class=\"event-card-content\">
+                <div class=\"event-date-display\">
+                    <span class=\"month\">${month}</span>
+                    <span class=\"day\">${day}</span>
                 </div>
-                <div class="event-details">
+                <div class=\"event-details\">
                     <h3>${fields.Name || 'Untitled Event'}</h3>
-                    <p class="description">${fields.Description || ''}</p>
+                    <p class=\"description\">${fields.Description || ''}</p>
                 </div>
             </div>
-            <div class="card-footer">
+            <div class=\"card-footer\">
                 ${rsvpButtonHTML}
             </div>
         `;
@@ -135,23 +139,23 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
-    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex); // <-- UPDATED
+    const quantitySelectorHTML = `<div class=\"quantity-selector\"><button class=\"quantity-btn minus\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\">+</button></div>`;
+    const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
-    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    const addToPlanBtnHTML = `<button class=\"card-action-btn add-to-plan-btn\" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-            <div class="heart-icon" data-record-id="${record.id}"></div>
+        <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">\
+            <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
         </div>
-        <div class="event-card-content">
+        <div class=\"event-card-content\">
             <h3>${fields.Name || 'Untitled Event'}</h3>
-            <p class="description">${fields.Description || ''}</p>
+            <p class=\"description\">${fields.Description || ''}</p>
         </div>
-        <div class="card-footer">
-            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
-            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+        <div class=\"card-footer\">
+            <div class=\"price-wrapper\"><div class=\"price\">${priceHTML}</div></div>
+            <div class=\"actions-wrapper\">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
