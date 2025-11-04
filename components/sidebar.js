@@ -180,6 +180,9 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
+// In: components/sidebar.js
+// Action: REPLACE the entire `updateTotalCost` function
+
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -196,16 +199,13 @@ export function updateTotalCost() {
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        // --- THIS IS THE KEY CHANGE ---
-        // We now get the record from state.records.all (where custom items live)
-        // and getRecordPrice will work for both real and custom items.
+        
+        // This logic is now correct and handles custom items
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
         
-        // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, minHeadcount);
-        // --- END KEY CHANGE ---
         
         subtotal += unitPrice * effectiveQuantity;
     });
@@ -258,7 +258,9 @@ export function updateTotalCost() {
             checkoutBtn.disabled = isPlanEmpty;
         } else {
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-            checkoutBtn.disabled = isVIRTUAL_PAD_FINGERPRINT_VENDOR;
+            // --- THIS IS THE FIX ---
+            checkoutBtn.disabled = isPlanEmpty; // Was `isVIRTUAL_PAD_FINGERPRINT_VENDOR`
+            // --- END THE FIX ---
         }
     }
     if (saveShareBtn) {
