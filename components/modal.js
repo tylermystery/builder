@@ -9,10 +9,10 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../a
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- Recommendation Engine v1.1: Helper Functions ---
+// --- Recommendation Engine v1.2: Helper Functions ---
 
 /**
- * [v1.1] Scans goal text for matching ranking keywords.
+ * [v1.2] Scans goal text for matching ranking keywords.
  * @param {string} text - The user's "Goals/Notes" text.
  * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
  */
@@ -45,7 +45,7 @@ function findGoalsInText(text) {
 }
 
 /**
- * [v1.1] Calculates the "health" of the event to find missing "Pillar" categories.
+ * [v1.2] Calculates the "health" of the event to find missing "Pillar" categories.
  * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
  */
 function calculateMissingCategories() {
@@ -87,7 +87,7 @@ function calculateMissingCategories() {
 }
 
 /**
- * [v1.1] Gets the combined "Ranking Profile" for all items currently in the plan.
+ * [v1.2] Gets the combined "Ranking Profile" for all items currently in the plan.
  * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
  */
 function getPlanRankingProfile() {
@@ -110,7 +110,7 @@ function getPlanRankingProfile() {
 
 
 /**
- * [v1.1] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
+ * [v1.2] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
  */
@@ -170,10 +170,8 @@ function generateRecommendationBlurb(record) {
             }
         });
     }
-    
-    // NOTE: The "Partner" (Brain 4) logic is omitted as requested.
 
-    // Build the final blurb
+    // --- Build the "Recommendation" Blurb ---
     if (blurbs.size > 0) {
         let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
         blurbs.forEach(blurb => {
@@ -183,9 +181,15 @@ function generateRecommendationBlurb(record) {
         return finalBlurb;
     }
 
-    return null;
+    // --- NEW: Default Blurb (The "Customize" Nudge) ---
+    // If no other reasons were found AND the user hasn't provided intent
+    if (blurbs.size === 0 && matchedGoals.length === 0 && searchTerm.length === 0) {
+        return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' (e.g., 'fun' or 'art') to get personalized recommendations for this item.";
+    }
+
+    return null; // No blurb needed
 }
-// --- END OF Recommendation Engine v1.1 ---
+// --- END OF Recommendation Engine v1.2 ---
 
 
 let stripe;
@@ -501,7 +505,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- THIS IS THE FIX ---
+    // --- THIS IS THE CRITICAL FIX ---
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
