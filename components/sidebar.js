@@ -163,6 +163,9 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
+// In: components/sidebar.js
+// Action: REPLACE the entire `updateTotalCost` function
+
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -173,57 +176,75 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
-    const totalBreakdown = document.getElementById('total-breakdown'); 
     
-    if (!totalCostEl || !subtotalCostEl || !totalBreakdown) return;
+    // --- NEW: Get Concierge Fee elements ---
+    const conciergeFeeRowEl = document.getElementById('concierge-fee-row');
+    const conciergeFeeCostEl = document.getElementById('concierge-fee-cost');
+    const CONCIERGE_FEE_PERCENT = 0.15; // 15% Fee - You can change this
+    // --- END NEW ---
+    
+    if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
+    let partnerItemSubtotal = 0; // --- NEW: Track partner item cost ---
+
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
-        if (!record) return;
-        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-        if (isNaN(unitPrice)) return;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
-        subtotal += unitPrice * effectiveQuantity;
+        if (!record) return; // Item not found (shouldn't happen)
+
+        let price = 0;
+        let isPartnerItem = false;
+
+        price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex); //
+        
+        // Check if it's a Partner Activity (from AI or curated list)
+        if (record.fields.ServiceType === 'Partner Activity') {
+            isPartnerItem = true;
+        }
+        
+        if (isNaN(price)) return;
+        
+        // Use the quantity from the itemInfo, not the record's min headcount
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        const itemTotal = price * effectiveQuantity;
+        
+        subtotal += itemTotal;
+        
+        if (isPartnerItem) {
+            partnerItemSubtotal += itemTotal; // Add to partner total
+        }
     });
     
+    // --- NEW: Calculate and Display Fee ---
+    let conciergeFee = 0;
+    if (partnerItemSubtotal > 0) {
+        conciergeFee = partnerItemSubtotal * CONCIERGE_FEE_PERCENT;
+        conciergeFeeCostEl.textContent = `$${conciergeFee.toFixed(2)}`;
+        conciergeFeeRowEl.style.display = 'flex';
+    } else {
+        conciergeFeeRowEl.style.display = 'none';
+    }
+    // --- END NEW ---
+    
     const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = subtotal - amountReceived;
+    const totalWithFee = subtotal + conciergeFee; // --- NEW: Add fee to total ---
+    const totalDue = totalWithFee - amountReceived;
     
     subtotalCostEl.textContent = `$${subtotal.toFixed(2)}`;
     totalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     
+    // --- (This logic remains the same from your file) ---
     if (typeof backgroundEngine.updateColors === 'function') {
         backgroundEngine.updateColors();
     }
     
-    // Reset total breakdown HTML before applying status logic
-    // Using simple quotes for string literals to avoid previous issues
-    totalBreakdown.innerHTML = `
-        <div class="total-row subtotal-row">
-            <span>Subtotal:</span>
-            <span id="subtotal-cost">$${subtotal.toFixed(2)}</span>
-        </div>
-        <div class="total-row amount-paid-row" style="display: none;">
-            <span>Amount Paid:</span>
-            <span id="amount-paid-cost">$0.00</span>
-        </div>
-        <hr class="total-divider" style="display: none;">
-        <div class="total-row final-total-row">
-            <strong>Total Due:</strong>
-            <strong id="total-cost">$${totalDue.toFixed(2)}</strong>
-        </div>
-    `;
-
     if (amountReceived > 0) {
-        // Re-get the elements after reset
-        const currentAmountPaidCostEl = totalBreakdown.querySelector('#amount-paid-cost');
-        const currentAmountPaidRowEl = totalBreakdown.querySelector('.amount-paid-row');
-        const currentTotalDividerEl = totalBreakdown.querySelector('.total-divider');
-        
-        if (currentAmountPaidCostEl) currentAmountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
-        if (currentAmountPaidRowEl) currentAmountPaidRowEl.style.display = 'flex';
-        if (currentTotalDividerEl) currentTotalDividerEl.style.display = 'block';
+        amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        amountPaidRowEl.style.display = 'flex';
+        totalDividerEl.style.display = 'block';
+    } else {
+        amountPaidRowEl.style.display = 'none';
+        totalDividerEl.style.display = 'none';
     }
 
     if (mobileItemCountEl && mobileTotalCostEl) {
@@ -242,32 +263,21 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        // --- START FIX: Ensure button is always enabled if plan is not empty ---
-        const hasContent = state.cart.lockedItems.size > 0;
+        checkoutBtn.style.display = 'block';
+        document.getElementById('total-breakdown').style.display = 'block';
 
-        if (hasContent) {
-            checkoutBtn.style.display = 'block';
-            checkoutBtn.disabled = false; // Always enable if content exists
-
-            if (isFullyPaid) {
-                // Display 'Paid in Full' status and set button text to 'View Summary'
-                totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
-                checkoutBtn.textContent = 'View Summary';
-                checkoutBtn.dataset.defaultText = 'View Summary'; // Set default text for consistency
-            } else if (amountReceived > 0) {
-                checkoutBtn.textContent = 'Pay Remainder';
-                checkoutBtn.dataset.defaultText = 'Reserve';
-            } else {
-                checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-                checkoutBtn.dataset.defaultText = 'Reserve';
+        if (isFullyPaid) {
+            checkoutBtn.style.display = 'none';
+            if (amountReceived > 0) {
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
+        } else if (amountReceived > 0) {
+            checkoutBtn.textContent = 'Pay Remainder';
+            checkoutBtn.disabled = isPlanEmpty;
         } else {
-            // Plan is empty
-            checkoutBtn.style.display = 'block';
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-            checkoutBtn.disabled = true;
+            checkoutBtn.disabled = isPlanEmpty;
         }
-        // --- END FIX ---\
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
