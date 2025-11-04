@@ -48,24 +48,30 @@ export function updateCardIcon(recordId) {
     });
 }
 
+// REPLACE THE ENTIRE CONTENTS of createInteractiveCard in components/card.js
+
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for \"${record.fields.Name}\"`);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
-    // --- MODIFY THIS BLOCK to handle custom items ---
+    // --- ADD THIS "PARTNER" BADGE LOGIC ---
+    let partnerBadge = '';
+    if (fields.ServiceType === 'Partner Activity') {
+        partnerBadge = '<span class="partner-badge">Partner</span>';
+    }
+    // --- END NEW LOGIC ---
+
+    // --- This block handles custom items (from your previous step) ---
     let imageUrlToLoad;
-    // Check if it's a ghost card or custom-added item
     if (record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) {
-        // Use the default placeholder image
         imageUrlToLoad = getPlaceholderImage([]);
     } else {
-        // Otherwise, fetch images as normal
         const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
         imageUrlToLoad = getPlaceholderImage(imageUrls);
     }
-    // --- END MODIFICATION ---
+    // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
         const groupingCard = eventCard;
@@ -114,20 +120,20 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const rsvpButtonHTML = `<button class=\"card-action-btn rsvp-btn\" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
 
         eventCard.innerHTML = `
-            <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">\
-                <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
-            </div>
-            <div class=\"event-card-content\">
-                <div class=\"event-date-display\">
-                    <span class=\"month\">${month}</span>
-                    <span class=\"day\">${day}</span>
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                <div class="heart-icon" data-record-id="${record.id}"></div>
+                ${partnerBadge} </div>
+            <div class="event-card-content">
+                <div class="event-date-display">
+                    <span class="month">${month}</span>
+                    <span class="day">${day}</span>
                 </div>
-                <div class=\"event-details\">
+                <div class="event-details">
                     <h3>${fields.Name || 'Untitled Event'}</h3>
-                    <p class=\"description\">${fields.Description || ''}</p>
+                    <p class="description">${fields.Description || ''}</p>
                 </div>
             </div>
-            <div class=\"card-footer\">
+            <div class="card-footer">
                 ${rsvpButtonHTML}
             </div>
         `;
@@ -146,16 +152,16 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class=\"card-action-btn add-to-plan-btn\" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
-        <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">\
-            <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
-        </div>
-        <div class=\"event-card-content\">
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="heart-icon" data-record-id="${record.id}"></div>
+            ${partnerBadge} </div>
+        <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
-            <p class=\"description\">${fields.Description || ''}</p>
+            <p class="description">${fields.Description || ''}</p>
         </div>
-        <div class=\"card-footer\">
-            <div class=\"price-wrapper\"><div class=\"price\">${priceHTML}</div></div>
-            <div class=\"actions-wrapper\">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+        <div class="card-footer">
+            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
