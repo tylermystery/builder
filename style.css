@@ -2327,4 +2327,17 @@ hr.total-divider {
     color: #007bff;
 }
 
-
+/* In: style.css (at the end) */
+.partner-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: #007bff;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    z-index: 10;
+    cursor: help; /* Makes the mouse cursor a question mark */
+}
