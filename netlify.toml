@@ -71,6 +71,13 @@
   to = "/.netlify/functions/send-chat-to-admin"
   status = 200
 
+# --- ADD THIS NEW BLOCK ---
+[[redirects]]
+  from = "/api/process-weblink"
+  to = "/.netlify/functions/process-weblink"
+  status = 200
+# --- END NEW BLOCK ---
+
 # --- NEW AI/CURATION REDIRECTS ---
 [[redirects]]
   from = "/api/process-image-ai"
