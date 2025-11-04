@@ -9,10 +9,10 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../a
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- 1. HELPER FUNCTIONS ---
+// --- Recommendation Engine v1.0: Helper Functions ---
 
 /**
- * Scans goal text for matching ranking keywords.
+ * [v1.0] Scans goal text for matching ranking keywords.
  * @param {string} text - The user's "Goals/Notes" text.
  * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
  */
@@ -45,7 +45,7 @@ function findGoalsInText(text) {
 }
 
 /**
- * Calculates the "health" of the event to find missing categories.
+ * [v1.0] Calculates the "health" of the event to find missing categories.
  * @returns {Array<string>} A list of missing categories (e.g., ["Food/Drink", "Extras"])
  */
 function calculateMissingCategories() {
@@ -81,63 +81,88 @@ function calculateMissingCategories() {
 }
 
 /**
- * Generates the full HTML "Intelligent Blurb" based on goals, breadth, and item type.
+ * [v1.0] Gets the combined "Ranking Profile" for all items currently in the plan.
+ * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
+ */
+function getPlanRankingProfile() {
+    const planProfile = {};
+    for (const recordId of state.cart.lockedItems.keys()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record || !record.fields['Rankings']) continue;
+        
+        try {
+            const rankings = JSON.parse(record.fields['Rankings']);
+            for (const key in rankings) {
+                if (typeof rankings[key] === 'number') {
+                    planProfile[key] = (planProfile[key] || 0) + rankings[key];
+                }
+            }
+        } catch (e) { /* Ignore bad JSON */ }
+    }
+    return planProfile;
+}
+
+
+/**
+ * [v1.0] Generates the full HTML "Intelligent Blurb" based on goals, breadth, and item type.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
  */
 function generateRecommendationBlurb(record) {
     const goalText = document.getElementById('header-goals').value;
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+    
+    // Get all context
     const matchedGoals = findGoalsInText(goalText);
     const missingCategories = calculateMissingCategories();
+    const planProfile = getPlanRankingProfile();
     
-    const rankings = JSON.parse(record.fields['Rankings'] || '{}');
+    const itemRankings = JSON.parse(record.fields['Rankings'] || '{}');
     const itemCategories = (record.fields.Categories || '').toLowerCase();
     
-    let blurbs = [];
+    let blurbs = new Set(); // Use a Set to avoid duplicate reasons
 
-    // 1. Goal Match Logic
-    let matchedGoalRanks = [];
-    if (matchedGoals.length > 0 && Object.keys(rankings).length > 0) {
+    // --- Brain 1: The "Complement" Brain (Goal Matching) ---
+    if (matchedGoals.length > 0 && Object.keys(itemRankings).length > 0) {
         matchedGoals.forEach(goal => {
-            if (rankings[goal] && rankings[goal] >= 4) { // Rank of 4 or 5
-                matchedGoalRanks.push(`<strong>"${goal}"</strong>`);
+            // If the item has this goal ranking...
+            if (itemRankings[goal] && itemRankings[goal] >= 4) {
+                // ...and the plan *doesn't* have this goal yet...
+                if (!planProfile[goal]) {
+                    blurbs.add(`This adds the <strong>"${goal}"</strong> element your plan is missing.`);
+                } else {
+                    // ...or the plan *does* have it, but it's a good match anyway.
+                    blurbs.add(`This is a top match for your <strong>"${goal}"</strong> goal.`);
+                }
             }
         });
     }
-    if (matchedGoalRanks.length > 0) {
-        blurbs.push(`This is a top match for your goal${matchedGoalRanks.length > 1 ? 's' : ''} of ${matchedGoalRanks.join(' and ')}.`);
+
+    // --- Brain 2: The "Search" Brain (Fallback) ---
+    // Only run if we didn't find a strong goal match
+    if (blurbs.size === 0 && searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
+        blurbs.add(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
     }
 
-    // 2. Search Match Logic
-    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
-        // Only add this if we don't *also* have a goal match (to avoid redundancy)
-        if (matchedGoalRanks.length === 0) {
-            blurbs.push(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
-        }
-    }
-
-    // 3. Breadth/Health Match Logic
+    // --- Brain 3: The "Breadth" Brain (Event Health) ---
     if (missingCategories.length > 0) {
         if (missingCategories.includes("Activity") && itemCategories.includes("activity")) {
-            blurbs.push("This adds a core <strong>Activity</strong> to your plan.");
+            blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
         } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
-            blurbs.push("This adds a <strong>Food/Drink</strong> option to your event.");
+            blurbs.add("This adds a <strong>Food/Drink</strong> option to your event.");
         } else if (missingCategories.includes("Extras") && itemCategories.includes("extras")) {
-            blurbs.push("This adds <strong>Extras</strong> to round out your event.");
+            blurbs.add("This adds <strong>Extras</strong> to round out your event.");
         }
     }
 
-    // 4. Partner Pitch Logic
+    // --- Brain 4: The "Concierge" Brain (Partner Pitch) ---
     if (record.fields.ServiceType === 'Partner Activity') {
-        blurbs.push("As a partner item, our expert team will handle all booking and logistics for you.");
+        blurbs.add("As a partner item, our expert team will handle all booking and logistics for you.");
     }
 
     // Build the final blurb
-    if (blurbs.length > 0) {
-        // Start with the "Recommended" title
+    if (blurbs.size > 0) {
         let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
-        // Add each reason as a list item
         blurbs.forEach(blurb => {
             finalBlurb += `<li style='margin-bottom: 3px;'>${blurb}</li>`;
         });
@@ -147,7 +172,7 @@ function generateRecommendationBlurb(record) {
 
     return null;
 }
-// --- END OF NEW HELPER FUNCTIONS ---
+// --- END OF Recommendation Engine v1.0 ---
 
 
 let stripe;
@@ -578,7 +603,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    // Add null check for safety
     if (closeBtn) {
         closeBtn.onclick = null;
     }
@@ -644,7 +668,7 @@ export async function showCheckoutModal(shopSettings) {
 
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
 
-        const itemTotal = price * (itemInfo.quantity || 1); // Use itemInfo.quantity
+        const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
         
