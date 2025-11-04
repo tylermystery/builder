@@ -470,9 +470,9 @@ async function initialize() {
         initializeChatEventListeners();
         
         // --- THIS IS THE FIX ---
-        // Initialize the Netlify Identity widget BEFORE setting up auth listeners
+        // Initialize the Netlify Identity widget, forcing Google as the only provider.
         if (window.netlifyIdentity) {
-            window.netlifyIdentity.init();
+            window.netlifyIdentity.init({ provider: 'google' });
         }
         // --- END FIX ---
 
