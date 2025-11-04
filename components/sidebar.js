@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/sidebar.js
+// REPLACE THE ENTIRE CONTENTS of components/sidebar.js
 
 import { state } from '../state.js';
 import * as ui from '../ui.js';
@@ -23,20 +23,17 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <small>${fields.Description || 'No description.'}</small><br>
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
-    
-    // FIX: Re-adding the missing action buttons for Ideas carousel
     itemCard.innerHTML = `
-        <div class="card-actions">
-            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-            <button class="action-btn remove-btn" title="Remove from Ideas">×</button>
+        <div class=\"card-actions\">\
+            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>
+            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>
         </div>
-        <div class="favorite-item-overlay"
-            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
-        >
-            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
+        <div class=\"favorite-item-overlay\"\
+            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"\
+        >\
+            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>
         </div>
     `;
-    
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
         allowHTML: true,
@@ -47,29 +44,51 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 }
 
 
+// --- 1. THIS FUNCTION IS REPLACED ---
+// It now receives the *full record* instead of just the ID
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
+    let isCustomItem = record.id.startsWith('custom-');
+    // Use a generic partner icon for custom items
+    let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/v1602613148/default_partner_icon.png`;
+
+    if (!isCustomItem) {
+        // --- EXISTING LOGIC for real items ---
+        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        if (imageUrls && imageUrls.length > 0) {
+            imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
+        }
+    }
+    // If it *is* a custom item, we just use the default `imageUrl` from above
+
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    
     let optionName = '';
-    if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
-        optionName = options[itemInfo.selectedOptionIndex].name;
+    if (!isCustomItem) { // Custom items don't have options
+        const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
+            optionName = options[itemInfo.selectedOptionIndex].name;
+        }
     }
 
-    const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+    let price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = price * itemInfo.quantity;
     let priceDisplay = `$${price.toFixed(2)}`;
+    
+    // Add "(Est.)" for dummy items
+    if (isCustomItem && itemInfo.overridePrice == null && price > 0) {
+        priceDisplay = `$${price.toFixed(2)} (Est.)`;
+    }
+    
     if (itemInfo.overridePrice != null) {
-        const originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
-    // --- REVISED: Updated buttons to Pencil and Minus Sign (with correct icons/tooltips) ---
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`}" alt="${fields.Name}">
+        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
@@ -77,26 +96,16 @@ async function createLockedInItemElement(record, itemInfo) {
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
-            <button class="edit-btn" title="Edit Item Details">✏️</button>
-            <button class="demote-locked-item-btn" title="Demote to Ideas (Minus Sign)">—</button>
+            ${!isCustomItem ? '<button class="edit-btn">Edit</button>' : ''}
+            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
-    // --- END REVISED ---
-    
-    // FIX: The edit button logic is now robust against duplicate clicks
-    itemElement.querySelector('.edit-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        log('Sidebar', `Edit button (✏️) clicked for ${fields.Name}. Opening modal.`);
-        ui.showDetailModal(record);
-    });
-
-    // FIX: The demote button listener is REMOVED from here to prevent infinite recursion.
-    // The global listener in events.js now handles demote/remove based on the class 'demote-locked-item-btn'.
-    
     return itemElement;
 }
+// --- END REPLACED FUNCTION ---
 
 
+// --- 2. THIS FUNCTION IS REPLACED ---
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -110,35 +119,42 @@ export async function updateEventPlanSection() {
     }
 
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        // --- THIS IS THE KEY CHANGE ---
+        // Find the record in state.records.all (where custom items now live)
         const record = state.records.all.find(r => r.id === recordId);
+        // --- END KEY CHANGE ---
+
         if (record) {
-            const itemElement = await createLockedInItemElement(record, itemInfo);
+            const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
             container.appendChild(itemElement);
+        } else {
+            log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
         }
     }
     ui.observeLazyImages(container);
-    // FIX: Event listeners were moved directly inside createLockedInItemElement for edit button
-    // The demote button relies on the single global listener in events.js for the demote-locked-item-btn class.
 }
+// --- END REPLACED FUNCTION ---
 
-export async function updateIdeasCarousel() {
-    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`);
-    const ideasSection = document.getElementById('favorites-section');
-    const ideasCarousel = document.getElementById('favorites-carousel');
+
+export async function updateIdeasCarousel() { // Renamed from updateFavoritesCarousel
+    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`); // Updated log message
+    const ideasSection = document.getElementById('favorites-section'); // Consider renaming ID to 'ideas-section'
+    const ideasCarousel = document.getElementById('favorites-carousel'); // Consider renaming ID to 'ideas-carousel'
     if (!ideasSection || !ideasCarousel) return;
 
     if (state.cart.items.size === 0) {
-        ideasSection.style.display = 'none';
+        ideasSection.style.display = 'none'; // Hide if empty
         return;
     }
-    ideasSection.style.display = 'block';
-    ideasCarousel.innerHTML = '';
-    const imageCache = new Map();
+    ideasSection.style.display = 'block'; // Show if not empty
+    ideasCarousel.innerHTML = ''; // Clear existing items
+    const imageCache = new Map(); // Use a local cache for this render pass
 
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
             try {
+                // Assuming createFavoriteCardElement is the correct function for idea cards
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
                 if (card) ideasCarousel.appendChild(card);
             } catch (error) {
@@ -146,6 +162,7 @@ export async function updateIdeasCarousel() {
             }
         }
     }
+    // Ensure lazy loading is applied after adding new cards
     if (typeof ui !== 'undefined' && ui.observeLazyImages) {
          ui.observeLazyImages(ideasCarousel);
     } else {
@@ -173,17 +190,23 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
-    const totalBreakdown = document.getElementById('total-breakdown'); 
-    
-    if (!totalCostEl || !subtotalCostEl || !totalBreakdown) return;
+    if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
+        // --- THIS IS THE KEY CHANGE ---
+        // We now get the record from state.records.all (where custom items live)
+        // and getRecordPrice will work for both real and custom items.
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1);
+        
+        // Custom items don't have a min headcount, so default to 1
+        const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, minHeadcount);
+        // --- END KEY CHANGE ---
+        
         subtotal += unitPrice * effectiveQuantity;
     });
     
@@ -197,33 +220,13 @@ export function updateTotalCost() {
         backgroundEngine.updateColors();
     }
     
-    // Reset total breakdown HTML before applying status logic
-    // Using simple quotes for string literals to avoid previous issues
-    totalBreakdown.innerHTML = `
-        <div class="total-row subtotal-row">
-            <span>Subtotal:</span>
-            <span id="subtotal-cost">$${subtotal.toFixed(2)}</span>
-        </div>
-        <div class="total-row amount-paid-row" style="display: none;">
-            <span>Amount Paid:</span>
-            <span id="amount-paid-cost">$0.00</span>
-        </div>
-        <hr class="total-divider" style="display: none;">
-        <div class="total-row final-total-row">
-            <strong>Total Due:</strong>
-            <strong id="total-cost">$${totalDue.toFixed(2)}</strong>
-        </div>
-    `;
-
     if (amountReceived > 0) {
-        // Re-get the elements after reset
-        const currentAmountPaidCostEl = totalBreakdown.querySelector('#amount-paid-cost');
-        const currentAmountPaidRowEl = totalBreakdown.querySelector('.amount-paid-row');
-        const currentTotalDividerEl = totalBreakdown.querySelector('.total-divider');
-        
-        if (currentAmountPaidCostEl) currentAmountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
-        if (currentAmountPaidRowEl) currentAmountPaidRowEl.style.display = 'flex';
-        if (currentTotalDividerEl) currentTotalDividerEl.style.display = 'block';
+        amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        amountPaidRowEl.style.display = 'flex';
+        totalDividerEl.style.display = 'block';
+    } else {
+        amountPaidRowEl.style.display = 'none';
+        totalDividerEl.style.display = 'none';
     }
 
     if (mobileItemCountEl && mobileTotalCostEl) {
@@ -242,32 +245,21 @@ export function updateTotalCost() {
     }
     
     if (checkoutBtn) {
-        // --- START FIX: Ensure button is always enabled if plan is not empty ---
-        const hasContent = state.cart.lockedItems.size > 0;
+        checkoutBtn.style.display = 'block';
+        document.getElementById('total-breakdown').style.display = 'block';
 
-        if (hasContent) {
-            checkoutBtn.style.display = 'block';
-            checkoutBtn.disabled = false; // Always enable if content exists
-
-            if (isFullyPaid) {
-                // Display 'Paid in Full' status and set button text to 'View Summary'
-                totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
-                checkoutBtn.textContent = 'View Summary';
-                checkoutBtn.dataset.defaultText = 'View Summary'; // Set default text for consistency
-            } else if (amountReceived > 0) {
-                checkoutBtn.textContent = 'Pay Remainder';
-                checkoutBtn.dataset.defaultText = 'Reserve';
-            } else {
-                checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-                checkoutBtn.dataset.defaultText = 'Reserve';
+        if (isFullyPaid) {
+            checkoutBtn.style.display = 'none';
+            if (amountReceived > 0) {
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
+        } else if (amountReceived > 0) {
+            checkoutBtn.textContent = 'Pay Remainder';
+            checkoutBtn.disabled = isPlanEmpty;
         } else {
-            // Plan is empty
-            checkoutBtn.style.display = 'block';
             checkoutBtn.textContent = checkoutBtn.dataset.defaultText || 'Reserve';
-            checkoutBtn.disabled = true;
+            checkoutBtn.disabled = isVIRTUAL_PAD_FINGERPRINT_VENDOR;
         }
-        // --- END FIX ---\
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
@@ -278,14 +270,11 @@ export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
-    
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'block'; 
-        checkoutBtn.textContent = 'View Summary'; // Changed from 'Reserve' to 'View Summary'
-        checkoutBtn.disabled = false;
+        checkoutBtn.style.display = 'none';
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = false;
