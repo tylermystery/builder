@@ -43,17 +43,19 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
+// In: components/sidebar.js
+// Action: REPLACE the `createLockedInItemElement` function
 
-// --- 1. THIS FUNCTION IS REPLACED ---
-// It now receives the *full record* instead of just the ID
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     let isCustomItem = record.id.startsWith('custom-');
-    // Use a generic partner icon for custom items
-    let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/v1602613148/default_partner_icon.png`;
+    
+    // --- THIS IS THE FIX ---
+    // Default to your main placeholder, which we know exists
+    let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
+    // --- END THE FIX ---
 
     if (!isCustomItem) {
-        // --- EXISTING LOGIC for real items ---
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
             imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
@@ -66,7 +68,7 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.dataset.recordId = record.id;
     
     let optionName = '';
-    if (!isCustomItem) { // Custom items don't have options
+    if (!isCustomItem) {
         const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
             optionName = options[itemInfo.selectedOptionIndex].name;
@@ -77,7 +79,6 @@ async function createLockedInItemElement(record, itemInfo) {
     const total = price * itemInfo.quantity;
     let priceDisplay = `$${price.toFixed(2)}`;
     
-    // Add "(Est.)" for dummy items
     if (isCustomItem && itemInfo.overridePrice == null && price > 0) {
         priceDisplay = `$${price.toFixed(2)} (Est.)`;
     }
@@ -102,8 +103,6 @@ async function createLockedInItemElement(record, itemInfo) {
     `;
     return itemElement;
 }
-// --- END REPLACED FUNCTION ---
-
 
 // --- 2. THIS FUNCTION IS REPLACED ---
 export async function updateEventPlanSection() {
