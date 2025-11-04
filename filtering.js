@@ -21,6 +21,101 @@ function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     return bookableItems;
 }
 
+// --- ADD THIS NEW HELPER FUNCTION near the top of the file ---
+/**
+ * Scans goal text for the first matching ranking keyword.
+ * @param {string} text - The user's "Goals/Notes" text.
+ * @returns {string | null} The first matching goal (e.g., "Fun") or null.
+ */
+function findGoalInText(text) {
+    if (!text) return null;
+    const lowerText = text.toLowerCase();
+    
+    // These keywords MUST exactly match the keys you just imported
+    // from the CSV (e.g., "Fun", "Art", "Celebration", "Competitive")
+    const GOAL_KEYWORDS = {
+        "fun": "Fun",
+        "art": "Art",
+        "artistic": "Art",
+        "celebration": "Celebration",
+        "celebrate": "Celebration",
+        "competitive": "Competitive",
+        "compete": "Competitive",
+        "team-build": "Team-Build",
+        "team build": "Team-Build",
+        "bonding": "Bonding"
+        // Add more keyword-to-goal mappings here
+    };
+
+    for (const keyword in GOAL_KEYWORDS) {
+        if (lowerText.includes(keyword)) {
+            return GOAL_KEYWORDS[keyword]; // Return the proper-cased Goal
+        }
+    }
+    return null; // No goal found
+}
+
+// --- REPLACE the existing `sortRecords` function with this new version ---
+function sortRecords(records, sortBy) {
+    // --- NEW: Check for "Recommended" sort ---
+    if (sortBy === 'recommended') {
+        const goalText = document.getElementById('header-goals').value;
+        const goal = findGoalInText(goalText);
+        
+        // We only sort if a valid goal was found in the text
+        if (goal) {
+            log('Filtering', `Sorting by recommended goal: "${goal}"`);
+            return records.sort((a, b) => {
+                let scoreA = 0;
+                let scoreB = 0;
+
+                try {
+                    // Get the rankings JSON from the record
+                    const rankingsA = JSON.parse(a.fields['Rankings'] || '{}');
+                    const rankingsB = JSON.parse(b.fields['Rankings'] || '{}');
+                    
+                    // Get the score for the *specific goal*
+                    scoreA = rankingsA[goal] || 0;
+                    scoreB = rankingsB[goal] || 0;
+                } catch (e) {
+                    // In case of bad JSON, scores remain 0
+                }
+                
+                // Sort by the goal score, highest to lowest
+                return scoreB - scoreA;
+            });
+        }
+        // If no goal is found, we fall through to the default sort (Featured, then Price)
+        log('Filtering', 'Sort by "Recommended" selected, but no goal text. Using default sort.');
+    }
+    
+    // --- EXISTING LOGIC (Fallback) ---
+    // (This part is the same as in your original file)
+    return records.sort((a, b) => {
+        const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
+        const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
+
+        if (aIsFeatured && !bIsFeatured) {
+            return -1; // a comes first
+        }
+        if (!aIsFeatured && bIsFeatured) {
+            return 1; // b comes first
+        }
+
+        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+        const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+        const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
+
+        switch (sortBy) {
+            case 'price-asc': return aPrice - bPrice;
+            case 'price-desc': return bPrice - aPrice;
+            case 'name-asc': return aName.localeCompare(bName);
+            default: return 0;
+        }
+    });
+}
+
 function isGrouping(record, allRecordNames) {
     // Assuming 'Grouping' is a defined Item Type in Airtable
     return record.fields['Item Type'] === 'Grouping';
