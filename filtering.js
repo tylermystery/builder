@@ -7,21 +7,7 @@ import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
 
 // --- HELPER FUNCTIONS (Moved to the top) ---
 
-function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
-    let bookableItems = [];
-    const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
-
-    for (const child of children) {
-        if (isGrouping(child, allRecordNames)) {
-            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecordsInStore, allRecordNames));
-        } else {
-            bookableItems.push(child);
-        }
-    }
-    return bookableItems;
-}
-
-// --- ADD THIS NEW HELPER FUNCTION near the top of the file ---
+// --- NEW HELPER FUNCTION ---
 /**
  * Scans goal text for the first matching ranking keyword.
  * @param {string} text - The user's "Goals/Notes" text.
@@ -31,8 +17,8 @@ function findGoalInText(text) {
     if (!text) return null;
     const lowerText = text.toLowerCase();
     
-    // These keywords MUST exactly match the keys you just imported
-    // from the CSV (e.g., "Fun", "Art", "Celebration", "Competitive")
+    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
+    // (e.g., "Fun", "Art", "Celebration", "Competitive")
     const GOAL_KEYWORDS = {
         "fun": "Fun",
         "art": "Art",
@@ -54,66 +40,21 @@ function findGoalInText(text) {
     }
     return null; // No goal found
 }
+// --- END NEW HELPER FUNCTION ---
 
-// --- REPLACE the existing `sortRecords` function with this new version ---
-function sortRecords(records, sortBy) {
-    // --- NEW: Check for "Recommended" sort ---
-    if (sortBy === 'recommended') {
-        const goalText = document.getElementById('header-goals').value;
-        const goal = findGoalInText(goalText);
-        
-        // We only sort if a valid goal was found in the text
-        if (goal) {
-            log('Filtering', `Sorting by recommended goal: "${goal}"`);
-            return records.sort((a, b) => {
-                let scoreA = 0;
-                let scoreB = 0;
 
-                try {
-                    // Get the rankings JSON from the record
-                    const rankingsA = JSON.parse(a.fields['Rankings'] || '{}');
-                    const rankingsB = JSON.parse(b.fields['Rankings'] || '{}');
-                    
-                    // Get the score for the *specific goal*
-                    scoreA = rankingsA[goal] || 0;
-                    scoreB = rankingsB[goal] || 0;
-                } catch (e) {
-                    // In case of bad JSON, scores remain 0
-                }
-                
-                // Sort by the goal score, highest to lowest
-                return scoreB - scoreA;
-            });
+function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
+    let bookableItems = [];
+    const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
+
+    for (const child of children) {
+        if (isGrouping(child, allRecordNames)) {
+            bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecordsInStore, allRecordNames));
+        } else {
+            bookableItems.push(child);
         }
-        // If no goal is found, we fall through to the default sort (Featured, then Price)
-        log('Filtering', 'Sort by "Recommended" selected, but no goal text. Using default sort.');
     }
-    
-    // --- EXISTING LOGIC (Fallback) ---
-    // (This part is the same as in your original file)
-    return records.sort((a, b) => {
-        const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
-        const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
-
-        if (aIsFeatured && !bIsFeatured) {
-            return -1; // a comes first
-        }
-        if (!aIsFeatured && bIsFeatured) {
-            return 1; // b comes first
-        }
-
-        const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
-        const bName = b.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
-
-        switch (sortBy) {
-            case 'price-asc': return aPrice - bPrice;
-            case 'price-desc': return bPrice - aPrice;
-            case 'name-asc': return aName.localeCompare(bName);
-            default: return 0;
-        }
-    });
+    return bookableItems;
 }
 
 function isGrouping(record, allRecordNames) {
@@ -157,11 +98,11 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                parentNameLower === selectedCategoryLower ||       // Matches Parent Item field
                itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower); // Matches Subcategories field
     });
-    // --- END NEW LOGIC ---
+    // --- END NEW LOGIC --
 
     // If subcategories are selected, further filter the category results.
     if (activeSubcategories.length > 0) {
-        // --- NEW LOGIC: Check Subcategories and Parent Item for the selected subcategories ---
+        // --- NEW LOGIC: Check Subcategories and Parent Item for the selected subcategories --
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             const fields = record.fields;
             const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
@@ -323,10 +264,46 @@ function filterBySearchTerm(records, searchTerm) {
     return scoredRecords.map(item => item.record);
 }
 
+// --- THIS IS THE CORRECT, REPLACED FUNCTION ---
 function sortRecords(records, sortBy) {
+    // --- NEW: Check for "Recommended" sort ---
+    if (sortBy === 'recommended') {
+        const goalText = document.getElementById('header-goals').value;
+        const goal = findGoalInText(goalText);
+        
+        // We only sort if a valid goal was found in the text
+        if (goal) {
+            // Use log function if it's available, otherwise console.log
+            const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
+            log('Filtering', `Sorting by recommended goal: "${goal}"`);
+
+            return records.sort((a, b) => {
+                let scoreA = 0;
+                let scoreB = 0;
+
+                try {
+                    // Get the rankings JSON from the record
+                    const rankingsA = JSON.parse(a.fields['Rankings'] || '{}');
+                    const rankingsB = JSON.parse(b.fields['Rankings'] || '{}');
+                    
+                    // Get the score for the *specific goal*
+                    scoreA = rankingsA[goal] || 0;
+                    scoreB = rankingsB[goal] || 0;
+                } catch (e) {
+                    // In case of bad JSON, scores remain 0
+                }
+                
+                // Sort by the goal score, highest to lowest
+                return scoreB - scoreA;
+            });
+        }
+        // If no goal is found, we fall through to the default sort (Featured, then Price)
+        const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
+        log('Filtering', 'Sort by "Recommended" selected, but no goal text. Using default sort.');
+    }
+    
+    // --- EXISTING LOGIC (Fallback) ---
     return records.sort((a, b) => {
-        // --- START NEW SORTING LOGIC ---
-        // 1. Prioritize 'Featured' items
         const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
         const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
 
@@ -336,9 +313,7 @@ function sortRecords(records, sortBy) {
         if (!aIsFeatured && bIsFeatured) {
             return 1; // b comes first
         }
-        // --- END NEW SORTING LOGIC ---
 
-        // 2. Fallback to original user-selected sorting if statuses are the same (both featured or both not)
         const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const aName = a.fields[CONSTANTS.FIELD_NAMES.NAME] || '';
@@ -352,8 +327,10 @@ function sortRecords(records, sortBy) {
         }
     });
 }
+// --- END REPLACED FUNCTION ---
 
-// --- MAIN EXPORTED FUNCTION ---
+
+// --- MAIN EXPORTED FUNCTION --
 
 // FILE: filtering.js (REPLACE ENTIRE applyFiltersAndSort function)
 
@@ -376,7 +353,7 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value; //
     const sortBy = document.getElementById('sort-by').value; //
 
-    // --- Determine Base Record Set ---
+    // --- Determine Base Record Set --
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     ); // Start with records for the current store
@@ -384,9 +361,9 @@ export function applyFiltersAndSort(imageCache) {
     // Reset title initially
     if (catalogTitle) catalogTitle.style.display = 'none';
 
-    // --- Apply Special Views (My Plan / My Likes) ---
+    // --- Apply Special Views (My Plan / My Likes) --
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
-        // --- "My Plan" View ---
+        // --- "My Plan" View --
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your'; //
         if (catalogTitle) {
             catalogTitle.textContent = `${eventName} Plan & Ideas`; //
@@ -399,7 +376,7 @@ export function applyFiltersAndSort(imageCache) {
         // For "My Plan", we usually don't apply further filters, but show everything in the plan/ideas.
         // We will skip other filters and just sort/render this set.
     } else if (likesFilterBtn && likesFilterBtn.classList.contains('active')) {
-        // --- "My Likes" View ---
+        // --- "My Likes" View --
         if (catalogTitle) {
             catalogTitle.textContent = `My Liked Items`; //
             catalogTitle.style.display = 'block'; //
@@ -415,13 +392,13 @@ export function applyFiltersAndSort(imageCache) {
         baseRecordsToFilter = baseRecordsToFilter.filter(record => likedIds.has(record.id)); // Filter the store records by liked IDs
         // Filters will be applied to this liked subset below.
     } else {
-         // --- Standard Category/All View ---
+         // --- Standard Category/All View --
          // Apply category/subcategory filtering to the store records
          baseRecordsToFilter = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories); //
          // Filters will be applied below.
     }
 
-    // --- Apply Standard Filters (to the determined base set) ---
+    // --- Apply Standard Filters (to the determined base set) --
     let recordsToDisplay = baseRecordsToFilter; // Start with the result from above
 
     // Don't apply standard filters if in "My Plan" view (usually desired behavior)
@@ -433,10 +410,10 @@ export function applyFiltersAndSort(imageCache) {
          recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm); //
     }
 
-    // --- Sort the Final List ---
+    // --- Sort the Final List --
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy); // Apply sorting
 
-    // --- Update State & Render ---
+    // --- Update State & Render --
     state.records.filtered = recordsToDisplay; // Update state
     state.ui.recordsCurrentlyDisplayed = 0; // Reset display count
 
