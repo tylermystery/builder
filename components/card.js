@@ -57,11 +57,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
+    // --- ADD THIS "PARTNER" BADGE LOGIC ---
     let partnerBadge = '';
     if (fields.ServiceType === 'Partner Activity') {
         partnerBadge = '<span class="partner-badge">Partner</span>';
     }
+    // --- END NEW LOGIC ---
 
+    // --- This block handles custom items (from your previous step) ---
     let imageUrlToLoad;
     if (record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) {
         imageUrlToLoad = getPlaceholderImage([]);
@@ -69,6 +72,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
         imageUrlToLoad = getPlaceholderImage(imageUrls);
     }
+    // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
         const groupingCard = eventCard;
@@ -119,8 +123,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
                 <div class="heart-icon" data-record-id="${record.id}"></div>
-                ${partnerBadge}
-            </div>
+                ${partnerBadge} </div>
             <div class="event-card-content">
                 <div class="event-date-display">
                     <span class="month">${month}</span>
@@ -152,8 +155,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
-            ${partnerBadge}
-        </div>
+            ${partnerBadge} </div>
         <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
             <p class="description">${fields.Description || ''}</p>
