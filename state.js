@@ -31,6 +31,7 @@ export let state = {
     cart: {
         items: new Map(),       // "Ideas" (formerly Favorites), populated by "Save for Later"
         lockedItems: new Map(), // "Event Plan"
+        customItems: new Map(), // ADD THIS LINE: Holds AI-parsed item data
     },
     eventDetails: {
         combined: new Map(),
