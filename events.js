@@ -1,4 +1,4 @@
-// In: events.js (REPLACE THE ENTIRE FILE)
+// REPLACE THE ENTIRE CONTENTS of events.js
 
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
@@ -12,51 +12,14 @@ import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-import * as backgroundEngine from './components/backgroundEngine.js'; 
-import { updateProcessingFeeDisplay } from './components/modal.js';
+import { addEnergy } from './components/backgroundEngine.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
 let saveShareBtn = null;
 let categoryFiltersContainer = null;
 let subcategoryFiltersContainer = null;
-
-// --- NEW FUNCTION: Progress Logic (Cleaned) ---
-function updateProgressForAction(actionName) {
-    let weight = 0.0;
-    // Define weights based on action commitment
-    switch (actionName) {
-        case 'add-to-plan':
-            weight = 0.05; // Major Positive
-            break;
-        case 'remove-from-plan':
-            weight = -0.05; // Major Negative
-            break;
-        case 'like':
-            weight = 0.015; // Medium Positive
-            break;
-        case 'unlike':
-            weight = -0.015; // Medium Negative
-            break; 
-        case 'increase-qty':
-        case 'option-change':
-            weight = 0.005; // Minor Positive
-            break;
-        case 'decrease-qty':
-            weight = -0.005; // Minor Negative
-            break;
-        case 'view-detail':
-        case 'filter-change':
-            weight = 0.002; // Tiny Positive boost for engagement
-            break;
-        default: 
-            weight = 0.0;
-    }
-    if (weight !== 0.0) {
-        backgroundEngine.updateProgress(weight);
-    }
-}
-// --- END NEW FUNCTION ---
+let aiSearchController = null; // --- ADDED THIS LINE ---
 
 function getCurrentCategoryRecord() {
     if (!categoryFiltersContainer) return null;
@@ -172,7 +135,7 @@ export async function updateAllCardAvailabilityIcons() {
             }
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
-            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+            const tooltipContent = `<div style=\"text-align: left;\"><strong>${dateRangeString}</strong><hr style=\"margin: 2px 0 5px;\"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
@@ -180,7 +143,6 @@ export async function updateAllCardAvailabilityIcons() {
     }
 }
 
-// --- MODIFIED: handlePaymentFormSubmit for Stripe Payment Element and Fee ---
 async function handlePaymentFormSubmit(event) {
     event.preventDefault();
     log('Events', 'Payment form submitted.');
@@ -195,12 +157,8 @@ async function handlePaymentFormSubmit(event) {
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
 
-    // Get the Stripe context and Elements object stored on the modal overlay
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    const stripeElements = checkoutModalOverlay?.stripeElements; 
-    const stripe = ui.getStripeContext().stripe; // Retrieve stripe instance
-    
-    if (!stripe || !stripeElements) { 
+    const { stripe, cardElement } = ui.getStripeContext();
+    if (!stripe || !cardElement) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
@@ -209,76 +167,35 @@ async function handlePaymentFormSubmit(event) {
     }
     
     try {
-        // --- STEP 1: Recalculate and update the intent for the final charge amount (base + tip + fee) ---
-        // We rely on the core logic here, which will also update the stripeElements object with the new clientSecret
         const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
         const amountReceived = state.session.user.amountReceived || 0;
         const totalDue = finalTotal - amountReceived;
-        
-        // This logic calculates the amount before the fee, including deposit/full choice
-        let baseAmountToCharge = totalDue;
-        const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
-        
-        if (amountReceived === 0) {
-            const shopSettings = state.stores.all.find(s => s.id === state.ui.activeShopId)?.fields;
-            if (shopSettings?.PaymentOptions === 'DepositOrFull' && choice === 'full') {
-                 baseAmountToCharge = finalTotal;
-            } else {
-                 baseAmountToCharge = finalTotal * 0.35;
-            }
-        }
-        
+        const isFirstPayment = amountReceived === 0;
+        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
         const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-        const finalAmountToChargeBeforeFee = baseAmountToCharge + tipAmount;
-
-        const amountInCentsBeforeFee = Math.round(finalAmountToChargeBeforeFee * 100);
-        if (amountInCentsBeforeFee < 50) {
+        const finalAmountToCharge = baseAmountToCharge + tipAmount;
+        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
+        if (finalAmountInCents < 50) {
             throw new Error("Final amount is too low to process.");
         }
 
-        // We call updateProcessingFeeDisplay one last time to ensure a fresh clientSecret reflecting the exact amount + tip + fee is generated and applied to the elements.
-        await updateProcessingFeeDisplay(); 
-        
-        // 2. Submit Payment Element to collect payment method details
-        const { error: submitError } = await stripeElements.submit();
-        if (submitError) {
-             throw new Error(submitError.message);
-        }
-
-        // 3. Extract the final clientSecret from the latest intent created by updateProcessingFeeDisplay
-        // This is a direct fetch since the clientSecret is not exposed globally by the Payment Element
         const intentResponse = await fetch('/api/create-payment-intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: amountInCentsBeforeFee }),
+            body: JSON.stringify({ amount: finalAmountInCents }),
         });
-
-        if (!intentResponse.ok) throw new Error('Could not refresh payment intent.');
+        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
         const paymentIntentData = await intentResponse.json();
         const clientSecret = paymentIntentData.clientSecret;
-        
-        // 4. Confirm the Payment Intent with the Elements object
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
-        
-        const { error, paymentIntent } = await stripe.confirmPayment({
-            elements: stripeElements, // Use the Elements object for confirmation
-            clientSecret: clientSecret,
-            confirmParams: {
-                // Return URL is necessary for asynchronous payment methods (PayPal, ACH, etc.)
-                return_url: `${window.location.origin}/`, 
-                payment_method_data: {
-                    billing_details: {
-                        name: customerName, 
-                        email: customerEmail 
-                    }
-                }
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: cardElement,
+                billing_details: { name: customerName, email: customerEmail },
             },
-            redirect: 'if_required', // Handles redirection for off-session payments
         });
-
         if (error) {
-            console.error('Stripe Payment Confirmation Error:', error);
             throw new Error(error.message);
         }
 
@@ -306,8 +223,6 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('payment-success-message').style.display = 'block';
 
             setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
-        } else {
-             log('Events', `Payment status is ${paymentIntent.status}. No immediate action needed if user was redirected.`);
         }
     } catch (err) {
         log('Events', `Stripe payment error: ${err.message}`);
@@ -317,7 +232,146 @@ async function handlePaymentFormSubmit(event) {
         spinner.style.display = 'none';
     }
 }
-// --- END MODIFIED handlePaymentFormSubmit ---
+
+// --- ADD THIS ENTIRE NEW FUNCTION ---
+/**
+ * Triggers a "ghost card" and dummy AI parse when a search yields no local results.
+ * @param {string} searchTerm The user's search query.
+ * @param {Map} imageCache The global imageCache.
+ */
+async function handleProactiveAISearch(searchTerm, imageCache) {
+    if (aiSearchController) {
+        aiSearchController.abort();
+    }
+    aiSearchController = new AbortController();
+    const signal = aiSearchController.signal;
+
+    const catalogContainer = document.getElementById('catalog-container');
+    if (!catalogContainer) return;
+
+    // 1. Inject the "Ghost Card" (Loading State)
+    const ghostRecord = {
+        id: `ai-search-${Date.now()}`, // Temporary ID
+        fields: {
+            Name: `Searching for "${searchTerm}"...`,
+            Description: "Our AI is looking for this item in the Bay Area...",
+            Price: 0,
+            'Item Type': 'Bookable Item',
+            ServiceType: 'Partner Activity', // Mark as partner
+            Status: 'Available'
+        }
+    };
+    
+    const ghostCard = await ui.createInteractiveCard(ghostRecord, [], imageCache);
+    ghostCard.id = "ai-ghost-card";
+    ghostCard.style.opacity = "0.5";
+    ghostCard.style.pointerEvents = "none";
+    
+    catalogContainer.innerHTML = '';
+    catalogContainer.appendChild(ghostCard);
+
+    try {
+        // --- START DUMMY DATA WORKAROUND ---
+        log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
+        await new Promise(res => setTimeout(res, 2000)); // Simulate 2 sec network delay
+        if (signal.aborted) return; // Check if aborted during delay
+
+        // This is the fake data the "API" (process-weblink.js) will return
+        const data = {
+            Name: `[DUMMY] ${searchTerm}`,
+            Description: "This is a dummy item. The real AI-parsed description will go here.",
+            Price: Math.floor(Math.random() * 100) + 10, // Random price
+            ServiceType: "Partner Activity" // This is critical
+        };
+        // --- END DUMMY DATA WORKAROUND ---
+
+        // (The real code would be:)
+        // const response = await fetch('/api/process-weblink', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ query: searchTerm }),
+        //     signal: signal,
+        // });
+        // const data = await response.json();
+        // if (signal.aborted) return;
+        // if (!response.ok) throw new Error(data.error);
+
+        log('Events', 'Proactive AI Parse Success:', data);
+        
+        const customId = `custom-${Date.now()}`;
+        
+        // --- THIS IS THE KEY "INTERMIXING" LOGIC ---
+        // Create a "record" object that mimics a real Airtable record
+        const liveRecord = {
+            id: customId, // The new, permanent-for-this-session ID
+            fields: {
+                Name: data.Name,
+                Description: data.Description,
+                Price: data.Price,
+                ServiceType: data.ServiceType,
+                'Item Type': 'Bookable Item',
+                Status: 'Available',
+                // Add "null" placeholders for safety to prevent crashes
+                Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
+                'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
+                Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
+                RSVPs: null, Date: null, 'Chat Enabled': false, Duration: null, 
+                Capacity: null, 'Location Details': null, 'Additional Information': null, 
+                Rankings: null
+            }
+        };
+        
+        // Add this new record to the *main state* so everyone can find it
+        state.records.all.push(liveRecord);
+        // --- END KEY LOGIC ---
+
+        // 4. Create the *real* card and replace the ghost card
+        const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
+        
+        const addToPlanBtn = finalCard.querySelector('.add-to-plan-btn');
+        if (addToPlanBtn) {
+            addToPlanBtn.textContent = 'Add to Plan';
+            addToPlanBtn.disabled = false;
+            
+            // Re-clone the button to remove old listeners
+            const newBtn = addToPlanBtn.cloneNode(true);
+            addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
+
+            newBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                log('Events', `Adding AI-parsed item: ${customId}`);
+                
+                state.cart.lockedItems.set(customId, {
+                    quantity: 1,
+                    selectedOptionIndex: 0,
+                    note: `Added via AI search for: "${searchTerm}"`
+                });
+
+                ui.updateEventPlanSection();
+                ui.updateTotalCost();
+                triggerSave();
+                
+                newBtn.textContent = 'In Plan';
+                newBtn.disabled = true;
+            });
+        }
+
+        catalogContainer.innerHTML = '';
+        catalogContainer.appendChild(finalCard);
+
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            log('Events', 'AI search aborted by new search.');
+            return;
+        }
+        log('Events', `Proactive AI parse error: ${err.message}`);
+        catalogContainer.innerHTML = `<p style='text-align: center;'>Could not find "${searchTerm}". Please try a different name or URL.</p>`;
+    } finally {
+        aiSearchController = null;
+    }
+}
+// --- END NEW FUNCTION ---
+
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
@@ -388,7 +442,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }, 100);
     });
 
-    // --- START CONSOLIDATED BUTTON GENERATION (Same as before) ---
+    // --- START CONSOLIDATED BUTTON GENERATION --
     if (categoryFiltersContainer) {
         categoryFiltersContainer.innerHTML = ''; 
     } else {
@@ -471,9 +525,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ category: newCategory, subcategory: null, view: null });
             updateSubcategoryButtons();
         }
-        
-        // PROGRESS: Apply small boost for navigating/exploring
-        updateProgressForAction('filter-change');
 
         applyFiltersAndSort(imageCache);
     });
@@ -484,42 +535,60 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const activeSubcats = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn.active'))
                                      .map(btn => btn.dataset.filter);
             updateUrl({ subcategory: activeSubcats.join(',') || null });
-            // PROGRESS: Apply small boost for navigating/exploring
-            updateProgressForAction('filter-change');
             applyFiltersAndSort(imageCache);
         }
     });
 
-    safeAddEventListener('status-filter', 'change', () => {
-        updateProgressForAction('filter-change');
-        applyFiltersAndSort(imageCache)
-    });
-    safeAddEventListener('name-filter', 'input', debounce(() => {
-        updateProgressForAction('filter-change');
-        applyFiltersAndSort(imageCache)
-    }, 300));
-    safeAddEventListener('headcount-custom', 'input', debounce(() => {
-        updateProgressForAction('filter-change');
-        applyFiltersAndSort(imageCache)
-    }, 300));
+    safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
+    
+    // --- THIS IS THE MODIFIED LISTENER ---
+    safeAddEventListener('name-filter', 'input', debounce((e) => {
+        const searchTerm = e.target.value.trim();
+        
+        if (aiSearchController) {
+            aiSearchController.abort(); // Cancel any pending AI search
+        }
+        
+        if (searchTerm.length === 0) {
+            applyFiltersAndSort(imageCache);
+            return;
+        }
+        
+        applyFiltersAndSort(imageCache);
+        
+        // This is the trigger
+        if (state.records.filtered.length === 0 && searchTerm.length > 2) {
+            log('Events', 'No local results, triggering proactive AI search.');
+            
+            // Check if any other filters are active
+            const hasOtherFilters = 
+                document.getElementById('status-filter').value !== 'Available' ||
+                document.getElementById('headcount-filter').value !== 'any' ||
+                document.getElementById('location-filter').value !== 'any' ||
+                document.getElementById('budget-filter').value !== 'any' ||
+                document.querySelector('#category-filters .filter-btn:not([data-filter="all"]).active') ||
+                document.querySelector('#subcategory-filters .filter-btn.active');
+            
+            if (!hasOtherFilters) {
+                // Only run AI search if *only* the name filter is active
+                handleProactiveAISearch(searchTerm, imageCache);
+            }
+        }
+    }, 300)); // 300ms debounce
+    // --- END MODIFICATION ---
+    
+    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
         document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
-        updateProgressForAction('filter-change');
         applyFiltersAndSort(imageCache);
     });
-    safeAddEventListener('location-filter', 'change', () => {
-        updateProgressForAction('filter-change');
-        applyFiltersAndSort(imageCache);
-    });
-    safeAddEventListener('budget-filter', 'change', () => {
-        updateProgressForAction('filter-change');
-        applyFiltersAndSort(imageCache);
-    });
+    safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
     safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter="all"]');
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
         if (allButton) {
             categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -534,7 +603,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         document.getElementById('budget-filter').selectedIndex = 0;
         document.getElementById('sort-by').selectedIndex = 0;
         if (mainDatePicker) mainDatePicker.clear();
-        updateProgressForAction('filter-change'); // Small boost for starting fresh
         applyFiltersAndSort(imageCache);
     });
 
@@ -556,7 +624,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 await updateAllCardAvailabilityIcons();
                 await updateMobileBarAvailability();
             }
-            updateProgressForAction('filter-change');
         },
     });
 
@@ -581,20 +648,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 break;
         }
         mainDatePicker.setDate([startDate, endDate], true);
-        updateProgressForAction('filter-change');
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
-        updateProgressForAction('filter-change');
     });
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
-        updateProgressForAction('filter-change');
     });
 
     document.body.addEventListener('click', async (e) => {
@@ -651,7 +715,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     rsvpBtn.textContent = "You're Going! ✅";
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
-                    updateProgressForAction('add-to-plan'); // RSVP is a major commitment
                 } else {
                     throw new Error('RSVP update failed.');
                 }
@@ -669,7 +732,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ view: 'present' });
             ui.showPresentationView(listType);
         } else if (carouselNav) {
-            const carousel = document.getElementById('favorites-carousel');
+            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
             if (carousel) {
                 const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
@@ -697,50 +760,57 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     }
                 }
             }
-        }
-        else if (heartIcon) {
+    // --- CORRECTLY PLACED HEART ICON LOGIC --
+        } else if (heartIcon) {
             e.stopPropagation();
-            backgroundEngine.addEnergy(); // Add energy on heart click
+            addEnergy(); 
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
     
-            let likedBeforeClick;
-            if (state.session.user.isAuthenticated) {
-                likedBeforeClick = state.session.user.likedItemIds.has(recordId);
-            } else {
-                const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
-                likedBeforeClick = tempLikes.has(recordId);
-            }
-
-            console.log(`[Events] Heart icon clicked for record: ${recordId}. Was liked: ${likedBeforeClick}`);
+            console.log(`[Events] Heart icon clicked for record: ${recordId}`); 
     
             if (state.session.user.isAuthenticated) {
+                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
                 try {
                     heartIcon.style.pointerEvents = 'none';
+                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
                     const result = await api.toggleUserLike(recordId);
-                    
+                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
+    
                     if (result.success) {
+                        let actionTaken = '';
                         if (result.liked) {
                             state.session.user.likedItemIds.add(recordId);
-                            updateProgressForAction('like');
+                            actionTaken = 'liked';
+                            log('Events', `User liked item ${recordId}.`);
                         } else {
                             state.session.user.likedItemIds.delete(recordId);
-                            updateProgressForAction('unlike');
+                            actionTaken = 'unliked';
+                            log('Events', `User unliked item ${recordId}.`);
                         }
+                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
+                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
                         ui.updateCardIcon(recordId);
+                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
+    
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
+                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
+                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
                     log('Events', `Error toggling like: ${error.message}`);
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
                     heartIcon.style.pointerEvents = 'auto';
+                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
+                 console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
                 let tempLikes = [];
                 try {
@@ -750,32 +820,37 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      localStorage.removeItem('tempLikes'); tempLikes = [];
                 }
                 const tempLikesSet = new Set(tempLikes);
-                
+                let currentlyLiked = false;
                 if (tempLikesSet.has(recordId)) {
-                    tempLikesSet.delete(recordId); 
-                    updateProgressForAction('unlike');
+                    tempLikesSet.delete(recordId); currentlyLiked = false;
+                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
                 } else {
-                    tempLikesSet.add(recordId);
-                    updateProgressForAction('like');
-                    ui.showLoginPromptForLikes();
+                    tempLikesSet.add(recordId); currentlyLiked = true;
+                     console.log(`[Events] Added ${recordId} to temporary likes.`);
                 }
-
                 localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
+                log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
+                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
                 ui.updateCardIcon(recordId);
-
+                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
+                if (currentlyLiked) {
+                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
+                     ui.showLoginPromptForLikes();
+                }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
             }
         }
+        // --- END HEART ICON LOGIC ---
         
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
 
-            backgroundEngine.addEnergy(); // Existing energy boost
-            updateProgressForAction('add-to-plan'); // PROGRESS: Major positive boost
+            addEnergy();
 
             if (state.cart.lockedItems.has(recordId)) {
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
@@ -816,7 +891,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.lockedItems.delete(recordId);
             state.cart.items.set(recordId, itemInfo);
 
-            updateProgressForAction('remove-from-plan'); // PROGRESS: Major negative weight
             ui.updateCardIcon(recordId);
             await ui.updateEventPlanSection();
             await ui.updateIdeasCarousel();
@@ -830,30 +904,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             state.cart.items.delete(recordId);
 
-            updateProgressForAction('unlike'); // PROGRESS: Treat as un-hearting
             await ui.updateIdeasCarousel();
             triggerSave();
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
+            
+            // --- This check prevents clicking the "ghost card" ---
+            if (record.id.startsWith('ai-search-')) {
+                return;
+            }
+            // --- End check ---
 
             if (record.fields['Item Type'] === 'Grouping') {
-                 // Existing grouping logic...
-                 // PROGRESS: Treat category/group navigation as a filter change
-                 updateProgressForAction('filter-change');
                  const groupName = record.fields.Name;
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-
-                 // --- NEW REDIRECT LOGIC ---
-                 const linkedStore = state.stores.all.find(s => s.fields.Name === groupName);
-                 if (!parentName && linkedStore) {
-                     log('Events', `Grouping "${groupName}" matches a Store name. Redirecting to store.`);
-                     window.location.href = `/?shopId=${linkedStore.id}`;
-                     return; // Stop further execution
-                 }
-                 // --- END NEW REDIRECT LOGIC ---
 
                  if (!parentName) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
@@ -878,24 +945,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  applyFiltersAndSort(imageCache);
 
             } else {
-                // Pass false for the last argument (isFromBrowserHistory) as this is a new click from the catalog card
-                ui.showDetailModal(record, 0, false, false); 
-                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
+                ui.showDetailModal(record);
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
             const recordId = lockedItemCard.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                ui.showDetailModal(record);
-                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
-            }
+            if (record) ui.showDetailModal(record);
         } else if (ideaItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
             const recordId = ideaItem.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
-             if (record) {
-                ui.showDetailModal(record);
-                updateProgressForAction('view-detail'); // PROGRESS: Slight boost for detail viewing
-             }
+             if (record) ui.showDetailModal(record);
         }
     }); // End of body click listener
 
@@ -907,26 +966,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const recordId = container.dataset.recordId;
         const isLocked = state.cart.lockedItems.has(recordId);
         let updates = {};
-        
         if (target.matches('.quantity-input')) {
-            const oldValue = parseInt(ui.getItemState(recordId).quantity, 10);
-            const newValue = parseInt(target.value, 10);
-            updates.quantity = newValue;
-            // PROGRESS: Check for increase or decrease
-            if (newValue > oldValue) {
-                updateProgressForAction('increase-qty');
-            } else if (newValue < oldValue) {
-                updateProgressForAction('decrease-qty');
-            }
+            updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
-            // PROGRESS: Slight boost for adding a note
-            if (updates.note.trim().length > 0) updateProgressForAction('filter-change');
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
-             updateProgressForAction('option-change'); // PROGRESS: Option change boost
         }
-        
         if (Object.keys(updates).length > 0) {
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
@@ -951,7 +997,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateLockedItemStatusIcons();
             await updateMobileBarAvailability();
             triggerSave();
-            updateProgressForAction('filter-change');
         }
     });
     safeAddEventListener('itinerary-btn', 'click', () => {
@@ -976,7 +1021,6 @@ export function initializeChatEventListeners() {
             if (message.trim() === '') return;
             sendMessage(message);
             messageInput.value = '';
-            updateProgressForAction('filter-change'); // Small boost for starting a chat
         });
     }
 
