@@ -155,9 +155,6 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
-// --- THIS IS THE FIX ---
-// This new function safely closes the modal by updating the URL state
-// and then hiding the UI, instead of using history.back().
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -182,21 +179,16 @@ function updateCheckoutDisplay() {
     const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue;
     
-    // Determine if this is an INITIAL DEPOSIT payment
     const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
     
-    // --- Tip Visibility Logic --
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
-        // Only allow tips if paying in full (either first time or remainder)
-        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) { // Assuming deposit is less than full amount
-            // Hiding tip if user explicitly selects 'deposit' and deposit is less than full amount
+        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) {
             tipRow.style.display = 'none';
         } else {
             tipRow.style.display = 'flex';
         }
     }
-    // --- End Tip Visibility Logic ---
 
     if (amountReceived === 0) {
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
@@ -226,7 +218,6 @@ function getBreadcrumbs(record) {
     return breadcrumbs;
 }
 
-// --- THIS FUNCTION IS MODIFIED ---
 function resetModalState() {
     const elements = {
         modalItemName: document.getElementById('modal-item-name'),
@@ -240,13 +231,13 @@ function resetModalState() {
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
         modalAdditionalDetails: document.getElementById('modal-additional-details'),
-        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb') // --- ADDED THIS ---
+        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb')
     };
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
             else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
-            else if (key === 'modalRecommendationBlurb') { // --- ADDED THIS ---
+            else if (key === 'modalRecommendationBlurb') {
                 elements[key].innerHTML = '';
                 elements[key].style.display = 'none';
             }
@@ -255,12 +246,8 @@ function resetModalState() {
     }
     log('Modal', 'Reset modal state.');
 }
-// --- END MODIFICATION ---
 
-
-// --- THIS FUNCTION IS MODIFIED ---
 export async function showDetailModal(record, startPhotoIndex = 0) {
-    // --- Detail Configuration (Only non-ranking fields now) ---
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -286,17 +273,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-    
-    // --- ADD THIS VARIABLE ---
     const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
 
-    console.log('[hideDetailModal] Called.'); // Note: This log seems misplaced, but keeping as per original
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
     document.addEventListener('keydown', handleEscapeKey);
 
-    resetModalState(); // This now also resets the blurb
+    resetModalState();
     modalOverlay.dataset.recordId = record.id;
     currentItemChatRecordId = record.id;
 
@@ -309,22 +293,21 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
     }
 
-    // --- MODIFY THIS BLOCK for custom items ---
     let imageUrls = [];
     if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
         const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         imageUrls = fetchedUrls;
     }
     if (imageUrls.length === 0) {
-        // Use the placeholder function from card.js (via ui.js)
-        imageUrls = [ui.getPlaceholderImage([])]; 
+        // --- THIS IS THE FIX for Bug 3 ---
+        // We call ui.getPlaceholderImage directly, which is imported at the top
+        imageUrls = [ui.getPlaceholderImage([])];
+        // --- END THE FIX ---
     }
-    // --- END MODIFICATION ---
-
+    
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
     
-    // --- ADD THIS "RECOMMENDATION BLURB" LOGIC ---
     try {
         const blurbHtml = generateRecommendationBlurb(record);
         if (blurbHtml && modalRecBlurb) {
@@ -334,16 +317,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } catch (e) {
         console.warn('Failed to generate recommendation blurb:', e);
     }
-    // --- END "RECOMMENDATION BLURB" LOGIC ---
 
-    // --- UPDATED: POPULATE ADDITIONAL DETAILS (Handles JSON Rankings) ---
     if (modalAdditionalDetails) {
-        modalAdditionalDetails.innerHTML = ''; // Clear previous details
+        modalAdditionalDetails.innerHTML = '';
         const fragment = document.createDocumentFragment();
         let hasRankings = false;
         const rankingsHtmlParts = [];
 
-        // 1. Process standard details
         detailSpecs.forEach(spec => {
             const value = record.fields[spec.fieldName];
             if (value) {
@@ -357,7 +337,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         });
 
-        // 2. Process Rankings from JSON field
         const rankingsJsonString = record.fields['Rankings'];
         if (rankingsJsonString) {
             try {
@@ -382,7 +361,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         }
 
-        // 3. Append rankings container
         if (hasRankings) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
@@ -394,13 +372,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
         modalAdditionalDetails.appendChild(fragment);
     }
-    // --- END UPDATED DETAILS POPULATION ---
 
-    // --- THIS BLOCK IS MODIFIED for custom items ---
-    // Price calculation
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    // Custom items can't be groupings
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && rawOptions.some(opt => allRecordNames.has(opt.name)); 
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
@@ -412,14 +386,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
         let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
-        // Add (Est.) for custom items
         if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;
     }
 
-    // Image gallery
     let currentPhotoIndex = startPhotoIndex;
     modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
     modalThumbnailStrip.innerHTML = '';
@@ -437,20 +409,17 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalThumbnailStrip.appendChild(thumb);
     });
 
-    // Breadcrumbs
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
         modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\\\"parent-link\\\" data-parent-name=\\\"${name}\\\" title=\\\"Go to ${name}\\\">${name}</a>`).join(' > ');
     }
 
-    // Heart icon
     const heartBtnContainer = document.createElement('div');
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
 
-    // Options
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -497,13 +466,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // Quantity / Notes
+    // --- THIS IS THE FIX for Bug 1 ---
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         modalQuantitySelector.innerHTML = `<div class=\\\"quantity-selector\\\" data-record-id=\\\"${record.id}\\\"><button class=\\\"quantity-btn minus\\\" aria-label=\\\"Decrease quantity\\\">-</button><input type=\\\"number\\\" class=\\\"quantity-input\\\" value=\\\"${itemState.quantity}\\\" min=\\\"${headcountMin}\\\"><button class=\\\"quantity-btn plus\\\" aria-label=\\\"Increase quantity\\\">+</button></div>`;
+        
+        // The listeners are now MOVED INSIDE this block
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -514,12 +485,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
+    // --- END THE FIX ---
 
-    // Calendar
     modalCalendarContainer.innerHTML = '';
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
-    if (iCalUrl) { // This will be false for all custom/dummy items
+    if (iCalUrl) {
         modalCalendarContainer.style.display = 'block';
         log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
 
@@ -572,7 +543,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalCalendarContainer.style.display = 'none';
         log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
     }
-    // --- END MODIFICATION BLOCK ---
 
     ui.updateCardIcon(record.id);
 
@@ -604,13 +574,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }, 0);
 }
-// --- END MODIFIED FUNCTION ---
-
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = null; // Remove the listener
+    closeBtn.onclick = null;
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
     if (currentItemChatRecordId) {
