@@ -275,8 +275,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
     const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
 
-    // This log was misplaced in the file you uploaded, I'm moving it to `hideDetailModal`
-    // console.log('[hideDetailModal] Called.'); 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
     modalOverlay.addEventListener('click', handleOverlayClick);
@@ -301,10 +299,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         imageUrls = fetchedUrls;
     }
     if (imageUrls.length === 0) {
-        // --- THIS IS THE FIX for the `ui.getPlaceholderImage` error ---
-        // We call ui.getPlaceholderImage directly, which is imported at the top
         imageUrls = [ui.getPlaceholderImage([])];
-        // --- END THE FIX ---
     }
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
@@ -348,7 +343,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                         const value = rankingsObject[label];
                         if (typeof value === 'number' && value > 0) {
                             hasRankings = true;
-                            // Use Math.round() for star ratings
                             const stars = '★'.repeat(Math.round(value)) + '☆'.repeat(Math.max(0, 5 - Math.round(value)));
                             rankingsHtmlParts.push(`
                                 <div class=\"ranking-item\">\
@@ -378,7 +372,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+    // --- THIS IS THE CORRECTED LOGIC ---
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
+    // --- END CORRECTION ---
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class=\\\"pricing-type\\\"> / ${pricingType.toLowerCase()}</span>` : '';
@@ -469,7 +465,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- THIS IS THE FIX for the `addEventListener` crash ---
+    // --- THIS IS THE FIX ---
+    // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
@@ -477,7 +474,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         modalQuantitySelector.innerHTML = `<div class=\\\"quantity-selector\\\" data-record-id=\\\"${record.id}\\\"><button class=\\\"quantity-btn minus\\\" aria-label=\\\"Decrease quantity\\\">-</button><input type=\\\"number\\\" class=\\\"quantity-input\\\" value=\\\"${itemState.quantity}\\\" min=\\\"${headcountMin}\\\"><button class=\\\"quantity-btn plus\\\" aria-label=\\\"Increase quantity\\\">+</button></div>`;
         
-        // The listeners are now MOVED INSIDE this `if` block
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -579,7 +575,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 }
 
 export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.'); // Moved this log here
+    console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = null;
     modalOverlay.removeEventListener('click', handleOverlayClick);
