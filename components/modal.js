@@ -9,7 +9,7 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS } from '../a
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- 1. ADD THESE THREE NEW HELPER FUNCTIONS ---
+// --- 1. HELPER FUNCTIONS ---
 
 /**
  * Scans goal text for matching ranking keywords.
@@ -110,7 +110,7 @@ function generateRecommendationBlurb(record) {
     }
 
     // 2. Search Match Logic
-    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || record.fields.Description.toLowerCase().includes(searchTerm))) {
+    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
         // Only add this if we don't *also* have a goal match (to avoid redundancy)
         if (matchedGoalRanks.length === 0) {
             blurbs.push(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
@@ -372,9 +372,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    // --- THIS IS THE CORRECTED LOGIC ---
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
-    // --- END CORRECTION ---
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class=\\\"pricing-type\\\"> / ${pricingType.toLowerCase()}</span>` : '';
@@ -477,8 +475,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
-        plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-        minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+        // This check prevents the crash
+        if (plusBtn && minusBtn && input) {
+            plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+            minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+        }
     } else {
         modalActionsContainer.style.display = 'none';
         modalNotesContainer.style.display = 'none';
@@ -577,7 +578,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
     const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = null;
+    // Add null check for safety
+    if (closeBtn) {
+        closeBtn.onclick = null;
+    }
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
     if (currentItemChatRecordId) {
@@ -640,7 +644,7 @@ export async function showCheckoutModal(shopSettings) {
 
         const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
 
-        const itemTotal = price * itemInfo.quantity;
+        const itemTotal = price * (itemInfo.quantity || 1); // Use itemInfo.quantity
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
         
@@ -651,7 +655,7 @@ export async function showCheckoutModal(shopSettings) {
         
         listItem.innerHTML = `
             <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity})</span>
+                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
                 ${noteHtml}
             </div>
             <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
