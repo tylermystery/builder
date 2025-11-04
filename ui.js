@@ -40,6 +40,17 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
 export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
+    // --- ADD THIS ---
+    // Initialize tooltips for new partner badges
+    const partnerBadges = container.querySelectorAll('.partner-badge');
+    if (partnerBadges.length > 0 && typeof tippy === 'function') {
+        tippy(partnerBadges, {
+            content: "This is a partner activity. We handle all booking and logistics to ensure it's a seamless part of your event.",
+            placement: 'top',
+            theme: 'light',
+        });
+    }
+    // --- END ADD ---
 }
 
 export function toggleLoading(show) {
