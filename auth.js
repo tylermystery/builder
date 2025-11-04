@@ -7,12 +7,20 @@ console.log('[auth.js] 0. File execution started.');
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js'; // Import api module
-
-// --- FIX: Removed unused imports for background engine and effects ---
-// (These are handled by main.js and backgroundEngine.js now)
+import * as backgroundEngine from './components/backgroundEngine.js';
 
 // --- DEBUG ---
-console.log('[auth.js] 1. Imports complete.');
+console.log('[auth.js] 1. Importing effect plugins...');
+// --- FIX: Removed imports for kaleidoscope, wind, water, psychedelic, and vortex ---
+console.log('[auth.js] 1a. Importing fractalEffect.js...');
+// --- DEBUG ---
+import fractalEffect from './components/effects/fractal.js';
+// --- DEBUG ---
+console.log('[auth.js] 1b. Importing fluidEffect.js...');
+// --- DEBUG ---
+import fluidEffect from './components/effects/fluid.js';
+// --- DEBUG ---
+console.log('[auth.js] 2. All effect plugins imported.');
 // --- DEBUG ---
 
 
@@ -33,10 +41,16 @@ const profilePhoneInput = document.getElementById('profile-phone');
 const profileNotificationsSelect = document.getElementById('profile-notifications');
 const prefsMessage = document.getElementById('prefs-message');
 
-// --- FIX: Removed unused 'effects' array ---
+// --- List of available background effects ---
+// --- FIX: This array now only contains the effects that actually exist ---
+const effects = [
+    { name: "Fluid Energy", plugin: fluidEffect },
+    { name: "Fractal (Simple)", plugin: fractalEffect },
+];
+// --- END FIX ---
 
 // --- DEBUG ---
-console.log(`[auth.js] 3. DOM element constants created.`);
+console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
 // --- DEBUG ---
 
 // Refactored function to handle a successful login from any method
@@ -118,7 +132,9 @@ export function showUserModal() {
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
     
-    // --- FIX: Removed element getters for non-existent "Fun Tweaks" section ---
+    // --- NEW: Get Effect UI Elements ---
+    const effectSelect = document.getElementById('effect-select');
+    const effectControlsContainer = document.getElementById('effect-controls-container');
 
     if (user.isAuthenticated) {
         profileNameEl.textContent = user.name;
@@ -141,8 +157,58 @@ export function showUserModal() {
         ownerDashboardLink.style.display = 'none';
     }
     
-    // --- FIX: Removed all logic for populating background effect tweaks ---
-    // (This was the source of the 'effectSelect exists: false' logs)
+    // --- MOVED: Populate Background Effects ---
+    // --- DEBUG ---
+    console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
+    console.log(`[auth.js] Checking IF condition...`);
+    console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
+    console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
+    if (effectSelect) {
+        // --- FIX: Use childElementCount to correctly check if empty ---
+        console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
+    }
+    // --- DEBUG ---
+
+    // --- FIX: Check childElementCount (handles whitespace) instead of innerHTML ---
+    if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition PASSED. Populating dropdown.');
+        // --- DEBUG ---
+        log('Auth', 'Populating background effect tweaks for the first time.');
+        effects.forEach((effect, index) => {
+            // --- DEBUG ---
+            console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
+            // --- DEBUG ---
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = effect.name;
+            effectSelect.appendChild(option);
+        });
+        
+        // Add listener to the dropdown
+        effectSelect.addEventListener('change', (e) => {
+            const selectedEffect = effects[e.target.value];
+            if (selectedEffect) {
+                log('Auth', `User selected effect: ${selectedEffect.name}`);
+                backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
+            }
+        });
+        
+        // Load the default effect (the first one in the 'effects' array)
+        // --- DEBUG ---
+        if (effects.length > 0 && effects[0].plugin) {
+            console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
+            backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
+        } else {
+            console.log('[auth.js] No effects found in array to load as default.');
+        }
+        // --- DEBUG ---
+    } else {
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
+        // --- DEBUG ---
+    }
+    // --- END: Moved Background Effects Logic ---
 
     userModalOverlay.classList.add('active');
     userModalOverlay.style.display = 'flex';
@@ -313,8 +379,8 @@ export function setupAuthEventListeners() {
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
             // --- THIS IS THE FIX ---
-            // This is the correct method to trigger a specific provider login.
-            netlifyIdentity.authenticate({ provider: 'google' });
+            // This triggers the Google login directly, skipping the Netlify modal.
+            netlifyIdentity.loginWith('google');
             // --- END FIX ---
         });
     }
