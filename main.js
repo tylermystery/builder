@@ -352,7 +352,8 @@ async function initialize() {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
                 if (payload.exp * 1000 > Date.now()) { // Check expiration
-                    setState({\n                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }\n                    });
+                    // --- FIX: Removed \n characters ---
+                    setState({ session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } } });
                     initialUserId = payload.userId;
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
@@ -373,7 +374,9 @@ async function initialize() {
                 const response = await fetch('/api/auth-verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify({ token: loginToken })\n                });
+                     // --- FIX: Removed \n characters ---
+                     body: JSON.stringify({ token: loginToken })
+                });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Token verification failed');
 
@@ -393,7 +396,7 @@ async function initialize() {
                  handleSignOut(); // Use sign out to reset state cleanly
             }
         
-        // --- THIS IS THE CORRECTED BLOCK ---
+        // --- THIS IS THE CORRECTED BLOCK --
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
@@ -409,7 +412,16 @@ async function initialize() {
                 }
                 const userData = await response.json();
                 if (userData.likedItemIds) {
-                    setState({\n                        session: {\n                            ...state.session,\n                            user: {\n                                ...state.session.user,\n                                likedItemIds: new Set(userData.likedItemIds)\n                            }\n                        }\n                    });
+                    // --- FIX: Removed \n characters ---
+                    setState({
+                        session: {
+                            ...state.session,
+                            user: {
+                                ...state.session.user,
+                                likedItemIds: new Set(userData.likedItemIds)
+                            }
+                        }
+                    });
                     log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
                     // Now that likes are loaded, update all visible card icons
                     document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
