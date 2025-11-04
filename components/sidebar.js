@@ -43,19 +43,19 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     return itemCard;
 }
 
-// In: components/sidebar.js
-// Action: REPLACE the `createLockedInItemElement` function
 
+// --- THIS FUNCTION IS CORRECTED ---
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     let isCustomItem = record.id.startsWith('custom-');
     
-    // --- THIS IS THE FIX ---
+    // --- THIS IS THE FIX for the 404 error ---
     // Default to your main placeholder, which we know exists
     let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
     // --- END THE FIX ---
 
     if (!isCustomItem) {
+        // --- EXISTING LOGIC for real items ---
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
             imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
@@ -68,7 +68,7 @@ async function createLockedInItemElement(record, itemInfo) {
     itemElement.dataset.recordId = record.id;
     
     let optionName = '';
-    if (!isCustomItem) {
+    if (!isCustomItem) { // Custom items don't have options
         const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
             optionName = options[itemInfo.selectedOptionIndex].name;
@@ -103,8 +103,10 @@ async function createLockedInItemElement(record, itemInfo) {
     `;
     return itemElement;
 }
+// --- END CORRECTED FUNCTION ---
 
-// --- 2. THIS FUNCTION IS REPLACED ---
+
+// --- THIS FUNCTION IS CORRECTED ---
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -118,10 +120,7 @@ export async function updateEventPlanSection() {
     }
 
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        // --- THIS IS THE KEY CHANGE ---
-        // Find the record in state.records.all (where custom items now live)
         const record = state.records.all.find(r => r.id === recordId);
-        // --- END KEY CHANGE ---
 
         if (record) {
             const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
@@ -132,28 +131,27 @@ export async function updateEventPlanSection() {
     }
     ui.observeLazyImages(container);
 }
-// --- END REPLACED FUNCTION ---
+// --- END CORRECTED FUNCTION ---
 
 
-export async function updateIdeasCarousel() { // Renamed from updateFavoritesCarousel
-    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`); // Updated log message
-    const ideasSection = document.getElementById('favorites-section'); // Consider renaming ID to 'ideas-section'
-    const ideasCarousel = document.getElementById('favorites-carousel'); // Consider renaming ID to 'ideas-carousel'
+export async function updateIdeasCarousel() { 
+    log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`);
+    const ideasSection = document.getElementById('favorites-section');
+    const ideasCarousel = document.getElementById('favorites-carousel');
     if (!ideasSection || !ideasCarousel) return;
 
     if (state.cart.items.size === 0) {
-        ideasSection.style.display = 'none'; // Hide if empty
+        ideasSection.style.display = 'none';
         return;
     }
-    ideasSection.style.display = 'block'; // Show if not empty
-    ideasCarousel.innerHTML = ''; // Clear existing items
-    const imageCache = new Map(); // Use a local cache for this render pass
+    ideasSection.style.display = 'block';
+    ideasCarousel.innerHTML = '';
+    const imageCache = new Map();
 
     for (const [recordId, itemInfo] of state.cart.items.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (record) {
             try {
-                // Assuming createFavoriteCardElement is the correct function for idea cards
                 const card = await createFavoriteCardElement(record, itemInfo, imageCache);
                 if (card) ideasCarousel.appendChild(card);
             } catch (error) {
@@ -161,7 +159,7 @@ export async function updateIdeasCarousel() { // Renamed from updateFavoritesCar
             }
         }
     }
-    // Ensure lazy loading is applied after adding new cards
+    
     if (typeof ui !== 'undefined' && ui.observeLazyImages) {
          ui.observeLazyImages(ideasCarousel);
     } else {
@@ -179,9 +177,7 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
-// In: components/sidebar.js
-// Action: REPLACE the entire `updateTotalCost` function
-
+// --- THIS FUNCTION IS CORRECTED ---
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -199,7 +195,6 @@ export function updateTotalCost() {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
         
-        // This logic is now correct and handles custom items
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
         
@@ -266,6 +261,7 @@ export function updateTotalCost() {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
 }
+// --- END CORRECTED FUNCTION ---
 
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
