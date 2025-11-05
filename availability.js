@@ -258,29 +258,35 @@ const GOAL_PROFILE_MAP = {
     "Extras": { "Pillars.Extras": 1.0 }
 };
 
+// In: availability.js
+// Action: REPLACE the entire buildGoalBucket function
+
 /**
- * [v2.1] Builds the user's complete "Goal Bucket" from all sources.
+ * [v2.2] Builds the user's complete "Goal Bucket" from all sources.
+ * @param {boolean} includeGoals - Whether to include goals from the Goals/Notes input.
  * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "escape room"])
  */
-export function buildGoalBucket() {
+export function buildGoalBucket(includeGoals = false) {
     const goals = new Set();
 
-    // 1. Implicit Goals (Missing Pillars)
+    // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED FOR RECOMMENDED SORT
     const missingCategories = calculateMissingCategories(); // e.g., ["Venue", "Food/Drink"]
     missingCategories.forEach(cat => goals.add(cat));
 
-    // 2. Explicit Goals (From "Goals/Notes" input)
-    const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
-    if (goalText.length > 2) {
-        // Find all keywords from our map that exist in the text
-        Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
-            if (goalText.includes(keyword)) {
-                goals.add(keyword);
-            }
-        });
+    // 2. Explicit Goals (From "Goals/Notes" input) - ONLY IF FLAG IS TRUE
+    if (includeGoals) {
+        const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
+        if (goalText.length > 2) {
+            // Find all keywords from our map that exist in the text
+            Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
+                if (goalText.includes(keyword)) {
+                    goals.add(keyword);
+                }
+            });
+        }
     }
 
-    // 3. Search Goal (From "Search" input)
+    // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED FOR RECOMMENDED SORT
     const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
     if (searchText.length > 2) {
         goals.add(searchText);
@@ -288,5 +294,4 @@ export function buildGoalBucket() {
 
     return Array.from(goals);
 }
-
 // --- END V2.1: NEW FUNCTIONS ---
