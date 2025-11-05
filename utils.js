@@ -131,7 +131,7 @@ function getDescendantBookableItems(record, allRecords) {
  * @returns {object | null} An object {min, max} or null.
  */
 export function getGroupPriceRange(record) {
-    if (record.fields['Item Type'] !== 'Grouping') return null;
+    if (!record || !record.fields || record.fields['Item Type'] !== 'Grouping') return null;
     
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
@@ -167,7 +167,9 @@ export function getGroupPriceRange(record) {
  * @returns {number} The calculated price.
  */
 export function getRecordPrice(record, optionIndex = null) {
-    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    if (!record || !record.fields) return 0; // Safety check
+    
+    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
