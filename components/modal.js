@@ -5,9 +5,9 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket } from '../availability.js'; // <-- CORRECTED IMPORT
+import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket } from '../availability.js'; // <-- CORRECT IMPORT
 import { log } from '../utils/debug.js';
-import { initializeItemChat } from '../chat.js'; // <-- CORRECTED IMPORT
+import { initializeItemChat } from '../chat.js';
 
 // --- START: NEW RECOMMENDATION ENGINE V2.1 ---
 
@@ -67,7 +67,9 @@ function generateRecommendationBlurb(record) {
 
     let profile;
     try {
-        profile = JSON.parse(record.fields.Rankings || '{}');
+        // --- THIS IS THE CHANGE ---
+        profile = JSON.parse(record.fields.AI_Profile || '{}');
+        // --- END CHANGE ---
         if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
     } catch (e) {
         return null; // Don't show a blurb for un-profiled items
@@ -311,7 +313,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         });
 
-        const rankingsJsonString = record.fields['Rankings'];
+        // --- THIS IS THE CHANGE ---
+        const rankingsJsonString = record.fields['AI_Profile'] || record.fields['Rankings'];
+        // --- END CHANGE ---
+        
         if (rankingsJsonString) {
             try {
                 // --- V2.1: Check for new profile structure ---
