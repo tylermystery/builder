@@ -261,14 +261,14 @@ const GOAL_PROFILE_MAP = {
 // Action: REPLACE the entire buildGoalBucket function
 
 /**
- * [v2.8] Builds the user's complete "Goal Bucket" from all sources.
- * Determines if goals should be included based on the presence of text in the goals field.
- * @param {string} sortBy - The current sort mode (e.g., 'recommended').
+ * [V3.0] Builds the user's complete "Goal Bucket".
+ * Includes Pillars, Goals, and Search Term, but only if 'recommended' sort is active.
+ * @param {string} sortBy - The current sort mode.
  * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "escape room"])
  */
 export function buildGoalBucket(sortBy) {
     const goals = new Set();
-    const isRecommendedSort = sortBy.startsWith('recommended');
+    const isRecommendedSort = sortBy === 'recommended';
     const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
 
     if (isRecommendedSort) {
@@ -276,7 +276,7 @@ export function buildGoalBucket(sortBy) {
         const missingCategories = calculateMissingCategories();
         missingCategories.forEach(cat => goals.add(cat));
 
-        // 2. Explicit Goals (From "Goals/Notes" input) - Only if text is present
+        // 2. Explicit Goals (From "Goals/Notes" input) - ALWAYS INCLUDED in Recommended Sort
         if (goalText.length > 2) {
             Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
                 if (goalText.includes(keyword)) {
