@@ -481,6 +481,20 @@ export function updateCatalogHeader() {
         activeFiltersHtml.push(createFilterChip('Budget: ' + budgetEl.options[budgetEl.selectedIndex].text, 'budget-filter', budgetEl.value));
     }
 
+    // F. Date Range
+    const mainDatePicker = document.getElementById('date-filter')?._flatpickr;
+    if (mainDatePicker && mainDatePicker.selectedDates.length > 0) {
+        let text;
+        if (mainDatePicker.selectedDates.length === 1) {
+            text = 'Date: ' + mainDatePicker.selectedDates[0].toLocaleDateString();
+        } else {
+            const start = mainDatePicker.selectedDates[0].toLocaleDateString();
+            const end = mainDatePicker.selectedDates[1].toLocaleDateString();
+            text = `Date: ${start} – ${end}`;
+        }
+        // Use 'date-filter' as the type, no value needed for clearing
+        activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
+    }
     // --- 3. Collect Active Category/Subcategory Filters ---
     
     const path = [];
@@ -585,6 +599,16 @@ function handleFilterChipClear(e) {
         case 'budget-filter':
             document.getElementById(type).value = 'any';
             break;
+        // --- VVV ADD THIS CASE VVV ---
+        case 'date-filter':
+            const datePicker = document.getElementById('date-filter')?._flatpickr;
+            if (datePicker) {
+                 datePicker.clear();
+                 // Manually remove date from state to ensure consistency
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            break;
+        // --- ^^^ END NEW CASE ^^^ ---
         case 'subcategory-filter':
             // Find and unclick the corresponding button (which updates the URL/filters)
             const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
