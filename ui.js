@@ -10,7 +10,9 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { initializeItemChat } from './chat.js';
 
 
-// Re-export functions from component modules
+// --- VVV UPDATED EXPORT LIST VVV ---
+// Re-export functions from component modules.
+// We explicitly DO NOT export handleFilterChipClear here to avoid the duplicate.
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
@@ -18,9 +20,9 @@ export * from '../utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
-// --- VVV EXPORT ALL UNIQUE FUNCTIONS HERE VVV ---
-export { handleFilterChipClear };
-// --- ^^^ END EXPORT ^^^
+
+// We will only export handleFilterChipClear at the end of its function definition.
+// --- ^^^ END UPDATED EXPORT LIST ^^^
 
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
