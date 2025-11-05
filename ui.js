@@ -18,7 +18,7 @@ export * from '../utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
-// --- VVV ADD THIS EXPORT VVV ---
+// --- VVV EXPORT ALL UNIQUE FUNCTIONS HERE VVV ---
 export { handleFilterChipClear };
 // --- ^^^ END EXPORT ^^^
 
