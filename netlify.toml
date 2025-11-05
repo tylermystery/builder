@@ -116,8 +116,10 @@
   to = "/.netlify/functions/get-store-data-by-owner-id"
   status = 200
 
-# In: netlify.toml
-# Action: Add this new redirect block
+[[redirects]]
+  from = "/api/get-items-for-profiling"
+  to = "/.netlify/functions/airtable.js"
+  status = 200
 
 [[redirects]]
   from = "/api/get-items-for-profiling"
