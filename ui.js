@@ -420,8 +420,7 @@ export async function updateMobileBarAvailability() {
 // END OF FIX
 
 // In: ui.js
-// Action: REPLACE the entire updateCatalogHeader function
-// (The previous version was V2.4, this is the final V3.2 logic)
+// Action: REPLACE the entire updateCatalogHeader function (V3.4)
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -449,14 +448,9 @@ export function updateCatalogHeader() {
         return;
     }
 
-    // --- 2. Collect Active Filters (Non-Category) ---
+    // --- 2. Collect Active Filters (Non-Category/Non-Search) ---
+    // The main search/category filters are handled separately below to avoid self-clearing loops.
 
-    // A. Name Search
-    if (isSearchActive) {
-        clearSearchBtn.style.display = 'block'; 
-        activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
-    }
-    
     // B. Status
     const statusEl = document.getElementById('status-filter');
     if (statusEl && statusEl.value !== 'Available') {
@@ -500,7 +494,7 @@ export function updateCatalogHeader() {
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
     }
     
-    // --- 3. Collect Active Category/Subcategory Filters ---
+    // --- 3. Collect Category & Subcategory FILTERS (Breadcrumbs/Title) ---
     
     const path = [];
     let currentTitle = '';
@@ -508,37 +502,44 @@ export function updateCatalogHeader() {
     path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
+    
+    // Check if a main category button is active AND it is NOT the 'All' button.
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
-        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
+        const categoryFilter = activeCategoryButton.dataset.filter;
+        
+        // --- VVV CRITICAL FIX: Add Main Category as a Clearable Chip VVV ---
+        activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
+        // --- ^^^ END CRITICAL FIX ^^^
+        
+        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     activeSubcategoryNodes.forEach(btn => {
         const subcatName = btn.textContent;
+        // Subcategories are treated as multi-select chips
         activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', btn.dataset.filter));
         path.push(`<span>${subcatName}</span>`);
         currentTitle = subcatName;
     });
 
-    // --- VVV 4. Goals Chip (V3.2 BEHAVIOR) VVV ---
+    // --- 4. Goals Chip (V3.2 BEHAVIOR) ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        // Only show goals if they are non-empty AND recommended sort is active
-        const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
+        // ... (Goal logic remains the same) ...
+        const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2);
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
-                 // Flag goals as goal-filter type
                 activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
             }
         });
     }
-    // --- ^^^ END V3.2 BEHAVIOR ^^^
     
     // 5. Render and Bind
 
     // A. Render Active Filter Chips
-    // --- VVV V3.2 FIX: Show chips if ANY filter is active VVV ---
+    // V3.2: Show chips if ANY filter is active
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
@@ -550,10 +551,9 @@ export function updateCatalogHeader() {
             button.addEventListener('click', handleFilterChipClear);
         });
     }
-    // --- ^^^ END V3.2 FIX ^^^
 
 
-    // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
+    // B. Render Breadcrumbs/Title (Title and Breadcrumbs logic is unchanged)
     let sortCue = '';
 
     if (isRecommendedSort) {
@@ -561,16 +561,13 @@ export function updateCatalogHeader() {
     }
 
     if (isSearchActive) {
-        // If search is active, the title prioritizes the search term and its context
         titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
         titleEl.style.display = 'block';
     } else if (path.length > 1) {
-        // If only categories are active, show the breadcrumb navigation path
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
     } else if (isRecommendedSort) {
-        // If only recommended sort is active (no search, no category), show the sort info
         titleEl.textContent = `Sorted by Recommended` + sortCue;
         titleEl.style.display = 'block';
     }
@@ -589,7 +586,17 @@ export function handleFilterChipClear(e) {
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
+    // --- VVV V3.4 FIX: Handle clearing Category Filter VVV ---
+    if (type === 'category-filter') {
+        // Simulate clicking the 'All' button to clear the category filter
+        const allButton = document.querySelector('#category-filters .category-filter-btn[data-filter=\"all\"]');
+        if (allButton) allButton.click();
+        return;
+    }
+    // --- ^^^ END V3.4 FIX ^^^
+
+
+    // --- V2.7 GOAL CHIP LOGIC ---
     if (type === 'goal-filter') {
         // Action: Clearing a goal chip removes the word from the goals input text
         const goalsInput = document.getElementById('header-goals');
@@ -609,10 +616,10 @@ export function handleFilterChipClear(e) {
             return; // Exit as goal logic is complete
         }
     }
-    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
+    // --- END V2.7 GOAL CHIP LOGIC ---
 
 
-    // 1. Clear the filter state based on type (for non-goal chips)
+    // 1. Clear the filter state based on type (for non-category/non-goal chips)
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
