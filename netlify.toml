@@ -106,3 +106,9 @@
   from = "/api/toggle-like"
   to = "/.netlify/functions/toggle-like"
   status = 200
+
+# --- ADD THIS NEW REDIRECT ---
+[[redirects]]
+  from = "/api/profile-item"
+  to = "/.netlify/functions/profile-item"
+  status = 200
