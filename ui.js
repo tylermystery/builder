@@ -1,24 +1,27 @@
-// In: ui.js
-// Action: REPLACE THE ENTIRE FILE with this corrected content.
-
+// REPLACE THE ENTIRE CONTENTS of ui.js
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
-import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability } from './availability.js';
-import * as api from './api.js';
+import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
+import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
+
 
 // Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
-export * from './utils.js';
+export * from '../utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
+// --- VVV ADD THIS EXPORT VVV ---
+export { handleFilterChipClear };
+// --- ^^^ END EXPORT ^^^
+
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
@@ -148,12 +151,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for="header-goals"]');
+    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
+    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -412,8 +415,11 @@ export async function updateMobileBarAvailability() {
         }
     }
 }
+// END OF FIX
+
 // In: ui.js
 // Action: REPLACE the entire updateCatalogHeader function
+// (The previous version was V2.4, this is the final V3.2 logic)
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -512,7 +518,7 @@ export function updateCatalogHeader() {
         currentTitle = subcatName;
     });
 
-    // --- VVV 4. Goals Chip (NEW V2.8 BEHAVIOR) VVV ---
+    // --- VVV 4. Goals Chip (V3.2 BEHAVIOR) VVV ---
     const goalsInput = document.getElementById('header-goals')?.value?.trim();
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
         // Only show goals if they are non-empty AND recommended sort is active
@@ -524,9 +530,9 @@ export function updateCatalogHeader() {
             }
         });
     }
-    // --- ^^^ END V2.8 BEHAVIOR ^^^
+    // --- ^^^ END V3.2 BEHAVIOR ^^^
     
-// 5. Render and Bind
+    // 5. Render and Bind
 
     // A. Render Active Filter Chips
     // --- VVV V3.2 FIX: Show chips if ANY filter is active VVV ---
@@ -542,7 +548,8 @@ export function updateCatalogHeader() {
         });
     }
     // --- ^^^ END V3.2 FIX ^^^
-    
+
+
     // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
     let sortCue = '';
     const isRecommendedSort = sortBy === 'recommended';
@@ -577,11 +584,10 @@ export function handleFilterChipClear(e) {
 
     const type = chip.dataset.filterType;
     const value = chip.dataset.filterValue;
-    const sortByEl = document.getElementById('sort-by');
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.8 GOAL CHIP LOGIC VVV ---
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
     if (type === 'goal-filter') {
         // Action: Clearing a goal chip removes the word from the goals input text
         const goalsInput = document.getElementById('header-goals');
@@ -601,7 +607,7 @@ export function handleFilterChipClear(e) {
             return; // Exit as goal logic is complete
         }
     }
-    // --- ^^^ END V2.8 GOAL CHIP LOGIC ^^^
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
 
 
     // 1. Clear the filter state based on type (for non-goal chips)
@@ -651,7 +657,6 @@ function createFilterChip(text, type, value) {
             </div>`;
 }
 
-let promptTimeout;
 export function showLoginPromptForLikes() {
     const profileButton = document.getElementById('user-profile-button');
     if (!profileButton) return;
@@ -693,4 +698,3 @@ export function showLoginPromptForLikes() {
         promptElement.style.opacity = '0';
     }, 4000); // Show for 4 seconds
 }
-// --- END login prompt function ---
