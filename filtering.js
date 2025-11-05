@@ -454,8 +454,8 @@ export function applyFiltersAndSort(imageCache) {
     const sortBy = document.getElementById('sort-by').value;
 
     // --- VVV NEW: Build the Goal Bucket based on SortBy selection VVV ---
-    const includeGoals = (sortBy === 'recommended-goals');
-    const goalBucket = buildGoalBucket(includeGoals);
+    // Pass the simple 'recommended' value
+    const goalBucket = buildGoalBucket(sortBy);
     // --- ^^^ END NEW ^^^
 
     let baseRecordsToFilter = state.records.all.filter(record =>
