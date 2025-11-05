@@ -291,7 +291,9 @@ export function displayReservedStatus() {
     }
 }
 
-// --- 4. ADD THIS ENTIRE NEW FUNCTION AT THE END OF THE FILE ---
+// In: components/sidebar.js
+// Action: REPLACE the entire `updateEventHealthScore` function
+
 /**
  * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
  */
@@ -299,12 +301,12 @@ export function updateEventHealthScore() {
     const container = document.getElementById('event-health-score');
     if (!container) return;
     
-    // Don't show if the plan is empty
-    if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Event Health.</p>`;
-        return;
-    }
-
+    // --- THIS IS THE FIX for Bug #2 ---
+    // We *always* run the calculation now.
+    // const suggestions = calculateMissingCategories();
+    // if (state.cart.lockedItems.size === 0) { ... } // This check is REMOVED.
+    // --- END FIX ---
+    
     const suggestions = calculateMissingCategories();
     const score = 4 - suggestions.length; // Based on 4 pillars
     let html = '';
@@ -318,9 +320,12 @@ export function updateEventHealthScore() {
     } else if (score === 1) {
         scoreText = '🔴 Just Beginning!';
         scoreColor = '#dc3545';
+    } else if (score === 0) { // New "Empty" state
+        scoreText = 'Start Your Plan!';
+        scoreColor = '#6c757d'; // Neutral gray
     } else if (score === 2) {
         scoreText = '🟡 Growing!';
-        scoreColor = '#ffc107'; // A yellow color
+        scoreColor = '#ffc107';
     }
 
 
@@ -335,10 +340,14 @@ export function updateEventHealthScore() {
         // Create clickable "suggestion" buttons
         html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
         suggestions.forEach(cat => {
-            // We'll make this button trigger the category filter
-            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${cat.toLowerCase().split('/')[0]}">
+            // --- THIS IS THE FIX for Bug #1 ---
+            // We now use the exact category name, in lowercase, as the filter tag
+            // e.g., "Activities" -> "activities", "Food/Drink" -> "food/drink"
+            const filterTag = cat.toLowerCase();
+            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${filterTag}">
                 + Add ${cat}
             </button>`;
+            // --- END FIX ---
         });
         html += `</div>`;
     } else {
