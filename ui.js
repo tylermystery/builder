@@ -416,9 +416,6 @@ export async function updateMobileBarAvailability() {
 // In: ui.js
 // Action: REPLACE the entire updateCatalogHeader function
 
-// In: ui.js
-// Action: REPLACE the entire updateCatalogHeader function
-
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const titleEl = document.getElementById('catalog-title');
@@ -434,11 +431,12 @@ export function updateCatalogHeader() {
     const activeFiltersHtml = [];
     const searchTerm = nameFilterEl.value.trim();
     const isSearchActive = searchTerm.length > 0;
-    const sortBy = document.getElementById('sort-by')?.value;
+    const sortByEl = document.getElementById('sort-by');
+    const sortBy = sortByEl?.value;
+    const isRecommendedSort = sortBy === 'recommended';
 
     // --- 1. Handle Special Views (My Plan/My Likes) ---
     if (document.getElementById('plan-filter-btn')?.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-        // Leave the default title logic in filtering.js to handle this
         return;
     }
 
@@ -446,9 +444,7 @@ export function updateCatalogHeader() {
 
     // A. Name Search
     if (isSearchActive) {
-        // Activate the search clear button
         clearSearchBtn.style.display = 'block'; 
-        // Add search term as a clearable chip
         activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
     }
     
@@ -492,60 +488,49 @@ export function updateCatalogHeader() {
             const end = mainDatePicker.selectedDates[1].toLocaleDateString();
             text = `Date: ${start} – ${end}`;
         }
-        // Use 'date-filter' as the type, no value needed for clearing
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
     }
-    // G. Goals/Recommended Chips (Only when Sort By: Recommended is active)
-    if (sortBy === 'recommended') {
-        const goalText = document.getElementById('header-goals')?.value?.trim();
-        const searchInput = document.getElementById('name-filter')?.value?.trim();
-
-        // Check for *all* abstract goals from the input text
-        if (goalText && goalText.length > 0) {
-            // Use a regex to grab words that look like goals
-            const abstractGoals = goalText.toLowerCase().match(/(\w+)/g) || [];
-
-            abstractGoals.forEach(goal => {
-                // Only add if it's a non-search word and not already captured
-                if (goal.length > 2 && goal !== searchInput.toLowerCase()) {
-                    activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
-                }
-            });
-        }
-    }
+    
     // --- 3. Collect Active Category/Subcategory Filters ---
     
     const path = [];
     let currentTitle = '';
     
-    // Always start with "All Categories" as the base path, but not as a filter chip
     path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
-    // Category (Only allow one active Category at a time based on existing events.js logic)
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
-        // The category itself becomes a breadcrumb
         path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
-    // Subcategories (Multi-select)
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     activeSubcategoryNodes.forEach(btn => {
         const subcatName = btn.textContent;
-        // Subcategories are added as clearable chips, not just a label in the breadcrumb
         activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', btn.dataset.filter));
-        // We still include them in the breadcrumb path as the title context
         path.push(`<span>${subcatName}</span>`);
         currentTitle = subcatName;
     });
+
+    // --- VVV 4. Goals Chip (NEW V2.8 BEHAVIOR) VVV ---
+    const goalsInput = document.getElementById('header-goals')?.value?.trim();
+    if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
+        // Only show goals if they are non-empty AND recommended sort is active
+        const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
+        goalWords.forEach(goal => {
+            if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
+                 // Flag goals as goal-filter type
+                activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
+            }
+        });
+    }
+    // --- ^^^ END V2.8 BEHAVIOR ^^^
     
-    // --- 4. Render and Bind ---
+    // 5. Render and Bind
 
     // A. Render Active Filter Chips
     if (activeFiltersHtml.length > 0) {
-        // Prepend a title for the filter bar
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
         chipContainer.innerHTML = '<h4>Active Filters:</h4>' + activeFiltersHtml.join('');
@@ -558,35 +543,106 @@ export function updateCatalogHeader() {
     }
 
 
-    // B. Render Breadcrumbs (Only if filter chips aren't used for navigation, or as a path)
-    if (path.length > 1 && !isSearchActive) {
-         // Show category breadcrumb only if search is NOT active, or if it's the only active filter
-        if (activeFiltersHtml.length === 0) {
-            breadcrumbsEl.innerHTML = path.join(' &gt; ');
-        }
+    // B. Render Breadcrumbs/Title
+    let sortCue = '';
+    if (isRecommendedSort) {
+        sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
+    }
+
+    if (isSearchActive) {
+        titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
+        titleEl.style.display = 'block';
+    } else if (path.length > 1) {
+        breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
-    } else if (isSearchActive) {
-        // If search is active, ensure the title reflects that (handled above in 2.A)
-        titleEl.textContent = `Search: "${searchTerm}"` + (sortBy === 'recommended' ? ` (Recommended)` : '');
+    } else if (isRecommendedSort) {
+        titleEl.textContent = `Sorted by Recommended` + sortCue;
         titleEl.style.display = 'block';
-    } else {
-        // Reset if only "All Categories" is active
-        titleEl.textContent = '';
     }
+}
+
+
+/**
+ * Handles the click event when a user clears a filter chip.
+ */
+export function handleFilterChipClear(e) {
+    const chip = e.target.closest('.filter-chip');
+    if (!chip) return;
+
+    const type = chip.dataset.filterType;
+    const value = chip.dataset.filterValue;
+    const sortByEl = document.getElementById('sort-by');
+    const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
+
+
+    // --- VVV V2.8 GOAL CHIP LOGIC VVV ---
+    if (type === 'goal-filter') {
+        // Action: Clearing a goal chip removes the word from the goals input text
+        const goalsInput = document.getElementById('header-goals');
+        if (goalsInput) {
+            const goalWords = goalsInput.value.split(/\s*,\s*|\s+/).filter(Boolean);
+            const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
+            
+            // 1. Update the input field
+            goalsInput.value = updatedGoals;
+            
+            // 2. Clear the input field's change event (this triggers save)
+            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // 3. Re-run filters
+            applyFilters();
+            
+            return; // Exit as goal logic is complete
+        }
+    }
+    // --- ^^^ END V2.8 GOAL CHIP LOGIC ^^^
+
+
+    // 1. Clear the filter state based on type (for non-goal chips)
+    switch (type) {
+        case 'name-filter':
+            document.getElementById('name-filter').value = '';
+            break;
+        case 'status-filter':
+            document.getElementById('status-filter').value = 'Available';
+            break;
+        case 'headcount-filter':
+            document.getElementById('headcount-filter').value = 'any';
+            document.getElementById('headcount-custom').value = '';
+            document.getElementById('headcount-custom').style.display = 'none';
+            break;
+        case 'location-filter':
+        case 'budget-filter':
+            document.getElementById(type).value = 'any';
+            break;
+        case 'date-filter':
+            const datePicker = document.getElementById('date-filter')?._flatpickr;
+            if (datePicker) {
+                 datePicker.clear();
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            break;
+        case 'subcategory-filter':
+            const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
+            if (subcatButton) subcatButton.click();
+            return;
+    }
+    
+    // 2. Re-run filters and update UI
+    applyFilters();
 }
 
 /**
  * Helper to create the filter chip HTML.
- * @param {string} text - The display text (e.g., 'Status: Coming Soon').
- * @param {string} type - The filter type ('status-filter', 'name-filter', etc.).
- * @param {string} value - The filter value to clear.
- * @returns {string} The HTML for the chip.
  */
 function createFilterChip(text, type, value) {
-    return `<div class="filter-chip" data-filter-type="${type}" data-filter-value="${value}">
+    const isGoal = type === 'goal-filter';
+    const tooltip = isGoal ? 'Click to remove this goal from the Goals / Notes box.' : 'Clear Filter';
+
+    return `<div class="filter-chip ${isGoal ? 'goal-chip' : ''}" data-filter-type="${type}" data-filter-value="${value}" data-tippy-content="${tooltip}">
                 <span>${text}</span>
-                <button title="Clear Filter">×</button>
+                <button title="${tooltip}">×</button>
             </div>`;
 }
 
