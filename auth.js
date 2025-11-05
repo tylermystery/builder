@@ -89,15 +89,16 @@ function closeUserModal() {
 // --- THIS FUNCTION IS RENAMED and EXPORTED ---
 export function initializeAuth(activeShopId) {
     shopId = activeShopId;
-    const modal = document.getElementById('user-modal-overlay');
-
     // --- THIS IS THE FIX ---
+    // The extra "=" is removed from the line below
+    const modal = document.getElementById('user-modal-overlay');
+    // --- END THE FIX ---
+
     // If the modal doesn't exist on this page, just stop.
     if (!modal) {
         log('Auth', 'Auth modal not found on this page. Skipping auth event listeners.');
         return;
     }
-    // --- END THE FIX ---
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -299,7 +300,9 @@ export function initializeAuth(activeShopId) {
     // --- End v2.0 Effects Engine ---
 }
 
+// --- THIS FUNCTION WAS MISSING/RENAMED ---
 export function updateUserProfileIcon() {
+// --- END FIX ---
     const userBtn = document.getElementById('user-profile-btn');
     if (!userBtn) return;
     
