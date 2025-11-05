@@ -5,7 +5,6 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-// --- THIS IS THE CORRECTED IMPORT BLOCK ---
 import { 
     getDayStatus, 
     AVAILABILITY_STATUS, 
@@ -13,7 +12,6 @@ import {
     findGoalsInText, 
     getPlanRankingProfile 
 } from '../availability.js';
-// --- END CORRECTION ---
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
@@ -414,7 +412,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- THIS IS THE FIX ---
+    // --- THIS IS THE FIX for the crash at modal.js:484 ---
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
@@ -461,8 +459,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 if (status.status === AVAILABILITY_STATUS.FULL) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                    className = 'available-partial';
-                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    // We don't have getAvailableSlotsForDay, so use a simpler message
+                    tooltip = `${status.reason}`;
                 } else {
                     className = 'unavailable';
                 }
