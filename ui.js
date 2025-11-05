@@ -1,6 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS of ui.js
 import { state } from './state.js';
-import { CONSTANTS } from './config.js';
+import { CONSTANTS } from '../config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
@@ -439,6 +439,8 @@ export function updateCatalogHeader() {
     const sortByEl = document.getElementById('sort-by');
     const sortBy = sortByEl?.value;
     const isRecommendedSort = sortBy === 'recommended';
+    
+    const goalsInput = document.getElementById('header-goals')?.value?.trim();
 
     // --- 1. Handle Special Views (My Plan/My Likes) ---
     if (document.getElementById('plan-filter-btn')?.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
@@ -519,7 +521,6 @@ export function updateCatalogHeader() {
     });
 
     // --- VVV 4. Goals Chip (V3.2 BEHAVIOR) VVV ---
-    const goalsInput = document.getElementById('header-goals')?.value?.trim();
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
         // Only show goals if they are non-empty AND recommended sort is active
         const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
@@ -552,7 +553,6 @@ export function updateCatalogHeader() {
 
     // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
     let sortCue = '';
-    const isRecommendedSort = sortBy === 'recommended';
 
     if (isRecommendedSort) {
         sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
