@@ -545,7 +545,6 @@ export function updateCatalogHeader() {
     
     // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
     let sortCue = '';
-    const goalsInput = document.getElementById('header-goals')?.value?.trim();
     const isRecommendedSort = sortBy === 'recommended';
 
     if (isRecommendedSort) {
