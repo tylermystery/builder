@@ -411,12 +411,8 @@ function sortRecords(records, sortBy, goalBucket) {
     });
 }
 // --- END REPLACED FUNCTION ---
-
-
-// --- MAIN EXPORTED FUNCTION --
-
 // In: filtering.js
-// Action: REPLACE the entire `applyFiltersAndSort` function
+// Action: REPLACE the entire applyFiltersAndSort function
 
 export function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
@@ -485,18 +481,17 @@ export function applyFiltersAndSort(imageCache) {
          // --- Standard Category/All View ---
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
          
-         // --- THIS IS THE FIX ---\
-         // The standard filters are now MOVED INSIDE this `else` block
+         // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
          recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          
-         // --- WORKAROUND: If not sorting by recommended, use old search ---
-         if (sortBy !== 'recommended' && searchTerm) {
-             recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-         }
-         // --- END FIX ---
+         // --- VVV REMOVE OLD SEARCH WORKAROUND VVV ---
+         // Removed: recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+         // The search term is now handled entirely by the RECOMMENDED sort calculation
+         // or is just a passive display element if another sort is selected.
+         // --- ^^^ END REMOVED WORKAROUND ^^^
     }
 
     // --- Sort the Final List (pass the goalBucket) ---
@@ -513,5 +508,5 @@ export function applyFiltersAndSort(imageCache) {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 
-    ui.updateCatalogHeader();
+    ui.updateCatalogHeader(); // This function will be updated to show the search term
 }
