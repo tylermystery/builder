@@ -9,45 +9,6 @@ const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 const PROFILE_ENDPOINT = '/api/profile-item';
 
 /**
- * Fetches all item records, but ONLY the Name and AI_Profile fields.
- */
-async function fetchItemsForProfiling() {
-    console.log("Fetching all items for profiling...");
-    let allRecords = [];
-    let offset = null;
-
-    const fieldsQuery = `fields%5B%5D=Name&fields%5B%5D=AI_Profile`;
-    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?${fieldsQuery}`;
-
-    try {
-        do {
-            let url = baseUrl;
-            if (offset) {
-                url += `&offset=${offset}`;
-            }
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`Airtable Error fetching items for profiling:`, errorText);
-                throw new Error(`Failed to fetch items. Status: ${response.status}`);
-            }
-            const data = await response.json();
-            allRecords = allRecords.concat(data.records);
-            offset = data.offset;
-        } while (offset);
-
-        console.log(`Total item records fetched for profiling: ${allRecords.length}`);
-        return allRecords;
-    } catch (error) {
-        console.error("Error fetching all item records for profiling:", error);
-        throw error;
-    }
-}
-
-/**
  * Wires up the new admin button
  */
 function setupAdminTools() {
