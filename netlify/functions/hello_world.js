@@ -1,13 +1,13 @@
-// REPURPOSED FILE: This is now the /api/profile-item function
+// REPURPOSED FILE: This is now the /api/profile-item function.
 const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
 
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Main catalog table
+// --- THIS IS THE CHANGE ---
+const PROFILE_FIELD = 'AI_Profile'; // Use the new safe field
+// --- END CHANGE ---
 const NAME_FIELD = 'Name';
 const DESCRIPTION_FIELD = 'Description';
-// --- THIS IS THE CHANGE ---
-const AI_PROFILE_FIELD = 'AI_Profile'; // Use the new, separate field
-// --- END CHANGE ---
 
 /**
  * Extracts a JSON object from a string, even if it's wrapped in markdown.
@@ -145,12 +145,12 @@ exports.handler = async (event) => {
         const payload = {
             fields: {
                 // --- THIS IS THE CHANGE ---
-                [AI_PROFILE_FIELD]: JSON.stringify(profileJson, null, 2) // Pretty-print the JSON
+                [PROFILE_FIELD]: JSON.stringify(profileJson, null, 2) // Pretty-print the JSON
                 // --- END CHANGE ---
             }
         };
 
-        console.log(`[Debug] Patching Airtable record ${recordId}...`);
+        console.log(`[Debug] Patching Airtable record ${recordId} in field ${PROFILE_FIELD}...`);
         const patchRes = await fetch(patchUrl, {
             method: 'PATCH',
             headers: {
@@ -163,7 +163,7 @@ exports.handler = async (event) => {
         if (!patchRes.ok) {
             const errorBody = await patchRes.text();
             console.error(`[Debug] Airtable patch failed. Status: ${patchRes.status}, Body: ${errorBody}`);
-            throw new Error(`Failed to update ${AI_PROFILE_FIELD} for item ${recordId} in Airtable.`);
+            throw new Error(`Failed to update ${PROFILE_FIELD} for item ${recordId} in Airtable.`);
         }
 
         console.log(`[Debug] Successfully profiled and updated item ${recordId}.`);
