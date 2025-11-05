@@ -31,8 +31,9 @@ export const CONSTANTS = {
 export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51L0C5iHh28kEjv5qjW2tCi3kOOkT9V6fJ1sUqjV8s3j9k9PzGkYkF8sX8c8p2J8sX8c8p2J8sX8c8p2J8';
 export const PUSHER_KEY = '236f480714e5001590b5';
 export const PUSHER_CLUSTER = 'us3';
+export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
 
 // --- THIS IS THE FIX ---
-// Add the Cloudinary name as an export so other files can import it.
-export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
+// Add the missing export for filtering.js
+export const RECORDS_PER_LOAD = 20;
 // --- END THE FIX ---
