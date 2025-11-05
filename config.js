@@ -40,3 +40,12 @@ export const CONSTANTS = {
         SPECIAL_REQUESTS: 'specialRequests',
     }
 };
+
+// In: config.js
+// Action: Add these two new lines at the end of the file
+
+// ... (keep all existing CONSTANTS, STRIPE_PUBLISHABLE_KEY, etc.)
+
+// --- ADD THESE TWO LINES ---
+export const PUSHER_KEY = '236f480714e5001590b5';
+export const PUSHER_CLUSTER = 'us3';
