@@ -28,10 +28,7 @@ export function debounce(func, wait) {
  * Parses URL parameters into an object.
  * @returns {object} An object of key/value pairs from the URL.
  */
-// --- THIS IS THE FIX ---
-// Added "export" to the function
 export function getUrlParams() {
-// --- END FIX ---
     const params = {};
     const queryString = window.location.search.substring(1);
     const regex = /([^&=]+)=([^&]*)/g;
