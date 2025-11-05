@@ -1,11 +1,13 @@
-// REPURPOSED FILE: This is now the /api/profile-item function.
+// REPURPOSED FILE: This is now the /api/profile-item function
 const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
 
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Main catalog table
-const RANKINGS_FIELD = 'Rankings'; // The field to update
 const NAME_FIELD = 'Name';
 const DESCRIPTION_FIELD = 'Description';
+// --- THIS IS THE CHANGE ---
+const AI_PROFILE_FIELD = 'AI_Profile'; // Use the new, separate field
+// --- END CHANGE ---
 
 /**
  * Extracts a JSON object from a string, even if it's wrapped in markdown.
@@ -14,7 +16,6 @@ const DESCRIPTION_FIELD = 'Description';
  */
 function cleanAndParseGeminiJson(text) {
   console.log('[Debug] Raw Gemini Text:', text);
-  // Look for the first { and the last } to get the JSON block
   const jsonMatch = text.match(/{[\s\S]*}/);
   if (!jsonMatch) {
     throw new Error('Gemini response did not contain a valid JSON object.');
@@ -31,7 +32,7 @@ function cleanAndParseGeminiJson(text) {
 /**
  * Calls the Gemini API to generate a "Universal Profile" for an item.
  * @param {string} itemName - The name of the item.
- *a * @param {string} itemDescription - The description of the item.
+ * @param {string} itemDescription - The description of the item.
  * @returns {object} The parsed "Universal Profile" JSON object.
  */
 async function getProfileFromGemini(itemName, itemDescription) {
@@ -143,7 +144,9 @@ exports.handler = async (event) => {
         const patchUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${recordId}`;
         const payload = {
             fields: {
-                [RANKINGS_FIELD]: JSON.stringify(profileJson, null, 2) // Pretty-print the JSON
+                // --- THIS IS THE CHANGE ---
+                [AI_PROFILE_FIELD]: JSON.stringify(profileJson, null, 2) // Pretty-print the JSON
+                // --- END CHANGE ---
             }
         };
 
@@ -158,3 +161,23 @@ exports.handler = async (event) => {
         });
 
         if (!patchRes.ok) {
+            const errorBody = await patchRes.text();
+            console.error(`[Debug] Airtable patch failed. Status: ${patchRes.status}, Body: ${errorBody}`);
+            throw new Error(`Failed to update ${AI_PROFILE_FIELD} for item ${recordId} in Airtable.`);
+        }
+
+        console.log(`[Debug] Successfully profiled and updated item ${recordId}.`);
+
+        return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, recordId: recordId, profile: profileJson })
+        };
+
+    } catch (error) {
+        console.error('[ERROR] /api/profile-item handler failed:', error.message, error.stack);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: `Function execution failed: ${error.message}` })
+        };
+    }
+};
