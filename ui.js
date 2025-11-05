@@ -413,12 +413,17 @@ export async function updateMobileBarAvailability() {
         }
     }
 }
-// END OF FIX
+// In: ui.js
+// Action: REPLACE the entire updateCatalogHeader function
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const titleEl = document.getElementById('catalog-title');
     const planFilterBtn = document.getElementById('plan-filter-btn');
+    const searchTerm = document.getElementById('name-filter')?.value?.trim();
+    const isSearchActive = searchTerm && searchTerm.length > 0;
+    const sortBy = document.getElementById('sort-by')?.value;
+
 
     if (!breadcrumbsEl || !titleEl) return;
 
@@ -426,23 +431,24 @@ export function updateCatalogHeader() {
     breadcrumbsEl.innerHTML = '';
     titleEl.style.display = 'none';
 
-    // Don't show breadcrumbs for the "My Plan" view
-    if (planFilterBtn && planFilterBtn.classList.contains('active')) {
+    // 1. Handle Special Views (My Plan/My Likes)
+    if (planFilterBtn && (planFilterBtn.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active'))) {
+        // These are handled by the separate logic block in filtering.js
         return;
     }
 
+    // 2. Determine Catalog Path / Title
     const path = [];
     let currentTitle = '';
 
     // Always start with a clickable "All Categories" link
-    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
+    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     // Find the active category
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
-        // The category link should also be clickable
-        path.push(`<a href="#" class="breadcrumb-link" data-filter="${activeCategoryButton.dataset.filter}">${categoryName}</a>`);
+        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
@@ -450,13 +456,32 @@ export function updateCatalogHeader() {
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     if (activeSubcategoryNodes.length > 0) {
         const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);
-        // The final part of the breadcrumb is just text, not a link
         path.push(`<span>${subcatNames.join(' + ')}</span>`);
         currentTitle = subcatNames.join(' + ');
     }
     
-    // Only show the breadcrumbs and title if we have navigated deeper than "All Categories"
-    if (path.length > 1) {
+    // 3. Set Breadcrumbs/Title with Search Priority
+
+    if (isSearchActive) {
+        // If search is active, the Title prioritizes the search term
+        titleEl.textContent = `Search: "${searchTerm}"`;
+        titleEl.style.display = 'block';
+        
+        // Show context below the search title
+        if (path.length > 1) {
+            breadcrumbsEl.innerHTML = path.join(' &gt; ');
+        } else {
+             // If no category filter is active, explicitly show "All Categories" as the context
+             breadcrumbsEl.innerHTML = path.join(' &gt; ');
+        }
+        
+        // If sorting by recommended, add a small visual cue
+        if (sortBy === 'recommended') {
+            titleEl.textContent += ` (Recommended)`;
+        }
+
+    } else if (path.length > 1) {
+        // If no search is active, show the category path
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
