@@ -165,6 +165,9 @@ export async function getCombinedPlanStatus(date, lockedItems) {
     return overallStatus;
 }
 
+// In: availability.js
+// Action: REPLACE the entire `calculateMissingCategories` function
+
 /**
  * [Recommendation Engine v1.2]
  * Calculates the "health" of the event to find missing "Pillar" categories.
