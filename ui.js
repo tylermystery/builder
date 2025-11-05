@@ -526,9 +526,10 @@ export function updateCatalogHeader() {
     }
     // --- ^^^ END V2.8 BEHAVIOR ^^^
     
-    // 5. Render and Bind
+// 5. Render and Bind
 
     // A. Render Active Filter Chips
+    // --- VVV V3.2 FIX: Show chips if ANY filter is active VVV ---
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
@@ -540,8 +541,8 @@ export function updateCatalogHeader() {
             button.addEventListener('click', handleFilterChipClear);
         });
     }
-
-
+    // --- ^^^ END V3.2 FIX ^^^
+    
     // B. Render Breadcrumbs/Title
     let sortCue = '';
     if (isRecommendedSort) {
