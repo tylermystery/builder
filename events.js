@@ -233,7 +233,7 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-// --- ADD THIS ENTIRE NEW FUNCTION ---
+// --- V2.1: REPLACE THIS ENTIRE FUNCTION ---
 /**
  * Triggers a "ghost card" and dummy AI parse when a search yields no local results.
  * @param {string} searchTerm The user's search query.
@@ -257,7 +257,7 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             Description: "Our AI is looking for this item in the Bay Area...",
             Price: 0,
             'Item Type': 'Bookable Item',
-            ServiceType: 'Partner Activity', // Mark as partner
+            ServiceType: 'Partner Activity',
             Status: 'Available'
         }
     };
@@ -271,59 +271,76 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     catalogContainer.appendChild(ghostCard);
 
     try {
-        // --- START DUMMY DATA WORKAROUND ---
+        // --- START V2.1: DUMMY DATA WORKAROUND ---
         log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
-        await new Promise(res => setTimeout(res, 2000)); // Simulate 2 sec network delay
-        if (signal.aborted) return; // Check if aborted during delay
+        await new Promise(res => setTimeout(res, 1500)); // Simulate network delay
+        if (signal.aborted) return;
 
-        // This is the fake data the "API" (process-weblink.js) will return
-        const data = {
+        // This is the fake data the "API" (process-weblink.js) would return
+        const webData = {
             Name: `[DUMMY] ${searchTerm}`,
             Description: "This is a dummy item. The real AI-parsed description will go here.",
-            Price: Math.floor(Math.random() * 100) + 10, // Random price
-            ServiceType: "Partner Activity" // This is critical
+            Price: Math.floor(Math.random() * 100) + 10,
+            ServiceType: "Partner Activity"
         };
-        // --- END DUMMY DATA WORKAROUND ---
+        // --- END V2.1 DUMMY ---
 
         // (The real code would be:)
-        // const response = await fetch('/api/process-weblink', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ query: searchTerm }),
-        //     signal: signal,
-        // });
-        // const data = await response.json();
-        // if (signal.aborted) return;
-        // if (!response.ok) throw new Error(data.error);
-
-        log('Events', 'Proactive AI Parse Success:', data);
+        // const response = await fetch('/api/process-weblink', { ... });
+        // const webData = await response.json();
+        // ...
+        
+        log('Events', 'Proactive AI Parse Success:', webData);
         
         const customId = `custom-${Date.now()}`;
         
-        // --- THIS IS THE KEY "INTERMIXING" LOGIC ---
+        // --- V2.1: This is the KEY "INTERMIXING" LOGIC --
         // Create a "record" object that mimics a real Airtable record
         const liveRecord = {
-            id: customId, // The new, permanent-for-this-session ID
+            id: customId,
             fields: {
-                Name: data.Name,
-                Description: data.Description,
-                Price: data.Price,
-                ServiceType: data.ServiceType,
+                Name: webData.Name,
+                Description: webData.Description,
+                Price: webData.Price,
+                ServiceType: webData.ServiceType,
                 'Item Type': 'Bookable Item',
                 Status: 'Available',
-                // Add "null" placeholders for safety to prevent crashes
+                // --- V2.1: SIMULATE THE AI PROFILING ---
+                // In a real scenario, we'd call /api/profile-item
+                // For now, we'll inject a DUMMY profile.
+                Rankings: JSON.stringify({
+                    "profileSource": "ai_v1_dummy_profile",
+                    "Pillars": { "Activities": 10, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
+                    "Vibe": { "Energy": 8, "Relaxation": 2, "Formality": 3, "Novelty": 9 },
+                    "Intellect": { "Creative": 5, "Analytical": 5 },
+                    "Physicality": { "Intensity": 5, "Accessibility": 5 },
+                    "Tags": [searchTerm.toLowerCase(), "dummy", "partner activity"]
+                }),
+                // Add "null" placeholders for safety
                 Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
                 'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
                 Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
                 RSVPs: null, Date: null, 'Chat Enabled': false, Duration: null, 
-                Capacity: null, 'Location Details': null, 'Additional Information': null, 
-                Rankings: null
+                Capacity: null, 'Location Details': null, 'Additional Information': null
             }
         };
         
-        // Add this new record to the *main state* so everyone can find it
+        // (The *real* code would call our new function:)
+        // try {
+        //    log('Events', `Calling /api/profile-item for new item ${customId}`);
+        //    const profileResponse = await fetch('/api/profile-item', {
+        //        method: 'POST',
+        //        headers: { 'Content-Type': 'application/json' },
+        //        body: JSON.stringify({ recordId: customId }) // (This assumes customId exists in Airtable)
+        //    });
+        //    const profileData = await profileResponse.json();
+        //    liveRecord.fields.Rankings = JSON.stringify(profileData.profile);
+        // } catch (profileError) {
+        //    log('Events', `Could not profile new item: ${profileError.message}`);
+        // }
+        // --- END V2.1 ---
+        
         state.records.all.push(liveRecord);
-        // --- END KEY LOGIC ---
 
         // 4. Create the *real* card and replace the ghost card
         const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
@@ -333,7 +350,6 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             addToPlanBtn.textContent = 'Add to Plan';
             addToPlanBtn.disabled = false;
             
-            // Re-clone the button to remove old listeners
             const newBtn = addToPlanBtn.cloneNode(true);
             addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
 
@@ -370,7 +386,7 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
         aiSearchController = null;
     }
 }
-// --- END NEW FUNCTION ---
+// --- END V2.1 REPLACEMENT ---
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
@@ -486,7 +502,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             });
         }
     } 
-    // --- END CONSOLIDATED BUTTON GENERATION ---
+    // --- END CONSOLIDATED BUTTON GENERATION --
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
@@ -541,7 +557,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     
-    // --- THIS IS THE MODIFIED LISTENER ---
+    // --- THIS IS THE MODIFIED LISTENER (V2.1) ---
     safeAddEventListener('name-filter', 'input', debounce((e) => {
         const searchTerm = e.target.value.trim();
         
@@ -549,12 +565,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             aiSearchController.abort(); // Cancel any pending AI search
         }
         
-        if (searchTerm.length === 0) {
-            applyFiltersAndSort(imageCache);
-            return;
-        }
-        
+        // --- V2.1: ALWAYS apply filters (sort will handle the search) ---
         applyFiltersAndSort(imageCache);
+        // --- END V2.1 ---
         
         // This is the trigger
         if (state.records.filtered.length === 0 && searchTerm.length > 2) {
@@ -566,7 +579,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
-                document.querySelector('#category-filters .filter-btn:not([data-filter="all"]).active') ||
+                document.querySelector('#category-filters .filter-btn:not([data-filter=\"all\"]).active') ||
                 document.querySelector('#subcategory-filters .filter-btn.active');
             
             if (!hasOtherFilters) {
@@ -575,7 +588,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
         }
     }, 300)); // 300ms debounce
-    // --- END MODIFICATION ---
+    // --- END MODIFICATION --
     
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
@@ -655,11 +668,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
+    // --- V2.1: APPLY FILTERS ON GOAL CHANGE ---
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
+        // Re-apply filters if "Recommended" sort is active
+        if (document.getElementById('sort-by').value === 'recommended') {
+            applyFiltersAndSort(imageCache);
+        }
     });
+    // --- END V2.1 ---
 
     document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
@@ -679,7 +698,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
 
-        // --- ADD THIS NEW "ELSE IF" BLOCK ---
+        // --- ADD THIS NEW \"ELSE IF\" BLOCK ---\
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
 
         if (healthSuggestionBtn) {
@@ -689,7 +708,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
             // Find the matching category button in the filter list
-            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter="${categoryToFilter}"]`);
+            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${categoryToFilter}\"]`);
             
             if (categoryButton) {
                 // Programmatically click the button
@@ -699,7 +718,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Scroll to the top of the catalog to show the results
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
         }
-        // --- END NEW BLOCK ---
+        // --- END NEW BLOCK ---\
 
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -865,7 +884,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  }
             }
         }
-        // --- END HEART ICON LOGIC ---
+        // --- END HEART ICON LOGIC --
         
         else if (addToPlanBtn) {
             e.stopPropagation();
@@ -933,11 +952,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
             
-            // --- This check prevents clicking the "ghost card" ---
+            // --- This check prevents clicking the \"ghost card\" ---\
             if (record.id.startsWith('ai-search-')) {
                 return;
             }
-            // --- End check ---
+            // --- End check ---\
 
             if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
