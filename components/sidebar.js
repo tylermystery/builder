@@ -4,7 +4,10 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
+// --- THIS IS THE CORRECTED IMPORT BLOCK ---
 import { parseOptions, getRecordPrice } from '../utils.js';
+import { calculateMissingCategories } from '../availability.js';
+// --- END CORRECTION ---
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 
@@ -13,6 +16,8 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item lazy-load`;
     itemCard.dataset.recordId = record.id;
+    
+    // This will use the default placeholder for custom items, which is correct
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     
     itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
@@ -24,14 +29,14 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
-        <div class=\"card-actions\">\
-            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>
-            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>
+        <div class="card-actions">
+            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
+            <button class="action-btn remove-btn" title="Remove">×</button>
         </div>
-        <div class=\"favorite-item-overlay\"\
-            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"\
-        >\
-            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>
+        <div class="favorite-item-overlay"
+            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
+        >
+            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
         </div>
     `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
@@ -44,10 +49,12 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 }
 
 
-// --- THIS FUNCTION IS CORRECTED ---
+// --- 1. THIS FUNCTION IS REPLACED ---
+// It now receives the *full record* instead of just the ID
+// It also fixes the 404 error for the partner icon
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
-    let isCustomItem = record.id.startsWith('custom-');
+    let isCustomItem = record.id.startsWith('custom-') || record.id.startsWith('ai-search-');
     
     // --- THIS IS THE FIX for the 404 error ---
     // Default to your main placeholder, which we know exists
@@ -76,8 +83,8 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     let price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-    const total = price * itemInfo.quantity;
-    let priceDisplay = `$${price.toFixed(2)}`;
+    const total = (price || 0) * (itemInfo.quantity || 1);
+    let priceDisplay = `$${(price || 0).toFixed(2)}`;
     
     if (isCustomItem && itemInfo.overridePrice == null && price > 0) {
         priceDisplay = `$${price.toFixed(2)} (Est.)`;
@@ -93,7 +100,7 @@ async function createLockedInItemElement(record, itemInfo) {
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
+            <p class="locked-item-pricing">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
@@ -103,10 +110,10 @@ async function createLockedInItemElement(record, itemInfo) {
     `;
     return itemElement;
 }
-// --- END CORRECTED FUNCTION ---
+// --- END REPLACED FUNCTION ---
 
 
-// --- THIS FUNCTION IS CORRECTED ---
+// --- 2. THIS FUNCTION IS REPLACED ---
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -116,22 +123,23 @@ export async function updateEventPlanSection() {
     
     if (state.cart.lockedItems.size === 0) {
         container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
-        return;
-    }
-
-    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-
-        if (record) {
-            const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
-            container.appendChild(itemElement);
-        } else {
-            log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
+    } else {
+        for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+            // Find the record in state.records.all (where custom items now live)
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
+                container.appendChild(itemElement);
+            } else {
+                log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
+            }
         }
     }
     ui.observeLazyImages(container);
+    
+    updateEventHealthScore(); // --- ADDED THIS LINE ---
 }
-// --- END CORRECTED FUNCTION ---
+// --- END REPLACED FUNCTION ---
 
 
 export async function updateIdeasCarousel() { 
@@ -177,7 +185,7 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
-// --- THIS FUNCTION IS CORRECTED ---
+// --- 3. THIS FUNCTION IS REPLACED ---
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -198,8 +206,10 @@ export function updateTotalCost() {
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         if (isNaN(unitPrice)) return;
         
+        // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, minHeadcount);
+        // Use itemInfo.quantity for all items
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
         
         subtotal += unitPrice * effectiveQuantity;
     });
@@ -260,8 +270,11 @@ export function updateTotalCost() {
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
+
+    updateEventHealthScore(); // --- ADDED THIS LINE ---
 }
-// --- END CORRECTED FUNCTION ---
+// --- END REPLACED FUNCTION ---
+
 
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
@@ -276,4 +289,63 @@ export function displayReservedStatus() {
     if (saveShareBtn) {
         saveShareBtn.disabled = false;
     }
+}
+
+// --- 4. ADD THIS ENTIRE NEW FUNCTION AT THE END OF THE FILE ---
+/**
+ * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
+ */
+export function updateEventHealthScore() {
+    const container = document.getElementById('event-health-score');
+    if (!container) return;
+    
+    // Don't show if the plan is empty
+    if (state.cart.lockedItems.size === 0) {
+        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Event Health.</p>`;
+        return;
+    }
+
+    const suggestions = calculateMissingCategories();
+    const score = 4 - suggestions.length; // Based on 4 pillars
+    let html = '';
+
+    // 1. The "Score"
+    let scoreText = '🟠 Good Start!';
+    let scoreColor = '#fd7e14';
+    if (score === 4) {
+        scoreText = '✅ Well-Rounded Event!';
+        scoreColor = '#28a745';
+    } else if (score === 1) {
+        scoreText = '🔴 Just Beginning!';
+        scoreColor = '#dc3545';
+    } else if (score === 2) {
+        scoreText = '🟡 Growing!';
+        scoreColor = '#ffc107'; // A yellow color
+    }
+
+
+    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText}</h5>`;
+
+    // 2. The "Suggestions"
+    if (suggestions.length > 0) {
+        html += `<p style="font-size: 0.9em; margin: 0; text-align: center;">
+            Our experts recommend adding these components for a full experience:
+        </p>`;
+        
+        // Create clickable "suggestion" buttons
+        html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
+        suggestions.forEach(cat => {
+            // We'll make this button trigger the category filter
+            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${cat.toLowerCase().split('/')[0]}">
+                + Add ${cat}
+            </button>`;
+        });
+        html += `</div>`;
+    } else {
+        html += `<p style="font-size: 0.9em; margin: 0; text-align: center; color: #28a745;">
+            You've covered all the core components for a great guest experience!
+        </p>`;
+    }
+
+    container.innerHTML = html;
 }
