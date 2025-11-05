@@ -698,7 +698,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
 
-        // --- ADD THIS NEW \"ELSE IF\" BLOCK ---\
+// --- NEW/FIXED HEALTH SUGGESTION BUTTON LOGIC ---
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
 
         if (healthSuggestionBtn) {
@@ -707,19 +707,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
-            // Find the matching category button in the filter list
+            // 1. Find the matching category button in the filter list (e.g., 'food/drink')
             const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${categoryToFilter}\"]`);
             
             if (categoryButton) {
-                // Programmatically click the button
+                // 2. Programmatically click the button to set the filter and update the URL
+                // This will trigger the existing click handler defined later in this file.
                 categoryButton.click(); 
+            } else {
+                 log('Events', `Error: Could not find matching category filter button for: ${categoryToFilter}`);
             }
             
-            // Scroll to the top of the catalog to show the results
+            // 3. Scroll to the top of the catalog to show the results
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
         }
-        // --- END NEW BLOCK ---\
-
+        // --- END NEW/FIXED BLOCK ---
+        
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
