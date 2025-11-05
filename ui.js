@@ -543,20 +543,26 @@ export function updateCatalogHeader() {
     }
     // --- ^^^ END V3.2 FIX ^^^
     
-    // B. Render Breadcrumbs/Title
+    // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
     let sortCue = '';
+    const goalsInput = document.getElementById('header-goals')?.value?.trim();
+    const isRecommendedSort = sortBy === 'recommended';
+
     if (isRecommendedSort) {
         sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
     }
 
     if (isSearchActive) {
+        // If search is active, the title prioritizes the search term and its context
         titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
         titleEl.style.display = 'block';
     } else if (path.length > 1) {
+        // If only categories are active, show the breadcrumb navigation path
         breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
     } else if (isRecommendedSort) {
+        // If only recommended sort is active (no search, no category), show the sort info
         titleEl.textContent = `Sorted by Recommended` + sortCue;
         titleEl.style.display = 'block';
     }
