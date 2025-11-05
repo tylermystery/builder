@@ -332,98 +332,95 @@ function sortRecords(records, sortBy) {
 
 // --- MAIN EXPORTED FUNCTION --
 
-// FILE: filtering.js (REPLACE ENTIRE applyFiltersAndSort function)
+// In: filtering.js
+// Action: REPLACE the entire `applyFiltersAndSort` function
 
 export function applyFiltersAndSort(imageCache) {
-    const catalogContainer = document.getElementById('catalog-container'); // Get container for clearing later
-    const catalogTitle = document.getElementById('catalog-title'); //
-    const planFilterBtn = document.getElementById('plan-filter-btn'); //
-    const likesFilterBtn = document.getElementById('liked-items-filter-btn'); //
+    const catalogContainer = document.getElementById('catalog-container');
+    const catalogTitle = document.getElementById('catalog-title');
+    const planFilterBtn = document.getElementById('plan-filter-btn');
+    const likesFilterBtn = document.getElementById('liked-items-filter-btn');
 
     // Get filter values from UI elements
-    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active'); //
-    const selectedCategory = activeCategoryButton ? activeCategoryButton.dataset.filter : 'all'; // Default to 'all' if somehow none is active
-    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active'); //
-    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter); //
-    const searchTerm = document.getElementById('name-filter').value.toLowerCase(); //
-    const statusFilter = document.getElementById('status-filter').value; //
-    const headcountFilter = document.getElementById('headcount-filter').value; //
-    const customHeadcount = document.getElementById('headcount-custom').value; //
-    const locationFilter = document.getElementById('location-filter').value; //
-    const budgetFilter = document.getElementById('budget-filter').value; //
-    const sortBy = document.getElementById('sort-by').value; //
+    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
+    const selectedCategory = activeCategoryButton ? activeCategoryButton.dataset.filter : 'all';
+    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
+    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
+    const searchTerm = document.getElementById('name-filter').value.toLowerCase();
+    const statusFilter = document.getElementById('status-filter').value;
+    const headcountFilter = document.getElementById('headcount-filter').value;
+    const customHeadcount = document.getElementById('headcount-custom').value;
+    const locationFilter = document.getElementById('location-filter').value;
+    const budgetFilter = document.getElementById('budget-filter').value;
+    const sortBy = document.getElementById('sort-by').value;
 
-    // --- Determine Base Record Set --
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
-    ); // Start with records for the current store
+    );
 
-    // Reset title initially
     if (catalogTitle) catalogTitle.style.display = 'none';
 
-    // --- Apply Special Views (My Plan / My Likes) --
+    let recordsToDisplay; // --- THIS IS THE KEY CHANGE ---
+
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
-        // --- "My Plan" View --
-        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your'; //
+        // --- "My Plan" View ---
+        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         if (catalogTitle) {
-            catalogTitle.textContent = `${eventName} Plan & Ideas`; //
-            catalogTitle.style.display = 'block'; //
+            catalogTitle.textContent = `${eventName} Plan & Ideas`;
+            catalogTitle.style.display = 'block';
         }
-        const lockedItemIds = Array.from(state.cart.lockedItems.keys()); //
-        const ideaItemIds = Array.from(state.cart.items.keys()); // Renamed from items to ideaItems
-        const allPlanRecordIds = [...lockedItemIds, ...ideaItemIds]; //
-        baseRecordsToFilter = allPlanRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean); //
-        // For "My Plan", we usually don't apply further filters, but show everything in the plan/ideas.
-        // We will skip other filters and just sort/render this set.
+        const lockedItemIds = Array.from(state.cart.lockedItems.keys());
+        const ideaItemIds = Array.from(state.cart.items.keys());
+        const allPlanRecordIds = [...lockedItemIds, ...ideaItemIds];
+        recordsToDisplay = allPlanRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
+        
+        // Note: No other filters are applied
+
     } else if (likesFilterBtn && likesFilterBtn.classList.contains('active')) {
-        // --- "My Likes" View --
+        // --- "My Likes" View ---
         if (catalogTitle) {
-            catalogTitle.textContent = `My Liked Items`; //
-            catalogTitle.style.display = 'block'; //
+            catalogTitle.textContent = `My Liked Items`;
+            catalogTitle.style.display = 'block';
         }
         let likedIds = new Set();
         if (state.session.user.isAuthenticated) {
-            likedIds = state.session.user.likedItemIds; // Use persistent likes
+            likedIds = state.session.user.likedItemIds;
         } else {
             try {
-                likedIds = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]')); // Use temporary likes
+                likedIds = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
             } catch (e) { console.error("Error reading tempLikes for filtering:", e); }
         }
-        baseRecordsToFilter = baseRecordsToFilter.filter(record => likedIds.has(record.id)); // Filter the store records by liked IDs
-        // Filters will be applied to this liked subset below.
+        recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
+        
+        // Note: No other filters are applied
+
     } else {
-         // --- Standard Category/All View --
-         // Apply category/subcategory filtering to the store records
-         baseRecordsToFilter = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories); //
-         // Filters will be applied below.
+         // --- Standard Category/All View ---
+         recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
+         
+         // --- THIS IS THE FIX ---
+         // The standard filters are now MOVED INSIDE this `else` block
+         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+         recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
+         recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
+         recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+         recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+         // --- END FIX ---
     }
 
-    // --- Apply Standard Filters (to the determined base set) --
-    let recordsToDisplay = baseRecordsToFilter; // Start with the result from above
+    // --- Sort the Final List ---
+    recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
-    // Don't apply standard filters if in "My Plan" view (usually desired behavior)
-    if (!planFilterBtn || !planFilterBtn.classList.contains('active')) {
-         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter); //
-         recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount); //
-         recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter); //
-         recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter); //
-         recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm); //
-    }
+    // --- Update State & Render ---
+    state.records.filtered = recordsToDisplay;
+    state.ui.recordsCurrentlyDisplayed = 0;
 
-    // --- Sort the Final List --
-    recordsToDisplay = sortRecords(recordsToDisplay, sortBy); // Apply sorting
-
-    // --- Update State & Render --
-    state.records.filtered = recordsToDisplay; // Update state
-    state.ui.recordsCurrentlyDisplayed = 0; // Reset display count
-
-    // Clear previous results before rendering new ones
     if (catalogContainer) catalogContainer.innerHTML = '';
 
-    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD); //
-    ui.renderRecords(initialRecords, imageCache, false).then(() => { //
-        state.ui.recordsCurrentlyDisplayed = initialRecords.length; //
+    const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+    ui.renderRecords(initialRecords, imageCache, false).then(() => {
+        state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 
-    ui.updateCatalogHeader(); // Update breadcrumbs
+    ui.updateCatalogHeader();
 }
