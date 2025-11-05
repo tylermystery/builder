@@ -293,6 +293,8 @@ export function displayReservedStatus() {
 
 // In: components/sidebar.js
 // Action: REPLACE the entire `updateEventHealthScore` function
+// In: components/sidebar.js
+// Action: REPLACE the entire `updateEventHealthScore` function
 
 /**
  * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
@@ -300,12 +302,6 @@ export function displayReservedStatus() {
 export function updateEventHealthScore() {
     const container = document.getElementById('event-health-score');
     if (!container) return;
-    
-    // --- THIS IS THE FIX for Bug #2 ---
-    // We *always* run the calculation now.
-    // const suggestions = calculateMissingCategories();
-    // if (state.cart.lockedItems.size === 0) { ... } // This check is REMOVED.
-    // --- END FIX ---
     
     const suggestions = calculateMissingCategories();
     const score = 4 - suggestions.length; // Based on 4 pillars
@@ -329,31 +325,23 @@ export function updateEventHealthScore() {
     }
 
 
-    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText}</h5>`;
+    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText}</h5>`;
 
     // 2. The "Suggestions"
     if (suggestions.length > 0) {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center;">
-            Our experts recommend adding these components for a full experience:
-        </p>`;
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\n            Our experts recommend adding these components for a full experience:\n        </p>`;
         
         // Create clickable "suggestion" buttons
-        html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
+        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
         suggestions.forEach(cat => {
-            // --- THIS IS THE FIX for Bug #1 ---
-            // We now use the exact category name, in lowercase, as the filter tag
-            // e.g., "Activities" -> "activities", "Food/Drink" -> "food/drink"
-            const filterTag = cat.toLowerCase();
-            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${filterTag}">
-                + Add ${cat}
-            </button>`;
-            // --- END FIX ---
+            // FIX: We now use the exact category string 'cat' for display and the lowercase filter tag.
+            const filterTag = cat.toLowerCase().replace(/ & /g, '/'); // Convert "Food & Drink" to "food/drink" for the filter
+            
+            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${cat}\n            </button>`;
         });
         html += `</div>`;
     } else {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center; color: #28a745;">
-            You've covered all the core components for a great guest experience!
-        </p>`;
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\n            You've covered all the core components for a great guest experience!\n        </p>`;
     }
 
     container.innerHTML = html;
