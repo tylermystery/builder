@@ -587,9 +587,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 handleProactiveAISearch(searchTerm, imageCache);
             }
         }
+    
+        
     }, 300)); // 300ms debounce
     // --- END MODIFICATION --
-    
+    // --- VVV NEW: Clear Search Button Listener VVV ---
+    safeAddEventListener('clear-search-btn', 'click', () => {
+        handleFilterChipClear({ 
+            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button') 
+        });
+        // We also ensure the focus stays off the search bar
+        document.getElementById('name-filter').blur(); 
+    });
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
         document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
@@ -1109,3 +1118,16 @@ export function openChatWidget(andKeepOpen = false) {
         }
     }
 }
+
+    // And add the handleFilterChipClear function to the end of events.js
+    function handleFilterChipClear(e) {
+        // This is a dummy function to route the click back to ui.js logic 
+        // to prevent deep import dependency issues. It requires ui.js to be loaded.
+        if (typeof ui.handleFilterChipClear === 'function') {
+            ui.handleFilterChipClear(e);
+        } else {
+             // Fallback for non-chip clearing
+            document.getElementById('name-filter').value = '';
+            window.applyFiltersAndSort(window.imageCache);
+        }
+    }
