@@ -1,11 +1,62 @@
-// REPLACE THE ENTIRE CONTENTS OF: filtering.js
+// In: filtering.js
+// Action: ADD this code block at the top of the file.
 
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
+import { calculateMissingCategories } from './availability.js'; // <-- ADD THIS IMPORT
 
-// --- HELPER FUNCTIONS (Moved to the top) ---
+// --- START: NEW RECOMMENDATION ENGINE V2.1 ---
+
+/**
+ * [v2.1] The "Goal Mapper" (Rosetta Stone).
+ * Translates abstract user goals into weighted "Universal Profile" attributes.
+ */
+const GOAL_PROFILE_MAP = {
+    // --- Abstract Goals (from text) ---
+    "fun": { "Vibe.Energy": 1.0, "Vibe.Novelty": 0.5, "Vibe.Relaxation": -0.5 },
+    "exciting": { "Vibe.Energy": 1.0, "Physicality.Intensity": 0.5 },
+    "relaxing": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
+    "chill": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
+    "creative": { "Intellect.Creative": 1.0, "Vibe.Novelty": 0.5 },
+    "art": { "Intellect.Creative": 1.0 },
+    "artistic": { "Intellect.Creative": 1.0 },
+    "team-build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
+    "team build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
+    "bonding": { "Vibe.Relaxation": 0.5, "Vibe.Formality": -0.5 },
+    "competitive": { "Physicality.Intensity": 0.5, "Tags": "competitive" },
+    "celebration": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
+    "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
+
+    // --- Pillar Goals (Implicit) ---
+    // These keys *must* match the strings from calculateMissingCategories
+    "Activities": { "Pillars.Activity": 1.0 },
+    "Food/Drink": { "Pillars.Food/Drink": 1.0 },
+    "Venue": { "Pillars.Venue": 1.0 },
+    "Extras": { "Pillars.Extras": 1.0 }
+};
+
+/**
+ * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
+ * @param {object} profile - The parsed Rankings JSON.
+ * @param {string} key - The dot-notation key (e.g., "Vibe.Energy").
+ * @returns {number} The score (0-10) or 0 if not found.
+ */
+function getProfileScore(profile, key) {
+    if (!profile || !key) return 0;
+    const keys = key.split('.');
+    if (keys.length === 2) {
+        return profile[keys[0]]?.[keys[1]] || 0;
+    }
+    return 0;
+}
+
+// --- END: NEW RECOMMENDATION ENGINE V2.1 ---
+
+
+// --- HELPER FUNCTIONS (Existing code) ---
+// (The existing findGoalInText function will be modified *next* in Phase 3)
 
 // --- NEW HELPER FUNCTION ---
 /**
