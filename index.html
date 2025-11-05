@@ -123,10 +123,13 @@
         <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
-                <div class="filter-group">
-                    <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-                </div>
-                   <div class="filter-group">
+                    <div class="filter-group">
+                    <div id="name-filter-wrapper" style="position: relative; display: flex; align-items: center;">
+                        <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
+                        <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
+                    </div>
+                    </div>
+                   <div class="filter-group">                   <div class="filter-group">
                     <label>Categories</label>
                     <div id="category-filters" class="filter-btn-group"></div>
                 </div>
