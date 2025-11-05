@@ -1,11 +1,10 @@
-// In: filtering.js
-// Action: ADD this code block at the top of the file.
+// REPLACE THE ENTIRE CONTENTS OF: filtering.js
 
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories } from './availability.js'; // <-- ADD THIS IMPORT
+import { calculateMissingCategories } from './availability.js'; // <-- IMPORT
 
 // --- START: NEW RECOMMENDATION ENGINE V2.1 ---
 
@@ -37,6 +36,10 @@ const GOAL_PROFILE_MAP = {
     "Extras": { "Pillars.Extras": 1.0 }
 };
 
+// These are the *only* keywords we look for in the "Goals/Notes" input.
+// This is an optimization to avoid mapping every single word.
+const GOAL_KEYWORDS = Object.keys(GOAL_PROFILE_MAP);
+
 /**
  * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
  * @param {object} profile - The parsed Rankings JSON.
@@ -47,53 +50,136 @@ function getProfileScore(profile, key) {
     if (!profile || !key) return 0;
     const keys = key.split('.');
     if (keys.length === 2) {
+        // e.g., profile['Vibe']['Energy']
         return profile[keys[0]]?.[keys[1]] || 0;
     }
     return 0;
 }
 
+/**
+ * [v2.1] Scans goal text for *all* matching ranking keywords.
+ * @param {string} text - The user's "Goals/Notes" text.
+ * @returns {Array<string>} A list of matching goals (e.g., ["fun", "art"])
+ */
+export function findGoalsInText(text) {
+    if (!text) return [];
+    const lowerText = text.toLowerCase();
+    const foundGoals = new Set();
+
+    GOAL_KEYWORDS.forEach(keyword => {
+        if (lowerText.includes(keyword)) {
+            foundGoals.add(keyword);
+        }
+    });
+    return Array.from(foundGoals);
+}
+
+/**
+ * [v2.1] Gets the user's complete "Goal Bucket" from all UI inputs.
+ * @returns {Array<string>} The master list of goals (e.g., ["fun", "creative", "Venue", "taco tuesdays"])
+ */
+function getGoalBucket() {
+    const goalText = document.getElementById('header-goals').value;
+    const searchTerm = document.getElementById('name-filter').value.toLowerCase().trim();
+    
+    // 1. Implicit Goals (Missing Pillars)
+    const missingPillars = calculateMissingCategories(); // e.g., ["Venue", "Food/Drink"]
+    
+    // 2. Explicit Goals (From Notes)
+    const explicitGoals = findGoalsInText(goalText); // e.g., ["fun", "creative"]
+    
+    // 3. Search Goal (From Search Bar)
+    const goalBucket = [...missingPillars, ...explicitGoals];
+    if (searchTerm.length > 2) {
+        goalBucket.push(searchTerm); // e.g., ["Venue", "Food/Drink", "fun", "creative", "escape room"]
+    }
+    
+    return [...new Set(goalBucket)]; // Return unique list
+}
+
+/**
+ * [v2.1] Calculates a single "Recommendation Score" for an item based on the user's Goal Bucket.
+ * @param {object} record - The Airtable item record.
+ * @param {Array<string>} goalBucket - The user's master goal list.
+ * @returns {number} The final recommendation score.
+ */
+export function calculateRecommendationScore(record, goalBucket) {
+    let finalScore = 0;
+    let profile = null;
+
+    // 1. Try to parse the Universal Profile JSON
+    try {
+        profile = JSON.parse(record.fields['Rankings'] || '{}');
+    } catch (e) {
+        // This item is un-profiled or has bad JSON
+    }
+
+    // 2. Handle Un-profiled Items (Fallback Logic)
+    if (!profile || !profile.profileSource) {
+        const searchTerm = document.getElementById('name-filter').value.toLowerCase().trim();
+        if (searchTerm.length > 2) {
+            // Use simple keyword matching as a fallback
+            const name = (record.fields.Name || '').toLowerCase();
+            const description = (record.fields.Description || '').toLowerCase();
+            if (name.includes(searchTerm)) finalScore += 10;
+            if (description.includes(searchTerm)) finalScore += 5;
+        }
+        return finalScore;
+    }
+
+    // 3. Handle Profiled Items (Hybrid Scoring Logic)
+    const itemTags = new Set(profile.Tags || []);
+
+    goalBucket.forEach(goal => {
+        const goalLower = goal.toLowerCase();
+        let goalScore = 0;
+
+        // --- Brain 1: Attribute Mapper (for "fun", "creative", "Venue", etc.) ---
+        if (GOAL_PROFILE_MAP[goalLower]) {
+            const mapper = GOAL_PROFILE_MAP[goalLower];
+            for (const attribute in mapper) {
+                const weight = mapper[attribute];
+                
+                if (attribute === "Tags") {
+                    // Special case: check if a required tag exists
+                    if (itemTags.has(weight)) {
+                        goalScore += 10; // Flat bonus for tag match
+                    }
+                } else {
+                    // Standard weighted score
+                    // e.g., itemScore (9) * weight (1.0) = 9
+                    const itemScore = getProfileScore(profile, attribute);
+                    goalScore += (itemScore * weight);
+                }
+            }
+        } 
+        // --- Brain 2: Robust Tag Matcher (for "tacos", "museum", etc.) ---
+        else {
+            // Check if the goal (e.g., "escape room") exists as a tag
+            if (itemTags.has(goalLower)) {
+                goalScore += 15; // High flat bonus for direct tag match
+            } else {
+                // Check if any tag *contains* the goal (e.g., tag "taco bar" contains "taco")
+                for (const tag of itemTags) {
+                    if (tag.includes(goalLower)) {
+                        goalScore += 5; // Smaller bonus for partial match
+                        break; // Only score once
+                    }
+                }
+            }
+        }
+        
+        finalScore += goalScore;
+    });
+
+    return finalScore;
+}
+
 // --- END: NEW RECOMMENDATION ENGINE V2.1 ---
 
 
-// --- HELPER FUNCTIONS (Existing code) ---
-// (The existing findGoalInText function will be modified *next* in Phase 3)
-
-// --- NEW HELPER FUNCTION ---
-/**
- * Scans goal text for the first matching ranking keyword.
- * @param {string} text - The user's "Goals/Notes" text.
- * @returns {string | null} The first matching goal (e.g., "Fun") or null.
- */
-function findGoalInText(text) {
-    if (!text) return null;
-    const lowerText = text.toLowerCase();
-    
-    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
-    // (e.g., "Fun", "Art", "Celebration", "Competitive")
-    const GOAL_KEYWORDS = {
-        "fun": "Fun",
-        "art": "Art",
-        "artistic": "Art",
-        "celebration": "Celebration",
-        "celebrate": "Celebration",
-        "competitive": "Competitive",
-        "compete": "Competitive",
-        "team-build": "Team-Build",
-        "team build": "Team-Build",
-        "bonding": "Bonding"
-        // Add more keyword-to-goal mappings here
-    };
-
-    for (const keyword in GOAL_KEYWORDS) {
-        if (lowerText.includes(keyword)) {
-            return GOAL_KEYWORDS[keyword]; // Return the proper-cased Goal
-        }
-    }
-    return null; // No goal found
-}
-// --- END NEW HELPER FUNCTION ---
-
-
+// --- (Existing helper functions: getDescendantBookableItems, isGrouping, etc.) ---
+// ... (keep all existing helper functions from here) ...
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
     const children = allRecordsInStore.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
@@ -121,8 +207,6 @@ function parseCapacity(capacityStr) {
     const parts = capacityStr.split('-').map(p => parseInt(p, 10));
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
-
-// REPLACE the filterByCategoryAndSubcategory function in: filtering.js
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
     // If 'all' or no category is selected, pass through all records.
@@ -167,7 +251,7 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                 parentNameLower === activeSubcat            // Matches Parent Item field
             );
         });
-         // --- END NEW LOGIC ---
+         // --- END NEW LOGIC --
         return subcategoryFilteredRecords; // Return items matching category logic AND subcategory logic
     } else {
         // If no subcategories are selected, return all items matching the broad category logic.
@@ -178,13 +262,13 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
 
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') {
-        // If "Show All" is selected, return everything
+        // If \"Show All\" is selected, return everything
         return records;
     } else if (statusFilter === 'Available') {
-        // If "Available" is selected, include both "Available" AND "Featured" items
+        // If \"Available\" is selected, include both \"Available\" AND \"Featured\" items
         return records.filter(record => {
             const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS]; // Get status once
-            // Check if status exists AND matches either "Available" or "Featured"
+            // Check if status exists AND matches either \"Available\" or \"Featured\"
             return status && (status === 'Available' || status === 'Featured');
         });
     } else {
@@ -206,7 +290,7 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
         filterMin = parseInt(customHeadcount, 10) || 0;
         filterMax = filterMin; // For custom, min and max are the same target value
     } else {
-        // Parse range like "11-25" or "250-plus"
+        // Parse range like \"11-25\" or \"250-plus\"
         const [minStr, maxStr] = headcountFilter.split('-');
         filterMin = parseInt(minStr, 10);
         filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
@@ -269,19 +353,17 @@ function filterByBudget(records, budgetFilter) {
     });
 }
 
+// --- REPLACE THE `filterBySearchTerm` FUNCTION ---
 function filterBySearchTerm(records, searchTerm) {
+    // This function is now ONLY used if the v2.1 Engine is NOT active (e.g., sort != recommended)
+    // OR as a fallback for un-profiled items.
     if (!searchTerm) {
         return records; // No search term, return all records
     }
-    // Normalize search term
     const lowerSearchTerm = searchTerm.toLowerCase();
 
-    const scoredRecords = [];
-    records.forEach(record => {
-        let score = 0;
+    return records.filter(record => {
         const fields = record.fields;
-
-        // Fields to search within
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ').toLowerCase();
@@ -291,69 +373,39 @@ function filterBySearchTerm(records, searchTerm) {
             fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '',
             fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '',
             fields['Location'] || '',
-            optionNames // Include parsed option names in search text
+            optionNames
         ].join(' ').toLowerCase();
 
-        // Assign scores based on where the term is found (higher score for name match)
-        if (name.includes(lowerSearchTerm)) {
-            score = 3;
-        } else if (description.includes(lowerSearchTerm)) {
-            score = 2;
-        } else if (allOtherText.includes(lowerSearchTerm)) {
-            score = 1;
-        }
-
-        // Add records with a score > 0 to the results
-        if (score > 0) {
-            scoredRecords.push({ record, score });
-        }
+        return name.includes(lowerSearchTerm) ||
+               description.includes(lowerSearchTerm) ||
+               allOtherText.includes(lowerSearchTerm);
     });
-
-    // Sort results by score (highest first)
-    scoredRecords.sort((a, b) => b.score - a.score);
-    // Return just the record objects in the sorted order
-    return scoredRecords.map(item => item.record);
 }
+// --- END REPLACEMENT ---
 
-// --- THIS IS THE CORRECT, REPLACED FUNCTION ---
+
+// --- REPLACE THE `sortRecords` FUNCTION ---
 function sortRecords(records, sortBy) {
-    // --- NEW: Check for "Recommended" sort ---
+    // --- NEW: v2.1 "Recommended" Sort ---
     if (sortBy === 'recommended') {
-        const goalText = document.getElementById('header-goals').value;
-        const goal = findGoalInText(goalText);
+        // 1. Get the single Goal Bucket for this sort pass
+        const goalBucket = getGoalBucket();
         
-        // We only sort if a valid goal was found in the text
-        if (goal) {
-            // Use log function if it's available, otherwise console.log
-            const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
-            log('Filtering', `Sorting by recommended goal: "${goal}"`);
-
-            return records.sort((a, b) => {
-                let scoreA = 0;
-                let scoreB = 0;
-
-                try {
-                    // Get the rankings JSON from the record
-                    const rankingsA = JSON.parse(a.fields['Rankings'] || '{}');
-                    const rankingsB = JSON.parse(b.fields['Rankings'] || '{}');
-                    
-                    // Get the score for the *specific goal*
-                    scoreA = rankingsA[goal] || 0;
-                    scoreB = rankingsB[goal] || 0;
-                } catch (e) {
-                    // In case of bad JSON, scores remain 0
-                }
-                
-                // Sort by the goal score, highest to lowest
-                return scoreB - scoreA;
-            });
-        }
-        // If no goal is found, we fall through to the default sort (Featured, then Price)
-        const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
-        log('Filtering', 'Sort by "Recommended" selected, but no goal text. Using default sort.');
+        // 2. Score every record once
+        const scoredRecords = records.map(record => ({
+            record,
+            score: calculateRecommendationScore(record, goalBucket)
+        }));
+        
+        // 3. Sort by the calculated score, highest to lowest
+        return scoredRecords
+            .filter(item => item.score > 0) // Only show items that match at all
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.record); // Return just the records
     }
+    // --- END NEW SORT ---
     
-    // --- EXISTING LOGIC (Fallback) ---
+    // --- EXISTING LOGIC (Fallback for other sorts) ---
     return records.sort((a, b) => {
         const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
         const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
@@ -378,14 +430,10 @@ function sortRecords(records, sortBy) {
         }
     });
 }
-// --- END REPLACED FUNCTION ---
+// --- END REPLACEMENT ---
 
 
-// --- MAIN EXPORTED FUNCTION --
-
-// In: filtering.js
-// Action: REPLACE the entire `applyFiltersAndSort` function
-
+// --- REPLACE THE `applyFiltersAndSort` FUNCTION ---
 export function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     const catalogTitle = document.getElementById('catalog-title');
@@ -411,7 +459,7 @@ export function applyFiltersAndSort(imageCache) {
 
     if (catalogTitle) catalogTitle.style.display = 'none';
 
-    let recordsToDisplay; // --- THIS IS THE KEY CHANGE ---
+    let recordsToDisplay;
 
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         // --- "My Plan" View ---
@@ -449,17 +497,21 @@ export function applyFiltersAndSort(imageCache) {
          // --- Standard Category/All View ---
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
          
-         // --- THIS IS THE FIX ---
-         // The standard filters are now MOVED INSIDE this `else` block
-         recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
-         recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
-         recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
-         recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
-         recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-         // --- END FIX ---
+         // --- v2.1 LOGIC: Apply filters *unless* sorting by recommended ---
+         // If sorting by "recommended", the filters are part of the scoring.
+         // If sorting by Price/Name, we apply filters first.
+         if (sortBy !== 'recommended') {
+            recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+            recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
+            recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
+            recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+            recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+         }
+         // --- END v2.1 LOGIC ---
     }
 
     // --- Sort the Final List ---
+    // This function now handles all logic, including "recommended"
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy);
 
     // --- Update State & Render ---
@@ -475,3 +527,4 @@ export function applyFiltersAndSort(imageCache) {
 
     ui.updateCatalogHeader();
 }
+// --- END REPLACEMENT ---
