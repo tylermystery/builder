@@ -169,35 +169,44 @@ export async function getCombinedPlanStatus(date, lockedItems) {
 // Action: REPLACE the entire `calculateMissingCategories` function
 
 /**
+// In: availability.js
+// Action: REPLACE the entire calculateMissingCategories function
+
+/**
  * [Recommendation Engine v1.2]
  * Calculates the "health" of the event to find missing "Pillar" categories.
- * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
+ * @returns {Array<string>} A list of missing categories (e.g., ["Venues", "Food & Drink"])
  */
 export function calculateMissingCategories() {
-    // Your 4 Pillars (Using the exact, case-sensitive names)
+    // Your 4 Pillars (Using the exact, case-sensitive names the UI will display)
     const requiredCategories = {
         "Activities": false,
-        "Food/Drink": false,
-        "Venue": false,
+        "Food & Drink": false, // <-- CHANGED from "Food/Drink" to match your desired UI/Airtable field style
+        "Venues": false,     // <-- CHANGED from "Venue" to match your desired plural/UI style
         "Extras": false,
     };
 
     for (const recordId of state.cart.lockedItems.keys()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        // We will check the raw string for a case-insensitive match
+        // The itemCategories string is a lowercased, comma-separated list of categories from Airtable
         const itemCategories = (record.fields.Categories || '').toLowerCase();
 
-        // Check against our "required" list
+        // Check against our "required" list. We check for common lowercase variations.
         if (itemCategories.includes('activities')) {
             requiredCategories["Activities"] = true;
         }
-        if (itemCategories.includes('food/drink') || itemCategories.includes('food')) {
-            requiredCategories["Food/Drink"] = true;
+        
+        // --- FIXED: Check for all common Food & Drink variations ---
+        if (itemCategories.includes('food & drink') || itemCategories.includes('food/drink') || itemCategories.includes('food') || itemCategories.includes('drink')) {
+            requiredCategories["Food & Drink"] = true;
         }
-        if (itemCategories.includes('venue')) {
-            requiredCategories["Venue"] = true;
+        
+        // --- FIXED: Check for Venue/Venues variations ---
+        if (itemCategories.includes('venues') || itemCategories.includes('venue')) {
+            requiredCategories["Venues"] = true;
         }
+        
         if (itemCategories.includes('extras')) {
             requiredCategories["Extras"] = true;
         }
@@ -206,12 +215,12 @@ export function calculateMissingCategories() {
     let suggestions = [];
     for (const category in requiredCategories) {
         if (!requiredCategories[category]) {
-            suggestions.push(category); // Add the *missing* category (e.g., "Activities")
+            // Add the *missing* category using the exact UI name (e.g., "Food & Drink")
+            suggestions.push(category); 
         }
     }
     return suggestions;
 }
-
 // --- START V2.1: NEW FUNCTIONS ---
 
 // In: availability.js
