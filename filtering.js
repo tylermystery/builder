@@ -454,9 +454,10 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    // --- NEW: Build the Goal Bucket for sorting ---
-    const goalBucket = buildGoalBucket();
-    // --- END NEW ---
+    // --- VVV NEW: Build the Goal Bucket based on SortBy selection VVV ---
+    const includeGoals = (sortBy === 'recommended-goals');
+    const goalBucket = buildGoalBucket(includeGoals);
+    // --- ^^^ END NEW ^^^
 
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
@@ -508,16 +509,13 @@ export function applyFiltersAndSort(imageCache) {
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          
-         // --- VVV FIXED: ALWAYS FILTER BY SEARCH TERM VVV ---
-         // This ensures only relevant items are displayed, regardless of sort type.
+         // FIXED: ALWAYS FILTER BY SEARCH TERM 
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
-         // --- ^^^ END FIXED ^^^ ---
     }
 
     // --- Sort the Final List (pass the goalBucket) ---
-    // If 'recommended' is active, the massive score bonus ensures exact matches are still #1.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
     // --- Update State & Render ---
