@@ -67,9 +67,6 @@ function getPlanRankingProfile() {
 }
 
 
-// In: components/modal.js
-// Action: REPLACE the entire `generateRecommendationBlurb` function
-
 /**
  * [v1.2] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
  * @param {object} record - The item record being displayed.
@@ -81,7 +78,7 @@ function generateRecommendationBlurb(record) {
     
     // Get all context
     const matchedGoals = findGoalsInText(goalText);
-    const missingCategories = calculateMissingCategories(); // This is now imported and correct
+    const missingCategories = calculateMissingCategories(); // This is now imported
     const planProfile = getPlanRankingProfile();
     
     const itemRankings = JSON.parse(record.fields['Rankings'] || '{}');
@@ -104,7 +101,6 @@ function generateRecommendationBlurb(record) {
     }
 
     // --- Brain 2: Breadth Match (The "4 Pillars") ---
-    // This logic is now fixed to use the correct plural/cased names
     if (missingCategories.length > 0) {
         if (missingCategories.includes("Activities") && itemCategories.includes("activities")) {
             blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
@@ -132,8 +128,8 @@ function generateRecommendationBlurb(record) {
             }
         });
     }
-    
-    // --- Build the "Recommendation" Blurb ---
+
+    // Build the "Recommendation" Blurb
     if (blurbs.size > 0) {
         let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
         blurbs.forEach(blurb => {
@@ -143,14 +139,15 @@ function generateRecommendationBlurb(record) {
         return finalBlurb;
     }
 
-    // --- NEW: Default Blurb (The "Customize" Nudge) ---
-    // If no other reasons were found AND the user hasn't provided intent
+    // --- Default Blurb (The "Customize" Nudge) ---
     if (blurbs.size === 0 && matchedGoals.length === 0 && searchTerm.length === 0) {
         return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' (e.g., 'fun' or 'art') to get personalized recommendations for this item.";
     }
 
     return null; // No blurb needed
 }
+// --- END OF Recommendation Engine v1.2 ---
+
 
 let stripe;
 let currentShopSettings = {};
@@ -465,7 +462,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- THIS IS THE CRITICAL FIX ---
+    // --- THIS IS THE FIX ---
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
