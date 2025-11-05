@@ -495,6 +495,24 @@ export function updateCatalogHeader() {
         // Use 'date-filter' as the type, no value needed for clearing
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
     }
+    // G. Goals/Recommended Chips (Only when Sort By: Recommended is active)
+    if (sortBy === 'recommended') {
+        const goalText = document.getElementById('header-goals')?.value?.trim();
+        const searchInput = document.getElementById('name-filter')?.value?.trim();
+
+        // Check for *all* abstract goals from the input text
+        if (goalText && goalText.length > 0) {
+            // Use a regex to grab words that look like goals
+            const abstractGoals = goalText.toLowerCase().match(/(\w+)/g) || [];
+
+            abstractGoals.forEach(goal => {
+                // Only add if it's a non-search word and not already captured
+                if (goal.length > 2 && goal !== searchInput.toLowerCase()) {
+                    activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
+                }
+            });
+        }
+    }
     // --- 3. Collect Active Category/Subcategory Filters ---
     
     const path = [];
@@ -606,6 +624,20 @@ function handleFilterChipClear(e) {
                  datePicker.clear();
                  // Manually remove date from state to ensure consistency
                  state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            break;
+        // --- ^^^ END NEW CASE ^^^ ---
+        // --- VVV ADD THIS CASE VVV ---
+        case 'goal-filter':
+            const goalsInput = document.getElementById('header-goals');
+            if (goalsInput) {
+                // Clearing a chip removes that word from the goals input text
+                const goalWords = goalsInput.value.split(/\s*,\s*|\s+/).filter(Boolean);
+                const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
+                goalsInput.value = updatedGoals;
+                
+                // Manually trigger the 'change' event on the input field
+                goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
             }
             break;
         // --- ^^^ END NEW CASE ^^^ ---
