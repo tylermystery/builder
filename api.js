@@ -709,7 +709,7 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
         const encodedTag = encodeURIComponent(`Failed Media Tag:\n${mediaTag}`);
         
         // A generic grey placeholder public ID
-        const placeholderPublicID = 'v1/samples/solid_color'; 
+        const placeholderPublicID = 'ww71meppejsewxsxr4x7'; // Replaced 'v1/samples/solid_color'
         
         // Cloudinary URL with text overlay:
         // w_600,h_520,c_fill: Base canvas
