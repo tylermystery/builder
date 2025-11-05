@@ -1,5 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS of availability.js
-
+// PASTE THIS ENTIRE CODE INTO: availability.js
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import * as api from './api.js';
@@ -103,6 +102,48 @@ export function checkAvailability(start, end, busyTimes) {
     return true;
 }
 
+export function getAvailableSlotsForDay(day, busyTimes) {
+    if (!busyTimes || busyTimes.length === 0) {
+        return '8:00 AM - 5:00 PM';
+        // Default availability if no data
+    }
+
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const availableSlots = [];
+    let lastEnd = dayStart;
+
+    busyTimes.sort((a, b) => new Date(a.start) - new Date(b.start));
+    busyTimes.forEach(busy => {
+        const start = new Date(Math.max(busy.start, dayStart));
+        const end = new Date(Math.min(busy.end, dayEnd));
+
+        if (start > lastEnd) {
+            availableSlots.push({
+                start: lastEnd,
+                end: start
+            });
+        }
+        lastEnd = end > lastEnd ? end : lastEnd;
+    });
+    if (lastEnd < dayEnd) {
+        availableSlots.push({
+            start: lastEnd,
+            end: dayEnd
+        });
+    }
+
+    return availableSlots.map(slot => {
+        const startTime = new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const endTime = new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `${startTime} - ${endTime}`;
+    }).join('\n') ||
+        'No available slots';
+}
+
 export async function getCombinedPlanStatus(date, lockedItems) {
     let overallStatus = AVAILABILITY_STATUS.FULL;
     for (const record of lockedItems) {
@@ -124,14 +165,16 @@ export async function getCombinedPlanStatus(date, lockedItems) {
     return overallStatus;
 }
 
-// --- Recommendation Engine v1.3: Helper Functions ---
+// In: availability.js
+// Action: REPLACE the entire `calculateMissingCategories` function
 
 /**
- * [v1.3] Calculates the "health" of the event to find missing "Pillar" categories.
+ * [Recommendation Engine v1.2]
+ * Calculates the "health" of the event to find missing "Pillar" categories.
  * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
  */
 export function calculateMissingCategories() {
-    // Your 4 Pillars
+    // Your 4 Pillars (Using the exact, case-sensitive names)
     const requiredCategories = {
         "Activities": false,
         "Food/Drink": false,
@@ -142,6 +185,7 @@ export function calculateMissingCategories() {
     for (const recordId of state.cart.lockedItems.keys()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
+        // We will check the raw string for a case-insensitive match
         const itemCategories = (record.fields.Categories || '').toLowerCase();
 
         // Check against our "required" list
@@ -166,59 +210,4 @@ export function calculateMissingCategories() {
         }
     }
     return suggestions;
-}
-
-/**
- * [v1.3] Scans goal text for matching ranking keywords.
- * @param {string} text - The user's "Goals/Notes" text.
- * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
- */
-export function findGoalsInText(text) {
-    if (!text) return [];
-    const lowerText = text.toLowerCase();
-    const foundGoals = new Set();
-    
-    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
-    const GOAL_KEYWORDS = {
-        "fun": "Fun",
-        "art": "Art",
-        "artistic": "Art",
-        "celebration": "Celebration",
-        "celebrate": "Celebration",
-        "competitive": "Competitive",
-        "compete": "Competitive",
-        "team-build": "Team-Build",
-        "team build": "Team-Build",
-        "bonding": "Bonding",
-        "relaxing": "Relaxing"
-    };
-
-    for (const keyword in GOAL_KEYWORDS) {
-        if (lowerText.includes(keyword)) {
-            foundGoals.add(GOAL_KEYWORDS[keyword]);
-        }
-    }
-    return Array.from(foundGoals);
-}
-
-/**
- * [v1.3] Gets the combined "Ranking Profile" for all items currently in the plan.
- * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
- */
-export function getPlanRankingProfile() {
-    const planProfile = {};
-    for (const recordId of state.cart.lockedItems.keys()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record || !record.fields['Rankings']) continue;
-        
-        try {
-            const rankings = JSON.parse(record.fields['Rankings']);
-            for (const key in rankings) {
-                if (typeof rankings[key] === 'number') {
-                    planProfile[key] = (planProfile[key] || 0) + rankings[key];
-                }
-            }
-        } catch (e) { /* Ignore bad JSON */ }
-    }
-    return planProfile;
 }
