@@ -432,7 +432,6 @@ function sortRecords(records, sortBy, goalBucket) {
         }
     });
 }
-// --- END REPLACED FUNCTION ---
 // In: filtering.js
 // Action: REPLACE the entire applyFiltersAndSort function
 
@@ -465,7 +464,7 @@ export function applyFiltersAndSort(imageCache) {
 
     if (catalogTitle) catalogTitle.style.display = 'none';
 
-    let recordsToDisplay; // --- THIS IS THE KEY CHANGE ---
+    let recordsToDisplay;
 
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         // --- "My Plan" View ---
@@ -509,14 +508,16 @@ export function applyFiltersAndSort(imageCache) {
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          
-         // --- VVV REMOVE OLD SEARCH WORKAROUND VVV ---
-         // Removed: recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
-         // The search term is now handled entirely by the RECOMMENDED sort calculation
-         // or is just a passive display element if another sort is selected.
-         // --- ^^^ END REMOVED WORKAROUND ^^^
+         // --- VVV FIXED: ALWAYS FILTER BY SEARCH TERM VVV ---
+         // This ensures only relevant items are displayed, regardless of sort type.
+         if (searchTerm) {
+             recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+         }
+         // --- ^^^ END FIXED ^^^ ---
     }
 
     // --- Sort the Final List (pass the goalBucket) ---
+    // If 'recommended' is active, the massive score bonus ensures exact matches are still #1.
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
     // --- Update State & Render ---
