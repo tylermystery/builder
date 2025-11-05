@@ -1050,3 +1050,48 @@ export async function toggleUserLike(itemId) {
     }
 }
 // --- END NEW FUNCTION ---
+
+// In: api.js
+// Action: ADD this new function to the END of the file.
+
+/**
+ * Fetches all item records, but ONLY the Name and AI_Profile fields.
+ * This is used by the admin bulk-profiling tool.
+ * @returns {Promise<Array<Object>>} A promise that resolves to an array of item records.
+ */
+export async function fetchItemsForProfiling() {
+    let allRecords = [];
+    let offset = null;
+    
+    // --- We only fetch Name and the new AI_Profile field ---
+    const fieldsQuery = `fields%5B%5D=Name&fields%5B%5D=AI_Profile`;
+    const baseUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?${fieldsQuery}`;
+    log('API', `Fetching all items for profiling...`);
+
+    try {
+        do {
+            let url = baseUrl;
+            if (offset) {
+                url += `&offset=${offset}`;
+            }
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Airtable Error fetching items for profiling:`, errorText);
+                throw new Error(`Failed to fetch items. Status: ${response.status}`);
+            }
+            const data = await response.json();
+            allRecords = allRecords.concat(data.records);
+            offset = data.offset;
+        } while (offset);
+
+        log('API', `Total item records fetched for profiling: ${allRecords.length}`);
+        return allRecords;
+    } catch (error) {
+        console.error("Error fetching all item records for profiling:", error);
+        throw error;
+    }
+}
