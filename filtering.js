@@ -4,9 +4,9 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket } from './availability.js'; // <-- CORRECT IMPORT
+import { calculateMissingCategories, buildGoalBucket } from './availability.js';
 
-// --- START: NEW RECOMMENDATION ENGINE V2.1 ---
+// --- START: RECOMMENDATION ENGINE V2.1 (DUAL-PROFILE) ---
 
 /**
  * [v2.1] The "Goal Mapper" (Rosetta Stone).
@@ -29,11 +29,19 @@ const GOAL_PROFILE_MAP = {
     "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
 
     // --- Pillar Goals (Implicit) ---
-    // These keys *must* match the strings from calculateMissingCategories
     "Activities": { "Pillars.Activity": 1.0 },
     "Food/Drink": { "Pillars.Food/Drink": 1.0 },
     "Venue": { "Pillars.Venue": 1.0 },
     "Extras": { "Pillars.Extras": 1.0 }
+};
+
+/**
+ * [v1.2] Keywords for the old "Rankings" (v1.2) profile.
+ */
+const V1_2_GOAL_KEYWORDS = {
+    "fun": "Fun", "art": "Art", "artistic": "Art", "celebration": "Celebration",
+    "celebrate": "Celebration", "competitive": "Competitive", "compete": "Competitive",
+    "team-build": "Team-Build", "team build": "Team-Build", "bonding": "Bonding"
 };
 
 /**
@@ -46,16 +54,10 @@ function getProfileScore(profile, key) {
     if (!profile || !key) return 0;
     const keys = key.split('.');
     if (keys.length === 2) {
-        // Accessing nested profile[keys[0]][keys[1]]
         return profile[keys[0]]?.[keys[1]] || 0;
     }
     return 0;
 }
-
-// --- END: NEW RECOMMENDATION ENGINE V2.1 ---
-
-
-// --- HELPER FUNCTIONS (Moved to the top) ---
 
 /**
  * [v2.1] Fallback scoring for un-profiled items.
@@ -77,28 +79,16 @@ function calculateBasicSearchScore(record, searchText) {
 }
 
 /**
- * [v2.1] Calculates the "Universal Profile" score for an item.
- * @param {object} record - The Airtable record.
+ * [v2.1] Scores an item based on the "Universal Profile" (AI_Profile field).
+ * @param {object} profile - The parsed v2.1 profile object.
  * @param {Array<string>} goalBucket - The user's master goal list.
+ * @param {string} searchText - The user's search query.
  * @returns {number} The final recommendation score.
  */
-function calculateRecommendationScore(record, goalBucket) {
+function calculateV2_1_Score(profile, goalBucket, searchText) {
     let finalScore = 0;
-    const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
+    const { Tags = [], ...attributes } = profile;
 
-    let profile;
-    try {
-        // Try to parse the new v2.1 Rankings profile
-        profile = JSON.parse(record.fields.Rankings || '{}');
-        if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
-    } catch (e) {
-        // Fallback for old/empty items
-        return calculateBasicSearchScore(record, searchText);
-    }
-
-    const { profileSource, Tags = [], ...attributes } = profile;
-
-    // --- HYBRID SCORING LOGIC ---
     goalBucket.forEach(goal => {
         const goalLower = goal.toLowerCase();
 
@@ -109,19 +99,16 @@ function calculateRecommendationScore(record, goalBucket) {
                 const weight = mapper[key];
                 
                 if (key === 'Tags') {
-                    // Special case for tag-based mappers (e.g., "competitive")
                     if (Tags.includes(weight)) {
-                        finalScore += 10; // Add a flat bonus for mapped tag matches
+                        finalScore += 10; // Flat bonus for mapped tag
                     }
                 } else {
-                    // Standard attribute scoring (e.g., "Vibe.Energy")
                     const itemScore = getProfileScore(attributes, key); // 0-10
                     finalScore += (itemScore * weight);
                 }
             }
         }
         // 2. Check "Brain 2" (The "Robust" Tagger)
-        // (Only run if this goal IS the search text, to avoid double-scoring)
         else if (goalLower === searchText) {
             const TAG_BONUS = 15; // High-priority bonus for direct search match
             if (Tags.some(tag => tag.includes(goalLower))) {
@@ -129,10 +116,68 @@ function calculateRecommendationScore(record, goalBucket) {
             }
         }
     });
-
     return finalScore;
 }
 
+/**
+ * [v1.2] Scores an item based on the *old* "Rankings" field.
+ * @param {object} profile - The parsed v1.2 profile object.
+ * @param {Array<string>} goalBucket - The user's master goal list.
+ * @returns {number} The final recommendation score.
+ */
+function calculateV1_2_Score(profile, goalBucket) {
+    let finalScore = 0;
+    
+    goalBucket.forEach(goal => {
+        const goalLower = goal.toLowerCase();
+        
+        // 1. Check Pillars
+        if (goal === "Activities" && (profile.Activities || 0) > 0) finalScore += 10;
+        if (goal === "Food/Drink" && (profile["Food/Drink"] || 0) > 0) finalScore += 10;
+        if (goal === "Venue" && (profile.Venue || 0) > 0) finalScore += 10;
+        if (goal === "Extras" && (profile.Extras || 0) > 0) finalScore += 10;
+
+        // 2. Check Mapped Goals
+        const mappedGoal = V1_2_GOAL_KEYWORDS[goalLower];
+        if (mappedGoal && (profile[mappedGoal] || 0) >= 4) {
+            finalScore += 15; // High score for matching an old goal
+        }
+    });
+    return finalScore;
+}
+
+
+/**
+ * [v2.1] The "Master Router" for scoring.
+ * It checks for a v2.1 profile, then a v1.2 profile, then falls back to search.
+ */
+function calculateRecommendationScore(record, goalBucket) {
+    const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
+
+    // 1. Try to parse v2.1 "AI_Profile"
+    try {
+        const v2_1_Profile = JSON.parse(record.fields.AI_Profile || '{}');
+        if (v2_1_Profile.profileSource) {
+            return calculateV2_1_Score(v2_1_Profile, goalBucket, searchText);
+        }
+    } catch (e) { /* Not a v2.1 profile, continue */ }
+
+    // 2. Try to parse v1.2 "Rankings"
+    try {
+        const v1_2_Profile = JSON.parse(record.fields.Rankings || '{}');
+        // Check if it's a non-empty object and NOT a v2.1 profile
+        if (Object.keys(v1_2_Profile).length > 0 && !v1_2_Profile.profileSource) {
+            return calculateV1_2_Score(v1_2_Profile, goalBucket);
+        }
+    } catch (e) { /* Not a v1.2 profile, continue */ }
+
+    // 3. Fallback to basic search
+    return calculateBasicSearchScore(record, searchText);
+}
+
+// --- END: RECOMMENDATION ENGINE ---
+
+// --- (Existing Helper Functions) ---
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
@@ -149,7 +194,6 @@ function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
 }
 
 function isGrouping(record, allRecordNames) {
-    // Assuming 'Grouping' is a defined Item Type in Airtable
     return record.fields['Item Type'] === 'Grouping';
 }
 
@@ -162,55 +206,40 @@ function parseCapacity(capacityStr) {
     return { min: parts[0] || 0, max: parts[1] || Infinity };
 }
 
-// REPLACE the filterByCategoryAndSubcategory function in: filtering.js
-
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
-    // If 'all' or no category is selected, pass through all records.
     if (selectedCategory === 'all' || !selectedCategory) {
         return records;
     }
-
     const selectedCategoryLower = selectedCategory.toLowerCase();
     let categoryFilteredRecords = [];
-
-    // --- NEW LOGIC: Check Categories, Parent Item, and Subcategories for the selected category ---
     categoryFilteredRecords = records.filter(record => {
         const fields = record.fields;
         const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
         const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
             .map(cat => cat.trim().toLowerCase());
-        // Also check Subcategories field for the main category name (edge case)
         const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
             .split(',')
             .map(sc => sc.trim().toLowerCase());
-
-        return itemCategories.includes(selectedCategoryLower) || // Matches Category field
-               parentNameLower === selectedCategoryLower ||       // Matches Parent Item field
-               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower); // Matches Subcategories field
+        return itemCategories.includes(selectedCategoryLower) ||
+               parentNameLower === selectedCategoryLower ||
+               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
     });
-    // --- END NEW LOGIC --
 
-    // If subcategories are selected, further filter the category results.
     if (activeSubcategories.length > 0) {
-        // --- NEW LOGIC: Check Subcategories and Parent Item for the selected subcategories --
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             const fields = record.fields;
             const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
             const itemSubcategories = (fields.Subcategories || '')
                 .split(',')
                 .map(sc => sc.trim().toLowerCase());
-
-            // Keep if *any* active subcategory filter matches the item's Subcategories OR Parent Item
             return activeSubcategories.some(activeSubcat =>
-                itemSubcategories.includes(activeSubcat) || // Matches Subcategories field
-                parentNameLower === activeSubcat            // Matches Parent Item field
+                itemSubcategories.includes(activeSubcat) ||
+                parentNameLower === activeSubcat
             );
         });
-         // --- END NEW LOGIC --
-        return subcategoryFilteredRecords; // Return items matching category logic AND subcategory logic
+        return subcategoryFilteredRecords;
     } else {
-        // If no subcategories are selected, return all items matching the broad category logic.
         return categoryFilteredRecords;
     }
 }
@@ -218,17 +247,13 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
 
 function filterByStatus(records, statusFilter) {
     if (statusFilter === 'all') {
-        // If "Show All" is selected, return everything
         return records;
     } else if (statusFilter === 'Available') {
-        // If "Available" is selected, include both "Available" AND "Featured" items
         return records.filter(record => {
-            const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS]; // Get status once
-            // Check if status exists AND matches either "Available" or "Featured"
+            const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS];
             return status && (status === 'Available' || status === 'Featured');
         });
     } else {
-        // For any other specific status, check if status exists AND matches the filter
         return records.filter(record =>
             record.fields[CONSTANTS.FIELD_NAMES.STATUS] &&
             record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter
@@ -240,23 +265,17 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     if (headcountFilter === 'any' && !customHeadcount) {
         return records;
     }
-
     let filterMin = 0, filterMax = Infinity;
     if (headcountFilter === 'custom') {
         filterMin = parseInt(customHeadcount, 10) || 0;
-        filterMax = filterMin; // For custom, min and max are the same target value
+        filterMax = filterMin;
     } else {
-        // Parse range like "11-25" or "250-plus"
         const [minStr, maxStr] = headcountFilter.split('-');
         filterMin = parseInt(minStr, 10);
         filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
     }
-
-    // Filter records: Keep if the record's capacity range overlaps with the filter range
     return records.filter(record => {
-        // Assuming 'Capacity' field exists and is parsed correctly by parseCapacity
         const capacity = parseCapacity(record.fields['Capacity']);
-        // Overlap condition: filterMin <= capacity.max AND filterMax >= capacity.min
         return filterMin <= capacity.max && filterMax >= capacity.min;
     });
 }
@@ -265,26 +284,17 @@ function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
     }
-    // Map dropdown values to Airtable region names
     const filterValueToRegion = {
-        'sf': 'San Francisco',
-        'oakland': 'Oakland',
-        'peninsula': 'Peninsula',
-        'south-bay': 'South Bay',
-        'north-bay': 'North Bay',
-        'east-bay': 'East Bay',
-        'other': 'Other'
+        'sf': 'San Francisco', 'oakland': 'Oakland', 'peninsula': 'Peninsula',
+        'south-bay': 'South Bay', 'north-bay': 'North Bay', 'east-bay': 'East Bay', 'other': 'Other'
     };
     const targetRegion = filterValueToRegion[locationFilter];
-
     return records.filter(record => {
-        // Assuming 'Region' is a multi-select field in Airtable
         const recordRegions = record.fields['Region'] || [];
         if (recordRegions.length > 0) {
-            // Keep if regions include 'All' or the specific target region
             return recordRegions.includes('All') || recordRegions.includes(targetRegion);
         }
-        return false; // Exclude if no region is set
+        return false;
     });
 }
 
@@ -292,7 +302,6 @@ function filterByBudget(records, budgetFilter) {
     if (budgetFilter === 'any') {
         return records;
     }
-    // Define budget ranges based on dropdown values
     const BUDGET_RANGES = {
         'budget-friendly': { min: 0, max: 50 },
         'moderate': { min: 51, max: 100 },
@@ -300,28 +309,21 @@ function filterByBudget(records, budgetFilter) {
         'luxury': { min: 251, max: Infinity }
     };
     const range = BUDGET_RANGES[budgetFilter];
-
     return records.filter(record => {
-        // Get the minimum price (handles groupings and individual items)
         const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        // Keep if the item's price falls within the selected budget range
         return price >= range.min && price <= range.max;
     });
 }
 
 function filterBySearchTerm(records, searchTerm) {
     if (!searchTerm) {
-        return records; // No search term, return all records
+        return records;
     }
-    // Normalize search term
     const lowerSearchTerm = searchTerm.toLowerCase();
-
     const scoredRecords = [];
     records.forEach(record => {
         let score = 0;
         const fields = record.fields;
-
-        // Fields to search within
         const name = (fields[CONSTANTS.FIELD_NAMES.NAME] || '').toLowerCase();
         const description = (fields[CONSTANTS.FIELD_NAMES.DESCRIPTION] || '').toLowerCase();
         const optionNames = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]).map(opt => opt.name).join(' ').toLowerCase();
@@ -331,10 +333,9 @@ function filterBySearchTerm(records, searchTerm) {
             fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '',
             fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '',
             fields['Location'] || '',
-            optionNames // Include parsed option names in search text
+            optionNames
         ].join(' ').toLowerCase();
 
-        // Assign scores based on where the term is found (higher score for name match)
         if (name.includes(lowerSearchTerm)) {
             score = 3;
         } else if (description.includes(lowerSearchTerm)) {
@@ -342,35 +343,26 @@ function filterBySearchTerm(records, searchTerm) {
         } else if (allOtherText.includes(lowerSearchTerm)) {
             score = 1;
         }
-
-        // Add records with a score > 0 to the results
         if (score > 0) {
             scoredRecords.push({ record, score });
         }
     });
-
-    // Sort results by score (highest first)
     scoredRecords.sort((a, b) => b.score - a.score);
-    // Return just the record objects in the sorted order
     return scoredRecords.map(item => item.record);
 }
 
-// --- THIS IS THE CORRECT, REPLACED FUNCTION ---
 function sortRecords(records, sortBy, goalBucket) {
-    // --- NEW: Check for "Recommended" sort ---
+    // --- NEW: "Recommended" sort uses the master router ---
     if (sortBy === 'recommended') {
         const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
         log('Filtering', `Sorting by v2.1 "Recommended". Goal Bucket: [${goalBucket.join(', ')}]`);
 
-        // Create a scored list
         const scoredRecords = records.map(record => ({
             record,
             score: calculateRecommendationScore(record, goalBucket)
         }));
 
-        // Sort by the new score, highest to lowest
         scoredRecords.sort((a, b) => b.score - a.score);
-
         return scoredRecords.map(item => item.record);
     }
     
@@ -378,13 +370,8 @@ function sortRecords(records, sortBy, goalBucket) {
     return records.sort((a, b) => {
         const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
         const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
-
-        if (aIsFeatured && !bIsFeatured) {
-            return -1; // a comes first
-        }
-        if (!aIsFeatured && bIsFeatured) {
-            return 1; // b comes first
-        }
+        if (aIsFeatured && !bIsFeatured) return -1;
+        if (!aIsFeatured && bIsFeatured) return 1;
 
         const aPrice = getGroupPriceRange(a)?.min ?? parseFloat(String(a.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
         const bPrice = getGroupPriceRange(b)?.min ?? parseFloat(String(b.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
@@ -395,17 +382,12 @@ function sortRecords(records, sortBy, goalBucket) {
             case 'price-asc': return aPrice - bPrice;
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
-            default: return 0; // Default case, no change in order
+            default: return 0;
         }
     });
 }
-// --- END REPLACED FUNCTION ---
-
 
 // --- MAIN EXPORTED FUNCTION --
-
-// In: filtering.js
-// Action: REPLACE the entire `applyFiltersAndSort` function
 
 export function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
@@ -413,7 +395,6 @@ export function applyFiltersAndSort(imageCache) {
     const planFilterBtn = document.getElementById('plan-filter-btn');
     const likesFilterBtn = document.getElementById('liked-items-filter-btn');
 
-    // Get filter values from UI elements
     const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
     const selectedCategory = activeCategoryButton ? activeCategoryButton.dataset.filter : 'all';
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
@@ -428,15 +409,13 @@ export function applyFiltersAndSort(imageCache) {
 
     // --- NEW: Build the Goal Bucket for sorting ---
     const goalBucket = buildGoalBucket();
-    // --- END NEW ---
 
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
     if (catalogTitle) catalogTitle.style.display = 'none';
-
-    let recordsToDisplay; // --- THIS IS THE KEY CHANGE ---
+    let recordsToDisplay; 
 
     if (planFilterBtn && planFilterBtn.classList.contains('active')) {
         // --- "My Plan" View ---
@@ -450,8 +429,6 @@ export function applyFiltersAndSort(imageCache) {
         const allPlanRecordIds = [...lockedItemIds, ...ideaItemIds];
         recordsToDisplay = allPlanRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
         
-        // Note: No other filters are applied
-
     } else if (likesFilterBtn && likesFilterBtn.classList.contains('active')) {
         // --- "My Likes" View ---
         if (catalogTitle) {
@@ -468,14 +445,9 @@ export function applyFiltersAndSort(imageCache) {
         }
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
-        // Note: No other filters are applied
-
     } else {
          // --- Standard Category/All View ---
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
-         
-         // --- THIS IS THE FIX ---\
-         // The standard filters are now MOVED INSIDE this `else` block
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
          recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
@@ -485,7 +457,6 @@ export function applyFiltersAndSort(imageCache) {
          if (sortBy !== 'recommended' && searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
-         // --- END FIX ---
     }
 
     // --- Sort the Final List (pass the goalBucket) ---
