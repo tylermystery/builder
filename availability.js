@@ -214,27 +214,40 @@ export function calculateMissingCategories() {
 
 // --- START V2.1: NEW FUNCTIONS ---
 
+// In: availability.js
+// Action: REPLACE the GOAL_PROFILE_MAP with the expanded version.
+
 /**
- * [v2.1] The "Goal Mapper" (Rosetta Stone).
+ * [v2.2] The "Goal Mapper" (Rosetta Stone). Expanded to include synonyms.
  */
 const GOAL_PROFILE_MAP = {
     // --- Abstract Goals (from text) ---
     "fun": { "Vibe.Energy": 1.0, "Vibe.Novelty": 0.5, "Vibe.Relaxation": -0.5 },
     "exciting": { "Vibe.Energy": 1.0, "Physicality.Intensity": 0.5 },
+    
+    // --- NEW SYNONYMS & MAPPERS ---
+    "social": { "Vibe.Energy": 0.5, "Vibe.Formality": -0.5, "Vibe.Relaxation": 0.5 },
+    "joy": { "Vibe.Energy": 0.8, "Vibe.Novelty": 0.5 },
+    "lively": { "Vibe.Energy": 1.0 },
+    "calm": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
+    "quiet": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
+    "unique": { "Vibe.Novelty": 1.0 },
+    "challenging": { "Intellect.Analytical": 0.7, "Physicality.Intensity": 0.5 },
+    // --- END NEW SYNONYMS ---
+    
     "relaxing": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
     "chill": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
     "creative": { "Intellect.Creative": 1.0, "Vibe.Novelty": 0.5 },
     "art": { "Intellect.Creative": 1.0 },
     "artistic": { "Intellect.Creative": 1.0 },
     "team-build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
-    "team build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
+    "team building": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 }, // Corrected case sensitivity match for "team building"
     "bonding": { "Vibe.Relaxation": 0.5, "Vibe.Formality": -0.5 },
     "competitive": { "Physicality.Intensity": 0.5, "Tags": "competitive" },
     "celebration": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
     "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
 
     // --- Pillar Goals (Implicit) ---
-    // These keys *must* match the strings from calculateMissingCategories
     "Activities": { "Pillars.Activity": 1.0 },
     "Food/Drink": { "Pillars.Food/Drink": 1.0 },
     "Venue": { "Pillars.Venue": 1.0 },
