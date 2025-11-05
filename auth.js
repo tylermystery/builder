@@ -10,8 +10,6 @@ let tippyInstance = null;
 
 console.log('[auth.js] 0. File execution started.');
 
-// --- v2.0 Dynamic Effects Engine ---
-// ... (effect imports are correct) ...
 import * as fractalEffect from './components/effects/fractal.js';
 console.log('[auth.js] 1a. Importing fractalEffect.js...');
 import * as fluidEffect from './components/effects/fluid.js';
@@ -24,12 +22,16 @@ const effects = [
     { name: 'Fluid', module: fluidEffect, controlsContainer: document.getElementById('fluid-controls') },
 ];
 console.log('[auth.js] 3. \'effects\' array created. Length:', effects.length);
-// --- End v2.0 Effects Engine ---
 
-
-// --- THIS FUNCTION IS NOW EXPORTED ---
 export function showUserModal(initialView = 'login') {
     const modal = document.getElementById('user-modal-overlay');
+    // --- Add a check here in case modal doesn't exist ---
+    if (!modal) {
+        console.warn('showUserModal called, but user modal overlay not found.');
+        return; 
+    }
+    // --- End check ---
+    
     const loginView = document.getElementById('login-view');
     const signupView = document.getElementById('signup-view');
     const verifyView = document.getElementById('verify-view');
@@ -38,25 +40,32 @@ export function showUserModal(initialView = 'login') {
     const profileView = document.getElementById('profile-view');
     const views = [loginView, signupView, verifyView, resetView, welcomeView, profileView];
     
-    views.forEach(view => view.style.display = 'none');
+    views.forEach(view => {
+        if (view) view.style.display = 'none';
+    });
     
-    document.getElementById('auth-error-msg').textContent = '';
-    document.getElementById('verify-error-msg').textContent = '';
-    document.getElementById('reset-error-msg').textContent = '';
+    // Check if error message elements exist before setting text
+    document.getElementById('auth-error-msg')?.textContent = '';
+    document.getElementById('verify-error-msg')?.textContent = '';
+    document.getElementById('reset-error-msg')?.textContent = '';
     
     const user = state.session.user;
     if (user.isAuthenticated) {
-        profileView.style.display = 'block';
-        document.getElementById('profile-email').textContent = user.email;
-        document.getElementById('profile-plan-count').textContent = user.planIds.length;
+        if (profileView) profileView.style.display = 'block';
+        if (document.getElementById('profile-email')) {
+             document.getElementById('profile-email').textContent = user.email;
+        }
+        if (document.getElementById('profile-plan-count')) {
+            document.getElementById('profile-plan-count').textContent = user.planIds.length;
+        }
     } else {
-        if (initialView === 'login') {
+        if (initialView === 'login' && loginView) {
             loginView.style.display = 'block';
-        } else if (initialView === 'signup') {
+        } else if (initialView === 'signup' && signupView) {
             signupView.style.display = 'block';
-        } else if (initialView === 'verify') {
+        } else if (initialView === 'verify' && verifyView) {
             verifyView.style.display = 'block';
-        } else if (initialView === 'reset') {
+        } else if (initialView === 'reset' && resetView) {
             resetView.style.display = 'block';
         }
     }
@@ -65,29 +74,42 @@ export function showUserModal(initialView = 'login') {
     setTimeout(() => modal.classList.add('active'), 10);
     document.body.classList.add('modal-open');
 }
-// --- END EXPORTED FUNCTION ---
 
 function closeUserModal() {
     const modal = document.getElementById('user-modal-overlay');
-    modal.classList.remove('active');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
+    if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300);
+    }
     document.body.classList.remove('modal-open');
 }
 
 // --- THIS FUNCTION IS RENAMED and EXPORTED ---
 export function initializeAuth(activeShopId) {
-// --- END RENAMING ---
     shopId = activeShopId;
     const modal = document.getElementById('user-modal-overlay');
+
+    // --- THIS IS THE FIX ---
+    // If the modal doesn't exist on this page, just stop.
+    if (!modal) {
+        log('Auth', 'Auth modal not found on this page. Skipping auth event listeners.');
+        return;
+    }
+    // --- END THE FIX ---
 
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
             closeUserModal();
         }
     });
-    document.getElementById('user-modal-close-btn').addEventListener('click', closeUserModal);
+    
+    // Add null checks for all buttons
+    const closeBtn = document.getElementById('user-modal-close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeUserModal);
+    }
     
     // Switch view triggers
     document.querySelectorAll('.toggle-auth-view').forEach(el => {
@@ -99,160 +121,181 @@ export function initializeAuth(activeShopId) {
     });
 
     // Handle Login
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        const errorMsg = document.getElementById('auth-error-msg');
-        errorMsg.textContent = '';
-        
-        try {
-            const response = await fetch('/api/auth-start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, shopId, authType: 'login' })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorMsg = document.getElementById('auth-error-msg');
+            errorMsg.textContent = '';
             
-            if (data.success && data.token) {
-                // Successful login
-                localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
-                setState({ session: { ...state.session, user: data.user } });
-                updateUserProfileIcon();
-                document.getElementById('welcome-email').textContent = data.user.email;
-                showUserModal('welcome');
+            try {
+                const response = await fetch('/api/auth-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, shopId, authType: 'login' })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                if (data.success && data.token) {
+                    // Successful login
+                    localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
+                    setState({ session: { ...state.session, user: data.user } });
+                    updateUserProfileIcon();
+                    document.getElementById('welcome-email').textContent = data.user.email;
+                    showUserModal('welcome');
+                }
+            } catch (err) {
+                errorMsg.textContent = err.message;
             }
-        } catch (err) {
-            errorMsg.textContent = err.message;
-        }
-    });
+        });
+    }
 
     // Handle Signup
-    document.getElementById('signup-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('signup-email').value;
-        const password = document.getElementById('signup-password').value;
-        const passwordConfirm = document.getElementById('signup-password-confirm').value;
-        const errorMsg = document.getElementById('auth-error-msg');
-        errorMsg.textContent = '';
-        
-        if (password !== passwordConfirm) {
-            errorMsg.textContent = 'Passwords do not match.';
-            return;
-        }
-        
-        try {
-            const response = await fetch('/api/auth-start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, shopId, authType: 'signup' })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
-
-            if (data.success) {
-                document.getElementById('verify-email-display').textContent = email;
-                showUserModal('verify');
+    const signupForm = document.getElementById('signup-form');
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const passwordConfirm = document.getElementById('signup-password-confirm').value;
+            const errorMsg = document.getElementById('auth-error-msg');
+            errorMsg.textContent = '';
+            
+            if (password !== passwordConfirm) {
+                errorMsg.textContent = 'Passwords do not match.';
+                return;
             }
-        } catch (err) {
-            errorMsg.textContent = err.message;
-        }
-    });
+            
+            try {
+                const response = await fetch('/api/auth-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, shopId, authType: 'signup' })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+
+                if (data.success) {
+                    document.getElementById('verify-email-display').textContent = email;
+                    showUserModal('verify');
+                }
+            } catch (err) {
+                errorMsg.textContent = err.message;
+            }
+        });
+    }
 
     // Handle Verify
-    document.getElementById('verify-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('verify-email-display').textContent;
-        const code = document.getElementById('verify-code').value;
-        const errorMsg = document.getElementById('verify-error-msg');
-        errorMsg.textContent = '';
-        
-        try {
-            const response = await fetch('/api/auth-verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, code, shopId })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
+    const verifyForm = document.getElementById('verify-form');
+    if (verifyForm) {
+        verifyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('verify-email-display').textContent;
+            const code = document.getElementById('verify-code').value;
+            const errorMsg = document.getElementById('verify-error-msg');
+            errorMsg.textContent = '';
+            
+            try {
+                const response = await fetch('/api/auth-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code, shopId })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
 
-            if (data.success && data.token) {
-                localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
-                setState({ session: { ...state.session, user: data.user } });
-                updateUserProfileIcon();
-                document.getElementById('welcome-email').textContent = data.user.email;
-                showUserModal('welcome');
+                if (data.success && data.token) {
+                    localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
+                    setState({ session: { ...state.session, user: data.user } });
+                    updateUserProfileIcon();
+                    document.getElementById('welcome-email').textContent = data.user.email;
+                    showUserModal('welcome');
+                }
+            } catch (err) {
+                errorMsg.textContent = err.message;
             }
-        } catch (err) {
-            errorMsg.textContent = err.message;
-        }
-    });
+        });
+    }
 
     // Handle Forgot Password
-    document.getElementById('reset-request-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('reset-email').value;
-        const errorMsg = document.getElementById('reset-error-msg');
-        errorMsg.textContent = '';
-        
-        try {
-            const response = await fetch('/api/auth-start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, shopId, authType: 'reset' })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
+    const resetForm = document.getElementById('reset-request-form');
+    if (resetForm) {
+        resetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('reset-email').value;
+            const errorMsg = document.getElementById('reset-error-msg');
+            errorMsg.textContent = '';
+            
+            try {
+                const response = await fetch('/api/auth-start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, shopId, authType: 'reset' })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
 
-            if (data.success) {
-                errorMsg.textContent = 'Password reset email sent! Check your inbox.';
-                errorMsg.style.color = 'green';
+                if (data.success) {
+                    errorMsg.textContent = 'Password reset email sent! Check your inbox.';
+                    errorMsg.style.color = 'green';
+                }
+            } catch (err) {
+                errorMsg.textContent = err.message;
             }
-        } catch (err) {
-            errorMsg.textContent = err.message;
-        }
-    });
+        });
+    }
 
     // Handle Logout
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        localStorage.removeItem(CONSTANTS.AUTH_TOKEN_KEY);
-        setState({ session: { ...state.session, user: { isAuthenticated: false, email: null, id: null, likedItemIds: new Set(), planIds: [], paymentHistory: [], amountReceived: 0 } } });
-        updateUserProfileIcon();
-        closeUserModal();
-        // Clear local likes
-        localStorage.removeItem('tempLikes');
-    });
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem(CONSTANTS.AUTH_TOKEN_KEY);
+            setState({ session: { ...state.session, user: { isAuthenticated: false, email: null, id: null, likedItemIds: new Set(), planIds: [], paymentHistory: [], amountReceived: 0 } } });
+            updateUserProfileIcon();
+            closeUserModal();
+            // Clear local likes
+            localStorage.removeItem('tempLikes');
+        });
+    }
 
     // Handle "Welcome" continue button
-    document.getElementById('welcome-continue-btn').addEventListener('click', closeUserModal);
+    const welcomeBtn = document.getElementById('welcome-continue-btn');
+    if (welcomeBtn) {
+        welcomeBtn.addEventListener('click', closeUserModal);
+    }
     
     // --- v2.0 Effects Engine ---
     const effectsDropdown = document.getElementById('effects-dropdown');
-    effects.forEach((effect, index) => {
-        const option = document.createElement('option');
-        option.value = index;
-        option.textContent = effect.name;
-        effectsDropdown.appendChild(option);
-    });
     
-    effectsDropdown.addEventListener('change', (e) => {
-        const selectedEffectIndex = e.target.value;
-        const selectedEffect = effects[selectedEffectIndex];
-        
-        // Hide all controls
-        effects.forEach(eff => {
-            if (eff.controlsContainer) eff.controlsContainer.style.display = 'none';
+    // Add a check in case this element doesn't exist
+    if (effectsDropdown) {
+        effects.forEach((effect, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = effect.name;
+            effectsDropdown.appendChild(option);
         });
         
-        // Load the new effect
-        if (selectedEffect) {
-            backgroundEngine.loadEffect(selectedEffect.module, selectedEffect.controlsContainer);
-        } else {
-            backgroundEngine.loadEffect(null, null); // Clear effect
-        }
-    });
-    
+        effectsDropdown.addEventListener('change', (e) => {
+            const selectedEffectIndex = e.target.value;
+            const selectedEffect = effects[selectedEffectIndex];
+            
+            // Hide all controls
+            effects.forEach(eff => {
+                if (eff.controlsContainer) eff.controlsContainer.style.display = 'none';
+            });
+            
+            // Load the new effect
+            if (selectedEffect) {
+                backgroundEngine.loadEffect(selectedEffect.module, selectedEffect.controlsContainer);
+            } else {
+                backgroundEngine.loadEffect(null, null); // Clear effect
+            }
+        });
+    }
     // --- End v2.0 Effects Engine ---
 }
 
