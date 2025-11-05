@@ -5,22 +5,19 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-// --- THIS IMPORT IS MODIFIED ---
-// It now imports all the helper functions from availability.js
+// --- THIS IS THE CORRECTED IMPORT BLOCK ---
 import { 
     getDayStatus, 
-    getAvailableSlotsForDay, 
     AVAILABILITY_STATUS, 
     calculateMissingCategories, 
     findGoalsInText, 
     getPlanRankingProfile 
 } from '../availability.js';
-// --- END MODIFICATION ---
+// --- END CORRECTION (removed getAvailableSlotsForDay) ---
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- ALL HELPER FUNCTIONS (findGoalsInText, calculateMissingCategories, getPlanRankingProfile) ARE NOW DELETED FROM THIS FILE ---
-
+// --- Recommendation Engine v1.2: Helper Functions ---
 
 /**
  * [v1.2] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
