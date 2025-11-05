@@ -1,7 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS of utils.js
 
 import { state } from './state.js';
-import { CONSTANTS }Code:
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 
