@@ -148,10 +148,8 @@ export function showUserModal() {
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
             ownerDashboardLink.style.display = 'block';
-            adminProfileBtn.style.display = 'block'; // <-- ADD THIS
         } else {
             ownerDashboardLink.style.display = 'none';
-            adminProfileBtn.style.display = 'none'; // <-- ADD THIS
         }
     } else {
         signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
