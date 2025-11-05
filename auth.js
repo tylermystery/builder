@@ -1,339 +1,417 @@
-// REPLACE THE ENTIRE CONTENTS of auth.js
+// FILE: auth.js (REPLACE ENTIRE FILE)
+
+// --- DEBUG ---
+console.log('[auth.js] 0. File execution started.');
+// --- DEBUG ---
 
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import { updateUrl, getUrlParams } from './utils.js';
-import { CONSTANTS } from './config.js';
+import * as api from './api.js'; // Import api module
+import * as backgroundEngine from './components/backgroundEngine.js';
 
-let shopId = null;
-let tippyInstance = null;
-
-console.log('[auth.js] 0. File execution started.');
-
-import * as fractalEffect from './components/effects/fractal.js';
+// --- DEBUG ---
+console.log('[auth.js] 1. Importing effect plugins...');
+// --- FIX: Removed imports for kaleidoscope, wind, water, psychedelic, and vortex ---
 console.log('[auth.js] 1a. Importing fractalEffect.js...');
-import * as fluidEffect from './components/effects/fluid.js';
+// --- DEBUG ---
+import fractalEffect from './components/effects/fractal.js';
+// --- DEBUG ---
 console.log('[auth.js] 1b. Importing fluidEffect.js...');
-
+// --- DEBUG ---
+import fluidEffect from './components/effects/fluid.js';
+// --- DEBUG ---
 console.log('[auth.js] 2. All effect plugins imported.');
+// --- DEBUG ---
 
+
+// --- DOM Elements ---
+const userModalOverlay = document.getElementById('user-modal-overlay');
+const userModalCloseBtn = document.getElementById('user-modal-close-btn');
+const signinView = document.getElementById('signin-view');
+const profileView = document.getElementById('profile-view');
+const signinForm = document.getElementById('signin-form');
+const signinEmailInput = document.getElementById('signin-email');
+const signinMessage = document.getElementById('signin-message');
+const signoutBtn = document.getElementById('signout-btn');
+const profileNameEl = document.getElementById('profile-name');
+const profileEmailEl = document.getElementById('profile-email');
+const userProfileButton = document.getElementById('user-profile-button');
+const userPrefsForm = document.getElementById('user-prefs-form');
+const profilePhoneInput = document.getElementById('profile-phone');
+const profileNotificationsSelect = document.getElementById('profile-notifications');
+const prefsMessage = document.getElementById('prefs-message');
+
+// --- List of available background effects ---
+// --- FIX: This array now only contains the effects that actually exist ---
 const effects = [
-    { name: 'Fractal', module: fractalEffect, controlsContainer: document.getElementById('fractal-controls') },
-    { name: 'Fluid', module: fluidEffect, controlsContainer: document.getElementById('fluid-controls') },
+    { name: "Fluid Energy", plugin: fluidEffect },
+    { name: "Fractal (Simple)", plugin: fractalEffect },
 ];
-console.log('[auth.js] 3. \'effects\' array created. Length:', effects.length);
+// --- END FIX ---
 
-export function showUserModal(initialView = 'login') {
-    const modal = document.getElementById('user-modal-overlay');
-    // --- Add a check here in case modal doesn't exist ---
-    if (!modal) {
-        console.warn('showUserModal called, but user modal overlay not found.');
-        return; 
+// --- DEBUG ---
+console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
+// --- DEBUG ---
+
+// Refactored function to handle a successful login from any method
+async function _handleSuccessfulLogin(payload) {
+    if (state.session.id) {
+        await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
     }
-    // --- End check ---
-    
-    const loginView = document.getElementById('login-view');
-    const signupView = document.getElementById('signup-view');
-    const verifyView = document.getElementById('verify-view');
-    const resetView = document.getElementById('reset-view');
-    const welcomeView = document.getElementById('welcome-view');
-    const profileView = document.getElementById('profile-view');
-    const views = [loginView, signupView, verifyView, resetView, welcomeView, profileView];
-    
-    views.forEach(view => {
-        if (view) view.style.display = 'none';
-    });
-    
-    // Check if error message elements exist before setting text
-    document.getElementById('auth-error-msg')?.textContent = '';
-    document.getElementById('verify-error-msg')?.textContent = '';
-    document.getElementById('reset-error-msg')?.textContent = '';
-    
-    const user = state.session.user;
-    if (user.isAuthenticated) {
-        if (profileView) profileView.style.display = 'block';
-        if (document.getElementById('profile-email')) {
-             document.getElementById('profile-email').textContent = user.email;
+
+    localStorage.setItem('jwt', payload.token);
+
+    // --- MOVED STATE UPDATE HERE ---
+    const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    setState({
+        session: {
+            ...state.session,
+            user: {
+                ...state.session.user,
+                ...payload.user,
+                isAuthenticated: true,
+                isOwner: payload.ownerData.isOwner,
+                ownerDashboardId: payload.ownerData.ownerDashboardId,
+                likedItemIds: new Set(initialLikedItemIdsFromPayload)
+            }
         }
-        if (document.getElementById('profile-plan-count')) {
-            document.getElementById('profile-plan-count').textContent = user.planIds.length;
+    });
+    console.log("[Auth] User state set immediately after login:", state.session.user);
+    // --- END MOVED STATE UPDATE ---
+
+    // --- START LIKES SYNC (Now runs *after* state is updated) ---
+    const currentLikedItemIds = state.session.user.likedItemIds;
+    let syncPromises = [];
+    const tempLikesString = localStorage.getItem('tempLikes');
+    if (tempLikesString) {
+        try {
+            const tempLikes = JSON.parse(tempLikesString);
+            if (Array.isArray(tempLikes) && tempLikes.length > 0) {
+                console.log(`[Auth] Found ${tempLikes.length} temporary likes to sync.`);
+                tempLikes.forEach(itemId => {
+                    if (!currentLikedItemIds.has(itemId)) {
+                        console.log(`[Auth] Syncing temporary like for item: ${itemId}`);
+                        syncPromises.push(
+                            api.toggleUserLike(itemId) // Use imported api
+                                .then(result => {
+                                    if (result.success && result.liked) {
+                                        state.session.user.likedItemIds.add(itemId);
+                                    }
+                                })
+                                .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err.message))
+                        );
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[Auth] Error parsing/processing temporary likes from localStorage:', e);
+        } finally {
+             localStorage.removeItem('tempLikes');
+             console.log('[Auth] Cleared temporary likes from localStorage.');
+        }
+    }
+    // --- END LIKES SYNC ---
+
+    await Promise.allSettled(syncPromises);
+    console.log('[Auth] Like sync process finished.');
+    
+    console.log("[Auth] Final user state after sync:", state.session.user);
+
+    // Trigger events and update UI
+    document.dispatchEvent(new CustomEvent('userLoggedIn'));
+    // populateUserPlans and applyFiltersAndSort are removed from here
+    // They are handled by the 'userLoggedIn' listener in main.js
+    updateUserProfileIcon();
+    hideUserModal();
+}
+
+export function showUserModal() {
+    // --- DEBUG ---
+    console.log('[auth.js] showUserModal() called.');
+    // --- DEBUG ---
+    const user = state.session.user;
+    const ownerDashboardLink = document.getElementById('owner-dashboard-link');
+    
+    // --- NEW: Get Effect UI Elements ---
+    const effectSelect = document.getElementById('effect-select');
+    const effectControlsContainer = document.getElementById('effect-controls-container');
+
+    if (user.isAuthenticated) {
+        profileNameEl.textContent = user.name;
+        profileEmailEl.textContent = user.email;
+        profilePhoneInput.value = user.phoneNumber || '';
+        profileNotificationsSelect.value = user.notificationFrequency || 'None';
+        prefsMessage.textContent = ''; 
+        signinView.style.display = 'none';
+        profileView.style.display = 'block';
+        if (user.isOwner && user.ownerDashboardId) {
+            ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
+            ownerDashboardLink.style.display = 'block';
+        } else {
+            ownerDashboardLink.style.display = 'none';
         }
     } else {
-        if (initialView === 'login' && loginView) {
-            loginView.style.display = 'block';
-        } else if (initialView === 'signup' && signupView) {
-            signupView.style.display = 'block';
-        } else if (initialView === 'verify' && verifyView) {
-            verifyView.style.display = 'block';
-        } else if (initialView === 'reset' && resetView) {
-            resetView.style.display = 'block';
-        }
+        signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
+        signinView.style.display = 'block';
+        profileView.style.display = 'none';
+        ownerDashboardLink.style.display = 'none';
     }
     
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('active'), 10);
-    document.body.classList.add('modal-open');
-}
-
-function closeUserModal() {
-    const modal = document.getElementById('user-modal-overlay');
-    if (modal) {
-        modal.classList.remove('active');
-        setTimeout(() => {
-            modal.style.display = 'none';
-        }, 300);
+    // --- MOVED: Populate Background Effects ---
+    // --- DEBUG ---
+    console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
+    console.log(`[auth.js] Checking IF condition...`);
+    console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
+    console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
+    if (effectSelect) {
+        // --- FIX: Use childElementCount to correctly check if empty ---
+        console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
     }
-    document.body.classList.remove('modal-open');
-}
+    // --- DEBUG ---
 
-// --- THIS FUNCTION IS RENAMED and EXPORTED ---
-export function initializeAuth(activeShopId) {
-    shopId = activeShopId;
-    // --- THIS IS THE FIX ---
-    // The extra "=" is removed from the line below
-    const modal = document.getElementById('user-modal-overlay');
-    // --- END THE FIX ---
-
-    // If the modal doesn't exist on this page, just stop.
-    if (!modal) {
-        log('Auth', 'Auth modal not found on this page. Skipping auth event listeners.');
-        return;
-    }
-
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeUserModal();
-        }
-    });
-    
-    // Add null checks for all buttons
-    const closeBtn = document.getElementById('user-modal-close-btn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeUserModal);
-    }
-    
-    // Switch view triggers
-    document.querySelectorAll('.toggle-auth-view').forEach(el => {
-        el.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetView = e.target.dataset.view;
-            showUserModal(targetView);
-        });
-    });
-
-    // Handle Login
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            const errorMsg = document.getElementById('auth-error-msg');
-            errorMsg.textContent = '';
-            
-            try {
-                const response = await fetch('/api/auth-start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, shopId, authType: 'login' })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-                
-                if (data.success && data.token) {
-                    // Successful login
-                    localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
-                    setState({ session: { ...state.session, user: data.user } });
-                    updateUserProfileIcon();
-                    document.getElementById('welcome-email').textContent = data.user.email;
-                    showUserModal('welcome');
-                }
-            } catch (err) {
-                errorMsg.textContent = err.message;
-            }
-        });
-    }
-
-    // Handle Signup
-    const signupForm = document.getElementById('signup-form');
-    if (signupForm) {
-        signupForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('signup-email').value;
-            const password = document.getElementById('signup-password').value;
-            const passwordConfirm = document.getElementById('signup-password-confirm').value;
-            const errorMsg = document.getElementById('auth-error-msg');
-            errorMsg.textContent = '';
-            
-            if (password !== passwordConfirm) {
-                errorMsg.textContent = 'Passwords do not match.';
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/auth-start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, shopId, authType: 'signup' })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-
-                if (data.success) {
-                    document.getElementById('verify-email-display').textContent = email;
-                    showUserModal('verify');
-                }
-            } catch (err) {
-                errorMsg.textContent = err.message;
-            }
-        });
-    }
-
-    // Handle Verify
-    const verifyForm = document.getElementById('verify-form');
-    if (verifyForm) {
-        verifyForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('verify-email-display').textContent;
-            const code = document.getElementById('verify-code').value;
-            const errorMsg = document.getElementById('verify-error-msg');
-            errorMsg.textContent = '';
-            
-            try {
-                const response = await fetch('/api/auth-verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code, shopId })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-
-                if (data.success && data.token) {
-                    localStorage.setItem(CONSTANTS.AUTH_TOKEN_KEY, data.token);
-                    setState({ session: { ...state.session, user: data.user } });
-                    updateUserProfileIcon();
-                    document.getElementById('welcome-email').textContent = data.user.email;
-                    showUserModal('welcome');
-                }
-            } catch (err) {
-                errorMsg.textContent = err.message;
-            }
-        });
-    }
-
-    // Handle Forgot Password
-    const resetForm = document.getElementById('reset-request-form');
-    if (resetForm) {
-        resetForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('reset-email').value;
-            const errorMsg = document.getElementById('reset-error-msg');
-            errorMsg.textContent = '';
-            
-            try {
-                const response = await fetch('/api/auth-start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, shopId, authType: 'reset' })
-                });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error);
-
-                if (data.success) {
-                    errorMsg.textContent = 'Password reset email sent! Check your inbox.';
-                    errorMsg.style.color = 'green';
-                }
-            } catch (err) {
-                errorMsg.textContent = err.message;
-            }
-        });
-    }
-
-    // Handle Logout
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            localStorage.removeItem(CONSTANTS.AUTH_TOKEN_KEY);
-            setState({ session: { ...state.session, user: { isAuthenticated: false, email: null, id: null, likedItemIds: new Set(), planIds: [], paymentHistory: [], amountReceived: 0 } } });
-            updateUserProfileIcon();
-            closeUserModal();
-            // Clear local likes
-            localStorage.removeItem('tempLikes');
-        });
-    }
-
-    // Handle "Welcome" continue button
-    const welcomeBtn = document.getElementById('welcome-continue-btn');
-    if (welcomeBtn) {
-        welcomeBtn.addEventListener('click', closeUserModal);
-    }
-    
-    // --- v2.0 Effects Engine ---
-    const effectsDropdown = document.getElementById('effects-dropdown');
-    
-    // Add a check in case this element doesn't exist
-    if (effectsDropdown) {
+    // --- FIX: Check childElementCount (handles whitespace) instead of innerHTML ---
+    if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition PASSED. Populating dropdown.');
+        // --- DEBUG ---
+        log('Auth', 'Populating background effect tweaks for the first time.');
         effects.forEach((effect, index) => {
+            // --- DEBUG ---
+            console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
+            // --- DEBUG ---
             const option = document.createElement('option');
             option.value = index;
             option.textContent = effect.name;
-            effectsDropdown.appendChild(option);
+            effectSelect.appendChild(option);
         });
         
-        effectsDropdown.addEventListener('change', (e) => {
-            const selectedEffectIndex = e.target.value;
-            const selectedEffect = effects[selectedEffectIndex];
-            
-            // Hide all controls
-            effects.forEach(eff => {
-                if (eff.controlsContainer) eff.controlsContainer.style.display = 'none';
-            });
-            
-            // Load the new effect
+        // Add listener to the dropdown
+        effectSelect.addEventListener('change', (e) => {
+            const selectedEffect = effects[e.target.value];
             if (selectedEffect) {
-                backgroundEngine.loadEffect(selectedEffect.module, selectedEffect.controlsContainer);
-            } else {
-                backgroundEngine.loadEffect(null, null); // Clear effect
+                log('Auth', `User selected effect: ${selectedEffect.name}`);
+                backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
             }
         });
-    }
-    // --- End v2.0 Effects Engine ---
-}
-
-// --- THIS FUNCTION WAS MISSING/RENAMED ---
-export function updateUserProfileIcon() {
-// --- END FIX ---
-    const userBtn = document.getElementById('user-profile-btn');
-    if (!userBtn) return;
-    
-    const user = state.session.user;
-    if (user.isAuthenticated) {
-        userBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm0 14c-2.03 0-4.43-.82-6.14-2.88C7.55 15.8 9.68 15 12 15s4.45.8 6.14 2.12C16.43 19.18 14.03 20 12 20z"></path></svg>
-        `;
-        if (tippyInstance) {
-            tippyInstance.setContent(`Logged in as: ${user.email}`);
+        
+        // Load the default effect (the first one in the 'effects' array)
+        // --- DEBUG ---
+        if (effects.length > 0 && effects[0].plugin) {
+            console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
+            backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
         } else {
-            tippyInstance = tippy(userBtn, {
-                content: `Logged in as: ${user.email}`,
-                placement: 'bottom',
-                theme: 'light',
-            });
+            console.log('[auth.js] No effects found in array to load as default.');
         }
+        // --- DEBUG ---
     } else {
-        userBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        `;
-        if (tippyInstance) {
-            tippyInstance.setContent('Login / Sign Up');
-        } else {
-            tippyInstance = tippy(userBtn, {
-                content: 'Login / Sign Up',
-                placement: 'bottom',
-                theme: 'light',
-            });
+        // --- DEBUG ---
+        console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
+        // --- DEBUG ---
+    }
+    // --- END: Moved Background Effects Logic ---
+
+    userModalOverlay.classList.add('active');
+    userModalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+}
+
+function hideUserModal() {
+    userModalOverlay.classList.remove('active');
+    setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
+    document.body.classList.add('modal-open');
+}
+
+async function handleSignIn(e) {
+    e.preventDefault();
+    const email = signinEmailInput.value;
+    log('Auth', `Sign-in initiated for: ${email}`);
+    localStorage.setItem('lastSignInEmail', email);
+    signinMessage.style.color = '#333';
+    signinMessage.textContent = `Sending confirmation email...`;
+    try {
+        const response = await fetch('/api/auth-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, siteUrl: window.location.origin }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to send confirmation email.');
         }
+        
+        signinMessage.style.color = '#28a745';
+        signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
+        signinEmailInput.value = '';
+        const pusher = new Pusher('236f480714e5001590b5', {
+            cluster: 'us3',
+            authEndpoint: '/api/pusher-auth'
+        });
+        const channelName = `private-auth-${data.channelId}`;
+        const channel = pusher.subscribe(channelName);
+
+        const loginTimeout = setTimeout(() => {
+            channel.unbind('auth-success');
+            pusher.unsubscribe(channelName);
+            signinMessage.style.color = '#dc3545';
+            signinMessage.textContent = 'Login attempt timed out. Please try again.';
+        }, 5 * 60 * 1000);
+
+        channel.bind('pusher:subscription_succeeded', () => {
+            log('Auth', `Successfully subscribed to Pusher channel: ${channelName}`);
+            channel.bind('auth-success', async (payload) => {
+                clearTimeout(loginTimeout);
+                pusher.unsubscribe(channelName);
+                await _handleSuccessfulLogin(payload);
+            });
+        });
+
+    } catch (error) {
+        signinMessage.style.color = '#dc3545';
+        signinMessage.textContent = error.message;
     }
 }
 
+async function handleUpdateUserPrefs(e) {
+    e.preventDefault();
+    prefsMessage.textContent = 'Saving...';
+    prefsMessage.style.color = '#333';
+
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+        prefsMessage.textContent = 'Authentication error. Please sign out and in again.';
+        prefsMessage.style.color = '#dc3545';
+        return;
+    }
+
+    const frequency = profileNotificationsSelect.value;
+    const phone = profilePhoneInput.value; // Get phone value
+
+    try {
+        const response = await fetch('/api/update-user-prefs', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` // Send JWT token
+            },
+            // Send 'action' and prefs data
+            body: JSON.stringify({ 
+                action: 'update-prefs', // Specify the action
+                phone: phone, 
+                frequency: frequency 
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save preferences.');
+        }
+        
+        setState({
+            session: {
+                ...state.session,
+                user: { ...state.session.user, ...data.user }
+            }
+        });
+        prefsMessage.textContent = data.message;
+        prefsMessage.style.color = '#28a745';
+    } catch (error) {
+        prefsMessage.textContent = error.message;
+        prefsMessage.style.color = '#dc3545';
+    }
+}
+
+export function handleSignOut() {
+    log('Auth', 'User signed out.');
+    localStorage.removeItem('jwt');
+    localStorage.removeItem('tempLikes'); // Clear any temporary likes on sign out
+
+    // Reset user state, including clearing likedItemIds
+    setState({
+        session: {
+            ...state.session,
+            user: {
+                isAuthenticated: false,
+                id: null,
+                name: '',
+                email: '',
+                amountReceived: 0,
+                paymentHistory: [],
+                rsvps: new Set(),
+                isOwner: false,
+                ownerDashboardId: null,
+                likedItemIds: new Set() // Clear liked items
+            }
+        }
+    });
+
+    updateUserProfileIcon();
+    hideUserModal();
+    
+    // Dispatch event so main.js can update plans dropdown and re-filter
+    document.dispatchEvent(new CustomEvent('userLoggedOut'));
+}
+
+export function updateUserProfileIcon() {
+    if (state.session.user.isAuthenticated && state.session.user.name) {
+        userProfileButton.classList.add('signed-in');
+        userProfileButton.textContent = state.session.user.name.charAt(0).toUpperCase();
+        userProfileButton.title = `Logged in as ${state.session.user.name}`;
+    } else {
+        userProfileButton.classList.remove('signed-in');
+        userProfileButton.innerHTML = '&#128100;';
+        userProfileButton.title = 'Sign In / My Account';
+    }
+}
+
+export function setupAuthEventListeners() {
+    userProfileButton.addEventListener('click', showUserModal);
+    userModalCloseBtn.addEventListener('click', hideUserModal);
+    signinForm.addEventListener('submit', handleSignIn);
+    signoutBtn.addEventListener('click', handleSignOut);
+    userPrefsForm.addEventListener('submit', handleUpdateUserPrefs);
+    userModalOverlay.addEventListener('click', (e) => {
+        if (e.target === userModalOverlay) {
+            hideUserModal();
+        }
+    });
+
+    // --- NEW SSO EVENT LISTENERS ---
+    const googleSsoBtn = document.getElementById('google-sso-btn');
+    if (googleSsoBtn) {
+        googleSsoBtn.addEventListener('click', () => {
+            // --- THIS IS THE FIX ---
+            // This triggers the Google login directly, skipping the Netlify modal.
+            netlifyIdentity.loginWith('google');
+            // --- END FIX ---
+        });
+    }
+
+    netlifyIdentity.on('login', async (user) => {
+        try {
+            const netlifyJwt = user.token.access_token;
+            // Call a new serverless function to get our app-specific JWT
+            const response = await fetch('/api/auth-social', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${netlifyJwt}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to sync social login.");
+
+            const appPayload = await response.json();
+            await _handleSuccessfulLogin(appPayload);
+            netlifyIdentity.close();
+
+        } catch (error) {
+            console.error("SSO login error:", error);
+            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            signinMessage.style.color = '#dc3545';
+        }
+    });
+    // --- END NEW SSO EVENT LISTENERS ---
+}
+
+
+// --- DEBUG ---
 console.log('[auth.js] 4. File execution finished. Exports are ready.');
+// --- DEBUG ---
