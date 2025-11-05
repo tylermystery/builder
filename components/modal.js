@@ -13,7 +13,7 @@ import {
     findGoalsInText, 
     getPlanRankingProfile 
 } from '../availability.js';
-// --- END CORRECTION (removed getAvailableSlotsForDay) ---
+// --- END CORRECTION ---
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
