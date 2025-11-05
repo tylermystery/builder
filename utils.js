@@ -1,143 +1,121 @@
-// REPLACE THE ENTIRE CONTENTS of utils.js
+// REPLACE THE ENTIRE CONTENTS OF: utils.js
 
-import { state } from './state.js';
-import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
+import { CONSTANTS } from './config.js';
+import { state } from './state.js';
 
 /**
- * Creates a "debounced" function that delays invoking the func until after
- * wait milliseconds have elapsed since the last time the debounced function
- * was invoked.
- * @param {Function} func The function to debounce.
- * @param {number} wait The number of milliseconds to delay.
- * @returns {Function} The new debounced function.
+ * Parses the raw string from Airtable's 'Options' field into a structured array of objects.
+ * This function handles various formats, including price changes, absolute prices,
+ * durations, and descriptions.
+ * @param {string} rawOptionsString The comma-separated string from the Airtable field.
+ * @returns {Array<Object>} An array of option objects, each with standardized properties.
  */
-export function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
+export function parseOptions(rawOptionsString) {
+    if (!rawOptionsString || typeof rawOptionsString !== 'string') {
+        return [];
+    }
+    
+    const optionsArray = rawOptionsString.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
+    return optionsArray.map(option => {
+        let name = option;
+        let price = null;
+        let priceChange = null;
+        let durationChange = null;
+        let description = null;
+
+        const parts = option.split(',').map(part => part.trim());
+        name = parts.shift() || '';
+        
+        parts.forEach(part => {
+            let match;
+            if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+                price = parseFloat(match[1]);
+            } else if (match = part.match(/price change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+                priceChange = parseFloat(match[1]);
+            } else if (match = part.match(/duration change:\s*(\-?\d+(\.\d{1,2})?)/i)) {
+                durationChange = parseFloat(match[1]);
+            } else if (match = part.match(/description:\s*['"]?([^"']+)['"]?/i)) {
+                description = match[1];
+            }
+        });
+
+        let namePriceMatch = name.match(/\$(\d+(\.\d{1,2})?)/);
+        if (namePriceMatch) {
+            price = parseFloat(namePriceMatch[1]);
+            name = name.replace(namePriceMatch[0], '').trim();
+        }
+
+        return {
+            name: name,
+            price: price,
+            priceChange: priceChange,
+            durationChange: durationChange,
+            description: description
         };
+    });
+}
+export function debounce(func, delay = 300) {
+    let timeout;
+    return (...args) => {
         clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+        timeout = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
     };
 }
 
 /**
- * Parses URL parameters into an object.
- * @returns {object} An object of key/value pairs from the URL.
- */
-export function getUrlParams() {
-    const params = {};
-    const queryString = window.location.search.substring(1);
-    const regex = /([^&=]+)=([^&]*)/g;
-    let m;
-    while (m = regex.exec(queryString)) {
-        params[decodeURIComponent(m[1])] = decodeURIComponent(m[2]);
-    }
-    return params;
-}
-
-/**
- * Updates the browser's URL with new query parameters without reloading.
- * @param {object} paramsToUpdate - An object of key/value pairs to add/update.
+ * Updates the browser's URL with new query parameters without reloading the page.
+ * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
+ * A value of null or undefined will remove the parameter.
  */
 export function updateUrl(paramsToUpdate) {
-    if (state.ui.isInitializing) return;
+    const url = new URL(window.location);
+    const searchParams = url.searchParams;
 
-    const currentParams = getUrlParams();
-    // 1. Update/add new params
     for (const key in paramsToUpdate) {
-        if (paramsToUpdate[key] === null || paramsToUpdate[key] === undefined) {
-            delete currentParams[key];
+        const value = paramsToUpdate[key];
+        if (value === null || value === undefined || value === '') {
+            searchParams.delete(key);
         } else {
-            currentParams[key] = paramsToUpdate[key];
+            searchParams.set(key, value);
         }
     }
 
-    // 2. Build the new query string
-    const newQueryString = Object.keys(currentParams)
-        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(currentParams[key])}`)
-        .join('&');
+    const newUrl = url.pathname + '?' + searchParams.toString();
+    const currentUrl = window.location.pathname + window.location.search;
     
-    // 3. Update the URL
-    const newUrl = `${window.location.pathname}${newQueryString ? '?' : ''}${newQueryString}`;
-    if (window.history.pushState) {
-        window.history.pushState({ path: newUrl }, '', newUrl);
+    if (newUrl !== currentUrl) {
+        // --- THIS IS THE FIX ---
+        // Always use pushState to update the URL without triggering a full navigation
+        // or relying on a potentially non-existent browser history entry.
+        history.pushState({}, '', newUrl);
     }
 }
 
-/**
- * Parses the "Options" field (which can be string or JSON) into a standard array.
- * @param {string} optionsString - The raw string from Airtable.
- * @returns {Array<object>} An array of option objects.
- */
-export function parseOptions(optionsString) {
-    if (!optionsString || typeof optionsString !== 'string') {
-        return [];
-    }
-    try {
-        // Try to parse as JSON first
-        const options = JSON.parse(optionsString);
-        if (Array.isArray(options)) {
-            // New JSON format: [{name: "Name", price: 100}, ...]
-            return options.map(opt => ({
-                name: opt.name || 'Option',
-                price: typeof opt.price === 'number' ? opt.price : null,
-                priceChange: typeof opt.priceChange === 'number' ? opt.priceChange : null,
-                description: opt.description || null
-            }));
-        }
-    } catch (e) {
-        // Fallback for old comma-separated string format
-        return optionsString.split(',').map(s => s.trim()).filter(s => s).map(name => ({
-            name: name,
-            price: null,
-            priceChange: null,
-            description: null
-        }));
-    }
-    return [];
-}
+// --- NEWLY MOVED FUNCTIONS ---
 
-/**
- * Recursively finds all descendant bookable items for a grouping.
- * @param {object} record - The parent record.
- * @param {Array<object>} allRecords - All records to search.
- * @returns {Array<object>} A flat array of all descendant items.
- */
 function getDescendantBookableItems(record, allRecords) {
     let bookableItems = [];
-    // Find children by Parent Item link
-    const children = allRecords.filter(r => 
-        r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] && 
-        r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM][0] === record.id 
-    );
-
+    const children = allRecords.filter(r => r.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] === record.fields.Name);
     for (const child of children) {
-        if (child.fields['Item Type'] === 'Grouping') {
+        const rawOptions = parseOptions(child.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+        const childRecordNames = new Set(allRecords.map(r => r.fields.Name));
+        const isGrouping = rawOptions.some(opt => childRecordNames.has(opt.name));
+        if (isGrouping) {
             bookableItems = bookableItems.concat(getDescendantBookableItems(child, allRecords));
-        } else if (child.fields['Item Type'] === 'Bookable Item' || child.fields['Item Type'] === 'Event') {
+        } else {
             bookableItems.push(child);
         }
     }
     return bookableItems;
 }
 
-/**
- * Calculates the min/max price range for a Grouping record.
- * @param {object} record - The Grouping item record.
- * @returns {object | null} An object {min, max} or null.
- */
 export function getGroupPriceRange(record) {
-    if (!record || !record.fields || record.fields['Item Type'] !== 'Grouping') return null;
-    
     const descendants = getDescendantBookableItems(record, state.records.all);
     if (descendants.length === 0) return null;
-
     let minPrice = Infinity, maxPrice = -Infinity;
-    
     descendants.forEach(item => {
         const options = parseOptions(item.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         if (options.length > 0) {
@@ -156,20 +134,10 @@ export function getGroupPriceRange(record) {
             }
         }
     });
-    
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
-
-/**
- * Gets the definitive price for a record, considering the selected option.
- * @param {object} record - The item record.
- * @param {number | null} optionIndex - The index of the selected option.
- * @returns {number} The calculated price.
- */
 export function getRecordPrice(record, optionIndex = null) {
-    if (!record || !record.fields) return 0; // Safety check
-    
-    let price = parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
     if (optionIndex !== null) {
         const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
         const variation = options[optionIndex];
@@ -178,5 +146,5 @@ export function getRecordPrice(record, optionIndex = null) {
             if (variation.priceChange !== null) price += variation.priceChange;
         }
     }
-    return price;
+    return isNaN(price) ? 0 : price;
 }
