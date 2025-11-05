@@ -5,66 +5,20 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories } from '../availability.js';
+// --- THIS IMPORT IS MODIFIED ---
+import { 
+    getDayStatus, 
+    getAvailableSlotsForDay, 
+    AVAILABILITY_STATUS, 
+    calculateMissingCategories, 
+    findGoalsInText, 
+    getPlanRankingProfile 
+} from '../availability.js';
+// --- END MODIFICATION ---
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// --- Recommendation Engine v1.2: Helper Functions ---
-
-/**
- * [v1.2] Scans goal text for matching ranking keywords.
- * @param {string} text - The user's "Goals/Notes" text.
- * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
- */
-function findGoalsInText(text) {
-    if (!text) return [];
-    const lowerText = text.toLowerCase();
-    const foundGoals = new Set();
-    
-    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
-    const GOAL_KEYWORDS = {
-        "fun": "Fun",
-        "art": "Art",
-        "artistic": "Art",
-        "celebration": "Celebration",
-        "celebrate": "Celebration",
-        "competitive": "Competitive",
-        "compete": "Competitive",
-        "team-build": "Team-Build",
-        "team build": "Team-Build",
-        "bonding": "Bonding"
-        // Add more keyword-to-goal mappings here
-    };
-
-    for (const keyword in GOAL_KEYWORDS) {
-        if (lowerText.includes(keyword)) {
-            foundGoals.add(GOAL_KEYWORDS[keyword]); // Add the proper-cased Goal
-        }
-    }
-    return Array.from(foundGoals); // Return unique goals
-}
-
-/**
- * [v1.2] Gets the combined "Ranking Profile" for all items currently in the plan.
- * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
- */
-function getPlanRankingProfile() {
-    const planProfile = {};
-    for (const recordId of state.cart.lockedItems.keys()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record || !record.fields['Rankings']) continue;
-        
-        try {
-            const rankings = JSON.parse(record.fields['Rankings']);
-            for (const key in rankings) {
-                if (typeof rankings[key] === 'number') {
-                    planProfile[key] = (planProfile[key] || 0) + rankings[key];
-                }
-            }
-        } catch (e) { /* Ignore bad JSON */ }
-    }
-    return planProfile;
-}
+// --- ALL HELPER FUNCTIONS (findGoalsInText, etc.) ARE NOW DELETED FROM HERE ---
 
 
 /**
@@ -76,9 +30,9 @@ function generateRecommendationBlurb(record) {
     const goalText = document.getElementById('header-goals').value;
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     
-    // Get all context
+    // Get all context (now using imported functions)
     const matchedGoals = findGoalsInText(goalText);
-    const missingCategories = calculateMissingCategories(); // This is now imported
+    const missingCategories = calculateMissingCategories();
     const planProfile = getPlanRankingProfile();
     
     const itemRankings = JSON.parse(record.fields['Rankings'] || '{}');
