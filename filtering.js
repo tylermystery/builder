@@ -275,6 +275,9 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
 // In: filtering.js
 // Action: REPLACE the entire filterByLocation function
 
+// In: filtering.js
+// Action: REPLACE the entire filterByLocation function
+
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
@@ -291,21 +294,33 @@ function filterByLocation(records, locationFilter) {
     };
     const targetRegion = filterValueToRegion[locationFilter];
 
+    // If no target region exists for the filter value, return all records (fallback)
+    if (!targetRegion) {
+        return records;
+    }
+
     return records.filter(record => {
         // Assuming 'Region' is a multi-select field in Airtable
         const recordRegions = record.fields['Region'] || [];
         
-        if (recordRegions.length > 0) {
-            // Keep if regions include 'All' OR the specific target region
-            return recordRegions.includes('All') || recordRegions.includes(targetRegion);
-        }
+        // --- VVV START LONG-TERM ROBUST LOGIC VVV ---
         
-        // If the record has no Region set, we default to showing it in an "Any" filter,
-        // but exclude it if a specific location is chosen.
-        return false; 
+        // Case 1: The item is explicitly tagged for the current filter region
+        const isTargeted = recordRegions.includes(targetRegion);
+        
+        // Case 2: The item is explicitly tagged as available everywhere
+        const isAvailableEverywhere = recordRegions.includes('All'); 
+        
+        // Case 3: The item has NO region tags, meaning it's assumed globally available
+        const isRegionBlank = recordRegions.length === 0;
+
+        // An item is visible if it matches the target region, OR is tagged 'All', 
+        // OR is not tagged at all (blank field = globally available default).
+        return isTargeted || isAvailableEverywhere || isRegionBlank;
+
+        // --- ^^^ END LONG-TERM ROBUST LOGIC ^^^ ---
     });
 }
-
 function filterByBudget(records, budgetFilter) {
     if (budgetFilter === 'any') {
         return records;
