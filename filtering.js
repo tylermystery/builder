@@ -388,12 +388,11 @@ function filterBySearchTerm(records, searchTerm) {
     return scoredRecords.map(item => item.record);
 }
 
-// --- THIS IS THE CORRECT, REPLACED FUNCTION ---
 function sortRecords(records, sortBy, goalBucket) {
     // --- NEW: Check for "Recommended" sort ---
-    if (sortBy === 'recommended') {
+    if (sortBy.startsWith('recommended-')) {
         const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
-        log('Filtering', `Sorting by v2.1 "Recommended". Goal Bucket: [${goalBucket.join(', ')}]`);
+        log('Filtering', `Sorting by v2.1 "${sortBy}". Goal Bucket: [${goalBucket.join(', ')}]`);
 
         // Create a scored list
         const scoredRecords = records.map(record => ({
