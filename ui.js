@@ -646,69 +646,6 @@ function createFilterChip(text, type, value) {
             </div>`;
 }
 
-/**
- * Handles the click event when a user clears a filter chip.
- */
-function handleFilterChipClear(e) {
-    const chip = e.target.closest('.filter-chip');
-    if (!chip) return;
-
-    const type = chip.dataset.filterType;
-    const value = chip.dataset.filterValue;
-
-    // 1. Clear the filter state based on type
-    switch (type) {
-        case 'name-filter':
-            document.getElementById('name-filter').value = '';
-            break;
-        case 'status-filter':
-            document.getElementById('status-filter').value = 'Available';
-            break;
-        case 'headcount-filter':
-            document.getElementById('headcount-filter').value = 'any';
-            document.getElementById('headcount-custom').value = '';
-            document.getElementById('headcount-custom').style.display = 'none';
-            break;
-        case 'location-filter':
-        case 'budget-filter':
-            document.getElementById(type).value = 'any';
-            break;
-        // --- VVV ADD THIS CASE VVV ---
-        case 'date-filter':
-            const datePicker = document.getElementById('date-filter')?._flatpickr;
-            if (datePicker) {
-                 datePicker.clear();
-                 // Manually remove date from state to ensure consistency
-                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-            }
-            break;
-        // --- ^^^ END NEW CASE ^^^ ---
-        // --- VVV ADD THIS CASE VVV ---
-        case 'goal-filter':
-            const goalsInput = document.getElementById('header-goals');
-            if (goalsInput) {
-                // Clearing a chip removes that word from the goals input text
-                const goalWords = goalsInput.value.split(/\s*,\s*|\s+/).filter(Boolean);
-                const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
-                goalsInput.value = updatedGoals;
-                
-                // Manually trigger the 'change' event on the input field
-                goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            break;
-        // --- ^^^ END NEW CASE ^^^ ---
-        case 'subcategory-filter':
-            // Find and unclick the corresponding button (which updates the URL/filters)
-            const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
-            if (subcatButton) subcatButton.click();
-            // We exit here, as subcatButton.click() already calls applyFiltersAndSort
-            return;
-    }
-    
-    // 2. Re-run filters and update UI (for all non-subcategory filters)
-    window.applyFiltersAndSort(window.imageCache);
-}
-// --- Function to show login prompt for likes ---
 let promptTimeout;
 export function showLoginPromptForLikes() {
     const profileButton = document.getElementById('user-profile-button');
