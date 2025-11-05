@@ -290,9 +290,6 @@ export function displayReservedStatus() {
         saveShareBtn.disabled = false;
     }
 }
-
-// In: components/sidebar.js
-// Action: REPLACE the entire `updateEventHealthScore` function
 // In: components/sidebar.js
 // Action: REPLACE the entire `updateEventHealthScore` function
 
@@ -334,10 +331,21 @@ export function updateEventHealthScore() {
         // Create clickable "suggestion" buttons
         html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
         suggestions.forEach(cat => {
-            // FIX: We now use the exact category string 'cat' for display and the lowercase filter tag.
-            const filterTag = cat.toLowerCase().replace(/ & /g, '/'); // Convert "Food & Drink" to "food/drink" for the filter
+            // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
+            const displayName = cat; 
             
-            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${cat}\n            </button>`;
+            // --- VVV FIXED: Explicitly set the filter tag to match the existing filter buttons VVV ---
+            let filterTag = displayName.toLowerCase();
+            if (displayName === "Food & Drink") {
+                filterTag = "food/drink"; // The actual filter tag used in the Category Filter buttons
+            } else if (displayName === "Venues") {
+                filterTag = "venues"; // Explicitly ensure this is "venues"
+            } else {
+                filterTag = filterTag.replace(/[^a-z0-9]/g, ''); // Fallback cleaning
+            }
+            // --- ^^^ END FIXED ^^^ ---
+            
+            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
         });
         html += `</div>`;
     } else {
