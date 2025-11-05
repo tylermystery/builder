@@ -423,7 +423,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.appendChild(heartBtnContainer);
 
 // In: components/modal.js
-// Action: REPLACE the rawOptions.forEach loop (lines 431-456)
+// Action: REPLACE the entire block from 'modalOptionsContainer.innerHTML = '';'
+//         down to the end of the rawOptions.forEach loop (approx. lines 431-456).
 
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
@@ -434,7 +435,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             optionButton.classList.add('selected');
         }
         
-        // --- VVV START NEW LOGIC VVV ---
+        // --- VVV START NEW LOGIC: Calculate and Display FULL Price VVV ---
         let priceDisplay = '';
         
         // Calculate the *total* price for this specific option
@@ -460,7 +461,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
 
         if (allRecordNames.has(opt.name)) {
-// ... (rest of the loop remains the same, until line 456)
             optionButton.dataset.childName = opt.name;
             optionButton.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -484,12 +484,22 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = getRecordPrice(record, newIndex);
-                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+                
+                // --- VVV UPDATED PRICE DISPLAY ON OPTION CHANGE VVV ---
+                // We show the main price, but without the redundant pricingTypeHTML
+                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A'); 
+                // --- ^^^ END UPDATED PRICE DISPLAY ^^^ ---
             });
         }
         modalOptionsContainer.appendChild(optionButton);
     });
 
+    // --- VVV FINAL STEP: Moving Pricing Type to the Item Name VVV ---
+    if (pricingTypeHTML && !isGrouping) {
+        modalItemName.textContent += ` ${pricingTypeHTML}`;
+    }
+    // --- ^^^ END FINAL STEP ^^^ ---
+    
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
