@@ -1,5 +1,5 @@
 // In: store-dashboard.js
-// Action: REPLACE THE ENTIRE FILE
+// Action: REPLACE THE ENTIRE FILE with this code.
 
 // --- NEW: API Configuration ---
 const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
@@ -7,6 +7,35 @@ const BASE_ID = 'app5yTznb3R5YNUFw';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 // Use the *relative* path to the Netlify function
 const PROFILE_ENDPOINT = '/api/profile-item';
+// --- NEW: Use the relative path to our proxy function ---
+const GET_ITEMS_ENDPOINT = '/api/get-items-for-profiling';
+
+
+/**
+ * [FIX] Fetches all item records via our Netlify proxy.
+ * This function must be defined here so setupAdminTools can find it.
+ */
+async function fetchItemsForProfiling() {
+    console.log(`Fetching all items for profiling via ${GET_ITEMS_ENDPOINT}...`);
+    
+    try {
+        const response = await fetch(GET_ITEMS_ENDPOINT);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error fetching items from proxy:`, errorText);
+            throw new Error(`Failed to fetch items. Status: ${response.status}`);
+        }
+        
+        const allRecords = await response.json();
+        console.log(`Total item records fetched via proxy: ${allRecords.length}`);
+        return allRecords;
+
+    } catch (error) {
+        console.error("Error in fetchItemsForProfiling:", error);
+        throw error; // This will be caught by the button's click handler
+    }
+}
 
 /**
  * Wires up the new admin button
@@ -27,8 +56,9 @@ function setupAdminTools() {
         statusMessage.textContent = 'Fetching item list...';
 
         try {
+            // This call was failing because fetchItemsForProfiling was missing
             const allItems = await fetchItemsForProfiling();
-
+            
             const itemsToProfile = allItems.filter(item => {
                 if (!item.fields.AI_Profile) return true; // Needs profiling if empty
                 try {
@@ -45,7 +75,7 @@ function setupAdminTools() {
             }
 
             statusMessage.textContent = `Profiling ${itemsToProfile.length} items. Please keep this tab open...`;
-
+            
             let successCount = 0;
             let failCount = 0;
 
@@ -57,13 +87,13 @@ function setupAdminTools() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ recordId: item.id })
                     });
-
+                    
                     if (!response.ok) {
                         const errText = await response.text();
                         console.error(`Failed to profile ${item.fields.Name}:`, errText);
                         throw new Error(`API Error ${response.status}`);
                     }
-
+                    
                     successCount++;
                     statusMessage.textContent = `Profiling... (${successCount}/${itemsToProfile.length})`;
                 } catch (err) {
@@ -105,16 +135,13 @@ async function initializeDashboard() {
             throw new Error('Could not load store data. Check function logs.');
         }
         const { store, items } = await response.json();
-
+        
         document.getElementById('store-name-header').textContent = `${store.fields.Name} Dashboard`;
-
-        // We no longer overwrite the container, so the button stays
-        // document.getElementById('store-settings-container').textContent = 'Settings form will go here.';
-
+        
         let itemsHtml = items.map(item => `<div>${item.fields.Name}</div>`).join('');
         document.getElementById('item-list-container').innerHTML = `<ul>${itemsHtml}</ul>`;
 
-        // --- NEW: Setup the admin tools ---
+        // Setup the admin tools
         setupAdminTools();
 
     } catch (error) {
