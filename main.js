@@ -197,12 +197,36 @@ async function initialize() {
     try {
         // Fetch stores and items data first
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
+
+        // --- VVV START V2.1 PROFILE INJECTION WORKAROUND VVV ---
+        const DEFAULT_V21_PROFILE = JSON.stringify({
+            "profileSource": "system_default_v21",
+            "Pillars": { "Activities": 8, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
+            "Vibe": { "Energy": 7, "Relaxation": 3, "Formality": 2, "Novelty": 6 },
+            "Intellect": { "Creative": 5, "Analytical": 5 },
+            "Physicality": { "Intensity": 5, "Accessibility": 5 },
+            "Tags": ["active", "default", "testing", "generic", "fun"]
+        });
+
+        records.forEach(record => {
+            // Check if the item is missing the AI_Profile and is a standard item type
+            if (!record.fields.AI_Profile && (record.fields['Item Type'] === 'Bookable Item' || record.fields['Item Type'] === 'Event')) {
+                // Manually inject the default profile as JSON string
+                record.fields.AI_Profile = DEFAULT_V21_PROFILE;
+            }
+            // Ensure legacy Rankings field is empty if AI_Profile is present to avoid confusion
+            if (record.fields.AI_Profile && record.fields.Rankings) {
+                 record.fields.Rankings = null;
+            }
+        });
+        // --- ^^^ END V2.1 PROFILE INJECTION WORKAROUND ^^^ ---
+
         // Immediately update state with essential catalog data
         setState({ // Use setState for potential reactivity
             stores: { all: stores },
             records: { all: records }
         });
-        log('Main', `Fetched ${stores.length} stores and ${records.length} items.`);
+        log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied default AI profiles.`);
 
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
