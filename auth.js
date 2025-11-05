@@ -144,11 +144,14 @@ export function showUserModal() {
         prefsMessage.textContent = ''; 
         signinView.style.display = 'none';
         profileView.style.display = 'block';
+        const adminProfileBtn = document.getElementById('admin-bulk-profile-btn'); // <-- ADD THIS
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
             ownerDashboardLink.style.display = 'block';
+            adminProfileBtn.style.display = 'block'; // <-- ADD THIS
         } else {
             ownerDashboardLink.style.display = 'none';
+            adminProfileBtn.style.display = 'none'; // <-- ADD THIS
         }
     } else {
         signinEmailInput.value = localStorage.getItem('lastSignInEmail') || '';
@@ -408,9 +411,77 @@ export function setupAuthEventListeners() {
             signinMessage.style.color = '#dc3545';
         }
     });
-    // --- END NEW SSO EVENT LISTENERS ---
-}
+// --- END NEW SSO EVENT LISTENERS ---
 
+    // --- NEW ADMIN BULK-PROFILER LISTENER ---
+    const bulkProfileBtn = document.getElementById('admin-bulk-profile-btn');
+    if (bulkProfileBtn) {
+        bulkProfileBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (!confirm('Are you sure you want to run the bulk profiler? This will call the AI API for all un-profiled items.')) {
+                return;
+            }
+
+            bulkProfileBtn.disabled = true;
+            prefsMessage.style.color = '#333';
+            prefsMessage.textContent = 'Fetching item list...';
+
+            try {
+                const allItems = await api.fetchItemsForProfiling();
+                
+                const itemsToProfile = allItems.filter(item => {
+                    if (!item.fields.AI_Profile) return true; // Needs profiling if empty
+                    try {
+                        const profile = JSON.parse(item.fields.AI_Profile);
+                        return !profile.profileSource; // Needs profiling if it's old
+                    } catch (e) { return true; } // Needs profiling if JSON is invalid
+                });
+
+                if (itemsToProfile.length === 0) {
+                    prefsMessage.style.color = '#28a745';
+                    prefsMessage.textContent = 'Success! All items are already profiled.';
+                    bulkProfileBtn.disabled = false;
+                    return;
+                }
+
+                prefsMessage.textContent = `Profiling ${itemsToProfile.length} items. Please keep this tab open...`;
+                
+                let successCount = 0;
+                let failCount = 0;
+
+                // Simple sequential loop to avoid rate limits
+                for (const item of itemsToProfile) {
+                    try {
+                        const response = await fetch('/api/profile-item', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ recordId: item.id })
+                        });
+                        
+                        if (!response.ok) throw new Error(`API Error ${response.status}`);
+                        
+                        successCount++;
+                        prefsMessage.textContent = `Profiling... (${successCount}/${itemsToProfile.length})`;
+                    } catch (err) {
+                        failCount++;
+                        console.error(`Failed to profile ${item.fields.Name}:`, err.message);
+                    }
+                }
+
+                prefsMessage.style.color = '#28a745';
+                prefsMessage.textContent = `Complete! Success: ${successCount}, Failed: ${failCount}.`;
+                bulkProfileBtn.disabled = false;
+
+            } catch (err) {
+                prefsMessage.style.color = '#dc3545';
+                prefsMessage.textContent = `Error: ${err.message}`;
+                bulkProfileBtn.disabled = false;
+            }
+        });
+    }
+    // --- END NEW ADMIN LISTENER ---
+}
 
 // --- DEBUG ---
 console.log('[auth.js] 4. File execution finished. Exports are ready.');
