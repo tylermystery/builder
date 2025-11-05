@@ -422,10 +422,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
 
-// In: components/modal.js
-// Action: REPLACE the entire block from 'modalOptionsContainer.innerHTML = '';' 
-//         down to the end of the price/name manipulation (approx. lines 431-480)
-
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -434,31 +430,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (itemState.selectedOptionIndex === index) {
             optionButton.classList.add('selected');
         }
-        
-        // --- VVV START NEW LOGIC: Calculate and Display FULL Price VVV ---
-        let priceDisplay = '';
-        
-        // Calculate the *total* price for this specific option
-        const itemPrice = getRecordPrice(record, null); // Base price of the record
-        let optionPrice = itemPrice;
-        
+        let priceModText = '';
         if (opt.price !== null) {
-            // Option sets an absolute price
-            optionPrice = opt.price;
+            priceModText = `$${opt.price.toFixed(2)}`;
         } else if (opt.priceChange !== null) {
-            // Option applies a price change
-            optionPrice += opt.priceChange;
+            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-
-        // Only display the price if it's a positive number
-        if (optionPrice > 0) {
-            priceDisplay = `$${optionPrice.toFixed(2)}`;
-        }
-        
-        // Display the calculated price instead of the modifier
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceDisplay}</span>`;
-        // --- ^^^ END NEW LOGIC ^^^ ---
-
+        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -484,37 +462,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = getRecordPrice(record, newIndex);
-                
-                // --- VVV FIXED PRICE DISPLAY ON OPTION CHANGE VVV ---
-                // Shows price clearly without the pricing type being added here
-                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A'); 
-                // --- ^^^ END FIXED PRICE DISPLAY ^^^ ---
+                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
             });
         }
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- VVV FINAL FIX: Remove PricingTypeHTML from Item Price, move it to Item Name VVV ---
-    // Note: This logic previously existed outside the loop but was added in the loop replacement
-    // and is necessary to execute after the itemPrice is initially set, before the options loop.
-    
-    // We explicitly remove the pricing type HTML from the modalItemPrice here 
-    // and append it to modalItemName, resolving the redundancy.
-    if (!isGrouping) {
-        let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
-        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
-            priceText += ' (Est.)';
-        }
-        // Set modalItemPrice cleanly
-        modalItemPrice.innerHTML = priceText; 
-        
-        // Append pricing type to the item name (h2)
-        if (pricingTypeHTML) {
-            modalItemName.innerHTML += ` <span class="pricing-type-display">${pricingTypeHTML}</span>`;
-        }
-    }
-    // --- ^^^ END FINAL FIX ^^^ ---
-    
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
