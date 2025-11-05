@@ -116,12 +116,8 @@
   to = "/.netlify/functions/get-store-data-by-owner-id"
   status = 200
 
-[[redirects]]
+  [[redirects]]
   from = "/api/get-items-for-profiling"
-  to = "/.netlify/functions/airtable.js"
+  to = "/.netlify/functions/airtable"
   status = 200
 
-[[redirects]]
-  from = "/api/get-items-for-profiling"
-  to = "/.netlify/functions/airtable.js"
-  status = 200
