@@ -1,731 +1,1108 @@
-// REPLACE THE ENTIRE CONTENTS of components/modal.js
+// REPLACE THE ENTIRE CONTENTS of events.js
 
-import { state } from '../state.js';
-import * as ui from '../ui.js';
-import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories } from '../availability.js';
-import { log } from '../utils/debug.js';
-import { initializeItemChat } from '../chat.js';
+import { state, setState } from './state.js';
+import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
+import * as ui from './ui.js';
+import * as api from './api.js';
+import { applyFiltersAndSort } from './filtering.js';
+import { log, setDebugMode } from './utils/debug.js';
+import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
+import { debounce, updateUrl } from './utils.js';
+import { sendMessage, initializeSessionChat } from './chat.js';
+import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
+import { updateMobileBarAvailability } from './ui.js';
+import { showUserModal } from './auth.js';
+import { addEnergy } from './components/backgroundEngine.js';
 
-// --- Recommendation Engine v1.2: Helper Functions ---
+let mainDatePicker = null;
+let saveTimeout = null;
+let saveShareBtn = null;
+let categoryFiltersContainer = null;
+let subcategoryFiltersContainer = null;
+let aiSearchController = null; // --- ADDED THIS LINE ---
 
-/**
- * [v1.2] Scans goal text for matching ranking keywords.
- * @param {string} text - The user's "Goals/Notes" text.
- * @returns {Array<string>} A list of matching goals (e.g., ["Fun", "Art"])
- */
-function findGoalsInText(text) {
-    if (!text) return [];
-    const lowerText = text.toLowerCase();
-    const foundGoals = new Set();
-    
-    // These keywords MUST exactly match the keys in your Airtable Rankings JSON
-    const GOAL_KEYWORDS = {
-        "fun": "Fun",
-        "art": "Art",
-        "artistic": "Art",
-        "celebration": "Celebration",
-        "celebrate": "Celebration",
-        "competitive": "Competitive",
-        "compete": "Competitive",
-        "team-build": "Team-Build",
-        "team build": "Team-Build",
-        "bonding": "Bonding"
-        // Add more keyword-to-goal mappings here
-    };
-
-    for (const keyword in GOAL_KEYWORDS) {
-        if (lowerText.includes(keyword)) {
-            foundGoals.add(GOAL_KEYWORDS[keyword]); // Add the proper-cased Goal
-        }
+function getCurrentCategoryRecord() {
+    if (!categoryFiltersContainer) return null;
+    const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
+    if (!selectedCategoryButton || selectedCategoryButton.dataset.filter === 'all' || selectedCategoryButton.id === 'plan-filter-btn') {
+        return null;
     }
-    return Array.from(foundGoals); // Return unique goals
+    return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
 }
 
-/**
- * [v1.2] Gets the combined "Ranking Profile" for all items currently in the plan.
- * @returns {object} A summed-up ranking object (e.g., {"Fun": 12, "Competitive": 8})
- */
-function getPlanRankingProfile() {
-    const planProfile = {};
-    for (const recordId of state.cart.lockedItems.keys()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (!record || !record.fields['Rankings']) continue;
-        
-        try {
-            const rankings = JSON.parse(record.fields['Rankings']);
-            for (const key in rankings) {
-                if (typeof rankings[key] === 'number') {
-                    planProfile[key] = (planProfile[key] || 0) + rankings[key];
-                }
-            }
-        } catch (e) { /* Ignore bad JSON */ }
+function getAvailableSubcategories(categoryRecord) {
+    if (!categoryRecord) {
+        return [];
     }
-    return planProfile;
+    const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    return subcategoryOptions.map(option => option.name).sort();
 }
 
-
-/**
- * [v1.2] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
- * @param {object} record - The item record being displayed.
- * @returns {string | null} The HTML string for the blurb, or null.
- */
-function generateRecommendationBlurb(record) {
-    const goalText = document.getElementById('header-goals').value;
-    const searchTerm = document.getElementById('name-filter').value.toLowerCase();
-    
-    // Get all context
-    const matchedGoals = findGoalsInText(goalText);
-    const missingCategories = calculateMissingCategories(); // This is now imported
-    const planProfile = getPlanRankingProfile();
-    
-    const itemRankings = JSON.parse(record.fields['Rankings'] || '{}');
-    const itemCategories = (record.fields.Categories || '').toLowerCase();
-    
-    let blurbs = new Set(); // Use a Set to avoid duplicate reasons
-
-    // --- Brain 1: Goal & Search Match (The "Intent") ---
-    // A. Goal Match
-    if (matchedGoals.length > 0 && Object.keys(itemRankings).length > 0) {
-        matchedGoals.forEach(goal => {
-            if (itemRankings[goal] && itemRankings[goal] >= 4) { // Rank of 4 or 5
-                blurbs.add(`This is a top match for your <strong>"${goal}"</strong> goal.`);
-            }
-        });
-    }
-    // B. Search Match
-    if (searchTerm.length > 2 && (record.fields.Name.toLowerCase().includes(searchTerm) || (record.fields.Description && record.fields.Description.toLowerCase().includes(searchTerm)))) {
-        blurbs.add(`This is a great match for your search for <strong>"${searchTerm}"</strong>.`);
-    }
-
-    // --- Brain 2: Breadth Match (The "4 Pillars") ---
-    if (missingCategories.length > 0) {
-        if (missingCategories.includes("Activities") && itemCategories.includes("activities")) {
-            blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
-        } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
-            blurbs.add("This adds a <strong>Food/Drink</strong> component to your event.");
-        } else if (missingCategories.includes("Venue") && itemCategories.includes("venue")) {
-            blurbs.add("This adds a <strong>Venue</strong> to house your event.");
-        } else if (missingCategories.includes("Extras") && itemCategories.includes("extras")) {
-            blurbs.add("This adds <strong>Extras</strong> to round out your event.");
-        }
-    }
-
-    // --- Brain 3: Depth Match (The "Complement") ---
-    if (matchedGoals.length > 0 && Object.keys(itemRankings).length > 0) {
-        matchedGoals.forEach(goal => {
-            // If the item has this goal ranking...
-            if (itemRankings[goal] && itemRankings[goal] >= 4) {
-                // ...and the plan *doesn't* have this goal yet...
-                if (!planProfile[goal]) {
-                    // This is a more specific reason, so remove the generic "Goal Match" one
-                    blurbs.delete(`This is a top match for your <strong>"${goal}"</strong> goal.`);
-                    // And add the "Depth" one
-                    blurbs.add(`This is a great complement! It adds the <strong>"${goal}"</strong> element your plan is missing.`);
-                }
-            }
-        });
-    }
-
-    // Build the "Recommendation" Blurb
-    if (blurbs.size > 0) {
-        let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
-        blurbs.forEach(blurb => {
-            finalBlurb += `<li style='margin-bottom: 3px;'>${blurb}</li>`;
-        });
-        finalBlurb += "</ul>";
-        return finalBlurb;
-    }
-
-    // --- Default Blurb (The "Customize" Nudge) ---
-    if (blurbs.size === 0 && matchedGoals.length === 0 && searchTerm.length === 0) {
-        return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' (e.g., 'fun' or 'art') to get personalized recommendations for this item.";
-    }
-
-    return null; // No blurb needed
-}
-// --- END OF Recommendation Engine v1.2 ---
-
-
-let stripe;
-let currentShopSettings = {};
-const modalOverlay = document.getElementById('detail-modal-overlay');
-let currentItemChatRecordId = null;
-
-function closeDetailModal() {
-    updateUrl({ openItem: null });
-    hideDetailModal();
-}
-
-function handleEscapeKey(event) {
-    if (event.key === 'Escape') {
-        closeDetailModal();
-    }
-}
-
-function handleOverlayClick(event) {
-    if (event.target === modalOverlay) {
-        closeDetailModal();
-    }
-}
-
-function updateCheckoutDisplay() {
-    const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
-    const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = finalTotal - amountReceived;
-    const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
-    let baseAmountToCharge = totalDue;
-    
-    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
-    
-    const tipRow = document.querySelector('.tip-row');
-    if (tipRow) {
-        if (isInitialDeposit && totalDue > baseAmountToCharge * 1.05) {
-            tipRow.style.display = 'none';
-        } else {
-            tipRow.style.display = 'flex';
-        }
-    }
-
-    if (amountReceived === 0) {
-        if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
-            baseAmountToCharge = finalTotal;
-            document.getElementById('deposit-label').textContent = 'Full Amount Due:';
-        } else {
-            baseAmountToCharge = finalTotal * 0.35;
-            document.getElementById('deposit-label').textContent = '35% Deposit Due:';
-        }
-    } else {
-        document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
-    }
-    const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-    const finalAmountToCharge = baseAmountToCharge + tipAmount;
-    document.getElementById('deposit-price').textContent = `$${finalAmountToCharge.toFixed(2)}`;
-}
-
-function getBreadcrumbs(record) {
-    const breadcrumbs = [];
-    let current = record;
-    while (current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]) {
-        const parentName = current.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-        breadcrumbs.unshift(parentName);
-        current = state.records.all.find(r => r.fields.Name === parentName);
-        if (!current) break;
-    }
-    return breadcrumbs;
-}
-
-function resetModalState() {
-    const elements = {
-        modalItemName: document.getElementById('modal-item-name'),
-        modalItemPrice: document.getElementById('modal-item-price'),
-        modalItemDescription: document.getElementById('modal-item-description'),
-        modalMainImage: document.getElementById('modal-main-image'),
-        modalThumbnailStrip: document.getElementById('modal-thumbnail-strip'),
-        modalOptionsContainer: document.getElementById('modal-options-container'),
-        modalQuantitySelector: document.getElementById('modal-quantity-selector'),
-        modalItemNote: document.getElementById('modal-item-note'),
-        modalCalendarContainer: document.getElementById('modal-calendar-container'),
-        modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalAdditionalDetails: document.getElementById('modal-additional-details'),
-        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb')
-    };
-    for (const key in elements) {
-        if (elements[key]) {
-            if (key === 'modalItemNote') elements[key].value = '';
-            else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
-            else if (key === 'modalRecommendationBlurb') {
-                elements[key].innerHTML = '';
-                elements[key].style.display = 'none';
-            }
-            else elements[key].innerHTML = '';
-        }
-    }
-    log('Modal', 'Reset modal state.');
-}
-
-export async function showDetailModal(record, startPhotoIndex = 0) {
-    const detailSpecs = [
-        { fieldName: 'Duration', label: 'Duration' },
-        { fieldName: 'Capacity', label: 'Capacity' },
-        { fieldName: 'Location Details', label: 'Location Info' },
-        { fieldName: 'Additional Information', label: 'Good to Know' },
-    ];
-
-    console.log('[showDetailModal] Called for item:', record.id);
-    log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
-    updateUrl({ openItem: record.id });
-    const modalHeaderActions = document.getElementById('modal-header-actions');
-    const modalItemName = document.getElementById('modal-item-name');
-    const modalItemPrice = document.getElementById('modal-item-price');
-    const modalItemDescription = document.getElementById('modal-item-description');
-    const modalMainImage = document.getElementById('modal-main-image');
-    const modalThumbnailStrip = document.getElementById('modal-thumbnail-strip');
-    const modalOptionsContainer = document.getElementById('modal-options-container');
-    const modalQuantitySelector = document.getElementById('modal-quantity-selector');
-    const modalNotesContainer = document.getElementById('modal-notes-container');
-    const modalItemNote = document.getElementById('modal-item-note');
-    const modalCalendarContainer = document.getElementById('modal-calendar-container');
-    const modalActionsContainer = document.getElementById('modal-actions-container');
-    const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
-    const modalAdditionalDetails = document.getElementById('modal-additional-details');
-    const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-    const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
-
-    const closeBtn = document.getElementById('modal-close-btn');
-    closeBtn.onclick = closeDetailModal;
-    modalOverlay.addEventListener('click', handleOverlayClick);
-    document.addEventListener('keydown', handleEscapeKey);
-
-    resetModalState();
-    modalOverlay.dataset.recordId = record.id;
-    currentItemChatRecordId = record.id;
-
-    const isLocked = state.cart.lockedItems.has(record.id);
-    modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
-
-    const itemState = isLocked ? state.cart.lockedItems.get(record.id) : ui.getItemState(record.id);
-    if (addToPlanBtn) {
-        addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
-        addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
-    }
-
-    let imageUrls = [];
-    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
-        const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-        imageUrls = fetchedUrls;
-    }
-    if (imageUrls.length === 0) {
-        imageUrls = [ui.getPlaceholderImage([])];
-    }
-    
-    modalItemName.textContent = record.fields.Name || 'Untitled';
-    modalItemDescription.textContent = record.fields.Description || '';
-    
-    try {
-        const blurbHtml = generateRecommendationBlurb(record);
-        if (blurbHtml && modalRecBlurb) {
-            modalRecBlurb.innerHTML = blurbHtml;
-            modalRecBlurb.style.display = 'block';
-        }
-    } catch (e) {
-        console.warn('Failed to generate recommendation blurb:', e);
-    }
-
-    if (modalAdditionalDetails) {
-        modalAdditionalDetails.innerHTML = '';
-        const fragment = document.createDocumentFragment();
-        let hasRankings = false;
-        const rankingsHtmlParts = [];
-
-        detailSpecs.forEach(spec => {
-            const value = record.fields[spec.fieldName];
-            if (value) {
-                const detailItem = document.createElement('div');
-                detailItem.className = 'detail-item';
-                detailItem.innerHTML = `
-                    <span class=\"detail-label\">${spec.label}</span>
-                    <span class=\"detail-value\">${String(value).replace(/\\n/g, '<br>')}</span>
-                `;
-                fragment.appendChild(detailItem);
-            }
-        });
-
-        const rankingsJsonString = record.fields['Rankings'];
-        if (rankingsJsonString) {
-            try {
-                const rankingsObject = JSON.parse(rankingsJsonString);
-                for (const label in rankingsObject) {
-                    if (Object.hasOwnProperty.call(rankingsObject, label)) {
-                        const value = rankingsObject[label];
-                        if (typeof value === 'number' && value > 0) {
-                            hasRankings = true;
-                            const stars = '★'.repeat(Math.round(value)) + '☆'.repeat(Math.max(0, 5 - Math.round(value)));
-                            rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">\
-                                    <span class=\"ranking-label\">${label}:</span>
-                                    <span class=\"ranking-stars\">${stars}</span>
-                                </div>
-                            `);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
-            }
-        }
-
-        if (hasRankings) {
-            const rankingContainer = document.createElement('div');
-            rankingContainer.className = 'ranking-list detail-item';
-            rankingContainer.innerHTML = `
-                <span class=\"detail-label\">Rankings</span>
-                ${rankingsHtmlParts.join('')}
-            `;
-            fragment.appendChild(rankingContainer);
-        }
-        modalAdditionalDetails.appendChild(fragment);
-    }
-
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
-    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
-
-    const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\\\"pricing-type\\\"> / ${pricingType.toLowerCase()}</span>` : '';
-
-    if (isGrouping) {
-        const range = getGroupPriceRange(record);
-        modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? `$${range.min.toFixed(2)}` : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
-    } else {
-        const price = getRecordPrice(record, itemState.selectedOptionIndex);
-        let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
-        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
-            priceText += ' (Est.)';
-        }
-        modalItemPrice.innerHTML = priceText + pricingTypeHTML;
-    }
-
-    let currentPhotoIndex = startPhotoIndex;
-    modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
-    modalThumbnailStrip.innerHTML = '';
-    imageUrls.forEach((url, index) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url}')`;
-        if (index === currentPhotoIndex) thumb.classList.add('active');
-        thumb.addEventListener('click', () => {
-            currentPhotoIndex = index;
-            modalMainImage.style.backgroundImage = `url('${url}')`;
-            modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
-            thumb.classList.add('active');
-        });
-        modalThumbnailStrip.appendChild(thumb);
+export function updateSubcategoryButtons() {
+    if (!subcategoryFiltersContainer) return;
+    subcategoryFiltersContainer.innerHTML = '';
+    const categoryRecord = getCurrentCategoryRecord();
+    const subcategories = getAvailableSubcategories(categoryRecord);
+    subcategories.forEach(subcat => {
+        const button = document.createElement('button');
+        button.className = 'filter-btn subcategory-filter-btn';
+        button.dataset.filter = subcat.toLowerCase();
+        button.textContent = subcat;
+        subcategoryFiltersContainer.appendChild(button);
     });
-
-    modalHeaderActions.innerHTML = '';
-    const breadcrumbs = getBreadcrumbs(record);
-    if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\\\"parent-link\\\" data-parent-name=\\\"${name}\\\" title=\\\"Go to ${name}\\\">${name}</a>`).join(' > ');
-    }
-
-    const heartBtnContainer = document.createElement('div');
-    heartBtnContainer.id = 'modal-heart-btn';
-    heartBtnContainer.dataset.recordId = record.id;
-    modalHeaderActions.appendChild(heartBtnContainer);
-
-    modalOptionsContainer.innerHTML = '';
-    rawOptions.forEach((opt, index) => {
-        const optionButton = document.createElement('button');
-        optionButton.className = 'option-btn';
-        optionButton.dataset.optionIndex = index;
-        if (itemState.selectedOptionIndex === index) {
-            optionButton.classList.add('selected');
-        }
-        let priceModText = '';
-        if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
-        } else if (opt.priceChange !== null) {
-            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-        }
-        optionButton.innerHTML = `${opt.name} <span class=\\\"price-mod\\\">${priceModText}</span>`;
-
-        if (allRecordNames.has(opt.name)) {
-            optionButton.dataset.childName = opt.name;
-            optionButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const childName = e.currentTarget.dataset.childName;
-                const childRecord = state.records.all.find(r => r.fields.Name === childName);
-                if (childRecord) {
-                    log('Modal', `Navigating from option to item: ${childName}`);
-                    showDetailModal(childRecord);
-                } else {
-                    log('Modal', `Could not find record for child option: ${childName}`);
-                }
-            });
-        } else {
-            optionButton.addEventListener('click', (e) => {
-                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-                e.currentTarget.classList.add('selected');
-                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                e.currentTarget.dispatchEvent(new CustomEvent('change', {
-                    bubbles: true,
-                    detail: { selectedOptionIndex: newIndex }
-                }));
-                modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = getRecordPrice(record, newIndex);
-                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
-            });
-        }
-        modalOptionsContainer.appendChild(optionButton);
-    });
-
-    // --- THIS IS THE FIX ---
-    // The listeners are now MOVED INSIDE this `if` block
-    if (!isGrouping) {
-        modalActionsContainer.style.display = 'block';
-        modalNotesContainer.style.display = 'block';
-        modalItemNote.value = itemState.note;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\\\"quantity-selector\\\" data-record-id=\\\"${record.id}\\\"><button class=\\\"quantity-btn minus\\\" aria-label=\\\"Decrease quantity\\\">-</button><input type=\\\"number\\\" class=\\\"quantity-input\\\" value=\\\"${itemState.quantity}\\\" min=\\\"${headcountMin}\\\"><button class=\\\"quantity-btn plus\\\" aria-label=\\\"Increase quantity\\\">+</button></div>`;
-        
-        const plusBtn = modalQuantitySelector.querySelector('.plus');
-        const minusBtn = modalQuantitySelector.querySelector('.minus');
-        const input = modalQuantitySelector.querySelector('input');
-        // This check prevents the crash
-        if (plusBtn && minusBtn && input) {
-            plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-            minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-        }
-    } else {
-        modalActionsContainer.style.display = 'none';
-        modalNotesContainer.style.display = 'none';
-        modalQuantitySelector.innerHTML = '';
-    }
-    // --- END THE FIX ---
-
-    modalCalendarContainer.innerHTML = '';
-    const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
-
-    if (iCalUrl) {
-        modalCalendarContainer.style.display = 'block';
-        log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
-
-        const busyTimes = await api.fetchCalendarForRecord(record);
-        const calendarInstance = window.flatpickr(modalCalendarContainer, {
-            inline: true,
-            showMonths: 1,
-            disable: [(date) => {
-                const status = getDayStatus(date, busyTimes, record);
-                return status.status === AVAILABILITY_STATUS.NONE;
-            }],
-            onDayCreate: function (dObj, dStr, fp, dayElem) {
-                const day = dayElem.dateObj;
-                const status = getDayStatus(day, busyTimes, record);
-                let className = '';
-                let tooltip = status.reason;
-                if (status.status === AVAILABILITY_STATUS.FULL) {
-                    className = 'available-full';
-                } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                    className = 'available-partial';
-                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                } else {
-                    className = 'unavailable';
-                }
-                dayElem.classList.add(className);
-                dayElem.setAttribute('data-tippy-content', tooltip);
-            },
-            onReady: function () {
-                tippy('.flatpickr-day', {
-                    content: reference => reference.getAttribute('data-tippy-content'),
-                    placement: 'top',
-                    theme: 'light',
-                    allowHTML: true,
-                });
-            },
-            onChange: (selectedDates) => {
-                if (selectedDates.length > 0) {
-                    const eventDateInput = document.getElementById('event-date-picker');
-                    if (eventDateInput && eventDateInput._flatpickr) {
-                        eventDateInput._flatpickr.setDate(selectedDates[0], true);
-                    }
-                }
-            }
-        });
-        const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (eventDate) {
-            calendarInstance.setDate(new Date(eventDate), true);
-        }
-    } else {
-        modalCalendarContainer.style.display = 'none';
-        log('Modal', `No iCal URL for ${record.id}, hiding calendar.`);
-    }
-
-    ui.updateCardIcon(record.id);
-
-    modalOverlay.classList.add('active');
-    modalOverlay.style.display = 'flex';
-    document.body.classList.add('modal-open');
-    setTimeout(() => {
-        const chatContainer = document.getElementById('modal-chat-container');
-        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
-        log('Modal Chat Init', {
-            isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem,
-            chatContainerExists: !!chatContainer,
-            user: state.session.user
-        });
-        if (state.session.user.isAuthenticated && chatContainer && isChatEnabledOnItem) {
-            log('Modal', 'All conditions met. Initializing item chat.');
-            chatContainer.style.display = 'flex';
-            initializeItemChat(record.id);
-        } else {
-            log('Modal', 'Hiding chat. Reason:', {
-                isAuthenticated: state.session.user.isAuthenticated,
-                isChatEnabledOnItem: isChatEnabledOnItem,
-                chatContainerExists: !!chatContainer
-            });
-            if (chatContainer) {
-                chatContainer.style.display = 'none';
-            }
-        }
-    }, 0);
 }
 
-export function hideDetailModal() {
-    console.log('[hideDetailModal] Called.');
-    const closeBtn = document.getElementById('modal-close-btn');
-    if (closeBtn) {
-        closeBtn.onclick = null;
-    }
-    modalOverlay.removeEventListener('click', handleOverlayClick);
-    document.removeEventListener('keydown', handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
-    }
-
-    if (modalOverlay) {
-        modalOverlay.classList.remove('active');
-        setTimeout(() => {
-            modalOverlay.style.display = 'none';
-            resetModalState();
-        }, 300);
-        document.body.classList.remove('modal-open');
+function loadMoreRecords(imageCache) {
+    if (state.ui.isLoadingMore) return;
+    const start = state.ui.recordsCurrentlyDisplayed;
+    const end = start + RECORDS_PER_LOAD;
+    const recordsToLoad = state.records.filtered.slice(start, end);
+    if (recordsToLoad.length > 0) {
+        state.ui.isLoadingMore = true;
+        ui.renderRecords(recordsToLoad, imageCache, true).then(() => {
+            state.ui.recordsCurrentlyDisplayed += recordsToLoad.length;
+            state.ui.isLoadingMore = false;
+        });
     }
 }
 
-export async function showCheckoutModal(shopSettings) {
-    currentShopSettings = shopSettings;
-    log('Modal', 'Showing checkout modal.');
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    const fullTotalEl = document.getElementById('full-total-price');
-    const checkoutCloseBtn = document.getElementById('checkout-close-btn');
-    const summaryDetailsEl = document.getElementById('checkout-summary-details');
-    const tipAmountInput = document.getElementById('tip-amount');
-    const paymentChoiceContainer = document.getElementById('payment-choice-container');
-    const termsContainer = document.querySelector('.terms-and-conditions');
-
-    const totalLabel = document.getElementById('checkout-total-label');
-    if (totalLabel) {
-        if (state.session.user.amountReceived > 0) {
-            totalLabel.textContent = 'Total Final Cost:';
-        } else {
-            totalLabel.textContent = 'Total Estimated Cost:';
-        }
+export function updateSaveShareButton() {
+    if (!saveShareBtn) return;
+    switch (state.ui.saveState) {
+        case 'MODIFIED':
+            saveShareBtn.textContent = 'Changes pending...';
+            saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes automatically...';
+            break;
+        case 'SAVING':
+            saveShareBtn.textContent = '⚙️ Saving...';
+            saveShareBtn.disabled = true;
+            saveShareBtn.dataset.tooltip = 'Saving your changes...';
+            break;
+        case 'SAVED':
+            saveShareBtn.textContent = '🔗 Copy Link';
+            const hasContent = state.cart.items.size > 0 || state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0;
+            saveShareBtn.disabled = !hasContent;
+            saveShareBtn.dataset.tooltip = !hasContent ? 'Add items or details to enable sharing' : 'Copy a shareable link to this plan';
+            break;
     }
+}
 
-    if (!checkoutModalOverlay) return;
-
-    const handleOverlayClick = (e) => {
-        if (e.target === checkoutModalOverlay) {
-            hideCheckoutModal();
+export function triggerSave() {
+    if (state.ui.isInitializing) return;
+    clearTimeout(saveTimeout);
+    state.ui.saveState = 'MODIFIED';
+    updateSaveShareButton();
+    saveTimeout = setTimeout(async () => {
+        state.ui.saveState = 'SAVING';
+        updateSaveShareButton();
+        const success = await api.saveSessionToAirtable();
+        if (success) {
+            state.ui.saveState = 'SAVED';
+            updateSaveShareButton();
         }
-    };
-    checkoutModalOverlay.addEventListener('click', handleOverlayClick);
-    
-    checkoutModalOverlay.removeEventListenerOnClick = () => {
-        checkoutModalOverlay.removeEventListener('click', handleOverlayClick);
-    };
+    }, 1500);
+}
 
-    if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
-    
-    summaryDetailsEl.innerHTML = '';
-    tipAmountInput.value = '';
-    let finalTotal = 0;
-    const summaryList = document.createElement('ul');
-    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+export async function updateAllCardAvailabilityIcons() {
+    if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
+        document.querySelectorAll('.availability-btn').forEach(icon => {
+            if (icon._tippy) icon._tippy.destroy();
+            icon.title = 'Select a date range to check availability';
+            icon.textContent = '📅';
+        });
+        return;
+    }
+    const startDate = mainDatePicker.selectedDates[0];
+    const requestedEnd = mainDatePicker.selectedDates[1];
+    const cards = document.querySelectorAll('.event-card');
+    for (const card of cards) {
+        const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-
-        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-
-        const itemTotal = price * (itemInfo.quantity || 1);
-        finalTotal += itemTotal;
-        const listItem = document.createElement('li');
         
-        let noteHtml = '';
-        if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
+        const busyTimes = await api.fetchCalendarForRecord(record);
+        const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
+        const icon = card.querySelector('.availability-btn');
+        if (icon) {
+            if (icon._tippy) icon._tippy.destroy();
+            let statusIcon;
+            switch (rangeStatus.status) {
+                case AVAILABILITY_STATUS.FULL: statusIcon = '✅'; break;
+                case AVAILABILITY_STATUS.PARTIAL: statusIcon = '🟠'; break;
+                case AVAILABILITY_STATUS.NONE: statusIcon = '❌'; break;
+                default: statusIcon = '📅';
+            }
+            
+            const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
+            const tooltipContent = `<div style=\"text-align: left;\"><strong>${dateRangeString}</strong><hr style=\"margin: 2px 0 5px;\"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+            tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
+            icon.title = rangeStatus.reason;
+            icon.textContent = statusIcon;
         }
-        
-        listItem.innerHTML = `
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
-                ${noteHtml}
-            </div>
-            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
-        `;
-        summaryList.appendChild(listItem);
     }
+}
 
-    summaryDetailsEl.appendChild(summaryList);
+async function handlePaymentFormSubmit(event) {
+    event.preventDefault();
+    log('Events', 'Payment form submitted.');
 
-    fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
-    fullTotalEl.dataset.total = finalTotal;
-    if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
-        paymentChoiceContainer.style.display = 'block';
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
-            radio.addEventListener('change', updateCheckoutDisplay);
-        });
-    } else {
-        paymentChoiceContainer.style.display = 'none';
+    const submitBtn = document.getElementById('payment-submit-btn');
+    const buttonText = submitBtn.querySelector('.button-text');
+    const spinner = submitBtn.querySelector('.spinner');
+    const cardErrors = document.getElementById('card-errors');
+    cardErrors.textContent = '';
+
+    submitBtn.disabled = true;
+    buttonText.style.display = 'none';
+    spinner.style.display = 'inline';
+
+    const { stripe, cardElement } = ui.getStripeContext();
+    if (!stripe || !cardElement) {
+        cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
+        submitBtn.disabled = false;
+        buttonText.style.display = 'inline';
+        spinner.style.display = 'none';
+        return;
     }
-
-    if (termsContainer && currentShopSettings.terms) {
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
-    }
-
-    updateCheckoutDisplay();
-    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
     
     try {
-        stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-        const elements = stripe.elements();
-        const cardElementContainer = document.getElementById('card-element');
-        if (cardElementContainer) cardElementContainer.innerHTML = '';
-        const cardElement = elements.create('card');
-        cardElement.mount('#card-element');
-        checkoutModalOverlay.cardElement = cardElement;
-        checkoutModalOverlay.classList.add('active');
-        setTimeout(() => {
-            checkoutModalOverlay.style.display = 'flex';
-            if(checkoutCloseBtn) checkoutCloseBtn.focus();
-        }, 0);
-        document.body.classList.add('modal-open');
-    } catch (err) {
-        console.error("Failed to initialize payment form:", err);
-        alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
-        hideCheckoutModal();
-    }
-}
-
-export function hideCheckoutModal() {
-    const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
-    if (checkoutModalOverlay) {
-        if (checkoutModalOverlay.removeEventListenerOnClick) {
-            checkoutModalOverlay.removeEventListenerOnClick();
+        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
+        const amountReceived = state.session.user.amountReceived || 0;
+        const totalDue = finalTotal - amountReceived;
+        const isFirstPayment = amountReceived === 0;
+        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
+        const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
+        const finalAmountToCharge = baseAmountToCharge + tipAmount;
+        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
+        if (finalAmountInCents < 50) {
+            throw new Error("Final amount is too low to process.");
         }
-        document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
-            radio.removeEventListener('change', updateCheckoutDisplay);
+
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: finalAmountInCents }),
         });
-        checkoutModalOverlay.classList.remove('active');
-        setTimeout(() => {
-            const checkoutCloseBtn = document.getElementById('checkout-close-btn');
-            if (checkoutCloseBtn) {
-                checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
-            }
-            checkoutModalOverlay.style.display = 'none';
-            log('Modal', 'Checkout modal hidden.');
-        }, 300);
-        document.body.classList.remove('modal-open');
+        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
+        const paymentIntentData = await intentResponse.json();
+        const clientSecret = paymentIntentData.clientSecret;
+        const customerName = document.getElementById('customer-name').value;
+        const customerEmail = document.getElementById('customer-email').value;
+        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+            payment_method: {
+                card: cardElement,
+                billing_details: { name: customerName, email: customerEmail },
+            },
+        });
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+            log('Events', 'Payment succeeded.');
+            const amountPaid = paymentIntent.amount / 100;
+            
+            const newPayment = {
+                amount: amountPaid,
+                date: new Date().toISOString(),
+                note: `Stripe Payment on ${new Date().toLocaleDateString()}`
+            };
+            const updatedPaymentHistory = [...state.session.user.paymentHistory, newPayment];
+            
+            await api.updatePaymentHistory(state.session.id, updatedPaymentHistory);
+
+            state.session.user.paymentHistory = updatedPaymentHistory;
+            state.session.user.amountReceived = updatedPaymentHistory.reduce((sum, p) => sum + p.amount, 0);
+
+            ui.updateTotalCost();
+            document.getElementById('payment-form').style.display = 'none';
+            document.getElementById('checkout-summary-details').style.display = 'none';
+            document.querySelector('.checkout-total-deposit-section').style.display = 'none';
+            document.querySelector('.terms-and-conditions').style.display = 'none';
+            document.getElementById('payment-success-message').style.display = 'block';
+
+            setTimeout(() => { ui.hideCheckoutModal(); }, 4000);
+        }
+    } catch (err) {
+        log('Events', `Stripe payment error: ${err.message}`);
+        cardErrors.textContent = err.message;
+        submitBtn.disabled = false;
+        buttonText.style.display = 'inline';
+        spinner.style.display = 'none';
     }
 }
 
-export function getStripeContext() {
-    const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
-    return { stripe, cardElement };
+// --- V2.1: REPLACE THIS ENTIRE FUNCTION ---
+/**
+ * Triggers a "ghost card" and dummy AI parse when a search yields no local results.
+ * @param {string} searchTerm The user's search query.
+ * @param {Map} imageCache The global imageCache.
+ */
+async function handleProactiveAISearch(searchTerm, imageCache) {
+    if (aiSearchController) {
+        aiSearchController.abort();
+    }
+    aiSearchController = new AbortController();
+    const signal = aiSearchController.signal;
+
+    const catalogContainer = document.getElementById('catalog-container');
+    if (!catalogContainer) return;
+
+    // 1. Inject the "Ghost Card" (Loading State)
+    const ghostRecord = {
+        id: `ai-search-${Date.now()}`, // Temporary ID
+        fields: {
+            Name: `Searching for "${searchTerm}"...`,
+            Description: "Our AI is looking for this item in the Bay Area...",
+            Price: 0,
+            'Item Type': 'Bookable Item',
+            ServiceType: 'Partner Activity',
+            Status: 'Available'
+        }
+    };
+    
+    const ghostCard = await ui.createInteractiveCard(ghostRecord, [], imageCache);
+    ghostCard.id = "ai-ghost-card";
+    ghostCard.style.opacity = "0.5";
+    ghostCard.style.pointerEvents = "none";
+    
+    catalogContainer.innerHTML = '';
+    catalogContainer.appendChild(ghostCard);
+
+    try {
+        // --- START V2.1: DUMMY DATA WORKAROUND ---
+        log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
+        await new Promise(res => setTimeout(res, 1500)); // Simulate network delay
+        if (signal.aborted) return;
+
+        // This is the fake data the "API" (process-weblink.js) would return
+        const webData = {
+            Name: `[DUMMY] ${searchTerm}`,
+            Description: "This is a dummy item. The real AI-parsed description will go here.",
+            Price: Math.floor(Math.random() * 100) + 10,
+            ServiceType: "Partner Activity"
+        };
+        // --- END V2.1 DUMMY ---
+
+        // (The real code would be:)
+        // const response = await fetch('/api/process-weblink', { ... });
+        // const webData = await response.json();
+        // ...
+        
+        log('Events', 'Proactive AI Parse Success:', webData);
+        
+        const customId = `custom-${Date.now()}`;
+        
+        // --- V2.1: This is the KEY "INTERMIXING" LOGIC --
+        // Create a "record" object that mimics a real Airtable record
+        const liveRecord = {
+            id: customId,
+            fields: {
+                Name: webData.Name,
+                Description: webData.Description,
+                Price: webData.Price,
+                ServiceType: webData.ServiceType,
+                'Item Type': 'Bookable Item',
+                Status: 'Available',
+                // --- V2.1: SIMULATE THE AI PROFILING ---
+                // In a real scenario, we'd call /api/profile-item
+                // For now, we'll inject a DUMMY profile.
+                Rankings: JSON.stringify({
+                    "profileSource": "ai_v1_dummy_profile",
+                    "Pillars": { "Activities": 10, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
+                    "Vibe": { "Energy": 8, "Relaxation": 2, "Formality": 3, "Novelty": 9 },
+                    "Intellect": { "Creative": 5, "Analytical": 5 },
+                    "Physicality": { "Intensity": 5, "Accessibility": 5 },
+                    "Tags": [searchTerm.toLowerCase(), "dummy", "partner activity"]
+                }),
+                // Add "null" placeholders for safety
+                Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
+                'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
+                Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
+                RSVPs: null, Date: null, 'Chat Enabled': false, Duration: null, 
+                Capacity: null, 'Location Details': null, 'Additional Information': null
+            }
+        };
+        
+        // (The *real* code would call our new function:)
+        // try {
+        //    log('Events', `Calling /api/profile-item for new item ${customId}`);
+        //    const profileResponse = await fetch('/api/profile-item', {
+        //        method: 'POST',
+        //        headers: { 'Content-Type': 'application/json' },
+        //        body: JSON.stringify({ recordId: customId }) // (This assumes customId exists in Airtable)
+        //    });
+        //    const profileData = await profileResponse.json();
+        //    liveRecord.fields.Rankings = JSON.stringify(profileData.profile);
+        // } catch (profileError) {
+        //    log('Events', `Could not profile new item: ${profileError.message}`);
+        // }
+        // --- END V2.1 ---
+        
+        state.records.all.push(liveRecord);
+
+        // 4. Create the *real* card and replace the ghost card
+        const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
+        
+        const addToPlanBtn = finalCard.querySelector('.add-to-plan-btn');
+        if (addToPlanBtn) {
+            addToPlanBtn.textContent = 'Add to Plan';
+            addToPlanBtn.disabled = false;
+            
+            const newBtn = addToPlanBtn.cloneNode(true);
+            addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
+
+            newBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                log('Events', `Adding AI-parsed item: ${customId}`);
+                
+                state.cart.lockedItems.set(customId, {
+                    quantity: 1,
+                    selectedOptionIndex: 0,
+                    note: `Added via AI search for: "${searchTerm}"`
+                });
+
+                ui.updateEventPlanSection();
+                ui.updateTotalCost();
+                triggerSave();
+                
+                newBtn.textContent = 'In Plan';
+                newBtn.disabled = true;
+            });
+        }
+
+        catalogContainer.innerHTML = '';
+        catalogContainer.appendChild(finalCard);
+
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            log('Events', 'AI search aborted by new search.');
+            return;
+        }
+        log('Events', `Proactive AI parse error: ${err.message}`);
+        catalogContainer.innerHTML = `<p style='text-align: center;'>Could not find "${searchTerm}". Please try a different name or URL.</p>`;
+    } finally {
+        aiSearchController = null;
+    }
+}
+// --- END V2.1 REPLACEMENT ---
+
+
+export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
+    const safeAddEventListener = (selector, event, handler) => {
+        const element = document.getElementById(selector);
+        if (element) element.addEventListener(event, handler);
+        else console.warn(`Element with ID \"${selector}\" not found.`);
+    };
+
+    safeAddEventListener('my-plans-dropdown', 'change', (e) => {
+        const dropdown = e.target;
+        const selectedId = dropdown.value;
+        if (selectedId === 'new') {
+            const currentShopId = state.ui.activeShopId;
+            window.location.href = `${window.location.pathname}?shopId=${currentShopId}`;
+        } else if (selectedId) {
+            window.location.href = `${window.location.pathname}?session=${selectedId}`;
+        }
+    });
+
+    const leftSidebar = document.getElementById('left-sidebar');
+    const rightSidebar = document.getElementById('right-sidebar');
+    if (window.innerWidth < 1000) {
+        leftSidebar?.classList.add('collapsed');
+        rightSidebar?.classList.add('collapsed');
+    }
+
+    safeAddEventListener('mobile-filter-trigger', 'click', () => {
+        if (window.innerWidth < 1000) {
+            leftSidebar?.classList.toggle('collapsed');
+        }
+    });
+    safeAddEventListener('mobile-view-plan-btn', 'click', () => {
+        const isCurrentlyCollapsed = rightSidebar?.classList.contains('collapsed');
+        rightSidebar?.classList.toggle('collapsed');
+
+        if (isCurrentlyCollapsed) {
+            setTimeout(() => {
+                rightSidebar?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 50);
+        } else {
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+
+    saveShareBtn = document.getElementById('save-share-btn');
+    categoryFiltersContainer = document.getElementById('category-filters');
+    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+    let debugEnabled = false;
+
+    const betaTrigger = document.getElementById('beta-trigger');
+    if (betaTrigger) {
+        betaTrigger.addEventListener('click', () => {
+            debugEnabled = !debugEnabled;
+            setDebugMode(debugEnabled);
+            log('Debug', `Debug mode is now ${debugEnabled ? 'ON' : 'OFF'}.`);
+        });
+    }
+
+    let scrollTimeout;
+    window.addEventListener('scroll', () => {
+        if (scrollTimeout) return;
+        scrollTimeout = setTimeout(() => {
+            const buffer = 300;
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - buffer && !state.ui.isLoadingMore) {
+                loadMoreRecords(imageCache);
+            }
+            scrollTimeout = null;
+        }, 100);
+    });
+
+    // --- START CONSOLIDATED BUTTON GENERATION --
+    if (categoryFiltersContainer) {
+        categoryFiltersContainer.innerHTML = ''; 
+    } else {
+        console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.");
+    }
+
+    if (categoryFiltersContainer) { 
+        const planFilterBtn = document.createElement('button');
+        planFilterBtn.className = 'filter-btn';
+        planFilterBtn.id = 'plan-filter-btn';
+        planFilterBtn.textContent = '⭐ My Plan';
+        categoryFiltersContainer.appendChild(planFilterBtn);
+
+        const likesFilterBtn = document.createElement('button');
+        likesFilterBtn.className = 'filter-btn';
+        likesFilterBtn.id = 'liked-items-filter-btn';
+        likesFilterBtn.textContent = '❤️ My Likes';
+        categoryFiltersContainer.appendChild(likesFilterBtn);
+
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn'; 
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
+        categoryFiltersContainer.appendChild(allButton);
+
+        const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
+        if (currentStore && Array.isArray(currentStore.fields.Items)) {
+            const categoryRecordIds = currentStore.fields.Items;
+            const categories = categoryRecordIds
+                .map(id => state.records.all.find(record => record.id === id && record.fields['Item Type'] === 'Grouping' && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]))
+                .filter(Boolean);
+
+            categories.sort((a, b) => (a.fields.Name || '').localeCompare(b.fields.Name || ''));
+
+            categories.forEach((catRecord) => {
+                const button = document.createElement('button');
+                button.className = 'filter-btn category-filter-btn';
+                button.dataset.filter = catRecord.fields.Name.toLowerCase();
+                button.textContent = catRecord.fields.Name;
+                categoryFiltersContainer.appendChild(button);
+            });
+        }
+    } 
+    // --- END CONSOLIDATED BUTTON GENERATION --
+
+    const toggleFilter = (elementId, settingName) => {
+        const container = document.getElementById(elementId)?.parentElement;
+        if (container) {
+            container.style.display = shopSettings.enabledFilters.includes(settingName) ? 'flex' : 'none';
+        }
+    };
+
+    toggleFilter('subcategory-filters', 'Subcategories');
+    toggleFilter('date-filter-group', 'Date & Time');
+    toggleFilter('headcount-filter', 'Headcount');
+    toggleFilter('location-filter', 'Location');
+    toggleFilter('budget-filter', 'Budget');
+
+    safeAddEventListener('category-filters', 'click', (e) => {
+        const planFilterBtn = document.getElementById('plan-filter-btn');
+        const likesFilterBtn = document.getElementById('liked-items-filter-btn');
+        const clickedBtn = e.target.closest('.filter-btn');
+
+        if (!clickedBtn || !categoryFiltersContainer) return; 
+
+        const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
+        const isLikesFilterClick = clickedBtn.id === 'liked-items-filter-btn';
+
+        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        clickedBtn.classList.add('active');
+
+        if (isPlanFilterClick) {
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
+            updateSubcategoryButtons();
+        } else if (isLikesFilterClick) {
+            updateUrl({ category: null, subcategory: null, view: 'likes' });
+            updateSubcategoryButtons();
+        } else {
+            const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter;
+            updateUrl({ category: newCategory, subcategory: null, view: null });
+            updateSubcategoryButtons();
+        }
+
+        applyFiltersAndSort(imageCache);
+    });
+
+    safeAddEventListener('subcategory-filters', 'click', (e) => {
+        if (e.target.classList.contains('subcategory-filter-btn')) {
+            e.target.classList.toggle('active');
+            const activeSubcats = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn.active'))
+                                     .map(btn => btn.dataset.filter);
+            updateUrl({ subcategory: activeSubcats.join(',') || null });
+            applyFiltersAndSort(imageCache);
+        }
+    });
+
+    safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
+    
+    // --- THIS IS THE MODIFIED LISTENER (V2.1) ---
+    safeAddEventListener('name-filter', 'input', debounce((e) => {
+        const searchTerm = e.target.value.trim();
+        
+        if (aiSearchController) {
+            aiSearchController.abort(); // Cancel any pending AI search
+        }
+        
+        // --- V2.1: ALWAYS apply filters (sort will handle the search) ---
+        applyFiltersAndSort(imageCache);
+        // --- END V2.1 ---
+        
+        // This is the trigger
+        if (state.records.filtered.length === 0 && searchTerm.length > 2) {
+            log('Events', 'No local results, triggering proactive AI search.');
+            
+            // Check if any other filters are active
+            const hasOtherFilters = 
+                document.getElementById('status-filter').value !== 'Available' ||
+                document.getElementById('headcount-filter').value !== 'any' ||
+                document.getElementById('location-filter').value !== 'any' ||
+                document.getElementById('budget-filter').value !== 'any' ||
+                document.querySelector('#category-filters .filter-btn:not([data-filter=\"all\"]).active') ||
+                document.querySelector('#subcategory-filters .filter-btn.active');
+            
+            if (!hasOtherFilters) {
+                // Only run AI search if *only* the name filter is active
+                handleProactiveAISearch(searchTerm, imageCache);
+            }
+        }
+    }, 300)); // 300ms debounce
+    // --- END MODIFICATION --
+    
+    safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
+    safeAddEventListener('headcount-filter', 'change', (e) => {
+        document.getElementById('headcount-custom').style.display = (e.target.value === 'custom') ? 'block' : 'none';
+        applyFiltersAndSort(imageCache);
+    });
+    safeAddEventListener('location-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('budget-filter', 'change', () => applyFiltersAndSort(imageCache));
+    safeAddEventListener('sort-by', 'change', () => applyFiltersAndSort(imageCache));
+
+    safeAddEventListener('reset-filters-btn', 'click', () => {
+        updateUrl({ category: null, subcategory: null, view: null });
+        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        if (allButton) {
+            categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            allButton.classList.add('active');
+        }
+        updateSubcategoryButtons();
+        document.getElementById('name-filter').value = '';
+        document.getElementById('status-filter').value = 'Available';
+        document.getElementById('headcount-filter').selectedIndex = 0;
+        document.getElementById('headcount-custom').value = '';
+        document.getElementById('headcount-custom').style.display = 'none';
+        document.getElementById('location-filter').selectedIndex = 0;
+        document.getElementById('budget-filter').selectedIndex = 0;
+        document.getElementById('sort-by').selectedIndex = 0;
+        if (mainDatePicker) mainDatePicker.clear();
+        applyFiltersAndSort(imageCache);
+    });
+
+    mainDatePicker = flatpickr("#date-filter", {
+        mode: "range",
+        dateFormat: "M j, Y",
+        onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return;
+            if (selectedDates.length > 0) {
+                if (selectedDates.length === 2) {
+                    selectedDates[1].setHours(23, 59, 59, 999);
+                }
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                triggerSave();
+                await updateAllCardAvailabilityIcons();
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                triggerSave();
+                await updateAllCardAvailabilityIcons();
+                await updateMobileBarAvailability();
+            }
+        },
+    });
+
+    safeAddEventListener('date-filter-group', 'click', (e) => {
+        const quickButton = e.target.closest('[data-date-quick]');
+        if (!quickButton || !mainDatePicker) return;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let startDate = new Date(today);
+        let endDate = new Date(today);
+        const quickFilterType = quickButton.dataset.dateQuick;
+        switch (quickFilterType) {
+            case 'tomorrow':
+                startDate.setDate(today.getDate() + 1);
+                endDate.setDate(today.getDate() + 1);
+                break;
+            case 'this-week':
+                endDate.setDate(today.getDate() + (6 - today.getDay()));
+                break;
+            case 'next-2-weeks':
+                endDate.setDate(today.getDate() + 14);
+                break;
+        }
+        mainDatePicker.setDate([startDate, endDate], true);
+    });
+
+    safeAddEventListener('header-event-name', 'change', (e) => {
+        if (state.ui.isInitializing) return;
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
+        triggerSave();
+    });
+    // --- V2.1: APPLY FILTERS ON GOAL CHANGE ---
+    safeAddEventListener('header-goals', 'change', (e) => {
+        if (state.ui.isInitializing) return;
+        state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
+        triggerSave();
+        // Re-apply filters if "Recommended" sort is active
+        if (document.getElementById('sort-by').value === 'recommended') {
+            applyFiltersAndSort(imageCache);
+        }
+    });
+    // --- END V2.1 ---
+
+    document.body.addEventListener('click', async (e) => {
+        if (state.ui.isInitializing) return;
+
+        const card = e.target.closest('.event-card');
+        const heartIcon = e.target.closest('.heart-icon');
+        const rsvpBtn = e.target.closest('.rsvp-btn');
+        const ideaItem = e.target.closest('.favorite-item');
+        const removeIdeaBtn = ideaItem?.querySelector('.remove-btn');
+        const checkoutBtn = e.target.closest('#checkout-btn');
+        const lockedItemCard = e.target.closest('.locked-item-card');
+        const demoteBtn = e.target.closest('.demote-locked-item-btn');
+        const parentLink = e.target.closest('.parent-link');
+        const presentBtn = e.target.closest('.present-btn');
+        const carouselNav = e.target.closest('.carousel-nav');
+        const saveShareBtn = e.target.closest('#save-share-btn');
+        const breadcrumbLink = e.target.closest('.breadcrumb-link');
+        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+
+        // --- ADD THIS NEW \"ELSE IF\" BLOCK ---\
+        const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
+
+        if (healthSuggestionBtn) {
+            e.stopPropagation();
+            const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
+            
+            log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
+            
+            // Find the matching category button in the filter list
+            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${categoryToFilter}\"]`);
+            
+            if (categoryButton) {
+                // Programmatically click the button
+                categoryButton.click(); 
+            }
+            
+            // Scroll to the top of the catalog to show the results
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
+        }
+        // --- END NEW BLOCK ---\
+
+        if (saveShareBtn) {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                const originalText = saveShareBtn.textContent;
+                saveShareBtn.textContent = 'Copied!';
+                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy link:', err);
+                ui.showToast('Failed to copy link.');
+            });
+        } else if (breadcrumbLink) {
+            e.preventDefault();
+            const filterValue = breadcrumbLink.dataset.filter;
+            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${filterValue}\"]`);
+            if (targetButton) {
+                targetButton.click();
+            }
+        } else if (checkoutBtn) {
+            ui.showCheckoutModal(shopSettings);
+        } else if (rsvpBtn) {
+            e.stopPropagation();
+            if (!state.session.user.isAuthenticated) {
+                showUserModal();
+                return;
+            }
+            const cardEl = rsvpBtn.closest('.event-card');
+            const recordId = cardEl?.dataset.recordId;
+            if (!recordId) return;
+
+            rsvpBtn.disabled = true;
+            rsvpBtn.textContent = 'Saving...';
+            try {
+                const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
+                if (updatedRecord) {
+                    rsvpBtn.textContent = "You're Going! ✅";
+                    const recordIndex = state.records.all.findIndex(r => r.id === recordId);
+                    if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
+                } else {
+                    throw new Error('RSVP update failed.');
+                }
+            } catch (error) {
+                console.error("RSVP Error:", error);
+                ui.showToast(`RSVP Error: ${error.message}`);
+                rsvpBtn.textContent = 'Error!';
+                setTimeout(() => {
+                    rsvpBtn.textContent = 'RSVP';
+                    rsvpBtn.disabled = false;
+                }, 2000);
+            }
+        } else if (presentBtn) {
+            const listType = presentBtn.dataset.listType;
+            updateUrl({ view: 'present' });
+            ui.showPresentationView(listType);
+        } else if (carouselNav) {
+            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
+            if (carousel) {
+                const scrollAmount = 300;
+                const direction = carouselNav.classList.contains('right') ? 1 : -1;
+                carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+            }
+        } else if (parentLink) {
+            e.stopPropagation();
+            const parentName = parentLink.dataset.parentName;
+            if (parentName) {
+                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
+                                     .find(btn => btn.textContent === parentName);
+                if (targetButton) {
+                    const isCategory = !!targetButton.closest('#category-filters');
+                    if (isCategory) {
+                        targetButton.click();
+                    } else {
+                        document.querySelectorAll('#subcategory-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                        targetButton.classList.add('active');
+                        updateUrl({ subcategory: targetButton.dataset.filter });
+                        applyFiltersAndSort(imageCache);
+                    }
+                    if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
+                        updateUrl({ openItem: null });
+                        ui.hideDetailModal();
+                    }
+                }
+            }
+    // --- CORRECTLY PLACED HEART ICON LOGIC --
+        } else if (heartIcon) {
+            e.stopPropagation();
+            addEnergy(); 
+            const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
+            if (!recordId) return;
+    
+            console.log(`[Events] Heart icon clicked for record: ${recordId}`); 
+    
+            if (state.session.user.isAuthenticated) {
+                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
+                try {
+                    heartIcon.style.pointerEvents = 'none';
+                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
+                    const result = await api.toggleUserLike(recordId);
+                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
+    
+                    if (result.success) {
+                        let actionTaken = '';
+                        if (result.liked) {
+                            state.session.user.likedItemIds.add(recordId);
+                            actionTaken = 'liked';
+                            log('Events', `User liked item ${recordId}.`);
+                        } else {
+                            state.session.user.likedItemIds.delete(recordId);
+                            actionTaken = 'unliked';
+                            log('Events', `User unliked item ${recordId}.`);
+                        }
+                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
+                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
+                        ui.updateCardIcon(recordId);
+                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
+    
+                        if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
+                            applyFiltersAndSort(imageCache);
+                        }
+                    } else {
+                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
+                         ui.showToast('Could not update like status. Please try again.');
+                    }
+                } catch (error) {
+                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
+                    log('Events', `Error toggling like: ${error.message}`);
+                    ui.showToast(`Error: ${error.message}`);
+                } finally {
+                    heartIcon.style.pointerEvents = 'auto';
+                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
+                }
+            } else {
+                 console.log('[Events] User is logged out. Handling temporary like.');
+                log('Events', `Guest toggling temporary like for item ${recordId}.`);
+                let tempLikes = [];
+                try {
+                    tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
+                } catch (e) {
+                     console.error('Error parsing tempLikes from localStorage:', e);
+                     localStorage.removeItem('tempLikes'); tempLikes = [];
+                }
+                const tempLikesSet = new Set(tempLikes);
+                let currentlyLiked = false;
+                if (tempLikesSet.has(recordId)) {
+                    tempLikesSet.delete(recordId); currentlyLiked = false;
+                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
+                } else {
+                    tempLikesSet.add(recordId); currentlyLiked = true;
+                     console.log(`[Events] Added ${recordId} to temporary likes.`);
+                }
+                localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
+                log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
+                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
+                ui.updateCardIcon(recordId);
+                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
+                if (currentlyLiked) {
+                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
+                     ui.showLoginPromptForLikes();
+                }
+                if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
+                      applyFiltersAndSort(imageCache);
+                 }
+            }
+        }
+        // --- END HEART ICON LOGIC --
+        
+        else if (addToPlanBtn) {
+            e.stopPropagation();
+            const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
+            if (!recordId) return;
+
+            addEnergy();
+
+            if (state.cart.lockedItems.has(recordId)) {
+                if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
+                    updateUrl({ openItem: null });
+                    ui.hideDetailModal();
+                }
+                return;
+            }
+
+            let itemInfo;
+            const modalOverlay = document.getElementById('detail-modal-overlay');
+            if (modalOverlay?.classList.contains('active') && modalOverlay.dataset.recordId === recordId) {
+                const quantity = parseInt(document.querySelector('#modal-quantity-selector .quantity-input')?.value, 10) || 1;
+                const selectedOptionIndex = parseInt(document.querySelector('#modal-options-container .option-btn.selected')?.dataset.optionIndex, 10) || 0;
+                const note = document.getElementById('modal-item-note')?.value || '';
+                itemInfo = { quantity, selectedOptionIndex, note };
+                updateUrl({ openItem: null });
+                ui.hideDetailModal();
+            } else {
+                itemInfo = ui.getItemState(recordId);
+            }
+
+            state.cart.lockedItems.set(recordId, itemInfo);
+            state.cart.items.delete(recordId);
+
+            ui.updateCardIcon(recordId);
+            await ui.updateIdeasCarousel();
+            await ui.updateEventPlanSection();
+            ui.updateTotalCost();
+            updateMobileBarAvailability();
+            triggerSave();
+        } else if (demoteBtn) {
+            e.stopPropagation();
+            const recordId = demoteBtn.closest('[data-record-id]')?.dataset.recordId;
+            if (!recordId || !state.cart.lockedItems.has(recordId)) return;
+
+            const itemInfo = state.cart.lockedItems.get(recordId);
+            state.cart.lockedItems.delete(recordId);
+            state.cart.items.set(recordId, itemInfo);
+
+            ui.updateCardIcon(recordId);
+            await ui.updateEventPlanSection();
+            await ui.updateIdeasCarousel();
+            ui.updateTotalCost();
+            updateMobileBarAvailability();
+            triggerSave();
+        } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
+            e.stopPropagation();
+            const recordId = ideaItem.dataset.recordId;
+            if (!recordId || !state.cart.items.has(recordId)) return;
+
+            state.cart.items.delete(recordId);
+
+            await ui.updateIdeasCarousel();
+            triggerSave();
+        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) return;
+            
+            // --- This check prevents clicking the \"ghost card\" ---\
+            if (record.id.startsWith('ai-search-')) {
+                return;
+            }
+            // --- End check ---\
+
+            if (record.fields['Item Type'] === 'Grouping') {
+                 const groupName = record.fields.Name;
+                 const groupNameLower = groupName.toLowerCase();
+                 const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
+
+                 if (!parentName) {
+                     updateUrl({ category: groupNameLower, subcategory: null, view: null });
+                     if (categoryFiltersContainer) {
+                         categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
+                     }
+                     updateSubcategoryButtons();
+                 } else {
+                     const parentNameLower = parentName.toLowerCase();
+                     updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
+                     if (categoryFiltersContainer) {
+                         categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${parentNameLower}\"]`)?.classList.add('active');
+                     }
+                     updateSubcategoryButtons();
+                     if (subcategoryFiltersContainer) {
+                         subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
+                     }
+                 }
+                 applyFiltersAndSort(imageCache);
+
+            } else {
+                ui.showDetailModal(record);
+            }
+        } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
+            const recordId = lockedItemCard.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) ui.showDetailModal(record);
+        } else if (ideaItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
+            const recordId = ideaItem.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+             if (record) ui.showDetailModal(record);
+        }
+    }); // End of body click listener
+
+    document.body.addEventListener('change', (e) => {
+        if (state.ui.isInitializing) return;
+        const target = e.target;
+        const container = target.closest('[data-record-id]');
+        if (!container) return;
+        const recordId = container.dataset.recordId;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        let updates = {};
+        if (target.matches('.quantity-input')) {
+            updates.quantity = parseInt(target.value, 10);
+        } else if (target.matches('#modal-item-note')) {
+            updates.note = target.value;
+        } else if (e.detail?.selectedOptionIndex !== undefined) {
+             updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+        }
+        if (Object.keys(updates).length > 0) {
+            if (isLocked) {
+                ui.updateLockedItemState(recordId, updates);
+                ui.updateEventPlanSection();
+                ui.updateTotalCost();
+            } else {
+                ui.updateItemState(recordId, updates);
+            }
+            triggerSave();
+        }
+    });
+    const eventPlanDatePicker = flatpickr("#event-date-picker", {
+        dateFormat: "M j, Y",
+        onChange: async (selectedDates) => {
+            if (state.ui.isInitializing) return;
+            if (selectedDates.length > 0) {
+                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+            } else {
+                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            await ui.updateEventPlanDateDisplay();
+            await ui.updateLockedItemStatusIcons();
+            await updateMobileBarAvailability();
+            triggerSave();
+        }
+    });
+    safeAddEventListener('itinerary-btn', 'click', () => {
+        log('Events', 'Itinerary button clicked, showing modal.');
+        showItineraryModal();
+    });
+    ui.setupPresentationEventListeners();
+    safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
+
+    setupItineraryEventListeners();
+
+    return { mainDatePicker, eventPlanDatePicker };
+}
+
+export function initializeChatEventListeners() {
+    const messageForm = document.getElementById('message-form');
+    const messageInput = document.getElementById('message-input');
+    if (messageForm) {
+        messageForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const message = messageInput.value;
+            if (message.trim() === '') return;
+            sendMessage(message);
+            messageInput.value = '';
+        });
+    }
+
+    const chatToggleButton = document.getElementById('chat-toggle-button');
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    function toggleChatWindow(forceClose = false) {
+        if (chatWidgetContainer) {
+            if (forceClose) {
+                chatWidgetContainer.classList.remove('chat-open');
+            } else {
+                chatWidgetContainer.classList.toggle('chat-open');
+            }
+        }
+    }
+
+    if (chatToggleButton) {
+        chatToggleButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleChatWindow();
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+        if (chatWidgetContainer && !chatWidgetContainer.contains(event.target) && chatWidgetContainer.classList.contains('chat-open')) {
+            if (!remainOpenCheckbox || !remainOpenCheckbox.checked) {
+                toggleChatWindow(true);
+            }
+        }
+    });
+}
+
+export function openChatWidget(andKeepOpen = false) {
+    const chatWidgetContainer = document.getElementById('chat-widget-container');
+    if (chatWidgetContainer) {
+        chatWidgetContainer.classList.add('chat-open');
+        if (andKeepOpen) {
+            const remainOpenCheckbox = document.getElementById('chat-remain-open-checkbox');
+            if (remainOpenCheckbox) {
+                remainOpenCheckbox.checked = true;
+            }
+        }
+    }
 }
