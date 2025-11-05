@@ -422,6 +422,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
 
+// In: components/modal.js
+// Action: REPLACE the rawOptions.forEach loop (lines 431-456)
+
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
         const optionButton = document.createElement('button');
@@ -430,15 +433,34 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (itemState.selectedOptionIndex === index) {
             optionButton.classList.add('selected');
         }
-        let priceModText = '';
+        
+        // --- VVV START NEW LOGIC VVV ---
+        let priceDisplay = '';
+        
+        // Calculate the *total* price for this specific option
+        const itemPrice = getRecordPrice(record, null); // Base price of the record
+        let optionPrice = itemPrice;
+        
         if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
+            // Option sets an absolute price
+            optionPrice = opt.price;
         } else if (opt.priceChange !== null) {
-            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
+            // Option applies a price change
+            optionPrice += opt.priceChange;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+
+        // Only display the price if it's a positive number
+        if (optionPrice > 0) {
+            priceDisplay = `$${optionPrice.toFixed(2)}`;
+        }
+        
+        // Display the calculated price instead of the modifier
+        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceDisplay}</span>`;
+        // --- ^^^ END NEW LOGIC ^^^ ---
+
 
         if (allRecordNames.has(opt.name)) {
+// ... (rest of the loop remains the same, until line 456)
             optionButton.dataset.childName = opt.name;
             optionButton.addEventListener('click', (e) => {
                 e.stopPropagation();
