@@ -94,13 +94,11 @@
   to = "/.netlify/functions/generate-products"
   status = 200
 
-
 # Add this rule to netlify.toml
 [[redirects]]
-  from = "/api/hello"
+  from = "/api/profile-item"
   to = "/.netlify/functions/hello-world"
   status = 200
-# Inside netlify.toml, add this block with the others
 
 [[redirects]]
   from = "/api/toggle-like"
