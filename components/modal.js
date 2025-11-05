@@ -67,6 +67,9 @@ function getPlanRankingProfile() {
 }
 
 
+// In: components/modal.js
+// Action: REPLACE the entire `generateRecommendationBlurb` function
+
 /**
  * [v1.2] Generates the full HTML "Intelligent Blurb" based on your 3-brain logic.
  * @param {object} record - The item record being displayed.
@@ -78,7 +81,7 @@ function generateRecommendationBlurb(record) {
     
     // Get all context
     const matchedGoals = findGoalsInText(goalText);
-    const missingCategories = calculateMissingCategories();
+    const missingCategories = calculateMissingCategories(); // This is now imported and correct
     const planProfile = getPlanRankingProfile();
     
     const itemRankings = JSON.parse(record.fields['Rankings'] || '{}');
@@ -101,8 +104,9 @@ function generateRecommendationBlurb(record) {
     }
 
     // --- Brain 2: Breadth Match (The "4 Pillars") ---
+    // This logic is now fixed to use the correct plural/cased names
     if (missingCategories.length > 0) {
-        if (missingCategories.includes("Activity") && itemCategories.includes("activity")) {
+        if (missingCategories.includes("Activities") && itemCategories.includes("activities")) {
             blurbs.add("This adds a core <strong>Activity</strong> to your plan.");
         } else if (missingCategories.includes("Food/Drink") && (itemCategories.includes("food/drink") || itemCategories.includes("food"))) {
             blurbs.add("This adds a <strong>Food/Drink</strong> component to your event.");
@@ -128,7 +132,7 @@ function generateRecommendationBlurb(record) {
             }
         });
     }
-
+    
     // --- Build the "Recommendation" Blurb ---
     if (blurbs.size > 0) {
         let finalBlurb = "<strong style='color: #0056b3;'>Recommended for you:</strong><ul style='margin: 5px 0 0 20px; padding: 0; list-style-type: disc;'>";
@@ -147,8 +151,6 @@ function generateRecommendationBlurb(record) {
 
     return null; // No blurb needed
 }
-// --- END OF Recommendation Engine v1.2 ---
-
 
 let stripe;
 let currentShopSettings = {};
