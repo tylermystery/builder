@@ -257,41 +257,40 @@ const GOAL_PROFILE_MAP = {
     "Venue": { "Pillars.Venue": 1.0 },
     "Extras": { "Pillars.Extras": 1.0 }
 };
-
 // In: availability.js
 // Action: REPLACE the entire buildGoalBucket function
 
 /**
- * [v2.2] Builds the user's complete "Goal Bucket" from all sources.
- * @param {boolean} includeGoals - Whether to include goals from the Goals/Notes input.
+ * [v2.8] Builds the user's complete "Goal Bucket" from all sources.
+ * Determines if goals should be included based on the presence of text in the goals field.
+ * @param {string} sortBy - The current sort mode (e.g., 'recommended').
  * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "escape room"])
  */
-export function buildGoalBucket(includeGoals = false) {
+export function buildGoalBucket(sortBy) {
     const goals = new Set();
+    const isRecommendedSort = sortBy.startsWith('recommended');
+    const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
 
-    // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED FOR RECOMMENDED SORT
-    const missingCategories = calculateMissingCategories(); // e.g., ["Venue", "Food/Drink"]
-    missingCategories.forEach(cat => goals.add(cat));
+    if (isRecommendedSort) {
+        // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED in Recommended Sort
+        const missingCategories = calculateMissingCategories();
+        missingCategories.forEach(cat => goals.add(cat));
 
-    // 2. Explicit Goals (From "Goals/Notes" input) - ONLY IF FLAG IS TRUE
-    if (includeGoals) {
-        const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
+        // 2. Explicit Goals (From "Goals/Notes" input) - Only if text is present
         if (goalText.length > 2) {
-            // Find all keywords from our map that exist in the text
             Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
                 if (goalText.includes(keyword)) {
                     goals.add(keyword);
                 }
             });
         }
-    }
 
-    // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED FOR RECOMMENDED SORT
-    const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
-    if (searchText.length > 2) {
-        goals.add(searchText);
+        // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED in Recommended Sort
+        const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
+        if (searchText.length > 2) {
+            goals.add(searchText);
+        }
     }
 
     return Array.from(goals);
 }
-// --- END V2.1: NEW FUNCTIONS ---
