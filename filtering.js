@@ -508,12 +508,13 @@ export function applyFiltersAndSort(imageCache) {
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          
-         // FIXED: ALWAYS FILTER BY SEARCH TERM 
+         // --- VVV FINAL V3.0 FIX: ALWAYS FILTER BY SEARCH TERM VVV ---
+         // The filterBySearchTerm function performs the basic Name/Description/Tag match
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
+         // --- ^^^ END FINAL V3.0 FIX ^^^
     }
-
     // --- Sort the Final List (pass the goalBucket) ---
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
