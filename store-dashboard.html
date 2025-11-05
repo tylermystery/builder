@@ -11,8 +11,15 @@
         </header>
         <main>
             <h2>Store Settings</h2>
-            <div id="store-settings-container"></div>
-
+            <div id="store-settings-container">
+            <div id="admin-tools" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;">
+                <h4>Admin Tools</h4>
+                <button id="admin-bulk-profile-btn" style="background-color: #dc3545; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em;">
+                    Run AI Profiler on All Items
+                </button>
+                <p id="admin-status-message" style="font-size: 0.9em; color: #666; margin-top: 10px;">Status: Ready</p>
+            </div>
+            </div>
             <h2>Your Items</h2>
             <div id="item-list-container"></div>
         </main>
