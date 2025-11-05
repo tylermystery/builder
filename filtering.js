@@ -388,11 +388,14 @@ function filterBySearchTerm(records, searchTerm) {
     return scoredRecords.map(item => item.record);
 }
 
+// In: filtering.js
+// Action: REPLACE the entire sortRecords function
+
 function sortRecords(records, sortBy, goalBucket) {
-    // --- NEW: Check for "Recommended" sort ---
-    if (sortBy.startsWith('recommended-')) {
+    // --- VVV NEW V3.0: Dedicated Recommended Sort VVV ---
+    if (sortBy === 'recommended') {
         const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
-        log('Filtering', `Sorting by v2.1 "${sortBy}". Goal Bucket: [${goalBucket.join(', ')}]`);
+        log('Filtering', `Sorting by v3.0 "Recommended". Goals Included. Bucket: [${goalBucket.join(', ')}]`);
 
         // Create a scored list
         const scoredRecords = records.map(record => ({
@@ -406,7 +409,7 @@ function sortRecords(records, sortBy, goalBucket) {
         return scoredRecords.map(item => item.record);
     }
     
-    // --- EXISTING LOGIC (Fallback) ---
+    // --- EXISTING LOGIC (Fallback: Price/Name Sort) ---
     return records.sort((a, b) => {
         const aIsFeatured = a.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
         const bIsFeatured = b.fields[CONSTANTS.FIELD_NAMES.STATUS] === 'Featured';
@@ -427,7 +430,7 @@ function sortRecords(records, sortBy, goalBucket) {
             case 'price-asc': return aPrice - bPrice;
             case 'price-desc': return bPrice - aPrice;
             case 'name-asc': return aName.localeCompare(bName);
-            default: return 0; // Default case, no change in order
+            default: return aName.localeCompare(bName); // Default sort for non-recommended mode is Name (A-Z)
         }
     });
 }
@@ -517,7 +520,7 @@ export function applyFiltersAndSort(imageCache) {
     }
     // --- Sort the Final List (pass the goalBucket) ---
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
-
+    
     // --- Update State & Render ---
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
