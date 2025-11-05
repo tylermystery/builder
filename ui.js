@@ -19,7 +19,6 @@ export * from './utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
-export { handleFilterChipClear };
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
