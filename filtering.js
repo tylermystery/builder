@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket } from './availability.js'; // <-- NEW IMPORT
+import { calculateMissingCategories, buildGoalBucket } from './availability.js'; // <-- CORRECT IMPORT
 
 // --- START: NEW RECOMMENDATION ENGINE V2.1 ---
 
