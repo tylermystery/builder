@@ -110,3 +110,8 @@
   from = "/api/profile-item"
   to = "/.netlify/functions/profile-item"
   status = 200
+
+[[redirects]]
+  from = "/api/get-store-data-by-owner-id"
+  to = "/.netlify/functions/get-store-data-by-owner-id"
+  status = 200
