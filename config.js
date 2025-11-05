@@ -32,8 +32,9 @@ export const STRIPE_PUBLISHABLE_KEY = 'pk_live_51L0C5iHh28kEjv5qjW2tCi3kOOkT9V6f
 export const PUSHER_KEY = '236f480714e5001590b5';
 export const PUSHER_CLUSTER = 'us3';
 export const CLOUDINARY_CLOUD_NAME = 'daedqizre';
+export const RECORDS_PER_LOAD = 20;
 
 // --- THIS IS THE FIX ---
-// Add the missing export for filtering.js
-export const RECORDS_PER_LOAD = 20;
+// Add the missing export for presentation.js
+export const EMOJI_REACTIONS = ['❤️', '👍', '🎉', '💡', '😂', '🔥'];
 // --- END THE FIX ---
