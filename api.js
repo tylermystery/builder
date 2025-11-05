@@ -399,7 +399,7 @@ export async function fetchAllRecords() {
         'Capacity',
         'Location Details',
         'Additional Information',
-        'Rankings'
+        'Rankings',
         'AI_Profile' // NEW FIELD FOR V2.1 PROFILING
         // Add ALL other ranking field names from Airtable if you used individual fields before
         // e.g., 'Ranking - Fun', 'Ranking - Competitive', etc.
