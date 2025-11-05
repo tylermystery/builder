@@ -290,8 +290,6 @@ export function displayReservedStatus() {
         saveShareBtn.disabled = false;
     }
 }
-// In: components/sidebar.js
-// Action: REPLACE the entire `updateEventHealthScore` function
 
 /**
  * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
@@ -334,16 +332,17 @@ export function updateEventHealthScore() {
             // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
             const displayName = cat; 
             
-            // --- VVV FIXED: Explicitly set the filter tag to match the existing filter buttons VVV ---
+            // --- VVV FINAL FIX: Create the canonical filter tag VVV ---
             let filterTag = displayName.toLowerCase();
+            
             if (displayName === "Food & Drink") {
-                filterTag = "food/drink"; // The actual filter tag used in the Category Filter buttons
+                // Ensure this always creates "food/drink" as expected by category filtering
+                filterTag = "food/drink"; 
             } else if (displayName === "Venues") {
-                filterTag = "venues"; // Explicitly ensure this is "venues"
-            } else {
-                filterTag = filterTag.replace(/[^a-z0-9]/g, ''); // Fallback cleaning
+                filterTag = "venues"; 
             }
-            // --- ^^^ END FIXED ^^^ ---
+            // For Activities and Extras, filterTag will correctly be "activities" and "extras".
+            // --- ^^^ END FINAL FIX ^^^ ---
             
             html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
         });
