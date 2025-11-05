@@ -679,6 +679,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
 
+        // --- ADD THIS NEW "ELSE IF" BLOCK ---
+        const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
+
+        if (healthSuggestionBtn) {
+            e.stopPropagation();
+            const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
+            
+            log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
+            
+            // Find the matching category button in the filter list
+            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter="${categoryToFilter}"]`);
+            
+            if (categoryButton) {
+                // Programmatically click the button
+                categoryButton.click(); 
+            }
+            
+            // Scroll to the top of the catalog to show the results
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
+        }
+        // --- END NEW BLOCK ---
+
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
