@@ -416,78 +416,186 @@ export async function updateMobileBarAvailability() {
 // In: ui.js
 // Action: REPLACE the entire updateCatalogHeader function
 
+// In: ui.js
+// Action: REPLACE the entire updateCatalogHeader function
+
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const titleEl = document.getElementById('catalog-title');
-    const planFilterBtn = document.getElementById('plan-filter-btn');
-    const searchTerm = document.getElementById('name-filter')?.value?.trim();
-    const isSearchActive = searchTerm && searchTerm.length > 0;
-    const sortBy = document.getElementById('sort-by')?.value;
+    const nameFilterEl = document.getElementById('name-filter');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
 
+    if (!breadcrumbsEl || !titleEl || !nameFilterEl || !clearSearchBtn) return;
 
-    if (!breadcrumbsEl || !titleEl) return;
-
-    // Reset previous state
+    // Reset visibility
     breadcrumbsEl.innerHTML = '';
     titleEl.style.display = 'none';
+    clearSearchBtn.style.display = 'none';
+    const activeFiltersHtml = [];
+    const searchTerm = nameFilterEl.value.trim();
+    const isSearchActive = searchTerm.length > 0;
+    const sortBy = document.getElementById('sort-by')?.value;
 
-    // 1. Handle Special Views (My Plan/My Likes)
-    if (planFilterBtn && (planFilterBtn.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active'))) {
-        // These are handled by the separate logic block in filtering.js
+    // --- 1. Handle Special Views (My Plan/My Likes) ---
+    if (document.getElementById('plan-filter-btn')?.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+        // Leave the default title logic in filtering.js to handle this
         return;
     }
 
-    // 2. Determine Catalog Path / Title
+    // --- 2. Collect Active Filters (Non-Category) ---
+
+    // A. Name Search
+    if (isSearchActive) {
+        // Activate the search clear button
+        clearSearchBtn.style.display = 'block'; 
+        // Add search term as a clearable chip
+        activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
+    }
+    
+    // B. Status
+    const statusEl = document.getElementById('status-filter');
+    if (statusEl && statusEl.value !== 'Available') {
+        activeFiltersHtml.push(createFilterChip('Status: ' + statusEl.options[statusEl.selectedIndex].text, 'status-filter', statusEl.value));
+    }
+    
+    // C. Headcount
+    const headcountEl = document.getElementById('headcount-filter');
+    const headcountCustomEl = document.getElementById('headcount-custom');
+    if (headcountEl && headcountEl.value !== 'any') {
+        let text = headcountEl.options[headcountEl.selectedIndex].text;
+        if (headcountEl.value === 'custom' && headcountCustomEl.value) {
+            text = `Headcount: ${headcountCustomEl.value}`;
+        }
+        activeFiltersHtml.push(createFilterChip(text, 'headcount-filter', headcountEl.value));
+    }
+    
+    // D. Location
+    const locationEl = document.getElementById('location-filter');
+    if (locationEl && locationEl.value !== 'any') {
+        activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
+    }
+
+    // E. Budget
+    const budgetEl = document.getElementById('budget-filter');
+    if (budgetEl && budgetEl.value !== 'any') {
+        activeFiltersHtml.push(createFilterChip('Budget: ' + budgetEl.options[budgetEl.selectedIndex].text, 'budget-filter', budgetEl.value));
+    }
+
+    // --- 3. Collect Active Category/Subcategory Filters ---
+    
     const path = [];
     let currentTitle = '';
-
-    // Always start with a clickable "All Categories" link
+    
+    // Always start with "All Categories" as the base path, but not as a filter chip
     path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
-    // Find the active category
+    // Category (Only allow one active Category at a time based on existing events.js logic)
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
+        // The category itself becomes a breadcrumb
         path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${activeCategoryButton.dataset.filter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
-    // Find any active subcategories
+    // Subcategories (Multi-select)
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
-    if (activeSubcategoryNodes.length > 0) {
-        const subcatNames = Array.from(activeSubcategoryNodes).map(btn => btn.textContent);
-        path.push(`<span>${subcatNames.join(' + ')}</span>`);
-        currentTitle = subcatNames.join(' + ');
-    }
+    activeSubcategoryNodes.forEach(btn => {
+        const subcatName = btn.textContent;
+        // Subcategories are added as clearable chips, not just a label in the breadcrumb
+        activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', btn.dataset.filter));
+        // We still include them in the breadcrumb path as the title context
+        path.push(`<span>${subcatName}</span>`);
+        currentTitle = subcatName;
+    });
     
-    // 3. Set Breadcrumbs/Title with Search Priority
+    // --- 4. Render and Bind ---
 
-    if (isSearchActive) {
-        // If search is active, the Title prioritizes the search term
-        titleEl.textContent = `Search: "${searchTerm}"`;
-        titleEl.style.display = 'block';
-        
-        // Show context below the search title
-        if (path.length > 1) {
+    // A. Render Active Filter Chips
+    if (activeFiltersHtml.length > 0) {
+        // Prepend a title for the filter bar
+        const chipContainer = document.createElement('div');
+        chipContainer.id = 'filter-chip-container';
+        chipContainer.innerHTML = '<h4>Active Filters:</h4>' + activeFiltersHtml.join('');
+        breadcrumbsEl.appendChild(chipContainer);
+
+        // Bind new event listeners for clearing filters
+        breadcrumbsEl.querySelectorAll('.filter-chip button').forEach(button => {
+            button.addEventListener('click', handleFilterChipClear);
+        });
+    }
+
+
+    // B. Render Breadcrumbs (Only if filter chips aren't used for navigation, or as a path)
+    if (path.length > 1 && !isSearchActive) {
+         // Show category breadcrumb only if search is NOT active, or if it's the only active filter
+        if (activeFiltersHtml.length === 0) {
             breadcrumbsEl.innerHTML = path.join(' &gt; ');
-        } else {
-             // If no category filter is active, explicitly show "All Categories" as the context
-             breadcrumbsEl.innerHTML = path.join(' &gt; ');
         }
-        
-        // If sorting by recommended, add a small visual cue
-        if (sortBy === 'recommended') {
-            titleEl.textContent += ` (Recommended)`;
-        }
-
-    } else if (path.length > 1) {
-        // If no search is active, show the category path
-        breadcrumbsEl.innerHTML = path.join(' &gt; ');
         titleEl.textContent = currentTitle;
         titleEl.style.display = 'block';
+    } else if (isSearchActive) {
+        // If search is active, ensure the title reflects that (handled above in 2.A)
+        titleEl.textContent = `Search: "${searchTerm}"` + (sortBy === 'recommended' ? ` (Recommended)` : '');
+        titleEl.style.display = 'block';
+    } else {
+        // Reset if only "All Categories" is active
+        titleEl.textContent = '';
     }
 }
 
+/**
+ * Helper to create the filter chip HTML.
+ * @param {string} text - The display text (e.g., 'Status: Coming Soon').
+ * @param {string} type - The filter type ('status-filter', 'name-filter', etc.).
+ * @param {string} value - The filter value to clear.
+ * @returns {string} The HTML for the chip.
+ */
+function createFilterChip(text, type, value) {
+    return `<div class="filter-chip" data-filter-type="${type}" data-filter-value="${value}">
+                <span>${text}</span>
+                <button title="Clear Filter">×</button>
+            </div>`;
+}
+
+/**
+ * Handles the click event when a user clears a filter chip.
+ */
+function handleFilterChipClear(e) {
+    const chip = e.target.closest('.filter-chip');
+    if (!chip) return;
+
+    const type = chip.dataset.filterType;
+    const value = chip.dataset.filterValue;
+
+    // 1. Clear the filter state based on type
+    switch (type) {
+        case 'name-filter':
+            document.getElementById('name-filter').value = '';
+            break;
+        case 'status-filter':
+            document.getElementById('status-filter').value = 'Available';
+            break;
+        case 'headcount-filter':
+            document.getElementById('headcount-filter').value = 'any';
+            document.getElementById('headcount-custom').value = '';
+            document.getElementById('headcount-custom').style.display = 'none';
+            break;
+        case 'location-filter':
+        case 'budget-filter':
+            document.getElementById(type).value = 'any';
+            break;
+        case 'subcategory-filter':
+            // Find and unclick the corresponding button (which updates the URL/filters)
+            const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
+            if (subcatButton) subcatButton.click();
+            // We exit here, as subcatButton.click() already calls applyFiltersAndSort
+            return;
+    }
+    
+    // 2. Re-run filters and update UI (for all non-subcategory filters)
+    window.applyFiltersAndSort(window.imageCache);
+}
 // --- Function to show login prompt for likes ---
 let promptTimeout;
 export function showLoginPromptForLikes() {
