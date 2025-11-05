@@ -423,8 +423,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.appendChild(heartBtnContainer);
 
 // In: components/modal.js
-// Action: REPLACE the entire block from 'modalOptionsContainer.innerHTML = '';'
-//         down to the end of the rawOptions.forEach loop (approx. lines 431-456).
+// Action: REPLACE the entire block from 'modalOptionsContainer.innerHTML = '';' 
+//         down to the end of the price/name manipulation (approx. lines 431-480)
 
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {
@@ -485,20 +485,35 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = getRecordPrice(record, newIndex);
                 
-                // --- VVV UPDATED PRICE DISPLAY ON OPTION CHANGE VVV ---
-                // We show the main price, but without the redundant pricingTypeHTML
+                // --- VVV FIXED PRICE DISPLAY ON OPTION CHANGE VVV ---
+                // Shows price clearly without the pricing type being added here
                 modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A'); 
-                // --- ^^^ END UPDATED PRICE DISPLAY ^^^ ---
+                // --- ^^^ END FIXED PRICE DISPLAY ^^^ ---
             });
         }
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- VVV FINAL STEP: Moving Pricing Type to the Item Name VVV ---
-    if (pricingTypeHTML && !isGrouping) {
-        modalItemName.textContent += ` ${pricingTypeHTML}`;
+    // --- VVV FINAL FIX: Remove PricingTypeHTML from Item Price, move it to Item Name VVV ---
+    // Note: This logic previously existed outside the loop but was added in the loop replacement
+    // and is necessary to execute after the itemPrice is initially set, before the options loop.
+    
+    // We explicitly remove the pricing type HTML from the modalItemPrice here 
+    // and append it to modalItemName, resolving the redundancy.
+    if (!isGrouping) {
+        let priceText = (typeof price === 'number' ? `$${price.toFixed(2)}` : 'N/A');
+        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
+            priceText += ' (Est.)';
+        }
+        // Set modalItemPrice cleanly
+        modalItemPrice.innerHTML = priceText; 
+        
+        // Append pricing type to the item name (h2)
+        if (pricingTypeHTML) {
+            modalItemName.innerHTML += ` <span class="pricing-type-display">${pricingTypeHTML}</span>`;
+        }
     }
-    // --- ^^^ END FINAL STEP ^^^ ---
+    // --- ^^^ END FINAL FIX ^^^ ---
     
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
