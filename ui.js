@@ -528,10 +528,20 @@ export function updateCatalogHeader() {
     // ^^^ END CRITICAL FIX V3.4.2 ^^^
 
 
-    // --- 4. Goals Chip (V3.2 BEHAVIOR) ---
+// --- 4. Goals Chip (V3.2 BEHAVIOR) ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        // ... (Goal logic remains the same) ...
-        const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
+        
+        // --- NEW: Add the same stop word list ---
+        const STOP_WORDS = new Set([
+            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
+            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
+        ]);
+
+        // Use the new simplified parser
+        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
+            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
+        );
+
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
                  // Flag goals as goal-filter type
