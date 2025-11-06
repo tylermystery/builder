@@ -164,40 +164,43 @@ export async function getCombinedPlanStatus(date, lockedItems) {
 
     return overallStatus;
 }
+
 // In: availability.js
-// Action: REPLACE the entire calculateMissingCategories function
+// Action: REPLACE the entire `calculateMissingCategories` function
 
 /**
  * [Recommendation Engine v1.2]
  * Calculates the "health" of the event to find missing "Pillar" categories.
- * @returns {Array<string>} A list of missing categories (e.g., ["Venues", "Food & Drink"])
+ * @returns {Array<string>} A list of missing categories (e.g., ["Venue", "Food/Drink"])
  */
 export function calculateMissingCategories() {
     // Your 4 Pillars (Using the exact, case-sensitive names the UI will display)
     const requiredCategories = {
         "Activities": false,
         "Food & Drink": false, // Key matches desired display
-        "Venues": false,     
+        "Venues": false,     // Key matches desired display
         "Extras": false,
     };
 
     for (const recordId of state.cart.lockedItems.keys()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
+        // The itemCategories string is a lowercased, comma-separated list of categories from Airtable
         const itemCategories = (record.fields.Categories || '').toLowerCase();
 
+        // Check against our "required" list. We check for common lowercase variations.
         if (itemCategories.includes('activities')) {
             requiredCategories["Activities"] = true;
         }
         
-        // --- VVV FIXED: Robust check for all Food & Drink variations VVV ---
+        // --- FIXED: Robust check for all Food & Drink variations ---
         if (itemCategories.includes('food & drink') ||  // "Food & Drink"
             itemCategories.includes('food/drink') ||    // "Food/Drink" (from original data)
             itemCategories.includes('food') ||          // "Food"
             itemCategories.includes('drink')) {         // "Drink"
             requiredCategories["Food & Drink"] = true;
         }
-        // --- ^^^ END FIXED ^^^ ---
+        // --- ^^^ END FIXED ^^^
         
         if (itemCategories.includes('venues') || itemCategories.includes('venue')) {
             requiredCategories["Venues"] = true;
@@ -216,20 +219,16 @@ export function calculateMissingCategories() {
     }
     return suggestions;
 }
-// --- START V2.1: NEW FUNCTIONS ---
 
-// In: availability.js
-// Action: REPLACE the GOAL_PROFILE_MAP with the expanded version.
+// --- START V2.1/V3.6: NEW FUNCTIONS (Centralized Scoring Helpers) ---
 
 /**
- * [v2.2] The "Goal Mapper" (Rosetta Stone). Expanded to include synonyms.
+ * [v2.1] The "Goal Mapper" (Rosetta Stone).
  */
-const GOAL_PROFILE_MAP = {
+export const GOAL_PROFILE_MAP = {
     // --- Abstract Goals (from text) ---
     "fun": { "Vibe.Energy": 1.0, "Vibe.Novelty": 0.5, "Vibe.Relaxation": -0.5 },
     "exciting": { "Vibe.Energy": 1.0, "Physicality.Intensity": 0.5 },
-    
-    // --- NEW SYNONYMS & MAPPERS ---
     "social": { "Vibe.Energy": 0.5, "Vibe.Formality": -0.5, "Vibe.Relaxation": 0.5 },
     "joy": { "Vibe.Energy": 0.8, "Vibe.Novelty": 0.5 },
     "lively": { "Vibe.Energy": 1.0 },
@@ -237,27 +236,18 @@ const GOAL_PROFILE_MAP = {
     "quiet": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
     "unique": { "Vibe.Novelty": 1.0 },
     "challenging": { "Intellect.Analytical": 0.7, "Physicality.Intensity": 0.5 },
-    // --- END NEW SYNONYMS ---
-    
     "relaxing": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
     "chill": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
     "creative": { "Intellect.Creative": 1.0, "Vibe.Novelty": 0.5 },
     "art": { "Intellect.Creative": 1.0 },
     "artistic": { "Intellect.Creative": 1.0 },
     "team-build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
-    "team building": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 }, // Corrected case sensitivity match for "team building"
+    "team building": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
     "bonding": { "Vibe.Relaxation": 0.5, "Vibe.Formality": -0.5 },
     "competitive": { "Physicality.Intensity": 0.5, "Tags": "competitive" },
     "celebration": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
     "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
-
-    // --- Pillar Goals (Implicit) ---
-    "Activities": { "Pillars.Activity": 1.0 },
-    "Food/Drink": { "Pillars.Food/Drink": 1.0 },
-    "Venue": { "Pillars.Venue": 1.0 },
-    "Extras": { "Pillars.Extras": 1.0 },
-
-    // --- Location/Vibe Entities (Direct Tag Matches) ---
+    // --- Location/Food Entities (Direct Tag Matches) ---
     "outdoor": { "Tags": "outdoor" },
     "outdoors": { "Tags": "outdoor" },
     "park": { "Tags": "outdoor" },
@@ -265,8 +255,6 @@ const GOAL_PROFILE_MAP = {
     "indoor": { "Tags": "indoor" },
     "home": { "Tags": "indoor" },
     "office": { "Tags": "indoor" },
-    
-    // --- Food Entities (Direct Tag Matches) ---
     "pizza": { "Tags": "pizza" },
     "porkchops": { "Tags": "porkchops" },
     "tacos": { "Tags": "tacos" },
@@ -274,14 +262,16 @@ const GOAL_PROFILE_MAP = {
     "bar": { "Tags": "bar" },
     "wine": { "Tags": "wine" },
     "drink": { "Tags": "drink" },
-    "food": { "Tags": "food" }
+    "food": { "Tags": "food" },
+    // --- Pillar Goals (Implicit) ---
+    "Activities": { "Pillars.Activity": 1.0 },
+    "Food & Drink": { "Pillars.Food & Drink": 1.0 },
+    "Venues": { "Pillars.Venues": 1.0 },
+    "Extras": { "Pillars.Extras": 1.0 }
 };
-// In: availability.js
-// Action: REPLACE the entire buildGoalBucket function (V3.6)
 
 /**
  * [V3.6] Builds the user's complete "Goal Bucket" using multi-pass extraction.
- * Processes goals by comma-separated phrases for robustness.
  * @param {string} sortBy - The current sort mode.
  * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun time with friends", "pizza"])
  */
@@ -297,22 +287,27 @@ export function buildGoalBucket(sortBy) {
         
         // 2. Explicit Goals & Entity Extraction (V3.6 Pass) ---
         if (rawGoalText.length > 2) {
-            // VVV FIX: Split by COMMA or WHITESPACE, keeping multi-word phrases intact VVV
+            // FIX: Use comma separation for clear multi-word phrases, keeping the goal as typed
             const phrases = rawGoalText.split(',').map(p => p.trim()).filter(p => p.length > 2 && p.toLowerCase() !== 'and'); 
             
             phrases.forEach(phrase => {
-                // If the phrase is a known keyword (like 'fun' or 'pizza'), use the keyword
-                let keywordFound = false;
+                // Check if the whole phrase matches a multi-word key in the map
+                let matchFound = false;
                 Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
-                    if (phrase.includes(keyword)) {
+                     if (phrase.includes(keyword)) {
                         goals.add(keyword);
-                        keywordFound = true;
+                        matchFound = true;
                     }
                 });
                 
-                // If it's a multi-word phrase that didn't match (like "movie night"), add the whole phrase as a tag
-                if (!keywordFound) {
-                    goals.add(phrase); 
+                if (!matchFound) {
+                    // Fallback to searching word by word in the phrase for known tags
+                    const wordsInPhrase = phrase.split(' ');
+                    wordsInPhrase.forEach(word => {
+                        if (GOAL_PROFILE_MAP[word]) {
+                            goals.add(word);
+                        }
+                    });
                 }
             });
         }
@@ -327,14 +322,9 @@ export function buildGoalBucket(sortBy) {
     return Array.from(goals);
 }
 
-// In: availability.js
-// Action: Add the core scoring functions after buildGoalBucket and export them.
 
 /**
  * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
- * @param {object} profile - The parsed Rankings JSON.
- * @param {string} key - The dot-notation key (e.g., "Vibe.Energy").
- * @returns {number} The score (0-10) or 0 if not found.
  */
 export function getProfileScore(profile, key) {
     if (!profile || !key) return 0;
@@ -347,30 +337,8 @@ export function getProfileScore(profile, key) {
 }
 
 /**
- * [V2.9] Fallback scoring for un-profiled items.
- * @param {object} record - The Airtable record.
- * @param {string} searchText - The user's search query.
- * @returns {number} A simple keyword-match score.
- */
-function calculateBasicSearchScore(record, searchText) {
-    if (!searchText) return 0;
-    
-    const name = (record.fields.Name || '').toLowerCase();
-    const description = (record.fields.Description || '').toLowerCase();
-    const tags = (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '').toLowerCase();
-    
-    if (name.includes(searchText)) return 10;
-    if (description.includes(searchText)) return 5;
-    if (tags.includes(searchText)) return 3;
-    return 0;
-}
-
-/**
  * [V2.9] Calculates the "Universal Profile" score for an item.
  * NOTE: This is now exported for use in components/card.js and components/sidebar.js.
- * @param {object} record - The Airtable record.
- * @param {Array<string>} goalBucket - The user's master goal list.
- * @returns {number} The final recommendation score.
  */
 export function calculateRecommendationScore(record, goalBucket) {
     let finalScore = 0;
@@ -383,7 +351,9 @@ export function calculateRecommendationScore(record, goalBucket) {
         if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
     } catch (e) {
         // Fallback for old/empty items: retains basic keyword score
-        return calculateBasicSearchScore(record, currentSearchTerm);
+        // NOTE: calculateBasicSearchScore is defined locally in filtering.js, which imports this function.
+        // We cannot call it directly here without importing it, so we rely on the primary filtering/sorting logic.
+        return 0; 
     }
 
     const { profileSource, Tags = [], ...attributes } = profile;
@@ -409,12 +379,10 @@ export function calculateRecommendationScore(record, goalBucket) {
             }
         }
         // 2. Check "Brain 2" (The "Robust" Tagger)
-        // This handles explicit search terms that aren't abstract goals (e.g. "tacos")
-        else if (goalLower === currentSearchTerm) { 
+        // This handles explicit search terms or un-mapped goals that match a Tag
+        else if (Tags.some(tag => tag.includes(goalLower))) { 
             const TAG_BONUS = 15; 
-            if (Tags.some(tag => tag.includes(goalLower))) {
-                finalScore += TAG_BONUS;
-            }
+            finalScore += TAG_BONUS;
         }
     });
 
