@@ -281,9 +281,9 @@ const GOAL_PROFILE_MAP = {
 
 /**
  * [V3.6] Builds the user's complete "Goal Bucket" using multi-pass extraction.
- * Includes Pillars, Goals, Entity Keywords, and Search Term, but only if 'recommended' sort is active.
+ * Processes goals by comma-separated phrases for robustness.
  * @param {string} sortBy - The current sort mode.
- * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "outdoors", "pizza", "celebration"])
+ * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun time with friends", "pizza"])
  */
 export function buildGoalBucket(sortBy) {
     const goals = new Set();
@@ -295,17 +295,24 @@ export function buildGoalBucket(sortBy) {
         const missingCategories = calculateMissingCategories();
         missingCategories.forEach(cat => goals.add(cat));
         
-        // --- 2. Explicit Goals & Entity Extraction (V3.6 Pass) ---
+        // 2. Explicit Goals & Entity Extraction (V3.6 Pass) ---
         if (rawGoalText.length > 2) {
-            // Treat the input as a single string for robust keyword scanning
-            const textToScan = rawGoalText.replace(/[^a-z0-9 ]/g, ' '); // Clean punctuation/commas into spaces
-
-            // Check against ALL keys in the GOAL_PROFILE_MAP (Abstract Goals + Entities)
-            Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
-                // Use a regex word boundary check to find the whole word/phrase
-                const regex = new RegExp('\\b' + keyword + '\\b'); 
-                if (textToScan.match(regex)) {
-                    goals.add(keyword);
+            // VVV FIX: Split by COMMA or WHITESPACE, keeping multi-word phrases intact VVV
+            const phrases = rawGoalText.split(',').map(p => p.trim()).filter(p => p.length > 2 && p.toLowerCase() !== 'and'); 
+            
+            phrases.forEach(phrase => {
+                // If the phrase is a known keyword (like 'fun' or 'pizza'), use the keyword
+                let keywordFound = false;
+                Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
+                    if (phrase.includes(keyword)) {
+                        goals.add(keyword);
+                        keywordFound = true;
+                    }
+                });
+                
+                // If it's a multi-word phrase that didn't match (like "movie night"), add the whole phrase as a tag
+                if (!keywordFound) {
+                    goals.add(phrase); 
                 }
             });
         }
