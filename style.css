@@ -2341,3 +2341,100 @@ hr.total-divider {
     z-index: 10;
     cursor: help; /* Makes the mouse cursor a question mark */
 }
+
+/* In: style.css */
+/* Action: Add these new rules to the end of the file */
+
+/* Container for the breadcrumb path (e.g., All > Activities) */
+#breadcrumb-path-container {
+    font-size: 0.9em;
+    margin-bottom: 10px;
+    color: #6c757d;
+}
+
+#breadcrumb-path-container a {
+    color: #007bff;
+    text-decoration: none;
+}
+#breadcrumb-path-container a:hover {
+    text-decoration: underline;
+}
+#breadcrumb-path-container span {
+    font-weight: bold;
+    color: #343a40;
+}
+
+
+/* Container for all active filter chips */
+#filter-chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.6); /* Frosted glass */
+    backdrop-filter: blur(5px);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* "Active Filters:" text label */
+.chip-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #495057;
+    margin-right: 5px;
+}
+
+/* Individual filter chip */
+.filter-chip {
+    display: flex;
+    align-items: center;
+    background-color: #e7f3ff;
+    border: 1px solid #b3d7ff;
+    border-radius: 15px;
+    padding: 3px 8px 3px 10px;
+    font-size: 0.85em;
+    color: #0056b3;
+    font-weight: 500;
+}
+
+/* Goal-specific chip styling */
+.filter-chip.goal-chip {
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+    color: #856404;
+}
+
+/* "x" button on each chip */
+.filter-chip button {
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    color: #007bff;
+    cursor: pointer;
+    padding: 0 0 0 5px;
+    line-height: 1;
+    font-weight: bold;
+}
+
+.filter-chip.goal-chip button {
+    color: #856404;
+}
+
+/* "Clear All" button */
+.filter-chip-clear-all {
+    background: none;
+    border: none;
+    color: #007bff;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.85em;
+    margin-left: auto; /* Pushes it to the far right */
+    padding: 5px;
+    font-weight: 500;
+}
+.filter-chip-clear-all:hover {
+    color: #0056b3;
+}
