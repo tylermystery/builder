@@ -4,12 +4,14 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-// --- THIS IS THE CORRECTED IMPORT BLOCK ---
+// VVV NEW IMPORTS VVV
+import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
+import { calculateRecommendationScore } from '../filtering.js'; 
+// ^^^ END NEW IMPORTS ^^^
 import { parseOptions, getRecordPrice } from '../utils.js';
-import { calculateMissingCategories } from '../availability.js';
-// --- END CORRECTION ---
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
+
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const fields = record.fields;
@@ -20,7 +22,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     // This will use the default placeholder for custom items, which is correct
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     
-    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
 
     const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -29,14 +31,14 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
-        <div class="card-actions">
-            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-            <button class="action-btn remove-btn" title="Remove">×</button>
+        <div class=\"card-actions\">
+            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>
+            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>
         </div>
-        <div class="favorite-item-overlay"
-            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
+        <div class=\"favorite-item-overlay\"
+            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"
         >
-            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
+            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>
         </div>
     `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
@@ -58,7 +60,7 @@ async function createLockedInItemElement(record, itemInfo) {
     
     // --- THIS IS THE FIX for the 404 error ---
     // Default to your main placeholder, which we know exists
-    let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
+    let imageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
     // --- END THE FIX ---
 
     if (!isCustomItem) {
@@ -92,25 +94,77 @@ async function createLockedInItemElement(record, itemInfo) {
     
     if (itemInfo.overridePrice != null) {
         let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrl}\" alt=\"${fields.Name}\">
+        <div class=\"locked-item-details\">
+            <p class=\"locked-item-name\">${fields.Name}</p>
+            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}
+            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
+            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
-        <div class="locked-item-actions">
-            ${!isCustomItem ? '<button class="edit-btn">Edit</button>' : ''}
-            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
+        <div class=\"locked-item-actions\">
+            ${!isCustomItem ? '<button class=\"edit-btn\">Edit</button>' : ''}
+            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>
         </div>
     `;
     return itemElement;
 }
 // --- END REPLACED FUNCTION ---
+
+// --- VVV NEW SCORE LOGIC VVV ---
+
+/**
+ * [V3.3] Calculates and returns the total recommendation score for the entire locked plan.
+ * @returns {number} The total score.
+ */
+function calculateTotalPlanScore() {
+    if (state.cart.lockedItems.size === 0) return 0;
+
+    const sortBy = document.getElementById('sort-by')?.value || 'recommended'; // Assume recommended if checking score
+    // The goal bucket is built based on ALL goals and missing pillars.
+    const goalBucket = buildGoalBucket(sortBy); 
+    
+    let totalScore = 0;
+    
+    for (const recordId of state.cart.lockedItems.keys()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            const score = calculateRecommendationScore(record, goalBucket);
+            totalScore += score;
+        }
+    }
+    return totalScore;
+}
+
+
+/**
+ * [V3.3] Updates the score display in the sidebar.
+ */
+function updateTotalPlanScoreDisplay(score) {
+    const container = document.getElementById('event-health-score'); // Reuse the container
+    
+    if (!container) return;
+
+    let scoreEl = container.querySelector('.plan-score-display');
+    
+    if (score > 0) {
+        if (!scoreEl) {
+             scoreEl = document.createElement('h5');
+             scoreEl.className = 'plan-score-display';
+             scoreEl.style.cssText = 'margin: 5px 0 0 0; text-align: center; color: #007bff; font-size: 1.2em;';
+             // Prepend the score above the health score text
+             container.prepend(scoreEl);
+        }
+        scoreEl.textContent = `Overall Score: ${score.toFixed(0)} Points`;
+    } else if (scoreEl) {
+        // If score is 0 and element exists, remove it or hide it
+        scoreEl.remove();
+    }
+}
+// --- ^^^ END NEW SCORE LOGIC ^^^
 
 
 // --- 2. THIS FUNCTION IS REPLACED ---
@@ -122,7 +176,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
     } else {
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
             // Find the record in state.records.all (where custom items now live)
@@ -138,6 +192,7 @@ export async function updateEventPlanSection() {
     ui.observeLazyImages(container);
     
     updateEventHealthScore(); // --- ADDED THIS LINE ---
+    updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // --- ADDED THIS LINE ---
 }
 // --- END REPLACED FUNCTION ---
 
@@ -185,7 +240,76 @@ export function updateHeader() {
     if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
 }
 
-// --- 3. THIS FUNCTION IS REPLACED ---
+// In: components/sidebar.js
+// Action: REPLACE the entire `updateEventHealthScore` function
+
+/**
+ * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
+ */
+export function updateEventHealthScore() {
+    const container = document.getElementById('event-health-score');
+    if (!container) return;
+    
+    const suggestions = calculateMissingCategories();
+    const score = 4 - suggestions.length; // Based on 4 pillars
+    let html = '';
+
+    // 1. The "Score"
+    let scoreText = '🟠 Good Start!';
+    let scoreColor = '#fd7e14';
+    if (score === 4) {
+        scoreText = '✅ Well-Rounded Event!';
+        scoreColor = '#28a745';
+    } else if (score === 1) {
+        scoreText = '🔴 Just Beginning!';
+        scoreColor = '#dc3545';
+    } else if (score === 0) { // New "Empty" state
+        scoreText = 'Start Your Plan!';
+        scoreColor = '#6c757d'; // Neutral gray
+    } else if (score === 2) {
+        scoreText = '🟡 Growing!';
+        scoreColor = '#ffc107';
+    }
+
+
+    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText}</h5>`;
+
+    // 2. The "Suggestions"
+    if (suggestions.length > 0) {
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\n            Our experts recommend adding these components for a full experience:\n        </p>`;
+        
+        // Create clickable "suggestion" buttons
+        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
+        suggestions.forEach(cat => {
+            // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
+            const displayName = cat; 
+            
+            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---
+            let filterTag = displayName.toLowerCase();
+            
+            if (displayName === "Food & Drink") {
+                // This tag MUST use the slash, as the filter logic in filtering.js expects "food/drink"
+                filterTag = "food/drink"; 
+            } else if (displayName === "Venues") {
+                filterTag = "venues"; 
+            } else if (displayName === "Activities") {
+                filterTag = "activities";
+            } else if (displayName === "Extras") {
+                filterTag = "extras";
+            }
+            // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---
+            
+            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
+        });
+        html += `</div>`;
+    } else {
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\n            You've covered all the core components for a great guest experience!\n        </p>`;
+    }
+
+    container.innerHTML = html;
+}
+
+
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
     const amountPaidCostEl = document.getElementById('amount-paid-cost');
@@ -272,8 +396,8 @@ export function updateTotalCost() {
     }
 
     updateEventHealthScore(); // --- ADDED THIS LINE ---
+    updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // V3.3: Call to display total score
 }
-// --- END REPLACED FUNCTION ---
 
 
 export function displayReservedStatus() {
@@ -289,72 +413,4 @@ export function displayReservedStatus() {
     if (saveShareBtn) {
         saveShareBtn.disabled = false;
     }
-}
-// In: components/sidebar.js
-// Action: REPLACE the entire `updateEventHealthScore` function
-
-/**
- * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
- */
-export function updateEventHealthScore() {
-    const container = document.getElementById('event-health-score');
-    if (!container) return;
-    
-    const suggestions = calculateMissingCategories();
-    const score = 4 - suggestions.length; // Based on 4 pillars
-    let html = '';
-
-    // 1. The "Score"
-    let scoreText = '🟠 Good Start!';
-    let scoreColor = '#fd7e14';
-    if (score === 4) {
-        scoreText = '✅ Well-Rounded Event!';
-        scoreColor = '#28a745';
-    } else if (score === 1) {
-        scoreText = '🔴 Just Beginning!';
-        scoreColor = '#dc3545';
-    } else if (score === 0) { // New "Empty" state
-        scoreText = 'Start Your Plan!';
-        scoreColor = '#6c757d'; // Neutral gray
-    } else if (score === 2) {
-        scoreText = '🟡 Growing!';
-        scoreColor = '#ffc107';
-    }
-
-
-    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText}</h5>`;
-
-    // 2. The "Suggestions"
-    if (suggestions.length > 0) {
-        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\n            Our experts recommend adding these components for a full experience:\n        </p>`;
-        
-        // Create clickable "suggestion" buttons
-        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
-        suggestions.forEach(cat => {
-            // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
-            const displayName = cat; 
-            
-            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---
-            let filterTag = displayName.toLowerCase();
-            
-            if (displayName === "Food & Drink") {
-                // This tag MUST use the slash, as the filter logic in filtering.js expects "food/drink"
-                filterTag = "food/drink"; 
-            } else if (displayName === "Venues") {
-                filterTag = "venues"; 
-            } else if (displayName === "Activities") {
-                filterTag = "activities";
-            } else if (displayName === "Extras") {
-                filterTag = "extras";
-            }
-            // --- ^^^ END ROBUST FILTER TAG GENERATION ^^^ ---
-            
-            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
-        });
-        html += `</div>`;
-    } else {
-        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\n            You've covered all the core components for a great guest experience!\n        </p>`;
-    }
-
-    container.innerHTML = html;
 }
