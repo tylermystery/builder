@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 // VVV ADD THESE IMPORTS VVV
-import { buildGoalBucket } from '../availability.js';
+import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 import { calculateRecommendationScore } from '../filtering.js'; 
 // ^^^ END ADDITION ^^^
 import { CONSTANTS } from '../config.js';
