@@ -326,3 +326,97 @@ export function buildGoalBucket(sortBy) {
 
     return Array.from(goals);
 }
+
+// In: availability.js
+// Action: Add the core scoring functions after buildGoalBucket and export them.
+
+/**
+ * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
+ * @param {object} profile - The parsed Rankings JSON.
+ * @param {string} key - The dot-notation key (e.g., "Vibe.Energy").
+ * @returns {number} The score (0-10) or 0 if not found.
+ */
+export function getProfileScore(profile, key) {
+    if (!profile || !key) return 0;
+    const keys = key.split('.');
+    if (keys.length === 2) {
+        // Accessing nested profile[keys[0]][keys[1]]
+        return profile[keys[0]]?.[keys[1]] || 0;
+    }
+    return 0;
+}
+
+/**
+ * [V2.9] Fallback scoring for un-profiled items.
+ * @param {object} record - The Airtable record.
+ * @param {string} searchText - The user's search query.
+ * @returns {number} A simple keyword-match score.
+ */
+function calculateBasicSearchScore(record, searchText) {
+    if (!searchText) return 0;
+    
+    const name = (record.fields.Name || '').toLowerCase();
+    const description = (record.fields.Description || '').toLowerCase();
+    const tags = (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '').toLowerCase();
+    
+    if (name.includes(searchText)) return 10;
+    if (description.includes(searchText)) return 5;
+    if (tags.includes(searchText)) return 3;
+    return 0;
+}
+
+/**
+ * [V2.9] Calculates the "Universal Profile" score for an item.
+ * NOTE: This is now exported for use in components/card.js and components/sidebar.js.
+ * @param {object} record - The Airtable record.
+ * @param {Array<string>} goalBucket - The user's master goal list.
+ * @returns {number} The final recommendation score.
+ */
+export function calculateRecommendationScore(record, goalBucket) {
+    let finalScore = 0;
+    const currentSearchTerm = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
+
+    let profile;
+    try {
+        // Try to parse the new v2.1 AI_Profile
+        profile = JSON.parse(record.fields.AI_Profile || '{}');
+        if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
+    } catch (e) {
+        // Fallback for old/empty items: retains basic keyword score
+        return calculateBasicSearchScore(record, currentSearchTerm);
+    }
+
+    const { profileSource, Tags = [], ...attributes } = profile;
+
+    // --- HYBRID SCORING LOGIC ---
+    goalBucket.forEach(goal => {
+        const goalLower = goal.toLowerCase();
+
+        // 1. Check "Brain 1" (The "Smart" Mapper)
+        if (GOAL_PROFILE_MAP[goalLower]) {
+            const mapper = GOAL_PROFILE_MAP[goalLower];
+            for (const key in mapper) {
+                const weight = mapper[key];
+                
+                if (key === 'Tags') {
+                    if (Tags.includes(weight)) {
+                        finalScore += 10;
+                    }
+                } else {
+                    const itemScore = getProfileScore(attributes, key); 
+                    finalScore += (itemScore * weight);
+                }
+            }
+        }
+        // 2. Check "Brain 2" (The "Robust" Tagger)
+        // This handles explicit search terms that aren't abstract goals (e.g. "tacos")
+        else if (goalLower === currentSearchTerm) { 
+            const TAG_BONUS = 15; 
+            if (Tags.some(tag => tag.includes(goalLower))) {
+                finalScore += TAG_BONUS;
+            }
+        }
+    });
+
+    return finalScore;
+}
