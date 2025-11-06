@@ -36,6 +36,7 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     });
 }, { rootMargin: "0px 0px 200px 0px" });
 
+let promptTimeout;
 export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
