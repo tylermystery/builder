@@ -277,34 +277,40 @@ const GOAL_PROFILE_MAP = {
     "food": { "Tags": "food" }
 };
 // In: availability.js
-// Action: REPLACE the entire buildGoalBucket function
+// Action: REPLACE the entire buildGoalBucket function (V3.6)
 
 /**
- * [V3.0] Builds the user's complete "Goal Bucket".
- * Includes Pillars, Goals, and Search Term, but only if 'recommended' sort is active.
+ * [V3.6] Builds the user's complete "Goal Bucket" using multi-pass extraction.
+ * Includes Pillars, Goals, Entity Keywords, and Search Term, but only if 'recommended' sort is active.
  * @param {string} sortBy - The current sort mode.
- * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "escape room"])
+ * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun", "outdoors", "pizza", "celebration"])
  */
 export function buildGoalBucket(sortBy) {
     const goals = new Set();
     const isRecommendedSort = sortBy === 'recommended';
-    const goalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
+    const rawGoalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
 
     if (isRecommendedSort) {
-        // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED in Recommended Sort
+        // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED
         const missingCategories = calculateMissingCategories();
         missingCategories.forEach(cat => goals.add(cat));
+        
+        // --- 2. Explicit Goals & Entity Extraction (V3.6 Pass) ---
+        if (rawGoalText.length > 2) {
+            // Treat the input as a single string for robust keyword scanning
+            const textToScan = rawGoalText.replace(/[^a-z0-9 ]/g, ' '); // Clean punctuation/commas into spaces
 
-        // 2. Explicit Goals (From "Goals/Notes" input) - ALWAYS INCLUDED in Recommended Sort
-        if (goalText.length > 2) {
+            // Check against ALL keys in the GOAL_PROFILE_MAP (Abstract Goals + Entities)
             Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
-                if (goalText.includes(keyword)) {
+                // Use a regex word boundary check to find the whole word/phrase
+                const regex = new RegExp('\\b' + keyword + '\\b'); 
+                if (textToScan.match(regex)) {
                     goals.add(keyword);
                 }
             });
         }
 
-        // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED in Recommended Sort
+        // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED
         const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
         if (searchText.length > 2) {
             goals.add(searchText);
