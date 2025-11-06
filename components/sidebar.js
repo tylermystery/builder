@@ -4,10 +4,10 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-// VVV NEW IMPORTS VVV
+// VVV FINAL IMPORT FIX: Direct imports from availability.js VVV
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
-import { calculateRecommendationScore } from '../filtering.js'; 
-// ^^^ END NEW IMPORTS ^^^
+import { calculateRecommendationScore } from '../availability.js'; // <-- Direct import fixed
+// ^^^ END FINAL IMPORT FIX ^^^
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
