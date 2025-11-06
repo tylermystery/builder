@@ -178,7 +178,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
             ${partnerBadge} 
             ${scoreBanner} 
-        </div>
+            </div>
         <div class=\"event-card-content\">
             <h3>${fields.Name || 'Untitled Event'}</h3>
             <p class=\"description\">${fields.Description || ''}</p>
