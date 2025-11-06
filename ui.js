@@ -529,7 +529,7 @@ export function updateCatalogHeader() {
     // --- 4. Goals Chip (V3.2 BEHAVIOR) ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
         // Only show goals if they are non-empty AND recommended sort is active
-        const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
+    const goalWords = buildGoalBucket(sortBy);
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
                  // Flag goals as goal-filter type
