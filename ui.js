@@ -416,8 +416,7 @@ export async function updateMobileBarAvailability() {
 // END OF FIX
 
 // In: ui.js
-// Action: REPLACE the entire updateCatalogHeader function
-// (The previous version was V2.4, this is the final V3.2 logic)
+// Action: REPLACE the entire updateCatalogHeader function (V3.4.2 - FIXING CHIP PERSISTENCE)
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -505,14 +504,15 @@ export function updateCatalogHeader() {
 
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     
-    // VVV CRITICAL FIX VVV
-    // Add Main Category as a clearable chip if it is NOT the 'All' button.
+    // VVV CRITICAL FIX V3.4.2 VVV
+    // The previous logic failed here. We must add the Category to the chips if it's active.
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
         const categoryFilter = activeCategoryButton.dataset.filter;
         
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
         
+        // This ensures the breadcrumb displays the path correctly
         path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
         currentTitle = categoryName;
     }
@@ -525,10 +525,12 @@ export function updateCatalogHeader() {
         path.push(`<span>${subcatName}</span>`);
         currentTitle = subcatName;
     });
+    // ^^^ END CRITICAL FIX V3.4.2 ^^^
+
 
     // --- 4. Goals Chip (V3.2 BEHAVIOR) ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        // Only show goals if they are non-empty AND recommended sort is active
+        // ... (Goal logic remains the same) ...
         const goalWords = goalsInput.split(/\s*,\s*|\s+/).filter(word => word.length > 2); // Filter out short words
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
@@ -541,7 +543,6 @@ export function updateCatalogHeader() {
     // 5. Render and Bind
 
     // A. Render Active Filter Chips
-    // V3.2 FIX: Show chips if ANY filter is active
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
@@ -577,7 +578,6 @@ export function updateCatalogHeader() {
         titleEl.style.display = 'block';
     }
 }
-
 
 /**
  * Handles the click event when a user clears a filter chip.
