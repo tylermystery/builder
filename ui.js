@@ -10,7 +10,7 @@ import { showPresentationView, hidePresentationView, setupPresentationEventListe
 import { initializeItemChat } from './chat.js';
 
 
-// VVV EXPORT LIST: Note that handleFilterChipClear is defined and exported at the bottom VVV
+// Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
@@ -18,7 +18,6 @@ export * from '../utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
-// VVV We define the final export at the bottom VVV
 
 
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
@@ -414,8 +413,10 @@ export async function updateMobileBarAvailability() {
     }
 }
 // END OF FIX
+
 // In: ui.js
-// Action: REPLACE the entire updateCatalogHeader function (V3.4.1)
+// Action: REPLACE the entire updateCatalogHeader function
+// (The previous version was V2.4, this is the final V3.2 logic)
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -574,4 +575,134 @@ export function updateCatalogHeader() {
         titleEl.textContent = `Sorted by Recommended` + sortCue;
         titleEl.style.display = 'block';
     }
+}
+
+
+/**
+ * Handles the click event when a user clears a filter chip.
+ */
+export function handleFilterChipClear(e) {
+    const chip = e.target.closest('.filter-chip');
+    if (!chip) return;
+
+    const type = chip.dataset.filterType;
+    const value = chip.dataset.filterValue;
+    const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
+
+
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
+    if (type === 'goal-filter') {
+        // Action: Clearing a goal chip removes the word from the goals input text
+        const goalsInput = document.getElementById('header-goals');
+        if (goalsInput) {
+            const goalWords = goalsInput.value.split(/\s*,\s*|\s+/).filter(Boolean);
+            const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
+            
+            // 1. Update the input field
+            goalsInput.value = updatedGoals;
+            
+            // 2. Clear the input field's change event (this triggers save)
+            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // 3. Re-run filters
+            applyFilters();
+            
+            return; // Exit as goal logic is complete
+        }
+    }
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
+
+
+    // 1. Clear the filter state based on type (for non-goal chips)
+    switch (type) {
+        case 'name-filter':
+            document.getElementById('name-filter').value = '';
+            break;
+        case 'status-filter':
+            document.getElementById('status-filter').value = 'Available';
+            break;
+        case 'headcount-filter':
+            document.getElementById('headcount-filter').value = 'any';
+            document.getElementById('headcount-custom').value = '';
+            document.getElementById('headcount-custom').style.display = 'none';
+            break;
+        case 'location-filter':
+        case 'budget-filter':
+            document.getElementById(type).value = 'any';
+            break;
+        case 'date-filter':
+            const datePicker = document.getElementById('date-filter')?._flatpickr;
+            if (datePicker) {
+                 datePicker.clear();
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
+            break;
+        case 'category-filter':
+            // Simulate clicking the 'All' button to clear the category filter
+            const allButton = document.querySelector('#category-filters .category-filter-btn[data-filter=\"all\"]');
+            if (allButton) allButton.click();
+            return;
+        case 'subcategory-filter':
+            const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
+            if (subcatButton) subcatButton.click();
+            return;
+    }
+    
+    // 2. Re-run filters and update UI
+    applyFilters();
+}
+
+/**
+ * Helper to create the filter chip HTML.
+ */
+function createFilterChip(text, type, value) {
+    const isGoal = type === 'goal-filter';
+    const tooltip = isGoal ? 'Click to remove this goal from the Goals / Notes box.' : 'Clear Filter';
+
+    return `<div class="filter-chip ${isGoal ? 'goal-chip' : ''}" data-filter-type="${type}" data-filter-value="${value}" data-tippy-content="${tooltip}">
+                <span>${text}</span>
+                <button title="${tooltip}">×</button>
+            </div>`;
+}
+
+export function showLoginPromptForLikes() {
+    const profileButton = document.getElementById('user-profile-button');
+    if (!profileButton) return;
+
+    // Create prompt element if it doesn't exist
+    let promptElement = document.getElementById('login-prompt-likes');
+    if (!promptElement) {
+        promptElement = document.createElement('div');
+        promptElement.id = 'login-prompt-likes';
+        promptElement.style.position = 'absolute';
+        promptElement.style.bottom = '110%'; // Position above the button
+        promptElement.style.right = '0';
+        promptElement.style.backgroundColor = '#333';
+        promptElement.style.color = 'white';
+        promptElement.style.padding = '8px 12px';
+        promptElement.style.borderRadius = '4px';
+        promptElement.style.fontSize = '0.85em';
+        promptElement.style.whiteSpace = 'nowrap';
+        promptElement.style.opacity = '0';
+        promptElement.style.transition = 'opacity 0.3s ease';
+        promptElement.style.pointerEvents = 'none'; // Prevent interaction
+        promptElement.textContent = 'Log in to save your likes & get updates!';
+        // Append near the button (adjust based on your header structure if needed)
+        profileButton.parentNode.style.position = 'relative'; // Ensure parent allows absolute positioning
+        profileButton.parentNode.appendChild(promptElement);
+    }
+
+    // Clear previous timeout if prompt is shown again quickly
+    if (promptTimeout) clearTimeout(promptTimeout);
+
+    // Show the prompt
+    requestAnimationFrame(() => {
+         promptElement.style.opacity = '1';
+    });
+
+
+    // Hide after a delay
+    promptTimeout = setTimeout(() => {
+        promptElement.style.opacity = '0';
+    }, 4000); // Show for 4 seconds
 }
