@@ -4,33 +4,12 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-// VVV FINAL IMPORT FIX: Import everything from availability.js VVV
-import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, getProfileScore, GOAL_PROFILE_MAP } from './availability.js'; 
+// VVV FINAL IMPORT FIX: Import all scoring helpers VVV
+import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js'; 
 // ^^^ END FINAL IMPORT FIX ^^^
 
 
-// --- HELPER FUNCTIONS (These local helpers are kept as they don't conflict) ---
-
-/**
- * [V2.9] Fallback scoring for un-profiled items.
- * (This function is kept here as it relies on internal knowledge of filter terms.)
- * @param {object} record - The Airtable record.
- * @param {string} searchText - The user's search query.
- * @returns {number} A simple keyword-match score.
- */
-function calculateBasicSearchScore(record, searchText) {
-    if (!searchText) return 0;
-    
-    const name = (record.fields.Name || '').toLowerCase();
-    const description = (record.fields.Description || '').toLowerCase();
-    const tags = (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '').toLowerCase();
-    
-    if (name.includes(searchText)) return 10;
-    if (description.includes(searchText)) return 5;
-    if (tags.includes(searchText)) return 3;
-    return 0;
-}
-
+// --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
