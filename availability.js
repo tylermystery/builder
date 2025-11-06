@@ -255,7 +255,26 @@ const GOAL_PROFILE_MAP = {
     "Activities": { "Pillars.Activity": 1.0 },
     "Food/Drink": { "Pillars.Food/Drink": 1.0 },
     "Venue": { "Pillars.Venue": 1.0 },
-    "Extras": { "Pillars.Extras": 1.0 }
+    "Extras": { "Pillars.Extras": 1.0 },
+
+    // --- Location/Vibe Entities (Direct Tag Matches) ---
+    "outdoor": { "Tags": "outdoor" },
+    "outdoors": { "Tags": "outdoor" },
+    "park": { "Tags": "outdoor" },
+    "beach": { "Tags": "outdoor" },
+    "indoor": { "Tags": "indoor" },
+    "home": { "Tags": "indoor" },
+    "office": { "Tags": "indoor" },
+    
+    // --- Food Entities (Direct Tag Matches) ---
+    "pizza": { "Tags": "pizza" },
+    "porkchops": { "Tags": "porkchops" },
+    "tacos": { "Tags": "tacos" },
+    "burritos": { "Tags": "burritos" },
+    "bar": { "Tags": "bar" },
+    "wine": { "Tags": "wine" },
+    "drink": { "Tags": "drink" },
+    "food": { "Tags": "food" }
 };
 // In: availability.js
 // Action: REPLACE the entire buildGoalBucket function
