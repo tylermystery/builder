@@ -270,47 +270,42 @@ export const GOAL_PROFILE_MAP = {
     "Extras": { "Pillars.Extras": 1.0 }
 };
 
+// In: availability.js
+// Action: REPLACE the entire `buildGoalBucket` function (around line 290)
+
 /**
  * [V3.6] Builds the user's complete "Goal Bucket" using multi-pass extraction.
  * @param {string} sortBy - The current sort mode.
- * @returns {Array<string>} A list of goals (e.g., ["Venue", "fun time with friends", "pizza"])
+ * @returns {Array<string>} A list of goals (e.g., ["Venues", "anniversary", "party", "bob", "pizza"])
  */
 export function buildGoalBucket(sortBy) {
     const goals = new Set();
     const isRecommendedSort = sortBy === 'recommended';
     const rawGoalText = document.getElementById('header-goals')?.value?.toLowerCase() || '';
 
+    // --- NEW: List of common "stop words" to ignore ---
+    const STOP_WORDS = new Set([
+        'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
+        'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
+    ]);
+
     if (isRecommendedSort) {
         // 1. Implicit Goals (Missing Pillars) - ALWAYS INCLUDED
         const missingCategories = calculateMissingCategories();
         missingCategories.forEach(cat => goals.add(cat));
         
-        // 2. Explicit Goals & Entity Extraction (V3.6 Pass) ---
+        // --- SIMPLIFIED & ROBUST GOAL PARSING ---
         if (rawGoalText.length > 2) {
-            // FIX: Use comma separation for clear multi-word phrases, keeping the goal as typed
-            const phrases = rawGoalText.split(',').map(p => p.trim()).filter(p => p.length > 2 && p.toLowerCase() !== 'and'); 
-            
-            phrases.forEach(phrase => {
-                // Check if the whole phrase matches a multi-word key in the map
-                let matchFound = false;
-                Object.keys(GOAL_PROFILE_MAP).forEach(keyword => {
-                     if (phrase.includes(keyword)) {
-                        goals.add(keyword);
-                        matchFound = true;
-                    }
-                });
-                
-                if (!matchFound) {
-                    // Fallback to searching word by word in the phrase for known tags
-                    const wordsInPhrase = phrase.split(' ');
-                    wordsInPhrase.forEach(word => {
-                        if (GOAL_PROFILE_MAP[word]) {
-                            goals.add(word);
-                        }
-                    });
+            // Split by any space or comma, then filter
+            const words = rawGoalText.split(/[\s,]+/); 
+            words.forEach(word => {
+                // Add any word that is long enough and not a stop word
+                if (word.length > 2 && !STOP_WORDS.has(word)) {
+                    goals.add(word);
                 }
             });
         }
+        // --- END SIMPLIFIED LOGIC ---
 
         // 3. Search Goal (From "Search" input) - ALWAYS INCLUDED
         const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
@@ -321,7 +316,6 @@ export function buildGoalBucket(sortBy) {
 
     return Array.from(goals);
 }
-
 
 /**
  * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
