@@ -639,10 +639,15 @@ export function handleFilterChipClear(e) {
             }
             break;
         case 'category-filter':
-            // Simulate clicking the 'All' button to clear the category filter
+// VVV CRITICAL FIX: Click the 'All' category button VVV
             const allButton = document.querySelector('#category-filters .category-filter-btn[data-filter=\"all\"]');
-            if (allButton) allButton.click();
-            return;
+            if (allButton) {
+                allButton.click();
+            } else {
+                 applyFilters(); // Fallback if 'All' button doesn't exist
+            }
+            return; // EXIT here because clicking the button already runs applyFiltersAndSort
+        // ^^^ END CRITICAL FIX ^^^
         case 'subcategory-filter':
             const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
             if (subcatButton) subcatButton.click();
