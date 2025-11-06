@@ -224,25 +224,62 @@ export function calculateMissingCategories() {
 
 export const ATTRIBUTE_TO_KEYWORDS_MAP = {
     // Vibe Attributes
-    "Vibe.Energy": ["fun", "exciting", "social", "joy", "lively", "party", "active", "energetic"],
-    "Vibe.Relaxation": ["calm", "quiet", "relaxing", "chill", "bonding", "mellow"],
-    "Vibe.Novelty": ["unique", "silly", "goofy", "weird", "new", "different", "surprising"],
-    "Vibe.Formality": ["celebration", "celebrate", "formal", "fancy", "executive", "luxury"],
+    "Vibe.Energy": [
+        "fun", "exciting", "social", "joy", "lively", "party", "active", "energetic", 
+        "fast", "upbeat", "loud", "dance", "dancing", "high-energy", "vibrant", 
+        "festive", "dynamic"
+    ],
+    "Vibe.Relaxation": [
+        "calm", "quiet", "relaxing", "chill", "bonding", "mellow", "peaceful", 
+        "serene", "tranquil", "low-key", "casual", "unwind", "restful", "cozy",
+        "spa", "mindfulness", "meditation"
+    ],
+    "Vibe.Novelty": [
+        "unique", "silly", "goofy", "weird", "new", "different", "surprising", 
+        "unusual", "novel", "quirky", "unexpected", "strange", "bizarre", "zany",
+        "wacky"
+    ],
+    "Vibe.Formality": [
+        "celebration", "celebrate", "formal", "fancy", "executive", "luxury", 
+        "elegant", "sophisticated", "classy", "upscale", "premium", "corporate",
+        "professional", "gala", "banquet"
+    ],
     
     // Intellect Attributes
-    "Intellect.Creative": ["creative", "art", "artistic", "design", "painting", "crafty"],
-    "Intellect.Analytical": ["team-build", "team building", "challenging", "problem-solving", "smart", "puzzle"],
+    "Intellect.Creative": [
+        "creative", "art", "artistic", "design", "painting", "crafty", "crafts",
+        "drawing", "diy", "hands-on", "build", "expressive", "music", "writing"
+    ],
+    "Intellect.Analytical": [
+        "team-build", "team building", "challenging", "problem-solving", "smart", 
+        "puzzle", "puzzles", "logic", "strategy", "strategic", "escape room", 
+        "brainy", "intellectual", "trivia", "collaboration", "collaborative"
+    ],
     
     // Physicality Attributes
-    "Physicality.Intensity": ["competitive", "physical", "active", "intense", "sporty"],
+    "Physicality.Intensity": [
+        "competitive", "physical", "active", "intense", "sporty", "sports", 
+        "fitness", "hiking", "running", "outdoor", "outdoors", "adventure",
+        "competition", "vs", "versus"
+    ],
     
-    // Pillar Attributes (for implicit goals)
-    "Pillars.Activity": ["activities", "activity"],
-    "Pillars.Food & Drink": ["food & drink", "food/drink", "food", "drink", "eat", "wine", "bar"],
-    "Pillars.Venues": ["venues", "venue"],
-    "Pillars.Extras": ["extras"]
+    // Pillar Attributes (for implicit goals & core needs)
+    "Pillars.Activity": [
+        "activities", "activity", "do", "something", "team"
+    ],
+    "Pillars.Food & Drink": [
+        "food & drink", "food/drink", "food", "drink", "eat", "wine", "bar", 
+        "drinks", "cocktails", "beer", "catering", "restaurant", "lunch", "dinner",
+        "snacks", "appetizers", "tacos", "pizza", "cuisine"
+    ],
+    "Pillars.Venues": [
+        "venues", "venue", "place", "location", "space", "rent", "room"
+    ],
+    "Pillars.Extras": [
+        "extras", "swag", "gifts", "photography", "transportation", "music", 
+        "dj", "entertainment", "decor"
+    ]
 };
-
 // In: availability.js
 // Action: REPLACE the entire `buildGoalBucket` function (around line 290)
 
