@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket } from './availability.js'; // <-- CORRECT IMPORT
+import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, getProfileScore } from './availability.js';
 
 // --- START: NEW RECOMMENDATION ENGINE V2.1 ---
 
@@ -84,66 +84,6 @@ function calculateBasicSearchScore(record, searchText) {
     if (tags.includes(searchText)) return 3;
     return 0;
 }
-
-/**
- * [v2.1] Calculates the "Universal Profile" score for an item.
- * @param {object} record - The Airtable record.
- * @param {Array<string>} goalBucket - The user's master goal list.
- * @returns {number} The final recommendation score.
- */
-function calculateRecommendationScore(record, goalBucket) {
-    let finalScore = 0;
-    const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
-
-    let profile;
-    try {
-        // --- THIS IS THE CHANGE ---
-        // Try to parse the new v2.1 AI_Profile
-        profile = JSON.parse(record.fields.AI_Profile || '{}');
-        // --- END CHANGE ---
-        if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
-    } catch (e) {
-        // Fallback for old/empty items
-        return calculateBasicSearchScore(record, searchText);
-    }
-
-    const { profileSource, Tags = [], ...attributes } = profile;
-
-    // --- HYBRID SCORING LOGIC ---
-    goalBucket.forEach(goal => {
-        const goalLower = goal.toLowerCase();
-
-        // 1. Check "Brain 1" (The "Smart" Mapper)
-        if (GOAL_PROFILE_MAP[goalLower]) {
-            const mapper = GOAL_PROFILE_MAP[goalLower];
-            for (const key in mapper) {
-                const weight = mapper[key];
-                
-                if (key === 'Tags') {
-                    // Special case for tag-based mappers (e.g., "competitive")
-                    if (Tags.includes(weight)) {
-                        finalScore += 10; // Add a flat bonus for mapped tag matches
-                    }
-                } else {
-                    // Standard attribute scoring (e.g., "Vibe.Energy")
-                    const itemScore = getProfileScore(attributes, key); // 0-10
-                    finalScore += (itemScore * weight);
-                }
-            }
-        }
-        // 2. Check "Brain 2" (The "Robust" Tagger)
-        // (Only run if this goal IS the search text, to avoid double-scoring)
-        else if (goalLower === searchText) {
-            const TAG_BONUS = 15; // High-priority bonus for direct search match
-            if (Tags.some(tag => tag.includes(goalLower))) {
-                finalScore += TAG_BONUS;
-            }
-        }
-    });
-
-    return finalScore;
-}
-
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
