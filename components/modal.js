@@ -5,12 +5,12 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
-import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket } from '../availability.js'; // <-- CORRECT IMPORT
+import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from '../availability.js'; // <-- ADDED calculateRecommendationScore
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
 // In: components/modal.js
-// Action: REPLACE the entire `generateRecommendationBlurb` function (around line 89)
+// Action: REPLACE the entire `generateRecommendationBlurb` function (around line 123)
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -18,23 +18,33 @@ import { initializeItemChat } from '../chat.js';
  * @returns {string | null} The HTML string for the blurb, or null.
  */
 function generateRecommendationBlurb(record) {
-    // 1. Get the current goal bucket
-    const goalBucket = buildGoalBucket(); // This import already exists
+    // --- THIS IS THE FIX ---
+    // Get the current sort value from the DOM
+    const sortBy = document.getElementById('sort-by')?.value || 'recommended';
+    
+    // 1. Get the current goal bucket, passing the sortBy value
+    const goalBucket = buildGoalBucket(sortBy); // This import already exists
+    // --- END FIX ---
+    
     if (goalBucket.length === 0) {
         return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
     }
 
     // 2. Call the ONE, TRUE scoring function from availability.js
-    // This function must now be imported:
-    // import { ... calculateRecommendationScore } from '../availability.js';
     const score = calculateRecommendationScore(record, goalBucket);
 
     // 3. Check if the item scored well
-    // We'll consider any positive score a "match" for blurb purposes
     if (score > 0) {
         // Create a simple, robust blurb
         let goalString = "goals"; // Default
-        const displayGoals = goalBucket.filter(g => !g.includes(' ')); // Filter out pillar names
+        
+        // Filter out pillar names (like "Food & Drink") from the blurb for cleaner text
+        const displayGoals = goalBucket.filter(g => 
+            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Activity"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Food & Drink"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Venues"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Extras"].includes(g.toLowerCase())
+        );
 
         if (displayGoals.length > 2) {
             goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
