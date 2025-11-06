@@ -416,7 +416,7 @@ export async function updateMobileBarAvailability() {
 // END OF FIX
 
 // In: ui.js
-// Action: REPLACE the entire updateCatalogHeader function (V3.4.2 - FIXING CHIP PERSISTENCE)
+// Action: REPLACE the entire `updateCatalogHeader` function (starts around line 497)
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
@@ -425,6 +425,9 @@ export function updateCatalogHeader() {
     const clearSearchBtn = document.getElementById('clear-search-btn');
 
     if (!breadcrumbsEl || !titleEl || !nameFilterEl || !clearSearchBtn) return;
+
+    // --- NEW: Initialize filter count ---
+    let filterCount = 0;
 
     // Reset visibility
     breadcrumbsEl.innerHTML = '';
@@ -441,6 +444,9 @@ export function updateCatalogHeader() {
 
     // --- 1. Handle Special Views (My Plan/My Likes) ---
     if (document.getElementById('plan-filter-btn')?.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
+        // --- ADDED: Still need to update the filter count even in this view ---
+        const filterControlsEl = document.getElementById('filter-controls');
+        if (filterControlsEl) { filterControlsEl.dataset.activeFilters = 0; }
         return;
     }
 
@@ -450,12 +456,14 @@ export function updateCatalogHeader() {
     if (isSearchActive) {
         clearSearchBtn.style.display = 'block'; 
         activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
+        filterCount++; // --- ADDED ---
     }
     
     // B. Status
     const statusEl = document.getElementById('status-filter');
     if (statusEl && statusEl.value !== 'Available') {
         activeFiltersHtml.push(createFilterChip('Status: ' + statusEl.options[statusEl.selectedIndex].text, 'status-filter', statusEl.value));
+        filterCount++; // --- ADDED ---
     }
     
     // C. Headcount
@@ -467,18 +475,21 @@ export function updateCatalogHeader() {
             text = `Headcount: ${headcountCustomEl.value}`;
         }
         activeFiltersHtml.push(createFilterChip(text, 'headcount-filter', headcountEl.value));
+        filterCount++; // --- ADDED ---
     }
     
     // D. Location
     const locationEl = document.getElementById('location-filter');
     if (locationEl && locationEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
+        filterCount++; // --- ADDED ---
     }
 
     // E. Budget
     const budgetEl = document.getElementById('budget-filter');
     if (budgetEl && budgetEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Budget: ' + budgetEl.options[budgetEl.selectedIndex].text, 'budget-filter', budgetEl.value));
+        filterCount++; // --- ADDED ---
     }
 
     // F. Date Range
@@ -493,6 +504,7 @@ export function updateCatalogHeader() {
             text = `Date: ${start} – ${end}`;
         }
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
+        filterCount++; // --- ADDED ---
     }
     
     // --- 3. Collect Category & Subcategory FILTERS (Breadcrumbs/Title) ---
@@ -500,108 +512,107 @@ export function updateCatalogHeader() {
     const path = [];
     let currentTitle = '';
     
-    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
+    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
     const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
     
-    // VVV CRITICAL FIX V3.4.2 VVV
-    // The previous logic failed here. We must add the Category to the chips if it's active.
     if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
         const categoryName = activeCategoryButton.textContent;
         const categoryFilter = activeCategoryButton.dataset.filter;
         
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
+        filterCount++; // --- ADDED ---
         
-        // This ensures the breadcrumb displays the path correctly
-        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
+        path.push(`<a href="#" class="breadcrumb-link" data-filter="${categoryFilter}">${categoryName}</a>`);
         currentTitle = categoryName;
     }
 
     const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
     activeSubcategoryNodes.forEach(btn => {
         const subcatName = btn.textContent;
-        // Subcategories are treated as multi-select chips
         activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', btn.dataset.filter));
+        filterCount++; // --- ADDED (counts each subcategory) ---
         path.push(`<span>${subcatName}</span>`);
         currentTitle = subcatName;
     });
-    // ^^^ END CRITICAL FIX V3.4.2 ^^^
 
-
-// --- 4. Goals Chip (V3.2 BEHAVIOR) ---
+    // --- 4. Goals Chip ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        
-        // --- NEW: Add the same stop word list ---
         const STOP_WORDS = new Set([
             'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
             'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
         ]);
 
-        // Use the new simplified parser
         const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
 
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
-                 // Flag goals as goal-filter type
                 activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
+                // We don't count goals in the main filter count, as they are part of the "Recommended" sort
             }
         });
     }
     
-// In: ui.js
-// Action: REPLACE the entire "5. Render and Bind" block (from lines 643-681)
+    // --- 5. Render and Bind ---
 
-    // 5. Render and Bind
-
-    // --- NEW BLOCK 5.A: Render Breadcrumb Path ---
-    // This now runs first and *only* adds the category path.
+    // A. Render Breadcrumb Path
     const pathContainer = document.createElement('div');
     pathContainer.id = 'breadcrumb-path-container';
-    // Only show the path if a category is selected AND we are not in a search-first view
     if (path.length > 1 && !isSearchActive) { 
         pathContainer.innerHTML = path.join(' &gt; ');
         breadcrumbsEl.appendChild(pathContainer);
     }
 
-    // --- MODIFIED BLOCK 5.B: Render Active Filter Chips ---
-    // This runs second and appends the chips *after* the path, preventing the overwrite.
+    // B. Render Active Filter Chips (with "Clear All" button)
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
-        chipContainer.innerHTML = '<h4>Active Filters:</h4>' + activeFiltersHtml.join('');
-        breadcrumbsEl.appendChild(chipContainer); // Appends to breadcrumbs container
+        
+        // --- MODIFIED: Add "Clear All" button ---
+        chipContainer.innerHTML = `
+            <span class="chip-label">Active Filters:</span>
+            ${activeFiltersHtml.join('')}
+            <button id="clear-all-chips-btn" class="filter-chip-clear-all">Clear All</button>
+        `;
+        breadcrumbsEl.appendChild(chipContainer); 
 
-        // Bind new event listeners for clearing filters
+        // Bind listeners for individual chips
         breadcrumbsEl.querySelectorAll('.filter-chip button').forEach(button => {
             button.addEventListener('click', handleFilterChipClear);
         });
+        
+        // --- ADDED: Bind listener for "Clear All" button ---
+        breadcrumbsEl.querySelector('#clear-all-chips-btn')?.addEventListener('click', () => {
+            // Programmatically click the main "Reset All Filters" button
+            document.getElementById('reset-filters-btn')?.click();
+        });
     }
 
-    // --- MODIFIED BLOCK 5.C: Render Title ---
-    // This block now *only* sets the main catalog title.
+    // C. Render Title
     let sortCue = '';
     if (isRecommendedSort) {
         sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
     }
 
     if (isSearchActive) {
-        // If search is active, the title prioritizes the search term
         titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
         titleEl.style.display = 'block';
     } else if (path.length > 1) {
-        // If category is active (and no search), show category name as title
-        // The breadcrumbs are already rendered above by block 5.A.
         titleEl.textContent = currentTitle; 
         titleEl.style.display = 'block';
     } else {
-        // If no search and no category, we are in "All".
         titleEl.textContent = "All Categories" + (isRecommendedSort ? sortCue : "");
         titleEl.style.display = 'block';
     }
-} // <-- This is the end of the updateCatalogHeader function
-
+    
+    // --- FINALLY: Update the filter count bubble ---
+    const filterControlsEl = document.getElementById('filter-controls');
+    if (filterControlsEl) {
+        filterControlsEl.dataset.activeFilters = filterCount;
+    }
+}
 /**
  * Handles the click event when a user clears a filter chip.
  */
