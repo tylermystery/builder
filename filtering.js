@@ -4,12 +4,12 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-// VVV FINAL IMPORT FIX VVV
+// VVV FINAL IMPORT FIX: Import everything from availability.js VVV
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, getProfileScore, GOAL_PROFILE_MAP } from './availability.js'; 
 // ^^^ END FINAL IMPORT FIX ^^^
 
 
-// --- HELPER FUNCTIONS (Moved to the top) ---
+// --- HELPER FUNCTIONS (These local helpers are kept as they don't conflict) ---
 
 /**
  * [V2.9] Fallback scoring for un-profiled items.
@@ -280,7 +280,9 @@ function sortRecords(records, sortBy, goalBucket) {
         // Create a scored list
         const scoredRecords = records.map(record => ({
             record,
+            // VVV Use the imported score function VVV
             score: calculateRecommendationScore(record, goalBucket)
+            // ^^^ END VVV
         }));
 
         // Sort by the new score, highest to lowest
