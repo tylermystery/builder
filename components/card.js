@@ -3,7 +3,7 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-// VVV FINAL IMPORT FIX VVV
+// VVV FINAL IMPORT FIX: Direct imports from availability.js VVV
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js'; 
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
