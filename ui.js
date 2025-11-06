@@ -550,14 +550,28 @@ export function updateCatalogHeader() {
         });
     }
     
+// In: ui.js
+// Action: REPLACE the entire "5. Render and Bind" block (from lines 643-681)
+
     // 5. Render and Bind
 
-    // A. Render Active Filter Chips
+    // --- NEW BLOCK 5.A: Render Breadcrumb Path ---
+    // This now runs first and *only* adds the category path.
+    const pathContainer = document.createElement('div');
+    pathContainer.id = 'breadcrumb-path-container';
+    // Only show the path if a category is selected AND we are not in a search-first view
+    if (path.length > 1 && !isSearchActive) { 
+        pathContainer.innerHTML = path.join(' &gt; ');
+        breadcrumbsEl.appendChild(pathContainer);
+    }
+
+    // --- MODIFIED BLOCK 5.B: Render Active Filter Chips ---
+    // This runs second and appends the chips *after* the path, preventing the overwrite.
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
         chipContainer.innerHTML = '<h4>Active Filters:</h4>' + activeFiltersHtml.join('');
-        breadcrumbsEl.appendChild(chipContainer);
+        breadcrumbsEl.appendChild(chipContainer); // Appends to breadcrumbs container
 
         // Bind new event listeners for clearing filters
         breadcrumbsEl.querySelectorAll('.filter-chip button').forEach(button => {
@@ -565,29 +579,28 @@ export function updateCatalogHeader() {
         });
     }
 
-
-    // B. Render Breadcrumbs/Title (Logic remains the same, but now runs regardless of active chips)
+    // --- MODIFIED BLOCK 5.C: Render Title ---
+    // This block now *only* sets the main catalog title.
     let sortCue = '';
-
     if (isRecommendedSort) {
         sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
     }
 
     if (isSearchActive) {
-        // If search is active, the title prioritizes the search term and its context
+        // If search is active, the title prioritizes the search term
         titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
         titleEl.style.display = 'block';
     } else if (path.length > 1) {
-        // If only categories are active, show the breadcrumb navigation path
-        breadcrumbsEl.innerHTML = path.join(' &gt; ');
-        titleEl.textContent = currentTitle;
+        // If category is active (and no search), show category name as title
+        // The breadcrumbs are already rendered above by block 5.A.
+        titleEl.textContent = currentTitle; 
         titleEl.style.display = 'block';
-    } else if (isRecommendedSort) {
-        // If only recommended sort is active (no search, no category), show the sort info
-        titleEl.textContent = `Sorted by Recommended` + sortCue;
+    } else {
+        // If no search and no category, we are in "All".
+        titleEl.textContent = "All Categories" + (isRecommendedSort ? sortCue : "");
         titleEl.style.display = 'block';
     }
-}
+} // <-- This is the end of the updateCatalogHeader function
 
 /**
  * Handles the click event when a user clears a filter chip.
