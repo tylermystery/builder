@@ -222,52 +222,25 @@ export function calculateMissingCategories() {
 
 // --- START V2.1/V3.6: NEW FUNCTIONS (Centralized Scoring Helpers) ---
 
-/**
- * [v2.1] The "Goal Mapper" (Rosetta Stone).
- */
-export const GOAL_PROFILE_MAP = {
-    // --- Abstract Goals (from text) ---
-    "fun": { "Vibe.Energy": 1.0, "Vibe.Novelty": 0.5, "Vibe.Relaxation": -0.5 },
-    "exciting": { "Vibe.Energy": 1.0, "Physicality.Intensity": 0.5 },
-    "social": { "Vibe.Energy": 0.5, "Vibe.Formality": -0.5, "Vibe.Relaxation": 0.5 },
-    "joy": { "Vibe.Energy": 0.8, "Vibe.Novelty": 0.5 },
-    "lively": { "Vibe.Energy": 1.0 },
-    "calm": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
-    "quiet": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
-    "unique": { "Vibe.Novelty": 1.0 },
-    "challenging": { "Intellect.Analytical": 0.7, "Physicality.Intensity": 0.5 },
-    "relaxing": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
-    "chill": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
-    "creative": { "Intellect.Creative": 1.0, "Vibe.Novelty": 0.5 },
-    "art": { "Intellect.Creative": 1.0 },
-    "artistic": { "Intellect.Creative": 1.0 },
-    "team-build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
-    "team building": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
-    "bonding": { "Vibe.Relaxation": 0.5, "Vibe.Formality": -0.5 },
-    "competitive": { "Physicality.Intensity": 0.5, "Tags": "competitive" },
-    "celebration": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
-    "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
-    // --- Location/Food Entities (Direct Tag Matches) ---
-    "outdoor": { "Tags": "outdoor" },
-    "outdoors": { "Tags": "outdoor" },
-    "park": { "Tags": "outdoor" },
-    "beach": { "Tags": "outdoor" },
-    "indoor": { "Tags": "indoor" },
-    "home": { "Tags": "indoor" },
-    "office": { "Tags": "indoor" },
-    "pizza": { "Tags": "pizza" },
-    "porkchops": { "Tags": "porkchops" },
-    "tacos": { "Tags": "tacos" },
-    "burritos": { "Tags": "burritos" },
-    "bar": { "Tags": "bar" },
-    "wine": { "Tags": "wine" },
-    "drink": { "Tags": "drink" },
-    "food": { "Tags": "food" },
-    // --- Pillar Goals (Implicit) ---
-    "Activities": { "Pillars.Activity": 1.0 },
-    "Food & Drink": { "Pillars.Food & Drink": 1.0 },
-    "Venues": { "Pillars.Venues": 1.0 },
-    "Extras": { "Pillars.Extras": 1.0 }
+export const ATTRIBUTE_TO_KEYWORDS_MAP = {
+    // Vibe Attributes
+    "Vibe.Energy": ["fun", "exciting", "social", "joy", "lively", "party", "active", "energetic"],
+    "Vibe.Relaxation": ["calm", "quiet", "relaxing", "chill", "bonding", "mellow"],
+    "Vibe.Novelty": ["unique", "silly", "goofy", "weird", "new", "different", "surprising"],
+    "Vibe.Formality": ["celebration", "celebrate", "formal", "fancy", "executive", "luxury"],
+    
+    // Intellect Attributes
+    "Intellect.Creative": ["creative", "art", "artistic", "design", "painting", "crafty"],
+    "Intellect.Analytical": ["team-build", "team building", "challenging", "problem-solving", "smart", "puzzle"],
+    
+    // Physicality Attributes
+    "Physicality.Intensity": ["competitive", "physical", "active", "intense", "sporty"],
+    
+    // Pillar Attributes (for implicit goals)
+    "Pillars.Activity": ["activities", "activity"],
+    "Pillars.Food & Drink": ["food & drink", "food/drink", "food", "drink", "eat", "wine", "bar"],
+    "Pillars.Venues": ["venues", "venue"],
+    "Pillars.Extras": ["extras"]
 };
 
 // In: availability.js
@@ -351,52 +324,55 @@ export function calculateBasicSearchScore(record, searchTerm) {
 
 
 /**
- * [V2.9] Calculates the "Universal Profile" score for an item.
- * NOTE: This is now exported for use in components/card.js and components/sidebar.js.
+ * [V3.7] Calculates the "Universal Profile" score using the robust "Reverse Map" engine.
  * @param {object} record - The Airtable record.
  * @param {Array<string>} goalBucket - The user's master goal list.
  * @returns {number} The final recommendation score.
  */
 export function calculateRecommendationScore(record, goalBucket) {
     let finalScore = 0;
-    const currentSearchTerm = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
-
+    if (goalBucket.length === 0) return 0;
+    
     let profile;
     try {
-        // Try to parse the new v2.1 AI_Profile
         profile = JSON.parse(record.fields.AI_Profile || '{}');
         if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
     } catch (e) {
         // Fallback for old/empty items: retains basic keyword score
+        const currentSearchTerm = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
         return calculateBasicSearchScore(record, currentSearchTerm); 
     }
 
-    const { profileSource, Tags = [], ...attributes } = profile;
+    const { Tags = [], ...attributes } = profile;
+    const itemTags = new Set(Tags.map(t => t.toLowerCase())); // Optimize tag lookup
 
-    // --- HYBRID SCORING LOGIC ---
+    // --- NEW "REVERSE MAP" SCORING LOGIC ---
+
     goalBucket.forEach(goal => {
         const goalLower = goal.toLowerCase();
+        let goalScored = false;
 
-        // 1. Check "Brain 1" (The "Smart" Mapper)
-        if (GOAL_PROFILE_MAP[goalLower]) {
-            const mapper = GOAL_PROFILE_MAP[goalLower];
-            for (const key in mapper) {
-                const weight = mapper[key];
+        // 1. Check "Brain 1" (The "Smart" Reverse Map)
+        // Iterate through our map of attributes (e.g., "Vibe.Energy")
+        for (const attributeKey in ATTRIBUTE_TO_KEYWORDS_MAP) {
+            // Check if that attribute's keyword list includes the user's goal
+            if (ATTRIBUTE_TO_KEYWORDS_MAP[attributeKey].includes(goalLower)) {
+                // IT'S A MATCH!
+                // Get the item's score for that attribute (e.g., Vibe.Energy = 7)
+                const itemScoreForAttribute = getProfileScore(attributes, attributeKey);
                 
-                if (key === 'Tags') {
-                    if (Tags.includes(weight)) {
-                        finalScore += 10;
-                    }
-                } else {
-                    const itemScore = getProfileScore(attributes, key); 
-                    finalScore += (itemScore * weight);
-                }
+                // Add that score to the total.
+                // An item with {Vibe.Energy: 7} gets +7 points for the goal "party"
+                finalScore += itemScoreForAttribute;
+                goalScored = true;
             }
         }
-        // 2. Check "Brain 2" (The "Robust" Tagger)
-        // This handles explicit search terms or un-mapped goals that match a Tag
-        else if (Tags.some(tag => tag.includes(goalLower))) { 
-            const TAG_BONUS = 15; 
+
+        // 2. Check "Brain 2" (The "Tag" Match)
+        // If the goal wasn't scored by the "Smart" map (e.g., "costume" or "pizza"),
+        // check if it exists in the item's direct AI Tags.
+        if (!goalScored && itemTags.has(goalLower)) {
+            const TAG_BONUS = 15; // Give a high bonus for specific keyword matches
             finalScore += TAG_BONUS;
         }
     });
