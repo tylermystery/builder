@@ -574,7 +574,7 @@ export function updateCatalogHeader() {
         chipContainer.innerHTML = `
             <span class="chip-label">Active Filters:</span>
             ${activeFiltersHtml.join('')}
-            <button id="clear-all-chips-btn" class="filter-chip-clear-all">Clear All</button>
+            <button id="clear-all-chips-btn" class="filter-chip-clear-all">Clear Filters</button>
         `;
         breadcrumbsEl.appendChild(chipContainer); 
 
