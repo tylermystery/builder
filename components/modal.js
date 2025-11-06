@@ -9,81 +9,44 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMi
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
+// In: components/modal.js
+// Action: REPLACE the entire `generateRecommendationBlurb` function (around line 89)
+
 /**
- * [v2.1] Generates the "Intelligent Blurb" based on the new v2.1 engine.
+ * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
  */
 function generateRecommendationBlurb(record) {
-    const goalBucket = buildGoalBucket();
+    // 1. Get the current goal bucket
+    const goalBucket = buildGoalBucket(); // This import already exists
     if (goalBucket.length === 0) {
-        // No goals, show the default "Customize" nudge
         return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
     }
 
-    let profile;
-    try {
-        // --- THIS IS THE CHANGE ---
-        profile = JSON.parse(record.fields.AI_Profile || '{}');
-        // --- END CHANGE ---
-        if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
-    } catch (e) {
-        return null; // Don't show a blurb for un-profiled items
-    }
+    // 2. Call the ONE, TRUE scoring function from availability.js
+    // This function must now be imported:
+    // import { ... calculateRecommendationScore } from '../availability.js';
+    const score = calculateRecommendationScore(record, goalBucket);
 
-    const { Tags = [], ...attributes } = profile;
-    let blurbs = new Set();
-    const searchText = document.getElementById('name-filter')?.value?.trim().toLowerCase() || '';
+    // 3. Check if the item scored well
+    // We'll consider any positive score a "match" for blurb purposes
+    if (score > 0) {
+        // Create a simple, robust blurb
+        let goalString = "goals"; // Default
+        const displayGoals = goalBucket.filter(g => !g.includes(' ')); // Filter out pillar names
 
-    // Loop through the user's goals and see how this item scores
-    goalBucket.forEach(goal => {
-        const goalLower = goal.toLowerCase();
-        let scoredWell = false;
-
-        // 1. Check "Brain 1" (The "Smart" Mapper)
-        if (GOAL_PROFILE_MAP[goalLower]) {
-            const mapper = GOAL_PROFILE_MAP[goalLower];
-            let score = 0;
-            for (const key in mapper) {
-                const weight = mapper[key];
-                if (key === 'Tags') {
-                    if (Tags.includes(weight)) score += 10;
-                } else {
-                    score += (getProfileScore(attributes, key) * weight);
-                }
-            }
-            // "Scored well" is a positive score from the mapper
-            if (score > 5) scoredWell = true;
-        }
-        // 2. Check "Brain 2" (The "Robust" Tagger)
-        else if (goalLower === searchText) {
-            if (Tags.some(tag => tag.includes(goalLower))) {
-                scoredWell = true;
-            }
+        if (displayGoals.length > 2) {
+            goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
+        } else if (displayGoals.length > 0) {
+            goalString = `'${displayGoals.join("' and '")}'`;
         }
 
-        if (scoredWell) {
-            // Use the *original* cased goal for display (e.g., "Venue", not "venue")
-            blurbs.add(`<strong>'${goal}'</strong>`);
-        }
-    });
-
-    // Build the final blurb
-    if (blurbs.size > 0) {
-        const blurbArray = Array.from(blurbs);
-        let reasonString;
-        if (blurbArray.length > 2) {
-            reasonString = `${blurbArray.slice(0, -1).join(', ')}, and ${blurbArray.slice(-1)}`;
-        } else {
-            reasonString = blurbArray.join(' and ');
-        }
-        return `<strong style='color: #0056b3;'>Recommended for you:</strong> This is a top match for your ${reasonString} goal(s).`;
+        return `<strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
     }
 
     return null; // No match
 }
-// --- END OF Recommendation Engine v2.1 --
-
 
 let stripe;
 let currentShopSettings = {};
