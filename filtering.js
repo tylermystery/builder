@@ -4,70 +4,16 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, getProfileScore } from './availability.js';
-
-// --- START: NEW RECOMMENDATION ENGINE V2.1 ---
-
-/**
- * [v2.1] The "Goal Mapper" (Rosetta Stone).
- * Translates abstract user goals into weighted "Universal Profile" attributes.
- */
-const GOAL_PROFILE_MAP = {
-    // --- Abstract Goals (from text) ---
-    "fun": { "Vibe.Energy": 1.0, "Vibe.Novelty": 0.5, "Vibe.Relaxation": -0.5 },
-    "exciting": { "Vibe.Energy": 1.0, "Physicality.Intensity": 0.5 },
-    
-    // --- NEW SYNONYMS & MAPPERS ---
-    "social": { "Vibe.Energy": 0.5, "Vibe.Formality": -0.5, "Vibe.Relaxation": 0.5 },
-    "joy": { "Vibe.Energy": 0.8, "Vibe.Novelty": 0.5 },
-    "lively": { "Vibe.Energy": 1.0 },
-    "calm": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
-    "quiet": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -0.8 },
-    "unique": { "Vibe.Novelty": 1.0 },
-    "challenging": { "Intellect.Analytical": 0.7, "Physicality.Intensity": 0.5 },
-    // --- END NEW SYNONYMS ---
-    
-    "relaxing": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
-    "chill": { "Vibe.Relaxation": 1.0, "Vibe.Energy": -1.0 },
-    "creative": { "Intellect.Creative": 1.0, "Vibe.Novelty": 0.5 },
-    "art": { "Intellect.Creative": 1.0 },
-    "artistic": { "Intellect.Creative": 1.0 },
-    "team-build": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 },
-    "team building": { "Intellect.Analytical": 0.5, "Intellect.Creative": 0.5 }, // Corrected case sensitivity match for "team building"
-    "bonding": { "Vibe.Relaxation": 0.5, "Vibe.Formality": -0.5 },
-    "competitive": { "Physicality.Intensity": 0.5, "Tags": "competitive" },
-    "celebration": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
-    "celebrate": { "Vibe.Energy": 0.5, "Vibe.Formality": 0.5 },
-
-    // --- Pillar Goals (Implicit) ---
-    "Activities": { "Pillars.Activity": 1.0 },
-    "Food/Drink": { "Pillars.Food/Drink": 1.0 },
-    "Venue": { "Pillars.Venue": 1.0 },
-    "Extras": { "Pillars.Extras": 1.0 }
-};
-/**
- * [v2.1] Helper to safely get a nested value (e.g., "Vibe.Energy") from a profile.
- * @param {object} profile - The parsed Rankings JSON.
- * @param {string} key - The dot-notation key (e.g., "Vibe.Energy").
- * @returns {number} The score (0-10) or 0 if not found.
- */
-function getProfileScore(profile, key) {
-    if (!profile || !key) return 0;
-    const keys = key.split('.');
-    if (keys.length === 2) {
-        // Accessing nested profile[keys[0]][keys[1]]
-        return profile[keys[0]]?.[keys[1]] || 0;
-    }
-    return 0;
-}
-
-// --- END: NEW RECOMMENDATION ENGINE V2.1 ---
+// VVV FINAL IMPORT FIX VVV
+import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, getProfileScore, GOAL_PROFILE_MAP } from './availability.js'; 
+// ^^^ END FINAL IMPORT FIX ^^^
 
 
 // --- HELPER FUNCTIONS (Moved to the top) ---
 
 /**
- * [v2.1] Fallback scoring for un-profiled items.
+ * [V2.9] Fallback scoring for un-profiled items.
+ * (This function is kept here as it relies on internal knowledge of filter terms.)
  * @param {object} record - The Airtable record.
  * @param {string} searchText - The user's search query.
  * @returns {number} A simple keyword-match score.
@@ -84,6 +30,7 @@ function calculateBasicSearchScore(record, searchText) {
     if (tags.includes(searchText)) return 3;
     return 0;
 }
+
 
 function getDescendantBookableItems(record, allRecordsInStore, allRecordNames) {
     let bookableItems = [];
@@ -212,12 +159,6 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     });
 }
 
-// In: filtering.js
-// Action: REPLACE the entire filterByLocation function
-
-// In: filtering.js
-// Action: REPLACE the entire filterByLocation function
-
 function filterByLocation(records, locationFilter) {
     if (locationFilter === 'any') {
         return records;
@@ -261,6 +202,7 @@ function filterByLocation(records, locationFilter) {
         // --- ^^^ END LONG-TERM ROBUST LOGIC ^^^ ---
     });
 }
+
 function filterByBudget(records, budgetFilter) {
     if (budgetFilter === 'any') {
         return records;
@@ -328,9 +270,7 @@ function filterBySearchTerm(records, searchTerm) {
     return scoredRecords.map(item => item.record);
 }
 
-// In: filtering.js
-// Action: REPLACE the entire sortRecords function
-
+// --- THIS IS THE CORRECT, REPLACED FUNCTION ---
 function sortRecords(records, sortBy, goalBucket) {
     // --- VVV NEW V3.0: Dedicated Recommended Sort VVV ---
     if (sortBy === 'recommended') {
@@ -374,8 +314,13 @@ function sortRecords(records, sortBy, goalBucket) {
         }
     });
 }
+// --- END REPLACED FUNCTION ---
+
+
+// --- MAIN EXPORTED FUNCTION --
+
 // In: filtering.js
-// Action: REPLACE the entire applyFiltersAndSort function
+// Action: REPLACE the entire `applyFiltersAndSort` function
 
 export function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
@@ -396,7 +341,7 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    // --- VVV NEW: Build the Goal Bucket based on SortBy selection VVV ---
+    // --- NEW: Build the Goal Bucket based on SortBy selection VVV ---
     // Pass the simple 'recommended' value
     const goalBucket = buildGoalBucket(sortBy);
     // --- ^^^ END NEW ^^^
@@ -451,16 +396,15 @@ export function applyFiltersAndSort(imageCache) {
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          
-         // --- VVV FINAL V3.0 FIX: ALWAYS FILTER BY SEARCH TERM VVV ---
-         // The filterBySearchTerm function performs the basic Name/Description/Tag match
+         // FIXED: ALWAYS FILTER BY SEARCH TERM 
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
-         // --- ^^^ END FINAL V3.0 FIX ^^^
     }
+
     // --- Sort the Final List (pass the goalBucket) ---
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
-    
+
     // --- Update State & Render ---
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
