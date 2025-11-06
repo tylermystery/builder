@@ -3,10 +3,9 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-// VVV ADD THESE IMPORTS VVV
-import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
-import { calculateRecommendationScore } from '../filtering.js'; 
-// ^^^ END ADDITION ^^^
+// VVV FINAL IMPORT FIX VVV
+import { buildGoalBucket, calculateRecommendationScore } from '../availability.js'; 
+// ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
