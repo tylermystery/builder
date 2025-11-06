@@ -337,8 +337,31 @@ export function getProfileScore(profile, key) {
 }
 
 /**
+ * [V2.9] Fallback scoring for un-profiled items.
+ * @param {object} record - The Airtable record.
+ * @param {string} searchTerm - The user's search query.
+ * @returns {number} A simple keyword-match score.
+ */
+export function calculateBasicSearchScore(record, searchTerm) {
+    if (!searchTerm) return 0;
+    
+    const name = (record.fields.Name || '').toLowerCase();
+    const description = (record.fields.Description || '').toLowerCase();
+    const tags = (record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || '').toLowerCase();
+    
+    if (name.includes(searchTerm)) return 10;
+    if (description.includes(searchTerm)) return 5;
+    if (tags.includes(searchTerm)) return 3;
+    return 0;
+}
+
+
+/**
  * [V2.9] Calculates the "Universal Profile" score for an item.
  * NOTE: This is now exported for use in components/card.js and components/sidebar.js.
+ * @param {object} record - The Airtable record.
+ * @param {Array<string>} goalBucket - The user's master goal list.
+ * @returns {number} The final recommendation score.
  */
 export function calculateRecommendationScore(record, goalBucket) {
     let finalScore = 0;
@@ -351,9 +374,7 @@ export function calculateRecommendationScore(record, goalBucket) {
         if (!profile.profileSource) throw new Error('Not a v2.1 profile.');
     } catch (e) {
         // Fallback for old/empty items: retains basic keyword score
-        // NOTE: calculateBasicSearchScore is defined locally in filtering.js, which imports this function.
-        // We cannot call it directly here without importing it, so we rely on the primary filtering/sorting logic.
-        return 0; 
+        return calculateBasicSearchScore(record, currentSearchTerm); 
     }
 
     const { profileSource, Tags = [], ...attributes } = profile;
