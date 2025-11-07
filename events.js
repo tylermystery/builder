@@ -17,8 +17,6 @@ import { addEnergy } from './components/backgroundEngine.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 let saveShareBtn = null;
-let categoryFiltersContainer = null;
-let subcategoryFiltersContainer = null;
 let aiSearchController = null; // --- ADDED THIS LINE ---
 
 function getCurrentCategoryRecord() {
@@ -442,8 +440,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     saveShareBtn = document.getElementById('save-share-btn');
-    categoryFiltersContainer = document.getElementById('category-filters');
-    subcategoryFiltersContainer = document.getElementById('subcategory-filters');
+    // categoryFiltersContainer and subcategoryFiltersContainer removed
     let debugEnabled = false;
 
     const betaTrigger = document.getElementById('beta-trigger');
@@ -468,101 +465,73 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     // --- START CONSOLIDATED BUTTON GENERATION --
-    if (categoryFiltersContainer) {
-        categoryFiltersContainer.innerHTML = ''; 
-    } else {
-        console.error("CRITICAL: Cannot find '#category-filters' container. Filter buttons will not be added.");
-    }
-
-    if (categoryFiltersContainer) { 
+    // We only generate the 'My Plan' and 'My Likes' buttons now
+    const categoryFiltersRoot = document.getElementById('category-filters'); // This is the new root container
+    if (categoryFiltersRoot) { 
         const planFilterBtn = document.createElement('button');
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
-        categoryFiltersContainer.appendChild(planFilterBtn);
+        // Add click listener
+        planFilterBtn.addEventListener('click', () => {
+            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+            planFilterBtn.classList.add('active');
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
+            applyFiltersAndSort(imageCache);
+        });
+        categoryFiltersRoot.appendChild(planFilterBtn);
+
 
         const likesFilterBtn = document.createElement('button');
         likesFilterBtn.className = 'filter-btn';
         likesFilterBtn.id = 'liked-items-filter-btn';
         likesFilterBtn.textContent = '❤️ My Likes';
-        categoryFiltersContainer.appendChild(likesFilterBtn);
+        // Add click listener
+        likesFilterBtn.addEventListener('click', () => {
+            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+            likesFilterBtn.classList.add('active');
+            updateUrl({ category: null, subcategory: null, view: 'likes' });
+            applyFiltersAndSort(imageCache);
+        });
+        categoryFiltersRoot.appendChild(likesFilterBtn);
 
+        // We still need an 'All' button
         const allButton = document.createElement('button');
-        allButton.className = 'filter-btn category-filter-btn'; 
+        allButton.className = 'filter-btn category-filter-btn active'; // Default to active
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
-        categoryFiltersContainer.appendChild(allButton);
+        allButton.addEventListener('click', () => {
+            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+            allButton.classList.add('active');
+            updateUrl({ category: null, subcategory: null, view: null });
+            applyFiltersAndSort(imageCache);
+        });
+        categoryFiltersRoot.appendChild(allButton);
 
-        const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
-        if (currentStore && Array.isArray(currentStore.fields.Items)) {
-            const categoryRecordIds = currentStore.fields.Items;
-            const categories = categoryRecordIds
-                .map(id => state.records.all.find(record => record.id === id && record.fields['Item Type'] === 'Grouping' && !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]))
-                .filter(Boolean);
-
-            categories.sort((a, b) => (a.fields.Name || '').localeCompare(b.fields.Name || ''));
-
-            categories.forEach((catRecord) => {
-                const button = document.createElement('button');
-                button.className = 'filter-btn category-filter-btn';
-                button.dataset.filter = catRecord.fields.Name.toLowerCase();
-                button.textContent = catRecord.fields.Name;
-                categoryFiltersContainer.appendChild(button);
-            });
-        }
-    } 
+    }  else {
+        console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
+    }
     // --- END CONSOLIDATED BUTTON GENERATION --
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
         if (container) {
-            container.style.display = shopSettings.enabledFilters.includes(settingName) ? 'flex' : 'none';
+            // We HIDE the subcategory filter group, but check the setting for others
+            if (elementId === 'subcategory-filters') {
+                container.style.display = 'none';
+            } else {
+                container.style.display = shopSettings.enabledFilters.includes(settingName) ? 'flex' : 'none';
+            }
         }
     };
 
-    toggleFilter('subcategory-filters', 'Subcategories');
+    toggleFilter('subcategory-filters', 'Subcategories'); // This will now just hide it
     toggleFilter('date-filter-group', 'Date & Time');
     toggleFilter('headcount-filter', 'Headcount');
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
 
-    safeAddEventListener('category-filters', 'click', (e) => {
-        const planFilterBtn = document.getElementById('plan-filter-btn');
-        const likesFilterBtn = document.getElementById('liked-items-filter-btn');
-        const clickedBtn = e.target.closest('.filter-btn');
-
-        if (!clickedBtn || !categoryFiltersContainer) return; 
-
-        const isPlanFilterClick = clickedBtn.id === 'plan-filter-btn';
-        const isLikesFilterClick = clickedBtn.id === 'liked-items-filter-btn';
-
-        categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-        clickedBtn.classList.add('active');
-
-        if (isPlanFilterClick) {
-            updateUrl({ category: null, subcategory: null, view: 'plan' });
-            updateSubcategoryButtons();
-        } else if (isLikesFilterClick) {
-            updateUrl({ category: null, subcategory: null, view: 'likes' });
-            updateSubcategoryButtons();
-        } else {
-            const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter;
-            updateUrl({ category: newCategory, subcategory: null, view: null });
-            updateSubcategoryButtons();
-        }
-
-        applyFiltersAndSort(imageCache);
-    });
-
-    safeAddEventListener('subcategory-filters', 'click', (e) => {
-        if (e.target.classList.contains('subcategory-filter-btn')) {
-            e.target.classList.toggle('active');
-            const activeSubcats = Array.from(document.querySelectorAll('#subcategory-filters .filter-btn.active'))
-                                     .map(btn => btn.dataset.filter);
-            updateUrl({ subcategory: activeSubcats.join(',') || null });
-            applyFiltersAndSort(imageCache);
-        }
-    });
+    // --- CATEGORY AND SUBCATEGORY LISTENERS REMOVED ---
 
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     
@@ -588,8 +557,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
-                document.querySelector('#category-filters .filter-btn:not([data-filter=\"all\"]).active') ||
-                document.querySelector('#subcategory-filters .filter-btn.active');
+                // --- THIS CHECK IS NOW SIMPLIFIED ---
+                (new URLSearchParams(window.location.search).get('category') !== null);
             
             if (!hasOtherFilters) {
                 // Only run AI search if *only* the name filter is active
@@ -619,12 +588,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
-        const allButton = categoryFiltersContainer?.querySelector('.category-filter-btn[data-filter=\"all\"]');
+        
+        // --- THIS IS UPDATED ---
+        const allButton = document.querySelector('#category-filters .filter-btn[data-filter="all"]');
         if (allButton) {
-            categoryFiltersContainer?.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
-        updateSubcategoryButtons();
+        // --- END UPDATED ---
+
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
         document.getElementById('headcount-filter').selectedIndex = 0;
@@ -686,19 +658,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
-    // --- V2.1: APPLY FILTERS ON GOAL CHANGE ---
-    safeAddEventListener('header-goals', 'change', (e) => {
+    // --- V2.1: APPLY FILTERS ON GOAL CHANGE ---\n    safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
-        // Re-apply filters if "Recommended" sort is active
+        // Re-apply filters if \"Recommended\" sort is active
         if (document.getElementById('sort-by').value === 'recommended') {
             applyFiltersAndSort(imageCache);
         }
     });
-    // --- END V2.1 ---
-
-    document.body.addEventListener('click', async (e) => {
+    // --- END V2.1 ---\n\n    document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
 
         const card = e.target.closest('.event-card');
@@ -716,31 +685,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
 
-// --- NEW/FIXED HEALTH SUGGESTION BUTTON LOGIC ---
-        const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
+// --- NEW/FIXED HEALTH SUGGESTION BUTTON LOGIC ---\n        const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
 
         if (healthSuggestionBtn) {
             e.stopPropagation();
             const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
-            
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
-            // 1. Find the matching category button in the filter list (e.g., 'food/drink')
-            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${categoryToFilter}\"]`);
-            
-            if (categoryButton) {
-                // 2. Programmatically click the button to set the filter and update the URL
-                // This will trigger the existing click handler defined later in this file.
-                categoryButton.click(); 
-            } else {
-                 log('Events', `Error: Could not find matching category filter button for: ${categoryToFilter}`);
-            }
+            // --- THIS IS THE FIX ---
+            // Directly update the URL and re-apply filters
+            updateUrl({ category: categoryToFilter, subcategory: null, view: null });
+            applyFiltersAndSort(imageCache);
+            // --- END FIX ---
             
             // 3. Scroll to the top of the catalog to show the results
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
         }
-        // --- END NEW/FIXED BLOCK ---
-        
+        // --- END NEW/FIXED BLOCK ---\n        
         if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
                 const originalText = saveShareBtn.textContent;
@@ -753,10 +714,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (breadcrumbLink) {
             e.preventDefault();
             const filterValue = breadcrumbLink.dataset.filter;
-            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter=\"${filterValue}\"]`);
-            if (targetButton) {
-                targetButton.click();
+            // --- THIS IS THE FIX ---
+            // Breadcrumb links now just update the URL and re-filter
+            if (filterValue === 'all') {
+                updateUrl({ category: null, subcategory: null, view: null });
+            } else {
+                // This assumes breadcrumb links are only for categories
+                updateUrl({ category: filterValue, subcategory: null, view: null });
             }
+            applyFiltersAndSort(imageCache);
+            // --- END FIX ---
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
@@ -804,26 +771,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
-                const targetButton = [...document.querySelectorAll('#category-filters .filter-btn, #subcategory-filters .filter-btn')]
-                                     .find(btn => btn.textContent === parentName);
-                if (targetButton) {
-                    const isCategory = !!targetButton.closest('#category-filters');
-                    if (isCategory) {
-                        targetButton.click();
-                    } else {
-                        document.querySelectorAll('#subcategory-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-                        targetButton.classList.add('active');
-                        updateUrl({ subcategory: targetButton.dataset.filter });
-                        applyFiltersAndSort(imageCache);
-                    }
+                // --- THIS IS THE FIX ---
+                // Find the parent record to get its filter-friendly name
+                const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
+                if (parentRecord) {
+                    const parentFilterName = parentName.toLowerCase(); // Assuming filter name is just lowercase
+                    updateUrl({ category: parentFilterName, subcategory: null, view: null });
+                    applyFiltersAndSort(imageCache);
+                    
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                         updateUrl({ openItem: null });
                         ui.hideDetailModal();
                     }
                 }
+                // --- END FIX ---
             }
-    // --- CORRECTLY PLACED HEART ICON LOGIC --
-        } else if (heartIcon) {
+    // --- CORRECTLY PLACED HEART ICON LOGIC --\n        } else if (heartIcon) {
             e.stopPropagation();
             addEnergy(); 
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
@@ -860,8 +823,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
-                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
-                         ui.showToast('Could not update like status. Please try again.');
+                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);\n                         ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
                     console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
@@ -878,8 +840,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 try {
                     tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
                 } catch (e) {
-                     console.error('Error parsing tempLikes from localStorage:', e);
-                     localStorage.removeItem('tempLikes'); tempLikes = [];
+                     console.error('Error parsing tempLikes from localStorage:', e);\n                     localStorage.removeItem('tempLikes'); tempLikes = [];
                 }
                 const tempLikesSet = new Set(tempLikes);
                 let currentlyLiked = false;
@@ -901,12 +862,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
                       console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
-                      applyFiltersAndSort(imageCache);
-                 }
+                      applyFiltersAndSort(imageCache);\n                 }
             }
         }
-        // --- END HEART ICON LOGIC --
-        
+        // --- END HEART ICON LOGIC --\n        
         else if (addToPlanBtn) {
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
@@ -973,38 +932,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
             
-            // --- This check prevents clicking the \"ghost card\" ---\
-            if (record.id.startsWith('ai-search-')) {
+            // --- This check prevents clicking the \\\"ghost card\\\" ---\\\n            if (record.id.startsWith('ai-search-')) {
                 return;
             }
-            // --- End check ---\
-
-            if (record.fields['Item Type'] === 'Grouping') {
+            // --- End check ---\\\n\n            if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
+                 // --- THIS IS THE FIX ---
                  if (!parentName) {
+                     // This is a top-level category
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
-                     if (categoryFiltersContainer) {
-                         categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
-                     }
-                     updateSubcategoryButtons();
                  } else {
+                     // This is a subcategory
                      const parentNameLower = parentName.toLowerCase();
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
-                     if (categoryFiltersContainer) {
-                         categoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         categoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${parentNameLower}\"]`)?.classList.add('active');
-                     }
-                     updateSubcategoryButtons();
-                     if (subcategoryFiltersContainer) {
-                         subcategoryFiltersContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                         subcategoryFiltersContainer.querySelector(`.filter-btn[data-filter=\"${groupNameLower}\"]`)?.classList.add('active');
-                     }
                  }
                  applyFiltersAndSort(imageCache);
+                 // --- END FIX ---
 
             } else {
                 ui.showDetailModal(record);
