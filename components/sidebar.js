@@ -7,7 +7,7 @@ import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 // VVV FINAL IMPORT FIX: Direct imports from availability.js VVV
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js'; // <-- Direct import fixed
-// ^^^ END FINAL IMPORT FIX ^^^
+// ^^^ END FINAL IMPORT FIX ^^^\
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
@@ -31,15 +31,15 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
-        <div class=\"card-actions\">
-            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>
-            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>
-        </div>
-        <div class=\"favorite-item-overlay\"
-            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"
-        >
-            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>
-        </div>
+        <div class=\\\"card-actions\\\">\
+            <button class=\\\"action-btn add-to-plan-btn\\\" title=\\\"Add to Plan\\\">+</button>\
+            <button class=\\\"action-btn remove-btn\\\" title=\\\"Remove\\\">×</button>\
+        </div>\
+        <div class=\\\"favorite-item-overlay\\\"\
+            data-tippy-content=\\\"${tooltipContent.replace(/\\\"/g, '&quot;')}\\\"\
+        >\
+            <span class=\\\"favorite-item-name\\\">${fields.Name || 'Untitled'}</span>\
+        </div>\
     `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
         content: tooltipContent,
@@ -51,20 +51,20 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 }
 
 
-// --- 1. THIS FUNCTION IS REPLACED ---
+// --- 1. THIS FUNCTION IS REPLACED ---\
 // It now receives the *full record* instead of just the ID
 // It also fixes the 404 error for the partner icon
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
     let isCustomItem = record.id.startsWith('custom-') || record.id.startsWith('ai-search-');
     
-    // --- THIS IS THE FIX for the 404 error ---
+    // --- THIS IS THE FIX for the 404 error ---\
     // Default to your main placeholder, which we know exists
     let imageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
-    // --- END THE FIX ---
+    // --- END THE FIX ---\
 
     if (!isCustomItem) {
-        // --- EXISTING LOGIC for real items ---
+        // --- EXISTING LOGIC for real items ---\
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
             imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
@@ -94,31 +94,31 @@ async function createLockedInItemElement(record, itemInfo) {
     
     if (itemInfo.overridePrice != null) {
         let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class=\\\"price-original\\\">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
     itemElement.innerHTML = `
-        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrl}\" alt=\"${fields.Name}\">
-        <div class=\"locked-item-details\">
-            <p class=\"locked-item-name\">${fields.Name}</p>
-            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}
-            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}
-        </div>
-        <div class=\"locked-item-actions\">
-            ${!isCustomItem ? '<button class=\"edit-btn\">Edit</button>' : ''}
-            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>
-        </div>
+        <img class=\\\"locked-item-thumbnail lazy-load\\\" data-src=\\\"${imageUrl}\\\" alt=\\\"${fields.Name}\\\">\
+        <div class=\\\"locked-item-details\\\">\
+            <p class=\\\"locked-item-name\\\">${fields.Name}</p>\
+            ${optionName ? `<p class=\\\"locked-item-option\\\">${optionName}</p>` : ''}\
+            <p class=\\\"locked-item-pricing\\\">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>\
+            ${itemInfo.note ? `<p class=\\\"locked-item-note\\\"><em>Note: ${itemInfo.note}</em></p>` : ''}\
+        </div>\
+        <div class=\\\"locked-item-actions\\\">\
+            ${!isCustomItem ? '<button class=\\\"edit-btn\\\">Edit</button>' : ''}\
+            <button class=\\\"demote-locked-item-btn\\\" title=\\\"Remove from Plan\\\">Unsave</button>\
+        </div>\
     `;
     return itemElement;
 }
-// --- END REPLACED FUNCTION ---
+// --- END REPLACED FUNCTION ---\
 
-// --- VVV NEW SCORE LOGIC VVV ---
+// --- VVV NEW SCORE LOGIC VVV ---\
 
 /**
- * [V3.3] Calculates and returns the total recommendation score for the entire locked plan.
- * @returns {number} The total score.
+ * [V3.3] Calculates and returns the total recommendation score for the entire locked plan.\
+ * @returns {number} The total score.\
  */
 function calculateTotalPlanScore() {
     if (state.cart.lockedItems.size === 0) return 0;
@@ -155,16 +155,16 @@ function updateTotalPlanScoreDisplay(score) {
              // Prepend the score above the health score text
              container.prepend(scoreEl);
         }
-        // --- THIS IS THE CHANGE ---
+        // --- THIS IS THE CHANGE ---\
         scoreEl.innerHTML = `Overall Score: ${score.toFixed(0)} Points<span class='beta-tag-subtle'>Beta</span>`;
-        // --- END THE CHANGE ---
+        // --- END THE CHANGE ---\
     } else if (scoreEl) {
         // If score is 0 and element exists, remove it or hide it
         scoreEl.remove();
     }
 }
 
-// --- 2. THIS FUNCTION IS REPLACED ---
+// --- 2. THIS FUNCTION IS REPLACED ---\
 export async function updateEventPlanSection() {
     log('Sidebar', 'Updating event plan panel.');
     const container = document.getElementById('cart-items-container');
@@ -173,7 +173,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
+        container.innerHTML = `<p style=\\\"font-size: 0.9em; color: #6c757d;\\\">No items locked in yet.</p>`;
     } else {
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
             // Find the record in state.records.all (where custom items now live)
@@ -188,10 +188,10 @@ export async function updateEventPlanSection() {
     }
     ui.observeLazyImages(container);
     
-    updateEventHealthScore(); // --- ADDED THIS LINE ---
-    updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // --- ADDED THIS LINE ---
+    updateEventHealthScore(); // --- ADDED THIS LINE ---\
+    updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // --- ADDED THIS LINE ---\
 }
-// --- END REPLACED FUNCTION ---
+// --- END REPLACED FUNCTION ---\
 
 
 export async function updateIdeasCarousel() { 
@@ -223,7 +223,7 @@ export async function updateIdeasCarousel() {
     if (typeof ui !== 'undefined' && ui.observeLazyImages) {
          ui.observeLazyImages(ideasCarousel);
     } else {
-         console.warn("ui.observeLazyImages not found during carousel update.");
+         console.warn(\"ui.observeLazyImages not found during carousel update.\");
     }
 }
 
@@ -241,7 +241,7 @@ export function updateHeader() {
 // Action: REPLACE the entire `updateEventHealthScore` function
 
 /**
- * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
+ * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.\
  */
 export function updateEventHealthScore() {
     const container = document.getElementById('event-health-score');
@@ -251,7 +251,7 @@ export function updateEventHealthScore() {
     const score = 4 - suggestions.length; // Based on 4 pillars
     let html = '';
 
-    // 1. The "Score"
+    // 1. The \"Score\"
     let scoreText = '🟠 Good Start!';
     let scoreColor = '#fd7e14';
     if (score === 4) {
@@ -260,7 +260,7 @@ export function updateEventHealthScore() {
     } else if (score === 1) {
         scoreText = '🔴 Just Beginning!';
         scoreColor = '#dc3545';
-    } else if (score === 0) { // New "Empty" state
+    } else if (score === 0) { // New \"Empty\" state
         scoreText = 'Start Your Plan!';
         scoreColor = '#6c757d'; // Neutral gray
     } else if (score === 2) {
@@ -268,45 +268,45 @@ export function updateEventHealthScore() {
         scoreColor = '#ffc107';
     }
 
-    // --- THIS IS THE CHANGE ---
-    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
-    // --- END THE CHANGE ---
+    // --- THIS IS THE CHANGE ---\
+    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
+    // --- END THE CHANGE ---\
 
-    // 2. The "Suggestions"
+    // 2. The \"Suggestions\"
     if (suggestions.length > 0) {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center;">
-            Our experts recommend adding these components for a full experience:
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\
+            Our experts recommend adding these components for a full experience:\
         </p>`;
         
-        // Create clickable "suggestion" buttons
-        html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
+        // Create clickable \"suggestion\" buttons
+        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
         suggestions.forEach(cat => {
-            // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
+            // The display name is the exact key from calculateMissingCategories (e.g., \"Food & Drink\")
             const displayName = cat; 
             
-            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---
+            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---\
             let filterTag = displayName.toLowerCase();
             
-            if (displayName === "Food & Drink") {
-                // This tag MUST use the slash, as the filter logic in filtering.js expects "food/drink"
-                filterTag = "food/drink"; 
-            } else if (displayName === "Venues") {
-                filterTag = "venues"; 
-            } else if (displayName === "Activities") {
-                filterTag = "activities";
-            } else if (displayName === "Extras") {
-                filterTag = "extras";
+            if (displayName === \"Food & Drink\") {
+                // This tag MUST use the slash, as the filter logic in filtering.js expects \"food/drink\"
+                filterTag = \"food/drink\"; 
+            } else if (displayName === \"Venues\") {
+                filterTag = \"venues\"; 
+            } else if (displayName === \"Activities\") {
+                filterTag = \"activities\";
+            } else if (displayName === \"Extras\") {
+                filterTag = \"extras\";
             }
-            // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---
+            // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---\
             
-            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${filterTag}">
-                + Add ${displayName}
+            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\
+                + Add ${displayName}\
             </button>`;
         });
         html += `</div>`;
     } else {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center; color: #28a745;">
-            You've covered all the core components for a great guest experience!
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\
+            You've covered all the core components for a great guest experience!\
         </p>`;
     }
 
@@ -323,6 +323,9 @@ export function updateTotalCost() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const mobileItemCountEl = document.getElementById('mobile-bar-item-count');
     const mobileTotalCostEl = document.getElementById('mobile-bar-total-cost');
+    const statusMessageEl = document.getElementById('payment-status-message'); // Get new element
+    if (statusMessageEl) statusMessageEl.innerHTML = ''; // Clear status on each run
+
     if (!totalCostEl || !subtotalCostEl) return;
 
     let subtotal = 0;
@@ -362,7 +365,7 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;\
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
@@ -380,10 +383,13 @@ export function updateTotalCost() {
         document.getElementById('total-breakdown').style.display = 'block';
 
         if (isFullyPaid) {
-            checkoutBtn.style.display = 'none';
-            if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
+            // --- THIS BLOCK IS MODIFIED ---
+            checkoutBtn.textContent = 'View Receipt';
+            checkoutBtn.disabled = false;
+            if (amountReceived > 0 && statusMessageEl) {
+                statusMessageEl.innerHTML = '<span style=\\\"color: #28a745; font-weight: bold; font-size: 1.2em; text-align: center; display: block; margin-bottom: 10px;\\\">✅ Paid in Full</span>';
             }
+            // --- END MODIFICATION ---
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
             checkoutBtn.disabled = isPlanEmpty;
@@ -398,7 +404,7 @@ export function updateTotalCost() {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
     }
 
-    updateEventHealthScore(); // --- ADDED THIS LINE ---
+    updateEventHealthScore(); // --- ADDED THIS LINE ---\
     updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // V3.3: Call to display total score
 }
 
@@ -406,12 +412,17 @@ export function updateTotalCost() {
 export function displayReservedStatus() {
     const checkoutBtn = document.getElementById('checkout-btn');
     const saveShareBtn = document.getElementById('save-share-btn');
-    const totalBreakdown = document.getElementById('total-breakdown');
-    if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
+    const statusMessageEl = document.getElementById('payment-status-message'); // Get new element
+    
+    if (statusMessageEl) {
+        // Use new status container
+        statusMessageEl.innerHTML = '<span style=\\\"color: #28a745; font-weight: bold; font-size: 1.2em; text-align: center; display: block; margin-bottom: 10px;\\\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
-        checkoutBtn.style.display = 'none';
+        // Change text and ensure it's visible
+        checkoutBtn.style.display = 'block';
+        checkoutBtn.textContent = 'View Receipt';
+        checkoutBtn.disabled = false;
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = false;
