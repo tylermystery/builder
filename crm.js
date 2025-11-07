@@ -1,6 +1,7 @@
 // REPLACE the entire contents of: crm.js
 
-// --- Configuration ---\nconst AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+// --- Configuration ---
+const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const SESSIONS_TABLE = 'Sessions';
 const MESSAGES_TABLE = 'Messages';
@@ -10,7 +11,8 @@ const PUSHER_KEY = '236f480714e5001590b5';
 const PUSHER_CLUSTER = 'us3';
 const ARCHIVE_STORAGE_KEY = 'tmt-archived-sessions';
 
-// --- State ---\nlet currentlySelectedSessionId = null;
+// --- State ---
+let currentlySelectedSessionId = null;
 let allSessions = [];
 let allMessages = [];
 let allCatalogItems = [];
@@ -21,7 +23,8 @@ let archivedSessionIds = new Set();
 let unreadArchivedSessions = new Set();
 let pusherChannelMap = new Map();
 
-// --- DOM Elements ---\nconst loadingIndicator = document.getElementById('loading');
+// --- DOM Elements ---
+const loadingIndicator = document.getElementById('loading');
 const sessionListContainer = document.getElementById('session-list');
 const archiveListContainer = document.getElementById('archive-list');
 const archivePane = document.getElementById('archive-pane');
@@ -40,7 +43,8 @@ const omniSearchBtn = document.getElementById('omni-search-btn');
 const omniSearchResults = document.getElementById('omni-search-results');
 
 
-// --- Airtable & Storage ---\nfunction loadArchivedState() {
+// --- Airtable & Storage ---
+function loadArchivedState() {
     const stored = localStorage.getItem(ARCHIVE_STORAGE_KEY);
     if (stored) {
         archivedSessionIds = new Set(JSON.parse(stored));
@@ -97,7 +101,8 @@ async function postChatMessage(sessionId, content) {
     } catch (error) { console.error("Error posting chat message:", error); }
 }
 
-// --- Message Analysis ---\nfunction analyzeMessageContent(content) {
+// --- Message Analysis ---
+function analyzeMessageContent(content) {
     if (!content) return ''; 
     const questionKeywords = ['?', 'how', 'what', 'when', 'where', 'why', 'can we', 'is it', 'tmt'];
     const followupKeywords = ['follow up', 'circle back', 'next steps', 'send me', 'proposal'];
@@ -107,13 +112,14 @@ async function postChatMessage(sessionId, content) {
     return '';
 }
 
-// --- UI Rendering ---\nfunction renderActivityItem(message, sessionName, prepend = false) {
+// --- UI Rendering ---
+function renderActivityItem(message, sessionName, prepend = false) {
     const item = document.createElement('div');
     const highlightClass = analyzeMessageContent(message.fields.Content);
     item.className = `feed-item ${highlightClass}`;
     item.dataset.sessionId = message.fields.SessionID[0];
     const time = new Date(message.fields.Timestamp).toLocaleString();
-    item.innerHTML = `<p>\"${message.fields.Content}\"</p><div class=\"meta\"><strong>${message.fields.SenderName}</strong> in <a href=\"#\" class=\"session-link\">${sessionName || message.fields.SessionID[0]}</a><small> - ${time}</small></div>`;
+    item.innerHTML = `<p>"${message.fields.Content}"</p><div class="meta"><strong>${message.fields.SenderName}</strong> in <a href="#" class="session-link">${sessionName || message.fields.SessionID[0]}</a><small> - ${time}</small></div>`;
     if (prepend) activityFeed.prepend(item); else activityFeed.appendChild(item);
 }
 
@@ -160,7 +166,7 @@ function renderSessionLists() {
             item.dataset.sessionId = session.id;
             if (session.id === currentlySelectedSessionId) item.classList.add('selected');
             if (unreadArchivedSessions.has(session.id)) item.classList.add('unread');
-            item.innerHTML = `<strong>${session.fields.Name || 'Unnamed Session'}</strong><div class=\"session-stats\"><span>Value: $${session.totalValue.toFixed(2)}</span><span>Stage: ${session.stage}</span><span>${session.messageCount} messages</span></div><small>Last active: ${new Date(session.lastActivity).toLocaleString()}</small>`;
+            item.innerHTML = `<strong>${session.fields.Name || 'Unnamed Session'}</strong><div class="session-stats"><span>Value: $${session.totalValue.toFixed(2)}</span><span>Stage: ${session.stage}</span><span>${session.messageCount} messages</span></div><small>Last active: ${new Date(session.lastActivity).toLocaleString()}</small>`;
             container.appendChild(item);
         });
     };
@@ -172,14 +178,14 @@ function renderEventPlan(sessionId) {
     const session = allSessions.find(s => s.id === sessionId);
     if (!session) return;
     
-    let planHtml = `<div class=\"pane-header\"><h2>Event Plan</h2> <a href=\"/?session=${sessionId}\" target=\"_blank\" class=\"open-new-tab\">Open in New Tab ↗</a></div>`;
+    let planHtml = `<div class="pane-header"><h2>Event Plan</h2> <a href="/?session=${sessionId}" target="_blank" class="open-new-tab">Open in New Tab ↗</a></div>`;
     try {
         const data = JSON.parse(session.fields['Items with Variations'] || '{}');
         const sessionDetails = new Map(Object.entries(data.favoritedDetails || {}));
         const lockedItems = new Map(Object.entries(data.lockedInItems || {}));
         const favoritedItems = new Map(Object.entries(data.favoritedItems || {}));
         const eventDate = sessionDetails.get('date');
-        planHtml += `<div class=\"plan-details-grid\"><div><strong>Event Name</strong> ${session.fields.Name || 'N/A'}</div><div><strong>Date</strong> ${eventDate ? new Date(eventDate).toLocaleDateString() : 'Not set'}</div><div style=\"grid-column: 1 / -1;\"><strong>Goals/Notes</strong> ${session.fields.Goals || 'N/A'}</div></div>`;
+        planHtml += `<div class="plan-details-grid"><div><strong>Event Name</strong> ${session.fields.Name || 'N/A'}</div><div><strong>Date</strong> ${eventDate ? new Date(eventDate).toLocaleDateString() : 'Not set'}</div><div style="grid-column: 1 / -1;"><strong>Goals/Notes</strong> ${session.fields.Goals || 'N/A'}</div></div>`;
         planHtml += '<h3>Locked-In Items</h3>';
         let totalValue = 0;
         if (lockedItems.size > 0) {
@@ -187,7 +193,7 @@ function renderEventPlan(sessionId) {
                 const item = catalogMap.get(id);
                 totalValue += (item?.fields?.Price || 0) * (info.quantity || 1);
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
-                planHtml += `<div class=\"plan-item\"><img src=\"${imageUrl}\" alt=\"\"><div class=\"plan-item-info\"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
+                planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
             });
         } else { planHtml += '<p>No items locked in.</p>'; }
         planHtml += '<h3>Favorited Ideas</h3>';
@@ -195,10 +201,10 @@ function renderEventPlan(sessionId) {
             favoritedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
-                planHtml += `<div class=\"plan-item\"><img src=\"${imageUrl}\" alt=\"\"><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
+                planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
         } else { planHtml += '<p>No favorited items.</p>'; }
-        planHtml += `<div class=\"plan-total\">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
+        planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;
     } catch(e) {
         console.error("Error rendering plan:", e);
         planHtml += '<p>Could not load event plan details.</p>';
@@ -220,7 +226,8 @@ function renderChatPane(sessionId) {
         const messageEl = document.createElement('div');
         const sender = msg.fields.SenderName;
         const isAdmin = sender === 'TMT Admin';
-        messageEl.className = `chat-message ${isAdmin ? 'admin' : 'user'}`;\n        messageEl.innerHTML = `<strong>${sender}:</strong> ${msg.fields.Content}`;
+        messageEl.className = `chat-message ${isAdmin ? 'admin' : 'user'}`;
+        messageEl.innerHTML = `<strong>${sender}:</strong> ${msg.fields.Content}`;
         chatMessagesContainer.appendChild(messageEl);
     });
     document.getElementById('chat-header-title').textContent = `Chat: ${session.fields.Name || 'Session'}`;
@@ -297,6 +304,7 @@ async function handleOmniSearch(query) {
     // 1. Search all local data
     results.item = allCatalogItems.find(item => (item.fields.Name || '').toLowerCase().includes(lowerQuery));
     results.session = allSessions.find(session => (session.fields.Name || '').toLowerCase().includes(lowerQuery));
+    // Use `allTeammates` which is loaded at init
     results.user = allTeammates.find(user => (user.fields.Email || '').toLowerCase() === lowerQuery || (user.fields.Name || '').toLowerCase().includes(lowerQuery));
 
     if (results.session) {
@@ -339,7 +347,8 @@ async function handleOmniSearch(query) {
 }
 
 
-// --- Event Handlers & Initialization ---\nfunction handleSessionSelect(sessionId) {
+// --- Event Handlers & Initialization ---
+function handleSessionSelect(sessionId) {
     if (!sessionMap.has(sessionId)) {
         console.warn(`Attempted to select a non-existent session: ${sessionId}`);
         planView.style.display = 'none';
@@ -399,7 +408,7 @@ async function initializeDashboard() {
         allSessions = allSessionsData;
         allMessages = allMessagesData;
         allCatalogItems = allCatalogItemsData;
-        allTeammates = allTeammatesData;
+        allTeammates = allTeammatesData; // Now globally accessible
 
         loadingIndicator.style.display = 'none';
 
@@ -420,7 +429,7 @@ async function initializeDashboard() {
         setupDragAndDrop();
 
         const teammateListContainer = document.createElement('div');
-        teammateListContainer.innerHTML = '<h2 style=\"margin-top: 30px;\">Teammates</h2>';
+        teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
         
         allTeammates.forEach(tm => {
             const link = document.createElement('a');
@@ -528,6 +537,7 @@ async function initializeDashboard() {
     if (omniSearchForm) {
         omniSearchForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+Storage
             const query = omniSearchInput.value.trim();
             if (!query) return;
             
