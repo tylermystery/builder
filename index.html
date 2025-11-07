@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Catalog</title>
-    <link rel="icon" href="data:;"/>
+    <link rel="icon" href="data:;" />
+    <!-- FIX: Removed Markdown []() wrapper from links -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -17,23 +18,28 @@
 
     </head>
 <body>
+    <!-- The canvas is now our one and only background element -->
     <canvas id="kaleidoscope-bg"></canvas>
     
     <div id="toast-notification"></div>
 
     <header id="main-header">
         <div class="header-content">
+            <!-- Left Section: Logo and Shop Name -->
             <div id="header-left">
                 <button id="parent-collective-trigger" title="What The Fun Collective">WTF</button>
-                <div id="shop-logo-container"></div> <h1 id="main-shop-title"></h1>
+                <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
+                <h1 id="main-shop-title"></h1>
             </div>
 
+            <!-- Center Section: Marquee -->
             <div id="header-center">
                <div id="marquee-banner-container" style="display: none;">
                    <div id="marquee-text"></div>
                </div>
             </div>
 
+            <!-- Right Section: Calendar, Plans, and Account -->
             <div id="header-right">
                 <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
                 <div id="my-plans-container" style="display: none;">
@@ -197,7 +203,7 @@
             </div>
             <div id="catalog-toolbar">
                 <select id="sort-by">
-                    <option value="recommended">Sort by: Recommended (Beta)</option>
+                    <option value="recommended">Sort by: Recommended</option>
                     <option value="price-asc">Price (Low to High)</option>
                     <option value="price-desc">Price (High to Low)</option>
                     <option value="name-asc">Name (A-Z)</option>
@@ -285,7 +291,7 @@
                     <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
                 </div>
             </div>
-            <div class.terms-and-conditions"></div>
+            <div class="terms-and-conditions"></div>
             <form id="payment-form">
                 <div class="form-row">
                     <label for="customer-name">Full Name</label>
@@ -315,9 +321,6 @@
     <div id="itinerary-modal-overlay" class="modal-overlay">
         <div class="modal-content itinerary-content">
             <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
-            
-            <div class="beta-banner">The Itinerary Builder is a Beta feature. We'd love your feedback!</div>
-            
             <div class="itinerary-modal-header">
                 <div class="itinerary-header-item">
                     <label for="itinerary-event-name">Event Name</label>
@@ -379,9 +382,6 @@
     <div id="presentation-modal-overlay" class="modal-overlay">
         <div class="presentation-content">
             <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
-            
-            <div class="beta-banner">Presentation Mode is a Beta feature. We'd love your feedback!</div>
-            
             <div class="presentation-summary-header">
                 <div class="summary-item"><strong>Event:</strong> <span id="summary-event-name"></span></div>
                 <div class="summary-item"><strong>Notes:</strong> <span id="summary-event-notes"></span></div>
@@ -473,7 +473,9 @@
                 <button id="signout-btn" class="primary-action-btn" style="background-color: #dc3545;">Sign Out</button>
             </div>
             
-            </div>
+            <!-- REMOVED "Fun Tweaks" section -->
+            
+        </div>
     </div>
 
     <div class="footer-link">
@@ -499,9 +501,6 @@
 <div id="calendar-modal-overlay" class="modal-overlay">
         <div class="modal-content" style="max-width: 900px; height: 90vh;">
             <button id="calendar-close-btn" class="modal-close-btn" title="Close">×</button>
-            
-            <div class="beta-banner">The Events Calendar is a Beta feature. We'd love your feedback!</div>
-            
             <h3 style="margin-top: 10px;">Upcoming Events Calendar</h3>
             <div id="calendar-body">
                 <div id="event-calendar"></div>
@@ -514,7 +513,9 @@
     </div>
     
     <script type="module" src="main.js"></script>
+    <!-- FIX: Removed Markdown []() wrapper from link -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 </body>
 </html>
+
