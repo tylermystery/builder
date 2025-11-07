@@ -140,9 +140,6 @@ function calculateTotalPlanScore() {
 }
 
 
-/**
- * [V3.3] Updates the score display in the sidebar.
- */
 function updateTotalPlanScoreDisplay(score) {
     const container = document.getElementById('event-health-score'); // Reuse the container
     
@@ -158,14 +155,14 @@ function updateTotalPlanScoreDisplay(score) {
              // Prepend the score above the health score text
              container.prepend(scoreEl);
         }
-        scoreEl.textContent = `Overall Score: ${score.toFixed(0)} Points`;
+        // --- THIS IS THE CHANGE ---
+        scoreEl.innerHTML = `Overall Score: ${score.toFixed(0)} Points<span class='beta-tag-subtle'>Beta</span>`;
+        // --- END THE CHANGE ---
     } else if (scoreEl) {
         // If score is 0 and element exists, remove it or hide it
         scoreEl.remove();
     }
 }
-// --- ^^^ END NEW SCORE LOGIC ^^^
-
 
 // --- 2. THIS FUNCTION IS REPLACED ---
 export async function updateEventPlanSection() {
