@@ -674,23 +674,27 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
-    // --- 2. Update UI (calculates tip and base amount due) ---
-    // This now updates module-level 'currentBaseAmount'
-    // --- THIS IS CHANGED: Add await ---
-    await updateCheckoutDisplay(); 
-    // --- THIS IS CHANGED: Add debounce and async/await ---
-    tipAmountInput.addEventListener('input', debounce(async () => await updateCheckoutDisplay(), 500));
-
-    // --- 3. Create Payment Intent ---
+    // --- THIS IS THE FIX ---
+    // Initialize Stripe *before* calling updateCheckoutDisplay
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
+    } catch (err) {
+        console.error("Failed to initialize Stripe:", err);
+        alert(`Could not initialize payment system: ${err.message}.`);
+        return;
+    }
+    // --- END FIX ---
 
-        // --- 4. Call create-payment-intent (Now happens in updateCheckoutDisplay) ---
-        // --- 5. Update UI with initial fees (Now happens in updateCheckoutDisplay) ---
-        // --- 6. Create and Mount PaymentElement (Now happens in updateCheckoutDisplay) ---
-        
-        // --- 7. REMOVE listener for dynamic fee updates ---
-        // paymentElement.on('change', debounce(handlePaymentMethodChange, 500)); // <-- THIS LINE IS REMOVED
+    // --- 2. Update UI (calculates tip and base amount due) ---
+    // This now updates module-level 'currentBaseAmount' and will create the payment element
+    await updateCheckoutDisplay(); 
+    tipAmountInput.addEventListener('input', debounce(async () => await updateCheckoutDisplay(), 500));
+
+    // --- 3. Create Payment Intent (MOVED to updateCheckoutDisplay) ---
+    try {
+        // --- 4. Call create-payment-intent (Happens in updateCheckoutDisplay) ---
+        // --- 5. Update UI with initial fees (Happens in updateCheckoutDisplay) ---
+        // --- 6. Create and Mount PaymentElement (Happens in updateCheckoutDisplay) ---
         
         checkoutModalOverlay.cardElement = null; // Clear old reference
 
@@ -703,8 +707,10 @@ export async function showCheckoutModal(shopSettings) {
         document.body.classList.add('modal-open');
 
     } catch (err) {
-        console.error("Failed to initialize payment form:", err);
-        alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
+        // This catch block now only catches errors related to showing the modal,
+        // as the payment init happens inside updateCheckoutDisplay
+        console.error("Failed to show checkout modal:", err);
+        alert(`Could not display checkout: ${err.message}.`);
         hideCheckoutModal();
     }
 }
