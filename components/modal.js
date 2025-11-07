@@ -62,6 +62,7 @@ let elements; // To hold the Stripe elements instance
 let paymentElement; // To hold the payment element
 let currentClientSecret = null;
 let currentBaseAmount = 0; // To store the amount *before* fees
+let currentPaymentType = 'card'; // <-- ADD THIS LINE
 let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
@@ -85,7 +86,7 @@ function handleOverlayClick(event) {
     }
 }
 
-function updateCheckoutDisplay() {
+async function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
@@ -120,17 +121,62 @@ function updateCheckoutDisplay() {
     const finalBaseAmount = baseAmountToCharge + tipAmount;
     document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
     
-    // Now, update the final charge based on the *current* processing fee
+    // Get fee elements
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
-    
-    // Use the module-level fee
-    if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
-    if (finalChargeEl) finalChargeEl.textContent = `$${(finalBaseAmount + currentProcessingFee).toFixed(2)}`;
-    
-    currentBaseAmount = finalBaseAmount; // Update module-level var
-    
-    return { baseAmountToCharge: finalBaseAmount }; // Return this
+
+    // --- NEW LOGIC: Rebuild Payment Element ONLY if amount changed ---
+    if (finalBaseAmount !== currentBaseAmount) {
+        currentBaseAmount = finalBaseAmount; // Update module-level var
+        
+        if (processingFeeEl) processingFeeEl.textContent = 'Calculating...';
+        if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
+
+        try {
+            // 1. Call create-payment-intent with the *current* payment type
+            const intentResponse = await fetch('/api/create-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    amount: Math.round(currentBaseAmount * 100), 
+                    paymentMethodType: currentPaymentType // Use the stored payment type
+                }),
+            });
+            if (!intentResponse.ok) throw new Error('Could not update payment intent.');
+            
+            const intentData = await intentResponse.json();
+            const newClientSecret = intentData.clientSecret;
+            const newProcessingFee = intentData.processingFeeInCents / 100;
+
+            // 2. Update UI with new fees
+            currentProcessingFee = newProcessingFee;
+            if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
+            if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+
+            // 3. Destroy old element and create/mount a new one
+            if (paymentElement) {
+                paymentElement.unmount();
+            }
+            
+            currentClientSecret = newClientSecret; // Update the secret
+            elements = stripe.elements({ clientSecret: currentClientSecret });
+            paymentElement = elements.create('payment');
+            paymentElement.mount('#payment-element');
+            
+            // 4. Add listener to *only* update the currentPaymentType
+            paymentElement.on('change', (event) => {
+                if (event.value.type) {
+                    currentPaymentType = event.value.type;
+                }
+            });
+
+        } catch (error) {
+            console.error('Failed to update payment intent/element:', error);
+            if (processingFeeEl) processingFeeEl.textContent = 'Error';
+            if (finalChargeEl) finalChargeEl.textContent = 'Error';
+        }
+    }
+    // --- END NEW LOGIC ---
 }
 
 function getBreadcrumbs(record) {
@@ -616,8 +662,9 @@ export async function showCheckoutModal(shopSettings) {
 
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
+        // --- THIS IS CHANGED: Add async/await ---
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
-            radio.addEventListener('change', updateCheckoutDisplay);
+            radio.addEventListener('change', async () => await updateCheckoutDisplay());
         });
     } else {
         paymentChoiceContainer.style.display = 'none';
@@ -629,42 +676,21 @@ export async function showCheckoutModal(shopSettings) {
 
     // --- 2. Update UI (calculates tip and base amount due) ---
     // This now updates module-level 'currentBaseAmount'
-    updateCheckoutDisplay(); 
-    tipAmountInput.addEventListener('input', updateCheckoutDisplay);
+    // --- THIS IS CHANGED: Add await ---
+    await updateCheckoutDisplay(); 
+    // --- THIS IS CHANGED: Add debounce and async/await ---
+    tipAmountInput.addEventListener('input', debounce(async () => await updateCheckoutDisplay(), 500));
 
     // --- 3. Create Payment Intent ---
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
 
-        // --- 4. Call create-payment-intent ---
-        const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                amount: Math.round(currentBaseAmount * 100), 
-                paymentMethodType: 'card' // Default to card to get started
-            }),
-        });
-        if (!intentResponse.ok) throw new Error('Could not create initial payment intent.');
+        // --- 4. Call create-payment-intent (Now happens in updateCheckoutDisplay) ---
+        // --- 5. Update UI with initial fees (Now happens in updateCheckoutDisplay) ---
+        // --- 6. Create and Mount PaymentElement (Now happens in updateCheckoutDisplay) ---
         
-        const intentData = await intentResponse.json();
-        currentClientSecret = intentData.clientSecret;
-        currentProcessingFee = intentData.processingFeeInCents / 100;
-
-        // --- 5. Update UI with initial fees ---
-        if(processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
-        if(finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
-
-        // --- 6. Create and Mount PaymentElement ---
-        elements = stripe.elements({ clientSecret: currentClientSecret });
-        paymentElement = elements.create('payment');
-        
-        const paymentElementContainer = document.getElementById('payment-element');
-        paymentElementContainer.innerHTML = ''; // Clear
-        paymentElement.mount('#payment-element');
-        
-        // --- 7. Add listener for dynamic fee updates ---
-        paymentElement.on('change', debounce(handlePaymentMethodChange, 500));
+        // --- 7. REMOVE listener for dynamic fee updates ---
+        // paymentElement.on('change', debounce(handlePaymentMethodChange, 500)); // <-- THIS LINE IS REMOVED
         
         checkoutModalOverlay.cardElement = null; // Clear old reference
 
@@ -680,61 +706,6 @@ export async function showCheckoutModal(shopSettings) {
         console.error("Failed to initialize payment form:", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
-    }
-}
-
-async function handlePaymentMethodChange(event) {
-    // Don't run if the event is incomplete or there's no type
-    if (!event.value.type || !event.complete) return;
-    
-    log('Modal', `Payment method changed to: ${event.value.type}`);
-    const processingFeeEl = document.getElementById('processing-fee-price');
-    const finalChargeEl = document.getElementById('final-charge-price');
-
-    if (!processingFeeEl || !finalChargeEl) return;
-
-    // Show loading state
-    processingFeeEl.textContent = 'Calculating...';
-    finalChargeEl.textContent = 'Calculating...';
-
-    try {
-        // 1. Create a *new* payment intent with the new payment type
-        const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                amount: Math.round(currentBaseAmount * 100), 
-                paymentMethodType: event.value.type 
-            }),
-        });
-        if (!intentResponse.ok) throw new Error('Could not update payment intent.');
-        
-        const intentData = await intentResponse.json();
-        const newClientSecret = intentData.clientSecret;
-        const newProcessingFee = intentData.processingFeeInCents / 100;
-
-        // 2. Update UI with new fees
-        currentProcessingFee = newProcessingFee; // Store new fee
-        processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
-        finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
-
-        // 3. Destroy old element and create/mount a new one with the new secret
-        if (paymentElement) {
-            paymentElement.unmount();
-        }
-        
-        currentClientSecret = newClientSecret; // Update the secret
-        elements = stripe.elements({ clientSecret: currentClientSecret });
-        paymentElement = elements.create('payment');
-        paymentElement.mount('#payment-element');
-        
-        // Re-attach listener
-        paymentElement.on('change', debounce(handlePaymentMethodChange, 500));
-
-    } catch (error) {
-        console.error('Failed to update payment method:', error);
-        processingFeeEl.textContent = 'Error';
-        finalChargeEl.textContent = 'Error';
     }
 }
 
