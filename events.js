@@ -483,8 +483,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
-    // Subcategory listener is no longer needed and has been removed.
-
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     
     safeAddEventListener('name-filter', 'input', debounce((e) => {
@@ -1032,14 +1030,10 @@ export function openChatWidget(andKeepOpen = false) {
     }
 }
 
-// And add the handleFilterChipClear function to the end of events.js
 function handleFilterChipClear(e) {
-    // This is a dummy function to route the click back to ui.js logic 
-    // to prevent deep import dependency issues. It requires ui.js to be loaded.
     if (typeof ui.handleFilterChipClear === 'function') {
         ui.handleFilterChipClear(e);
     } else {
-         // Fallback for non-chip clearing
         document.getElementById('name-filter').value = '';
         window.applyFiltersAndSort(window.imageCache);
     }
