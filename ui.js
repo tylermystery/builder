@@ -613,17 +613,19 @@ export function handleFilterChipClear(e) {
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---\n    if (type === 'goal-filter') {
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
+    if (type === 'goal-filter') {
         // Action: Clearing a goal chip removes the word from the goals input text
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/\\s*,\\s*|\\s+/).filter(Boolean);
+            const goalWords = goalsInput.value.split(/[\s,]+/).filter(Boolean); // Cleaned regex
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             // 1. Update the input field
             goalsInput.value = updatedGoals;
             
-            // 2. Clear the input field's change event (this triggers save)\n            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
+            // 2. Clear the input field's change event (this triggers save)
+            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
             
             // 3. Re-run filters
             applyFilters();
@@ -631,7 +633,9 @@ export function handleFilterChipClear(e) {
             return; // Exit as goal logic is complete
         }
     }
-    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^\n\n\n    // 1. Clear the filter state based on type (for non-goal chips)
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
+
+    // 1. Clear the filter state based on type (for non-goal chips)
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
@@ -652,7 +656,8 @@ export function handleFilterChipClear(e) {
             const datePicker = document.getElementById('date-filter')?._flatpickr;
             if (datePicker) {
                  datePicker.clear();
-                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);\n            }
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+            }
             break;
         // --- NEW URL-BASED LOGIC ---
         case 'category-filter':
