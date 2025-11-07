@@ -12,11 +12,10 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
-// Corrected import line below:
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
+import { debounce, updateUrl } from './utils.js';
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js'; 
 import { initializeSessionChat } from './chat.js';
-import { setupCalendarEventListeners } from './components/calendarView.js'; // NEW IMPORT
+import { setupCalendarEventListeners } from './components/calendarView.js'; 
 
 // --- DEBUG ---
 console.log('[main.js] 1. Importing auth.js...');
@@ -26,24 +25,20 @@ import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 console.log('[main.js] 2. Successfully imported auth.js.');
 // --- DEBUG ---
 
-import * as backgroundEngine from './components/backgroundEngine.js'; // <-- IMPORT NEW ENGINE
-
+import * as backgroundEngine from './components/backgroundEngine.js'; 
 // --- DEBUG ---
-console.log('[main.js] 3. Importing fluidEffect.js...'); // <-- UPDATED
+console.log('[main.js] 3. Importing fluidEffect.js...'); 
 // --- DEBUG ---
-import fluidEffect from './components/effects/fluid.js'; // <-- UPDATED
+import fluidEffect from './components/effects/fluid.js'; 
 // --- DEBUG ---
-console.log('[main.js] 4. Successfully imported fluidEffect.js.'); // <-- UPDATED
+console.log('[main.js] 4. Successfully imported fluidEffect.js.'); 
 // --- DEBUG ---
 
 
 const imageCache = new Map();
-
-// Make imageCache accessible (consider if a better pattern exists, e.g., passing via init)
-window.imageCache = imageCache; // Simple global access for now
+window.imageCache = imageCache; 
 
 async function populateUserPlans(userId) {
-    // Check if ui.populateMyPlansDropdown exists before calling
     if (typeof ui.populateMyPlansDropdown === 'function') {
         if (userId) {
             const plans = await api.fetchPlansForUser(userId);
@@ -56,9 +51,6 @@ async function populateUserPlans(userId) {
     }
 }
 
-
-// Ensure applyFiltersAndSort is accessible globally or passed correctly
-// Make applyFiltersAndSort accessible (consider if a better pattern exists)
 window.applyFiltersAndSort = applyFiltersAndSort;
 
 
@@ -67,6 +59,7 @@ function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
     const openItemId = params.get('openItem');
     const view = params.get('view');
+    console.log('[syncUiWithUrl] Parsed params:', { view, openItemId });
 
     // Close any open overlays first
     ui.hideDetailModal();
@@ -98,7 +91,7 @@ function syncUiWithUrl() {
     // --- Handle opening modals/views based on URL ---
     setTimeout(() => {
         if (view === 'present') {
-            ui.showPresentationView('ideas'); // Changed from 'favorites'
+            ui.showPresentationView('ideas'); 
         } else if (view === 'itinerary') {
             ui.showItineraryModal();
         } else if (openItemId) {
@@ -112,7 +105,6 @@ function syncUiWithUrl() {
     }, 100); // Small delay
 }
 
-// REPLACE the entire initialize function in: main.js
 
 async function initialize() {
     // --- DEBUG ---
@@ -121,19 +113,16 @@ async function initialize() {
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
-    // Add listener for custom event 'userLoggedIn' to refresh plans
      document.addEventListener('userLoggedIn', () => {
          log('Main', "'userLoggedIn' event caught, repopulating user plans and chat.");
          populateUserPlans(state.session.user.id);
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
-         // --- CHAT FIX: Re-initialize chat to update user name ---
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat(); 
          }
-         // --- END CHAT FIX ---
      });
 
     document.addEventListener('planCreated', () => {
@@ -143,19 +132,16 @@ async function initialize() {
     });
     document.addEventListener('sessionReady', () => {
         log('Main', '"sessionReady" event received, re-initializing session chat.');
-        // Check if initializeSessionChat is defined before calling
         if (typeof initializeSessionChat === 'function') {
              initializeSessionChat();
         } else {
              console.error("initializeSessionChat is not defined or imported correctly.");
         }
 
-        // Update UI elements that depend on session data *after* it's loaded
         ui.updateHeader();
         ui.updateEventPlanSection();
-        ui.updateIdeasCarousel(); // Renamed from updateFavoritesCarousel
+        ui.updateIdeasCarousel(); 
         ui.updateTotalCost();
-        // Update liked icons for all visible cards now that session user state (likedItemIds) might be ready
         document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
              ui.updateCardIcon(card.dataset.recordId);
         });
@@ -163,10 +149,8 @@ async function initialize() {
 
     ui.toggleLoading(true);
     try {
-        // Fetch stores and items data first
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
 
-        // --- VVV START V2.1 PROFILE INJECTION WORKAROUND VVV ---
         const DEFAULT_V21_PROFILE = JSON.stringify({
             "profileSource": "system_default_v21",
             "Pillars": { "Activities": 8, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
@@ -177,20 +161,15 @@ async function initialize() {
         });
 
         records.forEach(record => {
-            // Check if the item is missing the AI_Profile and is a standard item type
             if (!record.fields.AI_Profile && (record.fields['Item Type'] === 'Bookable Item' || record.fields['Item Type'] === 'Event')) {
-                // Manually inject the default profile as JSON string
                 record.fields.AI_Profile = DEFAULT_V21_PROFILE;
             }
-            // Ensure legacy Rankings field is empty if AI_Profile is present to avoid confusion
             if (record.fields.AI_Profile && record.fields.Rankings) {
                  record.fields.Rankings = null;
             }
         });
-        // --- ^^^ END V2.1 PROFILE INJECTION WORKAROUND ^^^ ---
 
-        // Immediately update state with essential catalog data
-        setState({ // Use setState for potential reactivity
+        setState({ 
             stores: { all: stores },
             records: { all: records }
         });
@@ -199,8 +178,8 @@ async function initialize() {
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please refresh.</p>`;
-        ui.toggleLoading(true); // Keep loading indicator on error
-        return; // Stop initialization
+        ui.toggleLoading(true); 
+        return; 
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -208,7 +187,6 @@ async function initialize() {
     let shopId = urlParams.get('shopId');
     let activeShop = null;
 
-    // --- Determine Active Shop (Simplified Logic) ---
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
         log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
@@ -216,7 +194,7 @@ async function initialize() {
 
     if (sessionId) {
          log('Main', `Session ID found in URL: ${sessionId}. Loading session...`);
-         await api.loadSessionFromAirtable(sessionId); // This sets state.session.storeId if found
+         await api.loadSessionFromAirtable(sessionId); 
          if (!activeShop && state.session.storeId) {
               activeShop = state.stores.all.find(s => s.id === state.session.storeId);
               log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
@@ -235,40 +213,31 @@ async function initialize() {
         activeShop = state.stores.all.find(r => r.fields.Name === "Tyler's Mystery Tours");
          log('Main', `Falling back to default shop 'Tyler's Mystery Tours'. Found shop: ${!!activeShop}`);
     }
-    // --- End Shop Determination ---
 
     if (activeShop) {
         setState({ ui: { ...state.ui, activeShopId: activeShop.id }});
         localStorage.setItem('lastVisitedShopId', activeShop.id);
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 
-        // --- CHAT FIX: Ensure guests have a session ID on load ---
         if (!state.session.id) {
             log('Main', 'No session ID found, creating new session for guest chat...');
-            await api.saveSessionToAirtable(); // This will create an ID and fire 'sessionReady'
+            await api.saveSessionToAirtable(); 
         }
-        // --- END CHAT FIX ---
 
-        // --- Initialize UI based on Shop ---
         const titleElement = document.getElementById('main-shop-title');
         if (titleElement) {
-            // --- Get Main Title ---
             const shopTitleField = activeShop.fields['Shop Title'] || activeShop.fields.Name;
             const titles = shopTitleField.split('|').map(t => t.trim()).filter(Boolean);
-            const displayTitle = titles.length > 0 ? titles[0] : 'Shop'; // Default main title
+            const displayTitle = titles.length > 0 ? titles[0] : 'Shop'; 
 
-            // --- Get Superscript Label ---
-            const shopTypeLabelField = activeShop.fields['Shop Type Label'] || 'Shop'; // Default superscript
+            const shopTypeLabelField = activeShop.fields['Shop Type Label'] || 'Shop'; 
             const labels = shopTypeLabelField.split('|').map(t => t.trim()).filter(Boolean);
-            const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; // Use first label or default
+            const displayLabel = labels.length > 0 ? labels[0] : 'Shop'; 
 
-            // --- Set innerHTML with both dynamic parts ---
             titleElement.innerHTML = `${displayTitle} <sup>${displayLabel}</sup><button id="shop-switcher-trigger" style="background:none; border:none; color:transparent; cursor:pointer; font-size: 1em; vertical-align: super;">s</button>`;
 
-            // Keep existing event listeners
             titleElement.style.cursor = 'pointer';
             titleElement.addEventListener('click', (e) => {
-                // Keep existing behavior: navigating to the active shop home if the title is clicked
                 if (e.target.id !== 'shop-switcher-trigger') {
                     window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;
                 }
@@ -276,10 +245,8 @@ async function initialize() {
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher());
 
-            // --- NEW: Add listener for the prominent WTF button ---
             const parentCollectiveTrigger = document.getElementById('parent-collective-trigger');
             if (parentCollectiveTrigger) parentCollectiveTrigger.addEventListener('click', () => {
-                // For now, reuse the existing shop switcher modal
                 ui.showShopSwitcher();
             });
         }
@@ -300,22 +267,17 @@ async function initialize() {
                 headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale/');
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
                 
-                // --- MODIFIED LOGO INSERTION LOGIC ---
-                // Insert logo into its dedicated container to ensure correct order
                 const logoContainer = document.getElementById('shop-logo-container');
                 if (logoContainer) {
-                    logoContainer.innerHTML = ''; // Clear previous
+                    logoContainer.innerHTML = ''; 
                     logoContainer.appendChild(headerLogo);
                 } else {
-                    // Fallback just in case, though it shouldn't be needed
                     const headerLeft = document.getElementById('header-left');
                     if (headerLeft) headerLeft.prepend(headerLogo);
                 }
-                // --- END MODIFIED LOGIC ---
             }
         }
 
-        // --- Shop Settings & Event Listeners ---
         const shopSettings = {
             shopType: activeShop.fields.ShopType || 'Events',
             enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
@@ -324,46 +286,40 @@ async function initialize() {
             cartLabels: {}
         };
         try {
-            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); // Add default empty object
+            shopSettings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}'); 
         } catch (e) { console.warn('Could not parse CartLabels JSON, using defaults.'); }
 
-// --- NEW MARQUEE LOGIC START ---
         const marqueeContainer = document.getElementById('marquee-banner-container');
         const marqueeTextElement = document.getElementById('marquee-text');
 
         if (marqueeContainer && marqueeTextElement) {
-            // Prioritize 'Marquee Text' field, fall back to 'Description', else empty
             const marqueeContent = activeShop.fields['Marquee Text'] || activeShop.fields.Description || '';
 
-            if (marqueeContent.trim()) { // Check if there's actual text
-                marqueeTextElement.textContent = marqueeContent; // Set the text
+            if (marqueeContent.trim()) { 
+                marqueeTextElement.textContent = marqueeContent; 
 
-                // Optional: Adjust speed based on text length for better readability
                 const textLength = marqueeContent.length;
-                // Simple formula: ~15 chars per second, minimum 10s, max 60s duration
                 const duration = Math.min(60, Math.max(10, textLength / 15));
                 marqueeTextElement.style.animationDuration = `${duration}s`;
 
-                marqueeContainer.style.display = 'block'; // Make the banner visible
+                marqueeContainer.style.display = 'block'; 
                 log('Main', `Marquee activated with text (duration: ${duration}s).`);
             } else {
-                marqueeContainer.style.display = 'none'; // Keep hidden if no text
+                marqueeContainer.style.display = 'none'; 
                 log('Main', 'Marquee has no content, keeping it hidden.');
             }
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        // --- NEW MARQUEE LOGIC END ---
-        ui.applyCartLabels(shopSettings.cartLabels); // Existing line
-        initializeEventListeners(imageCache, window.flatpickr, shopSettings); // Existing line
+        ui.applyCartLabels(shopSettings.cartLabels); 
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings); 
 
-        // --- Authentication & User State ---
         const jwt = localStorage.getItem('jwt');
         let initialUserId = null;
         if (jwt) {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
-                if (payload.exp * 1000 > Date.now()) { // Check expiration
+                if (payload.exp * 1000 > Date.now()) { 
                     setState({
                         session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
@@ -379,7 +335,6 @@ async function initialize() {
             }
         }
 
-        // Handle magic link token verification (this also loads user data including likes)
         const loginToken = urlParams.get('token');
         if (loginToken) {
              log('Main', 'Magic link token found in URL, verifying...');
@@ -392,7 +347,7 @@ async function initialize() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || 'Token verification failed');
 
-                await _handleSuccessfulLogin(data); // This now handles state update, JWT storage, like sync
+                await _handleSuccessfulLogin(data); 
                  log('Main', 'Magic link verification successful.');
 
                 const cleanUrl = new URL(window.location);
@@ -405,18 +360,15 @@ async function initialize() {
                 const cleanUrl = new URL(window.location);
                 cleanUrl.searchParams.delete('token');
                 window.history.replaceState({}, document.title, cleanUrl.toString());
-                 handleSignOut(); // Use sign out to reset state cleanly
+                 handleSignOut(); 
             }
         
-        // --- THIS IS THE CORRECTED BLOCK ---
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
-            // User authenticated by JWT, but likes weren't loaded. Fetch them now.
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
             try {
-                // Call the *existing* endpoint with a GET request and query parameter
                 const response = await fetch('/api/update-user-prefs?action=get-user-data', {
-                    method: 'GET', // Use GET
-                    headers: { 'Authorization': `Bearer ${jwt}` } // Use the existing JWT
+                    method: 'GET', 
+                    headers: { 'Authorization': `Bearer ${jwt}` } 
                 });
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -434,72 +386,62 @@ async function initialize() {
                         }
                     });
                     log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
-                    // Now that likes are loaded, update all visible card icons
                     document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
                         ui.updateCardIcon(card.dataset.recordId);
                     });
                 }
             } catch (error) {
                 console.error('Failed to fetch user data on reload:', error.message);
-                // Don't block the app, just log the error. Likes will be out of sync.
             }
-        // --- END CORRECTED BLOCK ---
         }
 
-        // --- Post-Auth Initialization ---
-        await populateUserPlans(state.session.user.id); // Populate plans based on final auth state
+        await populateUserPlans(state.session.user.id); 
 
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);
               await api.loadSessionFromAirtable(sessionId);
         } else if (state.session.id) {
              log('Main', `Session ${state.session.id} already loaded or initiated.`);
-             // --- CHAT FIX: Manually trigger sessionReady if session was already loaded by URL ---
-             // This ensures chat initializes even if loadSessionFromAirtable was skipped
              if (typeof initializeSessionChat === 'function') {
                  initializeSessionChat();
              }
-             // --- END CHAT FIX ---
              ui.updateHeader();
              ui.updateEventPlanSection();
-             ui.updateIdeasCarousel(); // Renamed
+             ui.updateIdeasCarousel(); 
              ui.updateTotalCost();
         } else {
              log('Main', 'No active session ID found (this should not happen after the guest-session fix).');
         }
 
 
-        // Set default status filter from shop settings
         let defaultFilterValue = activeShop.fields.DefaultStatusFilter || 'Available';
         if (defaultFilterValue === 'Show All') defaultFilterValue = 'all';
         const statusFilterEl = document.getElementById('status-filter');
         if (statusFilterEl) statusFilterEl.value = defaultFilterValue;
 
-        // --- Final UI Setup ---
         ui.toggleLoading(false);
         updateSaveShareButton();
         initializeChatEventListeners();
         setupAuthEventListeners();
-        setupCalendarEventListeners(); // NEW: Setup Calendar Button/Modal listeners
+        setupCalendarEventListeners(); 
         updateUserProfileIcon();
 
-        syncUiWithUrl(); // Sync UI with URL parameters
-        window.addEventListener('popstate', syncUiWithUrl); // Handle browser back/forward
+        syncUiWithUrl(); 
+        window.addEventListener('popstate', syncUiWithUrl); 
 
-        setState({ ui: { ...state.ui, isInitializing: false }}); // Mark initialization complete
+        setState({ ui: { ...state.ui, isInitializing: false }}); 
         log('Main', 'Initialization complete.');
 
         // --- DEBUG ---
         console.log('[main.js] 6. Calling backgroundEngine.initBackgroundEngine().');
         // --- DEBUG ---
-        backgroundEngine.initBackgroundEngine(); // <-- INITIALIZE NEW ENGINE
+        backgroundEngine.initBackgroundEngine(); 
         
         // --- THIS IS THE FIX ---
-        // Load the new fluid effect, passing 'null' for the controls container
         // --- DEBUG ---
-        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); // <-- UPDATED
+        console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); 
         // --- DEBUG ---
-        backgroundEngine.loadEffect(fluidEffect, null); // <-- UPDATED
+        backgroundEngine.loadEffect(fluidEffect, null); 
         // --- END FIX ---
         // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
@@ -508,15 +450,12 @@ async function initialize() {
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed.");
         document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. Please check configuration.</p>`;
-        ui.toggleLoading(true); // Keep loading shown
+        ui.toggleLoading(true); 
     }
 }
 
-// Global error handler (optional but helpful)
 window.addEventListener('unhandledrejection', function(event) {
     console.error('Unhandled Promise Rejection:', event.reason);
-    // Optionally show a generic error message to the user
-    // ui.showToast('An unexpected error occurred. Please try refreshing the page.');
 });
 
 
