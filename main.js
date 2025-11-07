@@ -1,10 +1,3 @@
-// In: main.js
-// Action: REPLACE THE ENTIRE FILE
-
-// --- DEBUG ---
-console.log('[main.js] 0. File execution started.');
-// --- DEBUG ---
-
 import { state, setState } from './state.js';
 import { CONSTANTS } from './config.js';
 import * as api from './api.js';
@@ -12,27 +5,20 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js'; 
+import { debounce, updateUrl } from './utils.js'; 
+// Corrected import line below:
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js'; 
 
-// --- DEBUG ---
 console.log('[main.js] 1. Importing auth.js...');
-// --- DEBUG ---
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
-// --- DEBUG ---
 console.log('[main.js] 2. Successfully imported auth.js.');
-// --- DEBUG ---
 
 import * as backgroundEngine from './components/backgroundEngine.js'; 
-// --- DEBUG ---
 console.log('[main.js] 3. Importing fluidEffect.js...'); 
-// --- DEBUG ---
 import fluidEffect from './components/effects/fluid.js'; 
-// --- DEBUG ---
 console.log('[main.js] 4. Successfully imported fluidEffect.js.'); 
-// --- DEBUG ---
 
 
 const imageCache = new Map();
@@ -59,27 +45,42 @@ function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
     const openItemId = params.get('openItem');
     const view = params.get('view');
-    console.log('[syncUiWithUrl] Parsed params:', { view, openItemId });
+    const category = params.get('category');
+    const subcategories = params.get('subcategory');
+
+    console.log('[syncUiWithUrl] Parsed params:', { view, category, subcategories, openItemId });
 
     // Close any open overlays first
     ui.hideDetailModal();
     ui.hideItineraryModal();
     ui.hidePresentationView();
 
-    // --- Sync 'My Plan'/'My Likes' Button Active State ---
+    // --- Sync Category/View Buttons ---
     const categoryFilters = document.getElementById('category-filters');
-    if (categoryFilters) {
+    if (categoryFilters) { 
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+
         let buttonToActivate;
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
         } else if (view === 'likes') {
             buttonToActivate = document.getElementById('liked-items-filter-btn');
+        } else if (category) {
+            buttonToActivate = document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`);
         } else {
-            buttonToActivate = categoryFilters.querySelector('.filter-btn[data-filter="all"]');
+            // Default to 'All'
+            buttonToActivate = document.querySelector(`#category-filters .filter-btn[data-filter="all"]`);
         }
-        if (buttonToActivate) buttonToActivate.classList.add('active');
+        
+        if (buttonToActivate) {
+            buttonToActivate.classList.add('active');
+        } else {
+            // Fallback if URL param is invalid, activate 'All'
+            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
+        }
     }
+
+    // --- Subcategory sync is no longer needed here ---
 
     // Re-apply filters based on the URL
     if (typeof applyFiltersAndSort === 'function') {
@@ -107,9 +108,7 @@ function syncUiWithUrl() {
 
 
 async function initialize() {
-    // --- DEBUG ---
     console.log('[main.js] 5. initialize() function called.');
-    // --- DEBUG ---
     log('Main', '1. Initialization started.');
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
@@ -432,20 +431,12 @@ async function initialize() {
         setState({ ui: { ...state.ui, isInitializing: false }}); 
         log('Main', 'Initialization complete.');
 
-        // --- DEBUG ---
         console.log('[main.js] 6. Calling backgroundEngine.initBackgroundEngine().');
-        // --- DEBUG ---
         backgroundEngine.initBackgroundEngine(); 
         
-        // --- THIS IS THE FIX ---
-        // --- DEBUG ---
         console.log('[main.js] 7. Calling backgroundEngine.loadEffect(fluidEffect, null).'); 
-        // --- DEBUG ---
         backgroundEngine.loadEffect(fluidEffect, null); 
-        // --- END FIX ---
-        // --- DEBUG ---
         console.log('[main.js] 8. End of initialize() function.');
-        // --- DEBUG ---
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed.");
