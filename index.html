@@ -321,39 +321,34 @@
         </div>
     </div>
     
-    <div id="itinerary-modal-overlay" class="modal-overlay">
-        <div class="modal-content itinerary-content">
-            <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="itinerary-modal-header">
-                <div class="beta-banner">The Itinerary Builder is a Beta feature. We'd love your feedback!</div>
-                <div class="itinerary-header-item">
-                    <label for="itinerary-event-name">Event Name</label>
-                   <input type="text" id="itinerary-event-name" value="Enter Event Name" autocomplete="off">
+<div id="itinerary-modal-overlay" class="modal-overlay">
+    <div class="modal-content itinerary-content" style="max-width: 90vw; width: 1400px; height: 90vh;">
+        <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
+        
+        <div class="beta-banner">The Itinerary Builder is now a Visual Scene Builder! We'd love your feedback!</div>
+
+        <div class="itinerary-container scene-builder-container">
+            <div id="scene-builder-canvas">
                 </div>
-                <div class="itinerary-header-item">
-                    <label for="itinerary-goals">Goals / Notes</label>
-                    <input type="text" id="itinerary-goals" placeholder="What are the goals for your event?" autocomplete="off">
+            
+            <div id="scene-builder-palette">
+                <div id="scene-background-picker">
+                    <h4>Backgrounds</h4>
+                    <p class="description">Add a Venue to your Event Plan to get backgrounds.</p>
+                    <div class="background-thumbnails">
+                        </div>
                 </div>
-                <div class="itinerary-header-item">
-                    <label for="itinerary-date-picker">Date & Time</label>
-                    <input type="text" id="itinerary-date-picker" placeholder="Select date range">
-                </div>
-            </div>
-            <div class="itinerary-container">
-                <div class="itinerary-column">
-                    <h3>Event Plan</h3>
-                    <p class="description">Drag items from Ideas here to add them to your plan.</p>
-                    <div id="itinerary-locked-items" class="itinerary-list"></div>
-                </div>
-                <div class="itinerary-column">
-                    <h3>Ideas</h3>
-                    <p class="description">Move items here to add them to your plan.</p>
-                    <div id="itinerary-favorited-items" class="itinerary-list"></div>
+                <div id="scene-item-palette">
+                    <h4>Items</h4>
+                    <p class="description">Add items to your "Ideas" list to drag them onto the scene.</p>
+                    <div class="palette-items">
+                        </div>
                 </div>
             </div>
         </div>
-    </div>
-
+        </div>
+</div>
+    
     <div id="chat-widget-container">
         <button id="chat-toggle-button">
             💬
