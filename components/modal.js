@@ -9,25 +9,21 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMi
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 
-// In: components/modal.js
-// Action: REPLACE the entire `generateRecommendationBlurb` function (around line 123)
-
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
  */
 function generateRecommendationBlurb(record) {
-    // --- THIS IS THE FIX ---
-    // Get the current sort value from the DOM
+    // --- THIS IS THE FIX ---\n    // Get the current sort value from the DOM
     const sortBy = document.getElementById('sort-by')?.value || 'recommended';
     
     // 1. Get the current goal bucket, passing the sortBy value
     const goalBucket = buildGoalBucket(sortBy); // This import already exists
-    // --- END FIX ---
-    
-    if (goalBucket.length === 0) {
-        return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
+    // --- END FIX ---\n    \n    if (goalBucket.length === 0) {
+        // --- THIS IS THE CHANGE (and syntax fix) ---
+        return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
+        // --- END THE CHANGE ---
     }
 
     // 2. Call the ONE, TRUE scoring function from availability.js
@@ -52,7 +48,9 @@ function generateRecommendationBlurb(record) {
             goalString = `'${displayGoals.join("' and '")}'`;
         }
 
-        return `<strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
+        // --- THIS IS THE CHANGE ---
+        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
+        // --- END THE CHANGE ---
     }
 
     return null; // No match
