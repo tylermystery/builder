@@ -31,14 +31,14 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         <strong>Price: $${price.toFixed(2)}</strong>
     `;
     itemCard.innerHTML = `
-        <div class="card-actions">
-            <button class="action-btn add-to-plan-btn" title="Add to Plan">+</button>
-            <button class="action-btn remove-btn" title="Remove">×</button>
+        <div class=\"card-actions\">
+            <button class=\"action-btn add-to-plan-btn\" title=\"Add to Plan\">+</button>
+            <button class=\"action-btn remove-btn\" title=\"Remove\">×</button>
         </div>
-        <div class="favorite-item-overlay"
-            data-tippy-content="${tooltipContent.replace(/"/g, '&quot;')}"
+        <div class=\"favorite-item-overlay\"
+            data-tippy-content=\"${tooltipContent.replace(/\"/g, '&quot;')}\"
         >
-            <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
+            <span class=\"favorite-item-name\">${fields.Name || 'Untitled'}</span>
         </div>
     `;
     tippy(itemCard.querySelector('.favorite-item-overlay'), {
@@ -94,20 +94,20 @@ async function createLockedInItemElement(record, itemInfo) {
     
     if (itemInfo.overridePrice != null) {
         let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        priceDisplay = `$${price.toFixed(2)} <em class=\"price-original\">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
-            ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
+        <img class=\"locked-item-thumbnail lazy-load\" data-src=\"${imageUrl}\" alt=\"${fields.Name}\">
+        <div class=\"locked-item-details\">
+            <p class=\"locked-item-name\">${fields.Name}</p>
+            ${optionName ? `<p class=\"locked-item-option\">${optionName}</p>` : ''}
+            <p class=\"locked-item-pricing\">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
+            ${itemInfo.note ? `<p class=\"locked-item-note\"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
-        <div class="locked-item-actions">
-            ${!isCustomItem ? '<button class="edit-btn">Edit</button>' : ''}
-            <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
+        <div class=\"locked-item-actions\">
+            ${!isCustomItem ? '<button class=\"edit-btn\">Edit</button>' : ''}
+            <button class=\"demote-locked-item-btn\" title=\"Remove from Plan\">Unsave</button>
         </div>
     `;
     return itemElement;
@@ -176,7 +176,7 @@ export async function updateEventPlanSection() {
     container.innerHTML = '';
     
     if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        container.innerHTML = `<p style=\"font-size: 0.9em; color: #6c757d;\">No items locked in yet.</p>`;
     } else {
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
             // Find the record in state.records.all (where custom items now live)
@@ -272,16 +272,14 @@ export function updateEventHealthScore() {
     }
 
 
-    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
+    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText}</h5>`;
 
     // 2. The "Suggestions"
     if (suggestions.length > 0) {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center;">
-            Our experts recommend adding these components for a full experience:
-        </p>`;
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\n            Our experts recommend adding these components for a full experience:\n        </p>`;
         
         // Create clickable "suggestion" buttons
-        html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
+        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
         suggestions.forEach(cat => {
             // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
             const displayName = cat; 
@@ -301,15 +299,11 @@ export function updateEventHealthScore() {
             }
             // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---
             
-            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${filterTag}">
-                + Add ${displayName}
-            </button>`;
+            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
         });
         html += `</div>`;
     } else {
-        html += `<p style="font-size: 0.9em; margin: 0; text-align: center; color: #28a745;">
-            You've covered all the core components for a great guest experience!
-        </p>`;
+        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\n            You've covered all the core components for a great guest experience!\n        </p>`;
     }
 
     container.innerHTML = html;
@@ -385,7 +379,7 @@ export function updateTotalCost() {
         if (isFullyPaid) {
             checkoutBtn.style.display = 'none';
             if (amountReceived > 0) {
-                document.getElementById('total-breakdown').innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Paid in Full</span>';
+                document.getElementById('total-breakdown').innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Paid in Full</span>';
             }
         } else if (amountReceived > 0) {
             checkoutBtn.textContent = 'Pay Remainder';
@@ -411,7 +405,7 @@ export function displayReservedStatus() {
     const saveShareBtn = document.getElementById('save-share-btn');
     const totalBreakdown = document.getElementById('total-breakdown');
     if (totalBreakdown) {
-        totalBreakdown.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.4em;">✅ Event Reserved</span>';
+        totalBreakdown.innerHTML = '<span style=\"color: #28a745; font-weight: bold; font-size: 1.4em;\">✅ Event Reserved</span>';
     }
     if (checkoutBtn) {
         checkoutBtn.style.display = 'none';
