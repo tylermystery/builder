@@ -1,5 +1,3 @@
-// REPLACE THE ENTIRE CONTENTS of events.js
-
 import { state, setState } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
@@ -461,7 +459,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // This listener is now for the whole #category-filters container
     safeAddEventListener('category-filters', 'click', (e) => {
         const clickedBtn = e.target.closest('.filter-btn');
-        if (!clickedBtn) return;
+        if (!clickedBtn || !categoryFiltersRoot) return; // Add guard for categoryFiltersRoot
 
         // De-activate all buttons in this group
         categoryFiltersRoot.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
