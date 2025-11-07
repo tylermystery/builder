@@ -15,15 +15,15 @@ import { initializeItemChat } from '../chat.js';
  * @returns {string | null} The HTML string for the blurb, or null.
  */
 function generateRecommendationBlurb(record) {
-    // --- THIS IS THE FIX ---\n    // Get the current sort value from the DOM
+    // Get the current sort value from the DOM
     const sortBy = document.getElementById('sort-by')?.value || 'recommended';
     
     // 1. Get the current goal bucket, passing the sortBy value
     const goalBucket = buildGoalBucket(sortBy); // This import already exists
-    // --- END FIX ---\n    \n    if (goalBucket.length === 0) {
-        // --- THIS IS THE CHANGE (and syntax fix) ---
+    
+    if (goalBucket.length === 0) {
+        // "Tip" blurb
         return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
-        // --- END THE CHANGE ---
     }
 
     // 2. Call the ONE, TRUE scoring function from availability.js
@@ -49,7 +49,8 @@ function generateRecommendationBlurb(record) {
         }
 
         // --- THIS IS THE CHANGE ---
-        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
+        // Adds the score directly into the recommendation blurb
+        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you (Score: ${score.toFixed(0)})</strong> This item is a good match for your ${goalString} goals.`;
         // --- END THE CHANGE ---
     }
 
