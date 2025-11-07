@@ -27,7 +27,8 @@ function generateRecommendationBlurb(record) {
     // --- END FIX ---\
     
     if (goalBucket.length === 0) {
-        return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
+        // --- THIS IS THE FIX: Using escaped \" for the outer string ---
+        return \"<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.\";
     }
 
     // 2. Call the ONE, TRUE scoring function from availability.js
@@ -52,6 +53,7 @@ function generateRecommendationBlurb(record) {
             goalString = `'${displayGoals.join(\"' and '\")}'`;
         }
 
+        // --- THIS IS THE FIX: Using a template literal (`) which doesn't need outer quotes escaped ---
         return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
     }
 
@@ -235,8 +237,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
                 detailItem.innerHTML = `
-                    <span class=\\\"detail-label\\\">${spec.label}</span>\
-                    <span class=\\\"detail-value\\\">${String(value).replace(/\\n/g, '<br>')}</span>\
+                    <span class=\\\"detail-label\\\">${spec.label}</span>
+                    <span class=\\\"detail-value\\\">${String(value).replace(/\\n/g, '<br>')}</span>
                 `;
                 fragment.appendChild(detailItem);
             }
@@ -278,7 +280,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     }
                 }
             } catch (error) {
-                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);\
+                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
             }
         }
 
@@ -375,9 +377,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                e.currentTarget.dispatchEvent(new CustomEvent('change', {\
-                    bubbles: true,\
-                    detail: { selectedOptionIndex: newIndex }\
+                e.currentTarget.dispatchEvent(new CustomEvent('change', {
+                    bubbles: true,
+                    detail: { selectedOptionIndex: newIndex }
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = getRecordPrice(record, newIndex);
@@ -435,7 +437,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;\
+                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                 }
@@ -615,7 +617,7 @@ export async function showCheckoutModal(shopSettings) {
         cardElement.mount('#card-element');
         checkoutModalOverlay.cardElement = cardElement;
         checkoutModalOverlay.classList.add('active');
-        setTimeout(() => {\
+        setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
         }, 0);
