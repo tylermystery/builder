@@ -298,22 +298,19 @@ function sortRecords(records, sortBy, goalBucket) {
 // --- END REPLACED FUNCTION ---
 
 
-// --- MAIN EXPORTED FUNCTION --
-
-// In: filtering.js
-// Action: REPLACE the entire `applyFiltersAndSort` function
-
 export function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
-    const catalogTitle = document.getElementById('catalog-title');
-    const planFilterBtn = document.getElementById('plan-filter-btn');
-    const likesFilterBtn = document.getElementById('liked-items-filter-btn');
+    const planFilterBtn = document.getElementById('plan-filter-btn'); // Still need this
+    const likesFilterBtn = document.getElementById('liked-items-filter-btn'); // Still need this
 
-    // Get filter values from UI elements
-    const activeCategoryButton = document.querySelector('#category-filters .filter-btn.active');
-    const selectedCategory = activeCategoryButton ? activeCategoryButton.dataset.filter : 'all';
-    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
-    const activeSubcategories = Array.from(activeSubcategoryNodes).map(btn => btn.dataset.filter);
+    // --- NEW: Read filters directly from URL ---
+    const params = new URLSearchParams(window.location.search);
+    const selectedCategory = params.get('category') || 'all';
+    const activeSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    const view = params.get('view');
+    // --- END NEW ---
+
+    // Get other filter values from UI elements (unchanged)
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;
     const headcountFilter = document.getElementById('headcount-filter').value;
@@ -322,39 +319,26 @@ export function applyFiltersAndSort(imageCache) {
     const budgetFilter = document.getElementById('budget-filter').value;
     const sortBy = document.getElementById('sort-by').value;
 
-    // --- NEW: Build the Goal Bucket based on SortBy selection VVV ---
-    // Pass the simple 'recommended' value
     const goalBucket = buildGoalBucket(sortBy);
-    // --- ^^^ END NEW ^^^
 
     let baseRecordsToFilter = state.records.all.filter(record =>
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
-    if (catalogTitle) catalogTitle.style.display = 'none';
-
     let recordsToDisplay;
 
-    if (planFilterBtn && planFilterBtn.classList.contains('active')) {
+    // --- UPDATED: Check 'view' param from URL ---
+    if (view === 'plan') {
         // --- "My Plan" View ---
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
-        if (catalogTitle) {
-            catalogTitle.textContent = `${eventName} Plan & Ideas`;
-            catalogTitle.style.display = 'block';
-        }
+        // (We removed the catalogTitle element)
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
         const ideaItemIds = Array.from(state.cart.items.keys());
         const allPlanRecordIds = [...lockedItemIds, ...ideaItemIds];
         recordsToDisplay = allPlanRecordIds.map(id => state.records.all.find(record => record.id === id)).filter(Boolean);
         
-        // Note: No other filters are applied
-
-    } else if (likesFilterBtn && likesFilterBtn.classList.contains('active')) {
+    } else if (view === 'likes') {
         // --- "My Likes" View ---
-        if (catalogTitle) {
-            catalogTitle.textContent = `My Liked Items`;
-            catalogTitle.style.display = 'block';
-        }
         let likedIds = new Set();
         if (state.session.user.isAuthenticated) {
             likedIds = state.session.user.likedItemIds;
@@ -365,8 +349,6 @@ export function applyFiltersAndSort(imageCache) {
         }
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
-        // Note: No other filters are applied
-
     } else {
          // --- Standard Category/All View ---
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
@@ -382,12 +364,11 @@ export function applyFiltersAndSort(imageCache) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
     }
+    // --- END UPDATED BLOCK ---
 
-    // --- Sort the Final List (pass the goalBucket) ---
-    recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
+    // --- Sort the Final List (pass the goalBucket) ---\n    recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
-    // --- Update State & Render ---
-    state.records.filtered = recordsToDisplay;
+    // --- Update State & Render ---\n    state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
 
     if (catalogContainer) catalogContainer.innerHTML = '';
@@ -397,5 +378,5 @@ export function applyFiltersAndSort(imageCache) {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
     });
 
-    ui.updateCatalogHeader(); // This function will be updated to show the search term
+    ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
 }
