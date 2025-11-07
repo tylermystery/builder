@@ -70,7 +70,6 @@ export let state = {
     },
 };
 
-// Allows modules to update the state and trigger re-renders if needed
 export function setState(newState) {
     let updatedState = { ...state, ...newState };
 
@@ -81,6 +80,15 @@ export function setState(newState) {
             ...newState.ui 
         };
     }
+    
+    // --- ADD THIS BLOCK TO FIX THE BUG ---
+    if (newState.records) {
+        updatedState.records = {
+            ...state.records,
+            ...newState.records
+        };
+    }
+    // --- END FIX ---
     
     // Also ensuring deep merge for session.user is always safe
     if (newState.session && newState.session.user) {
