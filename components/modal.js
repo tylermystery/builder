@@ -125,8 +125,9 @@ async function updateCheckoutDisplay() {
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
 
-    // --- NEW LOGIC: Rebuild Payment Element ONLY if amount changed ---
+    // --- LOGIC: Rebuild Payment Element ONLY if amount changed ---
     if (finalBaseAmount !== currentBaseAmount) {
+        log('Modal', `Price changed from ${currentBaseAmount} to ${finalBaseAmount}. Rebuilding PaymentElement.`);
         currentBaseAmount = finalBaseAmount; // Update module-level var
         
         if (processingFeeEl) processingFeeEl.textContent = 'Calculating...';
@@ -163,20 +164,73 @@ async function updateCheckoutDisplay() {
             paymentElement = elements.create('payment');
             paymentElement.mount('#payment-element');
             
-            // 4. Add listener to *only* update the currentPaymentType
-            paymentElement.on('change', (event) => {
-                if (event.value.type) {
-                    currentPaymentType = event.value.type;
-                }
-            });
+            // 4. --- THIS IS THE FIX ---
+            // Add listener to update payment type AND fetch new fee
+            paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
 
         } catch (error) {
             console.error('Failed to update payment intent/element:', error);
             if (processingFeeEl) processingFeeEl.textContent = 'Error';
             if (finalChargeEl) finalChargeEl.textContent = 'Error';
         }
+    } else {
+         // --- ADDED THIS ELSE BLOCK ---
+         // Price did NOT change, but we should still update the final total
+         // in case the processing fee was updated by the new listener.
+         log('Modal', 'Price did not change, just updating fee display.');
+         if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
+         if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
+         // --- END ADDED BLOCK ---
     }
-    // --- END NEW LOGIC ---
+}
+
+/**
+ * Handles changes in the PaymentElement (e.g., switching from Card to ACH).
+ * This function ONLY fetches the new fee and updates the UI, it does not
+ * rebuild the PaymentElement.
+ */
+async function handlePaymentTypeChange(event) {
+    if (!event.value.type || event.value.type === currentPaymentType) {
+        // No change, or event is incomplete
+        return;
+    }
+    
+    currentPaymentType = event.value.type;
+    log('Modal', `Payment type changed to: ${currentPaymentType}. Fetching new fee.`);
+
+    const processingFeeEl = document.getElementById('processing-fee-price');
+    const finalChargeEl = document.getElementById('final-charge-price');
+
+    if (processingFeeEl) processingFeeEl.textContent = 'Calculating...';
+    if (finalChargeEl) finalChargeEl.textContent = 'Calculating...';
+
+    try {
+        // 1. Call create-payment-intent to get the new fee
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                amount: Math.round(currentBaseAmount * 100), 
+                paymentMethodType: currentPaymentType
+            }),
+        });
+        if (!intentResponse.ok) throw new Error('Could not fetch new processing fee.');
+        
+        const intentData = await intentResponse.json();
+        const newProcessingFee = intentData.processingFeeInCents / 100;
+
+        // 2. Update UI with new fees
+        currentProcessingFee = newProcessingFee;
+        if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
+        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+        
+        log('Modal', `New fee is ${newProcessingFee.toFixed(2)}`);
+
+    } catch (error) {
+        console.error('Failed to update fee on type change:', error);
+        if (processingFeeEl) processingFeeEl.textContent = 'Error';
+        if (finalChargeEl) finalChargeEl.textContent = 'Error';
+    }
 }
 
 function getBreadcrumbs(record) {
