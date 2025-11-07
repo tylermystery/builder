@@ -102,7 +102,7 @@ export async function updateAllCardAvailabilityIcons() {
             }
             
             const dateRangeString = `${startDate.toLocaleDateString()} - ${requestedEnd.toLocaleDateString()}`;
-            const tooltipContent = `<div style=\"text-align: left;\"><strong>${dateRangeString}</strong><hr style=\"margin: 2px 0 5px;\"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
+            const tooltipContent = `<div style="text-align: left;"><strong>${dateRangeString}</strong><hr style="margin: 2px 0 5px;"><span>${statusIcon} ${record.fields.Name}: ${rangeStatus.reason}</span></div>`;
             tippy(icon, { content: tooltipContent, allowHTML: true, placement: 'top', arrow: true });
             icon.title = rangeStatus.reason;
             icon.textContent = statusIcon;
@@ -369,7 +369,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
-        else console.warn(`Element with ID \"${selector}\" not found.`);
+        else console.warn(`Element with ID "${selector}" not found.`);
     };
 
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
@@ -977,6 +977,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             triggerSave();
         }
     });
+    
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
@@ -992,10 +993,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             triggerSave();
         }
     });
+    
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');
         showItineraryModal();
     });
+    
     ui.setupPresentationEventListeners();
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
