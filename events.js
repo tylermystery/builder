@@ -157,8 +157,11 @@ async function handlePaymentFormSubmit(event) {
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
 
-    const { stripe, cardElement } = ui.getStripeContext();
-    if (!stripe || !cardElement) {
+    // --- THIS IS THE CHANGE ---
+    // Get stripe and elements from the new context
+    const { stripe, elements } = ui.getStripeContext();
+    
+    if (!stripe || !elements) {
         cardErrors.textContent = 'Payment system is not initialized. Please close and reopen the checkout window.';
         submitBtn.disabled = false;
         buttonText.style.display = 'inline';
@@ -167,36 +170,33 @@ async function handlePaymentFormSubmit(event) {
     }
     
     try {
-        const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
-        const amountReceived = state.session.user.amountReceived || 0;
-        const totalDue = finalTotal - amountReceived;
-        const isFirstPayment = amountReceived === 0;
-        const baseAmountToCharge = isFirstPayment ? (finalTotal * 0.35) : totalDue;
-        const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-        const finalAmountToCharge = baseAmountToCharge + tipAmount;
-        const finalAmountInCents = Math.round(finalAmountToCharge * 100);
-        if (finalAmountInCents < 50) {
-            throw new Error("Final amount is too low to process.");
-        }
-
-        const intentResponse = await fetch('/api/create-payment-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: finalAmountInCents }),
-        });
-        if (!intentResponse.ok) throw new Error('Could not create payment intent.');
-        const paymentIntentData = await intentResponse.json();
-        const clientSecret = paymentIntentData.clientSecret;
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
-        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-            payment_method: {
-                card: cardElement,
-                billing_details: { name: customerName, email: customerEmail },
+
+        // Use confirmPayment, not confirmCardPayment
+        const { error, paymentIntent } = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+                // This URL isn't really used with redirect: 'if_required', but it's good practice.
+                return_url: `${window.location.origin}${window.location.pathname}?payment_success=true`,
+                payment_method_data: {
+                    billing_details: {
+                        name: customerName,
+                        email: customerEmail,
+                    },
+                },
             },
+            redirect: 'if_required', // Don't redirect unless necessary (e.g., 3DS)
         });
+        // --- END CHANGE ---
+
         if (error) {
-            throw new Error(error.message);
+            if (error.type === "card_error" || error.type === "validation_error") {
+                throw new Error(error.message);
+            } else {
+                console.error('Stripe confirmPayment error:', error);
+                throw new Error("An unexpected error occurred during payment. Please try again.");
+            }
         }
 
         if (paymentIntent.status === 'succeeded') {
@@ -219,6 +219,15 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('checkout-summary-details').style.display = 'none';
             document.querySelector('.checkout-total-deposit-section').style.display = 'none';
+            
+            // Hide new fee/total rows on success
+            const feeRow = document.querySelector('.processing-fee-row');
+            const totalRow = document.querySelector('.final-total-row');
+            const divider = document.querySelector('.total-divider');
+            if(feeRow) feeRow.style.display = 'none';
+            if(totalRow) totalRow.style.display = 'none';
+            if(divider) divider.style.display = 'none';
+            
             document.querySelector('.terms-and-conditions').style.display = 'none';
             document.getElementById('payment-success-message').style.display = 'block';
 
