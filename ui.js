@@ -1,6 +1,6 @@
 // REPLACE THE ENTIRE CONTENTS of ui.js
 import { state } from './state.js';
-import { CONSTANTS } from '../config.js';
+import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
@@ -149,12 +149,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
+    const notesLabelEl = document.querySelector('label[for="header-goals"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
+    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -249,19 +249,13 @@ function hideShopSwitcher() {
     }
 }
 
-// In: ui.js (around line 347)
-// REPLACE the entire showShopSwitcher function with this:
-
 export function showShopSwitcher() {
     const overlay = document.getElementById('shop-switcher-overlay');
     const listContainer = document.getElementById('shop-list-container');
-    // --- NEW: Get the modal title element ---
     const modalTitleEl = overlay?.querySelector('.checkout-modal-content h3');
-    // --- END NEW ---
     
     if (!overlay || !listContainer) return;
 
-    // --- NEW: Set the branded title and styles ---
     if (modalTitleEl) {
         modalTitleEl.innerHTML = `www.whatthefun.wtf <sup>fun finder</sup>`;
         modalTitleEl.style.fontSize = '1.5em';
@@ -269,12 +263,10 @@ export function showShopSwitcher() {
     } else {
         console.warn('Shop switcher modal title element not found for branding.');
     }
-    // --- END NEW ---
 
     const storeRecords = state.stores.all;
     listContainer.innerHTML = ''; 
     storeRecords.forEach(record => {
-// ... rest of function remains the same ...
         const link = document.createElement('a');
         link.href = `/?shopId=${record.id}`;
         link.textContent = record.fields.Name;
@@ -389,7 +381,6 @@ export function populateMyPlansDropdown(plans) {
     }
 }
 
-// FIX: ADD THE MISSING EXPORTED FUNCTION HERE
 export async function updateMobileBarAvailability() {
     const mobileBar = document.getElementById('mobile-summary-bar');
     if (!mobileBar || window.innerWidth > 999) return;
@@ -413,64 +404,56 @@ export async function updateMobileBarAvailability() {
         }
     }
 }
-// END OF FIX
 
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
     const nameFilterEl = document.getElementById('name-filter');
     const clearSearchBtn = document.getElementById('clear-search-btn');
 
+    // Title element removed
     if (!breadcrumbsEl || !nameFilterEl || !clearSearchBtn) return;
 
     let filterCount = 0;
 
-    // Reset visibility
     breadcrumbsEl.innerHTML = '';
     clearSearchBtn.style.display = 'none';
     const activeFiltersHtml = [];
     
-    // --- NEW: Read params directly from URL ---
     const params = new URLSearchParams(window.location.search);
-    const searchTerm = nameFilterEl.value.trim(); // Still read search bar directly
+    const searchTerm = nameFilterEl.value.trim(); 
     const isSearchActive = searchTerm.length > 0;
     const view = params.get('view');
     const categoryFilter = params.get('category');
     const subcategoryFilters = params.get('subcategory')?.split(',').filter(Boolean) || [];
-    // --- END NEW ---
 
     const sortByEl = document.getElementById('sort-by');
     const sortBy = sortByEl?.value;
     const isRecommendedSort = sortBy === 'recommended';
     const goalsInput = document.getElementById('header-goals')?.value?.trim();
 
-    // --- 1. Handle Special Views (My Plan/My Likes) ---
     if (view === 'plan' || view === 'likes') {
         const filterControlsEl = document.getElementById('filter-controls');
         if (filterControlsEl) { filterControlsEl.dataset.activeFilters = 0; }
-        // We can add breadcrumbs for these views too
+        
         const pathContainer = document.createElement('div');
         pathContainer.id = 'breadcrumb-path-container';
         pathContainer.innerHTML = `<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
         breadcrumbsEl.appendChild(pathContainer);
-        return; // Stop here for these views
+        return; 
     }
 
-    // --- 2. Collect Active Filters (Non-Category) ---
-    // A. Name Search
     if (isSearchActive) {
         clearSearchBtn.style.display = 'block'; 
         activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
         filterCount++; 
     }
     
-    // B. Status
     const statusEl = document.getElementById('status-filter');
     if (statusEl && statusEl.value !== 'Available') {
         activeFiltersHtml.push(createFilterChip('Status: ' + statusEl.options[statusEl.selectedIndex].text, 'status-filter', statusEl.value));
         filterCount++; 
     }
     
-    // C. Headcount
     const headcountEl = document.getElementById('headcount-filter');
     const headcountCustomEl = document.getElementById('headcount-custom');
     if (headcountEl && headcountEl.value !== 'any') {
@@ -482,21 +465,18 @@ export function updateCatalogHeader() {
         filterCount++; 
     }
     
-    // D. Location
     const locationEl = document.getElementById('location-filter');
     if (locationEl && locationEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
         filterCount++; 
     }
 
-    // E. Budget
     const budgetEl = document.getElementById('budget-filter');
     if (budgetEl && budgetEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Budget: ' + budgetEl.options[budgetEl.selectedIndex].text, 'budget-filter', budgetEl.value));
         filterCount++; 
     }
 
-    // F. Date Range
     const mainDatePicker = document.getElementById('date-filter')?._flatpickr;
     if (mainDatePicker && mainDatePicker.selectedDates.length > 0) {
         let text;
@@ -511,18 +491,16 @@ export function updateCatalogHeader() {
         filterCount++; 
     }
     
-    // --- 3. Build Breadcrumbs from URL Params ---
     const path = [];
     path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
-    // Helper to find a record by its filter-friendly name
     const findRecordByName = (filterName) => {
         return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
     };
 
     if (categoryFilter) {
         const categoryRecord = findRecordByName(categoryFilter);
-        const categoryName = categoryRecord?.fields.Name || categoryFilter; // Fallback to filter value
+        const categoryName = categoryRecord?.fields.Name || categoryFilter; 
         
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
         filterCount++; 
@@ -539,14 +517,13 @@ export function updateCatalogHeader() {
         path.push(`<span>${subcatName}</span>`);
     });
 
-    // --- 4. Goals Chip ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
         const STOP_WORDS = new Set([
             'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
             'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
         ]);
 
-        const goalWords = goalsInput.split(/[\\s,]+/).filter(word => 
+        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
 
@@ -557,21 +534,16 @@ export function updateCatalogHeader() {
         });
     }
     
-    // --- 5. Render and Bind ---
-
-    // A. Render Breadcrumb Path
     const pathContainer = document.createElement('div');
     pathContainer.id = 'breadcrumb-path-container';
     if (path.length > 1 || isSearchActive) { 
         pathContainer.innerHTML = path.join(' &gt; ');
         breadcrumbsEl.appendChild(pathContainer);
     } else {
-        // Show "All Categories" even if it's the only thing
         pathContainer.innerHTML = `<span>All Categories</span>`;
         breadcrumbsEl.appendChild(pathContainer);
     }
 
-    // B. Render Active Filter Chips
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
@@ -583,7 +555,6 @@ export function updateCatalogHeader() {
         `;
         breadcrumbsEl.appendChild(chipContainer); 
 
-        // Bind listeners for individual chips
         breadcrumbsEl.querySelectorAll('.filter-chip button').forEach(button => {
             button.addEventListener('click', handleFilterChipClear);
         });
@@ -593,9 +564,6 @@ export function updateCatalogHeader() {
         });
     }
     
-    // C. Render Title (REMOVED)
-    
-    // --- FINALLY: Update the filter count bubble ---
     const filterControlsEl = document.getElementById('filter-controls');
     if (filterControlsEl) {
         filterControlsEl.dataset.activeFilters = filterCount;
@@ -615,27 +583,20 @@ export function handleFilterChipClear(e) {
 
     // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
     if (type === 'goal-filter') {
-        // Action: Clearing a goal chip removes the word from the goals input text
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
             const goalWords = goalsInput.value.split(/[\s,]+/).filter(Boolean); // Cleaned regex
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
-            // 1. Update the input field
             goalsInput.value = updatedGoals;
-            
-            // 2. Clear the input field's change event (this triggers save)
             goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // 3. Re-run filters
             applyFilters();
             
-            return; // Exit as goal logic is complete
+            return; 
         }
     }
     // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
 
-    // 1. Clear the filter state based on type (for non-goal chips)
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
@@ -659,21 +620,17 @@ export function handleFilterChipClear(e) {
                  state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
             }
             break;
-        // --- NEW URL-BASED LOGIC ---
         case 'category-filter':
             updateUrl({ category: null, subcategory: null, view: null });
             break;
         case 'subcategory-filter':
-            // Read current subcats, remove this one, and update the URL
             const params = new URLSearchParams(window.location.search);
             const subcats = params.get('subcategory')?.split(',').filter(Boolean) || [];
             const newSubcats = subcats.filter(s => s !== value);
             updateUrl({ subcategory: newSubcats.join(',') || null });
             break;
-        // --- END NEW LOGIC ---
     }
     
-    // 2. Re-run filters and update UI
     applyFilters();
 }
 
@@ -694,13 +651,12 @@ export function showLoginPromptForLikes() {
     const profileButton = document.getElementById('user-profile-button');
     if (!profileButton) return;
 
-    // Create prompt element if it doesn't exist
     let promptElement = document.getElementById('login-prompt-likes');
     if (!promptElement) {
         promptElement = document.createElement('div');
         promptElement.id = 'login-prompt-likes';
         promptElement.style.position = 'absolute';
-        promptElement.style.bottom = '110%'; // Position above the button
+        promptElement.style.bottom = '110%'; 
         promptElement.style.right = '0';
         promptElement.style.backgroundColor = '#333';
         promptElement.style.color = 'white';
@@ -710,24 +666,19 @@ export function showLoginPromptForLikes() {
         promptElement.style.whiteSpace = 'nowrap';
         promptElement.style.opacity = '0';
         promptElement.style.transition = 'opacity 0.3s ease';
-        promptElement.style.pointerEvents = 'none'; // Prevent interaction
+        promptElement.style.pointerEvents = 'none'; 
         promptElement.textContent = 'Log in to save your likes & get updates!';
-        // Append near the button (adjust based on your header structure if needed)
-        profileButton.parentNode.style.position = 'relative'; // Ensure parent allows absolute positioning
+        profileButton.parentNode.style.position = 'relative'; 
         profileButton.parentNode.appendChild(promptElement);
     }
 
-    // Clear previous timeout if prompt is shown again quickly
     if (promptTimeout) clearTimeout(promptTimeout);
 
-    // Show the prompt
     requestAnimationFrame(() => {
          promptElement.style.opacity = '1';
     });
 
-
-    // Hide after a delay
     promptTimeout = setTimeout(() => {
         promptElement.style.opacity = '0';
-    }, 4000); // Show for 4 seconds
+    }, 4000); 
 }
