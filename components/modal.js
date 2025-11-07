@@ -249,7 +249,7 @@ async function handlePaymentTypeChange(event) {
         // 2. Update UI with new fees
         currentProcessingFee = newProcessingFee;
         if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
-        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
+        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
         
         log('Modal', `New fee is ${newProcessingFee.toFixed(2)}`);
 
@@ -381,8 +381,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
                 detailItem.innerHTML = `
-                    <span class=\"detail-label\">${spec.label}</span>
-                    <span class=\"detail-value\">${String(value).replace(/\n/g, '<br>')}</span>
+                    <span class="detail-label">${spec.label}</span>
+                    <span class="detail-value">${String(value).replace(/\n/g, '<br>')}</span>
                 `;
                 fragment.appendChild(detailItem);
             }
@@ -415,9 +415,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                             // Show 0-10 scale as 0-5 stars
                             const stars = '★'.repeat(Math.round(value / 2)) + '☆'.repeat(Math.max(0, 5 - Math.round(value / 2)));
                             rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">
-                                    <span class=\"ranking-label\">${label}:</span>
-                                    <span class=\"ranking-stars\">${stars}</span>
+                                <div class="ranking-item">
+                                    <span class="ranking-label">${label}:</span>
+                                    <span class="ranking-stars">${stars}</span>
                                 </div>
                             `);
                         }
@@ -432,7 +432,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
             rankingContainer.innerHTML = `
-                <span class=\"detail-label\">Rankings</span>
+                <span class="detail-label">Rankings</span>
                 ${rankingsHtmlParts.join('')}
             `;
             fragment.appendChild(rankingContainer);
@@ -445,7 +445,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -479,7 +479,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\"parent-link\" data-parent-name=\"${name}\" title=\"Go to ${name}\">${name}</a>`).join(' > ');
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class="parent-link" data-parent-name="${name}" title="Go to ${name}">${name}</a>`).join(' > ');
     }
 
     const heartBtnContainer = document.createElement('div');
@@ -501,7 +501,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -540,7 +540,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
@@ -581,7 +581,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;\
+                    // --- THIS IS THE FIX (stray \ removed) ---
+                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
                 } else {
                     className = 'unavailable';
                 }
@@ -724,15 +725,15 @@ export async function showCheckoutModal(shopSettings) {
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
         
         listItem.innerHTML = `
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>\
-                ${noteHtml}\
-            </div>\
-            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>\
+            <div class="summary-item-details">
+                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
+                ${noteHtml}
+            </div>
+            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
     }
@@ -790,7 +791,7 @@ export async function showCheckoutModal(shopSettings) {
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
-        }, 0);\
+        }, 0); // <-- FIX: Removed stray \
         document.body.classList.add('modal-open');
 
     } catch (err) {
@@ -832,7 +833,7 @@ export function hideCheckoutModal() {
             }
             checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
-        }, 300);\
+        }, 300); // <-- FIX: Removed stray \
         document.body.classList.remove('modal-open');
     }
 }
