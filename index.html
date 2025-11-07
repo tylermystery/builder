@@ -129,10 +129,11 @@
                         <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
                     </div>
                     </div>
+                   
                    <div class="filter-group">                   
-                    <div id="category-filters" class="filter-btn-group"></div>
-                </div>
-                    <div id="date-filter-group" class="filter-group">
+                        <div id="category-filters" class="filter-btn-group"></div>
+                   </div>
+                   <div id="date-filter-group" class="filter-group">
                     <label for="date-filter">Date & Time</label>
                     <input type="text" id="date-filter" placeholder="Select date and time range">
                     <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
@@ -191,22 +192,6 @@
             </div>
         </div>
         
-        <div id="catalog-area">
-            <div id="catalog-header">
-                <div id="breadcrumbs"></div>
-            </div>
-            <div id="catalog-toolbar">
-                <select id="sort-by">
-                    <option value="recommended">Sort by: Recommended</option>
-                    <option value="price-asc">Price (Low to High)</option>
-                    <option value="price-desc">Price (High to Low)</option>
-                    <option value="name-asc">Name (A-Z)</option>
-                </select> 
-            </div>
-            <div id="catalog-container"></div>
-        </div>
-    </div>
-
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
