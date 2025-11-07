@@ -79,6 +79,58 @@
         
         #loading, .pane-placeholder { text-align: center; font-size: 1.2em; color: var(--text-light); padding: 40px; }
         .open-new-tab { font-size: 0.8em; text-decoration: none; color: var(--highlight-blue); }
+        
+        /* --- NEW PARSER STYLES --- */
+        #asset-parser-section, #ai-tools-section {
+            margin-top: 20px; 
+            padding: 15px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            background: #f9f9f9;
+        }
+        #omni-search-form { display: flex; gap: 10px; }
+        #omni-search-input {
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            box-sizing: border-box;
+        }
+        #omni-search-btn {
+            padding: 10px 15px; 
+            background-color: #28a745; 
+            color: white; border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        #omni-search-results {
+            margin-top: 15px; 
+            background: white; 
+            padding: 10px; 
+            border-radius: 4px; 
+            border: 1px solid #eee; 
+            min-height: 50px;
+            font-size: 0.9em;
+        }
+        #omni-search-results h5 {
+            margin: 10px 0 5px 0;
+            color: var(--text-dark);
+        }
+        #omni-search-results pre {
+            font-size: 0.9em; 
+            background: #eee; 
+            padding: 5px; 
+            border-radius: 4px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        #omni-search-results ul {
+            padding-left: 20px;
+            margin: 5px 0;
+        }
+        /* --- END NEW STYLES --- */
+        
     </style>
 </head>
 <body>
@@ -96,21 +148,34 @@
             <aside class="panel sessions-pane">
                 <h2>Active Sessions</h2>
                 <div id="session-list" class="session-list"></div>
-                <!-- NEW AI TOOL SECTION FOR QA -->
-                <h2 style="margin-top: 30px;">AI Image Tools</h2>
-                <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px;">
-                    <h3 style="border-bottom: none; padding-bottom: 0;">Test AI Processor</h3>
-                    <form id="test-ai-form">
-                        <label for="test-public-id" style="font-size: 0.9em; display: block; margin-bottom: 5px;">Cloudinary Public ID</label>
-                        <input type="text" id="test-public-id" placeholder="e.g., my/item/photo_01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px;" required>
-                        <button type="submit" id="trigger-single-ai" style="width: 100%; padding: 10px; background-color: var(--highlight-blue); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            Process Single Image
-                        </button>
+                
+                <section id="asset-parser-section">
+                    <h2 style="margin-top: 30px;">Asset Parser</h2>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 0;">Search for an item, session, or client. If no item is found, the parser will create a new one.</p>
+                    <form id="omni-search-form">
+                        <input type="search" id="omni-search-input" placeholder="Item Name, Session Name, or Client Email...">
+                        <button type="submit" id="omni-search-btn">Find/Create</button>
                     </form>
-                    <p id="single-ai-status" style="margin-top: 10px; font-size: 0.9em; color: #7f8c8d;">Status: Ready</p>
-                </div>
-                <!-- END NEW AI TOOL SECTION -->                
-            </aside>
+                    <div id="omni-search-results">
+                        <p style="font-size: 0.9em; color: #7f8c8d; text-align: center;">Results will appear here.</p>
+                    </div>
+                </section>
+                
+                <section id="ai-tools-section">
+                    <h2 style="margin-top: 30px;">AI Image Tools</h2>
+                    <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px;">
+                        <h3 style="border-bottom: none; padding-bottom: 0;">Test AI Tagger</h3>
+                        <form id="test-ai-form">
+                            <label for="test-public-id" style="font-size: 0.9em; display: block; margin-bottom: 5px;">Cloudinary Public ID</label>
+                            <input type="text" id="test-public-id" placeholder="e.g., my/item/photo_01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px;" required>
+                            <button type="submit" id="trigger-single-ai" style="width: 100%; padding: 10px; background-color: var(--highlight-blue); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                Process Single Image
+                            </button>
+                        </form>
+                        <p id="single-ai-status" style="margin-top: 10px; font-size: 0.9em; color: #7f8c8d;">Status: Ready</p>
+                    </div>
+                </section>
+                </aside>
 
             <main class="panel feed-pane">
                 <h1>Real-Time Activity Feed</h1>
@@ -141,8 +206,7 @@
     </div>
 
     <script>
-        // --- PAGE PROTECTION SCRIPT ---
-        const AUTH_KEY = 'tmt-crm-auth-token';
+        // --- PAGE PROTECTION SCRIPT ---\n        const AUTH_KEY = 'tmt-crm-auth-token';
         const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
         if (!isAuthenticated) {
             window.location.href = '/crm-login.html';
@@ -153,4 +217,3 @@
     <script type="module" src="crm.js"></script>
 </body>
 </html>
-
