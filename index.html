@@ -303,7 +303,20 @@
                 </div>
                 <div class="form-row">
                     <label for="card-element">Credit or debit card</label>
-                    <div id="card-element"></div>
+                    <label for="card-element">Payment Details</label>
+                    <div id="payment-element"></div> <div id="card-errors" role="alert"></div>
+                </div>
+                
+                <div class="checkout-total-row processing-fee-row" style="font-size: 0.9em; color: #6c757d; margin-top: 10px; display: flex; justify-content: space-between;">
+                    <span>Processing Fee:</span>
+                    <span id="processing-fee-price">$0.00</span>
+                </div>
+                <hr class="total-divider" style="margin: 5px 0;">
+                <div class="checkout-total-row final-total-row" style="font-size: 1.3em; font-weight: bold; display: flex; justify-content: space-between;">
+                    <strong>Total Charge:</strong>
+                    <strong id="final-charge-price">$0.00</strong>
+                </div>
+                <button id="payment-submit-btn" class="primary-action-btn" type="submit">
                     <div id="card-errors" role="alert"></div>
                 </div>
                 <button id="payment-submit-btn" class="primary-action-btn" type="submit">
