@@ -430,3 +430,5 @@ function updateCarouselNavState() {
     leftNav.style.display = atStart ? 'none' : 'block';
     rightNav.style.display = atEnd ? 'none' : 'block';
 }
+
+updateCarouselNavState();
