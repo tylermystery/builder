@@ -19,37 +19,6 @@ let saveTimeout = null;
 let saveShareBtn = null;
 let aiSearchController = null; // --- ADDED THIS LINE ---
 
-function getCurrentCategoryRecord() {
-    if (!categoryFiltersContainer) return null;
-    const selectedCategoryButton = categoryFiltersContainer.querySelector('.filter-btn.active');
-    if (!selectedCategoryButton || selectedCategoryButton.dataset.filter === 'all' || selectedCategoryButton.id === 'plan-filter-btn') {
-        return null;
-    }
-    return state.records.all.find(record => record.fields.Name === selectedCategoryButton?.textContent);
-}
-
-function getAvailableSubcategories(categoryRecord) {
-    if (!categoryRecord) {
-        return [];
-    }
-    const subcategoryOptions = ui.parseOptions(categoryRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    return subcategoryOptions.map(option => option.name).sort();
-}
-
-export function updateSubcategoryButtons() {
-    if (!subcategoryFiltersContainer) return;
-    subcategoryFiltersContainer.innerHTML = '';
-    const categoryRecord = getCurrentCategoryRecord();
-    const subcategories = getAvailableSubcategories(categoryRecord);
-    subcategories.forEach(subcat => {
-        const button = document.createElement('button');
-        button.className = 'filter-btn subcategory-filter-btn';
-        button.dataset.filter = subcat.toLowerCase();
-        button.textContent = subcat;
-        subcategoryFiltersContainer.appendChild(button);
-    });
-}
-
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
@@ -658,315 +627,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
     });
-    // --- V2.1: APPLY FILTERS ON GOAL CHANGE ---\n    safeAddEventListener('header-goals', 'change', (e) => {
+    
+    safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
-        // Re-apply filters if \"Recommended\" sort is active
+        // Re-apply filters if "Recommended" sort is active
         if (document.getElementById('sort-by').value === 'recommended') {
             applyFiltersAndSort(imageCache);
         }
     });
-    // --- END V2.1 ---\n\n    document.body.addEventListener('click', async (e) => {
-        if (state.ui.isInitializing) return;
 
-        const card = e.target.closest('.event-card');
-        const heartIcon = e.target.closest('.heart-icon');
-        const rsvpBtn = e.target.closest('.rsvp-btn');
-        const ideaItem = e.target.closest('.favorite-item');
-        const removeIdeaBtn = ideaItem?.querySelector('.remove-btn');
-        const checkoutBtn = e.target.closest('#checkout-btn');
-        const lockedItemCard = e.target.closest('.locked-item-card');
-        const demoteBtn = e.target.closest('.demote-locked-item-btn');
-        const parentLink = e.target.closest('.parent-link');
-        const presentBtn = e.target.closest('.present-btn');
-        const carouselNav = e.target.closest('.carousel-nav');
-        const saveShareBtn = e.target.closest('#save-share-btn');
-        const breadcrumbLink = e.target.closest('.breadcrumb-link');
-        const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
-
-// --- NEW/FIXED HEALTH SUGGESTION BUTTON LOGIC ---\n        const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
-
-        if (healthSuggestionBtn) {
-            e.stopPropagation();
-            const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
-            log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
-            
-            // --- THIS IS THE FIX ---
-            // Directly update the URL and re-apply filters
-            updateUrl({ category: categoryToFilter, subcategory: null, view: null });
-            applyFiltersAndSort(imageCache);
-            // --- END FIX ---
-            
-            // 3. Scroll to the top of the catalog to show the results
-            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
-        }
-        // --- END NEW/FIXED BLOCK ---\n        
-        if (saveShareBtn) {
-            navigator.clipboard.writeText(window.location.href).then(() => {
-                const originalText = saveShareBtn.textContent;
-                saveShareBtn.textContent = 'Copied!';
-                setTimeout(() => { saveShareBtn.textContent = originalText; }, 1500);
-            }).catch(err => {
-                console.error('Failed to copy link:', err);
-                ui.showToast('Failed to copy link.');
-            });
-        } else if (breadcrumbLink) {
-            e.preventDefault();
-            const filterValue = breadcrumbLink.dataset.filter;
-            // --- THIS IS THE FIX ---
-            // Breadcrumb links now just update the URL and re-filter
-            if (filterValue === 'all') {
-                updateUrl({ category: null, subcategory: null, view: null });
-            } else {
-                // This assumes breadcrumb links are only for categories
-                updateUrl({ category: filterValue, subcategory: null, view: null });
-            }
-            applyFiltersAndSort(imageCache);
-            // --- END FIX ---
-        } else if (checkoutBtn) {
-            ui.showCheckoutModal(shopSettings);
-        } else if (rsvpBtn) {
-            e.stopPropagation();
-            if (!state.session.user.isAuthenticated) {
-                showUserModal();
-                return;
-            }
-            const cardEl = rsvpBtn.closest('.event-card');
-            const recordId = cardEl?.dataset.recordId;
-            if (!recordId) return;
-
-            rsvpBtn.disabled = true;
-            rsvpBtn.textContent = 'Saving...';
-            try {
-                const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
-                if (updatedRecord) {
-                    rsvpBtn.textContent = "You're Going! ✅";
-                    const recordIndex = state.records.all.findIndex(r => r.id === recordId);
-                    if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
-                } else {
-                    throw new Error('RSVP update failed.');
-                }
-            } catch (error) {
-                console.error("RSVP Error:", error);
-                ui.showToast(`RSVP Error: ${error.message}`);
-                rsvpBtn.textContent = 'Error!';
-                setTimeout(() => {
-                    rsvpBtn.textContent = 'RSVP';
-                    rsvpBtn.disabled = false;
-                }, 2000);
-            }
-        } else if (presentBtn) {
-            const listType = presentBtn.dataset.listType;
-            updateUrl({ view: 'present' });
-            ui.showPresentationView(listType);
-        } else if (carouselNav) {
-            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
-            if (carousel) {
-                const scrollAmount = 300;
-                const direction = carouselNav.classList.contains('right') ? 1 : -1;
-                carousel.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
-            }
-        } else if (parentLink) {
-            e.stopPropagation();
-            const parentName = parentLink.dataset.parentName;
-            if (parentName) {
-                // --- THIS IS THE FIX ---
-                // Find the parent record to get its filter-friendly name
-                const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
-                if (parentRecord) {
-                    const parentFilterName = parentName.toLowerCase(); // Assuming filter name is just lowercase
-                    updateUrl({ category: parentFilterName, subcategory: null, view: null });
-                    applyFiltersAndSort(imageCache);
-                    
-                    if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
-                        updateUrl({ openItem: null });
-                        ui.hideDetailModal();
-                    }
-                }
-                // --- END FIX ---
-            }
-    // --- CORRECTLY PLACED HEART ICON LOGIC --\n        } else if (heartIcon) {
-            e.stopPropagation();
-            addEnergy(); 
-            const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId) return;
-    
-            console.log(`[Events] Heart icon clicked for record: ${recordId}`); 
-    
-            if (state.session.user.isAuthenticated) {
-                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
-                try {
-                    heartIcon.style.pointerEvents = 'none';
-                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
-                    const result = await api.toggleUserLike(recordId);
-                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
-    
-                    if (result.success) {
-                        let actionTaken = '';
-                        if (result.liked) {
-                            state.session.user.likedItemIds.add(recordId);
-                            actionTaken = 'liked';
-                            log('Events', `User liked item ${recordId}.`);
-                        } else {
-                            state.session.user.likedItemIds.delete(recordId);
-                            actionTaken = 'unliked';
-                            log('Events', `User unliked item ${recordId}.`);
-                        }
-                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
-                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
-                        ui.updateCardIcon(recordId);
-                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
-    
-                        if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
-                            applyFiltersAndSort(imageCache);
-                        }
-                    } else {
-                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);\n                         ui.showToast('Could not update like status. Please try again.');
-                    }
-                } catch (error) {
-                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
-                    log('Events', `Error toggling like: ${error.message}`);
-                    ui.showToast(`Error: ${error.message}`);
-                } finally {
-                    heartIcon.style.pointerEvents = 'auto';
-                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
-                }
-            } else {
-                 console.log('[Events] User is logged out. Handling temporary like.');
-                log('Events', `Guest toggling temporary like for item ${recordId}.`);
-                let tempLikes = [];
-                try {
-                    tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
-                } catch (e) {
-                     console.error('Error parsing tempLikes from localStorage:', e);\n                     localStorage.removeItem('tempLikes'); tempLikes = [];
-                }
-                const tempLikesSet = new Set(tempLikes);
-                let currentlyLiked = false;
-                if (tempLikesSet.has(recordId)) {
-                    tempLikesSet.delete(recordId); currentlyLiked = false;
-                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
-                } else {
-                    tempLikesSet.add(recordId); currentlyLiked = true;
-                     console.log(`[Events] Added ${recordId} to temporary likes.`);
-                }
-                localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
-                log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
-                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
-                ui.updateCardIcon(recordId);
-                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
-                if (currentlyLiked) {
-                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
-                     ui.showLoginPromptForLikes();
-                }
-                if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
-                      applyFiltersAndSort(imageCache);\n                 }
-            }
-        }
-        // --- END HEART ICON LOGIC --\n        
-        else if (addToPlanBtn) {
-            e.stopPropagation();
-            const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId) return;
-
-            addEnergy();
-
-            if (state.cart.lockedItems.has(recordId)) {
-                if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
-                    updateUrl({ openItem: null });
-                    ui.hideDetailModal();
-                }
-                return;
-            }
-
-            let itemInfo;
-            const modalOverlay = document.getElementById('detail-modal-overlay');
-            if (modalOverlay?.classList.contains('active') && modalOverlay.dataset.recordId === recordId) {
-                const quantity = parseInt(document.querySelector('#modal-quantity-selector .quantity-input')?.value, 10) || 1;
-                const selectedOptionIndex = parseInt(document.querySelector('#modal-options-container .option-btn.selected')?.dataset.optionIndex, 10) || 0;
-                const note = document.getElementById('modal-item-note')?.value || '';
-                itemInfo = { quantity, selectedOptionIndex, note };
-                updateUrl({ openItem: null });
-                ui.hideDetailModal();
-            } else {
-                itemInfo = ui.getItemState(recordId);
-            }
-
-            state.cart.lockedItems.set(recordId, itemInfo);
-            state.cart.items.delete(recordId);
-
-            ui.updateCardIcon(recordId);
-            await ui.updateIdeasCarousel();
-            await ui.updateEventPlanSection();
-            ui.updateTotalCost();
-            updateMobileBarAvailability();
-            triggerSave();
-        } else if (demoteBtn) {
-            e.stopPropagation();
-            const recordId = demoteBtn.closest('[data-record-id]')?.dataset.recordId;
-            if (!recordId || !state.cart.lockedItems.has(recordId)) return;
-
-            const itemInfo = state.cart.lockedItems.get(recordId);
-            state.cart.lockedItems.delete(recordId);
-            state.cart.items.set(recordId, itemInfo);
-
-            ui.updateCardIcon(recordId);
-            await ui.updateEventPlanSection();
-            await ui.updateIdeasCarousel();
-            ui.updateTotalCost();
-            updateMobileBarAvailability();
-            triggerSave();
-        } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
-            e.stopPropagation();
-            const recordId = ideaItem.dataset.recordId;
-            if (!recordId || !state.cart.items.has(recordId)) return;
-
-            state.cart.items.delete(recordId);
-
-            await ui.updateIdeasCarousel();
-            triggerSave();
-        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
-            const recordId = card.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (!record) return;
-            
-            // --- This check prevents clicking the \\\"ghost card\\\" ---\\\n            if (record.id.startsWith('ai-search-')) {
-                return;
-            }
-            // --- End check ---\\\n\n            if (record.fields['Item Type'] === 'Grouping') {
-                 const groupName = record.fields.Name;
-                 const groupNameLower = groupName.toLowerCase();
-                 const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
-
-                 // --- THIS IS THE FIX ---
-                 if (!parentName) {
-                     // This is a top-level category
-                     updateUrl({ category: groupNameLower, subcategory: null, view: null });
-                 } else {
-                     // This is a subcategory
-                     const parentNameLower = parentName.toLowerCase();
-                     updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
-                 }
-                 applyFiltersAndSort(imageCache);
-                 // --- END FIX ---
-
-            } else {
-                ui.showDetailModal(record);
-            }
-        } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
-            const recordId = lockedItemCard.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) ui.showDetailModal(record);
-        } else if (ideaItem && !e.target.closest('.add-to-plan-btn, .remove-btn')) {
-            const recordId = ideaItem.dataset.recordId;
-            const record = state.records.all.find(r => r.id === recordId);
-             if (record) ui.showDetailModal(record);
-        }
-    }); // End of body click listener
-
-document.body.addEventListener('click', async (e) => {
+    document.body.addEventListener('click', async (e) => {
         if (state.ui.isInitializing) return;
 
         const card = e.target.closest('.event-card');
@@ -1126,10 +798,8 @@ document.body.addEventListener('click', async (e) => {
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
-                         // --- THIS IS THE FIX ---
                          console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
-                         // --- END THE FIX ---
                     }
                 } catch (error) {
                     console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
@@ -1146,11 +816,9 @@ document.body.addEventListener('click', async (e) => {
                 try {
                     tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
                 } catch (e) {
-                     // --- THIS IS THE FIX ---
                      console.error('Error parsing tempLikes from localStorage:', e);
                      localStorage.removeItem('tempLikes'); 
                      tempLikes = [];
-                     // --- END THE FIX ---
                 }
                 const tempLikesSet = new Set(tempLikes);
                 let currentlyLiked = false;
@@ -1173,11 +841,9 @@ document.body.addEventListener('click', async (e) => {
                      ui.showLoginPromptForLikes();
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      // --- THIS IS THE FIX ---
                       console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
-                 // --- END THE FIX ---
             }
         }
         // --- END HEART ICON LOGIC --
@@ -1285,6 +951,32 @@ document.body.addEventListener('click', async (e) => {
         }
     }); // End of body click listener
 
+    document.body.addEventListener('change', (e) => {
+        if (state.ui.isInitializing) return;
+        const target = e.target;
+        const container = target.closest('[data-record-id]');
+        if (!container) return;
+        const recordId = container.dataset.recordId;
+        const isLocked = state.cart.lockedItems.has(recordId);
+        let updates = {};
+        if (target.matches('.quantity-input')) {
+            updates.quantity = parseInt(target.value, 10);
+        } else if (target.matches('#modal-item-note')) {
+            updates.note = target.value;
+        } else if (e.detail?.selectedOptionIndex !== undefined) {
+             updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+        }
+        if (Object.keys(updates).length > 0) {
+            if (isLocked) {
+                ui.updateLockedItemState(recordId, updates);
+                ui.updateEventPlanSection();
+                ui.updateTotalCost();
+            } else {
+                ui.updateItemState(recordId, updates);
+            }
+            triggerSave();
+        }
+    });
     const eventPlanDatePicker = flatpickr("#event-date-picker", {
         dateFormat: "M j, Y",
         onChange: async (selectedDates) => {
@@ -1367,14 +1059,15 @@ export function openChatWidget(andKeepOpen = false) {
     }
 }
 
+// And add the handleFilterChipClear function to the end of events.js
 function handleFilterChipClear(e) {
-        // This is a dummy function to route the click back to ui.js logic 
-        // to prevent deep import dependency issues. It requires ui.js to be loaded.
-        if (typeof ui.handleFilterChipClear === 'function') {
-            ui.handleFilterChipClear(e);
-        } else {
-             // Fallback for non-chip clearing
-            document.getElementById('name-filter').value = '';
-            window.applyFiltersAndSort(window.imageCache);
-        }
+    // This is a dummy function to route the click back to ui.js logic 
+    // to prevent deep import dependency issues. It requires ui.js to be loaded.
+    if (typeof ui.handleFilterChipClear === 'function') {
+        ui.handleFilterChipClear(e);
+    } else {
+         // Fallback for non-chip clearing
+        document.getElementById('name-filter').value = '';
+        window.applyFiltersAndSort(window.imageCache);
     }
+}
