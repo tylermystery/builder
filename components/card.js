@@ -70,23 +70,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     }
     // --- END NEW LOGIC ---
 
-    // --- VVV NEW SCORE LOGIC VVV ---
-    let scoreBanner = '';
-    const sortBy = document.getElementById('sort-by')?.value;
-    const isRecommendedSort = sortBy === 'recommended';
-
-    if (isRecommendedSort) {
-        // Calculate score using the current goal bucket (which includes search/pillars)
-        const score = calculateRecommendationScore(record, buildGoalBucket(sortBy));
-        
-        // Only show score if it's meaningful (i.e., > 0)
-        if (score > 0) {
-            // --- THIS IS THE CHANGE ---
-            scoreBanner = `<div class="score-banner">⭐ ${score.toFixed(0)} Points<span class='beta-tag-subtle'>Beta</span></div>`;
-            // --- END THE CHANGE ---
-        }
-    }
-    // --- ^^^ END NEW SCORE LOGIC ^^^
+    // --- VVV SCORE LOGIC REMOVED VVV ---
+    // The scoreBanner variable is now always empty
+    const scoreBanner = '';
+    // --- ^^^ END SCORE LOGIC REMOVAL ^^^
 
     // --- This block handles custom items (from your previous step) ---
     let imageUrlToLoad;
