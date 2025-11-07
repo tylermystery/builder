@@ -58,6 +58,12 @@ function generateRecommendationBlurb(record) {
 }
 
 let stripe;
+let elements; // To hold the Stripe elements instance
+let paymentElement; // To hold the payment element
+let currentClientSecret = null;
+let currentBaseAmount = 0; // To store the amount *before* fees
+let currentProcessingFee = 0; // To store the current fee
+
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
@@ -83,8 +89,8 @@ function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
-    const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
-    let baseAmountToCharge = totalDue;
+    const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
+    let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
     
     const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
     
@@ -109,8 +115,22 @@ function updateCheckoutDisplay() {
         document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
-    const finalAmountToCharge = baseAmountToCharge + tipAmount;
-    document.getElementById('deposit-price').textContent = `$${finalAmountToCharge.toFixed(2)}`;
+    
+    // This is the new base amount
+    const finalBaseAmount = baseAmountToCharge + tipAmount;
+    document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
+    
+    // Now, update the final charge based on the *current* processing fee
+    const processingFeeEl = document.getElementById('processing-fee-price');
+    const finalChargeEl = document.getElementById('final-charge-price');
+    
+    // Use the module-level fee
+    if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
+    if (finalChargeEl) finalChargeEl.textContent = `$${(finalBaseAmount + currentProcessingFee).toFixed(2)}`;
+    
+    currentBaseAmount = finalBaseAmount; // Update module-level var
+    
+    return { baseAmountToCharge: finalBaseAmount }; // Return this
 }
 
 function getBreadcrumbs(record) {
@@ -532,6 +552,10 @@ export async function showCheckoutModal(shopSettings) {
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
 
+    // Get new fee/total elements
+    const processingFeeEl = document.getElementById('processing-fee-price');
+    const finalChargeEl = document.getElementById('final-charge-price');
+
     const totalLabel = document.getElementById('checkout-total-label');
     if (totalLabel) {
         if (state.session.user.amountReceived > 0) {
@@ -556,9 +580,10 @@ export async function showCheckoutModal(shopSettings) {
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
+    // --- 1. Calculate Base Total ---
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
-    let finalTotal = 0;
+    let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
@@ -572,26 +597,26 @@ export async function showCheckoutModal(shopSettings) {
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
+            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
         
         listItem.innerHTML = `
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
+            <div class="summary-item-details">
+                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
                 ${noteHtml}
             </div>
-            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
+            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
         `;
         summaryList.appendChild(listItem);
     }
-
     summaryDetailsEl.appendChild(summaryList);
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
+
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.addEventListener('change', updateCheckoutDisplay);
         });
     } else {
@@ -599,30 +624,117 @@ export async function showCheckoutModal(shopSettings) {
     }
 
     if (termsContainer && currentShopSettings.terms) {
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
+        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
-    updateCheckoutDisplay();
+    // --- 2. Update UI (calculates tip and base amount due) ---
+    // This now updates module-level 'currentBaseAmount'
+    updateCheckoutDisplay(); 
     tipAmountInput.addEventListener('input', updateCheckoutDisplay);
-    
+
+    // --- 3. Create Payment Intent ---
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
-        const elements = stripe.elements();
-        const cardElementContainer = document.getElementById('card-element');
-        if (cardElementContainer) cardElementContainer.innerHTML = '';
-        const cardElement = elements.create('card');
-        cardElement.mount('#card-element');
-        checkoutModalOverlay.cardElement = cardElement;
+
+        // --- 4. Call create-payment-intent ---
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                amount: Math.round(currentBaseAmount * 100), 
+                paymentMethodType: 'card' // Default to card to get started
+            }),
+        });
+        if (!intentResponse.ok) throw new Error('Could not create initial payment intent.');
+        
+        const intentData = await intentResponse.json();
+        currentClientSecret = intentData.clientSecret;
+        currentProcessingFee = intentData.processingFeeInCents / 100;
+
+        // --- 5. Update UI with initial fees ---
+        if(processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
+        if(finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
+
+        // --- 6. Create and Mount PaymentElement ---
+        elements = stripe.elements({ clientSecret: currentClientSecret });
+        paymentElement = elements.create('payment');
+        
+        const paymentElementContainer = document.getElementById('payment-element');
+        paymentElementContainer.innerHTML = ''; // Clear
+        paymentElement.mount('#payment-element');
+        
+        // --- 7. Add listener for dynamic fee updates ---
+        paymentElement.on('change', debounce(handlePaymentMethodChange, 500));
+        
+        checkoutModalOverlay.cardElement = null; // Clear old reference
+
+        // --- 8. Show Modal ---
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
         }, 0);
         document.body.classList.add('modal-open');
+
     } catch (err) {
         console.error("Failed to initialize payment form:", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
+    }
+}
+
+async function handlePaymentMethodChange(event) {
+    // Don't run if the event is incomplete or there's no type
+    if (!event.value.type || !event.complete) return;
+    
+    log('Modal', `Payment method changed to: ${event.value.type}`);
+    const processingFeeEl = document.getElementById('processing-fee-price');
+    const finalChargeEl = document.getElementById('final-charge-price');
+
+    if (!processingFeeEl || !finalChargeEl) return;
+
+    // Show loading state
+    processingFeeEl.textContent = 'Calculating...';
+    finalChargeEl.textContent = 'Calculating...';
+
+    try {
+        // 1. Create a *new* payment intent with the new payment type
+        const intentResponse = await fetch('/api/create-payment-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                amount: Math.round(currentBaseAmount * 100), 
+                paymentMethodType: event.value.type 
+            }),
+        });
+        if (!intentResponse.ok) throw new Error('Could not update payment intent.');
+        
+        const intentData = await intentResponse.json();
+        const newClientSecret = intentData.clientSecret;
+        const newProcessingFee = intentData.processingFeeInCents / 100;
+
+        // 2. Update UI with new fees
+        currentProcessingFee = newProcessingFee; // Store new fee
+        processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
+        finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+
+        // 3. Destroy old element and create/mount a new one with the new secret
+        if (paymentElement) {
+            paymentElement.unmount();
+        }
+        
+        currentClientSecret = newClientSecret; // Update the secret
+        elements = stripe.elements({ clientSecret: currentClientSecret });
+        paymentElement = elements.create('payment');
+        paymentElement.mount('#payment-element');
+        
+        // Re-attach listener
+        paymentElement.on('change', debounce(handlePaymentMethodChange, 500));
+
+    } catch (error) {
+        console.error('Failed to update payment method:', error);
+        processingFeeEl.textContent = 'Error';
+        finalChargeEl.textContent = 'Error';
     }
 }
 
@@ -633,9 +745,21 @@ export function hideCheckoutModal() {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
         document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+        document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.removeEventListener('change', updateCheckoutDisplay);
         });
+
+        // --- ADD THIS ---
+        if (paymentElement) {
+            paymentElement.unmount();
+            paymentElement = null;
+        }
+        elements = null;
+        currentClientSecret = null;
+        currentBaseAmount = 0;
+        currentProcessingFee = 0;
+        // --- END ADD ---
+
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
             const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -650,6 +774,5 @@ export function hideCheckoutModal() {
 }
 
 export function getStripeContext() {
-    const cardElement = document.getElementById('checkout-modal-overlay')?.cardElement;
-    return { stripe, cardElement };
+    return { stripe, elements };
 }
