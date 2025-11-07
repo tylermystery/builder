@@ -415,55 +415,59 @@ export async function updateMobileBarAvailability() {
 }
 // END OF FIX
 
-// In: ui.js
-// Action: REPLACE the entire `updateCatalogHeader` function (starts around line 497)
-
 export function updateCatalogHeader() {
     const breadcrumbsEl = document.getElementById('breadcrumbs');
-    const titleEl = document.getElementById('catalog-title');
     const nameFilterEl = document.getElementById('name-filter');
     const clearSearchBtn = document.getElementById('clear-search-btn');
 
-    if (!breadcrumbsEl || !titleEl || !nameFilterEl || !clearSearchBtn) return;
+    if (!breadcrumbsEl || !nameFilterEl || !clearSearchBtn) return;
 
-    // --- NEW: Initialize filter count ---
     let filterCount = 0;
 
     // Reset visibility
     breadcrumbsEl.innerHTML = '';
-    titleEl.style.display = 'none';
     clearSearchBtn.style.display = 'none';
     const activeFiltersHtml = [];
-    const searchTerm = nameFilterEl.value.trim();
+    
+    // --- NEW: Read params directly from URL ---
+    const params = new URLSearchParams(window.location.search);
+    const searchTerm = nameFilterEl.value.trim(); // Still read search bar directly
     const isSearchActive = searchTerm.length > 0;
+    const view = params.get('view');
+    const categoryFilter = params.get('category');
+    const subcategoryFilters = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    // --- END NEW ---
+
     const sortByEl = document.getElementById('sort-by');
     const sortBy = sortByEl?.value;
     const isRecommendedSort = sortBy === 'recommended';
-    
     const goalsInput = document.getElementById('header-goals')?.value?.trim();
 
     // --- 1. Handle Special Views (My Plan/My Likes) ---
-    if (document.getElementById('plan-filter-btn')?.classList.contains('active') || document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-        // --- ADDED: Still need to update the filter count even in this view ---
+    if (view === 'plan' || view === 'likes') {
         const filterControlsEl = document.getElementById('filter-controls');
         if (filterControlsEl) { filterControlsEl.dataset.activeFilters = 0; }
-        return;
+        // We can add breadcrumbs for these views too
+        const pathContainer = document.createElement('div');
+        pathContainer.id = 'breadcrumb-path-container';
+        pathContainer.innerHTML = `<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
+        breadcrumbsEl.appendChild(pathContainer);
+        return; // Stop here for these views
     }
 
     // --- 2. Collect Active Filters (Non-Category) ---
-
     // A. Name Search
     if (isSearchActive) {
         clearSearchBtn.style.display = 'block'; 
         activeFiltersHtml.push(createFilterChip('Search: ' + searchTerm, 'name-filter', nameFilterEl.value));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
     
     // B. Status
     const statusEl = document.getElementById('status-filter');
     if (statusEl && statusEl.value !== 'Available') {
         activeFiltersHtml.push(createFilterChip('Status: ' + statusEl.options[statusEl.selectedIndex].text, 'status-filter', statusEl.value));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
     
     // C. Headcount
@@ -475,21 +479,21 @@ export function updateCatalogHeader() {
             text = `Headcount: ${headcountCustomEl.value}`;
         }
         activeFiltersHtml.push(createFilterChip(text, 'headcount-filter', headcountEl.value));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
     
     // D. Location
     const locationEl = document.getElementById('location-filter');
     if (locationEl && locationEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
 
     // E. Budget
     const budgetEl = document.getElementById('budget-filter');
     if (budgetEl && budgetEl.value !== 'any') {
         activeFiltersHtml.push(createFilterChip('Budget: ' + budgetEl.options[budgetEl.selectedIndex].text, 'budget-filter', budgetEl.value));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
 
     // F. Date Range
@@ -504,36 +508,35 @@ export function updateCatalogHeader() {
             text = `Date: ${start} – ${end}`;
         }
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
     }
     
-    // --- 3. Collect Category & Subcategory FILTERS (Breadcrumbs/Title) ---
-    
+    // --- 3. Build Breadcrumbs from URL Params ---
     const path = [];
-    let currentTitle = '';
-    
     path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
 
-    const activeCategoryButton = document.querySelector('#category-filters .category-filter-btn.active');
-    
-    if (activeCategoryButton && activeCategoryButton.dataset.filter !== 'all') {
-        const categoryName = activeCategoryButton.textContent;
-        const categoryFilter = activeCategoryButton.dataset.filter;
+    // Helper to find a record by its filter-friendly name
+    const findRecordByName = (filterName) => {
+        return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
+    };
+
+    if (categoryFilter) {
+        const categoryRecord = findRecordByName(categoryFilter);
+        const categoryName = categoryRecord?.fields.Name || categoryFilter; // Fallback to filter value
         
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
-        filterCount++; // --- ADDED ---
+        filterCount++; 
         
         path.push(`<a href="#" class="breadcrumb-link" data-filter="${categoryFilter}">${categoryName}</a>`);
-        currentTitle = categoryName;
     }
 
-    const activeSubcategoryNodes = document.querySelectorAll('#subcategory-filters .filter-btn.active');
-    activeSubcategoryNodes.forEach(btn => {
-        const subcatName = btn.textContent;
-        activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', btn.dataset.filter));
-        filterCount++; // --- ADDED (counts each subcategory) ---
+    subcategoryFilters.forEach(subcatFilter => {
+        const subcatRecord = findRecordByName(subcatFilter);
+        const subcatName = subcatRecord?.fields.Name || subcatFilter;
+
+        activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', subcatFilter));
+        filterCount++; 
         path.push(`<span>${subcatName}</span>`);
-        currentTitle = subcatName;
     });
 
     // --- 4. Goals Chip ---
@@ -543,14 +546,13 @@ export function updateCatalogHeader() {
             'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
         ]);
 
-        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
+        const goalWords = goalsInput.split(/[\\s,]+/).filter(word => 
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
 
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
                 activeFiltersHtml.push(createFilterChip(`Goal: ${goal}`, 'goal-filter', goal));
-                // We don't count goals in the main filter count, as they are part of the "Recommended" sort
             }
         });
     }
@@ -560,17 +562,20 @@ export function updateCatalogHeader() {
     // A. Render Breadcrumb Path
     const pathContainer = document.createElement('div');
     pathContainer.id = 'breadcrumb-path-container';
-    if (path.length > 1 && !isSearchActive) { 
+    if (path.length > 1 || isSearchActive) { 
         pathContainer.innerHTML = path.join(' &gt; ');
+        breadcrumbsEl.appendChild(pathContainer);
+    } else {
+        // Show "All Categories" even if it's the only thing
+        pathContainer.innerHTML = `<span>All Categories</span>`;
         breadcrumbsEl.appendChild(pathContainer);
     }
 
-    // B. Render Active Filter Chips (with "Clear All" button)
+    // B. Render Active Filter Chips
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
         
-        // --- MODIFIED: Add "Clear All" button ---
         chipContainer.innerHTML = `
             <span class="chip-label">Active Filters:</span>
             ${activeFiltersHtml.join('')}
@@ -583,29 +588,12 @@ export function updateCatalogHeader() {
             button.addEventListener('click', handleFilterChipClear);
         });
         
-        // --- ADDED: Bind listener for "Clear All" button ---
         breadcrumbsEl.querySelector('#clear-all-chips-btn')?.addEventListener('click', () => {
-            // Programmatically click the main "Reset All Filters" button
             document.getElementById('reset-filters-btn')?.click();
         });
     }
-
-    // C. Render Title
-    let sortCue = '';
-    if (isRecommendedSort) {
-        sortCue = goalsInput && goalsInput.length > 0 ? ` (w/ Goals)` : ` (w/o Goals)`;
-    }
-
-    if (isSearchActive) {
-        titleEl.textContent = `Search: "${searchTerm}"` + sortCue;
-        titleEl.style.display = 'block';
-    } else if (path.length > 1) {
-        titleEl.textContent = currentTitle; 
-        titleEl.style.display = 'block';
-    } else {
-        titleEl.textContent = "All Categories" + (isRecommendedSort ? sortCue : "");
-        titleEl.style.display = 'block';
-    }
+    
+    // C. Render Title (REMOVED)
     
     // --- FINALLY: Update the filter count bubble ---
     const filterControlsEl = document.getElementById('filter-controls');
