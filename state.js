@@ -29,8 +29,8 @@ export let state = {
         filtered: [],
     },
     cart: {
-        items: new Map(),       // "Ideas" (formerly Favorites), populated by "Save for Later"
-        lockedItems: new Map(), // "Event Plan"
+        items: new Map(),       // \"Ideas\" (formerly Favorites), populated by \"Save for Later\"
+        lockedItems: new Map(), // \"Event Plan\"
         customItems: new Map(), // ADD THIS LINE: Holds AI-parsed item data
     },
     eventDetails: {
@@ -56,6 +56,10 @@ export let state = {
         reactions: new Map(),
         flaggedUsers: new Set(),
         bannedUsers: new Set(),
+        
+        // --- THIS IS THE NEW LINE ---
+        itemPositions: new Map(), // Stores { x: 120, y: 50, z: 1 } for each recordId
+        // --- END NEW LINE ---
     },
     calendar: {
         busyTimes: new Map(),
