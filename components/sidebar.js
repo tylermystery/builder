@@ -417,3 +417,16 @@ export function displayReservedStatus() {
         saveShareBtn.disabled = false;
     }
 }
+
+function updateCarouselNavState() {
+    const carousel = document.getElementById('favorites-carousel');
+    const leftNav = document.querySelector('.carousel-nav.left');
+    const rightNav = document.querySelector('.carousel-nav.right');
+    if (!carousel || !leftNav || !rightNav) return;
+
+    const atStart = carousel.scrollLeft < 10;
+    const atEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 10;
+
+    leftNav.style.display = atStart ? 'none' : 'block';
+    rightNav.style.display = atEnd ? 'none' : 'block';
+}
