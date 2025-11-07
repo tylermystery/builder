@@ -391,42 +391,50 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // --- START CONSOLIDATED BUTTON GENERATION --
     const categoryFiltersRoot = document.getElementById('category-filters'); 
     if (categoryFiltersRoot) { 
+        categoryFiltersRoot.innerHTML = ''; // Clear it first
+
         const planFilterBtn = document.createElement('button');
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
-        planFilterBtn.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            planFilterBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'plan' });
-            applyFiltersAndSort(imageCache);
-        });
         categoryFiltersRoot.appendChild(planFilterBtn);
-
 
         const likesFilterBtn = document.createElement('button');
         likesFilterBtn.className = 'filter-btn';
         likesFilterBtn.id = 'liked-items-filter-btn';
         likesFilterBtn.textContent = '❤️ My Likes';
-        likesFilterBtn.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            likesFilterBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'likes' });
-            applyFiltersAndSort(imageCache);
-        });
         categoryFiltersRoot.appendChild(likesFilterBtn);
 
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active'; // Default to active
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
-        allButton.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            allButton.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: null });
-            applyFiltersAndSort(imageCache);
-        });
         categoryFiltersRoot.appendChild(allButton);
+
+        // --- THIS IS THE NEW LOGIC THAT WAS MISSING ---
+        const currentStore = state.stores.all.find(r => r.id === state.ui.activeShopId);
+        if (currentStore && Array.isArray(currentStore.fields.Items)) {
+            const categoryRecordIds = currentStore.fields.Items;
+            // Find all records that are a) in the store's item list, b) are 'Grouping' type, and c) have no parent
+            const categories = categoryRecordIds
+                .map(id => state.records.all.find(record => 
+                    record.id === id && 
+                    record.fields['Item Type'] === 'Grouping' && 
+                    !record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]
+                ))
+                .filter(Boolean); // Filter out any undefineds
+
+            categories.sort((a, b) => (a.fields.Name || '').localeCompare(b.fields.Name || ''));
+
+            categories.forEach((catRecord) => {
+                const button = document.createElement('button');
+                button.className = 'filter-btn category-filter-btn';
+                button.dataset.filter = catRecord.fields.Name.toLowerCase();
+                button.textContent = catRecord.fields.Name;
+                categoryFiltersRoot.appendChild(button);
+            });
+        }
+        // --- END NEW LOGIC ---
 
     }  else {
         console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
@@ -437,7 +445,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const container = document.getElementById(elementId)?.parentElement;
         if (container) {
             if (elementId === 'subcategory-filters') {
-                container.style.display = 'none';
+                container.style.display = 'none'; // Always hide subcats
             } else {
                 container.style.display = shopSettings.enabledFilters.includes(settingName) ? 'flex' : 'none';
             }
@@ -449,6 +457,33 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     toggleFilter('headcount-filter', 'Headcount');
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
+
+    // This listener is now for the whole #category-filters container
+    safeAddEventListener('category-filters', 'click', (e) => {
+        const clickedBtn = e.target.closest('.filter-btn');
+        if (!clickedBtn) return;
+
+        // De-activate all buttons in this group
+        categoryFiltersRoot.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        // Activate the one that was clicked
+        clickedBtn.classList.add('active');
+
+        // Handle URL update based on which button was clicked
+        if (clickedBtn.id === 'plan-filter-btn') {
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
+        } else if (clickedBtn.id === 'liked-items-filter-btn') {
+            updateUrl({ category: null, subcategory: null, view: 'likes' });
+        } else {
+            // This is a category button (or "All")
+            const newCategory = clickedBtn.dataset.filter === 'all' ? null : clickedBtn.dataset.filter;
+            updateUrl({ category: newCategory, subcategory: null, view: null });
+        }
+
+        // Re-run filters
+        applyFiltersAndSort(imageCache);
+    });
+
+    // Subcategory listener is no longer needed and has been removed.
 
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     
@@ -469,7 +504,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
-                (new URLSearchParams(window.location.search).get('category') !== null);
+                (new URLSearchParams(window.location.search).get('category') != null);
             
             if (!hasOtherFilters) {
                 handleProactiveAISearch(searchTerm, imageCache);
@@ -600,8 +635,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
-            updateUrl({ category: categoryToFilter, subcategory: null, view: null });
-            applyFiltersAndSort(imageCache);
+            // Find the matching category button
+            const categoryButton = document.querySelector(`#category-filters .filter-btn[data-filter="${categoryToFilter}"]`);
+            
+            if (categoryButton) {
+                categoryButton.click(); 
+            } else {
+                 log('Events', `Error: Could not find matching category filter button for: ${categoryToFilter}`);
+            }
             
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
         }
@@ -618,12 +659,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (breadcrumbLink) {
             e.preventDefault();
             const filterValue = breadcrumbLink.dataset.filter;
-            if (filterValue === 'all') {
-                updateUrl({ category: null, subcategory: null, view: null });
-            } else {
-                updateUrl({ category: filterValue, subcategory: null, view: null });
+            // Find the button and click it to trigger the main listener
+            const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${filterValue}"]`);
+            if (targetButton) {
+                targetButton.click();
             }
-            applyFiltersAndSort(imageCache);
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
@@ -671,11 +711,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
+                // Find the parent record to get its filter-friendly name
                 const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
                 if (parentRecord) {
                     const parentFilterName = parentName.toLowerCase(); 
-                    updateUrl({ category: parentFilterName, subcategory: null, view: null });
-                    applyFiltersAndSort(imageCache);
+                    // Find the button and click it
+                    const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${parentFilterName}"]`);
+                    if (targetButton) {
+                        targetButton.click();
+                    }
                     
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                         updateUrl({ openItem: null });
@@ -716,7 +760,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
     
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
+                            console.log('[Events] "My Likes" filter active, reapplying filters...');
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
@@ -763,7 +807,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      ui.showLoginPromptForLikes();
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
+                      console.log('[Events] "My Likes" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
             }
@@ -845,12 +889,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
                  if (!parentName) {
-                     updateUrl({ category: groupNameLower, subcategory: null, view: null });
+                     // This is a top-level category, find and click its button
+                     const targetButton = document.querySelector(`#category-filters .filter-btn[data-filter="${groupNameLower}"]`);
+                     if (targetButton) targetButton.click();
                  } else {
+                     // This is a subcategory
                      const parentNameLower = parentName.toLowerCase();
-                     updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
+                     
+                     // 1. Click the parent category button
+                     const parentButton = document.querySelector(`#category-filters .filter-btn[data-filter="${parentNameLower}"]`);
+                     if (parentButton) parentButton.click();
+                     
+                     // 2. Update the URL for the subcategory
+                     updateUrl({ subcategory: groupNameLower });
+                     
+                     // 3. Re-filter
+                     applyFiltersAndSort(imageCache);
                  }
-                 applyFiltersAndSort(imageCache);
 
             } else {
                 ui.showDetailModal(record);
