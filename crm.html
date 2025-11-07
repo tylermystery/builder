@@ -192,7 +192,7 @@
                 <div id="chat-pane" class="chat-pane" style="display: none;">
                     <div class="pane-header">
                         <h3 id="chat-header-title">Chat</h3>
-                        <a id="chat-open-link" href="#" target="_blank" class="open-new-tab">Open in New Tab ↗</a>
+                        <a id="chat-open-link" href="#" target="\_blank" class="open-new-tab">Open in New Tab ↗</a>
                     </div>
                     <div id="chat-messages" class="chat-messages"></div>
                     <form id="chat-form">
@@ -206,7 +206,8 @@
     </div>
 
     <script>
-        // --- PAGE PROTECTION SCRIPT ---\n        const AUTH_KEY = 'tmt-crm-auth-token';
+        // --- PAGE PROTECTION SCRIPT ---
+        const AUTH_KEY = 'tmt-crm-auth-token';
         const isAuthenticated = sessionStorage.getItem(AUTH_KEY);
         if (!isAuthenticated) {
             window.location.href = '/crm-login.html';
