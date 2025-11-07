@@ -58,7 +58,7 @@ export function updateCardIcon(recordId) {
 }
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
-    log('Card', `Creating card for \"${record.fields.Name}\\\"`);
+    log('Card', `Creating card for \"${record.fields.Name}\"`);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
@@ -81,7 +81,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         
         // Only show score if it's meaningful (i.e., > 0)
         if (score > 0) {
-            scoreBanner = `<div class=\"score-banner\">⭐ ${score.toFixed(0)} Points</div>`;
+            // --- THIS IS THE CHANGE ---
+            scoreBanner = `<div class="score-banner">⭐ ${score.toFixed(0)} Points<span class='beta-tag-subtle'>Beta</span></div>`;
+            // --- END THE CHANGE ---
         }
     }
     // --- ^^^ END NEW SCORE LOGIC ^^^
@@ -113,21 +115,21 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const imageResults = await Promise.all(imagePromises);
         const collageImages = imageResults.flatMap(res => res.imageUrls);
 
-        let imageContainerHTML = `<div class=\"event-card-image-container collage-container\">`;
+        let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
-            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class=\"collage-image lazy-load\" data-bg-image=\"${url}\"></div>`).join('');
+            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
         } else {
-            imageContainerHTML += `<div class=\"collage-image lazy-load\" data-bg-image=\"${imageUrlToLoad}\"></div>`;
+            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
             ${imageContainerHTML}
-            <div class=\"event-card-content\">
+            <div class="event-card-content">
                 <h3>${fields.Name || 'Untitled Category'}</h3>
-                <p class=\"description\">${fields.Description || ''}</p>
+                <p class="description">${fields.Description || ''}</p>
             </div>
-            <div class=\"card-footer\">
-                <button class=\"card-action-btn view-options-btn\">View Collection (${childItems.length})</button>
+            <div class="card-footer">
+                <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
         return groupingCard;
@@ -140,25 +142,25 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const day = eventDate ? eventDate.getDate() : '??';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
-        const rsvpButtonHTML = `<button class=\"card-action-btn rsvp-btn\" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
 
         eventCard.innerHTML = `
-            <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">
-                <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
+            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+                <div class="heart-icon" data-record-id="${record.id}"></div>
                 ${partnerBadge} 
                 ${scoreBanner} 
             </div>
-            <div class=\"event-card-content\">
-                <div class=\"event-date-display\">
-                    <span class=\"month\">${month}</span>
-                    <span class=\"day\">${day}</span>
+            <div class="event-card-content">
+                <div class="event-date-display">
+                    <span class="month">${month}</span>
+                    <span class="day">${day}</span>
                 </div>
-                <div class=\"event-details\">
+                <div class="event-details">
                     <h3>${fields.Name || 'Untitled Event'}</h3>
-                    <p class=\"description\">${fields.Description || ''}</p>
+                    <p class="description">${fields.Description || ''}</p>
                 </div>
             </div>
-            <div class=\"card-footer\">
+            <div class="card-footer">
                 ${rsvpButtonHTML}
             </div>
         `;
@@ -170,25 +172,25 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class=\"quantity-selector\"><button class=\"quantity-btn minus\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\">+</button></div>`;
+    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\">/ ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
-    const addToPlanBtnHTML = `<button class=\"card-action-btn add-to-plan-btn\" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
-        <div class=\"event-card-image-container lazy-load\" data-bg-image=\"${imageUrlToLoad}\">
-            <div class=\"heart-icon\" data-record-id=\"${record.id}\"></div>
+        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="heart-icon" data-record-id="${record.id}"></div>
             ${partnerBadge} 
             ${scoreBanner} 
             </div>
-        <div class=\"event-card-content\">
+        <div class="event-card-content">
             <h3>${fields.Name || 'Untitled Event'}</h3>
-            <p class=\"description\">${fields.Description || ''}</p>
+            <p class="description">${fields.Description || ''}</p>
         </div>
-        <div class=\"card-footer\">
-            <div class=\"price-wrapper\"><div class=\"price\">${priceHTML}</div></div>
-            <div class=\"actions-wrapper\">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
+        <div class="card-footer">
+            <div class="price-wrapper"><div class="price">${priceHTML}</div></div>
+            <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
