@@ -49,19 +49,20 @@ function generateRecommendationBlurb(record) {
             !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Extras"].includes(g.toLowerCase())
         );
 
-        if (displayGoals.length > 2) {
-            goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
-        } else if (displayGoals.length > 0) {
-            goalString = `'${displayGoals.join("' and '")}'`;
-        }
+if (displayGoals.length > 2) {
+        goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
+    } else if (displayGoals.length > 0) {
+        goalString = `'${displayGoals.join("' and '")}'`;
+    }
 
-        // --- THIS IS THE FIX: Using a template literal (`) ---
+    if (goalString) {
+        // --- THIS IS THE FIX: Template literal is now correctly wrapped and the rogue '}' is removed ---
         return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
     }
 
     return null; // No match
 }
-
+    
 let stripe;
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
