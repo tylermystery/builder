@@ -1074,8 +1074,7 @@ export function openChatWidget(andKeepOpen = false) {
     }
 }
 
-    // And add the handleFilterChipClear function to the end of events.js
-    function handleFilterChipClear(e) {
+function handleFilterChipClear(e) {
         // This is a dummy function to route the click back to ui.js logic 
         // to prevent deep import dependency issues. It requires ui.js to be loaded.
         if (typeof ui.handleFilterChipClear === 'function') {
