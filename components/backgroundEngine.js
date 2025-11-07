@@ -72,11 +72,11 @@ function animationLoop(timestamp) {
  * Public API: Called by events.js to add "energy" to the animation.
  * This will only affect WebGL shaders that use the 'energy' uniform.
  */
-export function addEnergy(weight = 1.0) {
-    log('BG-Engine', `Adding energy: ${weight}`);
-    // Add (or subtract) the weight and clamp the value between -1.0 and 1.0
-    currentEnergy = Math.max(-1.0, Math.min(1.0, currentEnergy + weight));
+export function addEnergy() {
+    log('BG-Engine', 'Adding energy boost!');
+    currentEnergy = 1.0; // Set energy to max
 }
+
 /**
  * Public API: Updates the color progress variable based on user action.
  * @param {number} weight - The positive or negative value to add to progress.
