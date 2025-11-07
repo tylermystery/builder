@@ -14,7 +14,7 @@ import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce, updateUrl } from './utils.js'; // Added updateUrl import
 // Corrected import line below:
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget, updateSubcategoryButtons } from './events.js'; // Added updateSubcategoryButtons here
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js'; // NEW IMPORT
 
@@ -65,57 +65,30 @@ window.applyFiltersAndSort = applyFiltersAndSort;
 function syncUiWithUrl() {
     console.log('[syncUiWithUrl] Fired. Current URL:', window.location.href);
     const params = new URLSearchParams(window.location.search);
-    const category = params.get('category');
-    const subcategories = params.get('subcategory')?.split(',');
     const openItemId = params.get('openItem');
     const view = params.get('view');
-    console.log('[syncUiWithUrl] Parsed params:', { view, category, subcategories, openItemId });
 
     // Close any open overlays first
     ui.hideDetailModal();
     ui.hideItineraryModal();
     ui.hidePresentationView();
 
-    // --- Sync Category/View Buttons ---
+    // --- Sync 'My Plan'/'My Likes' Button Active State ---
     const categoryFilters = document.getElementById('category-filters');
-    if (categoryFilters) { // Add safety check
+    if (categoryFilters) {
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-
-        // Determine which main filter button should be active
+        let buttonToActivate;
         if (view === 'plan') {
-            document.getElementById('plan-filter-btn')?.classList.add('active');
+            buttonToActivate = document.getElementById('plan-filter-btn');
         } else if (view === 'likes') {
-            document.getElementById('liked-items-filter-btn')?.classList.add('active');
-        } else if (category) {
-            document.querySelector(`#category-filters .filter-btn[data-filter="${category}"]`)?.classList.add('active');
+            buttonToActivate = document.getElementById('liked-items-filter-btn');
         } else {
-            // Default to 'All' if no specific view or category is set
-            document.querySelector(`#category-filters .filter-btn[data-filter="all"]`)?.classList.add('active');
+            buttonToActivate = categoryFilters.querySelector('.filter-btn[data-filter="all"]');
         }
+        if (buttonToActivate) buttonToActivate.classList.add('active');
     }
 
-    // --- Sync Subcategory Buttons ---
-    const subcategoryFilters = document.getElementById('subcategory-filters');
-     if (subcategoryFilters) { // Add safety check
-         // Make sure subcategories are generated based on the active category first
-         // Check if updateSubcategoryButtons is defined before calling
-         if (typeof updateSubcategoryButtons === 'function') {
-              updateSubcategoryButtons(); // Ensure correct subcats are visible
-         } else {
-              console.error("updateSubcategoryButtons is not defined or imported correctly.");
-         }
-
-
-         subcategoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-         if (subcategories && view !== 'plan' && view !== 'likes') { // Only apply subcat selection if not in special views
-             subcategories.forEach(subcat => {
-                 subcategoryFilters.querySelector(`.filter-btn[data-filter="${subcat}"]`)?.classList.add('active');
-             });
-         }
-     }
-
-    // Re-apply filters based on the synced UI state
-    // Check if applyFiltersAndSort is defined before calling
+    // Re-apply filters based on the URL
     if (typeof applyFiltersAndSort === 'function') {
         applyFiltersAndSort(imageCache);
     } else {
@@ -123,7 +96,6 @@ function syncUiWithUrl() {
     }
 
     // --- Handle opening modals/views based on URL ---
-    // Use setTimeout to allow filters to apply and DOM to update first
     setTimeout(() => {
         if (view === 'present') {
             ui.showPresentationView('ideas'); // Changed from 'favorites'
@@ -135,14 +107,10 @@ function syncUiWithUrl() {
                 ui.showDetailModal(recordToOpen);
             } else {
                 console.warn(`[syncUiWithUrl] Record ID ${openItemId} not found in state.records.all.`);
-                // Optionally remove invalid openItem param from URL
-                // updateUrl({ openItem: null });
             }
         }
-        // No specific action needed for view=likes or view=plan here, applyFiltersAndSort handles the main content area
     }, 100); // Small delay
 }
-
 
 // REPLACE the entire initialize function in: main.js
 
