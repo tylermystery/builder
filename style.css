@@ -2438,3 +2438,32 @@ hr.total-divider {
 .filter-chip-clear-all:hover {
     color: #0056b3;
 }
+
+/* --- Beta Feature Tags --- */
+
+/* For subtle, inline tags (e.g., in headers) */
+.beta-tag-subtle {
+    font-size: 0.6em;
+    background: #fd7e14; /* Orange */
+    color: white;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: super;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* For obvious banners at the top of modals */
+.beta-banner {
+    background-color: #fff3cd; /* Light yellow */
+    border-bottom: 1px solid #ffeeba;
+    color: #856404;
+    font-weight: 500;
+    padding: 12px 20px;
+    text-align: center;
+    font-size: 0.9em;
+    width: 100%;
+    box-sizing: border-box;
+}
