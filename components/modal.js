@@ -13,21 +13,21 @@ import { initializeItemChat } from '../chat.js';
 // Action: REPLACE the entire `generateRecommendationBlurb` function (around line 123)
 
 /**
- * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
- * @param {object} record - The item record being displayed.
- * @returns {string | null} The HTML string for the blurb, or null.
+ * [V3.7] Generates the \"Intelligent Blurb\" by calling the central recommendation engine.\
+ * @param {object} record - The item record being displayed.\
+ * @returns {string | null} The HTML string for the blurb, or null.\
  */
 function generateRecommendationBlurb(record) {
-    // --- THIS IS THE FIX ---
+    // --- THIS IS THE FIX ---\
     // Get the current sort value from the DOM
     const sortBy = document.getElementById('sort-by')?.value || 'recommended';
     
     // 1. Get the current goal bucket, passing the sortBy value
     const goalBucket = buildGoalBucket(sortBy); // This import already exists
-    // --- END FIX ---
+    // --- END FIX ---\
     
     if (goalBucket.length === 0) {
-        return "<strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
+        return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
     }
 
     // 2. Call the ONE, TRUE scoring function from availability.js
@@ -36,23 +36,23 @@ function generateRecommendationBlurb(record) {
     // 3. Check if the item scored well
     if (score > 0) {
         // Create a simple, robust blurb
-        let goalString = "goals"; // Default
+        let goalString = \"goals\"; // Default
         
-        // Filter out pillar names (like "Food & Drink") from the blurb for cleaner text
+        // Filter out pillar names (like \"Food & Drink\") from the blurb for cleaner text
         const displayGoals = goalBucket.filter(g => 
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Activity"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Food & Drink"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Venues"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Extras"].includes(g.toLowerCase())
+            !ATTRIBUTE_TO_KEYWORDS_MAP[\"Pillars.Activity\"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP[\"Pillars.Food & Drink\"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP[\"Pillars.Venues\"].includes(g.toLowerCase()) &&
+            !ATTRIBUTE_TO_KEYWORDS_MAP[\"Pillars.Extras\"].includes(g.toLowerCase())
         );
 
         if (displayGoals.length > 2) {
-            goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
+            goalString = `'${displayGoals.slice(0, -1).join(\"', '\")}', and '${displayGoals.slice(-1)}'`;
         } else if (displayGoals.length > 0) {
-            goalString = `'${displayGoals.join("' and '")}'`;
+            goalString = `'${displayGoals.join(\"' and '\")}'`;
         }
 
-        return `<strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
+        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you:</strong> This item is a good match for your ${goalString} goals.`;
     }
 
     return null; // No match
@@ -84,7 +84,7 @@ function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
-    const choice = document.querySelector('input[name=\"paymentChoice\"]:checked')?.value || 'deposit';
+    const choice = document.querySelector('input[name=\\\"paymentChoice\\\"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue;
     
     const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
@@ -164,7 +164,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     ];
 
     console.log('[showDetailModal] Called for item:', record.id);
-    log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
+    log('Modal', `Showing detail modal for \\\"${record.fields.Name}\\\"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
     const modalItemName = document.getElementById('modal-item-name');
@@ -235,20 +235,20 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 const detailItem = document.createElement('div');
                 detailItem.className = 'detail-item';
                 detailItem.innerHTML = `
-                    <span class=\"detail-label\">${spec.label}</span>
-                    <span class=\"detail-value\">${String(value).replace(/\n/g, '<br>')}</span>
+                    <span class=\\\"detail-label\\\">${spec.label}</span>\
+                    <span class=\\\"detail-value\\\">${String(value).replace(/\\n/g, '<br>')}</span>\
                 `;
                 fragment.appendChild(detailItem);
             }
         });
 
-        // --- THIS IS THE CHANGE ---
+        // --- THIS IS THE CHANGE ---\
         const rankingsJsonString = record.fields['AI_Profile'] || record.fields['Rankings'];
-        // --- END CHANGE ---
+        // --- END CHANGE ---\
         
         if (rankingsJsonString) {
             try {
-                // --- V2.1: Check for new profile structure ---
+                // --- V2.1: Check for new profile structure ---\
                 const rankingsObject = JSON.parse(rankingsJsonString);
                 
                 let displayRankings = {};
@@ -269,16 +269,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                             // Show 0-10 scale as 0-5 stars
                             const stars = '★'.repeat(Math.round(value / 2)) + '☆'.repeat(Math.max(0, 5 - Math.round(value / 2)));
                             rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">\
-                                    <span class=\"ranking-label\">${label}:</span>
-                                    <span class=\"ranking-stars\">${stars}</span>
-                                </div>
+                                <div class=\\\"ranking-item\\\">\\\
+                                    <span class=\\\"ranking-label\\\">${label}:</span>\
+                                    <span class=\\\"ranking-stars\\\">${stars}</span>\
+                                </div>\
                             `);
                         }
                     }
                 }
             } catch (error) {
-                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);
+                console.error(`[Modal Debug] Error parsing Rankings JSON for item ${record.id}:`, error);\
             }
         }
 
@@ -286,8 +286,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             const rankingContainer = document.createElement('div');
             rankingContainer.className = 'ranking-list detail-item';
             rankingContainer.innerHTML = `
-                <span class=\"detail-label\">Rankings</span>
-                ${rankingsHtmlParts.join('')}
+                <span class=\\\"detail-label\\\">Rankings</span>\
+                ${rankingsHtmlParts.join('')}\
             `;
             fragment.appendChild(rankingContainer);
         }
@@ -299,7 +299,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
-    const pricingTypeHTML = pricingType ? `<span class=\"pricing-type\"> / ${pricingType.toLowerCase()}</span>` : '';
+    const pricingTypeHTML = pricingType ? `<span class=\\\"pricing-type\\\"> / ${pricingType.toLowerCase()}</span>` : '';
 
     if (isGrouping) {
         const range = getGroupPriceRange(record);
@@ -333,7 +333,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {
-        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\"parent-link\" data-parent-name=\"${name}\" title=\"Go to ${name}\">${name}</a>`).join(' > ');
+        modalBreadcrumbs.innerHTML = breadcrumbs.map(name => `<a class=\\\"parent-link\\\" data-parent-name=\\\"${name}\\\" title=\\\"Go to ${name}\\\">${name}</a>`).join(' > ');
     }
 
     const heartBtnContainer = document.createElement('div');
@@ -355,7 +355,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         } else if (opt.priceChange !== null) {
             priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
         }
-        optionButton.innerHTML = `${opt.name} <span class=\"price-mod\">${priceModText}</span>`;
+        optionButton.innerHTML = `${opt.name} <span class=\\\"price-mod\\\">${priceModText}</span>`;
 
         if (allRecordNames.has(opt.name)) {
             optionButton.dataset.childName = opt.name;
@@ -375,9 +375,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
                 e.currentTarget.classList.add('selected');
                 const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                e.currentTarget.dispatchEvent(new CustomEvent('change', {
-                    bubbles: true,
-                    detail: { selectedOptionIndex: newIndex }
+                e.currentTarget.dispatchEvent(new CustomEvent('change', {\
+                    bubbles: true,\
+                    detail: { selectedOptionIndex: newIndex }\
                 }));
                 modalItemDescription.textContent = opt.description || record.fields.Description || '';
                 const newPrice = getRecordPrice(record, newIndex);
@@ -387,14 +387,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalOptionsContainer.appendChild(optionButton);
     });
 
-    // --- THIS IS THE FIX ---\
+    // --- THIS IS THE FIX ---\\\
     // The listeners are now MOVED INSIDE this `if` block
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class=\"quantity-selector\" data-record-id=\"${record.id}\"><button class=\"quantity-btn minus\" aria-label=\"Decrease quantity\">-</button><input type=\"number\" class=\"quantity-input\" value=\"${itemState.quantity}\" min=\"${headcountMin}\"><button class=\"quantity-btn plus\" aria-label=\"Increase quantity\">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class=\\\"quantity-selector\\\" data-record-id=\\\"${record.id}\\\"><button class=\\\"quantity-btn minus\\\" aria-label=\\\"Decrease quantity\\\">-</button><input type=\\\"number\\\" class=\\\"quantity-input\\\" value=\\\"${itemState.quantity}\\\" min=\\\"${headcountMin}\\\"><button class=\\\"quantity-btn plus\\\" aria-label=\\\"Increase quantity\\\">+</button></div>`;
         
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
@@ -409,7 +409,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'none';
         modalQuantitySelector.innerHTML = '';
     }
-    // --- END THE FIX ---\
+    // --- END THE FIX ---\\\
 
     modalCalendarContainer.innerHTML = '';
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
@@ -435,7 +435,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `${status.reason}\\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;\
                 } else {
                     className = 'unavailable';
                 }
@@ -573,15 +573,15 @@ export async function showCheckoutModal(shopSettings) {
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
+            noteHtml = `<small class=\\\"checkout-summary-note\\\">Note: ${itemInfo.note}</small>`;
         }
         
         listItem.innerHTML = `
-            <div class=\"summary-item-details\">\
-                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
-                ${noteHtml}
-            </div>
-            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>
+            <div class=\\\"summary-item-details\\\">\\\
+                <span class=\\\"summary-item-name\\\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>\
+                ${noteHtml}\
+            </div>\
+            <span class=\\\"summary-item-price\\\">$${itemTotal.toFixed(2)}</span>\
         `;
         summaryList.appendChild(listItem);
     }
@@ -592,7 +592,7 @@ export async function showCheckoutModal(shopSettings) {
     fullTotalEl.dataset.total = finalTotal;
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+        document.querySelectorAll('input[name=\\\"paymentChoice\\\"]').forEach(radio => {
             radio.addEventListener('change', updateCheckoutDisplay);
         });
     } else {
@@ -600,7 +600,7 @@ export async function showCheckoutModal(shopSettings) {
     }
 
     if (termsContainer && currentShopSettings.terms) {
-        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\n/g, '<br>')}</p>`;
+        termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
     updateCheckoutDisplay();
@@ -615,13 +615,13 @@ export async function showCheckoutModal(shopSettings) {
         cardElement.mount('#card-element');
         checkoutModalOverlay.cardElement = cardElement;
         checkoutModalOverlay.classList.add('active');
-        setTimeout(() => {
+        setTimeout(() => {\
             checkoutModalOverlay.style.display = 'flex';
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
         }, 0);
         document.body.classList.add('modal-open');
     } catch (err) {
-        console.error("Failed to initialize payment form:", err);
+        console.error(\"Failed to initialize payment form:\", err);
         alert(`Could not initialize payment form: ${err.message}. Please try again later.`);
         hideCheckoutModal();
     }
@@ -634,7 +634,7 @@ export function hideCheckoutModal() {
             checkoutModalOverlay.removeEventListenerOnClick();
         }
         document.getElementById('tip-amount')?.removeEventListener('input', updateCheckoutDisplay);
-        document.querySelectorAll('input[name=\"paymentChoice\"]').forEach(radio => {
+        document.querySelectorAll('input[name=\\\"paymentChoice\\\"]').forEach(radio => {
             radio.removeEventListener('change', updateCheckoutDisplay);
         });
         checkoutModalOverlay.classList.remove('active');
