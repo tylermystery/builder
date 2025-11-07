@@ -613,19 +613,17 @@ export function handleFilterChipClear(e) {
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
-    if (type === 'goal-filter') {
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---\n    if (type === 'goal-filter') {
         // Action: Clearing a goal chip removes the word from the goals input text
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/\s*,\s*|\s+/).filter(Boolean);
+            const goalWords = goalsInput.value.split(/\\s*,\\s*|\\s+/).filter(Boolean);
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             // 1. Update the input field
             goalsInput.value = updatedGoals;
             
-            // 2. Clear the input field's change event (this triggers save)
-            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
+            // 2. Clear the input field's change event (this triggers save)\n            goalsInput.dispatchEvent(new Event('change', { bubbles: true }));
             
             // 3. Re-run filters
             applyFilters();
@@ -633,10 +631,7 @@ export function handleFilterChipClear(e) {
             return; // Exit as goal logic is complete
         }
     }
-    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
-
-
-    // 1. Clear the filter state based on type (for non-goal chips)
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^\n\n\n    // 1. Clear the filter state based on type (for non-goal chips)
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
@@ -657,18 +652,20 @@ export function handleFilterChipClear(e) {
             const datePicker = document.getElementById('date-filter')?._flatpickr;
             if (datePicker) {
                  datePicker.clear();
-                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-            }
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);\n            }
             break;
+        // --- NEW URL-BASED LOGIC ---
         case 'category-filter':
-            // Simulate clicking the 'All' button to clear the category filter
-            const allButton = document.querySelector('#category-filters .category-filter-btn[data-filter=\"all\"]');
-            if (allButton) allButton.click();
-            return;
+            updateUrl({ category: null, subcategory: null, view: null });
+            break;
         case 'subcategory-filter':
-            const subcatButton = document.querySelector(`#subcategory-filters .filter-btn[data-filter=\"${value}\"]`);
-            if (subcatButton) subcatButton.click();
-            return;
+            // Read current subcats, remove this one, and update the URL
+            const params = new URLSearchParams(window.location.search);
+            const subcats = params.get('subcategory')?.split(',').filter(Boolean) || [];
+            const newSubcats = subcats.filter(s => s !== value);
+            updateUrl({ subcategory: newSubcats.join(',') || null });
+            break;
+        // --- END NEW LOGIC ---
     }
     
     // 2. Re-run filters and update UI
