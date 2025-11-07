@@ -1028,6 +1028,8 @@ body.modal-open {
     color: #333;
     transform: scale(0.8);
     transition: transform 0.3s ease, opacity 0.3s ease;
+    max-height: 90vh; /* <-- ADD THIS */
+    overflow-y: auto; /* <-- ADD THIS */
 }
 .modal-overlay.active .checkout-modal-content {
     transform: scale(1);
