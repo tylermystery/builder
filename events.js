@@ -17,7 +17,7 @@ import { addEnergy } from './components/backgroundEngine.js';
 let mainDatePicker = null;
 let saveTimeout = null;
 let saveShareBtn = null;
-let aiSearchController = null; // --- ADDED THIS LINE ---
+let aiSearchController = null;
 
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
@@ -124,8 +124,6 @@ async function handlePaymentFormSubmit(event) {
     buttonText.style.display = 'none';
     spinner.style.display = 'inline';
 
-    // --- THIS IS THE CHANGE ---
-    // Get stripe and elements from the new context
     const { stripe, elements } = ui.getStripeContext();
     
     if (!stripe || !elements) {
@@ -140,11 +138,9 @@ async function handlePaymentFormSubmit(event) {
         const customerName = document.getElementById('customer-name').value;
         const customerEmail = document.getElementById('customer-email').value;
 
-        // Use confirmPayment, not confirmCardPayment
         const { error, paymentIntent } = await stripe.confirmPayment({
             elements,
             confirmParams: {
-                // This URL isn't really used with redirect: 'if_required', but it's good practice.
                 return_url: `${window.location.origin}${window.location.pathname}?payment_success=true`,
                 payment_method_data: {
                     billing_details: {
@@ -153,9 +149,8 @@ async function handlePaymentFormSubmit(event) {
                     },
                 },
             },
-            redirect: 'if_required', // Don't redirect unless necessary (e.g., 3DS)
+            redirect: 'if_required', 
         });
-        // --- END CHANGE ---
 
         if (error) {
             if (error.type === "card_error" || error.type === "validation_error") {
@@ -187,7 +182,6 @@ async function handlePaymentFormSubmit(event) {
             document.getElementById('checkout-summary-details').style.display = 'none';
             document.querySelector('.checkout-total-deposit-section').style.display = 'none';
             
-            // Hide new fee/total rows on success
             const feeRow = document.querySelector('.processing-fee-row');
             const totalRow = document.querySelector('.final-total-row');
             const divider = document.querySelector('.total-divider');
@@ -209,12 +203,6 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-// --- V2.1: REPLACE THIS ENTIRE FUNCTION ---
-/**
- * Triggers a "ghost card" and dummy AI parse when a search yields no local results.
- * @param {string} searchTerm The user's search query.
- * @param {Map} imageCache The global imageCache.
- */
 async function handleProactiveAISearch(searchTerm, imageCache) {
     if (aiSearchController) {
         aiSearchController.abort();
@@ -225,9 +213,8 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
 
-    // 1. Inject the "Ghost Card" (Loading State)
     const ghostRecord = {
-        id: `ai-search-${Date.now()}`, // Temporary ID
+        id: `ai-search-${Date.now()}`,
         fields: {
             Name: `Searching for "${searchTerm}"...`,
             Description: "Our AI is looking for this item in the Bay Area...",
@@ -247,31 +234,21 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     catalogContainer.appendChild(ghostCard);
 
     try {
-        // --- START V2.1: DUMMY DATA WORKAROUND ---
         log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
-        await new Promise(res => setTimeout(res, 1500)); // Simulate network delay
+        await new Promise(res => setTimeout(res, 1500)); 
         if (signal.aborted) return;
 
-        // This is the fake data the "API" (process-weblink.js) would return
         const webData = {
             Name: `[DUMMY] ${searchTerm}`,
             Description: "This is a dummy item. The real AI-parsed description will go here.",
             Price: Math.floor(Math.random() * 100) + 10,
             ServiceType: "Partner Activity"
         };
-        // --- END V2.1 DUMMY ---
-
-        // (The real code would be:)
-        // const response = await fetch('/api/process-weblink', { ... });
-        // const webData = await response.json();
-        // ...
         
         log('Events', 'Proactive AI Parse Success:', webData);
         
         const customId = `custom-${Date.now()}`;
         
-        // --- V2.1: This is the KEY "INTERMIXING" LOGIC --
-        // Create a "record" object that mimics a real Airtable record
         const liveRecord = {
             id: customId,
             fields: {
@@ -281,9 +258,6 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                 ServiceType: webData.ServiceType,
                 'Item Type': 'Bookable Item',
                 Status: 'Available',
-                // --- V2.1: SIMULATE THE AI PROFILING ---
-                // In a real scenario, we'd call /api/profile-item
-                // For now, we'll inject a DUMMY profile.
                 Rankings: JSON.stringify({
                     "profileSource": "ai_v1_dummy_profile",
                     "Pillars": { "Activities": 10, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
@@ -292,7 +266,6 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                     "Physicality": { "Intensity": 5, "Accessibility": 5 },
                     "Tags": [searchTerm.toLowerCase(), "dummy", "partner activity"]
                 }),
-                // Add "null" placeholders for safety
                 Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
                 'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
                 Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
@@ -301,24 +274,8 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             }
         };
         
-        // (The *real* code would call our new function:)
-        // try {
-        //    log('Events', `Calling /api/profile-item for new item ${customId}`);
-        //    const profileResponse = await fetch('/api/profile-item', {
-        //        method: 'POST',
-        //        headers: { 'Content-Type': 'application/json' },
-        //        body: JSON.stringify({ recordId: customId }) // (This assumes customId exists in Airtable)
-        //    });
-        //    const profileData = await profileResponse.json();
-        //    liveRecord.fields.Rankings = JSON.stringify(profileData.profile);
-        // } catch (profileError) {
-        //    log('Events', `Could not profile new item: ${profileError.message}`);
-        // }
-        // --- END V2.1 ---
-        
         state.records.all.push(liveRecord);
 
-        // 4. Create the *real* card and replace the ghost card
         const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
         
         const addToPlanBtn = finalCard.querySelector('.add-to-plan-btn');
@@ -362,7 +319,6 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
         aiSearchController = null;
     }
 }
-// --- END V2.1 REPLACEMENT ---
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
@@ -409,7 +365,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     saveShareBtn = document.getElementById('save-share-btn');
-    // categoryFiltersContainer and subcategoryFiltersContainer removed
     let debugEnabled = false;
 
     const betaTrigger = document.getElementById('beta-trigger');
@@ -434,14 +389,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     // --- START CONSOLIDATED BUTTON GENERATION --
-    // We only generate the 'My Plan' and 'My Likes' buttons now
-    const categoryFiltersRoot = document.getElementById('category-filters'); // This is the new root container
+    const categoryFiltersRoot = document.getElementById('category-filters'); 
     if (categoryFiltersRoot) { 
         const planFilterBtn = document.createElement('button');
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
-        // Add click listener
         planFilterBtn.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             planFilterBtn.classList.add('active');
@@ -455,7 +408,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         likesFilterBtn.className = 'filter-btn';
         likesFilterBtn.id = 'liked-items-filter-btn';
         likesFilterBtn.textContent = '❤️ My Likes';
-        // Add click listener
         likesFilterBtn.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             likesFilterBtn.classList.add('active');
@@ -464,7 +416,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
         categoryFiltersRoot.appendChild(likesFilterBtn);
 
-        // We still need an 'All' button
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active'; // Default to active
         allButton.dataset.filter = 'all';
@@ -485,7 +436,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
         if (container) {
-            // We HIDE the subcategory filter group, but check the setting for others
             if (elementId === 'subcategory-filters') {
                 container.style.display = 'none';
             } else {
@@ -494,56 +444,45 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     };
 
-    toggleFilter('subcategory-filters', 'Subcategories'); // This will now just hide it
+    toggleFilter('subcategory-filters', 'Subcategories'); 
     toggleFilter('date-filter-group', 'Date & Time');
     toggleFilter('headcount-filter', 'Headcount');
     toggleFilter('location-filter', 'Location');
     toggleFilter('budget-filter', 'Budget');
 
-    // --- CATEGORY AND SUBCATEGORY LISTENERS REMOVED ---
-
     safeAddEventListener('status-filter', 'change', () => applyFiltersAndSort(imageCache));
     
-    // --- THIS IS THE MODIFIED LISTENER (V2.1) ---
     safeAddEventListener('name-filter', 'input', debounce((e) => {
         const searchTerm = e.target.value.trim();
         
         if (aiSearchController) {
-            aiSearchController.abort(); // Cancel any pending AI search
+            aiSearchController.abort(); 
         }
         
-        // --- V2.1: ALWAYS apply filters (sort will handle the search) ---
         applyFiltersAndSort(imageCache);
-        // --- END V2.1 ---
         
-        // This is the trigger
         if (state.records.filtered.length === 0 && searchTerm.length > 2) {
             log('Events', 'No local results, triggering proactive AI search.');
             
-            // Check if any other filters are active
             const hasOtherFilters = 
                 document.getElementById('status-filter').value !== 'Available' ||
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
-                // --- THIS CHECK IS NOW SIMPLIFIED ---
                 (new URLSearchParams(window.location.search).get('category') !== null);
             
             if (!hasOtherFilters) {
-                // Only run AI search if *only* the name filter is active
                 handleProactiveAISearch(searchTerm, imageCache);
             }
         }
     
         
-    }, 300)); // 300ms debounce
-    // --- END MODIFICATION --
-    // --- VVV NEW: Clear Search Button Listener VVV ---
+    }, 300)); 
+    
     safeAddEventListener('clear-search-btn', 'click', () => {
         handleFilterChipClear({ 
             target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button') 
         });
-        // We also ensure the focus stays off the search bar
         document.getElementById('name-filter').blur(); 
     });
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
@@ -558,13 +497,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
         
-        // --- THIS IS UPDATED ---
         const allButton = document.querySelector('#category-filters .filter-btn[data-filter="all"]');
         if (allButton) {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
         }
-        // --- END UPDATED ---
 
         document.getElementById('name-filter').value = '';
         document.getElementById('status-filter').value = 'Available';
@@ -632,7 +569,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (state.ui.isInitializing) return;
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
-        // Re-apply filters if "Recommended" sort is active
         if (document.getElementById('sort-by').value === 'recommended') {
             applyFiltersAndSort(imageCache);
         }
@@ -656,7 +592,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
 
-        // --- NEW/FIXED HEALTH SUGGESTION BUTTON LOGIC ---
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
 
         if (healthSuggestionBtn) {
@@ -665,16 +600,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
-            // --- THIS IS THE FIX ---
-            // Directly update the URL and re-apply filters
             updateUrl({ category: categoryToFilter, subcategory: null, view: null });
             applyFiltersAndSort(imageCache);
-            // --- END FIX ---
             
-            // 3. Scroll to the top of the catalog to show the results
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
         }
-        // --- END NEW/FIXED BLOCK ---
         
         else if (saveShareBtn) {
             navigator.clipboard.writeText(window.location.href).then(() => {
@@ -688,16 +618,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (breadcrumbLink) {
             e.preventDefault();
             const filterValue = breadcrumbLink.dataset.filter;
-            // --- THIS IS THE FIX ---
-            // Breadcrumb links now just update the URL and re-filter
             if (filterValue === 'all') {
                 updateUrl({ category: null, subcategory: null, view: null });
             } else {
-                // This assumes breadcrumb links are only for categories
                 updateUrl({ category: filterValue, subcategory: null, view: null });
             }
             applyFiltersAndSort(imageCache);
-            // --- END FIX ---
         } else if (checkoutBtn) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
@@ -735,7 +661,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateUrl({ view: 'present' });
             ui.showPresentationView(listType);
         } else if (carouselNav) {
-            const carousel = document.getElementById('ideas-carousel'); // Changed ID from favorites-carousel
+            const carousel = document.getElementById('ideas-carousel'); 
             if (carousel) {
                 const scrollAmount = 300;
                 const direction = carouselNav.classList.contains('right') ? 1 : -1;
@@ -745,11 +671,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             e.stopPropagation();
             const parentName = parentLink.dataset.parentName;
             if (parentName) {
-                // --- THIS IS THE FIX ---
-                // Find the parent record to get its filter-friendly name
                 const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
                 if (parentRecord) {
-                    const parentFilterName = parentName.toLowerCase(); // Assuming filter name is just lowercase
+                    const parentFilterName = parentName.toLowerCase(); 
                     updateUrl({ category: parentFilterName, subcategory: null, view: null });
                     applyFiltersAndSort(imageCache);
                     
@@ -758,9 +682,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         ui.hideDetailModal();
                     }
                 }
-                // --- END FIX ---
             }
-        // --- CORRECTLY PLACED HEART ICON LOGIC --
         } else if (heartIcon) {
             e.stopPropagation();
             addEnergy(); 
@@ -846,7 +768,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  }
             }
         }
-        // --- END HEART ICON LOGIC --
         
         else if (addToPlanBtn) {
             e.stopPropagation();
@@ -914,28 +835,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
             
-            // --- This check prevents clicking the "ghost card" ---
             if (record.id.startsWith('ai-search-')) {
                 return;
             }
-            // --- End check ---
 
             if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
-                 // --- THIS IS THE FIX ---
                  if (!parentName) {
-                     // This is a top-level category
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
                  } else {
-                     // This is a subcategory
                      const parentNameLower = parentName.toLowerCase();
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                  }
                  applyFiltersAndSort(imageCache);
-                 // --- END FIX ---
 
             } else {
                 ui.showDetailModal(record);
