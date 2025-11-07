@@ -268,15 +268,18 @@ export function updateEventHealthScore() {
         scoreColor = '#ffc107';
     }
 
-
-    html += `<h5 style=\"margin: 0 0 5px 0; text-align: center; color: ${scoreColor};\">Event Health: ${scoreText}</h5>`;
+    // --- THIS IS THE CHANGE ---
+    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
+    // --- END THE CHANGE ---
 
     // 2. The "Suggestions"
     if (suggestions.length > 0) {
-        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center;\">\n            Our experts recommend adding these components for a full experience:\n        </p>`;
+        html += `<p style="font-size: 0.9em; margin: 0; text-align: center;">
+            Our experts recommend adding these components for a full experience:
+        </p>`;
         
         // Create clickable "suggestion" buttons
-        html += `<div style=\"display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;\">`;
+        html += `<div style="display: flex; gap: 5px; margin-top: 10px; justify-content: center; flex-wrap: wrap;">`;
         suggestions.forEach(cat => {
             // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
             const displayName = cat; 
@@ -296,16 +299,19 @@ export function updateEventHealthScore() {
             }
             // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---
             
-            html += `<button class=\"filter-btn health-suggestion-btn\" data-category-filter=\"${filterTag}\">\n                + Add ${displayName}\n            </button>`;
+            html += `<button class="filter-btn health-suggestion-btn" data-category-filter="${filterTag}">
+                + Add ${displayName}
+            </button>`;
         });
         html += `</div>`;
     } else {
-        html += `<p style=\"font-size: 0.9em; margin: 0; text-align: center; color: #28a745;\">\n            You've covered all the core components for a great guest experience!\n        </p>`;
+        html += `<p style="font-size: 0.9em; margin: 0; text-align: center; color: #28a745;">
+            You've covered all the core components for a great guest experience!
+        </p>`;
     }
 
     container.innerHTML = html;
 }
-
 
 export function updateTotalCost() {
     const subtotalCostEl = document.getElementById('subtotal-cost');
