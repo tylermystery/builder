@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
