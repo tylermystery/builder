@@ -48,10 +48,10 @@ function generateRecommendationBlurb(record) {
             goalString = `'${displayGoals.join("' and '")}'`;
         }
 
-        // --- THIS IS THE CHANGE ---
+        // --- THIS IS THE CHANGE ---\
         // Adds the score directly into the recommendation blurb
         return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you (Score: ${score.toFixed(0)})</strong> This item is a good match for your ${goalString} goals.`;
-        // --- END THE CHANGE ---
+        // --- END THE CHANGE ---\
     }
 
     return null; // No match
@@ -90,6 +90,8 @@ async function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
     const totalDue = finalTotal - amountReceived;
+    const isFullyPaid = totalDue <= 0.009; // Check for paid status
+    
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
     
@@ -117,15 +119,40 @@ async function updateCheckoutDisplay() {
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
     
-    // This is the new base amount
-    const finalBaseAmount = baseAmountToCharge + tipAmount;
+    let finalBaseAmount = baseAmountToCharge + tipAmount;
     document.getElementById('deposit-price').textContent = `$${finalBaseAmount.toFixed(2)}`;
     
-    // Get fee elements
+    // Get fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
     const finalChargeEl = document.getElementById('final-charge-price');
+    const paymentForm = document.getElementById('payment-form'); // Get form
 
-    // --- LOGIC: Rebuild Payment Element ONLY if amount changed ---
+    // --- NEW LOGIC FOR "RECEIPT" MODE ---
+    if (isFullyPaid && finalBaseAmount <= 0) {
+        log('Modal', 'Receipt mode: Plan is fully paid.');
+        
+        // Hide all payment form elements
+        if (paymentForm) paymentForm.style.display = 'none';
+        
+        // Also hide the tip row
+        if (tipRow) tipRow.style.display = 'none';
+
+        return; // Stop here, don't create a payment intent
+    }
+    // --- END NEW LOGIC ---
+
+    // If we're here, we need to pay. Show the form.
+    if (paymentForm) paymentForm.style.display = 'block'; 
+
+    // --- MINIMUM CHARGE FIX ---
+    // Stripe's minimum charge is $0.50 (50 cents)
+    if (finalBaseAmount > 0 && finalBaseAmount < 0.50) {
+        finalBaseAmount = 0.50;
+        log('Modal', 'Amount less than $0.50, rounding up to Stripe minimum $0.50');
+    }
+    // --- END FIX ---
+
+    // --- LOGIC: Rebuild Payment Element ONLY if amount changed ---\
     if (finalBaseAmount !== currentBaseAmount) {
         log('Modal', `Price changed from ${currentBaseAmount} to ${finalBaseAmount}. Rebuilding PaymentElement.`);
         currentBaseAmount = finalBaseAmount; // Update module-level var
@@ -164,7 +191,7 @@ async function updateCheckoutDisplay() {
             paymentElement = elements.create('payment');
             paymentElement.mount('#payment-element');
             
-            // 4. --- THIS IS THE FIX ---
+            // 4. --- THIS IS THE FIX ---\
             // Add listener to update payment type AND fetch new fee
             paymentElement.on('change', debounce(handlePaymentTypeChange, 300));
 
@@ -174,13 +201,13 @@ async function updateCheckoutDisplay() {
             if (finalChargeEl) finalChargeEl.textContent = 'Error';
         }
     } else {
-         // --- ADDED THIS ELSE BLOCK ---
+         // --- ADDED THIS ELSE BLOCK ---\
          // Price did NOT change, but we should still update the final total
          // in case the processing fee was updated by the new listener.
          log('Modal', 'Price did not change, just updating fee display.');
          if (processingFeeEl) processingFeeEl.textContent = `$${currentProcessingFee.toFixed(2)}`;
          if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
-         // --- END ADDED BLOCK ---
+         // --- END ADDED BLOCK ---\
     }
 }
 
@@ -222,7 +249,7 @@ async function handlePaymentTypeChange(event) {
         // 2. Update UI with new fees
         currentProcessingFee = newProcessingFee;
         if (processingFeeEl) processingFeeEl.textContent = `$${newProcessingFee.toFixed(2)}`;
-        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + newProcessingFee).toFixed(2)}`;
+        if (finalChargeEl) finalChargeEl.textContent = `$${(currentBaseAmount + currentProcessingFee).toFixed(2)}`;
         
         log('Modal', `New fee is ${newProcessingFee.toFixed(2)}`);
 
@@ -361,13 +388,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         });
 
-        // --- THIS IS THE CHANGE ---
+        // --- THIS IS THE CHANGE ---\
         const rankingsJsonString = record.fields['AI_Profile'] || record.fields['Rankings'];
-        // --- END CHANGE ---
+        // --- END CHANGE ---\
         
         if (rankingsJsonString) {
             try {
-                // --- V2.1: Check for new profile structure ---
+                // --- V2.1: Check for new profile structure ---\
                 const rankingsObject = JSON.parse(rankingsJsonString);
                 
                 let displayRankings = {};
@@ -388,7 +415,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                             // Show 0-10 scale as 0-5 stars
                             const stars = '★'.repeat(Math.round(value / 2)) + '☆'.repeat(Math.max(0, 5 - Math.round(value / 2)));
                             rankingsHtmlParts.push(`
-                                <div class=\"ranking-item\">\
+                                <div class=\"ranking-item\">
                                     <span class=\"ranking-label\">${label}:</span>
                                     <span class=\"ranking-stars\">${stars}</span>
                                 </div>
@@ -554,7 +581,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     className = 'available-full';
                 } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
                     className = 'available-partial';
-                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;\
                 } else {
                     className = 'unavailable';
                 }
@@ -680,7 +707,7 @@ export async function showCheckoutModal(shopSettings) {
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
     
-    // --- 1. Calculate Base Total ---
+    // --- 1. Calculate Base Total ---\
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
@@ -697,15 +724,15 @@ export async function showCheckoutModal(shopSettings) {
         
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
-            noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
+            noteHtml = `<small class=\"checkout-summary-note\">Note: ${itemInfo.note}</small>`;
         }
         
         listItem.innerHTML = `
-            <div class="summary-item-details">
-                <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
-                ${noteHtml}
-            </div>
-            <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>
+            <div class=\"summary-item-details\">\
+                <span class=\"summary-item-name\">${record.fields.Name} (x${itemInfo.quantity || 1})</span>\
+                ${noteHtml}\
+            </div>\
+            <span class=\"summary-item-price\">$${itemTotal.toFixed(2)}</span>\
         `;
         summaryList.appendChild(listItem);
     }
@@ -716,7 +743,7 @@ export async function showCheckoutModal(shopSettings) {
 
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
-        // --- THIS IS CHANGED: Add async/await ---
+        // --- THIS IS CHANGED: Add async/await ---\
         document.querySelectorAll('input[name="paymentChoice"]').forEach(radio => {
             radio.addEventListener('change', async () => await updateCheckoutDisplay());
         });
@@ -728,7 +755,7 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
-    // --- THIS IS THE FIX ---
+    // --- THIS IS THE FIX ---\
     // Initialize Stripe *before* calling updateCheckoutDisplay
     try {
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
@@ -737,27 +764,33 @@ export async function showCheckoutModal(shopSettings) {
         alert(`Could not initialize payment system: ${err.message}.`);
         return;
     }
-    // --- END FIX ---
+    // --- END FIX ---\
 
-    // --- 2. Update UI (calculates tip and base amount due) ---
+    // --- NEW: Ensure payment form is visible by default ---
+    // updateCheckoutDisplay will hide it if the plan is paid
+    const paymentForm = document.getElementById('payment-form');
+    if (paymentForm) paymentForm.style.display = 'block';
+    // --- END NEW ---
+
+    // --- 2. Update UI (calculates tip and base amount due) ---\
     // This now updates module-level 'currentBaseAmount' and will create the payment element
     await updateCheckoutDisplay(); 
     tipAmountInput.addEventListener('input', debounce(async () => await updateCheckoutDisplay(), 500));
 
-    // --- 3. Create Payment Intent (MOVED to updateCheckoutDisplay) ---
+    // --- 3. Create Payment Intent (MOVED to updateCheckoutDisplay) ---\
     try {
-        // --- 4. Call create-payment-intent (Happens in updateCheckoutDisplay) ---
-        // --- 5. Update UI with initial fees (Happens in updateCheckoutDisplay) ---
-        // --- 6. Create and Mount PaymentElement (Happens in updateCheckoutDisplay) ---
+        // --- 4. Call create-payment-intent (Happens in updateCheckoutDisplay) ---\
+        // --- 5. Update UI with initial fees (Happens in updateCheckoutDisplay) ---\
+        // --- 6. Create and Mount PaymentElement (Happens in updateCheckoutDisplay) ---\
         
         checkoutModalOverlay.cardElement = null; // Clear old reference
 
-        // --- 8. Show Modal ---
+        // --- 8. Show Modal ---\
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
             checkoutModalOverlay.style.display = 'flex';
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
-        }, 0);
+        }, 0);\
         document.body.classList.add('modal-open');
 
     } catch (err) {
@@ -780,7 +813,7 @@ export function hideCheckoutModal() {
             radio.removeEventListener('change', updateCheckoutDisplay);
         });
 
-        // --- ADD THIS ---
+        // --- ADD THIS ---\
         if (paymentElement) {
             paymentElement.unmount();
             paymentElement = null;
@@ -789,7 +822,7 @@ export function hideCheckoutModal() {
         currentClientSecret = null;
         currentBaseAmount = 0;
         currentProcessingFee = 0;
-        // --- END ADD ---
+        // --- END ADD ---\
 
         checkoutModalOverlay.classList.remove('active');
         setTimeout(() => {
@@ -799,7 +832,7 @@ export function hideCheckoutModal() {
             }
             checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
-        }, 300);
+        }, 300);\
         document.body.classList.remove('modal-open');
     }
 }
