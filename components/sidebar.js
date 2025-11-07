@@ -359,7 +359,7 @@ export function updateTotalCost() {
 
     if (mobileItemCountEl && mobileTotalCostEl) {
         const itemCount = state.cart.lockedItems.size;
-        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;\
+        mobileItemCountEl.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
@@ -389,7 +389,7 @@ export function updateTotalCost() {
             // --- THIS IS THE FIX ---\
             checkoutBtn.disabled = isPlanEmpty; // Was `isVIRTUAL_PAD_FINGERPRINT_VENDOR`
             // --- END THE FIX ---\
-        }\
+        }
     }
     if (saveShareBtn) {
         saveShareBtn.disabled = isPlanEmpty && state.ui.saveState !== 'SAVING';
