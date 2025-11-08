@@ -1,10 +1,9 @@
-// FILE: chat.js (REPLACE ENTIRE FILE)
+// REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
-// --- FIX: Removed circular dependency import from 'events.js' ---
-// import { triggerSave, openChatWidget } from './events.js';
+import { triggerSave, openChatWidget } from './events.js';
 
 let currentUser = null;
 let pusher = null;
@@ -76,14 +75,12 @@ function updatePresenceUI(members) {
             const profileName = state.session.user.isAuthenticated ? state.session.user.name : member.info.name;
             if (!state.session.userProfiles.has(profileId)) {
                 state.session.userProfiles.set(profileId, profileName);
-                
-                // --- FIX: Dispatch event instead of calling import ---
-                document.dispatchEvent(new CustomEvent('chat:needsSave'));
+                triggerSave();
             }
  
             const userElement = document.createElement('div');
             const displayName = member.id === currentUser.id ? currentUser.name : member.info.name;
-            userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;\
+            userElement.innerText = `🟢 ${displayName} ${member.id === currentUser.id ? '(You)' : ''}`;
             whosHereList.appendChild(userElement);
         });
     }
@@ -153,10 +150,12 @@ function bindPresenceEvents() {
         }
         updatePresenceUI(members);
         
-        // --- FIX: Dispatch event instead of calling import ---
+        // --- THIS IS THE FIX ---
+        // If there's more than one person in the channel, auto-open the chat.
         if (members.count > 1) {
-            document.dispatchEvent(new CustomEvent('chat:userJoined'));
+            openChatWidget(true); // passing true keeps it open
         }
+        // --- END FIX ---
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
         updatePresenceUI(sessionChatChannel.members);
@@ -177,12 +176,13 @@ function showNewMessageNotification(sender, message) {
   }
 }
 
+// --- NEW DEBUG FUNCTION ---
 function displayDebugMessage(message) {
-    if (console.log) {
+    if (console.log) { // Check if debug is theoretically possible
         const messagesList = document.getElementById('messages-list');
         if (messagesList) {
             const debugEl = document.createElement('div');
-            debugEl.className = 'chat-message received';
+            debugEl.className = 'chat-message received'; // Use a standard message style
             debugEl.style.color = '#dc3545';
             debugEl.style.fontSize = '0.7em';
             debugEl.innerHTML = `<strong>[DEBUG]</strong> ${message}`;
@@ -191,6 +191,7 @@ function displayDebugMessage(message) {
         }
     }
 }
+// --- END NEW DEBUG FUNCTION ---
 
 export async function initializeSessionChat() {
     if (pusher) {
@@ -215,9 +216,7 @@ export async function initializeSessionChat() {
             
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(sessionChatChannel.members);
-                
-                // --- FIX: Dispatch event instead of calling import ---
-                document.dispatchEvent(new CustomEvent('chat:needsSave'));
+                triggerSave();
             } else {
                 e.target.value = currentUser.name;
             }
@@ -228,14 +227,18 @@ export async function initializeSessionChat() {
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
+        //displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
         const records = await api.fetchChatMessages(sessionId);
         
         if (records.length > 0) {
+            //displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp } = record.fields;
                 const isSent = SenderID === currentUser.id;
                 addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
             });
+        } else {
+            //displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
         }
     }
   
@@ -246,6 +249,7 @@ export async function initializeSessionChat() {
             params: { 
                 user_id: currentUser.id,
                 user_name: currentUser.name
+         
            }
         }
     });
