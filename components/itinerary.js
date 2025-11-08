@@ -23,7 +23,7 @@ const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails
 const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
 const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
 const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
-// --- NEW --- Context Thumbnail
+const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn'); // <-- ADD THIS LINE
 const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
 // Module state
