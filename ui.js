@@ -1,11 +1,10 @@
 // FILE: ui.js (REPLACE ENTIRE FILE)
-
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-// --- THIS LINE IS MODIFIED ---
-import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader } from './components/itinerary.js';
+// --- THIS LINE IS MODIFIED (renderItineraryHeader removed) ---
+import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
 import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
@@ -17,8 +16,8 @@ export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
 export * from '../utils.js';
-// --- THIS LINE IS MODIFIED ---
-export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, checkAvailability };
+// --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
+export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
 
