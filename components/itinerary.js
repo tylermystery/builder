@@ -174,34 +174,54 @@ async function renderScene() {
         return;
     }
 
-    // 1. Find Venue and render backgrounds
+// 1. Find Venue and render backgrounds
     bgThumbContainer.innerHTML = '';
-    const venueRecord = state.records.all.find(r => 
+
+    // --- THIS IS THE FIX (Part 1) ---
+    // Use .filter() to find ALL locked-in venues, not just the first one.
+    const venueRecords = state.records.all.filter(r => 
         state.cart.lockedItems.has(r.id) && 
         r.fields.Categories?.toLowerCase().includes('venue')
     );
+    // --- END FIX ---
+
     const bgDescription = bgThumbContainer.parentElement.querySelector('p.description');
-    if (venueRecord) {
+    
+    // --- THIS IS THE FIX (Part 2) ---
+    // Check if the array has any venues.
+    if (venueRecords.length > 0) {
         if(bgDescription) bgDescription.style.display = 'none';
-        const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map());
-        imageUrls.forEach(url => {
-            const thumb = document.createElement('div');
-            thumb.className = 'background-thumb';
-            const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-            thumb.innerHTML = `<img src="${thumbUrl}" alt="Venue option"> <span>${venueRecord.fields.Name}</span>`;
-            thumb.addEventListener('click', () => {
-                sceneCanvas.style.backgroundImage = `url('${url}')`;
-                updateSceneStatus("Background set!");
+        
+        let hasSetDefaultBackground = false;
+
+        // Loop over each venue record found
+        for (const venueRecord of venueRecords) {
+            const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map());
+            
+            // This loop now correctly adds all images from all venues.
+            // Clicking any of them will set the background (this part already worked).
+            imageUrls.forEach(url => {
+                const thumb = document.createElement('div');
+                thumb.className = 'background-thumb';
+                const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+                thumb.innerHTML = `<img src=\"${thumbUrl}\" alt=\"Venue option\"> <span>${venueRecord.fields.Name}</span>`;
+                thumb.addEventListener('click', () => {
+                    sceneCanvas.style.backgroundImage = `url('${url}')`;
+                    updateSceneStatus("Background set!");
+                });
+                bgThumbContainer.appendChild(thumb);
             });
-            bgThumbContainer.appendChild(thumb);
-        });
-        if (imageUrls.length > 0 && !sceneCanvas.style.backgroundImage) {
-            sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
+
+            // Set the default background image *once* from the first image found
+            if (imageUrls.length > 0 && !hasSetDefaultBackground && !sceneCanvas.style.backgroundImage) {
+                sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
+                hasSetDefaultBackground = true;
+            }
         }
     } else {
         if(bgDescription) bgDescription.style.display = 'block';
     }
-
+    
     // 2. Render the palette with BOTH locked items and ideas
     itemPaletteContainer.innerHTML = '';
     const paletteDescription = itemPaletteContainer.parentElement.querySelector('p.description');
