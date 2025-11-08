@@ -262,11 +262,18 @@ async function showCutoutPicker(record, x, y) {
     // --- END ADD ---
 }
 
+// --- REPLACE THIS FUNCTION ---
 function hideCutoutPicker() {
-    if (cutoutPicker) cutoutPicker.style.display = 'none';
+    if (cutoutPicker) {
+        cutoutPicker.classList.remove('active');
+        // Wait for the 300ms opacity transition to finish before hiding
+        setTimeout(() => {
+            cutoutPicker.style.display = 'none';
+        }, 300); 
+    }
     pendingCutout = null;
 }
-
+// --- END REPLACE ---
 /**
  * --- MODIFIED ---
  * Final step: creates the cutout and saves it to state with the AI prompt.
