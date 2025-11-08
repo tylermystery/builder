@@ -75,18 +75,25 @@ function renderSingleCutout(uniqueId, pos) {
     const { imageUrl, prompt } = pos;
     if (!imageUrl) return;
 
-    // 1. 🪄 The Cloudinary AI Magic 🪄
+// 1. 🪄 The Cloudinary AI Magic 🪄
     let cutoutUrl;
+
+    // --- REPLACE THIS ENTIRE IF/ELSE BLOCK ---
     if (prompt && prompt.trim() !== '') {
-        const encodedPrompt = encodeURIComponent(prompt.trim());
-        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore/`);
+        // This line defines the variable that was missing
+        const encodedPrompt = encodeURIComponent(prompt.trim()); 
+        
+        // This line now correctly uses the variable AND includes the ,f_png fix
+        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore,f_png/`);
+        
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
-        // Fix: Added ,f_png to preserve transparency
-        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore,f_png/`);
+        // Fallback to simple background removal (this part is correct)
+        cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150,f_png/');
         log('Itinerary', 'No prompt, using simple background removal.');
     }
-
+    // --- END REPLACE ---
+    
     // 2. Create a wrapper for the image and its controls
     const wrapper = document.createElement('div');
     wrapper.className = 'scene-item-wrapper';
