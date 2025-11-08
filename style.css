@@ -2479,6 +2479,7 @@ hr.total-divider {
     gap: 20px;
     padding: 20px;
     min-height: 0; /* Fix for flex-grow */
+    position: relative; /* <-- ADD THIS LINE */
 }
 
 #scene-builder-canvas {
