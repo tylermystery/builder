@@ -1,9 +1,11 @@
-// REPLACE THE ENTIRE CONTENTS of ui.js
+// FILE: ui.js (REPLACE ENTIRE FILE)
+
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary } from './components/itinerary.js';
+// --- THIS LINE IS MODIFIED ---
+import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
 import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
@@ -15,7 +17,8 @@ export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
 export * from '../utils.js';
-export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, renderItinerary, checkAvailability };
+// --- THIS LINE IS MODIFIED ---
+export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, renderItineraryHeader, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
 
@@ -149,12 +152,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for="header-goals"]');
+    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for="event-date-picker"]');
+    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -437,7 +440,7 @@ export function updateCatalogHeader() {
         
         const pathContainer = document.createElement('div');
         pathContainer.id = 'breadcrumb-path-container';
-        pathContainer.innerHTML = `<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
+        pathContainer.innerHTML = `<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
         breadcrumbsEl.appendChild(pathContainer);
         return; 
     }
@@ -492,7 +495,7 @@ export function updateCatalogHeader() {
     }
     
     const path = [];
-    path.push(`<a href="#" class="breadcrumb-link" data-filter="all">All Categories</a>`);
+    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     const findRecordByName = (filterName) => {
         return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
@@ -505,7 +508,7 @@ export function updateCatalogHeader() {
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
         filterCount++; 
         
-        path.push(`<a href="#" class="breadcrumb-link" data-filter="${categoryFilter}">${categoryName}</a>`);
+        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
     }
 
     subcategoryFilters.forEach(subcatFilter => {
@@ -523,7 +526,7 @@ export function updateCatalogHeader() {
             'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
         ]);
 
-        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
+        const goalWords = goalsInput.split(/[\\s,]+/).filter(word => 
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
 
@@ -549,9 +552,9 @@ export function updateCatalogHeader() {
         chipContainer.id = 'filter-chip-container';
         
         chipContainer.innerHTML = `
-            <span class="chip-label">Active Filters:</span>
+            <span class=\"chip-label\">Active Filters:</span>
             ${activeFiltersHtml.join('')}
-            <button id="clear-all-chips-btn" class="filter-chip-clear-all">Clear Filters</button>
+            <button id=\"clear-all-chips-btn\" class=\"filter-chip-clear-all\">Clear Filters</button>
         `;
         breadcrumbsEl.appendChild(chipContainer); 
 
@@ -585,7 +588,7 @@ export function handleFilterChipClear(e) {
     if (type === 'goal-filter') {
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/[\s,]+/).filter(Boolean); // Cleaned regex
+            const goalWords = goalsInput.value.split(/[\\s,]+/).filter(Boolean); // Cleaned regex
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             goalsInput.value = updatedGoals;
@@ -641,10 +644,7 @@ function createFilterChip(text, type, value) {
     const isGoal = type === 'goal-filter';
     const tooltip = isGoal ? 'Click to remove this goal from the Goals / Notes box.' : 'Clear Filter';
 
-    return `<div class="filter-chip ${isGoal ? 'goal-chip' : ''}" data-filter-type="${type}" data-filter-value="${value}" data-tippy-content="${tooltip}">
-                <span>${text}</span>
-                <button title="${tooltip}">×</button>
-            </div>`;
+    return `<div class=\"filter-chip ${isGoal ? 'goal-chip' : ''}\" data-filter-type=\"${type}\" data-filter-value=\"${value}\" data-tippy-content=\"${tooltip}\">\n                <span>${text}</span>\n                <button title=\"${tooltip}\">×</button>\n            </div>`;
 }
 
 export function showLoginPromptForLikes() {
