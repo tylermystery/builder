@@ -2753,3 +2753,72 @@ hr.total-divider {
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
     opacity: 1;
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* 1. Scene Header Title */
+.itinerary-scene-header {
+    padding: 15px 20px 10px 20px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    text-align: center;
+    flex-shrink: 0;
+}
+#scene-header-title {
+    margin: 0;
+    color: #343a40;
+}
+#scene-header-date {
+    font-size: 1em;
+    font-weight: 500;
+    color: #007bff;
+}
+
+/* 2. New Inputs in Cutout Picker */
+#cutout-item-time,
+#cutout-item-note {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    box-sizing: border-box;
+}
+#cutout-item-note {
+    height: 60px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* 3. On-Cutout Info Display */
+.scene-item-info {
+    position: absolute;
+    bottom: -5px; /* Sits just below the image */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none; /* So it doesn't block dragging */
+}
+
+.scene-item-time,
+.scene-item-note {
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.scene-item-note {
+    font-size: 0.75em;
+    font-weight: normal;
+    white-space: normal;
+    text-align: center;
+    max-width: 90%;
+}
