@@ -2822,3 +2822,34 @@ hr.total-divider {
     text-align: center;
     max-width: 90%;
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* 1. SVG Itinerary Path Layer */
+#scene-path-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Allows clicks to pass through to the items */
+    z-index: 20; /* Above the canvas, below the cutouts (z-index: 50+) */
+}
+
+.itinerary-path-line {
+    fill: none;
+    stroke: #d9534f; /* A rustic red color */
+    stroke-width: 3px;
+    stroke-dasharray: 8 8; /* Dotted line effect */
+    
+    /* Animation setup */
+    stroke-dashoffset: 1000;
+    animation: draw-map-line 3s ease-out 0.5s forwards;
+}
+
+/* 2. Keyframe Animation for "Line Drawing" */
+@keyframes draw-map-line {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
