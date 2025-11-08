@@ -23,7 +23,6 @@ const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails
 const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
 const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
 const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
-const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn');
 // --- NEW --- Context Thumbnail
 const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
@@ -43,7 +42,9 @@ let startRotation = 0;
 let startAngle = 0;
 let startDistance = 1;
 let transformOrigin = { x: 0, y: 0 };
+let startFlipped = false; // <-- ADD THIS LINE
 // --- END ADD ---
+
 
 // --- ADD THIS NEW HELPER FUNCTION ---
 /**
@@ -80,6 +81,7 @@ function replaceCloudinaryTransform(originalUrl, newTransform) {
 }
 // --- END NEW HELPER FUNCTION ---
 
+
 // --- NEW HELPER ---
 /**
  * Updates the status text overlay on the canvas.
@@ -110,20 +112,18 @@ function renderSingleCutout(uniqueId, pos) {
     const { imageUrl, prompt } = pos;
     if (!imageUrl) return;
 
-// --- REPLACE THIS ENTIRE LOGIC BLOCK ---
-
     // 1. 🪄 The Cloudinary AI Magic 🪄
     let cutoutUrl;
     let newTransform; // This will hold our desired transformation string
 
     if (prompt && prompt.trim() !== '') {
         const encodedPrompt = encodeURIComponent(prompt.trim());
-        // Define the *new* transform string
-        newTransform = `e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore,f_png`;
+        // Define the *new* transform string (w_250, f_png)
+        newTransform = `e_gen_remove:prompt_${encodedPrompt},w_250,a_ignore,f_png`;
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
-        // Define the *new* transform string
-        newTransform = 'e_background_removal,w_150,f_png';
+        // Define the *new* transform string (w_250, f_png)
+        newTransform = 'e_background_removal,w_250,f_png';
         log('Itinerary', 'No prompt, using simple background removal.');
     }
 
@@ -131,18 +131,16 @@ function renderSingleCutout(uniqueId, pos) {
     // with our new background removal transform.
     cutoutUrl = replaceCloudinaryTransform(imageUrl, newTransform);
 
-// --- END REPLACEMENT BLOCK ---
-
     // 2. Create a wrapper for the image and its controls
     const wrapper = document.createElement('div');
-// ... (rest of the function continues from here)
     wrapper.className = 'scene-item-wrapper';
     wrapper.dataset.uniqueId = uniqueId;
     wrapper.style.left = `${pos.x}px`;
     wrapper.style.top = `${pos.y}px`;
     wrapper.style.zIndex = pos.z;
-    // Apply saved scale and rotation
-    wrapper.style.transform = `scale(${pos.scale || 1}) rotate(${pos.rotation || 0}deg)`;
+    // Apply saved scale, rotation, and flip
+    const flipTransform = pos.flipped ? 'scaleX(-1)' : '';
+    wrapper.style.transform = `scale(${pos.scale || 1}) rotate(${pos.rotation || 0}deg) ${flipTransform}`;
 
     // 3. Create the image
     const img = document.createElement('img');
@@ -152,12 +150,13 @@ function renderSingleCutout(uniqueId, pos) {
     img.onload = () => updateSceneStatus("Item added! Drag to move.");
     img.onerror = () => updateSceneStatus("❌ Error creating cutout. Try a different prompt.");
 
-    // 4. Add transform controls
+    // 4. Add transform controls (flip, rotate, resize)
     const controls = document.createElement('div');
     controls.className = 'scene-item-controls';
     controls.innerHTML = `
-        <div class="scene-rotate-handle" data-action="rotate">↻</div>
-        <div class="scene-resize-handle" data-action="resize">⤭</div>
+        <div class="scene-flip-handle" data-action="flip" title="Flip">⇋</div>
+        <div class="scene-rotate-handle" data-action="rotate" title="Rotate">↻</div>
+        <div class="scene-resize-handle" data-action="resize" title="Resize">⤭</div>
     `;
 
     wrapper.appendChild(img);
@@ -172,6 +171,9 @@ function renderSingleCutout(uniqueId, pos) {
         if (action === 'rotate' || action === 'resize') {
             // Pass to the new transform handler
             handleTransformStart(e, wrapper, action);
+        } else if (action === 'flip') {
+            // Pass to the new flip handler
+            handleFlipToggle(wrapper);
         } else {
             // Default drag behavior (move)
             updateSceneStatus("Dragging item...");
@@ -192,6 +194,8 @@ function renderSingleCutout(uniqueId, pos) {
     sceneCanvas.appendChild(wrapper);
 }
 // --- END REPLACE ---
+
+
 /**
  * Draws all saved cutouts from state onto the canvas
  */
@@ -206,11 +210,85 @@ function renderCutouts() {
         if (pos.z > zCounter) zCounter = pos.z;
     }
     
-    // Show the "Drop" message only if the canvas is empty
+    // Show the \"Drop\" message only if the canvas is empty
     if(state.session.itemPositions.size === 0) {
         updateSceneStatus("Drag items from the palette onto the canvas.");
     }
 }
+
+// --- ADD THIS ENTIRE NEW FUNCTION ---
+/**
+ * Initializes a resize or rotate transform operation.
+ * @param {MouseEvent} e - The mousedown event.
+ * @param {HTMLElement} wrapper - The scene item wrapper being transformed.
+ * @param {string} action - 'resize' or 'rotate'.
+ */
+function handleTransformStart(e, wrapper, action) {
+    currentTransformAction = action;
+    currentDragItem = wrapper; // The item being transformed
+    currentDragItem.classList.add('is-dragging');
+    zCounter++;
+    currentDragItem.style.zIndex = zCounter;
+
+    const rect = wrapper.getBoundingClientRect();
+    // Get center of the element for rotation/scaling calculations
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    transformOrigin = { x: centerX, y: centerY };
+    startX = e.clientX;
+    startY = e.clientY;
+
+    const uniqueId = wrapper.dataset.uniqueId;
+    const pos = state.session.itemPositions.get(uniqueId);
+    
+    startScale = pos.scale || 1;
+    startRotation = pos.rotation || 0;
+    startFlipped = pos.flipped || false; 
+    
+    if (action === 'rotate') {
+        updateSceneStatus("Rotating item...");
+        // Calculate the starting angle between the mouse and the element's center
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - centerY;
+        startAngle = Math.atan2(dy, dx) * (180 / Math.PI) - startRotation;
+    } else if (action === 'resize') {
+        updateSceneStatus("Resizing item...");
+        // Calculate the initial distance from the center to the mouse
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - centerY;
+        startDistance = Math.hypot(dx, dy);
+        // startScale (the item's scale) is already set
+    }
+}
+
+// --- ADD THIS ENTIRE NEW FUNCTION ---
+/**
+ * Immediately toggles the horizontal flip state of a scene item.
+ * @param {HTMLElement} wrapper - The scene item wrapper to flip.
+ */
+function handleFlipToggle(wrapper) {
+    if (!wrapper) return;
+
+    const uniqueId = wrapper.dataset.uniqueId;
+    const pos = state.session.itemPositions.get(uniqueId);
+    if (!pos) return;
+
+    // Toggle the flipped state
+    pos.flipped = !pos.flipped;
+
+    // Re-apply the transform immediately
+    const flipTransform = pos.flipped ? 'scaleX(-1)' : '';
+    const scale = pos.scale || 1;
+    const rotation = pos.rotation || 0;
+    wrapper.style.transform = `scale(${scale}) rotate(${rotation}deg) ${flipTransform}`;
+    
+    // Save the change
+    state.session.itemPositions.set(uniqueId, pos);
+    triggerSave();
+    updateSceneStatus(pos.flipped ? "Item flipped" : "Item un-flipped");
+}
+
 
 /**
  * Renders the palette with BOTH locked items and ideas
@@ -221,7 +299,7 @@ async function renderScene() {
         return;
     }
 
-// 1. Find Venue and render backgrounds
+    // 1. Find Venue and render backgrounds
     bgThumbContainer.innerHTML = '';
 
     // --- THIS IS THE FIX (Part 1) ---
@@ -268,7 +346,9 @@ async function renderScene() {
     } else {
         if(bgDescription) bgDescription.style.display = 'block';
     }
-    
+    // --- END FIX ---
+
+
     // 2. Render the palette with BOTH locked items and ideas
     itemPaletteContainer.innerHTML = '';
     const paletteDescription = itemPaletteContainer.parentElement.querySelector('p.description');
@@ -289,7 +369,7 @@ async function renderScene() {
             itemEl.className = `palette-item ${type}`; 
             itemEl.setAttribute('draggable', true);
             const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-            itemEl.innerHTML = `<img src="${thumbUrl}" alt="${record.fields.Name}"> <span>${record.fields.Name}</span>`;
+            itemEl.innerHTML = `<img src=\"${thumbUrl}\" alt=\"${record.fields.Name}\"> <span>${record.fields.Name}</span>`;
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';
@@ -353,6 +433,7 @@ async function showCutoutPicker(record, x, y) {
 
     updateSceneStatus("Select an image to use as the cutout source.");
     cutoutPicker.style.display = 'flex';
+    
     // --- ADD THIS BLOCK ---
     // Use requestAnimationFrame to ensure 'display' is set before 'active'
     // so the fade-in transition works correctly.
@@ -374,6 +455,8 @@ function hideCutoutPicker() {
     pendingCutout = null;
 }
 // --- END REPLACE ---
+
+
 /**
  * --- MODIFIED ---
  * Final step: creates the cutout and saves it to state with the AI prompt.
@@ -395,7 +478,8 @@ function addCutoutToScene(imageUrl, promptText) {
         y: y - 75,
         z: zCounter,
         scale: 1,      // <-- ADD THIS
-        rotation: 0    // <-- ADD THIS
+        rotation: 0,   // <-- ADD THIS
+        flipped: false   // <-- ADD THIS
     };
             
     state.session.itemPositions.set(uniqueId, newPosition);
@@ -403,51 +487,6 @@ function addCutoutToScene(imageUrl, promptText) {
     
     renderSingleCutout(uniqueId, newPosition);
     hideCutoutPicker();
-}
-
-// --- ADD THIS ENTIRE NEW FUNCTION ---
-/**
- * Initializes a resize or rotate transform operation.
- * @param {MouseEvent} e - The mousedown event.
- * @param {HTMLElement} wrapper - The scene item wrapper being transformed.
- * @param {string} action - 'resize' or 'rotate'.
- */
-function handleTransformStart(e, wrapper, action) {
-    currentTransformAction = action;
-    currentDragItem = wrapper; // The item being transformed
-    currentDragItem.classList.add('is-dragging');
-    zCounter++;
-    currentDragItem.style.zIndex = zCounter;
-
-    const rect = wrapper.getBoundingClientRect();
-    // Get center of the element for rotation/scaling calculations
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    
-    transformOrigin = { x: centerX, y: centerY };
-    startX = e.clientX;
-    startY = e.clientY;
-
-    const uniqueId = wrapper.dataset.uniqueId;
-    const pos = state.session.itemPositions.get(uniqueId);
-    
-    startScale = pos.scale || 1;
-    startRotation = pos.rotation || 0;
-    
-    if (action === 'rotate') {
-        updateSceneStatus("Rotating item...");
-        // Calculate the starting angle between the mouse and the element's center
-        const dx = e.clientX - centerX;
-        const dy = e.clientY - centerY;
-        startAngle = Math.atan2(dy, dx) * (180 / Math.PI) - startRotation;
-    } else if (action === 'resize') {
-        updateSceneStatus("Resizing item...");
-        // Calculate the initial distance from the center to the mouse
-        const dx = e.clientX - centerX;
-        const dy = e.clientY - centerY;
-        startDistance = Math.hypot(dx, dy);
-        // startScale (the item's scale) is already set
-    }
 }
 
 /**
@@ -511,13 +550,17 @@ export function setupItineraryEventListeners() {
             showCutoutPicker(record, x, y);
         });
 
+        // --- REMOVE THE OLD 'mousemove' LISTENER ---
     }
     
-// 4. Mouse move listener (FOR DRAG, RESIZE, ROTATE)
+    // 4. Mouse move listener (FOR DRAG, RESIZE, ROTATE)
     // --- ADD THIS NEW LISTENER ---
     document.addEventListener('mousemove', (e) => {
         if (!currentDragItem) return;
         e.preventDefault(); // Prevent text selection while dragging
+
+        // --- ADD THIS LINE ---
+        const flipTransform = startFlipped ? 'scaleX(-1)' : '';
 
         if (currentTransformAction === 'rotate') {
             const dx = e.clientX - transformOrigin.x;
@@ -525,8 +568,8 @@ export function setupItineraryEventListeners() {
             const currentAngle = Math.atan2(dy, dx) * (180 / Math.PI);
             const rotation = Math.round(currentAngle - startAngle);
             
-            // Apply new transform
-            currentDragItem.style.transform = `scale(${startScale}) rotate(${rotation}deg)`;
+            // --- THIS LINE IS MODIFIED ---
+            currentDragItem.style.transform = `scale(${startScale}) rotate(${rotation}deg) ${flipTransform}`;
             // Store the value directly on the DOM element for mouseup
             currentDragItem.dataset.currentRotation = rotation; 
 
@@ -539,8 +582,8 @@ export function setupItineraryEventListeners() {
             let scale = (currentDistance / startDistance) * startScale;
             scale = Math.max(0.1, Math.min(scale, 5)); // Clamp scale
             
-            // Apply new transform
-            currentDragItem.style.transform = `scale(${scale}) rotate(${startRotation}deg)`;
+            // --- THIS LINE IS MODIFIED ---
+            currentDragItem.style.transform = `scale(${scale}) rotate(${startRotation}deg) ${flipTransform}`;
             // Store the value directly on the DOM element for mouseup
             currentDragItem.dataset.currentScale = scale;
 
@@ -576,9 +619,11 @@ export function setupItineraryEventListeners() {
             if (currentTransformAction === 'resize') {
                 posObject.scale = parseFloat(currentDragItem.dataset.currentScale) || startScale;
                 posObject.rotation = startRotation; // Keep original rotation
+                posObject.flipped = startFlipped; // <-- ADD THIS LINE
             } else if (currentTransformAction === 'rotate') {
                 posObject.scale = startScale; // Keep original scale
                 posObject.rotation = parseFloat(currentDragItem.dataset.currentRotation) || startRotation;
+                posObject.flipped = startFlipped; // <-- ADD THIS LINE
             } else {
                 // 'move' action
                 posObject.x = parseFloat(currentDragItem.style.left);
@@ -602,6 +647,7 @@ export function setupItineraryEventListeners() {
         startDistance = 1;
     });
 }
+
 /**
  * Shows the Itinerary (Scene Builder) modal
  */
