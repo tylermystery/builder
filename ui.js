@@ -469,7 +469,7 @@ export function updateCatalogHeader() {
     
     const locationEl = document.getElementById('location-filter');
     if (locationEl && locationEl.value !== 'any') {
-        activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
+        activeFiltersHtml.push(createFilterChip('Location: 'G' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
         filterCount++; 
     }
 
