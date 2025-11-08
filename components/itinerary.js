@@ -253,6 +253,13 @@ async function showCutoutPicker(record, x, y) {
 
     updateSceneStatus("Select an image to use as the cutout source.");
     cutoutPicker.style.display = 'flex';
+    // --- ADD THIS BLOCK ---
+    // Use requestAnimationFrame to ensure 'display' is set before 'active'
+    // so the fade-in transition works correctly.
+    requestAnimationFrame(() => {
+        cutoutPicker.classList.add('active');
+    });
+    // --- END ADD ---
 }
 
 function hideCutoutPicker() {
