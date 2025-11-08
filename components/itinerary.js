@@ -15,30 +15,39 @@ const sceneCanvas = document.getElementById('scene-builder-canvas');
 const bgThumbContainer = document.querySelector('.background-thumbnails');
 const itemPaletteContainer = document.querySelector('.palette-items');
 
+// --- NEW --- Cutout Picker DOM Elements
+const cutoutPicker = document.getElementById('cutout-picker-popover');
+const cutoutPickerTitle = document.getElementById('cutout-picker-title');
+const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails');
+const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
+
 // Module state for drag-and-drop
 let zCounter = 10; // For managing item stacking (z-index)
 let currentDragItem = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
+// --- NEW --- State for pending cutout
+let pendingCutout = null;
+
 /**
- * Creates a single cutout, applies AI transform, and makes it draggable
+ * Creates a single cutout from a *specific image URL* and makes it draggable
  */
-async function renderSingleCutout(record, pos) {
+function renderSingleCutout(uniqueId, pos) {
     if (!sceneCanvas) return;
     
-    // 1. Get the image URL for the item
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
-    if (imageUrls.length === 0) return; // No image to make a cutout from
+    // 1. Get the specific image URL from the position object
+    const imageUrl = pos.imageUrl;
+    if (!imageUrl) return;
 
     // 2. 🪄 The Cloudinary AI Magic 🪄
     // We add 'e_background_removal' to get the AI cutout
-    const cutoutUrl = imageUrls[0].replace('/upload/', '/upload/e_background_removal,w_150/');
+    const cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150/');
 
     const img = document.createElement('img');
     img.src = cutoutUrl;
     img.className = 'scene-cutout';
-    img.dataset.recordId = record.id;
+    img.dataset.uniqueId = uniqueId; // Use unique ID
     img.style.left = `${pos.x}px`;
     img.style.top = `${pos.y}px`;
     img.style.zIndex = pos.z;
@@ -50,12 +59,10 @@ async function renderSingleCutout(record, pos) {
         currentDragItem = img;
         currentDragItem.classList.add('is-dragging');
         
-        // Calculate offset from mouse to top-left corner of image
         const rect = img.getBoundingClientRect();
         dragOffsetX = e.clientX - rect.left;
         dragOffsetY = e.clientY - rect.top;
         
-        // Bring to front
         zCounter++; 
         img.style.zIndex = zCounter;
         img.style.cursor = 'grabbing';
@@ -67,22 +74,21 @@ async function renderSingleCutout(record, pos) {
 /**
  * Draws all saved cutouts from state onto the canvas
  */
-async function renderCutouts() {
+function renderCutouts() {
     if (!sceneCanvas) return;
     sceneCanvas.innerHTML = ''; // Clear existing cutouts
     zCounter = 10; // Reset z-index
 
-    for (const [recordId, pos] of state.session.itemPositions.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            renderSingleCutout(record, pos);
-            if (pos.z > zCounter) zCounter = pos.z; // Ensure new items are on top
-        }
+    // Iterate over the Map [uniqueId, positionObject]
+    for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
+        renderSingleCutout(uniqueId, pos);
+        if (pos.z > zCounter) zCounter = pos.z; // Ensure new items are on top
     }
 }
 
 /**
- * Renders the entire Scene Builder: Backgrounds, Palette, and Cutouts
+ * --- MODIFIED ---
+ * Renders the entire Scene Builder: Backgrounds, Palette (now with all items), and Cutouts
  */
 async function renderScene() {
     if (!sceneCanvas || !bgThumbContainer || !itemPaletteContainer) {
@@ -106,18 +112,15 @@ async function renderScene() {
         imageUrls.forEach(url => {
             const thumb = document.createElement('div');
             thumb.className = 'background-thumb';
-            // Transform for a small thumbnail
             const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
             thumb.innerHTML = `<img src="${thumbUrl}" alt="Venue option"> <span>${venueRecord.fields.Name}</span>`;
             
             thumb.addEventListener('click', () => {
-                // Set the full-size image as the background
                 sceneCanvas.style.backgroundImage = `url('${url}')`;
             });
             bgThumbContainer.appendChild(thumb);
         });
         
-        // Set first image as default background if one isn't set
         if (imageUrls.length > 0 && !sceneCanvas.style.backgroundImage) {
             sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
         }
@@ -125,28 +128,33 @@ async function renderScene() {
         if(bgDescription) bgDescription.style.display = 'block';
     }
 
-    // 2. Render the "Ideas" palette (items the user can drag)
+    // 2. --- MODIFIED --- Render the palette with BOTH locked items and ideas
     itemPaletteContainer.innerHTML = '';
     const paletteDescription = itemPaletteContainer.parentElement.querySelector('p.description');
 
-    if (state.cart.items.size === 0) {
+    const allItems = new Map([
+        ...Array.from(state.cart.lockedItems.entries()).map(([id, info]) => [id, { info, type: 'locked' }]),
+        ...Array.from(state.cart.items.entries()).map(([id, info]) => [id, { info, type: 'idea' }])
+    ]);
+
+    if (allItems.size === 0) {
         if(paletteDescription) paletteDescription.style.display = 'block';
     } else {
         if(paletteDescription) paletteDescription.style.display = 'none';
         
-        for (const [recordId, itemInfo] of state.cart.items.entries()) {
+        for (const [recordId, { info, type }] of allItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) continue;
 
             const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
             const itemEl = document.createElement('div');
-            itemEl.className = 'palette-item';
-            itemEl.setAttribute('draggable', true); // Make it draggable
+            // --- ADDED: 'locked' or 'idea' class ---
+            itemEl.className = `palette-item ${type}`; 
+            itemEl.setAttribute('draggable', true);
             
             const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
             itemEl.innerHTML = `<img src="${thumbUrl}" alt="${record.fields.Name}"> <span>${record.fields.Name}</span>`;
             
-            // Add drag start listener
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';
@@ -159,13 +167,87 @@ async function renderScene() {
     renderCutouts();
 }
 
+// --- NEW FUNCTION ---
+// Shows the "Cutout Picker" popover
+async function showCutoutPicker(record, x, y) {
+    if (!cutoutPicker) return;
+
+    // Store pending data
+    pendingCutout = { record, x, y };
+
+    // Set title and clear old thumbnails
+    cutoutPickerTitle.textContent = `Select image for: ${record.fields.Name}`;
+    cutoutPickerThumbnails.innerHTML = '';
+    
+    // Fetch all images for this item
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
+    
+    if (imageUrls.length === 0) {
+        // If no images, just add the default placeholder
+        addCutoutToScene(ui.getPlaceholderImage([]));
+        return;
+    }
+
+    // Create a thumbnail for each image
+    imageUrls.forEach(url => {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumbnail-img';
+        thumb.style.backgroundImage = `url('${url.replace('/upload/', '/upload/c_fill,g_auto,w_100,h_80/')}')`;
+        
+        // This is the important part!
+        thumb.addEventListener('click', () => {
+            addCutoutToScene(url);
+        });
+        cutoutPickerThumbnails.appendChild(thumb);
+    });
+
+    // Show the popover
+    cutoutPicker.style.display = 'flex';
+}
+
+// --- NEW FUNCTION ---
+// Hides the "Cutout Picker"
+function hideCutoutPicker() {
+    if (cutoutPicker) cutoutPicker.style.display = 'none';
+    pendingCutout = null;
+}
+
+// --- NEW FUNCTION ---
+// Final step: creates the cutout and saves it to state
+function addCutoutToScene(imageUrl) {
+    if (!pendingCutout) return;
+
+    const { record, x, y } = pendingCutout;
+    zCounter++;
+    
+    // Create a unique ID for this specific cutout
+    const uniqueId = `cutout-${Date.now()}`;
+    
+    // This is our new, more detailed position object
+    const newPosition = {
+        recordId: record.id,
+        imageUrl: imageUrl, // Save the *chosen* image URL
+        x: x - 75, // Offset to center
+        y: y - 75, // Offset to center
+        z: zCounter
+    };
+            
+    // Save to state (using uniqueId as the key)
+    state.session.itemPositions.set(uniqueId, newPosition);
+    triggerSave(); //
+    
+    // Draw the new cutout
+    renderSingleCutout(uniqueId, newPosition);
+    
+    // Hide the picker
+    hideCutoutPicker();
+}
+
 /**
  * Sets up all event listeners for the Itinerary (Scene Builder) modal
  */
 export function setupItineraryEventListeners() {
     log('Itinerary', 'Initializing Scene Builder listeners.');
-
-    // --- REMOVED: All SortableJS logic ---
 
     // 1. Close buttons
     closeBtn.addEventListener('click', () => {
@@ -179,34 +261,36 @@ export function setupItineraryEventListeners() {
         }
     });
 
+    // --- NEW --- Cutout Picker Listeners
+    cutoutPickerCloseBtn.addEventListener('click', hideCutoutPicker);
+    cutoutPicker.addEventListener('click', (e) => {
+        if (e.target === cutoutPicker) {
+            hideCutoutPicker();
+        }
+    });
+
     // 2. Scene Canvas drag-and-drop listeners
     if (sceneCanvas) {
         // A. Allow dropping *onto* the canvas (from palette)
         sceneCanvas.addEventListener('dragover', (e) => {
-            e.preventDefault(); // This is necessary to allow a drop
+            e.preventDefault(); 
         });
 
-        // B. Handle the drop event (from palette)
+        // B. --- MODIFIED --- Handle the drop event (from palette)
         sceneCanvas.addEventListener('drop', (e) => {
             e.preventDefault();
             const recordId = e.dataTransfer.getData('text/plain');
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
 
-            // Calculate position relative to the canvas
+            // Calculate position
             const rect = sceneCanvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            zCounter++; // Place it on top
 
-            const newPosition = { x: x - 75, y: y - 75, z: zCounter }; // Offset to center on cursor (150px wide)
-            
-            // Save to state and trigger save
-            state.session.itemPositions.set(recordId, newPosition);
-            triggerSave(); //
-            
-            // Draw the new cutout
-            renderSingleCutout(record, newPosition);
+            // --- CHANGED ---
+            // Instead of creating a cutout, show the picker
+            showCutoutPicker(record, x, y);
         });
 
         // C. Handle dragging *within* the canvas
@@ -226,7 +310,7 @@ export function setupItineraryEventListeners() {
         });
     }
     
-    // D. Handle mouse up *anywhere* to stop dragging
+    // D. --- MODIFIED --- Handle mouse up *anywhere* to stop dragging
     document.addEventListener('mouseup', () => {
         if (!currentDragItem) return;
 
@@ -234,14 +318,19 @@ export function setupItineraryEventListeners() {
         currentDragItem.style.cursor = 'move';
         
         // Save new position
-        const recordId = currentDragItem.dataset.recordId;
-        const newPos = { 
-            x: parseFloat(currentDragItem.style.left), 
-            y: parseFloat(currentDragItem.style.top), 
-            z: parseInt(currentDragItem.style.zIndex) 
-        };
-        state.session.itemPositions.set(recordId, newPos);
-        triggerSave(); //
+        const uniqueId = currentDragItem.dataset.uniqueId;
+        const posObject = state.session.itemPositions.get(uniqueId);
+        
+        if (posObject) {
+            // Update the object with new coordinates
+            posObject.x = parseFloat(currentDragItem.style.left);
+            posObject.y = parseFloat(currentDragItem.style.top);
+            posObject.z = parseInt(currentDragItem.style.zIndex);
+            
+            // Save the *entire object* back into the map
+            state.session.itemPositions.set(uniqueId, posObject);
+            triggerSave(); //
+        }
         
         currentDragItem = null;
     });
@@ -257,8 +346,6 @@ export function showItineraryModal() {
     // Always render the scene
     renderScene(); 
     
-    // --- REMOVED: renderItineraryHeader(); ---
-    
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
@@ -269,8 +356,7 @@ export function showItineraryModal() {
  */
 export function hideItineraryModal() {
     log('Itinerary', 'Hiding itinerary modal.');
-    // Note: We don't call updateUrl({ view: null }) here anymore,
-    // because the close button listener does it.
+    hideCutoutPicker(); // --- ADD THIS ---
     itineraryModal.classList.remove('active');
     setTimeout(() => {
         itineraryModal.style.display = 'none';
@@ -278,6 +364,4 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
-// --- REMOVED: renderItineraryHeader() ---
-// --- REMOVED: renderItinerary() ---
-// --- REMOVED: createItineraryItem() ---
+// --- REMOVED ALL OLD FUNCTIONS ---
