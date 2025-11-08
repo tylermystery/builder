@@ -34,6 +34,17 @@ let dragOffsetX = 0;
 let dragOffsetY = 0;
 let pendingCutout = null; // Stores { record, x, y, selectedUrl }
 
+// --- ADD THESE NEW VARIABLES ---
+let currentTransformAction = null; // 'resize', 'rotate', or null
+let startX = 0;
+let startY = 0;
+let startScale = 1;
+let startRotation = 0;
+let startAngle = 0;
+let startDistance = 1;
+let transformOrigin = { x: 0, y: 0 };
+// --- END ADD ---
+
 // --- NEW HELPER ---
 /**
  * Updates the status text overlay on the canvas.
@@ -57,61 +68,83 @@ function updateSceneStatus(text, isLoading = false) {
     }
 }
 
-/**
- * --- MODIFIED ---
- * Creates a single cutout from a specific image URL and AI prompt.
- */
+// --- REPLACE THIS ENTIRE FUNCTION ---
 function renderSingleCutout(uniqueId, pos) {
     if (!sceneCanvas) return;
     
     const { imageUrl, prompt } = pos;
     if (!imageUrl) return;
 
-    // 2. 🪄 The Cloudinary AI Magic 🪄
+    // 1. 🪄 The Cloudinary AI Magic 🪄
     let cutoutUrl;
     if (prompt && prompt.trim() !== '') {
-        // Use new Generative Remove with a prompt
-        // --- ADDED a_ignore --- to prevent text overlay
         const encodedPrompt = encodeURIComponent(prompt.trim());
         cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore/`);
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
-        // Fallback to simple background removal
-        cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150/');
+        // Fix: Added ,f_png to preserve transparency
+        cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150,f_png/');
         log('Itinerary', 'No prompt, using simple background removal.');
     }
 
+    // 2. Create a wrapper for the image and its controls
+    const wrapper = document.createElement('div');
+    wrapper.className = 'scene-item-wrapper';
+    wrapper.dataset.uniqueId = uniqueId;
+    wrapper.style.left = `${pos.x}px`;
+    wrapper.style.top = `${pos.y}px`;
+    wrapper.style.zIndex = pos.z;
+    // Apply saved scale and rotation
+    wrapper.style.transform = `scale(${pos.scale || 1}) rotate(${pos.rotation || 0}deg)`;
+
+    // 3. Create the image
     const img = document.createElement('img');
     img.src = cutoutUrl;
     img.className = 'scene-cutout';
-    img.dataset.uniqueId = uniqueId;
-    img.style.left = `${pos.x}px`;
-    img.style.top = `${pos.y}px`;
-    img.style.zIndex = pos.z;
     img.setAttribute('draggable', false);
-
-    // Add status update on load
     img.onload = () => updateSceneStatus("Item added! Drag to move.");
     img.onerror = () => updateSceneStatus("❌ Error creating cutout. Try a different prompt.");
-    
-    img.addEventListener('mousedown', (e) => {
+
+    // 4. Add transform controls
+    const controls = document.createElement('div');
+    controls.className = 'scene-item-controls';
+    controls.innerHTML = `
+        <div class="scene-rotate-handle" data-action="rotate">↻</div>
+        <div class="scene-resize-handle" data-action="resize">⤭</div>
+    `;
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(controls);
+
+    // 5. Wire up mouse events to the WRAPPER
+    wrapper.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        updateSceneStatus("Dragging item...");
-        currentDragItem = img;
-        currentDragItem.classList.add('is-dragging');
         
-        const rect = img.getBoundingClientRect();
-        dragOffsetX = e.clientX - rect.left;
-        dragOffsetY = e.clientY - rect.top;
+        const action = e.target.dataset.action;
         
-        zCounter++; 
-        img.style.zIndex = zCounter;
-        img.style.cursor = 'grabbing';
+        if (action === 'rotate' || action === 'resize') {
+            // Pass to the new transform handler
+            handleTransformStart(e, wrapper, action);
+        } else {
+            // Default drag behavior (move)
+            updateSceneStatus("Dragging item...");
+            currentDragItem = wrapper; // <-- Drag the wrapper
+            currentDragItem.classList.add('is-dragging');
+            
+            const rect = wrapper.getBoundingClientRect(); // <-- Get wrapper rect
+            // Calculate offset relative to the *scaled/rotated* element
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            
+            zCounter++; 
+            wrapper.style.zIndex = zCounter; // <-- Set wrapper z-index
+            wrapper.style.cursor = 'grabbing';
+        }
     });
     
-    sceneCanvas.appendChild(img);
+    sceneCanvas.appendChild(wrapper);
 }
-
+// --- END REPLACE ---
 /**
  * Draws all saved cutouts from state onto the canvas
  */
@@ -293,7 +326,9 @@ function addCutoutToScene(imageUrl, promptText) {
         prompt: promptText, // Save the AI prompt
         x: x - 75,
         y: y - 75,
-        z: zCounter
+        z: zCounter,
+        scale: 1,      // <-- ADD THIS
+        rotation: 0    // <-- ADD THIS
     };
             
     state.session.itemPositions.set(uniqueId, newPosition);
@@ -301,6 +336,51 @@ function addCutoutToScene(imageUrl, promptText) {
     
     renderSingleCutout(uniqueId, newPosition);
     hideCutoutPicker();
+}
+
+// --- ADD THIS ENTIRE NEW FUNCTION ---
+/**
+ * Initializes a resize or rotate transform operation.
+ * @param {MouseEvent} e - The mousedown event.
+ * @param {HTMLElement} wrapper - The scene item wrapper being transformed.
+ * @param {string} action - 'resize' or 'rotate'.
+ */
+function handleTransformStart(e, wrapper, action) {
+    currentTransformAction = action;
+    currentDragItem = wrapper; // The item being transformed
+    currentDragItem.classList.add('is-dragging');
+    zCounter++;
+    currentDragItem.style.zIndex = zCounter;
+
+    const rect = wrapper.getBoundingClientRect();
+    // Get center of the element for rotation/scaling calculations
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    transformOrigin = { x: centerX, y: centerY };
+    startX = e.clientX;
+    startY = e.clientY;
+
+    const uniqueId = wrapper.dataset.uniqueId;
+    const pos = state.session.itemPositions.get(uniqueId);
+    
+    startScale = pos.scale || 1;
+    startRotation = pos.rotation || 0;
+    
+    if (action === 'rotate') {
+        updateSceneStatus("Rotating item...");
+        // Calculate the starting angle between the mouse and the element's center
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - centerY;
+        startAngle = Math.atan2(dy, dx) * (180 / Math.PI) - startRotation;
+    } else if (action === 'resize') {
+        updateSceneStatus("Resizing item...");
+        // Calculate the initial distance from the center to the mouse
+        const dx = e.clientX - centerX;
+        const dy = e.clientY - centerY;
+        startDistance = Math.hypot(dx, dy);
+        // startScale (the item's scale) is already set
+    }
 }
 
 /**
@@ -364,22 +444,57 @@ export function setupItineraryEventListeners() {
             showCutoutPicker(record, x, y);
         });
 
-        sceneCanvas.addEventListener('mousemove', (e) => {
-            if (!currentDragItem) return;
+    }
+    
+// 4. Mouse move listener (FOR DRAG, RESIZE, ROTATE)
+    // --- ADD THIS NEW LISTENER ---
+    document.addEventListener('mousemove', (e) => {
+        if (!currentDragItem) return;
+        e.preventDefault(); // Prevent text selection while dragging
+
+        if (currentTransformAction === 'rotate') {
+            const dx = e.clientX - transformOrigin.x;
+            const dy = e.clientY - transformOrigin.y;
+            const currentAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+            const rotation = Math.round(currentAngle - startAngle);
             
+            // Apply new transform
+            currentDragItem.style.transform = `scale(${startScale}) rotate(${rotation}deg)`;
+            // Store the value directly on the DOM element for mouseup
+            currentDragItem.dataset.currentRotation = rotation; 
+
+        } else if (currentTransformAction === 'resize') {
+            const dx = e.clientX - transformOrigin.x;
+            const dy = e.clientY - transformOrigin.y;
+            const currentDistance = Math.hypot(dx, dy);
+            
+            // Calculate new scale based on distance change
+            let scale = (currentDistance / startDistance) * startScale;
+            scale = Math.max(0.1, Math.min(scale, 5)); // Clamp scale
+            
+            // Apply new transform
+            currentDragItem.style.transform = `scale(${scale}) rotate(${startRotation}deg)`;
+            // Store the value directly on the DOM element for mouseup
+            currentDragItem.dataset.currentScale = scale;
+
+        } else { 
+            // Default 'move' logic
             const rect = sceneCanvas.getBoundingClientRect();
             let x = e.clientX - rect.left - dragOffsetX;
             let y = e.clientY - rect.top - dragOffsetY;
 
-            x = Math.max(0, Math.min(x, rect.width - currentDragItem.width));
-            y = Math.max(0, Math.min(y, rect.height - currentDragItem.height));
+            // Clamp position to canvas bounds (allowing part of it to be off-screen)
+            const itemRect = currentDragItem.getBoundingClientRect();
+            x = Math.max(-itemRect.width / 2, Math.min(x, rect.width - itemRect.width / 2));
+            y = Math.max(-itemRect.height / 2, Math.min(y, rect.height - itemRect.height / 2));
             
             currentDragItem.style.left = `${x}px`;
             currentDragItem.style.top = `${y}px`;
-        });
-    }
-    
-    // 4. Mouse up listener (for saving drag position)
+        }
+    });
+
+    // 5. Mouse up listener (for saving drag position)
+    // --- REPLACE THE EXISTING 'mouseup' LISTENER ---
     document.addEventListener('mouseup', () => {
         if (!currentDragItem) return;
 
@@ -391,18 +506,35 @@ export function setupItineraryEventListeners() {
         const posObject = state.session.itemPositions.get(uniqueId);
         
         if (posObject) {
-            posObject.x = parseFloat(currentDragItem.style.left);
-            posObject.y = parseFloat(currentDragItem.style.top);
-            posObject.z = parseInt(currentDragItem.style.zIndex);
+            if (currentTransformAction === 'resize') {
+                posObject.scale = parseFloat(currentDragItem.dataset.currentScale) || startScale;
+                posObject.rotation = startRotation; // Keep original rotation
+            } else if (currentTransformAction === 'rotate') {
+                posObject.scale = startScale; // Keep original scale
+                posObject.rotation = parseFloat(currentDragItem.dataset.currentRotation) || startRotation;
+            } else {
+                // 'move' action
+                posObject.x = parseFloat(currentDragItem.style.left);
+                posObject.y = parseFloat(currentDragItem.style.top);
+            }
+            // Always update z-index
+            posObject.z = parseInt(currentDragItem.style.zIndex); 
             
             state.session.itemPositions.set(uniqueId, posObject);
             triggerSave();
         }
         
+        // Clear all drag/transform state
         currentDragItem = null;
+        currentTransformAction = null;
+        startX = 0;
+        startY = 0;
+        startScale = 1;
+        startRotation = 0;
+        startAngle = 0;
+        startDistance = 1;
     });
 }
-
 /**
  * Shows the Itinerary (Scene Builder) modal
  */
