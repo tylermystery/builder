@@ -14,48 +14,84 @@ const closeBtn = document.getElementById('itinerary-close-btn');
 const sceneCanvas = document.getElementById('scene-builder-canvas');
 const bgThumbContainer = document.querySelector('.background-thumbnails');
 const itemPaletteContainer = document.querySelector('.palette-items');
+const statusText = document.getElementById('scene-status-text');
 
-// --- NEW --- Cutout Picker DOM Elements
+// Cutout Picker DOM Elements
 const cutoutPicker = document.getElementById('cutout-picker-popover');
 const cutoutPickerTitle = document.getElementById('cutout-picker-title');
 const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails');
 const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
+const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
+const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
+const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn');
 
-// Module state for drag-and-drop
-let zCounter = 10; // For managing item stacking (z-index)
+// Module state
+let zCounter = 10;
 let currentDragItem = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
+let pendingCutout = null; // Stores { record, x, y, selectedUrl }
 
-// --- NEW --- State for pending cutout
-let pendingCutout = null;
+// --- NEW HELPER ---
+/**
+ * Updates the status text overlay on the canvas.
+ * @param {string} text - The message to display.
+ * @param {boolean} [isLoading=false] - If true, adds a spinner.
+ */
+function updateSceneStatus(text, isLoading = false) {
+    if (statusText) {
+        statusText.innerHTML = `${isLoading ? '⚙️ ' : ''}${text}`;
+        statusText.style.opacity = 1;
+        if (!isLoading) {
+            setTimeout(() => {
+                if (statusText.innerHTML === text) { // Only fade if text hasn't changed
+                    statusText.style.opacity = 0;
+                }
+            }, 3000);
+        }
+    }
+}
 
 /**
- * Creates a single cutout from a *specific image URL* and makes it draggable
+ * --- MODIFIED ---
+ * Creates a single cutout from a specific image URL and AI prompt.
  */
 function renderSingleCutout(uniqueId, pos) {
     if (!sceneCanvas) return;
     
-    // 1. Get the specific image URL from the position object
-    const imageUrl = pos.imageUrl;
+    const { imageUrl, prompt } = pos;
     if (!imageUrl) return;
 
     // 2. 🪄 The Cloudinary AI Magic 🪄
-    // We add 'e_background_removal' to get the AI cutout
-    const cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150/');
+    // Use Generative Remove if a prompt exists, otherwise fall back to background removal
+    let cutoutUrl;
+    if (prompt && prompt.trim() !== '') {
+        // Use new Generative Remove with a prompt
+        const encodedPrompt = encodeURIComponent(prompt.trim());
+        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150/`);
+        log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
+    } else {
+        // Fallback to simple background removal
+        cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150/');
+        log('Itinerary', 'No prompt, using simple background removal.');
+    }
 
     const img = document.createElement('img');
     img.src = cutoutUrl;
     img.className = 'scene-cutout';
-    img.dataset.uniqueId = uniqueId; // Use unique ID
+    img.dataset.uniqueId = uniqueId;
     img.style.left = `${pos.x}px`;
     img.style.top = `${pos.y}px`;
     img.style.zIndex = pos.z;
-    img.setAttribute('draggable', false); // Prevent native img drag
+    img.setAttribute('draggable', false);
 
-    // 3. Add mousedown listener to start dragging
+    // Add status update on load
+    img.onload = () => updateSceneStatus("Item added! Drag to move.");
+    img.onerror = () => updateSceneStatus("❌ Error creating cutout. Try a different prompt.");
+    
     img.addEventListener('mousedown', (e) => {
         e.preventDefault();
+        updateSceneStatus("Dragging item...");
         currentDragItem = img;
         currentDragItem.classList.add('is-dragging');
         
@@ -77,18 +113,18 @@ function renderSingleCutout(uniqueId, pos) {
 function renderCutouts() {
     if (!sceneCanvas) return;
     sceneCanvas.innerHTML = ''; // Clear existing cutouts
-    zCounter = 10; // Reset z-index
+    sceneCanvas.appendChild(statusText); // Re-add status text
+    zCounter = 10; 
 
-    // Iterate over the Map [uniqueId, positionObject]
     for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
         renderSingleCutout(uniqueId, pos);
-        if (pos.z > zCounter) zCounter = pos.z; // Ensure new items are on top
+        if (pos.z > zCounter) zCounter = pos.z;
     }
 }
 
 /**
  * --- MODIFIED ---
- * Renders the entire Scene Builder: Backgrounds, Palette (now with all items), and Cutouts
+ * Renders the palette with BOTH locked items and ideas
  */
 async function renderScene() {
     if (!sceneCanvas || !bgThumbContainer || !itemPaletteContainer) {
@@ -96,31 +132,27 @@ async function renderScene() {
         return;
     }
 
-    // 1. Find the Venue and render background thumbnails
+    // 1. Find Venue and render backgrounds
     bgThumbContainer.innerHTML = '';
     const venueRecord = state.records.all.find(r => 
         state.cart.lockedItems.has(r.id) && 
         r.fields.Categories?.toLowerCase().includes('venue')
     );
-
     const bgDescription = bgThumbContainer.parentElement.querySelector('p.description');
-    
     if (venueRecord) {
         if(bgDescription) bgDescription.style.display = 'none';
-        
-        const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map()); //
+        const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map());
         imageUrls.forEach(url => {
             const thumb = document.createElement('div');
             thumb.className = 'background-thumb';
             const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
             thumb.innerHTML = `<img src="${thumbUrl}" alt="Venue option"> <span>${venueRecord.fields.Name}</span>`;
-            
             thumb.addEventListener('click', () => {
                 sceneCanvas.style.backgroundImage = `url('${url}')`;
+                updateSceneStatus("Background set!");
             });
             bgThumbContainer.appendChild(thumb);
         });
-        
         if (imageUrls.length > 0 && !sceneCanvas.style.backgroundImage) {
             sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
         }
@@ -128,10 +160,9 @@ async function renderScene() {
         if(bgDescription) bgDescription.style.display = 'block';
     }
 
-    // 2. --- MODIFIED --- Render the palette with BOTH locked items and ideas
+    // 2. Render the palette with BOTH locked items and ideas
     itemPaletteContainer.innerHTML = '';
     const paletteDescription = itemPaletteContainer.parentElement.querySelector('p.description');
-
     const allItems = new Map([
         ...Array.from(state.cart.lockedItems.entries()).map(([id, info]) => [id, { info, type: 'locked' }]),
         ...Array.from(state.cart.items.entries()).map(([id, info]) => [id, { info, type: 'idea' }])
@@ -141,23 +172,19 @@ async function renderScene() {
         if(paletteDescription) paletteDescription.style.display = 'block';
     } else {
         if(paletteDescription) paletteDescription.style.display = 'none';
-        
         for (const [recordId, { info, type }] of allItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) continue;
-
-            const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
+            const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
             const itemEl = document.createElement('div');
-            // --- ADDED: 'locked' or 'idea' class ---
             itemEl.className = `palette-item ${type}`; 
             itemEl.setAttribute('draggable', true);
-            
             const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
             itemEl.innerHTML = `<img src="${thumbUrl}" alt="${record.fields.Name}"> <span>${record.fields.Name}</span>`;
-            
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';
+                updateSceneStatus("Drag to place item...");
             });
             itemPaletteContainer.appendChild(itemEl);
         }
@@ -167,24 +194,28 @@ async function renderScene() {
     renderCutouts();
 }
 
-// --- NEW FUNCTION ---
-// Shows the "Cutout Picker" popover
+/**
+ * --- MODIFIED ---
+ * Shows the "Cutout Picker" popover and populates it.
+ */
 async function showCutoutPicker(record, x, y) {
     if (!cutoutPicker) return;
+    updateSceneStatus("Fetching image options...", true);
 
     // Store pending data
-    pendingCutout = { record, x, y };
+    pendingCutout = { record, x, y, selectedUrl: null };
 
-    // Set title and clear old thumbnails
+    // Reset UI
     cutoutPickerTitle.textContent = `Select image for: ${record.fields.Name}`;
     cutoutPickerThumbnails.innerHTML = '';
+    cutoutAiPrompt.value = '';
+    cutoutPromptContainer.style.display = 'none';
     
-    // Fetch all images for this item
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
     if (imageUrls.length === 0) {
-        // If no images, just add the default placeholder
-        addCutoutToScene(ui.getPlaceholderImage([]));
+        updateSceneStatus("Item has no images, adding placeholder.");
+        addCutoutToScene(ui.getPlaceholderImage([]), ''); // Add with no prompt
         return;
     }
 
@@ -194,52 +225,55 @@ async function showCutoutPicker(record, x, y) {
         thumb.className = 'thumbnail-img';
         thumb.style.backgroundImage = `url('${url.replace('/upload/', '/upload/c_fill,g_auto,w_100,h_80/')}')`;
         
-        // This is the important part!
         thumb.addEventListener('click', () => {
-            addCutoutToScene(url);
+            // Highlight this thumbnail
+            cutoutPickerThumbnails.querySelectorAll('.thumbnail-img').forEach(t => t.classList.remove('selected'));
+            thumb.classList.add('selected');
+            
+            // Store the selected URL and show the prompt
+            pendingCutout.selectedUrl = url;
+            cutoutPromptContainer.style.display = 'block';
+            cutoutAiPrompt.focus();
+            updateSceneStatus("Now, tell the AI what to cut out.");
         });
         cutoutPickerThumbnails.appendChild(thumb);
     });
 
-    // Show the popover
+    updateSceneStatus("Select an image to use as the cutout source.");
     cutoutPicker.style.display = 'flex';
 }
 
-// --- NEW FUNCTION ---
-// Hides the "Cutout Picker"
 function hideCutoutPicker() {
     if (cutoutPicker) cutoutPicker.style.display = 'none';
     pendingCutout = null;
 }
 
-// --- NEW FUNCTION ---
-// Final step: creates the cutout and saves it to state
-function addCutoutToScene(imageUrl) {
+/**
+ * --- MODIFIED ---
+ * Final step: creates the cutout and saves it to state with the AI prompt.
+ */
+function addCutoutToScene(imageUrl, promptText) {
     if (!pendingCutout) return;
+    updateSceneStatus("⚙️ AI is generating cutout...", true);
 
     const { record, x, y } = pendingCutout;
     zCounter++;
     
-    // Create a unique ID for this specific cutout
     const uniqueId = `cutout-${Date.now()}`;
     
-    // This is our new, more detailed position object
     const newPosition = {
         recordId: record.id,
         imageUrl: imageUrl, // Save the *chosen* image URL
-        x: x - 75, // Offset to center
-        y: y - 75, // Offset to center
+        prompt: promptText, // Save the AI prompt
+        x: x - 75,
+        y: y - 75,
         z: zCounter
     };
             
-    // Save to state (using uniqueId as the key)
     state.session.itemPositions.set(uniqueId, newPosition);
-    triggerSave(); //
+    triggerSave();
     
-    // Draw the new cutout
     renderSingleCutout(uniqueId, newPosition);
-    
-    // Hide the picker
     hideCutoutPicker();
 }
 
@@ -261,39 +295,41 @@ export function setupItineraryEventListeners() {
         }
     });
 
-    // --- NEW --- Cutout Picker Listeners
+    // 2. Cutout Picker Listeners
     cutoutPickerCloseBtn.addEventListener('click', hideCutoutPicker);
     cutoutPicker.addEventListener('click', (e) => {
-        if (e.target === cutoutPicker) {
-            hideCutoutPicker();
+        if (e.target === cutoutPicker) hideCutoutPicker();
+    });
+    
+    // --- NEW --- Submit button for the AI prompt
+    cutoutPickerSubmitBtn.addEventListener('click', () => {
+        if (pendingCutout && pendingCutout.selectedUrl) {
+            addCutoutToScene(pendingCutout.selectedUrl, cutoutAiPrompt.value);
+        } else {
+            log('Itinerary', 'Cutout submit clicked, but no image was selected.');
         }
     });
 
-    // 2. Scene Canvas drag-and-drop listeners
+    // 3. Scene Canvas drag-and-drop listeners
     if (sceneCanvas) {
-        // A. Allow dropping *onto* the canvas (from palette)
         sceneCanvas.addEventListener('dragover', (e) => {
-            e.preventDefault(); 
+            e.preventDefault();
+            updateSceneStatus("Release to choose cutout...");
         });
 
-        // B. --- MODIFIED --- Handle the drop event (from palette)
         sceneCanvas.addEventListener('drop', (e) => {
             e.preventDefault();
             const recordId = e.dataTransfer.getData('text/plain');
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
 
-            // Calculate position
             const rect = sceneCanvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
-            // --- CHANGED ---
-            // Instead of creating a cutout, show the picker
             showCutoutPicker(record, x, y);
         });
 
-        // C. Handle dragging *within* the canvas
         sceneCanvas.addEventListener('mousemove', (e) => {
             if (!currentDragItem) return;
             
@@ -301,7 +337,6 @@ export function setupItineraryEventListeners() {
             let x = e.clientX - rect.left - dragOffsetX;
             let y = e.clientY - rect.top - dragOffsetY;
 
-            // Constrain to canvas boundaries
             x = Math.max(0, Math.min(x, rect.width - currentDragItem.width));
             y = Math.max(0, Math.min(y, rect.height - currentDragItem.height));
             
@@ -310,26 +345,24 @@ export function setupItineraryEventListeners() {
         });
     }
     
-    // D. --- MODIFIED --- Handle mouse up *anywhere* to stop dragging
+    // 4. Mouse up listener (for saving drag position)
     document.addEventListener('mouseup', () => {
         if (!currentDragItem) return;
 
         currentDragItem.classList.remove('is-dragging');
         currentDragItem.style.cursor = 'move';
+        updateSceneStatus("Position saved!");
         
-        // Save new position
         const uniqueId = currentDragItem.dataset.uniqueId;
         const posObject = state.session.itemPositions.get(uniqueId);
         
         if (posObject) {
-            // Update the object with new coordinates
             posObject.x = parseFloat(currentDragItem.style.left);
             posObject.y = parseFloat(currentDragItem.style.top);
             posObject.z = parseInt(currentDragItem.style.zIndex);
             
-            // Save the *entire object* back into the map
             state.session.itemPositions.set(uniqueId, posObject);
-            triggerSave(); //
+            triggerSave();
         }
         
         currentDragItem = null;
@@ -342,13 +375,11 @@ export function setupItineraryEventListeners() {
 export function showItineraryModal() {
     updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal (Scene Builder).');
-    
-    // Always render the scene
     renderScene(); 
-    
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
+    updateSceneStatus("Drag items from the palette onto the canvas.");
 }
 
 /**
@@ -356,12 +387,10 @@ export function showItineraryModal() {
  */
 export function hideItineraryModal() {
     log('Itinerary', 'Hiding itinerary modal.');
-    hideCutoutPicker(); // --- ADD THIS ---
+    hideCutoutPicker();
     itineraryModal.classList.remove('active');
     setTimeout(() => {
         itineraryModal.style.display = 'none';
     }, 300);
     document.body.classList.remove('modal-open');
 }
-
-// --- REMOVED ALL OLD FUNCTIONS ---
