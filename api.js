@@ -109,7 +109,7 @@ export async function associateSessionWithUser(sessionId, userId) {
 }
 
 
-export async function loadSessionFromAirtable(sessionId) {
+export async function loadSessionFrovmAirtable(sessionId) {
     if (!sessionId) {
          log('API', 'loadSessionFromAirtable called with no sessionId.');
          return;
@@ -184,6 +184,7 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
                 state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {}));
+                state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
             } catch (jsonError) {
@@ -194,6 +195,7 @@ export async function loadSessionFromAirtable(sessionId) {
                  state.session.reactions = new Map();
                  state.session.userProfiles = new Map();
                  state.eventDetails.combined = new Map();
+                state.session.itemPositions = new Map();
             }
         } else {
              log('API', `Session ${sessionId} has no 'Items with Variations' data.`);
