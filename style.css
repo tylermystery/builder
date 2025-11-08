@@ -2853,3 +2853,75 @@ hr.total-divider {
         stroke-dashoffset: 0;
     }
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* 1. Fullscreen Button */
+.itinerary-scene-header {
+    position: relative; /* Context for the button */
+}
+.scene-header-btn {
+    position: absolute;
+    top: 50%;
+    right: 15px;
+    transform: translateY(-50%);
+    background: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #495057;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    line-height: 30px;
+    padding: 0;
+}
+.scene-header-btn:hover {
+    background: #dee2e6;
+    color: #007bff;
+}
+
+/* 2. Scrolling Palette Fix */
+#scene-builder-palette {
+    overflow-y: auto; /* Make the whole palette scrollable */
+    max-height: 100%; /* Constrain to parent height */
+}
+
+/* 3. Standardized Time Inputs */
+.form-row-time {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.form-row-time input[type="time"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    box-sizing: border-box;
+    font-family: inherit;
+    color: #495057;
+}
+.form-row-time span {
+    font-weight: bold;
+    color: #6c757d;
+}
+
+/* 4. Path Animation Fix */
+.itinerary-path-line {
+    fill: none;
+    stroke: #d9534f;
+    stroke-width: 3px;
+    stroke-dasharray: 8 8;
+    
+    /* Corrected Animation: */
+    /* 1. Set dasharray to length, offset to length (line is "invisible") */
+    stroke-dashoffset: 1000; /* Will be replaced by JS */
+    stroke-dasharray: 1000 1000; /* Will be replaced by JS */
+    
+    /* 2. Animate offset to 0 (line "draws") */
+    transition: stroke-dashoffset 2s ease-out;
+}
+/* REMOVE the old @keyframes rule */
