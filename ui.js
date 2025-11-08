@@ -469,7 +469,7 @@ export function updateCatalogHeader() {
     
     const locationEl = document.getElementById('location-filter');
     if (locationEl && locationEl.value !== 'any') {
-        activeFiltersHtml.push(createFilterChip('Location: 'G' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
+        activeFiltersHtml.push(createFilterChip('Location: ' + locationEl.options[locationEl.selectedIndex].text, 'location-filter', locationEl.value));
         filterCount++; 
     }
 
@@ -604,7 +604,10 @@ export function handleFilterChipClear(e) {
             document.getElementById('name-filter').value = '';
             break;
         case 'status-filter':
-            document.getElementById('status-filter').css('display') = 'Available';
+            // --- THIS IS THE FIX ---
+            // It should be .value, not .css('display')
+            document.getElementById('status-filter').value = 'Available';
+            // --- END FIX ---
             break;
         case 'headcount-filter':
             document.getElementById('headcount-filter').value = 'any';
