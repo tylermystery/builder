@@ -3,7 +3,7 @@ import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard } from './components/card.js';
-// --- THIS LINE IS MODIFIED (renderItineraryHeader removed) ---
+// --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
 import * as api from '../api.js';
@@ -604,7 +604,7 @@ export function handleFilterChipClear(e) {
             document.getElementById('name-filter').value = '';
             break;
         case 'status-filter':
-            document.getElementById('status-filter').value = 'Available';
+            document.getElementById('status-filter').css('display') = 'Available';
             break;
         case 'headcount-filter':
             document.getElementById('headcount-filter').value = 'any';
