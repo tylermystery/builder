@@ -366,6 +366,12 @@
                     
                     <div id="cutout-prompt-container" style="display: none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
                         <p style="font-size: 0.9em; color: #6c757d; margin-top: 0;">2. Tell the AI what to cut out (e.g., "taco bar", "person in blue").</p>
+                        <div class="form-row">
+                            <input type="text" id="cutout-item-time" placeholder="Optional: Add a time (e.g., 7:00 PM)">
+                        </div>
+                        <div class="form-row">
+                            <textarea id="cutout-item-note" placeholder="Optional: Add a short note..."></textarea>
+                        </div>
                         <div class="form-row" style="display: flex; gap: 10px;">
                             <input type="text" id="cutout-ai-prompt" placeholder="Leave blank to remove background">
                             <button id="cutout-picker-submit-btn" class="primary-action-btn" style="width: 100px; padding: 10px; font-size: 0.9em; margin-top: 0;">Create</button>
