@@ -257,8 +257,7 @@ export function showItineraryModal() {
     // Always render the scene
     renderScene(); 
     
-    // This function is still used for the header inputs (Event Name, Goals)
-    renderItineraryHeader(); //
+    // --- REMOVED: renderItineraryHeader(); ---
     
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
@@ -279,16 +278,6 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
-/**
- * Renders the data in the small header of the itinerary modal
- * (This function is unchanged)
- */
-export function renderItineraryHeader() {
-    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
-    document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
-}
-
-
+// --- REMOVED: renderItineraryHeader() ---
 // --- REMOVED: renderItinerary() ---
 // --- REMOVED: createItineraryItem() ---
-// This work is now done by the main sidebar (updateEventPlanSection)
