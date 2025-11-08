@@ -329,7 +329,8 @@
 
         <div class="itinerary-container scene-builder-container">
             <div id="scene-builder-canvas">
-                </div>
+                <div id="scene-status-text">Drop an item on the canvas to start.</div>
+            </div>
             
             <div id="scene-builder-palette">
                 <div id="scene-background-picker">
@@ -345,20 +346,28 @@
                         </div>
                 </div>
             </div>
+
             <div id="cutout-picker-popover" class="modal-overlay" style="display: none; position: absolute; background: rgba(0,0,0,0.3); z-index: 100;">
                 <div class="checkout-modal-content" style="max-width: 500px; padding: 20px;">
                     <button id="cutout-picker-close-btn" class="modal-close-btn" style="top: 10px; right: 10px;">×</button>
                     <h4 id="cutout-picker-title" style="margin-top: 0;">Select a Cutout</h4>
-                    <p style="font-size: 0.9em; color: #6c757d;">Click an image to add it to the scene as an AI-generated cutout.</p>
+                    <p style="font-size: 0.9em; color: #6c757d;">1. Click an image to use as the source.</p>
                     <div id="cutout-picker-thumbnails" style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 300px; overflow-y: auto;">
                         </div>
+                    
+                    <div id="cutout-prompt-container" style="display: none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                        <p style="font-size: 0.9em; color: #6c757d; margin-top: 0;">2. Tell the AI what to cut out.</p>
+                        <div class="form-row" style="display: flex; gap: 10px;">
+                            <input type="text" id="cutout-ai-prompt" placeholder="e.g., 'taco bar' or 'person in blue'" style="flex-grow: 1;">
+                            <button id="cutout-picker-submit-btn" class="primary-action-btn" style="width: 100px; padding: 10px; font-size: 0.9em; margin-top: 0;">Create</button>
+                        </div>
+                    </div>
+                    
                 </div>
             </div>
-
         </div>
     </div>
-</div>
-    
+</div>    
     
     <div id="chat-widget-container">
         <button id="chat-toggle-button">
