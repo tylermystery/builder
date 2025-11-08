@@ -1,4 +1,4 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/itinerary.js
+// FILE: components/itinerary.js (REPLACE ENTIRE FILE)
 
 import { state } from '../state.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
@@ -8,74 +8,166 @@ import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
 
-const Sortable = window.Sortable;
-
+// Get DOM elements
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
-const lockedItemsContainer = document.getElementById('itinerary-locked-items');
-const favoritedItemsContainer = document.getElementById('itinerary-favorited-items');
 const closeBtn = document.getElementById('itinerary-close-btn');
+const sceneCanvas = document.getElementById('scene-builder-canvas');
+const bgThumbContainer = document.querySelector('.background-thumbnails');
+const itemPaletteContainer = document.querySelector('.palette-items');
 
-let lockedSortable, favoritedSortable;
+// Module state for drag-and-drop
+let zCounter = 10; // For managing item stacking (z-index)
+let currentDragItem = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
 
+/**
+ * Creates a single cutout, applies AI transform, and makes it draggable
+ */
+async function renderSingleCutout(record, pos) {
+    if (!sceneCanvas) return;
+    
+    // 1. Get the image URL for the item
+    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
+    if (imageUrls.length === 0) return; // No image to make a cutout from
+
+    // 2. 🪄 The Cloudinary AI Magic 🪄
+    // We add 'e_background_removal' to get the AI cutout
+    const cutoutUrl = imageUrls[0].replace('/upload/', '/upload/e_background_removal,w_150/');
+
+    const img = document.createElement('img');
+    img.src = cutoutUrl;
+    img.className = 'scene-cutout';
+    img.dataset.recordId = record.id;
+    img.style.left = `${pos.x}px`;
+    img.style.top = `${pos.y}px`;
+    img.style.zIndex = pos.z;
+    img.setAttribute('draggable', false); // Prevent native img drag
+
+    // 3. Add mousedown listener to start dragging
+    img.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        currentDragItem = img;
+        currentDragItem.classList.add('is-dragging');
+        
+        // Calculate offset from mouse to top-left corner of image
+        const rect = img.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        
+        // Bring to front
+        zCounter++; 
+        img.style.zIndex = zCounter;
+        img.style.cursor = 'grabbing';
+    });
+    
+    sceneCanvas.appendChild(img);
+}
+
+/**
+ * Draws all saved cutouts from state onto the canvas
+ */
+async function renderCutouts() {
+    if (!sceneCanvas) return;
+    sceneCanvas.innerHTML = ''; // Clear existing cutouts
+    zCounter = 10; // Reset z-index
+
+    for (const [recordId, pos] of state.session.itemPositions.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (record) {
+            renderSingleCutout(record, pos);
+            if (pos.z > zCounter) zCounter = pos.z; // Ensure new items are on top
+        }
+    }
+}
+
+/**
+ * Renders the entire Scene Builder: Backgrounds, Palette, and Cutouts
+ */
+async function renderScene() {
+    if (!sceneCanvas || !bgThumbContainer || !itemPaletteContainer) {
+        log('Itinerary', 'Scene Builder DOM elements not found.');
+        return;
+    }
+
+    // 1. Find the Venue and render background thumbnails
+    bgThumbContainer.innerHTML = '';
+    const venueRecord = state.records.all.find(r => 
+        state.cart.lockedItems.has(r.id) && 
+        r.fields.Categories?.toLowerCase().includes('venue')
+    );
+
+    const bgDescription = bgThumbContainer.parentElement.querySelector('p.description');
+    
+    if (venueRecord) {
+        if(bgDescription) bgDescription.style.display = 'none';
+        
+        const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map()); //
+        imageUrls.forEach(url => {
+            const thumb = document.createElement('div');
+            thumb.className = 'background-thumb';
+            // Transform for a small thumbnail
+            const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+            thumb.innerHTML = `<img src="${thumbUrl}" alt="Venue option"> <span>${venueRecord.fields.Name}</span>`;
+            
+            thumb.addEventListener('click', () => {
+                // Set the full-size image as the background
+                sceneCanvas.style.backgroundImage = `url('${url}')`;
+            });
+            bgThumbContainer.appendChild(thumb);
+        });
+        
+        // Set first image as default background if one isn't set
+        if (imageUrls.length > 0 && !sceneCanvas.style.backgroundImage) {
+            sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
+        }
+    } else {
+        if(bgDescription) bgDescription.style.display = 'block';
+    }
+
+    // 2. Render the "Ideas" palette (items the user can drag)
+    itemPaletteContainer.innerHTML = '';
+    const paletteDescription = itemPaletteContainer.parentElement.querySelector('p.description');
+
+    if (state.cart.items.size === 0) {
+        if(paletteDescription) paletteDescription.style.display = 'block';
+    } else {
+        if(paletteDescription) paletteDescription.style.display = 'none';
+        
+        for (const [recordId, itemInfo] of state.cart.items.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) continue;
+
+            const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map()); //
+            const itemEl = document.createElement('div');
+            itemEl.className = 'palette-item';
+            itemEl.setAttribute('draggable', true); // Make it draggable
+            
+            const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+            itemEl.innerHTML = `<img src="${thumbUrl}" alt="${record.fields.Name}"> <span>${record.fields.Name}</span>`;
+            
+            // Add drag start listener
+            itemEl.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', recordId);
+                e.dataTransfer.effectAllowed = 'copy';
+            });
+            itemPaletteContainer.appendChild(itemEl);
+        }
+    }
+    
+    // 3. Render all existing cutouts from state
+    renderCutouts();
+}
+
+/**
+ * Sets up all event listeners for the Itinerary (Scene Builder) modal
+ */
 export function setupItineraryEventListeners() {
-    log('Itinerary', 'Initializing Itinerary with SortableJS.');
-    lockedSortable = new Sortable(lockedItemsContainer, {
-        group: 'shared',
-        animation: 150,
-        ghostClass: 'itinerary-item-ghost',
-        onEnd: function(evt) {
-            log('Itinerary', 'Drag ended in locked items list.');
-            if (evt.from.id === evt.to.id) {
-                const newOrder = lockedSortable.toArray();
-                const newLockedItems = new Map();
-                newOrder.forEach(recordId => {
-                    if (state.cart.lockedItems.has(recordId)) {
-                        newLockedItems.set(recordId, state.cart.lockedItems.get(recordId));
-                    }
-                });
-                state.cart.lockedItems = newLockedItems;
-            } else {
-                const recordId = evt.item.dataset.recordId;
-                if (state.cart.items.has(recordId)) {
-                    const itemInfo = state.cart.items.get(recordId);
-                    state.cart.items.delete(recordId);
-                    state.cart.lockedItems.set(recordId, itemInfo);
-                }
-            }
-            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateIdeasCarousel();
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateEventPlanDateDisplay();
-            ui.updateLockedItemStatusIcons();
-            triggerSave();
-        }
-    });
+    log('Itinerary', 'Initializing Scene Builder listeners.');
 
-    favoritedSortable = new Sortable(favoritedItemsContainer, {
-        group: 'shared',
-        animation: 150,
-        ghostClass: 'itinerary-item-ghost',
-        onEnd: function(evt) {
-            log('Itinerary', 'Drag ended in favorites items list.');
-            if (evt.from.id !== evt.to.id) {
-                const recordId = evt.item.dataset.recordId;
-                if (state.cart.lockedItems.has(recordId)) {
-                    const itemInfo = state.cart.lockedItems.get(recordId);
-                    state.cart.lockedItems.delete(recordId);
-                    state.cart.items.set(recordId, itemInfo);
-                }
-            }
-            ui.updateCardIcon(state.records.all.find(r => r.id === evt.item.dataset.recordId).id);
-            ui.updateIdeasCarousel();
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateEventPlanDateDisplay();
-            ui.updateLockedItemStatusIcons();
-            triggerSave();
-        }
-    });
+    // --- REMOVED: All SortableJS logic ---
 
+    // 1. Close buttons
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
         hideItineraryModal();
@@ -86,20 +178,99 @@ export function setupItineraryEventListeners() {
             hideItineraryModal();
         }
     });
+
+    // 2. Scene Canvas drag-and-drop listeners
+    if (sceneCanvas) {
+        // A. Allow dropping *onto* the canvas (from palette)
+        sceneCanvas.addEventListener('dragover', (e) => {
+            e.preventDefault(); // This is necessary to allow a drop
+        });
+
+        // B. Handle the drop event (from palette)
+        sceneCanvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const recordId = e.dataTransfer.getData('text/plain');
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) return;
+
+            // Calculate position relative to the canvas
+            const rect = sceneCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            zCounter++; // Place it on top
+
+            const newPosition = { x: x - 75, y: y - 75, z: zCounter }; // Offset to center on cursor (150px wide)
+            
+            // Save to state and trigger save
+            state.session.itemPositions.set(recordId, newPosition);
+            triggerSave(); //
+            
+            // Draw the new cutout
+            renderSingleCutout(record, newPosition);
+        });
+
+        // C. Handle dragging *within* the canvas
+        sceneCanvas.addEventListener('mousemove', (e) => {
+            if (!currentDragItem) return;
+            
+            const rect = sceneCanvas.getBoundingClientRect();
+            let x = e.clientX - rect.left - dragOffsetX;
+            let y = e.clientY - rect.top - dragOffsetY;
+
+            // Constrain to canvas boundaries
+            x = Math.max(0, Math.min(x, rect.width - currentDragItem.width));
+            y = Math.max(0, Math.min(y, rect.height - currentDragItem.height));
+            
+            currentDragItem.style.left = `${x}px`;
+            currentDragItem.style.top = `${y}px`;
+        });
+    }
+    
+    // D. Handle mouse up *anywhere* to stop dragging
+    document.addEventListener('mouseup', () => {
+        if (!currentDragItem) return;
+
+        currentDragItem.classList.remove('is-dragging');
+        currentDragItem.style.cursor = 'move';
+        
+        // Save new position
+        const recordId = currentDragItem.dataset.recordId;
+        const newPos = { 
+            x: parseFloat(currentDragItem.style.left), 
+            y: parseFloat(currentDragItem.style.top), 
+            z: parseInt(currentDragItem.style.zIndex) 
+        };
+        state.session.itemPositions.set(recordId, newPos);
+        triggerSave(); //
+        
+        currentDragItem = null;
+    });
 }
 
+/**
+ * Shows the Itinerary (Scene Builder) modal
+ */
 export function showItineraryModal() {
     updateUrl({ view: 'itinerary' });
-    log('Itinerary', 'Showing itinerary modal.');
-    renderItinerary();
-    renderItineraryHeader();
+    log('Itinerary', 'Showing itinerary modal (Scene Builder).');
+    
+    // Always render the scene
+    renderScene(); 
+    
+    // --- REMOVED: renderItineraryHeader(); ---
+    
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
+/**
+ * Hides the Itinerary (Scene Builder) modal
+ */
 export function hideItineraryModal() {
     log('Itinerary', 'Hiding itinerary modal.');
+    // Note: We don't call updateUrl({ view: null }) here anymore,
+    // because the close button listener does it.
     itineraryModal.classList.remove('active');
     setTimeout(() => {
         itineraryModal.style.display = 'none';
@@ -107,146 +278,6 @@ export function hideItineraryModal() {
     document.body.classList.remove('modal-open');
 }
 
-export function renderItineraryHeader() {
-    document.getElementById('itinerary-event-name').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Awesome Event';
-    document.getElementById('itinerary-goals').value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
-}
-
-export async function renderItinerary() {
-    // --- DEBUG STATEMENT ---
-    log('Itinerary', 'Checking user object on render:', state.session.user);
-
-    log('Itinerary', 'Rendering itinerary items.');
-    lockedItemsContainer.innerHTML = '';
-    favoritedItemsContainer.innerHTML = '';
-    if (state.cart.lockedItems.size === 0) {
-        lockedItemsContainer.innerHTML = `<p class="description">Drag items from Ideas here to add them to your plan.</p>`;
-    }
-    if (state.cart.items.size === 0) {
-        favoritedItemsContainer.innerHTML = `<p class="description">Favorite items from the catalog to add them here.</p>`;
-    }
-
-    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            const itemElement = await createItineraryItem(record, itemInfo, 'locked');
-            if (itemElement) lockedItemsContainer.appendChild(itemElement);
-        }
-    }
-
-    for (const [recordId, itemInfo] of state.cart.items.entries()) {
-        const record = state.records.all.find(r => r.id === recordId);
-        if (record) {
-            const itemElement = await createItineraryItem(record, itemInfo, 'favorite');
-            if (itemElement) favoritedItemsContainer.appendChild(itemElement);
-        }
-    }
-
-    lockedItemsContainer.addEventListener('change', (e) => {
-        if (e.target.classList.contains('price-override-input')) {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            const newPrice = parseFloat(e.target.value);
-            if (!isNaN(newPrice)) {
-                ui.updateLockedItemState(recordId, { overridePrice: newPrice });
-                ui.updateTotalCost();
-                ui.updateEventPlanSection();
-                triggerSave();
-            }
-        }
-    });
-
-    document.querySelectorAll('.itinerary-item .quantity-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            const newQuantity = parseInt(e.target.value, 10);
-            if (e.target.closest('#itinerary-locked-items')) {
-                ui.updateLockedItemState(recordId, { quantity: newQuantity });
-            } else {
-                ui.updateItemState(recordId, { quantity: newQuantity });
-            }
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            triggerSave();
-        });
-    });
-    document.querySelectorAll('.itinerary-item-note').forEach(textarea => {
-        textarea.addEventListener('input', (e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            const newNote = e.target.value;
-            if (e.target.closest('#itinerary-locked-items')) {
-                ui.updateLockedItemState(recordId, { note: newNote });
-            } else {
-                ui.updateItemState(recordId, { note: newNote });
-            }
-            ui.updateEventPlanSection();
-            triggerSave();
-        });
-    });
-    document.querySelectorAll('.itinerary-item .remove-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const recordId = e.target.closest('.itinerary-item').dataset.recordId;
-            state.cart.lockedItems.delete(recordId);
-            ui.updateTotalCost();
-            ui.updateEventPlanSection();
-            ui.updateIdeasCarousel();
-            e.target.closest('.itinerary-item').remove();
-            triggerSave();
-        });
-    });
-}
-
-async function createItineraryItem(record, itemInfo, type) {
-    const fields = record.fields;
-    const itemElement = document.createElement('div');
-    itemElement.className = `itinerary-item ${type === 'locked' ? 'locked' : 'favorite'}`;
-    itemElement.dataset.recordId = record.id;
-    const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    
-    const options = ui.parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const selectedOption = options[itemInfo.selectedOptionIndex];
-
-    const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
-    let priceHtml;
-
-    if (state.session.user.isOwner && type === 'locked') {
-        priceHtml = `
-            <div class="price-editor">
-                <label>Price:</label>
-                <input type="number" class="price-override-input" value="${price.toFixed(2)}" step="0.01" />
-            </div>`;
-    } else {
-        priceHtml = `<div class="price-display">$${price.toFixed(2)}</div>`;
-    }
-    
-    const quantitySelector = `
-        <div class="quantity-selector">
-            <label>Qty:</label>
-            <input type="number" class="quantity-input" value="${itemInfo.quantity}" min="1">
-        </div>
-    `;
-    itemElement.innerHTML = `
-        <img src="${imageUrls[0]}" class="locked-item-thumbnail" alt="${fields.Name}">
-        <div class="locked-item-details">
-            <p class="locked-item-name">${fields.Name}</p>
-            ${selectedOption ? `<p class="locked-item-option">${selectedOption.name}</p>` : ''}
-            <textarea class="itinerary-item-note" placeholder="Add a note...">${itemInfo.note}</textarea>
-        </div>
-        ${priceHtml}
-        ${quantitySelector}
-        <div class="locked-item-actions">
-            <button class="remove-btn" title="Remove">×</button>
-        </div>
-    `;
-    if (type === 'locked') {
-        const editBtn = document.createElement('button');
-        editBtn.className = 'edit-btn';
-        editBtn.textContent = 'Edit';
-        itemElement.querySelector('.locked-item-actions').prepend(editBtn);
-        editBtn.addEventListener('click', () => {
-            log('Itinerary Item', `Edit button clicked. Opening detail modal for "${fields.Name}".`);
-            ui.showDetailModal(record);
-        });
-    }
-
-    return itemElement;
-}
+// --- REMOVED: renderItineraryHeader() ---
+// --- REMOVED: renderItinerary() ---
+// --- REMOVED: createItineraryItem() ---
