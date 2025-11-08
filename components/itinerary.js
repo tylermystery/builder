@@ -23,7 +23,8 @@ const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails
 const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
 const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
 const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
-const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn'); // <-- ADD THIS LINE
+const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn'); // <-- Fix: Added this definition
+// --- NEW --- Context Thumbnail
 const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
 // Module state
@@ -42,7 +43,7 @@ let startRotation = 0;
 let startAngle = 0;
 let startDistance = 1;
 let transformOrigin = { x: 0, y: 0 };
-let startFlipped = false; // <-- ADD THIS LINE
+let startFlipped = false;
 // --- END ADD ---
 
 
@@ -160,6 +161,24 @@ function renderSingleCutout(uniqueId, pos) {
     `;
 
     wrapper.appendChild(img);
+
+    // --- ADD THIS BLOCK: Display time and note ---
+    let infoHtml = '';
+    if (pos.time) {
+        infoHtml += `<div class="scene-item-time">${pos.time}</div>`;
+    }
+    if (pos.note) {
+        infoHtml += `<div class="scene-item-note">${pos.note}</div>`;
+    }
+    
+    if (infoHtml) {
+        const infoEl = document.createElement('div');
+        infoEl.className = 'scene-item-info';
+        infoEl.innerHTML = infoHtml;
+        wrapper.appendChild(infoEl);
+    }
+    // --- END ADD ---
+
     wrapper.appendChild(controls);
 
     // 5. Wire up mouse events to the WRAPPER
@@ -398,6 +417,10 @@ async function showCutoutPicker(record, x, y) {
     cutoutPickerTitle.textContent = `Select image for: ${record.fields.Name}`;
     cutoutPickerThumbnails.innerHTML = '';
     cutoutAiPrompt.value = '';
+    // --- ADD THIS: Reset new fields ---
+    document.getElementById('cutout-item-time').value = '';
+    document.getElementById('cutout-item-note').value = '';
+    // --- END ADD ---
     cutoutPromptContainer.style.display = 'none';
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -469,6 +492,11 @@ function addCutoutToScene(imageUrl, promptText) {
     zCounter++;
     
     const uniqueId = `cutout-${Date.now()}`;
+
+    // --- ADD THIS: Read new values ---
+    const itemTime = document.getElementById('cutout-item-time').value.trim() || null;
+    const itemNote = document.getElementById('cutout-item-note').value.trim() || null;
+    // --- END ADD ---
     
     const newPosition = {
         recordId: record.id,
@@ -477,9 +505,11 @@ function addCutoutToScene(imageUrl, promptText) {
         x: x - 75,
         y: y - 75,
         z: zCounter,
-        scale: 1,      // <-- ADD THIS
-        rotation: 0,   // <-- ADD THIS
-        flipped: false   // <-- ADD THIS
+        scale: 1,      
+        rotation: 0,   
+        flipped: false,
+        time: itemTime,   // <-- ADD THIS
+        note: itemNote    // <-- ADD THIS
     };
             
     state.session.itemPositions.set(uniqueId, newPosition);
@@ -654,6 +684,31 @@ export function setupItineraryEventListeners() {
 export function showItineraryModal() {
     updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal (Scene Builder).');
+
+    // --- ADD THIS BLOCK: Populate Scene Header ---
+    const titleEl = document.getElementById('scene-header-title');
+    const dateEl = document.getElementById('scene-header-date');
+    
+    if (titleEl && dateEl) {
+        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+        titleEl.textContent = eventName || 'Your Event Scene';
+        
+        const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+        if (dateValue) {
+            // Handle both single date (from picker) and array (from session)
+            const dateStr = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+                dateEl.textContent = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            } else {
+                dateEl.textContent = 'Invalid date';
+            }
+        } else {
+            dateEl.textContent = 'No date set';
+        }
+    }
+    // --- End Populate ---
+
     renderScene(); 
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
