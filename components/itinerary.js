@@ -24,6 +24,8 @@ const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
 const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
 const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
 const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn');
+// --- NEW --- Context Thumbnail
+const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
 // Module state
 let zCounter = 10;
@@ -42,9 +44,12 @@ function updateSceneStatus(text, isLoading = false) {
     if (statusText) {
         statusText.innerHTML = `${isLoading ? '⚙️ ' : ''}${text}`;
         statusText.style.opacity = 1;
+        
+        // Don't fade out if it's a loading message
         if (!isLoading) {
             setTimeout(() => {
-                if (statusText.innerHTML === text) { // Only fade if text hasn't changed
+                // Only fade if the text hasn't been replaced by a new message
+                if (statusText.innerHTML === text) {
                     statusText.style.opacity = 0;
                 }
             }, 3000);
@@ -63,12 +68,12 @@ function renderSingleCutout(uniqueId, pos) {
     if (!imageUrl) return;
 
     // 2. 🪄 The Cloudinary AI Magic 🪄
-    // Use Generative Remove if a prompt exists, otherwise fall back to background removal
     let cutoutUrl;
     if (prompt && prompt.trim() !== '') {
         // Use new Generative Remove with a prompt
+        // --- ADDED a_ignore --- to prevent text overlay
         const encodedPrompt = encodeURIComponent(prompt.trim());
-        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150/`);
+        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore/`);
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
         // Fallback to simple background removal
@@ -120,10 +125,14 @@ function renderCutouts() {
         renderSingleCutout(uniqueId, pos);
         if (pos.z > zCounter) zCounter = pos.z;
     }
+    
+    // Show the "Drop" message only if the canvas is empty
+    if(state.session.itemPositions.size === 0) {
+        updateSceneStatus("Drag items from the palette onto the canvas.");
+    }
 }
 
 /**
- * --- MODIFIED ---
  * Renders the palette with BOTH locked items and ideas
  */
 async function renderScene() {
@@ -184,7 +193,7 @@ async function renderScene() {
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';
-                updateSceneStatus("Drag to place item...");
+                updateSceneStatus("Release to choose cutout...");
             });
             itemPaletteContainer.appendChild(itemEl);
         }
@@ -196,7 +205,7 @@ async function renderScene() {
 
 /**
  * --- MODIFIED ---
- * Shows the "Cutout Picker" popover and populates it.
+ * Shows the "Cutout Picker" popover and populates it with context.
  */
 async function showCutoutPicker(record, x, y) {
     if (!cutoutPicker) return;
@@ -213,6 +222,11 @@ async function showCutoutPicker(record, x, y) {
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
+    // --- NEW: Set Context Thumbnail ---
+    const contextThumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+    if (cutoutContextThumb) cutoutContextThumb.style.backgroundImage = `url('${contextThumbUrl}')`;
+    // --- END NEW ---
+
     if (imageUrls.length === 0) {
         updateSceneStatus("Item has no images, adding placeholder.");
         addCutoutToScene(ui.getPlaceholderImage([]), ''); // Add with no prompt
@@ -226,11 +240,9 @@ async function showCutoutPicker(record, x, y) {
         thumb.style.backgroundImage = `url('${url.replace('/upload/', '/upload/c_fill,g_auto,w_100,h_80/')}')`;
         
         thumb.addEventListener('click', () => {
-            // Highlight this thumbnail
             cutoutPickerThumbnails.querySelectorAll('.thumbnail-img').forEach(t => t.classList.remove('selected'));
             thumb.classList.add('selected');
             
-            // Store the selected URL and show the prompt
             pendingCutout.selectedUrl = url;
             cutoutPromptContainer.style.display = 'block';
             cutoutAiPrompt.focus();
@@ -301,12 +313,12 @@ export function setupItineraryEventListeners() {
         if (e.target === cutoutPicker) hideCutoutPicker();
     });
     
-    // --- NEW --- Submit button for the AI prompt
     cutoutPickerSubmitBtn.addEventListener('click', () => {
         if (pendingCutout && pendingCutout.selectedUrl) {
             addCutoutToScene(pendingCutout.selectedUrl, cutoutAiPrompt.value);
         } else {
             log('Itinerary', 'Cutout submit clicked, but no image was selected.');
+            updateSceneStatus("Please select an image first.");
         }
     });
 
@@ -314,7 +326,15 @@ export function setupItineraryEventListeners() {
     if (sceneCanvas) {
         sceneCanvas.addEventListener('dragover', (e) => {
             e.preventDefault();
-            updateSceneStatus("Release to choose cutout...");
+            // Don't update status here, it's too noisy.
+        });
+        
+        sceneCanvas.addEventListener('dragleave', (e) => {
+            if(state.session.itemPositions.size === 0) {
+                 updateSceneStatus("Drag items from the palette onto the canvas.");
+            } else {
+                statusText.style.opacity = 0; // Fade out status
+            }
         });
 
         sceneCanvas.addEventListener('drop', (e) => {
@@ -379,7 +399,7 @@ export function showItineraryModal() {
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    updateSceneStatus("Drag items from the palette onto the canvas.");
+    // Status update is now handled by renderCutouts
 }
 
 /**
