@@ -285,7 +285,8 @@ export async function saveSessionToAirtable() {
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
         userProfiles: Object.fromEntries(state.session.userProfiles),
-        eventDetails: Object.fromEntries(state.eventDetails.combined)
+        eventDetails: Object.fromEntries(state.eventDetails.combined),
+        itemPositions: Object.fromEntries(state.session.itemPositions)
     };
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
