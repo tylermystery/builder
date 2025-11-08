@@ -2662,11 +2662,11 @@ hr.total-divider {
 /* Update cutout class to work inside the wrapper */
 .scene-item-wrapper .scene-cutout {
     display: block;
-    width: 150px; /* Base width */
+/* --- THIS IS THE CHANGE (150px -> 250px) --- */
+    width: 250px; /* Base width */
     height: auto;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-    /* Prevent img from capturing mouse events meant for handles */
-    pointer-events: none; 
+    pointer-events: none;
 }
 
 /* Controls container, hidden by default */
@@ -2707,6 +2707,27 @@ hr.total-divider {
 }
 .scene-resize-handle {
     cursor: nwse-resize; /* Standard resize cursor */
+}
+
+.scene-flip-handle { /* <-- ADD THIS */
+    width: 20px;
+    height: 20px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    user-select: none; /* Prevent text selection */
+}
+
+/* --- ADD THIS NEW RULE for the flip cursor --- */
+.scene-flip-handle {
+    cursor: pointer;
 }
 
 /* Update hover and dragging styles */
