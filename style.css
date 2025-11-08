@@ -2599,3 +2599,32 @@ hr.total-divider {
 #cutout-picker-thumbnails .thumbnail-img:hover {
     border-color: #007bff;
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* New status text overlay */
+#scene-status-text {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    z-index: 50;
+    transition: opacity 0.3s ease;
+}
+
+/* New styles for the cutout picker */
+#cutout-picker-thumbnails .thumbnail-img {
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+#cutout-picker-thumbnails .thumbnail-img.selected {
+    border-color: #007bff;
+    box-shadow: 0 0 8px rgba(0,123,255,0.5);
+}
+#cutout-picker-submit-btn {
+    flex-shrink: 0;
+}
