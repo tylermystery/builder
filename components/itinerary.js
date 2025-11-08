@@ -83,7 +83,7 @@ function renderSingleCutout(uniqueId, pos) {
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
         // Fix: Added ,f_png to preserve transparency
-        cutoutUrl = imageUrl.replace('/upload/', '/upload/e_background_removal,w_150,f_png/');
+        cutoutUrl = imageUrl.replace('/upload/', `/upload/e_gen_remove:prompt_${encodedPrompt},w_150,a_ignore,f_png/`);
         log('Itinerary', 'No prompt, using simple background removal.');
     }
 
