@@ -15,7 +15,7 @@ const sceneCanvas = document.getElementById('scene-builder-canvas');
 const bgThumbContainer = document.querySelector('.background-thumbnails');
 const itemPaletteContainer = document.querySelector('.palette-items');
 const statusText = document.getElementById('scene-status-text');
-const scenePathSvg = document.getElementById('scene-path-svg'); // <-- NEW: Get SVG element
+const scenePathSvg = document.getElementById('scene-path-svg');
 
 // Cutout Picker DOM Elements
 const cutoutPicker = document.getElementById('cutout-picker-popover');
@@ -25,8 +25,6 @@ const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
 const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
 const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
 const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn');
-
-// --- NEW --- Context Thumbnail
 const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
 // Module state
@@ -34,9 +32,9 @@ let zCounter = 10;
 let currentDragItem = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
-let pendingCutout = null; // Stores { record, x, y, selectedUrl }
+let pendingCutout = null; 
 
-let currentTransformAction = null; // 'resize', 'rotate', or null
+let currentTransformAction = null; 
 let startX = 0;
 let startY = 0;
 let startScale = 1;
@@ -88,56 +86,52 @@ function updateSceneStatus(text, isLoading = false) {
 }
 
 
-// --- 1. NEW HELPER: Parse Time String ---
+// --- NEW HELPER: Format Time String ---
 /**
- * Parses a variety of time strings (e.g., "7:00 PM", "19:00", "8am") into a sortable Date object.
- * @param {string} timeString - The time string from the cutout note.
- * @returns {Date | null} A Date object or null if unparseable.
+ * Formats an HH:mm string (from type="time") into a 12-hour AM/PM string.
+ * @param {string} timeString - The "HH:mm" time string.
+ * @returns {string} Formatted time (e.g., "7:30 PM").
+ */
+function formatTimeFromInput(timeString) {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12; // 0 or 12 should be 12
+    return `${hours12}:${minutes < 10 ? '0' : ''}${minutes} ${ampm}`;
+}
+
+// --- UPDATED HELPER: Parse Time String ---
+/**
+ * Parses an "HH:mm" time string into a sortable Date object.
+ * @param {string} timeString - The "HH:mm" time string from state.
+ * @returns {Date | null} A Date object or null if invalid.
  */
 function parseItemTime(timeString) {
     if (!timeString) return null;
 
     const now = new Date();
-    let hours = 0;
-    let minutes = 0;
+    const [hours, minutes] = timeString.split(':').map(Number);
     
-    // Regex to match "7:00 PM", "19:00", "8am", etc.
-    const match = timeString.match(/(\d{1,2})(:(\d{2}))?\s*(am|pm)?/i);
-
-    if (match) {
-        hours = parseInt(match[1], 10);
-        minutes = parseInt(match[3], 10) || 0;
-        const ampm = match[4];
-
-        if (ampm && ampm.toLowerCase() === 'pm' && hours < 12) {
-            hours += 12;
-        }
-        if (ampm && ampm.toLowerCase() === 'am' && hours === 12) {
-            hours = 0; // 12 AM is midnight
-        }
-        
-        now.setHours(hours, minutes, 0, 0);
-        return now;
-    }
-    return null; // Invalid format
+    if (isNaN(hours) || isNaN(minutes)) return null;
+    
+    now.setHours(hours, minutes, 0, 0);
+    return now;
 }
 
 
-// --- 2. NEW FEATURE: Draw SVG Path ---
+// --- UPDATED FEATURE: Draw SVG Path ---
 /**
  * Finds all cutouts with times, sorts them, and draws an animated SVG path between their centers.
  */
 function drawItineraryPath() {
     const svg = document.getElementById('scene-path-svg');
     if (!svg) return;
-
-    // Clear old paths
     svg.innerHTML = '';
 
-    // 1. Get and sort items with a valid time
+    // 1. Get and sort items with a valid start time
     const timedItems = [];
     for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
-        const parsedTime = parseItemTime(pos.time);
+        const parsedTime = parseItemTime(pos.timeStart); // <-- Use timeStart
         if (parsedTime) {
             timedItems.push({ uniqueId, pos, parsedTime });
         }
@@ -147,7 +141,6 @@ function drawItineraryPath() {
         return; // Not enough items to draw a path
     }
 
-    // Sort by the parsed Date object
     timedItems.sort((a, b) => a.parsedTime - b.parsedTime);
 
     // 2. Get center points from the DOM
@@ -155,51 +148,47 @@ function drawItineraryPath() {
         const wrapper = document.querySelector(`.scene-item-wrapper[data-unique-id="${uniqueId}"]`);
         if (!wrapper) return null;
         
-        // Calculate center based on rendered offset and size
         const x = wrapper.offsetLeft + wrapper.offsetWidth / 2;
         const y = wrapper.offsetTop + wrapper.offsetHeight / 2;
         return { x, y };
-    }).filter(Boolean); // Filter out any nulls if DOM element wasn't found
+    }).filter(Boolean); 
 
     // 3. Create arched paths
     for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i];
         const p2 = points[i + 1];
 
-        // Calculate midpoint
         const midX = (p1.x + p2.x) / 2;
         const midY = (p1.y + p2.y) / 2;
-
-        // Calculate a perpendicular vector for the arch
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
         const len = Math.hypot(dx, dy);
-        const archHeight = len * 0.15; // Arch is 15% of the line length
-
-        // Control point for the curve
+        const archHeight = len * 0.15; 
         const controlX = midX - (dy / len) * archHeight;
         const controlY = midY + (dx / len) * archHeight;
 
-        // Create the SVG <path> element
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const pathData = `M ${p1.x},${p1.y} Q ${controlX},${controlY} ${p2.x},${p2.y}`;
         
         path.setAttribute('d', pathData);
         path.setAttribute('class', 'itinerary-path-line');
         
-        // Estimate length for animation (Q curve length is tricky, this is an approximation)
+        // --- ANIMATION FIX ---
+        // 1. Get approx length and set dasharray/offset to that length (line is invisible)
         const approxLength = Math.hypot(p1.x - controlX, p1.y - controlY) + Math.hypot(p2.x - controlX, p2.y - controlY);
+        path.style.strokeDasharray = `${approxLength} ${approxLength}`;
         path.style.strokeDashoffset = approxLength;
-        path.style.strokeDasharray = `8 ${approxLength}`; // Set dasharray to 8px dashes, and a gap of the entire length
-        
-        // Trigger the animation by setting dasharray and offset back to normal
-        // This is a CSS trick to make it animate from a "full gap" to the "dotted line"
-        setTimeout(() => {
-            path.style.strokeDasharray = `8 8`;
-            path.style.strokeDashoffset = 0;
-        }, 100 + i * 300); // Stagger the line animations
-
         svg.appendChild(path);
+
+        // 2. Trigger animation by setting offset to 0 after a stagger
+        setTimeout(() => {
+            path.style.strokeDashoffset = 0;
+            // 3. After line draws, set to dotted for final state
+            setTimeout(() => {
+                path.style.strokeDasharray = `8 8`;
+            }, 2000); // 2s transition
+        }, 100 + i * 500); // Stagger the line animations
+        // --- END ANIMATION FIX ---
     }
 }
 
@@ -256,10 +245,14 @@ function renderSingleCutout(uniqueId, pos) {
 
     wrapper.appendChild(img);
 
-    // --- ADD THIS BLOCK: Display time and note ---
+    // --- UPDATED BLOCK: Display formatted time/note ---
     let infoHtml = '';
-    if (pos.time) {
-        infoHtml += `<div class="scene-item-time">${pos.time}</div>`;
+    if (pos.timeStart) {
+        let timeText = formatTimeFromInput(pos.timeStart);
+        if (pos.timeEnd) {
+            timeText += ` - ${formatTimeFromInput(pos.timeEnd)}`;
+        }
+        infoHtml += `<div class="scene-item-time">${timeText}</div>`;
     }
     if (pos.note) {
         infoHtml += `<div class="scene-item-note">${pos.note}</div>`;
@@ -271,7 +264,7 @@ function renderSingleCutout(uniqueId, pos) {
         infoEl.innerHTML = infoHtml;
         wrapper.appendChild(infoEl);
     }
-    // --- END ADD ---
+    // --- END UPDATED BLOCK ---
 
     wrapper.appendChild(controls);
 
@@ -308,9 +301,9 @@ function renderSingleCutout(uniqueId, pos) {
  */
 function renderCutouts() {
     if (!sceneCanvas) return;
-    sceneCanvas.innerHTML = ''; // Clear existing cutouts
-    sceneCanvas.appendChild(statusText); // Re-add status text
-    sceneCanvas.appendChild(scenePathSvg); // <-- NEW: Re-add SVG layer
+    sceneCanvas.innerHTML = ''; 
+    sceneCanvas.appendChild(statusText); 
+    sceneCanvas.appendChild(scenePathSvg); 
     zCounter = 10; 
 
     for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
@@ -318,8 +311,6 @@ function renderCutouts() {
         if (pos.z > zCounter) zCounter = pos.z;
     }
     
-    // --- 3. CALL DRAW PATH ---
-    // Draw path *after* all items are rendered
     drawItineraryPath();
     
     if(state.session.itemPositions.size === 0) {
@@ -386,8 +377,6 @@ function handleFlipToggle(wrapper) {
     triggerSave();
     updateSceneStatus(pos.flipped ? "Item flipped" : "Item un-flipped");
     
-    // --- 4. CALL DRAW PATH ---
-    // Update path in case position changed (it shouldn't, but good practice)
     drawItineraryPath();
 }
 
@@ -485,8 +474,11 @@ async function showCutoutPicker(record, x, y) {
     cutoutPickerTitle.textContent = `Select image for: ${record.fields.Name}`;
     cutoutPickerThumbnails.innerHTML = '';
     cutoutAiPrompt.value = '';
-    document.getElementById('cutout-item-time').value = '';
+    // --- UPDATED: Reset new time fields ---
+    document.getElementById('cutout-item-time-start').value = '';
+    document.getElementById('cutout-item-time-end').value = '';
     document.getElementById('cutout-item-note').value = '';
+    // --- END UPDATE ---
     cutoutPromptContainer.style.display = 'none';
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -551,8 +543,11 @@ function addCutoutToScene(imageUrl, promptText) {
     
     const uniqueId = `cutout-${Date.now()}`;
 
-    const itemTime = document.getElementById('cutout-item-time').value.trim() || null;
+    // --- UPDATED: Read new time values ---
+    const itemTimeStart = document.getElementById('cutout-item-time-start').value || null;
+    const itemTimeEnd = document.getElementById('cutout-item-time-end').value || null;
     const itemNote = document.getElementById('cutout-item-note').value.trim() || null;
+    // --- END UPDATE ---
     
     const newPosition = {
         recordId: record.id,
@@ -564,19 +559,16 @@ function addCutoutToScene(imageUrl, promptText) {
         scale: 1,      
         rotation: 0,   
         flipped: false,
-        time: itemTime,   // <-- ADDED
-        note: itemNote    // <-- ADDED
+        timeStart: itemTimeStart, // <-- UPDATED
+        timeEnd: itemTimeEnd,     // <-- ADDED
+        note: itemNote
     };
             
     state.session.itemPositions.set(uniqueId, newPosition);
     triggerSave();
     
     renderSingleCutout(uniqueId, newPosition);
-    
-    // --- 5. CALL DRAW PATH ---
-    // Draw path after the new item is rendered
     drawItineraryPath();
-    
     hideCutoutPicker();
 }
 
@@ -675,8 +667,6 @@ export function setupItineraryEventListeners() {
             currentDragItem.style.top = `${y}px`;
         }
         
-        // --- 6. CALL DRAW PATH (On Drag) ---
-        // Redraw path continuously while moving
         drawItineraryPath();
     });
 
@@ -710,8 +700,6 @@ export function setupItineraryEventListeners() {
             triggerSave();
         }
         
-        // --- 7. CALL DRAW PATH (On Up) ---
-        // Final redraw when action is complete
         drawItineraryPath();
         
         currentDragItem = null;
@@ -723,6 +711,23 @@ export function setupItineraryEventListeners() {
         startAngle = 0;
         startDistance = 1;
     });
+
+    // --- 6. NEW: Fullscreen Button Listener ---
+    const fullscreenBtn = document.getElementById('scene-fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+            const modalContent = document.querySelector('#itinerary-modal-overlay .modal-content');
+            if (!modalContent) return;
+
+            if (!document.fullscreenElement) {
+                modalContent.requestFullscreen().catch(err => {
+                    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        });
+    }
 }
 
 /**
@@ -732,7 +737,6 @@ export function showItineraryModal() {
     updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal (Scene Builder).');
 
-    // --- ADD THIS BLOCK: Populate Scene Header ---
     const titleEl = document.getElementById('scene-header-title');
     const dateEl = document.getElementById('scene-header-date');
     
@@ -753,9 +757,8 @@ export function showItineraryModal() {
             dateEl.textContent = 'No date set';
         }
     }
-    // --- End Populate ---
 
-    renderScene(); // This will call renderCutouts(), which now calls drawItineraryPath()
+    renderScene(); 
     itineraryModal.classList.add('active');
     itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
