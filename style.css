@@ -2649,3 +2649,86 @@ hr.total-divider {
     flex-shrink: 0;
     border: 1px solid #ddd;
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* New wrapper for scene items to handle transforms */
+.scene-item-wrapper {
+    position: absolute;
+    cursor: move;
+    /* transform-origin is center by default, which is perfect */
+}
+
+/* Update cutout class to work inside the wrapper */
+.scene-item-wrapper .scene-cutout {
+    display: block;
+    width: 150px; /* Base width */
+    height: auto;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    /* Prevent img from capturing mouse events meant for handles */
+    pointer-events: none; 
+}
+
+/* Controls container, hidden by default */
+.scene-item-controls {
+    position: absolute;
+    top: -10px;    /* Position outside the top-right corner */
+    right: -10px;
+    display: none; /* Hide by default */
+    gap: 5px;
+    z-index: 100;
+}
+
+/* Show controls on wrapper hover */
+.scene-item-wrapper:hover .scene-item-controls {
+    display: flex;
+}
+
+/* Style for the handles */
+.scene-rotate-handle,
+.scene-resize-handle {
+    width: 20px;
+    height: 20px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    border: 1px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    user-select: none; /* Prevent text selection */
+}
+
+.scene-rotate-handle {
+    cursor: grab; /* 'grab' is a good visual cue for rotation */
+}
+.scene-resize-handle {
+    cursor: nwse-resize; /* Standard resize cursor */
+}
+
+/* Update hover and dragging styles */
+.scene-item-wrapper:hover .scene-cutout {
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+.scene-item-wrapper.is-dragging {
+    opacity: 0.7;
+}
+.scene-item-wrapper.is-dragging .scene-cutout {
+     filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+
+/* Remove old individual cutout styles */
+.scene-cutout {
+    position: static; /* No longer absolute */
+    cursor: default;  /* Wrapper handles cursor */
+}
+.scene-cutout:hover,
+.scene-cutout.is-dragging {
+    /* These are now controlled by the wrapper */
+    transform: none;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    opacity: 1;
+}
