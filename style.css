@@ -2575,3 +2575,27 @@ hr.total-divider {
     opacity: 0.7;
     transform: scale(1.05);
 }
+
+/* --- ADD TO END of style.css --- */
+
+/* Styles for palette items */
+.palette-item.idea {
+    opacity: 0.7; /* Greys out the "idea" items */
+}
+.palette-item.idea:hover {
+    opacity: 1;
+}
+.palette-item.locked {
+    border-left: 4px solid #28a745; /* Green bar for "locked" items */
+    padding-left: 10px;
+}
+
+/* Styles for cutout picker thumbnails */
+#cutout-picker-thumbnails .thumbnail-img {
+    width: 100px;
+    height: 80px;
+    border: 3px solid #ddd;
+}
+#cutout-picker-thumbnails .thumbnail-img:hover {
+    border-color: #007bff;
+}
