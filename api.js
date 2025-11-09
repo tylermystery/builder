@@ -109,7 +109,7 @@ export async function associateSessionWithUser(sessionId, userId) {
 }
 
 
-export async function loadSessionFromAirtable(sessionId) {
+export async function loadSessionFrovmAirtable(sessionId) {
     if (!sessionId) {
          log('API', 'loadSessionFromAirtable called with no sessionId.');
          return;
