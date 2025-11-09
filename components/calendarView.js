@@ -4,10 +4,7 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
 
-const calendarModal = document.getElementById('calendar-modal-overlay');
-const calendarContainer = document.getElementById('event-calendar');
-const dailyEventList = document.getElementById('daily-event-list');
-const closeBtn = document.getElementById('calendar-close-btn');
+// --- REMOVED: Top-level const declarations ---
 
 let fullEventList = []; // Stores all upcoming events fetched from the server
 let calendarInstance = null;
@@ -24,11 +21,9 @@ async function fetchUpcomingEvents() {
         return [];
     }
 
-    // --- NEW DEBUGGING LOGS ---
-    console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
+    // --- NEW DEBUGGING LOGS ---\n    console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
     let checkedCount = 0;
-    // --- END DEBUGGING LOGS ---
-
+    // --- END DEBUGGING LOGS ---\n
     const eventItems = state.records.all.filter(record => {
         checkedCount++;
         const itemType = record.fields['Item Type'];
@@ -41,17 +36,14 @@ async function fetchUpcomingEvents() {
         const isOneOfYourEvents = eventName.includes("EVENT_NAME_1") || eventName.includes("EVENT_NAME_2"); // <-- REPLACE THESE
 
         if (checkedCount <= 25 || isOneOfYourEvents) {
-            console.log(`[Calendar Debug] Checking: "${eventName}" | Item Type: "${itemType}" | Has Date: ${!!hasDate} | Is "Event": ${isEvent}`);
+            console.log(`[Calendar Debug] Checking: \"${eventName}\" | Item Type: \"${itemType}\" | Has Date: ${!!hasDate} | Is \"Event\": ${isEvent}`);
         }
-        // --- END DEBUGGING LOGS ---
-        
+        // --- END DEBUGGING LOGS ---\n        
         return isEvent && hasDate;
     });
 
-    // --- MODIFIED LOG ---
-    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
-    // --- END MODIFIED LOG ---
-
+    // --- MODIFIED LOG ---\n    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
+    // --- END MODIFIED LOG ---\n
     
     // Map to the format our calendar logic will use
     return eventItems.map(record => {
@@ -75,6 +67,11 @@ function getEventsForDay(date) {
 }
 
 function renderDailyEvents(date) {
+    // --- ADDED: Query inside function ---
+    const dailyEventList = document.getElementById('daily-event-list');
+    if (!dailyEventList) return; // Safety check
+    // --- END ADD ---
+
     const events = getEventsForDay(date);
     dailyEventList.innerHTML = '';
     
@@ -92,11 +89,10 @@ function renderDailyEvents(date) {
         // Highlight if user has RSVP'd
         if (state.session.user.rsvps.has(event.recordId)) {
              listItem.classList.add('event-item-rsvpd');
-             listItem.textContent += ' (RSVP\'d)';
+             listItem.textContent += ' (RSVP\\'d)';
         }
 
-        // --- ADDED: On-click logic ---
-        listItem.addEventListener('click', () => {
+        // --- ADDED: On-click logic ---\n        listItem.addEventListener('click', () => {
             log('Calendar', `Event item clicked: ${event.name}`);
             // Find the full record from our pre-fetched list
             const fullRecord = event.record;
@@ -109,37 +105,62 @@ function renderDailyEvents(date) {
                 log('Calendar', 'Error: Could not find full record for this event.');
             }
         });
-        // --- END ADDED ---
-        
+        // --- END ADDED ---\n        
         dailyEventList.appendChild(listItem);
     });
 }
 
 
 export function setupCalendarEventListeners() {
+    // --- ADDED: Queries inside function ---
+    const calendarModal = document.getElementById('calendar-modal-overlay');
+    const closeBtn = document.getElementById('calendar-close-btn');
+    // --- END ADD ---
+
     document.getElementById('calendar-view-btn')?.addEventListener('click', showCalendarModal);
-    closeBtn.addEventListener('click', hideCalendarModal);
-    calendarModal.addEventListener('click', (e) => {
+    
+    // --- FIX: Add safety checks ---
+    closeBtn?.addEventListener('click', hideCalendarModal);
+    calendarModal?.addEventListener('click', (e) => {
         if (e.target === calendarModal) {
             hideCalendarModal();
         }
     });
+    // --- END FIX ---
 }
 
 export function showCalendarModal() {
+    // --- ADDED: Query inside function ---
+    const calendarModal = document.getElementById('calendar-modal-overlay');
+    // --- END ADD ---
+
     log('Calendar', 'Showing upcoming events calendar.');
-    renderCalendar(); // Renders and fetches events
-    calendarModal.classList.add('active');
-    calendarModal.style.display = 'flex';
+    // renderCalendar(); // Renders and fetches events -> This function doesn't exist, commenting out
+    log('Calendar', 'Warning: renderCalendar() function is missing.');
+
+    // --- FIX: Add safety check ---
+    if (calendarModal) {
+        calendarModal.classList.add('active');
+        calendarModal.style.display = 'flex';
+    }
+    // --- END FIX ---
     document.body.classList.add('modal-open');
 }
 
 export function hideCalendarModal() {
+    // --- ADDED: Query inside function ---
+    const calendarModal = document.getElementById('calendar-modal-overlay');
+    // --- END ADD ---
+
     log('Calendar', 'Hiding calendar modal.');
-    calendarModal.classList.remove('active');
-    setTimeout(() => {
-        calendarModal.style.display = 'none';
-    }, 300);
+    
+    // --- FIX: Add safety check ---
+    if (calendarModal) {
+        calendarModal.classList.remove('active');
+        setTimeout(() => {
+            calendarModal.style.display = 'none';
+        }, 300);
+    }
+    // --- END FIX ---
     document.body.classList.remove('modal-open');
 }
-
