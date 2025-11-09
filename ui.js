@@ -6,7 +6,7 @@ import { createInteractiveCard } from './components/card.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
-import * as api from '../api.js';
+import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
 
@@ -15,7 +15,9 @@ import { initializeItemChat } from './chat.js';
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
-export * from '../utils.js';
+// --- THIS IS THE FIX: Changed '../utils.js' to './utils.js' ---
+export * from './utils.js';
+// --- END FIX ---
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
@@ -151,12 +153,12 @@ export function applyCartLabels(labels) {
         cartNameEl.value = labels.cartNamePlaceholder;
     }
 
-    const notesLabelEl = document.querySelector('label[for=\"header-goals\"]');
+    const notesLabelEl = document.querySelector('label[for=\\\"header-goals\\\"]');
     if (notesLabelEl && labels.notesLabel) {
         notesLabelEl.textContent = labels.notesLabel;
     }
 
-    const dateLabelEl = document.querySelector('label[for=\"event-date-picker\"]');
+    const dateLabelEl = document.querySelector('label[for=\\\"event-date-picker\\\"]');
     if (dateLabelEl && labels.dateLabel) {
         dateLabelEl.textContent = labels.dateLabel;
     }
@@ -439,7 +441,7 @@ export function updateCatalogHeader() {
         
         const pathContainer = document.createElement('div');
         pathContainer.id = 'breadcrumb-path-container';
-        pathContainer.innerHTML = `<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
+        pathContainer.innerHTML = `<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"all\\\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
         breadcrumbsEl.appendChild(pathContainer);
         return; 
     }
@@ -487,14 +489,13 @@ export function updateCatalogHeader() {
         } else {
             const start = mainDatePicker.selectedDates[0].toLocaleDateString();
             const end = mainDatePicker.selectedDates[1].toLocaleDateString();
-            text = `Date: ${start} – ${end}`;
-        }
+            text = `Date: ${start} – ${end}`;\n        }
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
         filterCount++; 
     }
     
     const path = [];
-    path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
+    path.push(`<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"all\\\">All Categories</a>`);
 
     const findRecordByName = (filterName) => {
         return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
@@ -507,7 +508,7 @@ export function updateCatalogHeader() {
         activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
         filterCount++; 
         
-        path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
+        path.push(`<a href=\\\"#\\\" class=\\\"breadcrumb-link\\\" data-filter=\\\"${categoryFilter}\\\">${categoryName}</a>`);
     }
 
     subcategoryFilters.forEach(subcatFilter => {
@@ -520,14 +521,10 @@ export function updateCatalogHeader() {
     });
 
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        const STOP_WORDS = new Set([
-            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 
-            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
-        ]);
+        const STOP_WORDS = new Set([\n            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', \n            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'\n        ]);
 
-        const goalWords = goalsInput.split(/[\\s,]+/).filter(word => 
-            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
-        );
+        const goalWords = goalsInput.split(/[\\\\s,]+/).filter(word => 
+            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())\n        );
 
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
@@ -551,9 +548,8 @@ export function updateCatalogHeader() {
         chipContainer.id = 'filter-chip-container';
         
         chipContainer.innerHTML = `
-            <span class=\"chip-label\">Active Filters:</span>
-            ${activeFiltersHtml.join('')}
-            <button id=\"clear-all-chips-btn\" class=\"filter-chip-clear-all\">Clear Filters</button>
+            <span class=\\\"chip-label\\\">Active Filters:</span>
+            ${activeFiltersHtml.join('')}\n            <button id=\\\"clear-all-chips-btn\\\" class=\\\"filter-chip-clear-all\\\">Clear Filters</button>
         `;
         breadcrumbsEl.appendChild(chipContainer); 
 
@@ -583,11 +579,10 @@ export function handleFilterChipClear(e) {
     const applyFilters = () => window.applyFiltersAndSort(window.imageCache);
 
 
-    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---
-    if (type === 'goal-filter') {
+    // --- VVV V2.7 GOAL CHIP LOGIC VVV ---\n    if (type === 'goal-filter') {
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/[\\s,]+/).filter(Boolean); // Cleaned regex
+            const goalWords = goalsInput.value.split(/[\\\\s,]+/).filter(Boolean); // Cleaned regex
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             goalsInput.value = updatedGoals;
@@ -597,18 +592,15 @@ export function handleFilterChipClear(e) {
             return; 
         }
     }
-    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^
-
+    // --- ^^^ END V2.7 GOAL CHIP LOGIC ^^^\n
     switch (type) {
         case 'name-filter':
             document.getElementById('name-filter').value = '';
             break;
         case 'status-filter':
-            // --- THIS IS THE FIX ---
-            // It should be .value, not .css('display')
+            // --- THIS IS THE FIX ---\n            // It should be .value, not .css('display')
             document.getElementById('status-filter').value = 'Available';
-            // --- END FIX ---
-            break;
+            // --- END FIX ---\n            break;
         case 'headcount-filter':
             document.getElementById('headcount-filter').value = 'any';
             document.getElementById('headcount-custom').value = '';
@@ -622,8 +614,7 @@ export function handleFilterChipClear(e) {
             const datePicker = document.getElementById('date-filter')?._flatpickr;
             if (datePicker) {
                  datePicker.clear();
-                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-            }
+                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);\n            }
             break;
         case 'category-filter':
             updateUrl({ category: null, subcategory: null, view: null });
@@ -646,7 +637,7 @@ function createFilterChip(text, type, value) {
     const isGoal = type === 'goal-filter';
     const tooltip = isGoal ? 'Click to remove this goal from the Goals / Notes box.' : 'Clear Filter';
 
-    return `<div class=\"filter-chip ${isGoal ? 'goal-chip' : ''}\" data-filter-type=\"${type}\" data-filter-value=\"${value}\" data-tippy-content=\"${tooltip}\">\n                <span>${text}</span>\n                <button title=\"${tooltip}\">×</button>\n            </div>`;
+    return `<div class=\\\"filter-chip ${isGoal ? 'goal-chip' : ''}\\\" data-filter-type=\\\"${type}\\\" data-filter-value=\\\"${value}\\\" data-tippy-content=\\\"${tooltip}\\\">\\n                <span>${text}</span>\\n                <button title=\\\"${tooltip}\\\">×</button>\\n            </div>`;
 }
 
 export function showLoginPromptForLikes() {
@@ -674,8 +665,7 @@ export function showLoginPromptForLikes() {
         profileButton.parentNode.appendChild(promptElement);
     }
 
-    if (promptTimeout) clearTimeout(promptTimeout);
-
+    if (promptTimeout) clearTimeout(promptTimeout);\n
     requestAnimationFrame(() => {
          promptElement.style.opacity = '1';
     });
