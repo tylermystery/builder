@@ -15,9 +15,7 @@ import { initializeItemChat } from './chat.js';
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader } from './components/sidebar.js';
-// --- THIS IS THE FIX: Changed '../utils.js' to './utils.js' ---
 export * from './utils.js';
-// --- END FIX ---
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
@@ -489,7 +487,11 @@ export function updateCatalogHeader() {
         } else {
             const start = mainDatePicker.selectedDates[0].toLocaleDateString();
             const end = mainDatePicker.selectedDates[1].toLocaleDateString();
-            text = `Date: ${start} – ${end}`;\n        }
+            // --- THIS IS THE FIX ---
+            // Removed the stray `\n` and extra spaces from the template literal
+            text = `Date: ${start} – ${end}`;
+        }
+        // --- END FIX ---
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
         filterCount++; 
     }
