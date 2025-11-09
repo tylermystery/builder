@@ -665,7 +665,9 @@ export function setupItineraryEventListeners() {
             currentDragItem.dataset.currentRotation = rotation; 
         } else if (currentTransformAction === 'resize') {
             const dx = e.clientX - transformOrigin.x;
-            const dy = e.clientY - centerY;
+            // --- THIS IS THE FIX: Use transformOrigin.y instead of centerY ---
+            const dy = e.clientY - transformOrigin.y;
+            // --- END FIX ---
             const currentDistance = Math.hypot(dx, dy);
             let scale = (currentDistance / startDistance) * startScale;
             scale = Math.max(0.1, Math.min(scale, 5)); 
