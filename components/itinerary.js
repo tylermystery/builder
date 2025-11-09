@@ -8,16 +8,33 @@ import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
 
-// --- REMOVED: All top-level const declarations ---
+// Get DOM elements
+const itineraryModal = document.getElementById('itinerary-modal-overlay');
+const closeBtn = document.getElementById('itinerary-close-btn');
+const sceneCanvas = document.getElementById('scene-builder-canvas');
+const bgThumbContainer = document.querySelector('.background-thumbnails');
+const itemPaletteContainer = document.querySelector('.palette-items');
+const statusText = document.getElementById('scene-status-text');
+
+// Cutout Picker DOM Elements
+const cutoutPicker = document.getElementById('cutout-picker-popover');
+const cutoutPickerTitle = document.getElementById('cutout-picker-title');
+const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails');
+const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
+const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
+const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
+const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn'); // <-- ADD THIS LINE
+const cutoutContextThumb = document.getElementById('cutout-context-thumb');
 
 // Module state
 let zCounter = 10;
 let currentDragItem = null;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
-let pendingCutout = null; 
+let pendingCutout = null; // Stores { record, x, y, selectedUrl }
 
-let currentTransformAction = null; 
+// --- ADD THESE NEW VARIABLES ---
+let currentTransformAction = null; // 'resize', 'rotate', or null
 let startX = 0;
 let startY = 0;
 let startScale = 1;
@@ -25,45 +42,61 @@ let startRotation = 0;
 let startAngle = 0;
 let startDistance = 1;
 let transformOrigin = { x: 0, y: 0 };
-let startFlipped = false;
+let startFlipped = false; // <-- ADD THIS LINE
+// --- END ADD ---
 
 
+// --- ADD THIS NEW HELPER FUNCTION ---
 /**
  * Replaces any existing transformations in a Cloudinary URL with a new one.
+ * @param {string} originalUrl - The URL from the API (e.g., .../upload/c_fill,f_jpg/v123/img.jpg)
+ * @param {string} newTransform - The new transformation (e.g., e_background_removal,f_png)
+ * @returns {string} The new URL (e.g., .../upload/e_background_removal,f_png/v123/img.jpg)
  */
 function replaceCloudinaryTransform(originalUrl, newTransform) {
     try {
         const url = new URL(originalUrl);
         const parts = url.pathname.split('/upload/');
-        if (parts.length !== 2) return originalUrl; 
+        if (parts.length !== 2) return originalUrl; // Not a standard Cloudinary URL
+
+        // parts[1] is something like "c_fill,f_jpg/v12345/my/image.jpg" OR "v12345/my/image.jpg"
         const pathSegments = parts[1].split('/');
-        if (pathSegments.length > 1 && (!pathSegments[0].startsWith('v') || !/v\\d+/.test(pathSegments[0]))) {
+        
+        // Check if the first segment is a transformation (doesn't start with 'v' + digits)
+        if (pathSegments.length > 1 && (!pathSegments[0].startsWith('v') || !/v\d+/.test(pathSegments[0]))) {
+            // It's a transformation, so remove it
             pathSegments.shift();
         }
+
+        // Rebuild the path
         const publicIdPath = pathSegments.join('/');
+        
+        // Construct the new URL
         url.pathname = `${parts[0]}/upload/${newTransform}/${publicIdPath}`;
         return url.toString();
     } catch (e) {
         console.error("Error parsing/replacing Cloudinary URL:", e);
-        return originalUrl;
+        return originalUrl; // Fallback
     }
 }
+// --- END NEW HELPER FUNCTION ---
 
 
+// --- NEW HELPER ---
 /**
  * Updates the status text overlay on the canvas.
+ * @param {string} text - The message to display.
+ * @param {boolean} [isLoading=false] - If true, adds a spinner.
  */
 function updateSceneStatus(text, isLoading = false) {
-    // --- ADDED: Query inside function ---
-    const statusText = document.getElementById('scene-status-text');
-    // --- END ADD ---
-
     if (statusText) {
         statusText.innerHTML = `${isLoading ? '⚙️ ' : ''}${text}`;
         statusText.style.opacity = 1;
         
+        // Don't fade out if it's a loading message
         if (!isLoading) {
             setTimeout(() => {
+                // Only fade if the text hasn't been replaced by a new message
                 if (statusText.innerHTML === text) {
                     statusText.style.opacity = 0;
                 }
@@ -72,118 +105,8 @@ function updateSceneStatus(text, isLoading = false) {
     }
 }
 
-
-// --- NEW HELPER: Format Time String ---\n/**
- * Formats an HH:mm string (from type=\"time\") into a 12-hour AM/PM string.
- * @param {string} timeString - The \"HH:mm\" time string.
- * @returns {string} Formatted time (e.g., \"7:30 PM\").
- */
-function formatTimeFromInput(timeString) {
-    if (!timeString) return '';
-    const [hours, minutes] = timeString.split(':').map(Number);
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12; // 0 or 12 should be 12
-    return `${hours12}:${minutes < 10 ? '0' : ''}${minutes} ${ampm}`;
-}
-
-// --- UPDATED HELPER: Parse Time String ---\n/**
- * Parses an \"HH:mm\" time string into a sortable Date object.
- * @param {string} timeString - The \"HH:mm\" time string from state.
- * @returns {Date | null} A Date object or null if invalid.
- */
-function parseItemTime(timeString) {
-    if (!timeString) return null;
-
-    const now = new Date();
-    const [hours, minutes] = timeString.split(':').map(Number);
-    
-    if (isNaN(hours) || isNaN(minutes)) return null;
-    
-    now.setHours(hours, minutes, 0, 0);
-    return now;
-}
-
-
-// --- UPDATED FEATURE: Draw SVG Path ---\n/**
- * Finds all cutouts with times, sorts them, and draws an animated SVG path between their centers.
- */
-function drawItineraryPath() {
-    // --- ADDED: Query inside function ---
-    const svg = document.getElementById('scene-path-svg');
-    // --- END ADD ---
-    if (!svg) return;
-    svg.innerHTML = '';
-
-    // 1. Get and sort items with a valid start time
-    const timedItems = [];
-    for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
-        const parsedTime = parseItemTime(pos.timeStart); // <-- Use timeStart
-        if (parsedTime) {
-            timedItems.push({ uniqueId, pos, parsedTime });
-        }
-    }
-
-    if (timedItems.length < 2) {
-        return; // Not enough items to draw a path
-    }
-
-    timedItems.sort((a, b) => a.parsedTime - b.parsedTime);
-
-    // 2. Get center points from the DOM
-    const points = timedItems.map(({ uniqueId }) => {
-        const wrapper = document.querySelector(`.scene-item-wrapper[data-unique-id=\"${uniqueId}\"]`);
-        if (!wrapper) return null;
-        
-        const x = wrapper.offsetLeft + wrapper.offsetWidth / 2;
-        const y = wrapper.offsetTop + wrapper.offsetHeight / 2;
-        return { x, y };
-    }).filter(Boolean); 
-
-    // 3. Create arched paths
-    for (let i = 0; i < points.length - 1; i++) {
-        const p1 = points[i];
-        const p2 = points[i + 1];
-
-        const midX = (p1.x + p2.x) / 2;
-        const midY = (p1.y + p2.y) / 2;
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const len = Math.hypot(dx, dy);
-        const archHeight = len * 0.15; 
-        const controlX = midX - (dy / len) * archHeight;
-        const controlY = midY + (dx / len) * archHeight;
-
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const pathData = `M ${p1.x},${p1.y} Q ${controlX},${controlY} ${p2.x},${p2.y}`;
-        
-        path.setAttribute('d', pathData);
-        path.setAttribute('class', 'itinerary-path-line');
-        
-        // --- ANIMATION FIX ---\n        // 1. Get approx length and set dasharray/offset to that length (line is invisible)
-        const approxLength = Math.hypot(p1.x - controlX, p1.y - controlY) + Math.hypot(p2.x - controlX, p2.y - controlY);
-        path.style.strokeDasharray = `${approxLength} ${approxLength}`;
-        path.style.strokeDashoffset = approxLength;
-        svg.appendChild(path);
-
-        // 2. Trigger animation by setting offset to 0 after a stagger
-        setTimeout(() => {
-            path.style.strokeDashoffset = 0;
-            // 3. After line draws, set to dotted for final state
-            setTimeout(() => {
-                path.style.strokeDasharray = `8 8`;
-            }, 2000); // 2s transition
-        }, 100 + i * 500); // Stagger the line animations
-        // --- END ANIMATION FIX ---\n    }
-}
-
-
-/**
- * Renders a single cutout wrapper, image, and controls onto the canvas.
- */
+// --- REPLACE THIS ENTIRE FUNCTION ---
 function renderSingleCutout(uniqueId, pos) {
-    // --- ADDED: Query inside function ---
-    const sceneCanvas = document.getElementById('scene-builder-canvas');
-    // --- END ADD ---
     if (!sceneCanvas) return;
     
     const { imageUrl, prompt } = pos;
@@ -191,16 +114,21 @@ function renderSingleCutout(uniqueId, pos) {
 
     // 1. 🪄 The Cloudinary AI Magic 🪄
     let cutoutUrl;
-    let newTransform; 
+    let newTransform; // This will hold our desired transformation string
 
     if (prompt && prompt.trim() !== '') {
         const encodedPrompt = encodeURIComponent(prompt.trim());
+        // Define the *new* transform string (w_250, f_png)
         newTransform = `e_gen_remove:prompt_${encodedPrompt},w_250,a_ignore,f_png`;
         log('Itinerary', `Using Generative Remove, prompt: ${prompt}`);
     } else {
+        // Define the *new* transform string (w_250, f_png)
         newTransform = 'e_background_removal,w_250,f_png';
         log('Itinerary', 'No prompt, using simple background removal.');
     }
+
+    // Use the new helper function to *replace* any existing transforms (like f_jpg)
+    // with our new background removal transform.
     cutoutUrl = replaceCloudinaryTransform(imageUrl, newTransform);
 
     // 2. Create a wrapper for the image and its controls
@@ -210,6 +138,7 @@ function renderSingleCutout(uniqueId, pos) {
     wrapper.style.left = `${pos.x}px`;
     wrapper.style.top = `${pos.y}px`;
     wrapper.style.zIndex = pos.z;
+    // Apply saved scale, rotation, and flip
     const flipTransform = pos.flipped ? 'scaleX(-1)' : '';
     wrapper.style.transform = `scale(${pos.scale || 1}) rotate(${pos.rotation || 0}deg) ${flipTransform}`;
 
@@ -225,32 +154,12 @@ function renderSingleCutout(uniqueId, pos) {
     const controls = document.createElement('div');
     controls.className = 'scene-item-controls';
     controls.innerHTML = `
-        <div class=\"scene-flip-handle\" data-action=\"flip\" title=\"Flip\">⇋</div>
-        <div class=\"scene-rotate-handle\" data-action=\"rotate\" title=\"Rotate\">↻</div>
-        <div class=\"scene-resize-handle\" data-action=\"resize\" title=\"Resize\">⤭</div>
+        <div class="scene-flip-handle" data-action="flip" title="Flip">⇋</div>
+        <div class="scene-rotate-handle" data-action="rotate" title="Rotate">↻</div>
+        <div class="scene-resize-handle" data-action="resize" title="Resize">⤭</div>
     `;
 
     wrapper.appendChild(img);
-
-    // --- UPDATED BLOCK: Display formatted time/note ---\n    let infoHtml = '';
-    if (pos.timeStart) {
-        let timeText = formatTimeFromInput(pos.timeStart);
-        if (pos.timeEnd) {
-            timeText += ` - ${formatTimeFromInput(pos.timeEnd)}`;
-        }
-        infoHtml += `<div class=\"scene-item-time\">${timeText}</div>`;
-    }
-    if (pos.note) {
-        infoHtml += `<div class=\"scene-item-note\">${pos.note}</div>`;
-    }
-    
-    if (infoHtml) {
-        const infoEl = document.createElement('div');
-        infoEl.className = 'scene-item-info';
-        infoEl.innerHTML = infoHtml;
-        wrapper.appendChild(infoEl);
-    }
-    // --- END UPDATED BLOCK ---\n
     wrapper.appendChild(controls);
 
     // 5. Wire up mouse events to the WRAPPER
@@ -260,46 +169,40 @@ function renderSingleCutout(uniqueId, pos) {
         const action = e.target.dataset.action;
         
         if (action === 'rotate' || action === 'resize') {
+            // Pass to the new transform handler
             handleTransformStart(e, wrapper, action);
         } else if (action === 'flip') {
+            // Pass to the new flip handler
             handleFlipToggle(wrapper);
         } else {
             // Default drag behavior (move)
             updateSceneStatus("Dragging item...");
-            currentDragItem = wrapper; 
+            currentDragItem = wrapper; // <-- Drag the wrapper
             currentDragItem.classList.add('is-dragging');
-            const rect = wrapper.getBoundingClientRect(); 
+            
+            const rect = wrapper.getBoundingClientRect(); // <-- Get wrapper rect
+            // Calculate offset relative to the *scaled/rotated* element
             dragOffsetX = e.clientX - rect.left;
             dragOffsetY = e.clientY - rect.top;
+            
             zCounter++; 
-            wrapper.style.zIndex = zCounter; 
+            wrapper.style.zIndex = zCounter; // <-- Set wrapper z-index
             wrapper.style.cursor = 'grabbing';
         }
     });
     
-    // --- FIX: Query sceneCanvas again for safety ---
-    const canvasForEvent = document.getElementById('scene-builder-canvas');
-    if (canvasForEvent) {
-        canvasForEvent.appendChild(wrapper);
-    }
-    // --- END FIX ---
+    sceneCanvas.appendChild(wrapper);
 }
+// --- END REPLACE ---
 
 
 /**
  * Draws all saved cutouts from state onto the canvas
  */
 function renderCutouts() {
-    // --- ADDED: Queries inside function ---
-    const sceneCanvas = document.getElementById('scene-builder-canvas');
-    const statusText = document.getElementById('scene-status-text');
-    const scenePathSvg = document.getElementById('scene-path-svg');
-    // --- END ADD ---
-
     if (!sceneCanvas) return;
-    sceneCanvas.innerHTML = ''; 
-    if (statusText) sceneCanvas.appendChild(statusText); 
-    if (scenePathSvg) sceneCanvas.appendChild(scenePathSvg); 
+    sceneCanvas.innerHTML = ''; // Clear existing cutouts
+    sceneCanvas.appendChild(statusText); // Re-add status text
     zCounter = 10; 
 
     for (const [uniqueId, pos] of state.session.itemPositions.entries()) {
@@ -307,24 +210,28 @@ function renderCutouts() {
         if (pos.z > zCounter) zCounter = pos.z;
     }
     
-    drawItineraryPath();
-    
+    // Show the \"Drop\" message only if the canvas is empty
     if(state.session.itemPositions.size === 0) {
         updateSceneStatus("Drag items from the palette onto the canvas.");
     }
 }
 
+// --- ADD THIS ENTIRE NEW FUNCTION ---
 /**
  * Initializes a resize or rotate transform operation.
+ * @param {MouseEvent} e - The mousedown event.
+ * @param {HTMLElement} wrapper - The scene item wrapper being transformed.
+ * @param {string} action - 'resize' or 'rotate'.
  */
 function handleTransformStart(e, wrapper, action) {
     currentTransformAction = action;
-    currentDragItem = wrapper; 
+    currentDragItem = wrapper; // The item being transformed
     currentDragItem.classList.add('is-dragging');
     zCounter++;
     currentDragItem.style.zIndex = zCounter;
 
     const rect = wrapper.getBoundingClientRect();
+    // Get center of the element for rotation/scaling calculations
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     
@@ -341,19 +248,24 @@ function handleTransformStart(e, wrapper, action) {
     
     if (action === 'rotate') {
         updateSceneStatus("Rotating item...");
+        // Calculate the starting angle between the mouse and the element's center
         const dx = e.clientX - centerX;
         const dy = e.clientY - centerY;
         startAngle = Math.atan2(dy, dx) * (180 / Math.PI) - startRotation;
     } else if (action === 'resize') {
         updateSceneStatus("Resizing item...");
+        // Calculate the initial distance from the center to the mouse
         const dx = e.clientX - centerX;
         const dy = e.clientY - centerY;
         startDistance = Math.hypot(dx, dy);
+        // startScale (the item's scale) is already set
     }
 }
 
+// --- ADD THIS ENTIRE NEW FUNCTION ---
 /**
  * Immediately toggles the horizontal flip state of a scene item.
+ * @param {HTMLElement} wrapper - The scene item wrapper to flip.
  */
 function handleFlipToggle(wrapper) {
     if (!wrapper) return;
@@ -362,18 +274,19 @@ function handleFlipToggle(wrapper) {
     const pos = state.session.itemPositions.get(uniqueId);
     if (!pos) return;
 
+    // Toggle the flipped state
     pos.flipped = !pos.flipped;
 
+    // Re-apply the transform immediately
     const flipTransform = pos.flipped ? 'scaleX(-1)' : '';
     const scale = pos.scale || 1;
     const rotation = pos.rotation || 0;
     wrapper.style.transform = `scale(${scale}) rotate(${rotation}deg) ${flipTransform}`;
     
+    // Save the change
     state.session.itemPositions.set(uniqueId, pos);
     triggerSave();
     updateSceneStatus(pos.flipped ? "Item flipped" : "Item un-flipped");
-    
-    drawItineraryPath();
 }
 
 
@@ -381,12 +294,6 @@ function handleFlipToggle(wrapper) {
  * Renders the palette with BOTH locked items and ideas
  */
 async function renderScene() {
-    // --- ADDED: Queries inside function ---
-    const sceneCanvas = document.getElementById('scene-builder-canvas');
-    const bgThumbContainer = document.querySelector('.background-thumbnails');
-    const itemPaletteContainer = document.querySelector('.palette-items');
-    // --- END ADD ---
-
     if (!sceneCanvas || !bgThumbContainer || !itemPaletteContainer) {
         log('Itinerary', 'Scene Builder DOM elements not found.');
         return;
@@ -394,25 +301,35 @@ async function renderScene() {
 
     // 1. Find Venue and render backgrounds
     bgThumbContainer.innerHTML = '';
+
+    // --- THIS IS THE FIX (Part 1) ---
+    // Use .filter() to find ALL locked-in venues, not just the first one.
     const venueRecords = state.records.all.filter(r => 
         state.cart.lockedItems.has(r.id) && 
         r.fields.Categories?.toLowerCase().includes('venue')
     );
+    // --- END FIX ---
+
     const bgDescription = bgThumbContainer.parentElement.querySelector('p.description');
     
+    // --- THIS IS THE FIX (Part 2) ---
+    // Check if the array has any venues.
     if (venueRecords.length > 0) {
         if(bgDescription) bgDescription.style.display = 'none';
         
         let hasSetDefaultBackground = false;
 
+        // Loop over each venue record found
         for (const venueRecord of venueRecords) {
             const { imageUrls } = await api.fetchImagesForRecord(venueRecord, state.records.all, new Map());
             
+            // This loop now correctly adds all images from all venues.
+            // Clicking any of them will set the background (this part already worked).
             imageUrls.forEach(url => {
                 const thumb = document.createElement('div');
                 thumb.className = 'background-thumb';
                 const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-                thumb.innerHTML = `<img src=\\\"${thumbUrl}\\\" alt=\\\"Venue option\\\"> <span>${venueRecord.fields.Name}</span>`;
+                thumb.innerHTML = `<img src=\"${thumbUrl}\" alt=\"Venue option\"> <span>${venueRecord.fields.Name}</span>`;
                 thumb.addEventListener('click', () => {
                     sceneCanvas.style.backgroundImage = `url('${url}')`;
                     updateSceneStatus("Background set!");
@@ -420,6 +337,7 @@ async function renderScene() {
                 bgThumbContainer.appendChild(thumb);
             });
 
+            // Set the default background image *once* from the first image found
             if (imageUrls.length > 0 && !hasSetDefaultBackground && !sceneCanvas.style.backgroundImage) {
                 sceneCanvas.style.backgroundImage = `url('${imageUrls[0]}')`;
                 hasSetDefaultBackground = true;
@@ -428,6 +346,8 @@ async function renderScene() {
     } else {
         if(bgDescription) bgDescription.style.display = 'block';
     }
+    // --- END FIX ---
+
 
     // 2. Render the palette with BOTH locked items and ideas
     itemPaletteContainer.innerHTML = '';
@@ -449,7 +369,7 @@ async function renderScene() {
             itemEl.className = `palette-item ${type}`; 
             itemEl.setAttribute('draggable', true);
             const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-            itemEl.innerHTML = `<img src=\\\"${thumbUrl}\\\" alt=\\\"${record.fields.Name}\\\"> <span>${record.fields.Name}</span>`;
+            itemEl.innerHTML = `<img src=\"${thumbUrl}\" alt=\"${record.fields.Name}\"> <span>${record.fields.Name}</span>`;
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';
@@ -460,46 +380,40 @@ async function renderScene() {
     }
     
     // 3. Render all existing cutouts from state
-    renderCutouts(); // This will now also call drawItineraryPath()\n}
+    renderCutouts();
+}
 
 /**
- * Shows the \"Cutout Picker\" popover and populates it with context.
+ * --- MODIFIED ---
+ * Shows the "Cutout Picker" popover and populates it with context.
  */
 async function showCutoutPicker(record, x, y) {
-    // --- ADDED: Queries inside function ---
-    const cutoutPicker = document.getElementById('cutout-picker-popover');
-    const cutoutPickerTitle = document.getElementById('cutout-picker-title');
-    const cutoutPickerThumbnails = document.getElementById('cutout-picker-thumbnails');
-    const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
-    const cutoutPromptContainer = document.getElementById('cutout-prompt-container');
-    const cutoutContextThumb = document.getElementById('cutout-context-thumb');
-    // --- END ADD ---
-
     if (!cutoutPicker) return;
     updateSceneStatus("Fetching image options...", true);
 
+    // Store pending data
     pendingCutout = { record, x, y, selectedUrl: null };
 
     // Reset UI
     cutoutPickerTitle.textContent = `Select image for: ${record.fields.Name}`;
     cutoutPickerThumbnails.innerHTML = '';
     cutoutAiPrompt.value = '';
-    // --- UPDATED: Reset new time fields ---\n    document.getElementById('cutout-item-time-start').value = '';
-    document.getElementById('cutout-item-time-end').value = '';
-    document.getElementById('cutout-item-note').value = '';
-    // --- END UPDATE ---\n    cutoutPromptContainer.style.display = 'none';
+    cutoutPromptContainer.style.display = 'none';
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
     
+    // --- NEW: Set Context Thumbnail ---
     const contextThumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
     if (cutoutContextThumb) cutoutContextThumb.style.backgroundImage = `url('${contextThumbUrl}')`;
+    // --- END NEW ---
 
     if (imageUrls.length === 0) {
         updateSceneStatus("Item has no images, adding placeholder.");
-        addCutoutToScene(ui.getPlaceholderImage([]), ''); 
+        addCutoutToScene(ui.getPlaceholderImage([]), ''); // Add with no prompt
         return;
     }
 
+    // Create a thumbnail for each image
     imageUrls.forEach(url => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
@@ -520,30 +434,32 @@ async function showCutoutPicker(record, x, y) {
     updateSceneStatus("Select an image to use as the cutout source.");
     cutoutPicker.style.display = 'flex';
     
+    // --- ADD THIS BLOCK ---
+    // Use requestAnimationFrame to ensure 'display' is set before 'active'
+    // so the fade-in transition works correctly.
     requestAnimationFrame(() => {
         cutoutPicker.classList.add('active');
     });
+    // --- END ADD ---
 }
 
-/**
- * Hides the \"Cutout Picker\" popover.
- */
+// --- REPLACE THIS FUNCTION ---
 function hideCutoutPicker() {
-    // --- ADDED: Query inside function ---
-    const cutoutPicker = document.getElementById('cutout-picker-popover');
-    // --- END ADD ---
     if (cutoutPicker) {
         cutoutPicker.classList.remove('active');
+        // Wait for the 300ms opacity transition to finish before hiding
         setTimeout(() => {
             cutoutPicker.style.display = 'none';
         }, 300); 
     }
     pendingCutout = null;
 }
+// --- END REPLACE ---
 
 
 /**
- * Final step: creates the cutout and saves it to state.
+ * --- MODIFIED ---
+ * Final step: creates the cutout and saves it to state with the AI prompt.
  */
 function addCutoutToScene(imageUrl, promptText) {
     if (!pendingCutout) return;
@@ -553,29 +469,23 @@ function addCutoutToScene(imageUrl, promptText) {
     zCounter++;
     
     const uniqueId = `cutout-${Date.now()}`;
-
-    // --- UPDATED: Read new time values ---\n    const itemTimeStart = document.getElementById('cutout-item-time-start').value || null;
-    const itemTimeEnd = document.getElementById('cutout-item-time-end').value || null;
-    const itemNote = document.getElementById('cutout-item-note').value.trim() || null;
-    // --- END UPDATE ---\n    
+    
     const newPosition = {
         recordId: record.id,
-        imageUrl: imageUrl, 
-        prompt: promptText, 
+        imageUrl: imageUrl, // Save the *chosen* image URL
+        prompt: promptText, // Save the AI prompt
         x: x - 75,
         y: y - 75,
         z: zCounter,
-        scale: 1,      
-        rotation: 0,   
-        flipped: false,
-        timeStart: itemTimeStart, // <-- UPDATED\n        timeEnd: itemTimeEnd,     // <-- ADDED\n        note: itemNote
+        scale: 1,      // <-- ADD THIS
+        rotation: 0,   // <-- ADD THIS
+        flipped: false   // <-- ADD THIS
     };
             
     state.session.itemPositions.set(uniqueId, newPosition);
     triggerSave();
     
     renderSingleCutout(uniqueId, newPosition);
-    drawItineraryPath();
     hideCutoutPicker();
 }
 
@@ -583,56 +493,47 @@ function addCutoutToScene(imageUrl, promptText) {
  * Sets up all event listeners for the Itinerary (Scene Builder) modal
  */
 export function setupItineraryEventListeners() {
-    // --- ADDED: Queries inside function ---
-    const itineraryModal = document.getElementById('itinerary-modal-overlay');
-    const closeBtn = document.getElementById('itinerary-close-btn');
-    const cutoutPicker = document.getElementById('cutout-picker-popover');
-    const cutoutPickerCloseBtn = document.getElementById('cutout-picker-close-btn');
-    const cutoutPickerSubmitBtn = document.getElementById('cutout-picker-submit-btn');
-    const cutoutAiPrompt = document.getElementById('cutout-ai-prompt');
-    const sceneCanvas = document.getElementById('scene-builder-canvas');
-    const fullscreenBtn = document.getElementById('scene-fullscreen-btn');
-    // --- END ADD ---
-
     log('Itinerary', 'Initializing Scene Builder listeners.');
 
-    // --- FIX: Add safety checks ---
-    closeBtn?.addEventListener('click', () => {
+    // 1. Close buttons
+    closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
         hideItineraryModal();
     });
-    itineraryModal?.addEventListener('click', (e) => {
+    itineraryModal.addEventListener('click', (e) => {
         if (e.target === itineraryModal) {
             updateUrl({ view: null });
             hideItineraryModal();
         }
     });
 
-    cutoutPickerCloseBtn?.addEventListener('click', hideCutoutPicker);
-    cutoutPicker?.addEventListener('click', (e) => {
+    // 2. Cutout Picker Listeners
+    cutoutPickerCloseBtn.addEventListener('click', hideCutoutPicker);
+    cutoutPicker.addEventListener('click', (e) => {
         if (e.target === cutoutPicker) hideCutoutPicker();
     });
     
-    cutoutPickerSubmitBtn?.addEventListener('click', () => {
+    cutoutPickerSubmitBtn.addEventListener('click', () => {
         if (pendingCutout && pendingCutout.selectedUrl) {
-            addCutoutToScene(pendingCutout.selectedUrl, cutoutAiPrompt?.value);
+            addCutoutToScene(pendingCutout.selectedUrl, cutoutAiPrompt.value);
         } else {
             log('Itinerary', 'Cutout submit clicked, but no image was selected.');
             updateSceneStatus("Please select an image first.");
         }
     });
 
+    // 3. Scene Canvas drag-and-drop listeners
     if (sceneCanvas) {
         sceneCanvas.addEventListener('dragover', (e) => {
             e.preventDefault();
+            // Don't update status here, it's too noisy.
         });
         
         sceneCanvas.addEventListener('dragleave', (e) => {
             if(state.session.itemPositions.size === 0) {
                  updateSceneStatus("Drag items from the palette onto the canvas.");
             } else {
-                const statusText = document.getElementById('scene-status-text');
-                if (statusText) statusText.style.opacity = 0; 
+                statusText.style.opacity = 0; // Fade out status
             }
         });
 
@@ -648,12 +549,17 @@ export function setupItineraryEventListeners() {
 
             showCutoutPicker(record, x, y);
         });
+
+        // --- REMOVE THE OLD 'mousemove' LISTENER ---
     }
     
+    // 4. Mouse move listener (FOR DRAG, RESIZE, ROTATE)
+    // --- ADD THIS NEW LISTENER ---
     document.addEventListener('mousemove', (e) => {
         if (!currentDragItem) return;
-        e.preventDefault(); 
+        e.preventDefault(); // Prevent text selection while dragging
 
+        // --- ADD THIS LINE ---
         const flipTransform = startFlipped ? 'scaleX(-1)' : '';
 
         if (currentTransformAction === 'rotate') {
@@ -661,34 +567,44 @@ export function setupItineraryEventListeners() {
             const dy = e.clientY - transformOrigin.y;
             const currentAngle = Math.atan2(dy, dx) * (180 / Math.PI);
             const rotation = Math.round(currentAngle - startAngle);
+            
+            // --- THIS LINE IS MODIFIED ---
             currentDragItem.style.transform = `scale(${startScale}) rotate(${rotation}deg) ${flipTransform}`;
+            // Store the value directly on the DOM element for mouseup
             currentDragItem.dataset.currentRotation = rotation; 
+
         } else if (currentTransformAction === 'resize') {
             const dx = e.clientX - transformOrigin.x;
-            // --- THIS IS THE FIX: Use transformOrigin.y instead of centerY ---
             const dy = e.clientY - transformOrigin.y;
-            // --- END FIX ---
             const currentDistance = Math.hypot(dx, dy);
+            
+            // Calculate new scale based on distance change
             let scale = (currentDistance / startDistance) * startScale;
-            scale = Math.max(0.1, Math.min(scale, 5)); 
+            scale = Math.max(0.1, Math.min(scale, 5)); // Clamp scale
+            
+            // --- THIS LINE IS MODIFIED ---
             currentDragItem.style.transform = `scale(${scale}) rotate(${startRotation}deg) ${flipTransform}`;
+            // Store the value directly on the DOM element for mouseup
             currentDragItem.dataset.currentScale = scale;
+
         } else { 
-            const canvasForMove = document.getElementById('scene-builder-canvas');
-            if (!canvasForMove) return;
-            const rect = canvasForMove.getBoundingClientRect();
+            // Default 'move' logic
+            const rect = sceneCanvas.getBoundingClientRect();
             let x = e.clientX - rect.left - dragOffsetX;
             let y = e.clientY - rect.top - dragOffsetY;
+
+            // Clamp position to canvas bounds (allowing part of it to be off-screen)
             const itemRect = currentDragItem.getBoundingClientRect();
             x = Math.max(-itemRect.width / 2, Math.min(x, rect.width - itemRect.width / 2));
             y = Math.max(-itemRect.height / 2, Math.min(y, rect.height - itemRect.height / 2));
+            
             currentDragItem.style.left = `${x}px`;
             currentDragItem.style.top = `${y}px`;
         }
-        
-        drawItineraryPath();
     });
 
+    // 5. Mouse up listener (for saving drag position)
+    // --- REPLACE THE EXISTING 'mouseup' LISTENER ---
     document.addEventListener('mouseup', () => {
         if (!currentDragItem) return;
 
@@ -702,24 +618,25 @@ export function setupItineraryEventListeners() {
         if (posObject) {
             if (currentTransformAction === 'resize') {
                 posObject.scale = parseFloat(currentDragItem.dataset.currentScale) || startScale;
-                posObject.rotation = startRotation; 
-                posObject.flipped = startFlipped; 
+                posObject.rotation = startRotation; // Keep original rotation
+                posObject.flipped = startFlipped; // <-- ADD THIS LINE
             } else if (currentTransformAction === 'rotate') {
-                posObject.scale = startScale; 
+                posObject.scale = startScale; // Keep original scale
                 posObject.rotation = parseFloat(currentDragItem.dataset.currentRotation) || startRotation;
-                posObject.flipped = startFlipped; 
+                posObject.flipped = startFlipped; // <-- ADD THIS LINE
             } else {
+                // 'move' action
                 posObject.x = parseFloat(currentDragItem.style.left);
                 posObject.y = parseFloat(currentDragItem.style.top);
             }
+            // Always update z-index
             posObject.z = parseInt(currentDragItem.style.zIndex); 
             
             state.session.itemPositions.set(uniqueId, posObject);
             triggerSave();
         }
         
-        drawItineraryPath();
-        
+        // Clear all drag/transform state
         currentDragItem = null;
         currentTransformAction = null;
         startX = 0;
@@ -729,85 +646,30 @@ export function setupItineraryEventListeners() {
         startAngle = 0;
         startDistance = 1;
     });
-
-    if (fullscreenBtn) {
-        fullscreenBtn.addEventListener('click', () => {
-            const modalContent = document.querySelector('#itinerary-modal-overlay .modal-content');
-            if (!modalContent) return;
-
-            if (!document.fullscreenElement) {
-                modalContent.requestFullscreen().catch(err => {
-                    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-                });
-            } else {
-                document.exitFullscreen();
-            }
-        });
-    }
-    // --- END FIX ---
 }
 
 /**
  * Shows the Itinerary (Scene Builder) modal
  */
 export function showItineraryModal() {
-    // --- ADDED: Query inside function ---
-    const itineraryModal = document.getElementById('itinerary-modal-overlay');
-    // --- END ADD ---
-
     updateUrl({ view: 'itinerary' });
     log('Itinerary', 'Showing itinerary modal (Scene Builder).');
-
-    const titleEl = document.getElementById('scene-header-title');
-    const dateEl = document.getElementById('scene-header-date');
-    
-    if (titleEl && dateEl) {
-        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
-        titleEl.textContent = eventName || 'Your Event Scene';
-        
-        const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (dateValue) {
-            const dateStr = Array.isArray(dateValue) ? dateValue[0] : dateValue;
-            const date = new Date(dateStr);
-            if (!isNaN(date.getTime())) {
-                dateEl.textContent = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            } else {
-                dateEl.textContent = 'Invalid date';
-            }
-        } else {
-            dateEl.textContent = 'No date set';
-        }
-    }
-
     renderScene(); 
-    
-    // --- FIX: Add safety check ---
-    if (itineraryModal) {
-        itineraryModal.classList.add('active');
-        itineraryModal.style.display = 'flex';
-    }
-    // --- END FIX ---
+    itineraryModal.classList.add('active');
+    itineraryModal.style.display = 'flex';
     document.body.classList.add('modal-open');
+    // Status update is now handled by renderCutouts
 }
 
 /**
  * Hides the Itinerary (Scene Builder) modal
  */
 export function hideItineraryModal() {
-    // --- ADDED: Query inside function ---
-    const itineraryModal = document.getElementById('itinerary-modal-overlay');
-    // --- END ADD ---
-
     log('Itinerary', 'Hiding itinerary modal.');
     hideCutoutPicker();
-    
-    // --- FIX: Add safety check ---
-    if (itineraryModal) {
-        itineraryModal.classList.remove('active');
-        setTimeout(() => {
-            itineraryModal.style.display = 'none';
-        }, 300);
-    }
-    // --- END FIX ---
+    itineraryModal.classList.remove('active');
+    setTimeout(() => {
+        itineraryModal.style.display = 'none';
+    }, 300);
     document.body.classList.remove('modal-open');
 }
