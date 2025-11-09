@@ -400,6 +400,17 @@ async function initialize() {
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);
               await api.loadSessionFromAirtable(sessionId);
+        } else if (state.session.id) {
+             log('Main', `Session ${state.session.id} already loaded or initiated.`);
+             if (typeof initializeSessionChat === 'function') {
+                 initializeSessionChat();
+             }
+             ui.updateHeader();
+             ui.updateEventPlanSection();
+             ui.updateIdeasCarousel(); 
+             ui.updateTotalCost();
+        } else {
+             log('Main', 'No active session ID found (this should not happen after the guest-session fix).');
         }
 
 
