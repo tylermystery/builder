@@ -320,14 +320,12 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     }
 }
 
-// In: events.js
-// Action: REPLACE the entire initializeEventListeners function
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
-        else console.warn(`Element with ID \"${selector}\" not found.`);
+        else console.warn(`Element with ID "${selector}" not found.`);
     };
 
     safeAddEventListener('my-plans-dropdown', 'change', (e) => {
@@ -390,56 +388,50 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }, 100);
     });
 
-    // --- START CONSOLIDATED BUTTON GENERATION (FIXED) ---
+    // --- START CONSOLIDATED BUTTON GENERATION --
     const categoryFiltersRoot = document.getElementById('category-filters'); 
     if (categoryFiltersRoot) { 
-        // 1. Create all buttons
         const planFilterBtn = document.createElement('button');
         planFilterBtn.className = 'filter-btn';
         planFilterBtn.id = 'plan-filter-btn';
         planFilterBtn.textContent = '⭐ My Plan';
-
-        const likesFilterBtn = document.createElement('button');
-        likesFilterBtn.className = 'filter-btn';
-        likesFilterBtn.id = 'liked-items-filter-btn';
-        likesFilterBtn.textContent = '❤️ My Likes';
-
-        const allButton = document.createElement('button');
-        allButton.className = 'filter-btn category-filter-btn active'; // Default to active
-        allButton.dataset.filter = 'all';
-        allButton.textContent = 'All';
-
-        // 2. Add all buttons to the DOM
-        categoryFiltersRoot.appendChild(planFilterBtn);
-        categoryFiltersRoot.appendChild(likesFilterBtn);
-        categoryFiltersRoot.appendChild(allButton);
-
-        // 3. Now, add event listeners
         planFilterBtn.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             planFilterBtn.classList.add('active');
             updateUrl({ category: null, subcategory: null, view: 'plan' });
             applyFiltersAndSort(imageCache);
         });
+        categoryFiltersRoot.appendChild(planFilterBtn);
 
+
+        const likesFilterBtn = document.createElement('button');
+        likesFilterBtn.className = 'filter-btn';
+        likesFilterBtn.id = 'liked-items-filter-btn';
+        likesFilterBtn.textContent = '❤️ My Likes';
         likesFilterBtn.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             likesFilterBtn.classList.add('active');
             updateUrl({ category: null, subcategory: null, view: 'likes' });
             applyFiltersAndSort(imageCache);
         });
+        categoryFiltersRoot.appendChild(likesFilterBtn);
 
+        const allButton = document.createElement('button');
+        allButton.className = 'filter-btn category-filter-btn active'; // Default to active
+        allButton.dataset.filter = 'all';
+        allButton.textContent = 'All';
         allButton.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
             updateUrl({ category: null, subcategory: null, view: null });
             applyFiltersAndSort(imageCache);
         });
+        categoryFiltersRoot.appendChild(allButton);
 
     }  else {
         console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
     }
-    // --- END CONSOLIDATED BUTTON GENERATION (FIXED) ---
+    // --- END CONSOLIDATED BUTTON GENERATION --
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
@@ -489,7 +481,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     safeAddEventListener('clear-search-btn', 'click', () => {
         handleFilterChipClear({ 
-            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type=\"name-filter\"] button') 
+            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button') 
         });
         document.getElementById('name-filter').blur(); 
     });
@@ -505,7 +497,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('reset-filters-btn', 'click', () => {
         updateUrl({ category: null, subcategory: null, view: null });
         
-        const allButton = document.querySelector('#category-filters .filter-btn[data-filter=\"all\"]');
+        const allButton = document.querySelector('#category-filters .filter-btn[data-filter="all"]');
         if (allButton) {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
             allButton.classList.add('active');
@@ -724,7 +716,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
     
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            console.log('[Events] \\\"My Likes\\\" filter active, reapplying filters...');
+                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
@@ -771,7 +763,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                      ui.showLoginPromptForLikes();
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      console.log('[Events] \\\"My Likes\\\" filter active, reapplying filters (logged out)...');
+                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
             }
