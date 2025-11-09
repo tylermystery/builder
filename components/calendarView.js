@@ -12,7 +12,9 @@ const closeBtn = document.getElementById('calendar-close-btn');
 let fullEventList = []; // Stores all upcoming events fetched from the server
 let calendarInstance = null;
 
-// --- UPDATED: This function now fetches real data from the state ---
+// In: components/calendarView.js
+// Action: REPLACE the entire fetchUpcomingEvents function
+
 async function fetchUpcomingEvents() {
     log('Calendar', 'Fetching all public events from state...');
     
@@ -22,12 +24,35 @@ async function fetchUpcomingEvents() {
         return [];
     }
 
-    const eventItems = state.records.all.filter(record => 
-        record.fields['Item Type'] === 'Event' && record.fields.Date
-    );
+    // --- NEW DEBUGGING LOGS ---
+    console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
+    let checkedCount = 0;
+    // --- END DEBUGGING LOGS ---
 
-    log('Calendar', `Found ${eventItems.length} public events.`);
+    const eventItems = state.records.all.filter(record => {
+        checkedCount++;
+        const itemType = record.fields['Item Type'];
+        const hasDate = record.fields.Date; // This will be truthy if a date exists
+        const isEvent = itemType === 'Event';
+        
+        // Log the first 25 items to avoid spamming the console
+        // We'll also log YOUR specific event names if we find them.
+        const eventName = record.fields.Name || 'Unnamed Record';
+        const isOneOfYourEvents = eventName.includes("EVENT_NAME_1") || eventName.includes("EVENT_NAME_2"); // <-- REPLACE THESE
 
+        if (checkedCount <= 25 || isOneOfYourEvents) {
+            console.log(`[Calendar Debug] Checking: "${eventName}" | Item Type: "${itemType}" | Has Date: ${!!hasDate} | Is "Event": ${isEvent}`);
+        }
+        // --- END DEBUGGING LOGS ---
+        
+        return isEvent && hasDate;
+    });
+
+    // --- MODIFIED LOG ---
+    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
+    // --- END MODIFIED LOG ---
+
+    
     // Map to the format our calendar logic will use
     return eventItems.map(record => {
         return {
@@ -38,61 +63,6 @@ async function fetchUpcomingEvents() {
             record: record // Keep a reference to the full record
         };
     });
-}
-// --- END UPDATED FUNCTION ---
-
-/**
- * Initializes the calendar widget with events and handles interaction.
- */
-async function renderCalendar() {
-    fullEventList = await fetchUpcomingEvents();
-    
-    // Destroy previous instance to re-render clean
-    if (calendarInstance) {
-        calendarInstance.destroy();
-    }
-    
-    calendarInstance = window.flatpickr(calendarContainer, {
-        inline: true,
-        monthSelectorType: "static",
-        minDate: "today",
-        // Enable multiple dates for viewing, but not selecting
-        mode: "multiple", 
-        dateFormat: "Y-m-d",
-        
-        onDayCreate: function (dObj, dStr, fp, dayElem) {
-            const dayEvents = getEventsForDay(dayElem.dateObj);
-            
-            if (dayEvents.length > 0) {
-                // Add a visual indicator for days with events
-                dayElem.classList.add('has-event'); 
-                dayElem.setAttribute('title', `${dayEvents.length} event(s) scheduled.`);
-                
-                // Add highlight if user RSVP'd to any event that day
-                const isUserRsvpd = dayEvents.some(event => state.session.user.rsvps.has(event.recordId));
-                if (isUserRsvpd) {
-                    dayElem.classList.add('rsvpd-event-day');
-                    dayElem.setAttribute('title', dayElem.getAttribute('title') + ' (You RSVP\'d)');
-                }
-            }
-        },
-        
-        onChange: function(selectedDates) {
-            if (selectedDates.length > 0) {
-                // Show events for the *first* selected date (flatpickr multiple mode)
-                const selectedDay = selectedDates[0];
-                renderDailyEvents(selectedDay);
-                // Reselect the date to keep it highlighted
-                calendarInstance.setDate(selectedDay, true);
-            } else {
-                 dailyEventList.innerHTML = '<li>Select a date to see details.</li>';
-            }
-        }
-    });
-    
-    // Select today's date by default to populate the right panel
-    calendarInstance.setDate(new Date(), true);
-    renderDailyEvents(new Date());
 }
 
 function getEventsForDay(date) {
