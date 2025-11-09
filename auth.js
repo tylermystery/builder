@@ -11,7 +11,7 @@ import * as backgroundEngine from './components/backgroundEngine.js';
 
 // --- DEBUG ---
 console.log('[auth.js] 1. Importing effect plugins...');
-// --- FIX: Removed imports for kaleidoscope, wind, water, psychedelic, and vortex --
+// --- FIX: Removed imports for kaleidoscope, wind, water, psychedelic, and vortex ---
 console.log('[auth.js] 1a. Importing fractalEffect.js...');
 // --- DEBUG ---
 import fractalEffect from './components/effects/fractal.js';
@@ -24,7 +24,22 @@ console.log('[auth.js] 2. All effect plugins imported.');
 // --- DEBUG ---
 
 
-// --- DOM Elements are no longer queried here ---
+// --- DOM Elements ---
+const userModalOverlay = document.getElementById('user-modal-overlay');
+const userModalCloseBtn = document.getElementById('user-modal-close-btn');
+const signinView = document.getElementById('signin-view');
+const profileView = document.getElementById('profile-view');
+const signinForm = document.getElementById('signin-form');
+const signinEmailInput = document.getElementById('signin-email');
+const signinMessage = document.getElementById('signin-message');
+const signoutBtn = document.getElementById('signout-btn');
+const profileNameEl = document.getElementById('profile-name');
+const profileEmailEl = document.getElementById('profile-email');
+const userProfileButton = document.getElementById('user-profile-button');
+const userPrefsForm = document.getElementById('user-prefs-form');
+const profilePhoneInput = document.getElementById('profile-phone');
+const profileNotificationsSelect = document.getElementById('profile-notifications');
+const prefsMessage = document.getElementById('prefs-message');
 
 // --- List of available background effects ---
 // --- FIX: This array now only contains the effects that actually exist ---
@@ -111,19 +126,9 @@ async function _handleSuccessfulLogin(payload) {
 }
 
 export function showUserModal() {
-    // --- FIX: Query elements INSIDE the function ---
-    const userModalOverlay = document.getElementById('user-modal-overlay');
-    const signinView = document.getElementById('signin-view');
-    const profileView = document.getElementById('profile-view');
-    const signinEmailInput = document.getElementById('signin-email');
-    const profileNameEl = document.getElementById('profile-name');
-    const profileEmailEl = document.getElementById('profile-email');
-    const profilePhoneInput = document.getElementById('profile-phone');
-    const profileNotificationsSelect = document.getElementById('profile-notifications');
-    const prefsMessage = document.getElementById('prefs-message');
-    // --- END FIX ---
-    
+    // --- DEBUG ---
     console.log('[auth.js] showUserModal() called.');
+    // --- DEBUG ---
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
     
@@ -154,19 +159,27 @@ export function showUserModal() {
     }
     
     // --- MOVED: Populate Background Effects ---
+    // --- DEBUG ---
     console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
     console.log(`[auth.js] Checking IF condition...`);
     console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
     console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
     if (effectSelect) {
+        // --- FIX: Use childElementCount to correctly check if empty ---
         console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
     }
+    // --- DEBUG ---
 
+    // --- FIX: Check childElementCount (handles whitespace) instead of innerHTML ---
     if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
+        // --- DEBUG ---
         console.log('[auth.js] IF condition PASSED. Populating dropdown.');
+        // --- DEBUG ---
         log('Auth', 'Populating background effect tweaks for the first time.');
         effects.forEach((effect, index) => {
+            // --- DEBUG ---
             console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
+            // --- DEBUG ---
             const option = document.createElement('option');
             option.value = index;
             option.textContent = effect.name;
@@ -183,42 +196,34 @@ export function showUserModal() {
         });
         
         // Load the default effect (the first one in the 'effects' array)
+        // --- DEBUG ---
         if (effects.length > 0 && effects[0].plugin) {
             console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
             backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
         } else {
             console.log('[auth.js] No effects found in array to load as default.');
         }
+        // --- DEBUG ---
     } else {
+        // --- DEBUG ---
         console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
+        // --- DEBUG ---
     }
     // --- END: Moved Background Effects Logic ---
 
-    if (userModalOverlay) {
-        userModalOverlay.classList.add('active');
-        userModalOverlay.style.display = 'flex';
-    }
+    userModalOverlay.classList.add('active');
+    userModalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
 }
 
 function hideUserModal() {
-    // --- FIX: Query element INSIDE the function ---
-    const userModalOverlay = document.getElementById('user-modal-overlay');
-    if (userModalOverlay) {
-        userModalOverlay.classList.remove('active');
-        setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
-    }
-    // --- END FIX ---
+    userModalOverlay.classList.remove('active');
+    setTimeout(() => { userModalOverlay.style.display = 'none'; }, 300);
     document.body.classList.add('modal-open');
 }
 
 async function handleSignIn(e) {
     e.preventDefault();
-    // --- FIX: Query elements INSIDE the function ---
-    const signinEmailInput = document.getElementById('signin-email');
-    const signinMessage = document.getElementById('signin-message');
-    // --- END FIX ---
-    
     const email = signinEmailInput.value;
     log('Auth', `Sign-in initiated for: ${email}`);
     localStorage.setItem('lastSignInEmail', email);
@@ -269,12 +274,6 @@ async function handleSignIn(e) {
 
 async function handleUpdateUserPrefs(e) {
     e.preventDefault();
-    // --- FIX: Query elements INSIDE the function ---
-    const prefsMessage = document.getElementById('prefs-message');
-    const profileNotificationsSelect = document.getElementById('profile-notifications');
-    const profilePhoneInput = document.getElementById('profile-phone');
-    // --- END FIX ---
-    
     prefsMessage.textContent = 'Saving...';
     prefsMessage.style.color = '#333';
 
@@ -353,11 +352,6 @@ export function handleSignOut() {
 }
 
 export function updateUserProfileIcon() {
-    // --- FIX: Query element INSIDE the function ---
-    const userProfileButton = document.getElementById('user-profile-button');
-    if (!userProfileButton) return; // Safety check
-    // --- END FIX ---
-    
     if (state.session.user.isAuthenticated && state.session.user.name) {
         userProfileButton.classList.add('signed-in');
         userProfileButton.textContent = state.session.user.name.charAt(0).toUpperCase();
@@ -370,28 +364,18 @@ export function updateUserProfileIcon() {
 }
 
 export function setupAuthEventListeners() {
-    // --- FIX: Query elements INSIDE the function ---
-    const userProfileButton = document.getElementById('user-profile-button');
-    const userModalCloseBtn = document.getElementById('user-modal-close-btn');
-    const signinForm = document.getElementById('signin-form');
-    const signoutBtn = document.getElementById('signout-btn');
-    const userPrefsForm = document.getElementById('user-prefs-form');
-    const userModalOverlay = document.getElementById('user-modal-overlay');
-    // --- END FIX ---
-
-    // Safely add listeners
-    userProfileButton?.addEventListener('click', showUserModal);
-    userModalCloseBtn?.addEventListener('click', hideUserModal);
-    signinForm?.addEventListener('submit', handleSignIn);
-    signoutBtn?.addEventListener('click', handleSignOut);
-    userPrefsForm?.addEventListener('submit', handleUpdateUserPrefs);
-    userModalOverlay?.addEventListener('click', (e) => {
+    userProfileButton.addEventListener('click', showUserModal);
+    userModalCloseBtn.addEventListener('click', hideUserModal);
+    signinForm.addEventListener('submit', handleSignIn);
+    signoutBtn.addEventListener('click', handleSignOut);
+    userPrefsForm.addEventListener('submit', handleUpdateUserPrefs);
+    userModalOverlay.addEventListener('click', (e) => {
         if (e.target === userModalOverlay) {
             hideUserModal();
         }
     });
 
-    // --- NEW SSO EVENT LISTENERS ---\
+    // --- NEW SSO EVENT LISTENERS ---
     const googleSsoBtn = document.getElementById('google-sso-btn');
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
@@ -421,14 +405,12 @@ export function setupAuthEventListeners() {
 
         } catch (error) {
             console.error("SSO login error:", error);
-            const signinMessage = document.getElementById('signin-message');
-            if (signinMessage) {
-                signinMessage.textContent = "Error logging in with Google. Please try again.";
-                signinMessage.style.color = '#dc3545';
-            }
+            signinMessage.textContent = "Error logging in with Google. Please try again.";
+            signinMessage.style.color = '#dc3545';
         }
     });
-    // --- END NEW SSO EVENT LISTENERS ---
+// --- END NEW SSO EVENT LISTENERS ---
+
 }
 
 // --- DEBUG ---
