@@ -487,11 +487,8 @@ export function updateCatalogHeader() {
         } else {
             const start = mainDatePicker.selectedDates[0].toLocaleDateString();
             const end = mainDatePicker.selectedDates[1].toLocaleDateString();
-            // --- THIS IS THE FIX ---
-            // Removed the stray `\n` and extra spaces from the template literal
             text = `Date: ${start} – ${end}`;
         }
-        // --- END FIX ---
         activeFiltersHtml.push(createFilterChip(text, 'date-filter', 'active'));
         filterCount++; 
     }
@@ -522,11 +519,14 @@ export function updateCatalogHeader() {
         path.push(`<span>${subcatName}</span>`);
     });
 
+    // --- THIS IS THE FIX: Removed \n from Set and filter ---
     if (isRecommendedSort && goalsInput && goalsInput.length > 0) {
-        const STOP_WORDS = new Set([\n            'a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', \n            'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'\n        ]);
+        const STOP_WORDS = new Set(['a', 'an', 'the', 'for', 'with', 'and', 'is', 'of', 'to', 'in', 'on', 'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want']);
 
         const goalWords = goalsInput.split(/[\\\\s,]+/).filter(word => 
-            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())\n        );
+            word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
+        );
+    // --- END FIX ---
 
         goalWords.forEach(goal => {
             if (goal.toLowerCase() !== searchTerm.toLowerCase()) {
@@ -667,7 +667,10 @@ export function showLoginPromptForLikes() {
         profileButton.parentNode.appendChild(promptElement);
     }
 
-    if (promptTimeout) clearTimeout(promptTimeout);\n
+    // --- THIS IS THE FIX: Removed stray \n ---
+    if (promptTimeout) clearTimeout(promptTimeout);
+    // --- END FIX ---
+    
     requestAnimationFrame(() => {
          promptElement.style.opacity = '1';
     });
