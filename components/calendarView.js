@@ -89,7 +89,9 @@ function renderDailyEvents(date) {
         // Highlight if user has RSVP'd
         if (state.session.user.rsvps.has(event.recordId)) {
              listItem.classList.add('event-item-rsvpd');
-             listItem.textContent += ' (RSVP\\'d)';
+             // --- THIS IS THE FIX: Removed extra backslashes ---
+             listItem.textContent += ' (RSVP\'d)';
+             // --- END FIX ---
         }
 
         // --- ADDED: On-click logic ---\n        listItem.addEventListener('click', () => {
