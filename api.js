@@ -395,18 +395,17 @@ export async function fetchAllRecords() {
         'Item Type',
         'Stores',
         'RSVPs',
+        'RSVPMaybe',
+        'RSVPNo',
         'Date',
+        'Time',
         'Chat Enabled',
-        // New Modal Fields (VERIFY THESE NAMES)
         'Duration',
         'Capacity',
         'Location Details',
         'Additional Information',
         'Rankings',
-        'AI_Profile' // NEW FIELD FOR V2.1 PROFILING
-        // Add ALL other ranking field names from Airtable if you used individual fields before
-        // e.g., 'Ranking - Fun', 'Ranking - Competitive', etc.
-        // Add ALL other fields used anywhere else
+        'AI_Profile'
     ];
     // --- END OF FIELD LIST ---
 
@@ -944,12 +943,12 @@ export async function updateUserFlagStatus(userId, isFlagged) {
 }
 
 
-export async function addRsvpToEvent(eventId, userId) {
+export async function updateRsvpForEvent(eventId, userId, rsvpType) {
     if (!eventId || !userId) {
-         log('API', 'addRsvpToEvent: Missing eventId or userId.');
+         log('API', 'updateRsvpForEvent: Missing eventId or userId.');
          return null;
     }
-    log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
+    log('API', `Updating RSVP for user ${userId} to event ${eventId} with type: ${rsvpType}`);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
 
     try {
@@ -962,16 +961,28 @@ export async function addRsvpToEvent(eventId, userId) {
         }
 
         const existingRecord = await getResponse.json();
-        const rsvps = new Set(existingRecord.fields.RSVPs || []);
+        const rsvpYes = new Set(existingRecord.fields.RSVPs || []);
+        const rsvpMaybe = new Set(existingRecord.fields.RSVPMaybe || []);
+        const rsvpNo = new Set(existingRecord.fields.RSVPNo || []);
 
-        if (rsvps.has(userId)) {
-             log('API', `User ${userId} already RSVP'd to event ${eventId}.`);
-             return existingRecord;
+        rsvpYes.delete(userId);
+        rsvpMaybe.delete(userId);
+        rsvpNo.delete(userId);
+
+        if (rsvpType === 'yes') {
+            rsvpYes.add(userId);
+        } else if (rsvpType === 'maybe') {
+            rsvpMaybe.add(userId);
+        } else if (rsvpType === 'no') {
+            rsvpNo.add(userId);
         }
-        rsvps.add(userId);
 
         const rsvpPayload = {
-            fields: { 'RSVPs': Array.from(rsvps) }
+            fields: { 
+                'RSVPs': Array.from(rsvpYes),
+                'RSVPMaybe': Array.from(rsvpMaybe),
+                'RSVPNo': Array.from(rsvpNo)
+            }
         };
         const patchResponse = await fetch(url, {
             method: 'PATCH',
@@ -986,17 +997,21 @@ export async function addRsvpToEvent(eventId, userId) {
             throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
         }
 
-        log('API', `Successfully added RSVP for user ${userId} to event ${eventId}`);
+        log('API', `Successfully updated RSVP for user ${userId} to event ${eventId}`);
         return await patchResponse.json();
 
     } catch (error) {
-        console.error(`Failed to add RSVP for event ${eventId}:`, error);
-        log('API', `Failed to add RSVP: ${error.message}`);
+        console.error(`Failed to update RSVP for event ${eventId}:`, error);
+        log('API', `Failed to update RSVP: ${error.message}`);
          if (typeof ui !== 'undefined' && ui.showToast) {
              ui.showToast(`RSVP Error: ${error.message}`);
          }
         return null;
     }
+}
+
+export async function addRsvpToEvent(eventId, userId) {
+    return updateRsvpForEvent(eventId, userId, 'yes');
 }
 
 
