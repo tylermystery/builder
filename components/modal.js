@@ -359,6 +359,68 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
     
+    if (record.fields['Item Type'] === 'Event') {
+        const eventDateStr = record.fields.Date;
+        const eventTime = record.fields.Time || '';
+        const eventLocation = record.fields.Location || '';
+        
+        if (eventDateStr) {
+            const eventDate = new Date(eventDateStr);
+            const dateStr = eventDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            
+            const eventInfoSection = document.createElement('div');
+            eventInfoSection.className = 'event-info-section';
+            eventInfoSection.innerHTML = `
+                <div class="event-date-time">
+                    <strong>📅 ${dateStr}</strong>${eventTime ? ` at ${eventTime}` : ''}
+                </div>
+                ${eventLocation ? `<div class="event-location">📍 ${eventLocation}</div>` : ''}
+            `;
+            
+            modalItemDescription.parentElement.insertBefore(eventInfoSection, modalItemDescription);
+        }
+        
+        const rsvpYes = record.fields.RSVPs || [];
+        const rsvpMaybe = record.fields.RSVPMaybe || [];
+        const rsvpNo = record.fields.RSVPNo || [];
+        
+        if (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0) {
+            const rsvpListSection = document.createElement('div');
+            rsvpListSection.className = 'rsvp-list-section';
+            
+            let rsvpHTML = '<div class="rsvp-list-header"><strong>RSVPs</strong></div>';
+            
+            if (rsvpYes.length > 0) {
+                rsvpHTML += `<div class="rsvp-list-group">
+                    <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
+                    <div class="rsvp-list-items">Anonymous users</div>
+                </div>`;
+            }
+            
+            if (rsvpMaybe.length > 0) {
+                rsvpHTML += `<div class="rsvp-list-group">
+                    <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
+                    <div class="rsvp-list-items">Anonymous users</div>
+                </div>`;
+            }
+            
+            if (rsvpNo.length > 0) {
+                rsvpHTML += `<div class="rsvp-list-group">
+                    <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
+                    <div class="rsvp-list-items">Anonymous users</div>
+                </div>`;
+            }
+            
+            rsvpListSection.innerHTML = rsvpHTML;
+            modalItemDescription.parentElement.insertBefore(rsvpListSection, modalItemDescription);
+        }
+    }
+    
     try {
         const blurbHtml = generateRecommendationBlurb(record);
         if (blurbHtml && modalRecBlurb) {
@@ -486,6 +548,43 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     heartBtnContainer.id = 'modal-heart-btn';
     heartBtnContainer.dataset.recordId = record.id;
     modalHeaderActions.appendChild(heartBtnContainer);
+
+    if (record.fields['Item Type'] === 'Event') {
+        const rsvpYes = record.fields.RSVPs || [];
+        const rsvpMaybe = record.fields.RSVPMaybe || [];
+        const rsvpNo = record.fields.RSVPNo || [];
+        const userId = state.session.user.id;
+        
+        const hasRsvpdYes = rsvpYes.includes(userId);
+        const hasRsvpdMaybe = rsvpMaybe.includes(userId);
+        const hasRsvpdNo = rsvpNo.includes(userId);
+
+        const rsvpContainer = document.createElement('div');
+        rsvpContainer.className = 'rsvp-button-group';
+        
+        const yesBtn = document.createElement('button');
+        yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
+        yesBtn.dataset.recordId = record.id;
+        yesBtn.dataset.rsvpType = 'yes';
+        yesBtn.innerHTML = hasRsvpdYes ? "Going ✅" : 'Yes';
+        
+        const maybeBtn = document.createElement('button');
+        maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
+        maybeBtn.dataset.recordId = record.id;
+        maybeBtn.dataset.rsvpType = 'maybe';
+        maybeBtn.innerHTML = hasRsvpdMaybe ? "Maybe ❓" : 'Maybe';
+        
+        const noBtn = document.createElement('button');
+        noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
+        noBtn.dataset.recordId = record.id;
+        noBtn.dataset.rsvpType = 'no';
+        noBtn.innerHTML = hasRsvpdNo ? "Can't Go ❌" : 'No';
+        
+        rsvpContainer.appendChild(yesBtn);
+        rsvpContainer.appendChild(maybeBtn);
+        rsvpContainer.appendChild(noBtn);
+        modalHeaderActions.appendChild(rsvpContainer);
+    }
 
     modalOptionsContainer.innerHTML = '';
     rawOptions.forEach((opt, index) => {

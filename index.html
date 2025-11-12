@@ -524,15 +524,19 @@
     </div>
 
 <div id="calendar-modal-overlay" class="modal-overlay">
-        <div class="modal-content" style="max-width: 900px; height: 90vh;">
+        <div class="modal-content calendar-modal-content">
             <button id="calendar-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="beta-banner">The Events Calendar is a Beta feature. We'd love your feedback!</div>
-            <h3 style="margin-top: 10px;">Upcoming Events Calendar</h3>
+            <div class="beta-banner calendar-header">The Events Calendar is a Beta feature. We'd love your feedback!</div>
+            <div id="calendar-view-controls">
+                <button id="calendar-view-month" class="calendar-view-btn active" data-view="month">📅 Month View</button>
+                <button id="calendar-view-list" class="calendar-view-btn" data-view="list">📋 List View</button>
+            </div>
             <div id="calendar-body">
-                <div id="event-calendar"></div>
-                <div id="event-details-panel">
-                    <h4>Events on Selected Day:</h4>
-                    <ul id="daily-event-list"></ul>
+                <div id="calendar-month-view" class="calendar-view-container">
+                    <div id="event-calendar"></div>
+                </div>
+                <div id="calendar-list-view" class="calendar-view-container" style="display: none;">
+                    <div id="events-list-container"></div>
                 </div>
             </div>
         </div>

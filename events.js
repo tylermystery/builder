@@ -632,29 +632,40 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 showUserModal();
                 return;
             }
-            const cardEl = rsvpBtn.closest('.event-card');
+            const cardEl = rsvpBtn.closest('.event-card') || rsvpBtn.closest('[data-record-id]');
             const recordId = cardEl?.dataset.recordId;
             if (!recordId) return;
 
+            const rsvpType = rsvpBtn.dataset.rsvpType || 'yes';
+            const wasActive = rsvpBtn.classList.contains('active');
+
             rsvpBtn.disabled = true;
+            const originalText = rsvpBtn.innerHTML;
             rsvpBtn.textContent = 'Saving...';
+            
             try {
-                const updatedRecord = await api.addRsvpToEvent(recordId, state.session.user.id);
+                let updatedRecord;
+                if (wasActive) {
+                    updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, null);
+                } else {
+                    updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, rsvpType);
+                }
+                
                 if (updatedRecord) {
-                    rsvpBtn.textContent = "You're Going! ✅";
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
+                    
+                    if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
+                        ui.showDetailModal(updatedRecord);
+                    }
                 } else {
                     throw new Error('RSVP update failed.');
                 }
             } catch (error) {
                 console.error("RSVP Error:", error);
                 ui.showToast(`RSVP Error: ${error.message}`);
-                rsvpBtn.textContent = 'Error!';
-                setTimeout(() => {
-                    rsvpBtn.textContent = 'RSVP';
-                    rsvpBtn.disabled = false;
-                }, 2000);
+                rsvpBtn.innerHTML = originalText;
+                rsvpBtn.disabled = false;
             }
         } else if (presentBtn) {
             const listType = presentBtn.dataset.listType;
