@@ -38,19 +38,6 @@ console.log('[main.js] 4. Successfully imported fluidEffect.js.');
 const imageCache = new Map();
 window.imageCache = imageCache; 
 
-async function populateUserPlans(userId) {
-    if (typeof ui.populateMyPlansDropdown === 'function') {
-        if (userId) {
-            const plans = await api.fetchPlansForUser(userId);
-            ui.populateMyPlansDropdown(plans);
-        } else {
-            ui.populateMyPlansDropdown([]);
-        }
-    } else {
-        console.error("ui.populateMyPlansDropdown is not defined or imported correctly.");
-    }
-}
-
 window.applyFiltersAndSort = applyFiltersAndSort;
 
 
@@ -114,8 +101,7 @@ async function initialize() {
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
-         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat.");
-         populateUserPlans(state.session.user.id);
+         log('Main', "'userLoggedIn' event caught, reapplying filters and reinitializing chat.");
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
@@ -126,9 +112,7 @@ async function initialize() {
      });
 
     document.addEventListener('planCreated', () => {
-        if (state.session.user.isAuthenticated) {
-            populateUserPlans(state.session.user.id);
-        }
+        log('Main', 'New plan created.');
     });
     document.addEventListener('sessionReady', () => {
         log('Main', '"sessionReady" event received, re-initializing session chat.');
@@ -394,8 +378,6 @@ async function initialize() {
                 console.error('Failed to fetch user data on reload:', error.message);
             }
         }
-
-        await populateUserPlans(state.session.user.id); 
 
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);

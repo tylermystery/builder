@@ -328,17 +328,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
-    safeAddEventListener('my-plans-dropdown', 'change', (e) => {
-        const dropdown = e.target;
-        const selectedId = dropdown.value;
-        if (selectedId === 'new') {
-            const currentShopId = state.ui.activeShopId;
-            window.location.href = `${window.location.pathname}?shopId=${currentShopId}`;
-        } else if (selectedId) {
-            window.location.href = `${window.location.pathname}?session=${selectedId}`;
-        }
-    });
-
     const leftSidebar = document.getElementById('left-sidebar');
     const rightSidebar = document.getElementById('right-sidebar');
     if (window.innerWidth < 1000) {
@@ -403,18 +392,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
         categoryFiltersRoot.appendChild(planFilterBtn);
 
-
-        const likesFilterBtn = document.createElement('button');
-        likesFilterBtn.className = 'filter-btn';
-        likesFilterBtn.id = 'liked-items-filter-btn';
-        likesFilterBtn.textContent = '❤️ My Likes';
-        likesFilterBtn.addEventListener('click', () => {
+        const categoriesBtn = document.createElement('button');
+        categoriesBtn.className = 'filter-btn';
+        categoriesBtn.id = 'categories-filter-btn';
+        categoriesBtn.textContent = '📂 Categories';
+        categoriesBtn.addEventListener('click', () => {
             document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            likesFilterBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'likes' });
+            categoriesBtn.classList.add('active');
+            updateUrl({ category: null, subcategory: null, view: 'categories' });
             applyFiltersAndSort(imageCache);
         });
-        categoryFiltersRoot.appendChild(likesFilterBtn);
+        categoryFiltersRoot.appendChild(categoriesBtn);
 
         const allButton = document.createElement('button');
         allButton.className = 'filter-btn category-filter-btn active'; // Default to active
@@ -432,6 +420,44 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
     }
     // --- END CONSOLIDATED BUTTON GENERATION --
+
+    // --- START HEADER USER FILTER BUTTONS ---
+    const likedItemsHeaderBtn = document.getElementById('liked-items-header-btn');
+    const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
+    const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
+
+    if (likedItemsHeaderBtn) {
+        likedItemsHeaderBtn.style.display = 'block';
+        likedItemsHeaderBtn.addEventListener('click', () => {
+            updateUrl({ category: null, subcategory: null, view: 'likes' });
+            applyFiltersAndSort(imageCache);
+        });
+    }
+
+    if (mySessionsHeaderBtn) {
+        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        mySessionsHeaderBtn.addEventListener('click', () => {
+            if (!state.session.user.isAuthenticated) {
+                showUserModal();
+                return;
+            }
+            updateUrl({ category: null, subcategory: null, view: 'my-sessions' });
+            applyFiltersAndSort(imageCache);
+        });
+    }
+
+    if (rsvpEventsHeaderBtn) {
+        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        rsvpEventsHeaderBtn.addEventListener('click', () => {
+            if (!state.session.user.isAuthenticated) {
+                showUserModal();
+                return;
+            }
+            updateUrl({ category: null, subcategory: null, view: 'rsvp-events' });
+            applyFiltersAndSort(imageCache);
+        });
+    }
+    // --- END HEADER USER FILTER BUTTONS ---
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
@@ -847,6 +873,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (!record) return;
             
             if (record.id.startsWith('ai-search-')) {
+                return;
+            }
+            
+            // Handle session tile clicks - navigate to that session
+            if (record.isSession && record.sessionData) {
+                const currentShopId = state.ui.activeShopId;
+                window.location.href = `${window.location.pathname}?session=${record.id}&shopId=${currentShopId}`;
                 return;
             }
 

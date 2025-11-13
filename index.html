@@ -30,6 +30,11 @@
                 <button id="parent-collective-trigger" title="What The Fun Collective">WTF</button>
                 <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
                 <h1 id="main-shop-title"></h1>
+                <div id="user-filter-buttons" style="display: flex; gap: 8px; margin-left: 12px;">
+                    <button id="liked-items-header-btn" class="header-icon-btn" title="My Likes" style="display: none;">❤️</button>
+                    <button id="my-sessions-header-btn" class="header-icon-btn" title="My Sessions" style="display: none;">📋</button>
+                    <button id="rsvp-events-header-btn" class="header-icon-btn" title="My RSVP Events" style="display: none;">📅</button>
+                </div>
             </div>
 
             <!-- Center Section: Marquee -->
@@ -39,12 +44,9 @@
                </div>
             </div>
 
-            <!-- Right Section: Calendar, Plans, and Account -->
+            <!-- Right Section: Calendar and Account -->
             <div id="header-right">
                 <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
-                <div id="my-plans-container" style="display: none;">
-                    <select id="my-plans-dropdown"></select>
-                </div>
                 <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
             </div>
         </div>
@@ -129,7 +131,8 @@
                         <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
                     </div>
                     </div>
-                   <div class="filter-group">                   
+                   <div class="filter-group">
+                    <label for="category-filters">Categories</label>
                     <div id="category-filters" class="filter-btn-group"></div>
                 </div>
                     <div id="date-filter-group" class="filter-group">

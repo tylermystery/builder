@@ -722,20 +722,25 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     setTimeout(() => {
         const chatContainer = document.getElementById('modal-chat-container');
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
+        const isEvent = record.fields['Item Type'] === 'Event';
+        const userRsvped = isEvent && (record.fields.RSVPs || []).includes(state.session.user.id);
+        
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
             isChatEnabledOnItem: isChatEnabledOnItem,
+            isEvent,
+            userRsvped,
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
-        if (state.session.user.isAuthenticated && chatContainer && isChatEnabledOnItem) {
+        if (state.session.user.isAuthenticated && chatContainer && (isChatEnabledOnItem || userRsvped)) {
             log('Modal', 'All conditions met. Initializing item chat.');
             chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
         } else {
             log('Modal', 'Hiding chat. Reason:', {
                 isAuthenticated: state.session.user.isAuthenticated,
-                isChatEnabledOnItem: isChatEnabledOnItem,
+                chatEnabled: isChatEnabledOnItem || userRsvped,
                 chatContainerExists: !!chatContainer
             });
             if (chatContainer) {

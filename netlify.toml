@@ -71,6 +71,11 @@
   to = "/.netlify/functions/send-chat-to-admin"
   status = 200
 
+[[redirects]]
+  from = "/api/notify-rsvp-users"
+  to = "/.netlify/functions/notify-rsvp-users"
+  status = 200
+
 # --- ADD THIS NEW BLOCK ---
 [[redirects]]
   from = "/api/process-weblink"

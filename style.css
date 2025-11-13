@@ -171,6 +171,31 @@ body.modal-open {
     flex-shrink: 0; /* Don't shrink logo/title */
 }
 
+.header-icon-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+.header-icon-btn:active {
+    transform: scale(0.95);
+}
+
 /* --- NEW: Styles for WTF Button --- */
 #parent-collective-trigger {
     background-color: #343a40; /* Dark grey/black */
