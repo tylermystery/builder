@@ -2,7 +2,7 @@
 import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
-import { createInteractiveCard } from './components/card.js';
+import { createInteractiveCard, updateCardIcon } from './components/card.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
