@@ -145,7 +145,24 @@ function renderMonthView() {
                     }
                     
                     const timeStr = event.record.fields.Time || '';
+                    const location = event.record.fields.Location || '';
+                    const price = event.record.fields.Price || 0;
+                    const description = event.record.fields.Description || '';
+                    
+                    // Build tooltip text
+                    let tooltipText = event.name;
+                    if (timeStr) tooltipText += `\n⏰ ${timeStr}`;
+                    if (location) tooltipText += `\n📍 ${location}`;
+                    if (price > 0) tooltipText += `\n💵 $${price}`;
+                    else tooltipText += `\n💵 Free`;
+                    if (description) {
+                        const shortDesc = description.length > 100 ? description.substring(0, 100) + '...' : description;
+                        tooltipText += `\n${shortDesc}`;
+                    }
+                    
                     eventItem.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
+                    eventItem.setAttribute('data-event-details', tooltipText);
+                    eventItem.setAttribute('title', event.name);
                     
                     eventItem.addEventListener('click', (e) => {
                         e.stopPropagation();
