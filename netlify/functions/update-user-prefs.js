@@ -184,7 +184,7 @@ async function handleGetUserData(userId) {
     
     let likedItemIds = [];
     const likedItemsFormula = `FIND('${userId}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
-    const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`; // Only get record IDs
+    const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?filterByFormula=${encodeURIComponent(likedItemsFormula)}`;
 
     console.log(`[func-combo] handleGetUserData: Formula: ${likedItemsFormula}`);
     console.log(`[func-combo] handleGetUserData: Full URL: ${likedItemsUrl}`);
