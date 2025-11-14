@@ -96,6 +96,19 @@ async function handleToggleLike(userId, itemId) {
     }
 
     console.log(`[func-combo] handleToggleLike: Successfully patched likes for item ${itemId}. New status: ${liked ? 'Liked' : 'Unliked'}`);
+    
+    // --- VERIFICATION: Re-fetch the item to confirm the patch was applied ---
+    console.log(`[func-combo] handleToggleLike: Verifying patch by re-fetching item ${itemId}...`);
+    const verifyRes = await fetch(getItemUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+    if (verifyRes.ok) {
+        const verifiedRecord = await verifyRes.json();
+        const verifiedLikes = verifiedRecord.fields?.[LIKED_BY_FIELD] || [];
+        console.log(`[func-combo] handleToggleLike: VERIFICATION - ${LIKED_BY_FIELD} field after patch:`, verifiedLikes);
+        console.log(`[func-combo] handleToggleLike: VERIFICATION - Does it contain user ${userId}?`, verifiedLikes.includes(userId));
+    } else {
+        console.warn(`[func-combo] handleToggleLike: Could not verify patch. Status: ${verifyRes.status}`);
+    }
+    // --- END VERIFICATION ---
 
     return { success: true, liked: liked }; // Return the actual new liked status
      // --- End Original Logic ---
@@ -163,25 +176,35 @@ async function handleUpdatePrefs(userId, phone, frequency) {
 
 // --- NEW HELPER: Get User Data (Likes) ---
 async function handleGetUserData(userId) {
+    console.log(`[func-combo] handleGetUserData: ========== GET USER DATA START ==========`);
     console.log(`[func-combo] handleGetUserData: Fetching liked items for user ${userId}`);
+    console.log(`[func-combo] handleGetUserData: Using BASE_ID: ${BASE_ID}`);
+    console.log(`[func-combo] handleGetUserData: Using ITEMS_TABLE: ${ITEMS_TABLE}`);
+    console.log(`[func-combo] handleGetUserData: Using LIKED_BY_FIELD: ${LIKED_BY_FIELD}`);
     
     let likedItemIds = [];
     const likedItemsFormula = `FIND('${userId}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
     const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`; // Only get record IDs
 
-    console.log(`[func-combo] handleGetUserData: Fetching URL: ${likedItemsUrl}`);
+    console.log(`[func-combo] handleGetUserData: Formula: ${likedItemsFormula}`);
+    console.log(`[func-combo] handleGetUserData: Full URL: ${likedItemsUrl}`);
     const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+    console.log(`[func-combo] handleGetUserData: Response status: ${likedItemsRes.status}`);
 
     if (likedItemsRes.ok) {
         const likedItemsData = await likedItemsRes.json();
+        console.log(`[func-combo] handleGetUserData: Raw response from Airtable:`, JSON.stringify(likedItemsData, null, 2));
         likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
         console.log(`[func-combo] handleGetUserData: Found ${likedItemIds.length} liked items for user ${userId}.`);
+        console.log(`[func-combo] handleGetUserData: Liked item IDs:`, likedItemIds);
     } else {
         const errorBody = await likedItemsRes.text();
-        console.warn(`[func-combo] handleGetUserData: Failed to fetch liked items for user ${userId}. Status: ${likedItemsRes.status}, Body: ${errorBody}`);
+        console.error(`[func-combo] handleGetUserData: Failed to fetch liked items for user ${userId}. Status: ${likedItemsRes.status}, Body: ${errorBody}`);
         // Don't fail the request, just return empty list
     }
     
+    console.log(`[func-combo] handleGetUserData: Returning ${likedItemIds.length} liked items`);
+    console.log(`[func-combo] handleGetUserData: ========== GET USER DATA END ==========`);
     // Return the payload expected by the client
     return { likedItemIds: likedItemIds };
 }
