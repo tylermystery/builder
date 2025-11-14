@@ -530,7 +530,7 @@ export function updateCatalogHeader() {
             'at', 'my', 'it', 'big', 'small', 'all', 'new', 'old', 'about', 'want'
         ]);
 
-        const goalWords = goalsInput.split(/[\\s,]+/).filter(word => 
+        const goalWords = goalsInput.split(/[\s,]+/).filter(word => 
             word.length > 2 && !STOP_WORDS.has(word.toLowerCase())
         );
 
@@ -592,7 +592,7 @@ export function handleFilterChipClear(e) {
     if (type === 'goal-filter') {
         const goalsInput = document.getElementById('header-goals');
         if (goalsInput) {
-            const goalWords = goalsInput.value.split(/[\\s,]+/).filter(Boolean); // Cleaned regex
+            const goalWords = goalsInput.value.split(/[\s,]+/).filter(Boolean);
             const updatedGoals = goalWords.filter(word => word.toLowerCase() !== value.toLowerCase()).join(' ');
             
             goalsInput.value = updatedGoals;
