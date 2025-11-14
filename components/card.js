@@ -22,16 +22,27 @@ export function getPlaceholderImage(imageUrls) {
 }
 
 export function updateCardIcon(recordId) {
+    console.log(`[Card] ========== UPDATE CARD ICON DEBUG START ==========`);
+    console.log(`[Card] Updating icon for record: ${recordId}`);
+    console.log(`[Card] User authenticated:`, state.session.user.isAuthenticated);
+    
     let isLiked = false;
 
     if (state.session.user.isAuthenticated) {
         isLiked = state.session.user.likedItemIds.has(recordId);
+        console.log(`[Card] User is authenticated, checking liked items`);
+        console.log(`[Card] Total liked items:`, state.session.user.likedItemIds.size);
+        console.log(`[Card] All liked item IDs:`, Array.from(state.session.user.likedItemIds));
+        console.log(`[Card] Is ${recordId} liked?`, isLiked);
     } else {
+        console.log(`[Card] User is not authenticated, checking tempLikes`);
         try {
             const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
             isLiked = tempLikes.has(recordId);
+            console.log(`[Card] TempLikes:`, Array.from(tempLikes));
+            console.log(`[Card] Is ${recordId} in tempLikes?`, isLiked);
         } catch (e) {
-            console.error('Error reading tempLikes for icon update:', e);
+            console.error('[Card] Error reading tempLikes for icon update:', e);
             isLiked = false;
         }
     }
@@ -41,32 +52,38 @@ export function updateCardIcon(recordId) {
     // ^^^ End resilient SVG definition ^^^
 
     // Query for all instances of the icon (card and modal)
-    document.querySelectorAll(`.event-card[data-record-id=\"${recordId}\"] .heart-icon, #modal-heart-btn[data-record-id=\"${recordId}\"]`).forEach(icon => {
+    const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
+    console.log(`[Card] Found ${elements.length} icon elements to update for ${recordId}`);
+    
+    elements.forEach(icon => {
         if (!icon) return;
 
         if (isLiked) {
             icon.className = 'heart-icon hearted';
             icon.title = 'Unlike this item';
+            console.log(`[Card] Set icon to HEARTED for ${recordId}`);
         } else {
             icon.className = 'heart-icon';
             icon.title = 'Like this item';
+            console.log(`[Card] Set icon to UNHEARTED for ${recordId}`);
         }
         icon.innerHTML = heartSVG;
         icon.style.display = 'block';
         icon.style.pointerEvents = 'auto';
     });
+    console.log(`[Card] ========== UPDATE CARD ICON DEBUG END ==========`);
 }
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
-    log('Card', `Creating card for \"${record.fields.Name}\"`);
+    log('Card', `Creating card for "${record.fields.Name}"`);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
-    // --- ADD THIS \"PARTNER\" BADGE LOGIC ---
+    // --- ADD THIS "PARTNER" BADGE LOGIC ---
     let partnerBadge = '';
     if (fields.ServiceType === 'Partner Activity') {
-        partnerBadge = '<span class=\"partner-badge\">Partner</span>';
+        partnerBadge = '<span class="partner-badge">Partner</span>';
     }
     // --- END NEW LOGIC ---
 
