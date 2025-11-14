@@ -105,6 +105,10 @@ async function initialize() {
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
+         // Update all heart icons to reflect the newly loaded liked items
+         document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
+             ui.updateCardIcon(card.dataset.recordId);
+         });
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat(); 

@@ -149,28 +149,36 @@ exports.handler = async (event) => {
         // --- END NEW RSVPS FETCH ---
 
         // 7. Generate Session JWT
-        const userPayloadForToken = {
-// ... existing payload ...
-        };
-// ... existing JWT logic ...
+        const sessionToken = jwt.sign(
+            { 
+                userId: userRecord.id, 
+                name: userRecord.fields[NAME_FIELD], 
+                email: userRecord.fields[EMAIL_FIELD], 
+                isOwner: ownerData.isOwner 
+            },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
 
         // 8. Return Response to Client
         return {
             statusCode: 200,
             body: JSON.stringify({
                 token: sessionToken,
-                user: {
-// ... existing user payload ...
+                user: { 
+                    id: userRecord.id, 
+                    name: userRecord.fields[NAME_FIELD], 
+                    email: userRecord.fields[EMAIL_FIELD],
+                    phoneNumber: userRecord.fields.PhoneNumber || '',
+                    notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
                     likedItemIds: likedItemIds,
-                    rsvpdItemIds: rsvpdItemIds // NEW: Include the fetched RSVP item IDs here
+                    rsvpdItemIds: rsvpdItemIds
                 },
-                ownerData: ownerData
+                ownerData: ownerData,
+                associatedSessions: associatedSessions
             }),
         };
     } catch (error) {
-// ... existing catch block ...
-
-
         console.error('[auth-verify] Function Error:', error);
         return {
             statusCode: 500,

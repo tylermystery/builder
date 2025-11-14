@@ -63,6 +63,7 @@ async function _handleSuccessfulLogin(payload) {
 
     // --- MOVED STATE UPDATE HERE ---
     const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    console.log(`[Auth] Setting user state. Liked items from payload: ${initialLikedItemIdsFromPayload.length}`);
     setState({
         session: {
             ...state.session,
@@ -76,7 +77,8 @@ async function _handleSuccessfulLogin(payload) {
             }
         }
     });
-    console.log("[Auth] User state set immediately after login:", state.session.user);
+    console.log("[Auth] User state set immediately after login. Liked items count:", state.session.user.likedItemIds.size);
+    console.log("[Auth] Full user state:", state.session.user);
     // --- END MOVED STATE UPDATE ---
 
     // --- START LIKES SYNC (Now runs *after* state is updated) ---
