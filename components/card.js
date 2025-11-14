@@ -131,6 +131,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         } else {
             imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
+        imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
             ${imageContainerHTML}
@@ -174,7 +175,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${rsvpButtonHTML}
             </div>
         `;
-        setTimeout(() => updateCardIcon(record.id), 0);
         return eventCard;
     }
 
@@ -219,6 +219,5 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         });
     }
 
-    setTimeout(() => updateCardIcon(record.id), 0);
     return eventCard;
 }

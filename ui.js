@@ -98,6 +98,11 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
     catalogContainer.appendChild(fragment);
     
+    // Initialize heart icons for all newly rendered cards
+    recordsToRender.forEach(record => {
+        updateCardIcon(record.id);
+    });
+    
     observeLazyImages(catalogContainer);
 
     if (loadingMessage) {
