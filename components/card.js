@@ -72,15 +72,9 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.title = 'Like this item';
             console.log(`[Card] Set icon to UNHEARTED for ${recordId}`);
-            
-            if (isInModal) {
-                icon.innerHTML = heartSVG;
-                icon.style.display = 'block';
-                icon.style.pointerEvents = 'auto';
-            } else if (isInCard) {
-                icon.style.display = 'none';
-                icon.style.pointerEvents = 'none';
-            }
+            icon.innerHTML = heartSVG;
+            icon.style.display = 'block';
+            icon.style.pointerEvents = 'auto';
         }
     });
     console.log(`[Card] ========== UPDATE CARD ICON DEBUG END ==========`);
@@ -162,7 +156,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-                <div class="heart-icon" data-record-id="${record.id}" style="display: none;"></div>
+                <div class="heart-icon" data-record-id="${record.id}"></div>
                 ${partnerBadge} 
                 ${scoreBanner} 
             </div>
@@ -196,7 +190,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
-            <div class="heart-icon" data-record-id="${record.id}" style="display: none;"></div>
+            <div class="heart-icon" data-record-id="${record.id}"></div>
             ${partnerBadge} 
             ${scoreBanner} 
             </div>
