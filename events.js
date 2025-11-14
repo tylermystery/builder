@@ -732,6 +732,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
                 try {
                     heartIcon.style.pointerEvents = 'none';
+                    heartIcon.style.opacity = '0.6';
+                    heartIcon.style.transform = 'scale(0.9)';
+                    
                     console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
                     const result = await api.toggleUserLike(recordId);
                     console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
@@ -766,7 +769,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
                     heartIcon.style.pointerEvents = 'auto';
-                     console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
+                    heartIcon.style.opacity = '';
+                    heartIcon.style.transform = '';
+                    console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
                  console.log('[Events] User is logged out. Handling temporary like.');
