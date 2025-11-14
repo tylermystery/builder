@@ -149,20 +149,48 @@ function renderMonthView() {
                     const price = event.record.fields.Price || 0;
                     const description = event.record.fields.Description || '';
                     
-                    // Build tooltip text
-                    let tooltipText = event.name;
-                    if (timeStr) tooltipText += `\n⏰ ${timeStr}`;
-                    if (location) tooltipText += `\n📍 ${location}`;
-                    if (price > 0) tooltipText += `\n💵 $${price}`;
-                    else tooltipText += `\n💵 Free`;
-                    if (description) {
-                        const shortDesc = description.length > 100 ? description.substring(0, 100) + '...' : description;
-                        tooltipText += `\n${shortDesc}`;
+                    // Create event label
+                    const eventLabel = document.createElement('span');
+                    eventLabel.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
+                    eventItem.appendChild(eventLabel);
+                    
+                    // Create tooltip element
+                    const tooltip = document.createElement('div');
+                    tooltip.classList.add('event-tooltip');
+                    
+                    const tooltipTitle = document.createElement('div');
+                    tooltipTitle.classList.add('tooltip-title');
+                    tooltipTitle.textContent = event.name;
+                    tooltip.appendChild(tooltipTitle);
+                    
+                    if (timeStr) {
+                        const timeRow = document.createElement('div');
+                        timeRow.classList.add('tooltip-row');
+                        timeRow.innerHTML = `<span class="tooltip-label">⏰</span><span>${timeStr}</span>`;
+                        tooltip.appendChild(timeRow);
                     }
                     
-                    eventItem.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
-                    eventItem.setAttribute('data-event-details', tooltipText);
-                    eventItem.setAttribute('title', event.name);
+                    if (location) {
+                        const locationRow = document.createElement('div');
+                        locationRow.classList.add('tooltip-row');
+                        locationRow.innerHTML = `<span class="tooltip-label">📍</span><span>${location}</span>`;
+                        tooltip.appendChild(locationRow);
+                    }
+                    
+                    const priceRow = document.createElement('div');
+                    priceRow.classList.add('tooltip-row');
+                    priceRow.innerHTML = `<span class="tooltip-label">💵</span><span>${price > 0 ? '$' + price : 'Free'}</span>`;
+                    tooltip.appendChild(priceRow);
+                    
+                    if (description) {
+                        const descDiv = document.createElement('div');
+                        descDiv.classList.add('tooltip-description');
+                        const shortDesc = description.length > 150 ? description.substring(0, 150) + '...' : description;
+                        descDiv.textContent = shortDesc;
+                        tooltip.appendChild(descDiv);
+                    }
+                    
+                    eventItem.appendChild(tooltip);
                     
                     eventItem.addEventListener('click', (e) => {
                         e.stopPropagation();
