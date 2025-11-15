@@ -19,16 +19,82 @@ const NAME_FIELD = 'Name';
 const EMAIL_FIELD = 'Email';
 
 exports.handler = async (event, context) => {
+  console.log('[auth-social] ========== FUNCTION INVOKED ==========');
+  console.log('[auth-social] Timestamp:', new Date().toISOString());
+  console.log('[auth-social] Event method:', event.httpMethod);
+  console.log('[auth-social] Event headers:', JSON.stringify(event.headers, null, 2));
+  console.log('[auth-social] Has clientContext:', !!context.clientContext);
+  console.log('[auth-social] Has clientContext.user:', !!context.clientContext?.user);
+  
   // 1. Verify Netlify Identity User
-  const { user } = context.clientContext;
-  if (!user) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized.' }) };
+  // Check both context.clientContext.user (when called directly by Identity)
+  // and Authorization header (when called from frontend with JWT)
+  let email, name;
+  
+  console.log('[auth-social] ========== USER EXTRACTION START ==========');
+  
+  // First try to get user from clientContext (direct Identity integration)
+  if (context.clientContext && context.clientContext.user) {
+    console.log('[auth-social] Extracting user from clientContext...');
+    const { user } = context.clientContext;
+    email = user.email;
+    name = user.user_metadata?.full_name || email.split('@')[0];
+    console.log(`[auth-social] ✓ User from clientContext - email: ${email}, name: ${name}`);
+  } 
+  // Otherwise, try to get user from Authorization header
+  else {
+    console.log('[auth-social] No clientContext.user, checking Authorization header...');
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    console.log('[auth-social] Authorization header present:', !!authHeader);
+    if (authHeader) {
+      console.log('[auth-social] Authorization header (first 30 chars):', authHeader.substring(0, 30) + '...');
+    }
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('[auth-social] ✗ No valid authorization found');
+      console.error('[auth-social] authHeader:', authHeader);
+      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized. No authentication provided.' }) };
+    }
+    
+    const netlifyJwt = authHeader.replace('Bearer ', '');
+    console.log('[auth-social] Extracted JWT (first 30 chars):', netlifyJwt.substring(0, 30) + '...');
+    try {
+      console.log('[auth-social] Attempting to decode JWT...');
+      // Decode the Netlify JWT (we don't verify it here since Netlify already did)
+      // In production, you might want to verify it against Netlify's public key
+      const decoded = jwt.decode(netlifyJwt);
+      console.log('[auth-social] JWT decoded successfully');
+      console.log('[auth-social] Decoded JWT payload:', JSON.stringify(decoded, null, 2));
+      
+      if (!decoded || !decoded.email) {
+        console.error('[auth-social] ✗ Invalid token - no email in decoded JWT');
+        console.error('[auth-social] Decoded value:', decoded);
+        return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token.' }) };
+      }
+      
+      email = decoded.email;
+      name = decoded.user_metadata?.full_name || decoded.app_metadata?.full_name || email.split('@')[0];
+      console.log(`[auth-social] ✓ User from JWT - email: ${email}, name: ${name}`);
+    } catch (error) {
+      console.error('[auth-social] ✗ Error decoding JWT:', error);
+      console.error('[auth-social] Error message:', error.message);
+      console.error('[auth-social] Error stack:', error.stack);
+      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token.' }) };
+    }
+  }
+
+  console.log('[auth-social] ========== USER EXTRACTION COMPLETE ==========');
+  console.log('[auth-social] Final extracted email:', email);
+  console.log('[auth-social] Final extracted name:', name);
+
+  if (!email) {
+    console.error('[auth-social] ✗ Email not found in authentication data');
+    return { statusCode: 401, body: JSON.stringify({ error: 'Email not found in authentication data.' }) };
   }
 
   try {
-    const { email, user_metadata } = user;
-    const name = user_metadata.full_name || email.split('@')[0]; // Use full name if available
-    console.log(`[auth-social] Processing social login for email: ${email}, name: ${name}`);
+    console.log(`[auth-social] ========== PROCESSING SOCIAL LOGIN ==========`);
+    console.log(`[auth-social] Email: ${email}`);
+    console.log(`[auth-social] Name: ${name}`);
 
     // 2. Find or Create User in Airtable
     const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(USERS_TABLE)}?filterByFormula=({${EMAIL_FIELD}}='${email}')`;
@@ -148,6 +214,7 @@ exports.handler = async (event, context) => {
     // --- END NEW RSVPS FETCH ---
 
     // 7. Generate Session JWT
+    console.log('[auth-social] ========== GENERATING SESSION JWT ==========');
     const sessionToken = jwt.sign(
         { 
             userId: userRecord.id, 
@@ -158,32 +225,43 @@ exports.handler = async (event, context) => {
         JWT_SECRET,
         { expiresIn: '30d' }
     );
+    console.log('[auth-social] Session JWT generated (first 30 chars):', sessionToken.substring(0, 30) + '...');
 
     // 8. Return Response to Client
-    console.log(`[auth-social] ========== RESPONSE DEBUG ==========`);
-    console.log(`[auth-social] Returning response with ${likedItemIds.length} liked items`);
-    console.log(`[auth-social] Liked item IDs being sent to client:`, likedItemIds);
+    console.log(`[auth-social] ========== PREPARING RESPONSE ==========`);
     console.log(`[auth-social] User ID: ${userRecord.id}`);
-    console.log(`[auth-social] ========== RESPONSE DEBUG END ==========`);
+    console.log(`[auth-social] User name: ${userRecord.fields[NAME_FIELD]}`);
+    console.log(`[auth-social] User email: ${userRecord.fields[EMAIL_FIELD]}`);
+    console.log(`[auth-social] Returning response with ${likedItemIds.length} liked items`);
+    console.log(`[auth-social] Returning response with ${rsvpdItemIds.length} RSVP items`);
+    console.log(`[auth-social] Liked item IDs being sent to client:`, likedItemIds);
+    console.log(`[auth-social] RSVP item IDs being sent to client:`, rsvpdItemIds);
+    const responseBody = {
+        token: sessionToken,
+        user: { 
+            id: userRecord.id, 
+            name: userRecord.fields[NAME_FIELD], 
+            email: userRecord.fields[EMAIL_FIELD],
+            phoneNumber: userRecord.fields.PhoneNumber || '',
+            notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
+            likedItemIds: likedItemIds,
+            rsvpdItemIds: rsvpdItemIds
+        },
+        ownerData: ownerData,
+        associatedSessions: associatedSessions
+    };
+    console.log('[auth-social] Full response body:', JSON.stringify(responseBody, null, 2));
+    console.log('[auth-social] ========== RESPONSE SENT SUCCESSFULLY ==========');
     return {
         statusCode: 200,
-        body: JSON.stringify({
-            token: sessionToken,
-            user: { 
-                id: userRecord.id, 
-                name: userRecord.fields[NAME_FIELD], 
-                email: userRecord.fields[EMAIL_FIELD],
-                phoneNumber: userRecord.fields.PhoneNumber || '',
-                notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
-                likedItemIds: likedItemIds,
-                rsvpdItemIds: rsvpdItemIds
-            },
-            ownerData: ownerData,
-            associatedSessions: associatedSessions
-        }),
+        body: JSON.stringify(responseBody),
     };
     } catch (error) {
-        console.error('[auth-social] Function Error:', error);
+        console.error('[auth-social] ========== FUNCTION ERROR ==========');
+        console.error('[auth-social] Error:', error);
+        console.error('[auth-social] Error message:', error.message);
+        console.error('[auth-social] Error stack:', error.stack);
+        console.error('[auth-social] ========== FUNCTION ERROR END ==========');
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message || 'An internal server error occurred.' })

@@ -551,6 +551,58 @@
         </div>
     </div>
     
+    <!-- localStorage Debug Monitor -->
+    <script>
+        console.log('[localStorage Monitor] ========== INITIALIZATION ==========');
+        console.log('[localStorage Monitor] Current JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
+        
+        // Monitor localStorage changes
+        const originalSetItem = localStorage.setItem;
+        localStorage.setItem = function(key, value) {
+            if (key === 'jwt') {
+                console.log('[localStorage Monitor] ========== JWT BEING SAVED ==========');
+                console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
+                console.log('[localStorage Monitor] Stack trace:', new Error().stack);
+                console.log('[localStorage Monitor] JWT value (first 30 chars):', value ? value.substring(0, 30) + '...' : 'null');
+            }
+            return originalSetItem.apply(this, arguments);
+        };
+        
+        const originalRemoveItem = localStorage.removeItem;
+        localStorage.removeItem = function(key) {
+            if (key === 'jwt') {
+                console.log('[localStorage Monitor] ========== JWT BEING REMOVED ==========');
+                console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
+                console.log('[localStorage Monitor] Stack trace:', new Error().stack);
+            }
+            return originalRemoveItem.apply(this, arguments);
+        };
+        
+        const originalClear = localStorage.clear;
+        localStorage.clear = function() {
+            console.log('[localStorage Monitor] ========== localStorage.clear() CALLED ==========');
+            console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
+            console.log('[localStorage Monitor] Stack trace:', new Error().stack);
+            return originalClear.apply(this, arguments);
+        };
+        
+        // Monitor page lifecycle events
+        window.addEventListener('beforeunload', function() {
+            console.log('[localStorage Monitor] ========== PAGE UNLOAD ==========');
+            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
+        });
+        
+        window.addEventListener('load', function() {
+            console.log('[localStorage Monitor] ========== PAGE LOADED ==========');
+            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[localStorage Monitor] ========== DOM READY ==========');
+            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
+        });
+    </script>
+    
     <script type="module" src="main.js"></script>
     <!-- FIX: Removed Markdown []() wrapper from link -->
     <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
