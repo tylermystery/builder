@@ -55,16 +55,24 @@ console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
 
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
-    console.log(`[Auth] ========== LOGIN DEBUG START ==========`);
+    console.log(`[Auth] ========== _handleSuccessfulLogin CALLED ==========`);
+    console.log(`[Auth] Timestamp:`, new Date().toISOString());
+    console.log(`[Auth] Full payload:`, JSON.stringify(payload, null, 2));
     console.log(`[Auth] Payload received:`, payload);
     console.log(`[Auth] User from payload:`, payload.user);
     console.log(`[Auth] Liked items from payload:`, payload.user.likedItemIds);
+    console.log(`[Auth] Token from payload:`, payload.token ? 'Present' : 'Missing');
     
     if (state.session.id) {
         await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
     }
 
+    console.log('[Auth] Storing JWT in localStorage...');
     localStorage.setItem('jwt', payload.token);
+    console.log('[Auth] JWT stored. Verifying storage...');
+    const storedJwt = localStorage.getItem('jwt');
+    console.log('[Auth] JWT successfully stored:', !!storedJwt);
+    console.log('[Auth] Stored JWT (first 20 chars):', storedJwt ? storedJwt.substring(0, 20) + '...' : 'null');
 
     // --- MOVED STATE UPDATE HERE ---
     const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
@@ -142,11 +150,16 @@ async function _handleSuccessfulLogin(payload) {
     console.log(`[Auth] ========== LOGIN DEBUG END ==========`);
 
     // Trigger events and update UI
+    console.log('[Auth] Dispatching userLoggedIn event...');
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
+    console.log('[Auth] userLoggedIn event dispatched');
     // populateUserPlans and applyFiltersAndSort are removed from here
     // They are handled by the 'userLoggedIn' listener in main.js
+    console.log('[Auth] Updating user profile icon...');
     updateUserProfileIcon();
+    console.log('[Auth] Hiding user modal...');
     hideUserModal();
+    console.log('[Auth] ========== _handleSuccessfulLogin COMPLETE ==========');
 }
 
 export function showUserModal() {
@@ -409,21 +422,73 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- NEW SSO EVENT LISTENERS ---
+    // --- NETLIFY IDENTITY SSO SETUP ---
+    // Wait for Netlify Identity to be ready before setting up SSO
+    if (typeof netlifyIdentity !== 'undefined') {
+        initializeNetlifyIdentity();
+    } else {
+        // Wait for the script to load
+        window.addEventListener('load', () => {
+            if (typeof netlifyIdentity !== 'undefined') {
+                initializeNetlifyIdentity();
+            } else {
+                console.error('Netlify Identity widget failed to load');
+            }
+        });
+    }
+}
+
+function initializeNetlifyIdentity() {
+    console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
+    console.log('[Auth] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
+    console.log('[Auth] Initializing Netlify Identity');
+    
+    // Initialize the widget
+    console.log('[Auth] Calling netlifyIdentity.init()');
+    netlifyIdentity.init({
+        locale: 'en'
+    });
+    console.log('[Auth] netlifyIdentity.init() completed');
+
+    // Set up Google SSO button
     const googleSsoBtn = document.getElementById('google-sso-btn');
+    console.log('[Auth] Google SSO button element found:', !!googleSsoBtn);
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
-            // --- THIS IS THE FIX ---
-            // This triggers the Google login directly, skipping the Netlify modal.
-            netlifyIdentity.loginWith('google');
-            // --- END FIX ---
+            console.log('[Auth] ========== GOOGLE SSO BUTTON CLICKED ==========');
+            console.log('[Auth] Timestamp:', new Date().toISOString());
+            try {
+                // Trigger Google login directly
+                console.log('[Auth] Opening Netlify Identity modal...');
+                netlifyIdentity.open('login');
+                console.log('[Auth] Netlify Identity modal opened');
+                netlifyIdentity.on('open', () => {
+                    // Automatically select Google provider
+                    const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
+                    if (googleBtn) {
+                        googleBtn.click();
+                    }
+                });
+            } catch (error) {
+                console.error('[Auth] Error opening Google SSO:', error);
+                signinMessage.textContent = "Error opening Google sign-in. Please try again.";
+                signinMessage.style.color = '#dc3545';
+            }
         });
     }
 
+    // Handle successful login
     netlifyIdentity.on('login', async (user) => {
+        console.log('[Auth] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
+        console.log('[Auth] Timestamp:', new Date().toISOString());
+        console.log('[Auth] User object:', user);
+        console.log('[Auth] User email:', user?.email);
+        console.log('[Auth] User token:', user?.token?.access_token ? 'Present' : 'Missing');
         try {
             const netlifyJwt = user.token.access_token;
-            // Call a new serverless function to get our app-specific JWT
+            console.log('[Auth] Calling /api/auth-social with Netlify JWT...');
+            console.log('[Auth] JWT (first 20 chars):', netlifyJwt.substring(0, 20) + '...');
+            // Call serverless function to get app-specific JWT
             const response = await fetch('/api/auth-social', {
                 method: 'POST',
                 headers: {
@@ -431,20 +496,46 @@ export function setupAuthEventListeners() {
                     'Authorization': `Bearer ${netlifyJwt}`
                 }
             });
-            if (!response.ok) throw new Error("Failed to sync social login.");
+            console.log('[Auth] /api/auth-social response status:', response.status);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to sync social login.");
+            }
 
             const appPayload = await response.json();
+            console.log('[Auth] Received app payload from /api/auth-social:', appPayload);
+            console.log('[Auth] App token present:', !!appPayload.token);
+            console.log('[Auth] User data present:', !!appPayload.user);
+            console.log('[Auth] Liked items count:', appPayload.user?.likedItemIds?.length || 0);
+            console.log('[Auth] Calling _handleSuccessfulLogin...');
             await _handleSuccessfulLogin(appPayload);
+            console.log('[Auth] _handleSuccessfulLogin completed');
+            console.log('[Auth] Closing Netlify Identity modal...');
             netlifyIdentity.close();
+            console.log('[Auth] Modal closed');
+            console.log('[Auth] ========== GOOGLE SSO LOGIN COMPLETE ==========');
 
         } catch (error) {
-            console.error("SSO login error:", error);
+            console.error('[Auth] ========== SSO LOGIN ERROR ==========');
+            console.error("[Auth] Error details:", error);
+            console.error("[Auth] Error message:", error.message);
+            console.error("[Auth] Error stack:", error.stack);
             signinMessage.textContent = "Error logging in with Google. Please try again.";
             signinMessage.style.color = '#dc3545';
+            console.error('[Auth] ========== SSO LOGIN ERROR END ==========');
         }
     });
-// --- END NEW SSO EVENT LISTENERS ---
 
+    // Handle errors
+    netlifyIdentity.on('error', (error) => {
+        console.error('[Auth] ========== NETLIFY IDENTITY ERROR ==========');
+        console.error('[Auth] Error:', error);
+        signinMessage.textContent = "Authentication error. Please try again.";
+        signinMessage.style.color = '#dc3545';
+        console.error('[Auth] ========== NETLIFY IDENTITY ERROR END ==========');
+    });
+    
+    console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
 }
 
 // --- DEBUG ---

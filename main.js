@@ -300,26 +300,55 @@ async function initialize() {
         ui.applyCartLabels(shopSettings.cartLabels); 
         initializeEventListeners(imageCache, window.flatpickr, shopSettings); 
 
+        console.log('[Main] ========== JWT CHECK START ==========');
+        console.log('[Main] Checking for stored JWT in localStorage...');
         const jwt = localStorage.getItem('jwt');
+        console.log('[Main] JWT found in localStorage:', !!jwt);
+        if (jwt) {
+            console.log('[Main] JWT (first 20 chars):', jwt.substring(0, 20) + '...');
+        }
         let initialUserId = null;
         if (jwt) {
+            console.log('[Main] Attempting to parse JWT...');
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
-                if (payload.exp * 1000 > Date.now()) { 
+                console.log('[Main] JWT parsed successfully');
+                console.log('[Main] JWT payload:', payload);
+                console.log('[Main] JWT expiration:', new Date(payload.exp * 1000));
+                console.log('[Main] Current time:', new Date());
+                console.log('[Main] JWT valid:', payload.exp * 1000 > Date.now());
+                if (payload.exp * 1000 > Date.now()) {
+                    console.log('[Main] JWT is valid, setting user state...'); 
                     setState({
                         session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
                     });
                     initialUserId = payload.userId;
+                    console.log('[Main] User state updated from JWT');
+                    console.log('[Main] User ID:', initialUserId);
+                    console.log('[Main] User name:', payload.name);
+                    console.log('[Main] User email:', payload.email);
+                    console.log('[Main] User isOwner:', payload.isOwner);
+                    console.log('[Main] User isAuthenticated:', state.session.user.isAuthenticated);
+                    console.log('[Main] User likedItemIds.size:', state.session.user.likedItemIds.size);
                      log('Main', `User authenticated via existing JWT: ${initialUserId}`);
                 } else {
+                    console.log('[Main] JWT expired, removing from localStorage...');
                     localStorage.removeItem('jwt');
                      log('Main', 'Existing JWT expired.');
                 }
             } catch (e) {
+                console.error('[Main] ========== JWT PARSE ERROR ==========');
+                console.error('[Main] Error parsing JWT:', e);
+                console.error('[Main] Error message:', e.message);
+                console.error('[Main] Error stack:', e.stack);
                 localStorage.removeItem('jwt');
-                console.error("Failed to parse existing JWT:", e);
+                console.error("[Main] Failed to parse existing JWT:", e);
+                console.error('[Main] ========== JWT PARSE ERROR END ==========');
             }
+        } else {
+            console.log('[Main] No JWT found in localStorage');
         }
+        console.log('[Main] ========== JWT CHECK END ==========');
 
         const loginToken = urlParams.get('token');
         if (loginToken) {
@@ -350,43 +379,76 @@ async function initialize() {
             }
         
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
-            console.log('[Main] ========== JWT RELOAD LIKED ITEMS DEBUG START ==========');
-            log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
+            console.log('[Main] ========== JWT RELOAD USER DATA DEBUG START ==========');
+            console.log('[Main] User is authenticated but has no liked items loaded');
+            console.log('[Main] User ID:', state.session.user.id);
+            console.log('[Main] User name:', state.session.user.name);
+            console.log('[Main] User email:', state.session.user.email);
+            log('Main', 'User authenticated by JWT, but no likes found. Fetching full user data from /api/update-user-prefs?action=get-user-data...');
             console.log('[Main] Current user state:', state.session.user);
             console.log('[Main] Current liked items size:', state.session.user.likedItemIds.size);
             try {
+                console.log('[Main] Fetching user data with JWT...');
+                console.log('[Main] Request URL: /api/update-user-prefs?action=get-user-data');
                 const response = await fetch('/api/update-user-prefs?action=get-user-data', {
                     method: 'GET', 
                     headers: { 'Authorization': `Bearer ${jwt}` } 
                 });
                 console.log('[Main] Fetch response status:', response.status);
+                console.log('[Main] Fetch response ok:', response.ok);
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.error || `Failed to fetch user data (Status: ${response.status})`);
                 }
                 const userData = await response.json();
-                console.log('[Main] Received user data:', userData);
+                console.log('[Main] ========== RECEIVED USER DATA ==========');
+                console.log('[Main] Full user data:', JSON.stringify(userData, null, 2));
+                console.log('[Main] User ID from API:', userData.id);
+                console.log('[Main] User name from API:', userData.name);
+                console.log('[Main] User email from API:', userData.email);
                 console.log('[Main] Liked items from API:', userData.likedItemIds);
+                console.log('[Main] Liked items count:', userData.likedItemIds?.length || 0);
+                console.log('[Main] RSVP items from API:', userData.rsvpdItemIds);
+                console.log('[Main] RSVP items count:', userData.rsvpdItemIds?.length || 0);
                 if (userData.likedItemIds) {
+                    console.log('[Main] Updating state with liked items...');
                     setState({
                         session: {
                             ...state.session,
                             user: {
                                 ...state.session.user,
-                                likedItemIds: new Set(userData.likedItemIds)
+                                likedItemIds: new Set(userData.likedItemIds),
+                                rsvps: new Set(userData.rsvpdItemIds || [])
                             }
                         }
                     });
-                    log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
+                    log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items and ${userData.rsvpdItemIds?.length || 0} RSVPs.`);
                     console.log('[Main] Updated liked items in state:', Array.from(state.session.user.likedItemIds));
+                    console.log('[Main] Updated RSVP items in state:', Array.from(state.session.user.rsvps));
+                    console.log('[Main] Updating card icons...');
                     const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+                    console.log('[Main] Found', recordIds.length, 'cards to update');
                     if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
-                    console.log('[Main] Updated all card icons');
+                    console.log('[Main] Card icons updated');
+                } else {
+                    console.log('[Main] No liked items in user data response');
                 }
             } catch (error) {
-                console.error('[Main] Failed to fetch user data on reload:', error.message);
+                console.error('[Main] ========== USER DATA FETCH ERROR ==========');
+                console.error('[Main] Error fetching user data on reload:', error);
+                console.error('[Main] Error message:', error.message);
+                console.error('[Main] Error stack:', error.stack);
+                console.error('[Main] ========== USER DATA FETCH ERROR END ==========');
             }
-            console.log('[Main] ========== JWT RELOAD LIKED ITEMS DEBUG END ==========');
+            console.log('[Main] ========== JWT RELOAD USER DATA DEBUG END ==========');
+        } else {
+            console.log('[Main] ========== USER STATE AFTER JWT CHECK ==========');
+            console.log('[Main] User authenticated:', state.session.user.isAuthenticated);
+            console.log('[Main] User ID:', state.session.user.id);
+            console.log('[Main] User name:', state.session.user.name);
+            console.log('[Main] Liked items size:', state.session.user.likedItemIds.size);
+            console.log('[Main] Will NOT fetch user data (either not authenticated or already has liked items)');
+            console.log('[Main] ========== USER STATE AFTER JWT CHECK END ==========');
         }
 
         if (sessionId && state.session.id !== sessionId) {

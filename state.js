@@ -75,6 +75,32 @@ export let state = {
 };
 
 export function setState(newState) {
+    console.log('[State] ========== setState CALLED ==========');
+    console.log('[State] Timestamp:', new Date().toISOString());
+    console.log('[State] New state being applied:', JSON.stringify(newState, (key, value) => {
+        // Convert Sets to arrays for logging
+        if (value instanceof Set) {
+            return Array.from(value);
+        }
+        // Convert Maps to objects for logging
+        if (value instanceof Map) {
+            return Object.fromEntries(value);
+        }
+        return value;
+    }, 2));
+    
+    // Log user state changes specifically
+    if (newState.session?.user) {
+        console.log('[State] User state update detected:');
+        console.log('[State]   - isAuthenticated:', newState.session.user.isAuthenticated);
+        console.log('[State]   - id:', newState.session.user.id);
+        console.log('[State]   - name:', newState.session.user.name);
+        console.log('[State]   - email:', newState.session.user.email);
+        if (newState.session.user.likedItemIds) {
+            console.log('[State]   - likedItemIds:', Array.from(newState.session.user.likedItemIds));
+        }
+    }
+    
     let updatedState = { ...state, ...newState };
 
     // FIX: Deep merge for UI properties to ensure continuity
@@ -114,5 +140,12 @@ export function setState(newState) {
 
 
     state = updatedState;
+    console.log('[State] State updated successfully');
+    console.log('[State] Current user state after update:');
+    console.log('[State]   - isAuthenticated:', state.session.user.isAuthenticated);
+    console.log('[State]   - id:', state.session.user.id);
+    console.log('[State]   - name:', state.session.user.name);
+    console.log('[State]   - likedItemIds.size:', state.session.user.likedItemIds.size);
+    console.log('[State] ========== setState COMPLETE ==========');
     // document.dispatchEvent(new CustomEvent('stateChanged'));
 }
