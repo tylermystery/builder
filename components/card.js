@@ -10,6 +10,29 @@ import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 
+// Helper to generate optimized Cloudinary URLs with responsive sizing
+function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
+    if (!url || !url.includes('cloudinary')) return url;
+    
+    // Extract the upload segment and insert transformations
+    const uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex === -1) return url;
+    
+    const transformations = `c_fill,w_${width},q_${quality},f_auto`;
+    return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
+// Generate low-quality placeholder for blur-up effect
+function getLowQualityPlaceholder(url) {
+    if (!url || !url.includes('cloudinary')) return url;
+    
+    const uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex === -1) return url;
+    
+    const transformations = 'c_fill,w_50,q_30,f_auto,e_blur:300';
+    return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
 // --- THIS IS THE FIX ---
 // Added "export" so other modules (like modal.js) can use it
 export function getPlaceholderImage(imageUrls) {
@@ -18,7 +41,7 @@ export function getPlaceholderImage(imageUrls) {
         return `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
     }
     const randomIndex = Math.floor(Math.random() * imageUrls.length);
-    return imageUrls[randomIndex];
+    return getOptimizedImageUrl(imageUrls[randomIndex], 600);
 }
 
 export function updateCardIcon(recordId) {
@@ -126,9 +149,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
         let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
-            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
+            const optimizedImages = collageImages.slice(0, 4).map(url => getOptimizedImageUrl(url, 300));
+            imageContainerHTML += optimizedImages.map(url => {
+                const placeholder = getLowQualityPlaceholder(url);
+                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${url}"></div>`;
+            }).join('');
         } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
+            const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
+            imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
         imageContainerHTML += `</div>`;
@@ -153,9 +181,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
         const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
         eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <div class="heart-icon" data-record-id="${record.id}"></div>
                 ${partnerBadge} 
                 ${scoreBanner} 
@@ -187,8 +216,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
+    
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+        <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
             ${partnerBadge} 
             ${scoreBanner} 

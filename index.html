@@ -6,15 +6,27 @@
     <title>Event Catalog</title>
     <link rel="icon" href="data:;" />
     <!-- FIX: Removed Markdown []() wrapper from links -->
+    <!-- Preload critical resources -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://js.stripe.com">
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://js.pusher.com">
+    <link rel="preconnect" href="https://identity.netlify.com">
+    <link rel="preconnect" href="https://res.cloudinary.com">
+    
+    <!-- DNS prefetch for API endpoints -->
+    <link rel="dns-prefetch" href="https://api.airtable.com">
+    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://unpkg.com/tippy.js@6"></script>
-    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
-    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Defer non-critical scripts -->
+    <script defer src="https://js.stripe.com/v3/"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script defer src="https://unpkg.com/@popperjs/core@2"></script>
+    <script defer src="https://unpkg.com/tippy.js@6"></script>
+    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
     </head>
 <body>
@@ -541,7 +553,7 @@
     
     <script type="module" src="main.js"></script>
     <!-- FIX: Removed Markdown []() wrapper from link -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 </body>
 </html>
