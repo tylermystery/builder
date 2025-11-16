@@ -942,6 +942,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateIdeasCarousel();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
+            await updateAllCardAvailabilityIcons();
             await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
             triggerSave();
@@ -968,6 +969,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateEventPlanSection();
             await ui.updateIdeasCarousel();
             ui.updateTotalCost();
+            await updateAllCardAvailabilityIcons();
+            await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
             triggerSave();
         } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
