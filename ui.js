@@ -27,16 +27,28 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
         if (entry.isIntersecting) {
             const element = entry.target;
             if (element.dataset.bgImage) {
-                element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
+                // Create a new image to preload
+                const img = new Image();
+                img.onload = () => {
+                    element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
+                    element.classList.add('loaded');
+                    element.classList.remove('lazy-load');
+                };
+                img.src = element.dataset.bgImage;
             }
             if (element.dataset.src) {
-                element.src = element.dataset.src;
+                const img = new Image();
+                img.onload = () => {
+                    element.src = element.dataset.src;
+                    element.classList.add('loaded');
+                    element.classList.remove('lazy-load');
+                };
+                img.src = element.dataset.src;
             }
-            element.classList.remove('lazy-load');
             observer.unobserve(element);
         }
     });
-}, { rootMargin: "0px 0px 200px 0px" });
+}, { rootMargin: "0px 0px 300px 0px" });
 
 let promptTimeout;
 export function observeLazyImages(container) {
@@ -63,6 +75,25 @@ export function toggleLoading(show) {
     if (mainContent) mainContent.style.display = show ? 'none' : 'grid';
 }
 
+// Helper function to create skeleton cards
+function createSkeletonCard() {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-card';
+    skeleton.innerHTML = `
+        <div class="skeleton-image"></div>
+        <div class="skeleton-content">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text short"></div>
+        </div>
+        <div class="skeleton-footer">
+            <div class="skeleton skeleton-price"></div>
+            <div class="skeleton skeleton-button"></div>
+        </div>
+    `;
+    return skeleton;
+}
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
@@ -72,9 +103,14 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         return;
     }
     if (!append) {
+        // Show skeleton cards immediately for better perceived performance
         catalogContainer.innerHTML = '';
+        const skeletonCount = Math.min(recordsToRender.length, 6);
+        for (let i = 0; i < skeletonCount; i++) {
+            catalogContainer.appendChild(createSkeletonCard());
+        }
         if (loadingMessage) {
-            loadingMessage.style.display = 'block';
+            loadingMessage.style.display = 'none'; // Hide loading message when showing skeletons
         }
     }
     if (recordsToRender.length === 0 && !append) {
@@ -87,16 +123,31 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
 
     const fragment = document.createDocumentFragment();
-    const CHUNK_SIZE = 5;
+    const CHUNK_SIZE = 6; // Render in larger chunks for better performance
+    
+    // Progressive rendering with skeleton replacement
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
         const cards = await Promise.all(cardPromises);
+        
+        // Replace skeletons with real cards or append new ones
+        if (!append && i === 0) {
+            catalogContainer.innerHTML = ''; // Clear skeletons on first batch
+        }
+        
         cards.forEach(card => {
             if (card) fragment.appendChild(card);
         });
+        
+        catalogContainer.appendChild(fragment.cloneNode(true));
+        fragment.textContent = ''; // Clear fragment for next batch
+        
+        // Allow UI to update between chunks
+        if (i + CHUNK_SIZE < recordsToRender.length) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
     }
-    catalogContainer.appendChild(fragment);
     
     // Initialize heart icons for all newly rendered cards
     recordsToRender.forEach(record => {

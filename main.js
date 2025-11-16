@@ -106,9 +106,8 @@ async function initialize() {
               applyFiltersAndSort(imageCache);
          }
          // Update all heart icons to reflect the newly loaded liked items
-         document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
-             ui.updateCardIcon(card.dataset.recordId);
-         });
+         const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+         if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat(); 
@@ -130,9 +129,8 @@ async function initialize() {
         ui.updateEventPlanSection();
         ui.updateIdeasCarousel(); 
         ui.updateTotalCost();
-        document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
-             ui.updateCardIcon(card.dataset.recordId);
-        });
+        const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+        if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
     });
 
     ui.toggleLoading(true);
@@ -381,9 +379,8 @@ async function initialize() {
                     });
                     log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
                     console.log('[Main] Updated liked items in state:', Array.from(state.session.user.likedItemIds));
-                    document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
-                        ui.updateCardIcon(card.dataset.recordId);
-                    });
+                    const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+                    if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
                     console.log('[Main] Updated all card icons');
                 }
             } catch (error) {

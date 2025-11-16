@@ -10,6 +10,29 @@ import { CONSTANTS } from '../config.js';
 import { getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 
+// Helper to generate optimized Cloudinary URLs with responsive sizing
+function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
+    if (!url || !url.includes('cloudinary')) return url;
+    
+    // Extract the upload segment and insert transformations
+    const uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex === -1) return url;
+    
+    const transformations = `c_fill,w_${width},q_${quality},f_auto`;
+    return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
+// Generate low-quality placeholder for blur-up effect
+function getLowQualityPlaceholder(url) {
+    if (!url || !url.includes('cloudinary')) return url;
+    
+    const uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex === -1) return url;
+    
+    const transformations = 'c_fill,w_50,q_30,f_auto,e_blur:300';
+    return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
 // --- THIS IS THE FIX ---
 // Added "export" so other modules (like modal.js) can use it
 export function getPlaceholderImage(imageUrls) {
@@ -18,29 +41,18 @@ export function getPlaceholderImage(imageUrls) {
         return `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
     }
     const randomIndex = Math.floor(Math.random() * imageUrls.length);
-    return imageUrls[randomIndex];
+    return getOptimizedImageUrl(imageUrls[randomIndex], 600);
 }
 
 export function updateCardIcon(recordId) {
-    console.log(`[Card] ========== UPDATE CARD ICON DEBUG START ==========`);
-    console.log(`[Card] Updating icon for record: ${recordId}`);
-    console.log(`[Card] User authenticated:`, state.session.user.isAuthenticated);
-    
     let isLiked = false;
 
     if (state.session.user.isAuthenticated) {
         isLiked = state.session.user.likedItemIds.has(recordId);
-        console.log(`[Card] User is authenticated, checking liked items`);
-        console.log(`[Card] Total liked items:`, state.session.user.likedItemIds.size);
-        console.log(`[Card] All liked item IDs:`, Array.from(state.session.user.likedItemIds));
-        console.log(`[Card] Is ${recordId} liked?`, isLiked);
     } else {
-        console.log(`[Card] User is not authenticated, checking tempLikes`);
         try {
             const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
             isLiked = tempLikes.has(recordId);
-            console.log(`[Card] TempLikes:`, Array.from(tempLikes));
-            console.log(`[Card] Is ${recordId} in tempLikes?`, isLiked);
         } catch (e) {
             console.error('[Card] Error reading tempLikes for icon update:', e);
             isLiked = false;
@@ -50,19 +62,14 @@ export function updateCardIcon(recordId) {
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
 
     const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
-    console.log(`[Card] Found ${elements.length} icon elements to update for ${recordId}`);
     
     elements.forEach(icon => {
         if (!icon) return;
-
-        const isInModal = icon.id === 'modal-heart-btn';
-        const isInCard = icon.closest('.event-card');
 
         if (isLiked) {
             icon.className = 'heart-icon hearted';
             icon.title = 'Unlike this item';
             icon.setAttribute('aria-label', 'Unlike this item');
-            console.log(`[Card] Set icon to HEARTED for ${recordId}`);
             icon.innerHTML = heartSVG;
             icon.style.display = 'block';
             icon.style.pointerEvents = 'auto';
@@ -70,13 +77,35 @@ export function updateCardIcon(recordId) {
             icon.className = 'heart-icon';
             icon.title = 'Like this item';
             icon.setAttribute('aria-label', 'Like this item');
-            console.log(`[Card] Set icon to UNHEARTED for ${recordId}`);
             icon.innerHTML = heartSVG;
             icon.style.display = 'block';
             icon.style.pointerEvents = 'auto';
         }
     });
-    console.log(`[Card] ========== UPDATE CARD ICON DEBUG END ==========`);
+}
+
+export function batchUpdateCardIcons(recordIds) {
+    const likedItems = state.session.user.isAuthenticated 
+        ? state.session.user.likedItemIds
+        : new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
+    
+    const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
+    
+    recordIds.forEach(recordId => {
+        const isLiked = likedItems.has(recordId);
+        const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
+        
+        elements.forEach(icon => {
+            if (!icon) return;
+            
+            icon.className = isLiked ? 'heart-icon hearted' : 'heart-icon';
+            icon.title = isLiked ? 'Unlike this item' : 'Like this item';
+            icon.setAttribute('aria-label', isLiked ? 'Unlike this item' : 'Like this item');
+            icon.innerHTML = heartSVG;
+            icon.style.display = 'block';
+            icon.style.pointerEvents = 'auto';
+        });
+    });
 }
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
@@ -126,9 +155,14 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
         let imageContainerHTML = `<div class="event-card-image-container collage-container">`;
         if (collageImages.length > 0) {
-            imageContainerHTML += collageImages.slice(0, 4).map(url => `<div class="collage-image lazy-load" data-bg-image="${url}"></div>`).join('');
+            const optimizedImages = collageImages.slice(0, 4).map(url => getOptimizedImageUrl(url, 300));
+            imageContainerHTML += optimizedImages.map(url => {
+                const placeholder = getLowQualityPlaceholder(url);
+                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${url}"></div>`;
+            }).join('');
         } else {
-            imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
+            const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
+            imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
         imageContainerHTML += `</div>`;
@@ -153,9 +187,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
         const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
         eventCard.innerHTML = `
-            <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+            <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <div class="heart-icon" data-record-id="${record.id}"></div>
                 ${partnerBadge} 
                 ${scoreBanner} 
@@ -187,8 +222,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
+    
     eventCard.innerHTML = `
-        <div class="event-card-image-container lazy-load" data-bg-image="${imageUrlToLoad}">
+        <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
             ${partnerBadge} 
             ${scoreBanner} 
