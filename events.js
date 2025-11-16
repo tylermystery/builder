@@ -413,20 +413,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
         categoryFiltersRoot.appendChild(planFilterBtn);
 
-        const categoriesBtn = document.createElement('button');
-        categoriesBtn.className = 'filter-btn';
-        categoriesBtn.id = 'categories-filter-btn';
-        categoriesBtn.textContent = '📂 Categories';
-        categoriesBtn.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            categoriesBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'categories' });
-            applyFiltersAndSort(imageCache);
-        });
-        categoryFiltersRoot.appendChild(categoriesBtn);
-
         const allButton = document.createElement('button');
-        allButton.className = 'filter-btn category-filter-btn active'; // Default to active
+        allButton.className = 'filter-btn category-filter-btn active';
         allButton.dataset.filter = 'all';
         allButton.textContent = 'All';
         allButton.addEventListener('click', () => {
@@ -436,6 +424,48 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             applyFiltersAndSort(imageCache);
         });
         categoryFiltersRoot.appendChild(allButton);
+
+        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        if (activeShop && activeShop.fields && activeShop.fields.Items) {
+            // Items field contains Airtable record IDs, not category names
+            const itemRecordIds = Array.isArray(activeShop.fields.Items) 
+                ? activeShop.fields.Items 
+                : activeShop.fields.Items.split(',').map(id => id.trim());
+            
+            console.log('[Events] Store Items field:', activeShop.fields.Items);
+            console.log('[Events] Parsed itemRecordIds:', itemRecordIds);
+            console.log('[Events] Total records in state.records.all:', state.records.all.length);
+            
+            // Look up the actual category records by their IDs
+            itemRecordIds.forEach(recordId => {
+                // Skip if this looks like it's already a resolved name (doesn't start with 'rec')
+                if (!recordId.startsWith('rec')) {
+                    console.warn(`[Events] Skipping non-record-ID value in Items field: ${recordId}`);
+                    return;
+                }
+                
+                const categoryRecord = state.records.all.find(r => r.id === recordId);
+                console.log(`[Events] Looking for recordId: ${recordId}, found:`, categoryRecord);
+                
+                if (categoryRecord && categoryRecord.fields && categoryRecord.fields.Name) {
+                    const categoryName = categoryRecord.fields.Name;
+                    console.log(`[Events] Creating button for category: ${categoryName}`);
+                    const categoryBtn = document.createElement('button');
+                    categoryBtn.className = 'filter-btn category-filter-btn';
+                    categoryBtn.dataset.filter = categoryName.toLowerCase().replace(/\s+/g, '-');
+                    categoryBtn.textContent = categoryName;
+                    categoryBtn.addEventListener('click', () => {
+                        document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                        categoryBtn.classList.add('active');
+                        updateUrl({ category: categoryBtn.dataset.filter, subcategory: null, view: null });
+                        applyFiltersAndSort(imageCache);
+                    });
+                    categoryFiltersRoot.appendChild(categoryBtn);
+                } else {
+                    console.warn(`[Events] Could not find category record for ID: ${recordId} or it has no Name field`);
+                }
+            });
+        }
 
     }  else {
         console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");

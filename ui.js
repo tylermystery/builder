@@ -577,6 +577,11 @@ export function updateCatalogHeader() {
     path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     const findRecordByName = (filterName) => {
+        // First, check if filterName is actually a record ID (starts with 'rec')
+        if (filterName.startsWith('rec')) {
+            return state.records.all.find(r => r.id === filterName);
+        }
+        // Otherwise, match by name (convert dashes to spaces and compare lowercase)
         return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
     };
 

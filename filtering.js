@@ -352,39 +352,41 @@ export async function applyFiltersAndSort(imageCache) {
     } else if (view === 'categories') {
         // Get categories from the active store's Items field
         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
-        let categories = [];
+        let categoryRecords = [];
         
         if (activeShop && activeShop.fields && activeShop.fields.Items) {
-            // Items field contains top-level categories for the store
-            // Handle both array (from Airtable API) and string formats
-            const itemsData = Array.isArray(activeShop.fields.Items) 
+            // Items field contains Airtable record IDs that reference actual category records
+            const itemRecordIds = Array.isArray(activeShop.fields.Items) 
                 ? activeShop.fields.Items 
-                : activeShop.fields.Items.split(',');
+                : activeShop.fields.Items.split(',').map(id => id.trim());
             
-            categories = itemsData
-                .map(cat => typeof cat === 'string' ? cat.trim() : cat)
+            // Look up the actual category records by their IDs
+            categoryRecords = itemRecordIds
+                .map(recordId => state.records.all.find(r => r.id === recordId))
                 .filter(Boolean);
         } else {
             // Fallback to extracting categories from items if store doesn't have Items field
-            categories = [...new Set(
+            const categoryNames = [...new Set(
                 baseRecordsToFilter
                     .map(r => r.fields[CONSTANTS.FIELD_NAMES.CATEGORIES])
                     .filter(Boolean)
                     .flatMap(cat => cat.split(',').map(c => c.trim()))
             )].sort();
+            
+            categoryRecords = categoryNames.map(categoryName => {
+                return {
+                    id: `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
+                    fields: {
+                        Name: categoryName,
+                        Description: `View all items in ${categoryName}`,
+                        'Item Type': 'Grouping',
+                        Categories: categoryName
+                    }
+                };
+            });
         }
         
-        recordsToDisplay = categories.map(categoryName => {
-            return {
-                id: `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
-                fields: {
-                    Name: categoryName,
-                    Description: `View all items in ${categoryName}`,
-                    'Item Type': 'Grouping',
-                    Categories: categoryName
-                }
-            };
-        });
+        recordsToDisplay = categoryRecords;
         
     } else {
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);

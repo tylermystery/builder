@@ -38,10 +38,14 @@ function syncUiWithUrl() {
     if (categoryFilters) {
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
         let buttonToActivate;
+        const categoryFilter = params.get('category');
+        
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
         } else if (view === 'likes') {
             buttonToActivate = document.getElementById('liked-items-filter-btn');
+        } else if (categoryFilter) {
+            buttonToActivate = categoryFilters.querySelector(`.filter-btn[data-filter="${categoryFilter}"]`);
         } else {
             buttonToActivate = categoryFilters.querySelector('.filter-btn[data-filter="all"]');
         }
