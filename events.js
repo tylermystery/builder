@@ -787,10 +787,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (healthSuggestionBtn) {
             e.stopPropagation();
             const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
+            const normalizedCategory = categoryToFilter.toLowerCase().replace(/\s+/g, ' ');
             
             log('Events', `Health suggestion clicked. Filtering for: ${categoryToFilter}`);
             
-            updateUrl({ category: categoryToFilter, subcategory: null, view: null });
+            updateUrl({ category: normalizedCategory, subcategory: null, view: null });
             applyFiltersAndSort(imageCache);
             
             document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
@@ -811,7 +812,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (filterValue === 'all') {
                 updateUrl({ category: null, subcategory: null, view: null });
             } else {
-                updateUrl({ category: filterValue, subcategory: null, view: null });
+                const normalizedFilter = filterValue.toLowerCase().replace(/\s+/g, ' ');
+                updateUrl({ category: normalizedFilter, subcategory: null, view: null });
             }
             applyFiltersAndSort(imageCache);
         } else if (checkoutBtn) {
@@ -1074,7 +1076,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     modalCalendar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             }, 300);
-        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
+        } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
             if (!record) return;
