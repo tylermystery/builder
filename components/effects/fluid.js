@@ -1,9 +1,6 @@
 // In: components/effects/fluid.js
 // Action: REPLACE THE ENTIRE FILE
 
-// --- DEBUG ---
-console.log('[fluid.js] File execution started. (Progress-Controlled)');
-// --- DEBUG ---
 
 import { Shader } from '../../utils/shader.js';
 
@@ -100,9 +97,6 @@ const fluidEffect = {
     type: "webgl", // This is our new type
 
     init: (context) => {
-        // --- DEBUG ---
-        console.log('[fluid.js] init() called.');
-        // --- DEBUG ---
         gl = context;
         shader = new Shader(gl, vsSource, fsSource);
     }, 
@@ -112,23 +106,7 @@ const fluidEffect = {
         if (!shader) return;
 
         drawCallCount++;
-        
-        // Log every 120 frames (~2 seconds at 60fps) OR when progress changes
-        const shouldLog = (drawCallCount % 120 === 0) || (progress !== lastLoggedProgress);
-        
-        if (shouldLog) {
-            console.log('[fluid.js] ========== draw() stats ==========');
-            console.log('[fluid.js] Draw call #:', drawCallCount);
-            console.log('[fluid.js]   - width:', width);
-            console.log('[fluid.js]   - height:', height);
-            console.log('[fluid.js]   - time:', time.toFixed(2));
-            console.log('[fluid.js]   - energy:', energy.toFixed(3));
-            console.log('[fluid.js]   - progress:', progress);
-            if (progress !== lastLoggedProgress) {
-                console.log('[fluid.js]   - PROGRESS CHANGED:', lastLoggedProgress, '->', progress);
-            }
-            lastLoggedProgress = progress;
-        }
+        lastLoggedProgress = progress;
 
         shader.use();
 

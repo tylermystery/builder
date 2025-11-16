@@ -694,60 +694,92 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
     if (iCalUrl) {
-        modalCalendarContainer.style.display = 'block';
-        log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
+        try {
+            modalCalendarContainer.style.display = 'block';
+            log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
 
-        // Lazy load Flatpickr if needed
-        if (!window.flatpickr) {
-            log('Modal', 'Loading Flatpickr dynamically...');
-            await loadFlatpickr();
-        }
+            // Lazy load Flatpickr if needed
+            if (!window.flatpickr) {
+                log('Modal', 'Loading Flatpickr dynamically...');
+                await loadFlatpickr();
+            }
 
-        const busyTimes = await api.fetchCalendarForRecord(record);
-        const calendarInstance = window.flatpickr(modalCalendarContainer, {
-            inline: true,
-            showMonths: 1,
-            disable: [(date) => {
-                const status = getDayStatus(date, busyTimes, record);
-                return status.status === AVAILABILITY_STATUS.NONE;
-            }],
-            onDayCreate: function (dObj, dStr, fp, dayElem) {
-                const day = dayElem.dateObj;
-                const status = getDayStatus(day, busyTimes, record);
-                let className = '';
-                let tooltip = status.reason;
-                if (status.status === AVAILABILITY_STATUS.FULL) {
-                    className = 'available-full';
-                } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
-                    className = 'available-partial';
-                    // --- THIS IS THE FIX (stray \ removed) ---
-                    tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
-                } else {
-                    className = 'unavailable';
-                }
-                dayElem.classList.add(className);
-                dayElem.setAttribute('data-tippy-content', tooltip);
-            },
-            onReady: function () {
-                tippy('.flatpickr-day', {
-                    content: reference => reference.getAttribute('data-tippy-content'),
-                    placement: 'top',
-                    theme: 'light',
-                    allowHTML: true,
-                });
-            },
-            onChange: (selectedDates) => {
-                if (selectedDates.length > 0) {
-                    const eventDateInput = document.getElementById('event-date-picker');
-                    if (eventDateInput && eventDateInput._flatpickr) {
-                        eventDateInput._flatpickr.setDate(selectedDates[0], true);
+            if (!window.flatpickr) {
+                throw new Error('Flatpickr not available after loading');
+            }
+            
+            if (typeof window.flatpickr !== 'function') {
+                throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
+            }
+
+            const busyTimes = await api.fetchCalendarForRecord(record);
+            const calendarInstance = window.flatpickr(modalCalendarContainer, {
+                inline: true,
+                showMonths: 1,
+                disable: [(date) => {
+                    const status = getDayStatus(date, busyTimes, record);
+                    return status.status === AVAILABILITY_STATUS.NONE;
+                }],
+                onDayCreate: function (dObj, dStr, fp, dayElem) {
+                    const day = dayElem.dateObj;
+                    const status = getDayStatus(day, busyTimes, record);
+                    let className = '';
+                    let tooltip = status.reason;
+                    if (status.status === AVAILABILITY_STATUS.FULL) {
+                        className = 'available-full';
+                    } else if (status.status === AVAILABILITY_STATUS.PARTIAL) {
+                        className = 'available-partial';
+                        tooltip = `${status.reason}\nAvailable slots: ${getAvailableSlotsForDay(day, busyTimes) || 'None'}`;
+                    } else {
+                        className = 'unavailable';
+                    }
+                    dayElem.classList.add(className);
+                    dayElem.setAttribute('data-tippy-content', tooltip);
+                },
+                onReady: function () {
+                    if (window.tippy) {
+                        tippy('.flatpickr-day', {
+                            content: reference => reference.getAttribute('data-tippy-content'),
+                            placement: 'top',
+                            theme: 'light',
+                            allowHTML: true,
+                        });
+                    }
+                },
+                onChange: (selectedDates) => {
+                    if (selectedDates.length > 0 && selectedDates[0]) {
+                        const eventDateInput = document.getElementById('event-date-picker');
+                        if (eventDateInput && eventDateInput._flatpickr) {
+                            try {
+                                eventDateInput._flatpickr.setDate(selectedDates[0], true);
+                            } catch (error) {
+                                log('Modal', `Error syncing event date picker: ${error.message}`);
+                            }
+                        }
                     }
                 }
+            });
+            
+            const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+            if (eventDate) {
+                try {
+                    const dateObj = new Date(eventDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        calendarInstance.setDate(dateObj, true);
+                    } else {
+                        log('Modal', `Invalid event date: ${eventDate}`);
+                    }
+                } catch (error) {
+                    log('Modal', `Error setting calendar date: ${error.message}`);
+                }
             }
-        });
-        const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-        if (eventDate) {
-            calendarInstance.setDate(new Date(eventDate), true);
+            
+            log('Modal', 'Calendar initialized successfully');
+        } catch (error) {
+            log('Modal', `Error initializing calendar: ${error.message}`);
+            console.error('Calendar initialization error:', error);
+            modalCalendarContainer.style.display = 'none';
+            modalCalendarContainer.innerHTML = '<p style="color: #dc3545; padding: 10px; text-align: center;">Unable to load calendar. Please try refreshing the page.</p>';
         }
     } else {
         modalCalendarContainer.style.display = 'none';

@@ -105,7 +105,24 @@ export async function loadStripe() {
  * @returns {Promise<void>}
  */
 export async function loadFlatpickr() {
-    await loadScript('https://cdn.jsdelivr.net/npm/flatpickr', 'flatpickr');
+    if (window.flatpickr) {
+        return Promise.resolve();
+    }
+    
+    await loadScript('https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', 'flatpickr');
+    
+    // Wait for flatpickr to be available on window object
+    let attempts = 0;
+    while (!window.flatpickr && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (!window.flatpickr) {
+        throw new Error('Flatpickr failed to load after 5 seconds');
+    }
+    
+    log('LazyLoad', 'Flatpickr is now available on window object');
 }
 
 /**
