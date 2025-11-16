@@ -7,12 +7,12 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce, updateUrl } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes } from './utils.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
-import { addEnergy } from './components/backgroundEngine.js';
+import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -296,6 +296,9 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                     note: `Added via AI search for: "${searchTerm}"`
                 });
 
+                // Add progress for AI-sourced item
+                updateProgress(0.02);
+
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
                 triggerSave();
@@ -541,26 +544,38 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         applyFiltersAndSort(imageCache);
     });
 
-    mainDatePicker = flatpickr("#date-filter", {
-        mode: "range",
-        dateFormat: "M j, Y",
-        onChange: async (selectedDates) => {
-            if (state.ui.isInitializing) return;
-            if (selectedDates.length > 0) {
-                if (selectedDates.length === 2) {
-                    selectedDates[1].setHours(23, 59, 59, 999);
+    // Lazy load Flatpickr when date filter is focused
+    const dateFilterInput = document.getElementById('date-filter');
+    if (dateFilterInput) {
+        dateFilterInput.addEventListener('focus', async function initializeDatePicker() {
+            if (!mainDatePicker) {
+                if (!window.flatpickr) {
+                    log('Events', 'Loading Flatpickr dynamically...');
+                    await loadFlatpickr();
                 }
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
-                triggerSave();
-                await updateAllCardAvailabilityIcons();
-            } else {
-                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-                triggerSave();
-                await updateAllCardAvailabilityIcons();
-                await updateMobileBarAvailability();
+                mainDatePicker = flatpickr("#date-filter", {
+                    mode: "range",
+                    dateFormat: "M j, Y",
+                    onChange: async (selectedDates) => {
+                        if (state.ui.isInitializing) return;
+                        if (selectedDates.length > 0) {
+                            if (selectedDates.length === 2) {
+                                selectedDates[1].setHours(23, 59, 59, 999);
+                            }
+                            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                            triggerSave();
+                            await updateAllCardAvailabilityIcons();
+                        } else {
+                            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                            triggerSave();
+                            await updateAllCardAvailabilityIcons();
+                            await updateMobileBarAvailability();
+                        }
+                    },
+                });
             }
-        },
-    });
+        }, { once: true });
+    }
 
     safeAddEventListener('date-filter-group', 'click', (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
@@ -586,13 +601,33 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
+        console.log('[Events] ========== EVENT NAME CHANGE ==========');
+        console.log('[Events] isInitializing:', state.ui.isInitializing);
         if (state.ui.isInitializing) return;
+        const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+        const newValue = e.target.value.trim();
+        console.log('[Events] hadValue:', hadValue, 'newValue:', newValue);
+        if (newValue && !hadValue) {
+            console.log('[Events] Adding event name, calling updateProgress(0.01)');
+            updateProgress(0.01); // Adding event name progresses
+        } else if (!newValue && hadValue) {
+            console.log('[Events] Removing event name, calling updateProgress(-0.01)');
+            updateProgress(-0.01); // Removing event name regresses
+        }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
+        console.log('[Events] ========== EVENT NAME CHANGE COMPLETE ==========');
     });
     
     safeAddEventListener('header-goals', 'change', (e) => {
         if (state.ui.isInitializing) return;
+        const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.GOALS);
+        const newValue = e.target.value.trim();
+        if (newValue && !hadValue) {
+            updateProgress(0.01); // Adding goals progresses
+        } else if (!newValue && hadValue) {
+            updateProgress(-0.01); // Removing goals regresses
+        }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
         if (document.getElementById('sort-by').value === 'recommended') {
@@ -776,15 +811,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             } else {
                  console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
-                let tempLikes = [];
-                try {
-                    tempLikes = JSON.parse(localStorage.getItem('tempLikes') || '[]');
-                } catch (e) {
-                     console.error('Error parsing tempLikes from localStorage:', e);
-                     localStorage.removeItem('tempLikes'); 
-                     tempLikes = [];
-                }
-                const tempLikesSet = new Set(tempLikes);
+                const tempLikesSet = getTempLikes();
                 let currentlyLiked = false;
                 if (tempLikesSet.has(recordId)) {
                     tempLikesSet.delete(recordId); 
@@ -795,7 +822,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     currentlyLiked = true;
                      console.log(`[Events] Added ${recordId} to temporary likes.`);
                 }
-                localStorage.setItem('tempLikes', JSON.stringify(Array.from(tempLikesSet)));
+                setTempLikes(tempLikesSet);
                 log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
                  console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
                 ui.updateCardIcon(recordId);
@@ -812,13 +839,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
         
         else if (addToPlanBtn) {
+            console.log('[Events] ========== ADD TO PLAN CLICKED ==========');
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
+            console.log('[Events] recordId:', recordId);
             if (!recordId) return;
 
             addEnergy();
 
             if (state.cart.lockedItems.has(recordId)) {
+                console.log('[Events] Item already in plan, skipping');
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                     updateUrl({ openItem: null });
                     ui.hideDetailModal();
@@ -839,8 +869,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 itemInfo = ui.getItemState(recordId);
             }
 
+            console.log('[Events] itemInfo:', itemInfo);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
+
+            // Add progress for adding item to plan (scaled by quantity)
+            const progressDelta = 0.02 * (itemInfo.quantity || 1);
+            console.log('[Events] Calling updateProgress with delta:', progressDelta);
+            updateProgress(progressDelta);
+            console.log('[Events] updateProgress called');
 
             ui.updateCardIcon(recordId);
             ui.updateCardButtonText(recordId, true);
@@ -850,13 +887,22 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updateMobileBarAvailability();
             triggerSave();
         } else if (demoteBtn) {
+            console.log('[Events] ========== DEMOTE CLICKED ==========');
             e.stopPropagation();
             const recordId = demoteBtn.closest('[data-record-id]')?.dataset.recordId;
+            console.log('[Events] recordId:', recordId);
             if (!recordId || !state.cart.lockedItems.has(recordId)) return;
 
             const itemInfo = state.cart.lockedItems.get(recordId);
+            console.log('[Events] itemInfo:', itemInfo);
             state.cart.lockedItems.delete(recordId);
             state.cart.items.set(recordId, itemInfo);
+
+            // Regress progress when demoting item from plan
+            const progressDelta = -0.02 * (itemInfo.quantity || 1);
+            console.log('[Events] Calling updateProgress with delta:', progressDelta);
+            updateProgress(progressDelta);
+            console.log('[Events] updateProgress called');
 
             ui.updateCardIcon(recordId);
             ui.updateCardButtonText(recordId, false);
@@ -870,7 +916,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const recordId = ideaItem.dataset.recordId;
             if (!recordId || !state.cart.items.has(recordId)) return;
 
+            const itemInfo = state.cart.items.get(recordId);
             state.cart.items.delete(recordId);
+
+            // Regress progress when removing item from ideas
+            updateProgress(-0.01 * (itemInfo?.quantity || 1));
 
             await ui.updateIdeasCarousel();
             triggerSave();
@@ -895,6 +945,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  const groupNameLower = groupName.toLowerCase();
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
+                 // Small progress for browsing categories
+                 updateProgress(0.002);
+
                  if (!parentName) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
                  } else {
@@ -904,6 +957,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  applyFiltersAndSort(imageCache);
 
             } else {
+                // Small progress for viewing item details
+                updateProgress(0.001);
                 ui.showDetailModal(record);
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
@@ -926,14 +981,26 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const isLocked = state.cart.lockedItems.has(recordId);
         const isInIdeas = state.cart.items.has(recordId);
         let updates = {};
+        
+        // Track old quantity for progress calculation
+        let oldQuantity = 0;
         if (target.matches('.quantity-input')) {
+            const currentState = isLocked ? state.cart.lockedItems.get(recordId) : state.cart.items.get(recordId);
+            oldQuantity = currentState?.quantity || 1;
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
         } else if (e.detail?.selectedOptionIndex !== undefined) {
              updates.selectedOptionIndex = e.detail.selectedOptionIndex;
         }
+        
         if (Object.keys(updates).length > 0) {
+            // Calculate progress based on quantity changes
+            if (updates.quantity !== undefined && updates.quantity !== oldQuantity) {
+                const quantityDelta = updates.quantity - oldQuantity;
+                updateProgress(0.01 * quantityDelta);
+            }
+            
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
@@ -948,21 +1015,36 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
     });
     
-    const eventPlanDatePicker = flatpickr("#event-date-picker", {
-        dateFormat: "M j, Y",
-        onChange: async (selectedDates) => {
-            if (state.ui.isInitializing) return;
-            if (selectedDates.length > 0) {
-                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
-            } else {
-                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+    // Lazy load Flatpickr when event date picker is focused
+    let eventPlanDatePicker = null;
+    const eventDateInput = document.getElementById('event-date-picker');
+    if (eventDateInput) {
+        eventDateInput.addEventListener('focus', async function initializeEventDatePicker() {
+            if (!eventPlanDatePicker) {
+                if (!window.flatpickr) {
+                    log('Events', 'Loading Flatpickr dynamically...');
+                    await loadFlatpickr();
+                }
+                eventPlanDatePicker = flatpickr("#event-date-picker", {
+                    dateFormat: "M j, Y",
+                    onChange: async (selectedDates) => {
+                        if (state.ui.isInitializing) return;
+                        if (selectedDates.length > 0) {
+                            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+                            updateProgress(0.015); // Adding date progresses the color wheel
+                        } else {
+                            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                            updateProgress(-0.015); // Removing date regresses the color wheel
+                        }
+                        await ui.updateEventPlanDateDisplay();
+                        await ui.updateLockedItemStatusIcons();
+                        await updateMobileBarAvailability();
+                        triggerSave();
+                    }
+                });
             }
-            await ui.updateEventPlanDateDisplay();
-            await ui.updateLockedItemStatusIcons();
-            await updateMobileBarAvailability();
-            triggerSave();
-        }
-    });
+        }, { once: true });
+    }
     
     safeAddEventListener('itinerary-btn', 'click', () => {
         log('Events', 'Itinerary button clicked, showing modal.');

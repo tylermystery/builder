@@ -66,7 +66,12 @@ const fsSource = `
         // 5. Calculate Color from Progress
         // We use the progress variable to define the base hue.
         // The noise still creates the fluid bands, but they shift based on u_progress.
-        float base_wave = n * 1.5 + u_progress * 10.0; // Use progress for base hue offset
+        // Multiplier of 50.0 creates a full spectrum cycle across the 0.0-1.0 progress range
+        // Adding the slow vortex_speed creates continuous animation independent of progress
+        float base_wave = n * 1.5 + (u_progress * 50.0) + (vortex_speed * 0.3); // Combine progress and animation
+        
+        // DEBUG: Add a subtle visual indicator when progress is exactly 0.3 (starting value)
+        // If progress hasn't changed from 0.3, we'll see a specific color pattern
         
         // Define the standard 120-degree phase shift for full spectrum HSL cycling
         const float PI_2_OVER_3 = 2.0943951; 
@@ -82,8 +87,13 @@ const fsSource = `
     }
 `;
 
-let gl;
-let shader;
+// Module-level variables to persist between function calls
+let gl = null;
+let shader = null;
+
+// Track draw calls for debugging
+let drawCallCount = 0;
+let lastLoggedProgress = null;
 
 const fluidEffect = {
     name: "Fluid Energy",
@@ -100,6 +110,25 @@ const fluidEffect = {
     // MODIFIED: Added 'progress' to the draw function
     draw: (gl, width, height, time, energy, progress) => { 
         if (!shader) return;
+
+        drawCallCount++;
+        
+        // Log every 120 frames (~2 seconds at 60fps) OR when progress changes
+        const shouldLog = (drawCallCount % 120 === 0) || (progress !== lastLoggedProgress);
+        
+        if (shouldLog) {
+            console.log('[fluid.js] ========== draw() stats ==========');
+            console.log('[fluid.js] Draw call #:', drawCallCount);
+            console.log('[fluid.js]   - width:', width);
+            console.log('[fluid.js]   - height:', height);
+            console.log('[fluid.js]   - time:', time.toFixed(2));
+            console.log('[fluid.js]   - energy:', energy.toFixed(3));
+            console.log('[fluid.js]   - progress:', progress);
+            if (progress !== lastLoggedProgress) {
+                console.log('[fluid.js]   - PROGRESS CHANGED:', lastLoggedProgress, '->', progress);
+            }
+            lastLoggedProgress = progress;
+        }
 
         shader.use();
 

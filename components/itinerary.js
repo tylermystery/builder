@@ -147,6 +147,7 @@ function renderSingleCutout(uniqueId, pos) {
     img.src = cutoutUrl;
     img.className = 'scene-cutout';
     img.setAttribute('draggable', false);
+    img.loading = 'lazy'; // Native lazy loading for better performance
     img.onload = () => updateSceneStatus("Item added! Drag to move.");
     img.onerror = () => updateSceneStatus("❌ Error creating cutout. Try a different prompt.");
 
