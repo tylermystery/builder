@@ -48,19 +48,19 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         return records;
     }
 
-    const selectedCategoryLower = selectedCategory.toLowerCase();
+    const selectedCategoryLower = selectedCategory.toLowerCase().replace(/\s+/g, ' ');
     console.log('[FilterDebug] selectedCategoryLower:', selectedCategoryLower);
     let categoryFilteredRecords = [];
 
     categoryFilteredRecords = records.filter(record => {
         const fields = record.fields;
-        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
-            .map(cat => cat.trim().toLowerCase());
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
         const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
             .split(',')
-            .map(sc => sc.trim().toLowerCase());
+            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
 
         const matches = itemCategories.includes(selectedCategoryLower) || 
                parentNameLower === selectedCategoryLower ||       
@@ -82,10 +82,10 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
         console.log('[FilterDebug] Applying subcategory filter...');
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             const fields = record.fields;
-            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
             const itemSubcategories = (fields.Subcategories || '')
                 .split(',')
-                .map(sc => sc.trim().toLowerCase());
+                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
 
             return activeSubcategories.some(activeSubcat =>
                 itemSubcategories.includes(activeSubcat) || 
@@ -276,8 +276,10 @@ export async function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     
     const params = new URLSearchParams(window.location.search);
-    const selectedCategory = params.get('category') || 'all';
-    const activeSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    const rawCategory = params.get('category');
+    const selectedCategory = rawCategory ? rawCategory.toLowerCase().replace(/\s+/g, ' ') : 'all';
+    const rawSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    const activeSubcategories = rawSubcategories.map(sc => sc.toLowerCase().replace(/\s+/g, ' '));
     const view = params.get('view');
     console.log('[FilterDebug] selectedCategory from URL:', selectedCategory);
     console.log('[FilterDebug] activeSubcategories from URL:', activeSubcategories);

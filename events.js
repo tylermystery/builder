@@ -458,14 +458,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     });
                     const categoryBtn = document.createElement('button');
                     categoryBtn.className = 'filter-btn category-filter-btn';
-                    categoryBtn.dataset.filter = categoryName.toLowerCase();
+                    const normalizedCategoryName = categoryName.toLowerCase().replace(/\s+/g, ' ');
+                    categoryBtn.dataset.filter = normalizedCategoryName;
                     categoryBtn.textContent = categoryName;
                     categoryBtn.addEventListener('click', () => {
                         console.log('[Events] Category button clicked:', categoryName);
                         console.log('[Events] Button dataset.filter value:', categoryBtn.dataset.filter);
                         document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
                         categoryBtn.classList.add('active');
-                        updateUrl({ category: categoryBtn.dataset.filter, subcategory: null, view: null });
+                        updateUrl({ category: normalizedCategoryName, subcategory: null, view: null });
                         console.log('[Events] URL updated, calling applyFiltersAndSort...');
                         applyFiltersAndSort(imageCache);
                     });
@@ -873,7 +874,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (parentName) {
                 const parentRecord = state.records.all.find(r => r.fields.Name === parentName);
                 if (parentRecord) {
-                    const parentFilterName = parentName.toLowerCase(); 
+                    const parentFilterName = parentName.toLowerCase().replace(/\s+/g, ' '); 
                     updateUrl({ category: parentFilterName, subcategory: null, view: null });
                     applyFiltersAndSort(imageCache);
                     
@@ -1091,7 +1092,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             if (record.fields['Item Type'] === 'Grouping') {
                  const groupName = record.fields.Name;
-                 const groupNameLower = groupName.toLowerCase();
+                 const groupNameLower = groupName.toLowerCase().replace(/\s+/g, ' ');
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
                  // Small progress for browsing categories
@@ -1100,7 +1101,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  if (!parentName) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
                  } else {
-                     const parentNameLower = parentName.toLowerCase();
+                     const parentNameLower = parentName.toLowerCase().replace(/\s+/g, ' ');
                      updateUrl({ category: parentNameLower, subcategory: groupNameLower, view: null });
                  }
                  applyFiltersAndSort(imageCache);
