@@ -942,7 +942,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateIdeasCarousel();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
-            await updateAllCardAvailabilityIcons();
+            await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
             triggerSave();
         } else if (demoteBtn) {
