@@ -707,6 +707,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             if (!window.flatpickr) {
                 throw new Error('Flatpickr not available after loading');
             }
+            
+            if (typeof window.flatpickr !== 'function') {
+                throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
+            }
 
             const busyTimes = await api.fetchCalendarForRecord(record);
             const calendarInstance = window.flatpickr(modalCalendarContainer, {
@@ -743,10 +747,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     }
                 },
                 onChange: (selectedDates) => {
-                    if (selectedDates.length > 0) {
+                    if (selectedDates.length > 0 && selectedDates[0]) {
                         const eventDateInput = document.getElementById('event-date-picker');
                         if (eventDateInput && eventDateInput._flatpickr) {
-                            eventDateInput._flatpickr.setDate(selectedDates[0], true);
+                            try {
+                                eventDateInput._flatpickr.setDate(selectedDates[0], true);
+                            } catch (error) {
+                                log('Modal', `Error syncing event date picker: ${error.message}`);
+                            }
                         }
                     }
                 }
@@ -754,7 +762,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             
             const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
             if (eventDate) {
-                calendarInstance.setDate(new Date(eventDate), true);
+                try {
+                    const dateObj = new Date(eventDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        calendarInstance.setDate(dateObj, true);
+                    } else {
+                        log('Modal', `Invalid event date: ${eventDate}`);
+                    }
+                } catch (error) {
+                    log('Modal', `Error setting calendar date: ${error.message}`);
+                }
             }
             
             log('Modal', 'Calendar initialized successfully');

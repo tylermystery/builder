@@ -575,6 +575,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         throw new Error('Flatpickr not available after loading');
                     }
                     
+                    if (typeof window.flatpickr !== 'function') {
+                        throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
+                    }
+                    
                     mainDatePicker = window.flatpickr(dateFilterInput, {
                         mode: "range",
                         dateFormat: "M j, Y",
@@ -630,6 +634,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 
                 if (!window.flatpickr) {
                     throw new Error('Flatpickr not available after loading');
+                }
+                
+                if (typeof window.flatpickr !== 'function') {
+                    throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
                 }
                 
                 mainDatePicker = window.flatpickr(dateFilterInput, {
@@ -1129,6 +1137,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     
                     if (!window.flatpickr) {
                         throw new Error('Flatpickr not available after loading');
+                    }
+                    
+                    if (typeof window.flatpickr !== 'function') {
+                        throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
                     }
                     
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
