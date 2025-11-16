@@ -106,7 +106,6 @@ async function createLockedInItemElement(record, itemInfo) {
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
-            ${!isCustomItem ? '<button class="edit-btn">Edit</button>' : ''}
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
@@ -229,7 +228,9 @@ export async function updateIdeasCarousel() {
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
-    document.title = eventName || 'Event Builder';
+    const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const shopName = activeShop?.fields?.Name || '';
+    document.title = eventName || (shopName ? `WTFun ${shopName}` : 'WTFun');
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) eventNameInput.value = eventName;
     
@@ -241,7 +242,7 @@ export function updateHeader() {
 // Action: REPLACE the entire `updateEventHealthScore` function
 
 /**
- * [v1.2] Updates the Event Health UI in the sidebar with the score and actionable suggestions.
+ * [v1.2] Updates the Plan Health UI in the sidebar with the score and actionable suggestions.
  */
 export function updateEventHealthScore() {
     const container = document.getElementById('event-health-score');
@@ -269,7 +270,7 @@ export function updateEventHealthScore() {
     }
 
     // --- THIS IS THE FIX (Removed \") ---
-    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Event Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
+    html += `<h5 style="margin: 0 0 5px 0; text-align: center; color: ${scoreColor};">Plan Health: ${scoreText} <span class='beta-tag-subtle'>Beta</span></h5>`;
     // --- END THE FIX ---
 
     // 2. The "Suggestions"

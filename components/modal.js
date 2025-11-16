@@ -639,15 +639,38 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
         const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}" step="1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
         
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
-        // This check prevents the crash
         if (plusBtn && minusBtn && input) {
-            plusBtn.addEventListener('click', () => { input.stepUp(); input.dispatchEvent(new Event('change', { bubbles: true })); });
-            minusBtn.addEventListener('click', () => { input.stepDown(); input.dispatchEvent(new Event('change', { bubbles: true })); });
+            const handlePlus = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const currentValue = parseInt(input.value, 10) || 1;
+                input.value = currentValue + 1;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const handleMinus = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const currentValue = parseInt(input.value, 10) || 1;
+                const minValue = parseInt(input.min, 10) || 1;
+                if (currentValue > minValue) {
+                    input.value = currentValue - 1;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            };
+            const handleTouchEnd = (e) => {
+                e.preventDefault();
+                const handler = e.currentTarget === plusBtn ? handlePlus : handleMinus;
+                handler(e);
+            };
+            plusBtn.addEventListener('click', handlePlus);
+            plusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
+            minusBtn.addEventListener('click', handleMinus);
+            minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
         }
     } else {
         modalActionsContainer.style.display = 'none';
