@@ -1140,6 +1140,71 @@ body.modal-open {
     font-size: 1.1em;
     color: #28a745;
 }
+.card-footer .price-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.card-footer .actions-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.card-footer .quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    overflow: hidden;
+    background: white;
+}
+.card-footer .quantity-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+    border: none;
+    color: #495057;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.card-footer .quantity-btn:hover {
+    background-color: #e9ecef;
+    color: #007bff;
+}
+.card-footer .quantity-btn:active {
+    background-color: #dee2e6;
+    transform: scale(0.95);
+}
+.card-footer .quantity-input {
+    width: 45px;
+    height: 32px;
+    text-align: center;
+    border: none;
+    border-left: 1px solid #ced4da;
+    border-right: 1px solid #ced4da;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    background: white;
+    -moz-appearance: textfield;
+}
+.card-footer .quantity-input::-webkit-outer-spin-button,
+.card-footer .quantity-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.card-footer .quantity-input:focus {
+    outline: none;
+    background-color: #f8f9fa;
+}
 .card-action-btn {
     padding: 8px 16px;
     font-weight: bold;
@@ -1406,6 +1471,62 @@ body.modal-open {
 }
 #modal-quantity-selector { 
     margin: 20px 0;
+}
+#modal-quantity-selector .quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    overflow: hidden;
+    background: white;
+    width: fit-content;
+}
+#modal-quantity-selector .quantity-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+    border: none;
+    color: #495057;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+#modal-quantity-selector .quantity-btn:hover {
+    background-color: #e9ecef;
+    color: #007bff;
+}
+#modal-quantity-selector .quantity-btn:active {
+    background-color: #dee2e6;
+    transform: scale(0.95);
+}
+#modal-quantity-selector .quantity-input {
+    width: 60px;
+    height: 40px;
+    text-align: center;
+    border: none;
+    border-left: 1px solid #ced4da;
+    border-right: 1px solid #ced4da;
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+    background: white;
+    -moz-appearance: textfield;
+}
+#modal-quantity-selector .quantity-input::-webkit-outer-spin-button,
+#modal-quantity-selector .quantity-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#modal-quantity-selector .quantity-input:focus {
+    outline: none;
+    background-color: #f8f9fa;
 }
 #modal-notes-container { 
     margin-bottom: 20px;
@@ -3358,5 +3479,36 @@ hr.total-divider {
     
     .event-info-section {
         padding: 10px 12px;
+    }
+    
+    .card-footer {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    
+    .card-footer .price-wrapper,
+    .card-footer .actions-wrapper {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .card-footer .quantity-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+        touch-action: manipulation;
+    }
+    
+    .card-footer .quantity-input {
+        width: 60px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .card-action-btn {
+        flex: 1;
+        min-height: 44px;
+        font-size: 16px;
     }
 }

@@ -300,7 +300,7 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                 ui.updateTotalCost();
                 triggerSave();
                 
-                newBtn.textContent = 'In Plan';
+                newBtn.textContent = 'Update Plan';
                 newBtn.disabled = true;
             });
         }
@@ -843,6 +843,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.items.delete(recordId);
 
             ui.updateCardIcon(recordId);
+            ui.updateCardButtonText(recordId, true);
             await ui.updateIdeasCarousel();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
@@ -858,6 +859,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.items.set(recordId, itemInfo);
 
             ui.updateCardIcon(recordId);
+            ui.updateCardButtonText(recordId, false);
             await ui.updateEventPlanSection();
             await ui.updateIdeasCarousel();
             ui.updateTotalCost();
@@ -922,6 +924,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         if (!container) return;
         const recordId = container.dataset.recordId;
         const isLocked = state.cart.lockedItems.has(recordId);
+        const isInIdeas = state.cart.items.has(recordId);
         let updates = {};
         if (target.matches('.quantity-input')) {
             updates.quantity = parseInt(target.value, 10);
@@ -937,6 +940,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 ui.updateTotalCost();
             } else {
                 ui.updateItemState(recordId, updates);
+                if (!isInIdeas && target.matches('.quantity-input')) {
+                    ui.updateIdeasCarousel();
+                }
             }
             triggerSave();
         }

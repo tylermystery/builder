@@ -108,6 +108,25 @@ export function batchUpdateCardIcons(recordIds) {
     });
 }
 
+export function updateCardButtonText(recordId, isLocked) {
+    const cardButtons = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .add-to-plan-btn`);
+    const modalButton = document.getElementById('modal-add-to-plan-btn');
+    
+    cardButtons.forEach(btn => {
+        if (btn) {
+            btn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+            btn.disabled = isLocked;
+            btn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+        }
+    });
+    
+    const modalOverlay = document.getElementById('detail-modal-overlay');
+    if (modalButton && modalOverlay?.dataset.recordId === recordId) {
+        modalButton.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
+        modalButton.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+    }
+}
+
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
     const eventCard = document.createElement('div');
@@ -216,12 +235,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const itemState = ui.getItemState(record.id);
     const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}"><button class="quantity-btn plus">+</button></div>`;
+    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}" step="1"><button type="button" class="quantity-btn plus">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
     const priceHTML = `$${displayPrice.toFixed(2)} ${pricingTypeHTML}`;
-    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'In Plan' : 'Add to Plan'}</button>`;
+    const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
     const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
     
     eventCard.innerHTML = `
@@ -243,16 +262,32 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
     if (plusBtn && minusBtn && quantityInput) {
-        plusBtn.addEventListener('click', (e) => {
+        const handlePlus = (e) => {
             e.stopPropagation();
-            quantityInput.stepUp();
+            e.preventDefault();
+            const currentValue = parseInt(quantityInput.value, 10) || 1;
+            quantityInput.value = currentValue + 1;
             quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        minusBtn.addEventListener('click', (e) => {
+        };
+        const handleMinus = (e) => {
             e.stopPropagation();
-            quantityInput.stepDown();
-            quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
-        });
+            e.preventDefault();
+            const currentValue = parseInt(quantityInput.value, 10) || 1;
+            const minValue = parseInt(quantityInput.min, 10) || 1;
+            if (currentValue > minValue) {
+                quantityInput.value = currentValue - 1;
+                quantityInput.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+        const handleTouchEnd = (e) => {
+            e.preventDefault();
+            const handler = e.currentTarget === plusBtn ? handlePlus : handleMinus;
+            handler(e);
+        };
+        plusBtn.addEventListener('click', handlePlus);
+        plusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
+        minusBtn.addEventListener('click', handleMinus);
+        minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
     }
 
     return eventCard;

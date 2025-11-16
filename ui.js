@@ -192,10 +192,12 @@ export function updateLockedItemState(recordId, updates) {
 
 export function updateHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
-    document.title = eventName || 'Event Builder';
+    const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const shopName = activeShop?.fields?.Name || '';
+    document.title = eventName || (shopName ? `WTFun ${shopName}` : 'WTFun');
     const eventNameInput = document.getElementById('header-event-name');
     if (eventNameInput) {
-        eventNameInput.value = eventName || 'My Awesome Event';
+        eventNameInput.value = eventName || 'Enter Plan Name';
     }
     const goalsInput = document.getElementById('header-goals');
     if (goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
