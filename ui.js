@@ -9,6 +9,7 @@ import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailabi
 import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
+import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 
 
 // Re-export functions from component modules
@@ -123,9 +124,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     }
 
     const fragment = document.createDocumentFragment();
-    const CHUNK_SIZE = 6; // Render in larger chunks for better performance
+    const CHUNK_SIZE = 4; // Smaller chunks to yield to browser more frequently
     
-    // Progressive rendering with skeleton replacement
+    // Progressive rendering with skeleton replacement - yield to browser between chunks
     for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
         const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
         const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
@@ -143,9 +144,21 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         catalogContainer.appendChild(fragment.cloneNode(true));
         fragment.textContent = ''; // Clear fragment for next batch
         
-        // Allow UI to update between chunks
+        // Add energy burst as each chunk loads to animate the background
+        addEnergy();
+        
+        // Progress the color wheel slightly as catalog items load (browsing behavior)
+        updateProgress(0.005 * chunk.length);
+        
+        // Yield to browser between chunks to avoid blocking main thread
         if (i + CHUNK_SIZE < recordsToRender.length) {
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(resolve => {
+                if (window.requestIdleCallback) {
+                    requestIdleCallback(resolve, { timeout: 50 });
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            });
         }
     }
     

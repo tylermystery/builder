@@ -4,7 +4,7 @@ import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
-import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
+import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js'; 
 
 
@@ -283,9 +283,7 @@ export async function applyFiltersAndSort(imageCache) {
         if (state.session.user.isAuthenticated) {
             likedIds = state.session.user.likedItemIds;
         } else {
-            try {
-                likedIds = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
-            } catch (e) { console.error("Error reading tempLikes for filtering:", e); }
+            likedIds = getTempLikes();
         }
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
@@ -358,9 +356,13 @@ export async function applyFiltersAndSort(imageCache) {
         
         if (activeShop && activeShop.fields && activeShop.fields.Items) {
             // Items field contains top-level categories for the store
-            categories = activeShop.fields.Items
-                .split(',')
-                .map(cat => cat.trim())
+            // Handle both array (from Airtable API) and string formats
+            const itemsData = Array.isArray(activeShop.fields.Items) 
+                ? activeShop.fields.Items 
+                : activeShop.fields.Items.split(',');
+            
+            categories = itemsData
+                .map(cat => typeof cat === 'string' ? cat.trim() : cat)
                 .filter(Boolean);
         } else {
             // Fallback to extracting categories from items if store doesn't have Items field

@@ -22,7 +22,12 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     // This will use the default placeholder for custom items, which is correct
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
     
-    itemCard.dataset.bgImage = imageUrls[0] || `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+    // Optimize background image with proper Cloudinary transformations
+    const defaultPlaceholder = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
+    const bgImageUrl = imageUrls[0] || defaultPlaceholder;
+    itemCard.dataset.bgImage = bgImageUrl.includes('cloudinary') && !bgImageUrl.includes('/upload/c_fill')
+        ? bgImageUrl.replace('/upload/', '/upload/c_fill,w_600,h_520,f_auto,q_auto/')
+        : bgImageUrl;
 
     const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
     const tooltipContent = `
@@ -98,7 +103,7 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" alt="${fields.Name}">
+        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}

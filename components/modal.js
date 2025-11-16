@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce, loadStripe, loadFlatpickr } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -522,16 +522,27 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
 
     let currentPhotoIndex = startPhotoIndex;
-    modalMainImage.style.backgroundImage = `url('${imageUrls[currentPhotoIndex]}')`;
+    // Optimize main image with proper size and format
+    const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary') 
+        ? imageUrls[currentPhotoIndex].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+        : imageUrls[currentPhotoIndex];
+    modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
     modalThumbnailStrip.innerHTML = '';
     imageUrls.forEach((url, index) => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url}')`;
+        // Optimize thumbnails with smaller size
+        const optimizedThumb = url.includes('cloudinary')
+            ? url.replace('/upload/', '/upload/w_150,h_150,c_fill,f_auto,q_auto/')
+            : url;
+        thumb.style.backgroundImage = `url('${optimizedThumb}')`;
         if (index === currentPhotoIndex) thumb.classList.add('active');
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
-            modalMainImage.style.backgroundImage = `url('${url}')`;
+            const optimizedClickImage = imageUrls[index].includes('cloudinary')
+                ? imageUrls[index].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                : imageUrls[index];
+            modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
             thumb.classList.add('active');
         });
@@ -685,6 +696,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     if (iCalUrl) {
         modalCalendarContainer.style.display = 'block';
         log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
+
+        // Lazy load Flatpickr if needed
+        if (!window.flatpickr) {
+            log('Modal', 'Loading Flatpickr dynamically...');
+            await loadFlatpickr();
+        }
 
         const busyTimes = await api.fetchCalendarForRecord(record);
         const calendarInstance = window.flatpickr(modalCalendarContainer, {
@@ -883,16 +900,18 @@ export async function showCheckoutModal(shopSettings) {
         termsContainer.innerHTML = `<h4>Simplified Terms</h4><p>${currentShopSettings.terms.replace(/\\n/g, '<br>')}</p>`;
     }
 
-    // --- THIS IS THE FIX ---\
-    // Initialize Stripe *before* calling updateCheckoutDisplay
+    // Initialize Stripe on demand (lazy load)
     try {
+        if (!window.Stripe) {
+            log('Modal', 'Loading Stripe.js dynamically...');
+            await loadStripe();
+        }
         stripe = window.Stripe(STRIPE_PUBLISHABLE_KEY);
     } catch (err) {
         console.error("Failed to initialize Stripe:", err);
         alert(`Could not initialize payment system: ${err.message}.`);
         return;
     }
-    // --- END FIX ---\
 
     // --- NEW: Ensure payment form is visible by default ---
     // updateCheckoutDisplay will hide it if the plan is paid

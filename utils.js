@@ -4,6 +4,110 @@ import { log } from './utils/debug.js';
 import { CONSTANTS } from './config.js';
 import { state } from './state.js';
 
+const loadedLibraries = new Set();
+const loadingPromises = new Map();
+
+// Cache for tempLikes to reduce localStorage parsing overhead
+let tempLikesCache = null;
+let tempLikesCacheTime = 0;
+const TEMP_LIKES_CACHE_TTL = 5000; // Cache for 5 seconds
+
+/**
+ * Get temporary likes with caching to reduce localStorage overhead
+ * @returns {Set<string>} Set of liked item IDs
+ */
+export function getTempLikes() {
+    const now = Date.now();
+    if (tempLikesCache && (now - tempLikesCacheTime) < TEMP_LIKES_CACHE_TTL) {
+        return tempLikesCache;
+    }
+    
+    try {
+        const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
+        tempLikesCache = tempLikes;
+        tempLikesCacheTime = now;
+        return tempLikes;
+    } catch (e) {
+        console.error('[Utils] Error reading tempLikes:', e);
+        return new Set();
+    }
+}
+
+/**
+ * Set temporary likes and update cache
+ * @param {Set<string>} likes - Set of liked item IDs
+ */
+export function setTempLikes(likes) {
+    try {
+        localStorage.setItem('tempLikes', JSON.stringify(Array.from(likes)));
+        tempLikesCache = likes;
+        tempLikesCacheTime = Date.now();
+    } catch (e) {
+        console.error('[Utils] Error setting tempLikes:', e);
+    }
+}
+
+/**
+ * Invalidate the tempLikes cache to force a refresh
+ */
+export function invalidateTempLikesCache() {
+    tempLikesCache = null;
+    tempLikesCacheTime = 0;
+}
+
+/**
+ * Dynamically loads a script from a URL and returns a promise
+ * @param {string} src - The script URL to load
+ * @param {string} name - Identifier for the library being loaded
+ * @returns {Promise<void>}
+ */
+export function loadScript(src, name) {
+    if (loadedLibraries.has(name)) {
+        return Promise.resolve();
+    }
+    
+    if (loadingPromises.has(name)) {
+        return loadingPromises.get(name);
+    }
+    
+    const promise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => {
+            loadedLibraries.add(name);
+            loadingPromises.delete(name);
+            log('LazyLoad', `${name} loaded successfully`);
+            resolve();
+        };
+        script.onerror = () => {
+            loadingPromises.delete(name);
+            log('LazyLoad', `Failed to load ${name}`);
+            reject(new Error(`Failed to load ${name}`));
+        };
+        document.head.appendChild(script);
+    });
+    
+    loadingPromises.set(name, promise);
+    return promise;
+}
+
+/**
+ * Lazy loads Stripe.js library on demand
+ * @returns {Promise<void>}
+ */
+export async function loadStripe() {
+    await loadScript('https://js.stripe.com/v3/', 'stripe');
+}
+
+/**
+ * Lazy loads Flatpickr library on demand
+ * @returns {Promise<void>}
+ */
+export async function loadFlatpickr() {
+    await loadScript('https://cdn.jsdelivr.net/npm/flatpickr', 'flatpickr');
+}
+
 /**
  * Parses the raw string from Airtable's 'Options' field into a structured array of objects.
  * This function handles various formats, including price changes, absolute prices,

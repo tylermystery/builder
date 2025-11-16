@@ -70,7 +70,7 @@ export let state = {
         saveState: 'SAVED',
         isInitializing: true,
         activeShopId: null,
-        currentProgress: 0.0, // NEW: Background color progress (0.0 to 1.0)
+        currentProgress: 0.3, // NEW: Background color progress (0.0 to 1.0) - Start at cyan/blue range
     },
 };
 
@@ -109,6 +109,12 @@ export function setState(newState) {
             ...state.ui, 
             ...newState.ui 
         };
+        // CRITICAL: Ensure currentProgress never gets lost during initialization
+        // If the new state doesn't explicitly include currentProgress, preserve the old value
+        if (newState.ui.currentProgress === undefined && state.ui.currentProgress !== undefined) {
+            console.log('[State] Preserving currentProgress during setState:', state.ui.currentProgress);
+            updatedState.ui.currentProgress = state.ui.currentProgress;
+        }
     }
     
     // --- ADD THIS BLOCK TO FIX THE BUG ---

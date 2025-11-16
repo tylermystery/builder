@@ -193,7 +193,11 @@ function renderEventPlan(sessionId) {
                 const item = catalogMap.get(id);
                 totalValue += (item?.fields?.Price || 0) * (info.quantity || 1);
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
-                planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
+                // Optimize images with proper alt text and dimensions for better performance
+                const optimizedImageUrl = imageUrl.includes('via.placeholder.com') 
+                    ? 'https://via.placeholder.com/50?text=No+Image'
+                    : imageUrl;
+                planHtml += `<div class="plan-item"><img src="${optimizedImageUrl}" alt="${item?.fields?.Name || 'Item'}" width="50" height="50" loading="lazy"><div class="plan-item-info"><strong>${item?.fields?.Name || 'Unknown Item'}</strong><br><small>Qty: ${info.quantity || 1} - Note: ${info.note || 'none'}</small></div></div>`;
             });
         } else { planHtml += '<p>No items locked in.</p>'; }
         planHtml += '<h3>Favorited Ideas</h3>';
@@ -201,7 +205,10 @@ function renderEventPlan(sessionId) {
             favoritedItems.forEach((info, id) => {
                 const item = catalogMap.get(id);
                 const imageUrl = item?.fields?.Attachments?.[0]?.thumbnails?.small?.url || 'https://via.placeholder.com/50';
-                planHtml += `<div class="plan-item"><img src="${imageUrl}" alt=""><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
+                const optimizedImageUrl = imageUrl.includes('via.placeholder.com')
+                    ? 'https://via.placeholder.com/50?text=No+Image'
+                    : imageUrl;
+                planHtml += `<div class="plan-item"><img src="${optimizedImageUrl}" alt="${item?.fields?.Name || 'Item'}" width="50" height="50" loading="lazy"><div><strong>${item?.fields?.Name || 'Unknown Item'}</strong></div></div>`;
             });
         } else { planHtml += '<p>No favorited items.</p>'; }
         planHtml += `<div class="plan-total">Total Plan Value: $${totalValue.toFixed(2)}</div>`;

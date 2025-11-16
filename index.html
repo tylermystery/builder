@@ -7,8 +7,6 @@
     <link rel="icon" href="data:;" />
     <!-- FIX: Removed Markdown []() wrapper from links -->
     <!-- Preload critical resources -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="preconnect" href="https://js.stripe.com">
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://js.pusher.com">
     <link rel="preconnect" href="https://identity.netlify.com">
@@ -17,21 +15,428 @@
     <!-- DNS prefetch for API endpoints -->
     <link rel="dns-prefetch" href="https://api.airtable.com">
     
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link rel="stylesheet" href="style.css">
+    <!-- Load Flatpickr CSS asynchronously -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"></noscript>
     
-    <!-- Defer non-critical scripts -->
-    <script defer src="https://js.stripe.com/v3/"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <!-- Inline Critical CSS -->
+    <style>
+/* CRITICAL CSS - Above-the-fold styles loaded inline */
+
+/* Global Improvements */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* Core Body & Kaleidoscope Canvas */
+body {
+    padding-bottom: 150px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: transparent;
+    margin: 0;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+#kaleidoscope-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    display: block;
+}
+
+/* Frosted Glass: Header */
+#main-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.header-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    gap: 20px;
+}
+
+#header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.header-icon-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+.header-icon-btn:active {
+    transform: scale(0.95);
+}
+
+#parent-collective-trigger {
+    background-color: #343a40;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.1em;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+#parent-collective-trigger:hover {
+    background-color: #007bff;
+}
+
+#shop-logo-container {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    height: 44px;
+}
+
+#shop-logo-container img {
+    height: 100%;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+#header-center {
+    flex-grow: 1;
+    min-width: 200px;
+    overflow: hidden;
+}
+
+#header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+#main-shop-title {
+    margin: 0;
+    line-height: 1.2;
+    color: #2c3e50;
+    cursor: pointer;
+}
+
+/* Core Layout */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+@media (min-width: 1000px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 380px;
+        gap: 25px;
+    }
+    #left-sidebar { order: 1; }
+    #catalog-area { order: 2; }
+    #right-sidebar { order: 3; }
+}
+
+#right-sidebar, #left-sidebar {
+    position: relative;
+}
+
+#right-sidebar h3, #left-sidebar h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 10px;
+    color: #333;
+}
+
+/* Frosted Glass: Sidebar Panels */
+#filter-controls {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#event-plan-panel {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 85px;
+}
+
+/* Filter Controls */
+#filter-controls::after {
+    content: attr(data-active-filters);
+    display: inline-block;
+    background: #007bff;
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin-left: 10px;
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.filter-group label {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #333;
+}
+
+.filter-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-btn {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.85em;
+}
+
+.filter-btn.active {
+    background-color: #e7f3ff;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+#name-filter:not(:placeholder-shown) {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+/* Catalog Grid */
+#catalog-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+}
+
+/* Skeleton Loading - Critical for perceived performance */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    overflow: hidden;
+    height: 420px;
+}
+
+.skeleton-image {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-content {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.skeleton-title {
+    height: 24px;
+    width: 70%;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 16px;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skeleton-price {
+    height: 20px;
+    width: 80px;
+    border-radius: 4px;
+}
+
+.skeleton-button {
+    height: 36px;
+    width: 120px;
+    border-radius: 5px;
+}
+
+/* Loading Message */
+#loading-message {
+    text-align: center;
+    padding: 40px;
+    color: #333;
+}
+
+/* Toast Notification - visible immediately */
+#toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 350px;
+}
+    </style>
+    
+    <!-- Load Deferred CSS Asynchronously -->
+    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
+    
+    <!-- Tippy.js and Popper (small, needed early for tooltips) -->
     <script defer src="https://unpkg.com/@popperjs/core@2"></script>
     <script defer src="https://unpkg.com/tippy.js@6"></script>
+    
+    <!-- Other libraries will be lazy-loaded on demand -->
     <script defer src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
     <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
     </head>
 <body>
     <!-- The canvas is now our one and only background element -->
-    <canvas id="kaleidoscope-bg"></canvas>
+    <canvas id="kaleidoscope-bg" style="background-color: #000;"></canvas>
+    
+    <!-- Background Settings Panel (Hidden by default) -->
+    <div id="bg-settings-panel" style="display: none; position: fixed; top: 80px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 2000; padding: 20px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+            <h3 style="margin: 0; color: #333;">🎨 Background Engine</h3>
+            <button id="bg-settings-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
+        </div>
+        
+        <div id="bg-debug-info" style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; font-family: monospace;">
+            <div><strong>Status:</strong> <span id="bg-status-indicator" style="color: #28a745;">●</span> <span id="bg-status-text">Loading...</span></div>
+            <div style="margin-top: 8px;"><strong>Progress:</strong> <span id="bg-progress-value">0.30</span></div>
+            <div><strong>Energy:</strong> <span id="bg-energy-value">0.00</span></div>
+            <div><strong>Time:</strong> <span id="bg-time-value">0.0s</span></div>
+            <div><strong>Draw Calls:</strong> <span id="bg-draw-calls">0</span></div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Color Progress (0-1)</label>
+            <input type="range" id="bg-progress-slider" min="0" max="1" step="0.01" value="0.3" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #666; margin-top: 4px;">
+                <span>🟣 Purple</span>
+                <span>🔵 Blue</span>
+                <span>🟢 Green</span>
+                <span>🟡 Yellow</span>
+                <span>🔴 Red</span>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Energy Boost</label>
+            <input type="range" id="bg-energy-slider" min="0" max="1" step="0.05" value="0" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="font-size: 0.8em; color: #666; margin-top: 4px;">Higher = more movement & swirls</div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button id="bg-test-energy" style="flex: 1; padding: 10px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ Test Energy</button>
+            <button id="bg-test-progress" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">+0.1 Progress</button>
+        </div>
+        
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 0.85em; color: #856404;">
+            <strong>💡 Tip:</strong> In the full system, background colors will automatically evolve as you add items, lock in details, and build your plan!
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; font-size: 0.75em; color: #999;">
+            Background Engine v1.0 | Debug Mode
+        </div>
+    </div>
     
     <div id="toast-notification"></div>
 
@@ -56,8 +461,9 @@
                </div>
             </div>
 
-            <!-- Right Section: Calendar and Account -->
+            <!-- Right Section: Calendar, Background Settings, and Account -->
             <div id="header-right">
+                <button id="bg-settings-trigger" class="header-icon-btn" title="Background Settings" style="position: relative;">🎨</button>
                 <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
                 <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
             </div>
@@ -551,57 +957,6 @@
         </div>
     </div>
     
-    <!-- localStorage Debug Monitor -->
-    <script>
-        console.log('[localStorage Monitor] ========== INITIALIZATION ==========');
-        console.log('[localStorage Monitor] Current JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
-        
-        // Monitor localStorage changes
-        const originalSetItem = localStorage.setItem;
-        localStorage.setItem = function(key, value) {
-            if (key === 'jwt') {
-                console.log('[localStorage Monitor] ========== JWT BEING SAVED ==========');
-                console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
-                console.log('[localStorage Monitor] Stack trace:', new Error().stack);
-                console.log('[localStorage Monitor] JWT value (first 30 chars):', value ? value.substring(0, 30) + '...' : 'null');
-            }
-            return originalSetItem.apply(this, arguments);
-        };
-        
-        const originalRemoveItem = localStorage.removeItem;
-        localStorage.removeItem = function(key) {
-            if (key === 'jwt') {
-                console.log('[localStorage Monitor] ========== JWT BEING REMOVED ==========');
-                console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
-                console.log('[localStorage Monitor] Stack trace:', new Error().stack);
-            }
-            return originalRemoveItem.apply(this, arguments);
-        };
-        
-        const originalClear = localStorage.clear;
-        localStorage.clear = function() {
-            console.log('[localStorage Monitor] ========== localStorage.clear() CALLED ==========');
-            console.log('[localStorage Monitor] Timestamp:', new Date().toISOString());
-            console.log('[localStorage Monitor] Stack trace:', new Error().stack);
-            return originalClear.apply(this, arguments);
-        };
-        
-        // Monitor page lifecycle events
-        window.addEventListener('beforeunload', function() {
-            console.log('[localStorage Monitor] ========== PAGE UNLOAD ==========');
-            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
-        });
-        
-        window.addEventListener('load', function() {
-            console.log('[localStorage Monitor] ========== PAGE LOADED ==========');
-            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
-        });
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('[localStorage Monitor] ========== DOM READY ==========');
-            console.log('[localStorage Monitor] JWT in localStorage:', localStorage.getItem('jwt') ? 'Present' : 'Not present');
-        });
-    </script>
     
     <script type="module" src="main.js"></script>
     <!-- FIX: Removed Markdown []() wrapper from link -->

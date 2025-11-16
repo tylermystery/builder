@@ -7,7 +7,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js'; 
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice } from '../utils.js';
+import { getRecordPrice, getTempLikes } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 // Helper to generate optimized Cloudinary URLs with responsive sizing
@@ -18,8 +18,26 @@ function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
     const uploadIndex = url.indexOf('/upload/');
     if (uploadIndex === -1) return url;
     
-    const transformations = `c_fill,w_${width},q_${quality},f_auto`;
+    // Add progressive loading and auto format for better compression
+    const transformations = `c_fill,w_${width},q_${quality},f_auto,fl_progressive`;
     return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+}
+
+// Generate srcset for responsive images at different screen densities and sizes
+function generateSrcSet(url, baseWidth = 600) {
+    if (!url || !url.includes('cloudinary')) return '';
+    
+    const sizes = [
+        { width: Math.floor(baseWidth * 0.5), descriptor: '400w' },
+        { width: baseWidth, descriptor: '600w' },
+        { width: Math.floor(baseWidth * 1.5), descriptor: '900w' },
+        { width: baseWidth * 2, descriptor: '1200w' }
+    ];
+    
+    return sizes.map(({ width, descriptor }) => {
+        const optimized = getOptimizedImageUrl(url, width);
+        return `${optimized} ${descriptor}`;
+    }).join(', ');
 }
 
 // Generate low-quality placeholder for blur-up effect
@@ -38,11 +56,14 @@ function getLowQualityPlaceholder(url) {
 export function getPlaceholderImage(imageUrls) {
 // --- END THE FIX ---
     if (!imageUrls || imageUrls.length === 0) {
-        return `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520/ww71meppejsewxsxr4x7.jpg`;
+        return `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
     }
     const randomIndex = Math.floor(Math.random() * imageUrls.length);
     return getOptimizedImageUrl(imageUrls[randomIndex], 600);
 }
+
+// Export helper functions for use in other modules
+export { getOptimizedImageUrl, generateSrcSet };
 
 export function updateCardIcon(recordId) {
     let isLiked = false;
@@ -50,13 +71,7 @@ export function updateCardIcon(recordId) {
     if (state.session.user.isAuthenticated) {
         isLiked = state.session.user.likedItemIds.has(recordId);
     } else {
-        try {
-            const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
-            isLiked = tempLikes.has(recordId);
-        } catch (e) {
-            console.error('[Card] Error reading tempLikes for icon update:', e);
-            isLiked = false;
-        }
+        isLiked = getTempLikes().has(recordId);
     }
 
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
@@ -87,7 +102,7 @@ export function updateCardIcon(recordId) {
 export function batchUpdateCardIcons(recordIds) {
     const likedItems = state.session.user.isAuthenticated 
         ? state.session.user.likedItemIds
-        : new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
+        : getTempLikes();
     
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
     
