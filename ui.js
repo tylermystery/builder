@@ -581,8 +581,13 @@ export function updateCatalogHeader() {
         if (filterName.startsWith('rec')) {
             return state.records.all.find(r => r.id === filterName);
         }
-        // Otherwise, match by name (convert dashes to spaces and compare lowercase)
-        return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
+        // Try exact match first (for new format with spaces)
+        let record = state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName);
+        // If no match, try converting dashes to spaces (for old URLs with dashes)
+        if (!record) {
+            record = state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
+        }
+        return record;
     };
 
     if (categoryFilter) {

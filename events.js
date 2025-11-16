@@ -452,7 +452,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     console.log(`[Events] Creating button for category: ${categoryName}`);
                     const categoryBtn = document.createElement('button');
                     categoryBtn.className = 'filter-btn category-filter-btn';
-                    categoryBtn.dataset.filter = categoryName.toLowerCase().replace(/\s+/g, '-');
+                    categoryBtn.dataset.filter = categoryName.toLowerCase();
                     categoryBtn.textContent = categoryName;
                     categoryBtn.addEventListener('click', () => {
                         document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
