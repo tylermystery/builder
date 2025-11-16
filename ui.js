@@ -148,7 +148,7 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         addEnergy();
         
         // Progress the color wheel slightly as catalog items load (browsing behavior)
-        updateProgress(0.005 * chunk.length);
+        updateProgress(0.00005 * chunk.length);
         
         // Yield to browser between chunks to avoid blocking main thread
         if (i + CHUNK_SIZE < recordsToRender.length) {
