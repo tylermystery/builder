@@ -19,6 +19,10 @@ let saveTimeout = null;
 let saveShareBtn = null;
 let aiSearchController = null;
 
+export function getMainDatePicker() {
+    return mainDatePicker;
+}
+
 function loadMoreRecords(imageCache) {
     if (state.ui.isLoadingMore) return;
     const start = state.ui.recordsCurrentlyDisplayed;
@@ -561,7 +565,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // Lazy load Flatpickr when date filter is focused
     const dateFilterInput = document.getElementById('date-filter');
     if (dateFilterInput) {
-        dateFilterInput.addEventListener('focus', async function initializeDatePicker() {
+        const initializeDatePicker = async () => {
             if (!mainDatePicker) {
                 try {
                     log('Events', 'Loading Flatpickr dynamically...');
@@ -571,7 +575,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         throw new Error('Flatpickr not available after loading');
                     }
                     
-                    mainDatePicker = window.flatpickr("#date-filter", {
+                    mainDatePicker = window.flatpickr(dateFilterInput, {
                         mode: "range",
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
@@ -591,18 +595,33 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                             }
                         },
                     });
+                    
+                    // Store the flatpickr instance on the input element
+                    dateFilterInput._flatpickr = mainDatePicker;
+                    
+                    // Open the calendar after initialization
+                    mainDatePicker.open();
+                    
                     log('Events', 'Date filter picker initialized successfully');
                 } catch (error) {
                     log('Events', `Error initializing date picker: ${error.message}`);
                     console.error('Flatpickr initialization error:', error);
                 }
+            } else {
+                // If already initialized, just open it
+                mainDatePicker.open();
             }
-        }, { once: true });
+        };
+        
+        dateFilterInput.addEventListener('focus', initializeDatePicker);
     }
 
     safeAddEventListener('date-filter-group', 'click', async (e) => {
         const quickButton = e.target.closest('[data-date-quick]');
         if (!quickButton) return;
+        
+        const dateFilterInput = document.getElementById('date-filter');
+        if (!dateFilterInput) return;
         
         if (!mainDatePicker) {
             try {
@@ -613,7 +632,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     throw new Error('Flatpickr not available after loading');
                 }
                 
-                mainDatePicker = window.flatpickr("#date-filter", {
+                mainDatePicker = window.flatpickr(dateFilterInput, {
                     mode: "range",
                     dateFormat: "M j, Y",
                     onChange: async (selectedDates) => {
@@ -630,6 +649,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         }
                     },
                 });
+                
+                // Store the flatpickr instance on the input element
+                dateFilterInput._flatpickr = mainDatePicker;
+                
                 log('Events', 'Date filter picker initialized from quick select');
             } catch (error) {
                 log('Events', `Error initializing date picker: ${error.message}`);
@@ -1098,7 +1121,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     let eventPlanDatePicker = null;
     const eventDateInput = document.getElementById('event-date-picker');
     if (eventDateInput) {
-        eventDateInput.addEventListener('focus', async function initializeEventDatePicker() {
+        const initializeEventDatePicker = async () => {
             if (!eventPlanDatePicker) {
                 try {
                     log('Events', 'Loading Flatpickr dynamically for event date picker...');
@@ -1108,7 +1131,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         throw new Error('Flatpickr not available after loading');
                     }
                     
-                    eventPlanDatePicker = window.flatpickr("#event-date-picker", {
+                    eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
                             if (state.ui.isInitializing) return;
@@ -1125,13 +1148,25 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                             triggerSave();
                         }
                     });
+                    
+                    // Store the flatpickr instance on the input element
+                    eventDateInput._flatpickr = eventPlanDatePicker;
+                    
+                    // Open the calendar after initialization
+                    eventPlanDatePicker.open();
+                    
                     log('Events', 'Event date picker initialized successfully');
                 } catch (error) {
                     log('Events', `Error initializing event date picker: ${error.message}`);
                     console.error('Flatpickr initialization error:', error);
                 }
+            } else {
+                // If already initialized, just open it
+                eventPlanDatePicker.open();
             }
-        }, { once: true });
+        };
+        
+        eventDateInput.addEventListener('focus', initializeEventDatePicker);
     }
     
     safeAddEventListener('itinerary-btn', 'click', () => {
