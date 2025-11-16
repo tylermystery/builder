@@ -11,6 +11,9 @@ let debugPanel = null;
 let startTime = 0;
 let currentEnergy = 0.0;
 
+let progressMultiplier = 1.0;
+let energyDecayRate = 0.985;
+
 let lastTimestamp_2d = 0;
 let currentColors = [];
 let settings = {};
@@ -43,7 +46,7 @@ function animationLoop(timestamp) {
              return;
         }
         const elapsedTime = (timestamp - startTime) / 1000.0;
-        currentEnergy *= 0.95; 
+        currentEnergy *= energyDecayRate; 
         if (currentEnergy < 0.01) currentEnergy = 0.0;
         
         if (currentProgress !== lastProgressLog) {
@@ -78,9 +81,13 @@ export function updateProgress(weight) {
     console.log('[BG-Engine] ========== updateProgress CALLED ==========');
     console.log('[BG-Engine] Timestamp:', new Date().toISOString());
     console.log('[BG-Engine] Input weight:', weight);
+    console.log('[BG-Engine] Progress multiplier:', progressMultiplier);
     console.log('[BG-Engine] Current progress:', state.ui.currentProgress);
     
-    let newProgress = state.ui.currentProgress + weight;
+    const adjustedWeight = weight * progressMultiplier;
+    console.log('[BG-Engine] Adjusted weight:', adjustedWeight);
+    
+    let newProgress = state.ui.currentProgress + adjustedWeight;
     console.log('[BG-Engine] Calculated newProgress (before clamp):', newProgress);
     
     newProgress = Math.min(1.0, Math.max(0.0, newProgress));
@@ -99,7 +106,7 @@ export function updateProgress(weight) {
         console.log('[BG-Engine] State after update:', state.ui.currentProgress);
         
         if (weight > 0) {
-            currentEnergy = Math.min(1.0, currentEnergy + weight * 5);
+            currentEnergy = Math.min(1.0, currentEnergy + adjustedWeight * 5);
             console.log('[BG-Engine] Energy boosted to:', currentEnergy); 
         }
     } else {
@@ -377,6 +384,31 @@ function initDebugPanel() {
         energySlider.addEventListener('input', (e) => {
             currentEnergy = parseFloat(e.target.value);
             console.log('[BG-Engine] Manual energy change via slider:', currentEnergy);
+        });
+    }
+    
+    const energyDecaySlider = document.getElementById('bg-energy-decay');
+    if (energyDecaySlider) {
+        energyDecaySlider.value = 0.985;
+        energyDecaySlider.addEventListener('input', (e) => {
+            energyDecayRate = parseFloat(e.target.value);
+            const valueDisplay = document.getElementById('bg-energy-decay-value');
+            if (valueDisplay) {
+                valueDisplay.textContent = energyDecayRate.toFixed(2);
+            }
+            console.log('[BG-Engine] Energy decay rate changed:', energyDecayRate);
+        });
+    }
+    
+    const progressMultiplierSlider = document.getElementById('bg-progress-multiplier');
+    if (progressMultiplierSlider) {
+        progressMultiplierSlider.addEventListener('input', (e) => {
+            progressMultiplier = parseFloat(e.target.value);
+            const valueDisplay = document.getElementById('bg-progress-multiplier-value');
+            if (valueDisplay) {
+                valueDisplay.textContent = progressMultiplier.toFixed(1);
+            }
+            console.log('[BG-Engine] Progress multiplier changed:', progressMultiplier);
         });
     }
     

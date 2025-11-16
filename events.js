@@ -297,7 +297,7 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                 });
 
                 // Add progress for AI-sourced item
-                updateProgress(0.02);
+                updateProgress(0.0002);
 
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
@@ -608,11 +608,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const newValue = e.target.value.trim();
         console.log('[Events] hadValue:', hadValue, 'newValue:', newValue);
         if (newValue && !hadValue) {
-            console.log('[Events] Adding event name, calling updateProgress(0.01)');
-            updateProgress(0.01); // Adding event name progresses
+            console.log('[Events] Adding event name, calling updateProgress(0.0001)');
+            updateProgress(0.0001); // Adding event name progresses
         } else if (!newValue && hadValue) {
-            console.log('[Events] Removing event name, calling updateProgress(-0.01)');
-            updateProgress(-0.01); // Removing event name regresses
+            console.log('[Events] Removing event name, calling updateProgress(-0.0001)');
+            updateProgress(-0.0001); // Removing event name regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
         triggerSave();
@@ -624,9 +624,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.GOALS);
         const newValue = e.target.value.trim();
         if (newValue && !hadValue) {
-            updateProgress(0.01); // Adding goals progresses
+            updateProgress(0.0001); // Adding goals progresses
         } else if (!newValue && hadValue) {
-            updateProgress(-0.01); // Removing goals regresses
+            updateProgress(-0.0001); // Removing goals regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.GOALS, e.target.value);
         triggerSave();
@@ -874,7 +874,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.items.delete(recordId);
 
             // Add progress for adding item to plan (scaled by quantity)
-            const progressDelta = 0.02 * (itemInfo.quantity || 1);
+            const progressDelta = 0.0002 * (itemInfo.quantity || 1);
             console.log('[Events] Calling updateProgress with delta:', progressDelta);
             updateProgress(progressDelta);
             console.log('[Events] updateProgress called');
@@ -899,7 +899,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.items.set(recordId, itemInfo);
 
             // Regress progress when demoting item from plan
-            const progressDelta = -0.02 * (itemInfo.quantity || 1);
+            const progressDelta = -0.0002 * (itemInfo.quantity || 1);
             console.log('[Events] Calling updateProgress with delta:', progressDelta);
             updateProgress(progressDelta);
             console.log('[Events] updateProgress called');
@@ -920,7 +920,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.cart.items.delete(recordId);
 
             // Regress progress when removing item from ideas
-            updateProgress(-0.01 * (itemInfo?.quantity || 1));
+            updateProgress(-0.0001 * (itemInfo?.quantity || 1));
 
             await ui.updateIdeasCarousel();
             triggerSave();
@@ -946,7 +946,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                  const parentName = record.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM];
 
                  // Small progress for browsing categories
-                 updateProgress(0.002);
+                 updateProgress(0.00002);
 
                  if (!parentName) {
                      updateUrl({ category: groupNameLower, subcategory: null, view: null });
@@ -958,7 +958,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             } else {
                 // Small progress for viewing item details
-                updateProgress(0.001);
+                updateProgress(0.00001);
                 ui.showDetailModal(record);
             }
         } else if (lockedItemCard && !e.target.closest('.demote-locked-item-btn, .edit-btn')) {
@@ -998,7 +998,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Calculate progress based on quantity changes
             if (updates.quantity !== undefined && updates.quantity !== oldQuantity) {
                 const quantityDelta = updates.quantity - oldQuantity;
-                updateProgress(0.01 * quantityDelta);
+                updateProgress(0.0001 * quantityDelta);
             }
             
             if (isLocked) {
@@ -1031,10 +1031,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         if (state.ui.isInitializing) return;
                         if (selectedDates.length > 0) {
                             state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
-                            updateProgress(0.015); // Adding date progresses the color wheel
+                            updateProgress(0.00015); // Adding date progresses the color wheel
                         } else {
                             state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-                            updateProgress(-0.015); // Removing date regresses the color wheel
+                            updateProgress(-0.00015); // Removing date regresses the color wheel
                         }
                         await ui.updateEventPlanDateDisplay();
                         await ui.updateLockedItemStatusIcons();
