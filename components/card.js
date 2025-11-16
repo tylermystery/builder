@@ -144,6 +144,7 @@ export function updateCardButtonText(recordId, isLocked) {
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
+    console.log('[createInteractiveCard] Creating card for record:', record.id, record.fields.Name);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
@@ -199,7 +200,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
         }
         imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
+        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
         imageContainerHTML += `</div>`;
+        console.log('[createInteractiveCard] Grouping card HTML includes availability-btn:', imageContainerHTML.includes('availability-btn'));
         groupingCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
@@ -210,6 +213,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
+        console.log('[createInteractiveCard] Grouping card created, checking for availability-btn');
+        const availBtn = groupingCard.querySelector('.availability-btn');
+        console.log('[createInteractiveCard] Grouping card availability-btn found:', !!availBtn, availBtn);
         return groupingCard;
     }
 
@@ -226,6 +232,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <div class="heart-icon" data-record-id="${record.id}"></div>
+                <button class="availability-btn" title="Select a date range to check availability">📅</button>
                 ${partnerBadge} 
                 ${scoreBanner} 
             </div>
@@ -243,6 +250,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${rsvpButtonHTML}
             </div>
         `;
+        console.log('[createInteractiveCard] Event card created, checking for availability-btn');
+        const eventAvailBtn = eventCard.querySelector('.availability-btn');
+        console.log('[createInteractiveCard] Event card availability-btn found:', !!eventAvailBtn, eventAvailBtn);
         return eventCard;
     }
 
@@ -261,6 +271,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
+            <button class="availability-btn" title="Select a date range to check availability">📅</button>
             ${partnerBadge} 
             ${scoreBanner} 
             </div>
@@ -273,6 +284,10 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
+    console.log('[createInteractiveCard] Standard card created, checking for availability-btn');
+    const stdAvailBtn = eventCard.querySelector('.availability-btn');
+    console.log('[createInteractiveCard] Standard card availability-btn found:', !!stdAvailBtn, stdAvailBtn);
+    
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');

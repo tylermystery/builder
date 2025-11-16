@@ -6,6 +6,7 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
+import { updateAllCardAvailabilityIcons } from './events.js';
 import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
@@ -166,6 +167,14 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     recordsToRender.forEach(record => {
         updateCardIcon(record.id);
     });
+    
+    // Update availability icons if a date range is selected
+    if (!append) {
+        console.log('[renderRecords] Calling updateAllCardAvailabilityIcons after rendering');
+        updateAllCardAvailabilityIcons().catch(err => {
+            log('UI', `Error updating availability icons: ${err.message}`);
+        });
+    }
     
     observeLazyImages(catalogContainer);
 

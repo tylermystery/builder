@@ -30,13 +30,6 @@ function animationLoop(timestamp) {
     const currentProgress = state.ui.currentProgress;
     
     loopIterations++;
-    if (loopIterations % 120 === 0) {
-        console.log('[BG-Engine] Animation loop check:');
-        console.log('[BG-Engine]   - Iteration:', loopIterations);
-        console.log('[BG-Engine]   - Progress:', currentProgress);
-        console.log('[BG-Engine]   - Energy:', currentEnergy.toFixed(3));
-        console.log('[BG-Engine]   - Effect:', currentEffect.type);
-    }
     
     updateDebugPanel(currentProgress, currentEnergy, timestamp / 1000.0, loopIterations);
 
@@ -50,10 +43,6 @@ function animationLoop(timestamp) {
         if (currentEnergy < 0.01) currentEnergy = 0.0;
         
         if (currentProgress !== lastProgressLog) {
-            console.log('[BG-Engine] ========== PROGRESS CHANGED ==========');
-            console.log('[BG-Engine] Iteration:', loopIterations);
-            console.log('[BG-Engine] Progress:', lastProgressLog, '->', currentProgress);
-            console.log('[BG-Engine] Energy:', currentEnergy.toFixed(3));
             lastProgressLog = currentProgress;
         }
         
@@ -78,41 +67,22 @@ export function addEnergy() {
 }
 
 export function updateProgress(weight) {
-    console.log('[BG-Engine] ========== updateProgress CALLED ==========');
-    console.log('[BG-Engine] Timestamp:', new Date().toISOString());
-    console.log('[BG-Engine] Input weight:', weight);
-    console.log('[BG-Engine] Progress multiplier:', progressMultiplier);
-    console.log('[BG-Engine] Current progress:', state.ui.currentProgress);
-    
     const adjustedWeight = weight * progressMultiplier;
-    console.log('[BG-Engine] Adjusted weight:', adjustedWeight);
-    
     let newProgress = state.ui.currentProgress + adjustedWeight;
-    console.log('[BG-Engine] Calculated newProgress (before clamp):', newProgress);
-    
     newProgress = Math.min(1.0, Math.max(0.0, newProgress));
-    console.log('[BG-Engine] Clamped newProgress:', newProgress);
 
     if (newProgress !== state.ui.currentProgress) {
-        log('BG-Engine', `Progress updated: ${state.ui.currentProgress.toFixed(3)} -> ${newProgress.toFixed(3)} (Weight: ${weight})`);
-        console.log('[BG-Engine] Progress changed, updating state...');
         setState({
             ui: {
                 ...state.ui,
                 currentProgress: newProgress
             }
         });
-        console.log('[BG-Engine] setState called');
-        console.log('[BG-Engine] State after update:', state.ui.currentProgress);
         
         if (weight > 0) {
             currentEnergy = Math.min(1.0, currentEnergy + adjustedWeight * 5);
-            console.log('[BG-Engine] Energy boosted to:', currentEnergy); 
         }
-    } else {
-        console.log('[BG-Engine] Progress unchanged, skipping state update');
     }
-    console.log('[BG-Engine] ========== updateProgress COMPLETE ==========');
 }
 
 function updateColors() {
@@ -161,9 +131,6 @@ function updateSettings(newSettings) {
 
 export function loadEffect(effect, controlsContainer) {
     log('BG-Engine', `Loading effect: ${effect.name}`);
-    console.log('[BG-Engine] ========== loadEffect CALLED ==========');
-    console.log('[BG-Engine] Effect name:', effect.name);
-    console.log('[BG-Engine] Effect type:', effect.type);
     
     currentEffect = effect;
     settings = {};
@@ -175,47 +142,30 @@ export function loadEffect(effect, controlsContainer) {
     
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    console.log('[BG-Engine] Canvas reset to:', canvas.width, 'x', canvas.height);
             
     if (currentEffect.type === 'webgl') {
-        console.log('[BG-Engine] Initializing WebGL context...');
         gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         ctx_2d = null;
         
         if (!gl) {
             console.error('[BG-Engine] FATAL: Could not get WebGL context!');
-            console.log('[BG-Engine] Browser support:', {
-                webgl: !!canvas.getContext('webgl'),
-                experimental: !!canvas.getContext('experimental-webgl')
-            });
             return;
         }
         
-        console.log('[BG-Engine] WebGL context obtained successfully');
-        console.log('[BG-Engine] WebGL info:', {
-            version: gl.getParameter(gl.VERSION),
-            vendor: gl.getParameter(gl.VENDOR),
-            renderer: gl.getParameter(gl.RENDERER)
-        });
-        
         if (typeof currentEffect.init === 'function') {
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            console.log('[BG-Engine] Calling effect.init()...');
             currentEffect.init(gl);
             currentEffect.initialized = true;
-            console.log('[BG-Engine] Effect initialized successfully');
         } else {
             console.error('[BG-Engine] Effect has no init function!');
         }
     } else if (currentEffect.type === 'canvas') {
-        console.log('[BG-Engine] Initializing 2D canvas context...');
         ctx_2d = canvas.getContext('2d');
         gl = null;
         if (ctx_2d && typeof currentEffect.init === 'function') {
             ctx_2d.globalAlpha = 0.4;
             currentEffect.init(ctx_2d, canvas.width, canvas.height);
             currentEffect.initialized = true;
-            console.log('[BG-Engine] 2D context initialized successfully');
         } else if (!ctx_2d) {
             console.error('[BG-Engine] FATAL: Could not get 2D context!');
         }
@@ -267,27 +217,18 @@ export function loadEffect(effect, controlsContainer) {
     if (currentEffect.type === 'canvas') {
         updateColors();
     }
-    
-    console.log('[BG-Engine] ========== loadEffect COMPLETE ==========');
 }
 
 export function initBackgroundEngine() {
-    console.log('[BG-Engine] ========== initBackgroundEngine CALLED ==========');
     canvas = document.getElementById('kaleidoscope-bg'); 
     if (!canvas) {
         console.error('[BG-Engine] FATAL: Background canvas not found in DOM!');
         return;
     }
-    console.log('[BG-Engine] Canvas element found:', canvas);
-    console.log('[BG-Engine] Canvas dimensions:', canvas.width, 'x', canvas.height);
-    console.log('[BG-Engine] Canvas display:', window.getComputedStyle(canvas).display);
-    console.log('[BG-Engine] Canvas visibility:', window.getComputedStyle(canvas).visibility);
-    console.log('[BG-Engine] Canvas z-index:', window.getComputedStyle(canvas).zIndex);
     
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        console.log('[BG-Engine] Canvas resized to:', canvas.width, 'x', canvas.height);
         
         if (currentEffect && typeof currentEffect.resize === 'function') {
             if (currentEffect.type === 'webgl' && gl) {
@@ -308,7 +249,6 @@ export function initBackgroundEngine() {
     initDebugPanel();
     
     log('BG-Engine', 'Hybrid WebGL/2D Engine Initialized.');
-    console.log('[BG-Engine] ========== initBackgroundEngine COMPLETE ==========');
 }
 
 function updateDebugPanel(progress, energy, time, drawCalls) {
@@ -347,13 +287,10 @@ function initDebugPanel() {
         return;
     }
     
-    console.log('[BG-Engine] Initializing debug panel...');
-    
     const trigger = document.getElementById('bg-settings-trigger');
     if (trigger) {
         trigger.addEventListener('click', () => {
             debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
-            console.log('[BG-Engine] Debug panel toggled:', debugPanel.style.display);
         });
     }
     
@@ -369,7 +306,6 @@ function initDebugPanel() {
         progressSlider.value = state.ui.currentProgress;
         progressSlider.addEventListener('input', (e) => {
             const newProgress = parseFloat(e.target.value);
-            console.log('[BG-Engine] Manual progress change via slider:', newProgress);
             setState({
                 ui: {
                     ...state.ui,
@@ -383,7 +319,6 @@ function initDebugPanel() {
     if (energySlider) {
         energySlider.addEventListener('input', (e) => {
             currentEnergy = parseFloat(e.target.value);
-            console.log('[BG-Engine] Manual energy change via slider:', currentEnergy);
         });
     }
     
@@ -396,7 +331,6 @@ function initDebugPanel() {
             if (valueDisplay) {
                 valueDisplay.textContent = energyDecayRate.toFixed(2);
             }
-            console.log('[BG-Engine] Energy decay rate changed:', energyDecayRate);
         });
     }
     
@@ -408,14 +342,12 @@ function initDebugPanel() {
             if (valueDisplay) {
                 valueDisplay.textContent = progressMultiplier.toFixed(1);
             }
-            console.log('[BG-Engine] Progress multiplier changed:', progressMultiplier);
         });
     }
     
     const testEnergyBtn = document.getElementById('bg-test-energy');
     if (testEnergyBtn) {
         testEnergyBtn.addEventListener('click', () => {
-            console.log('[BG-Engine] Test energy button clicked');
             addEnergy();
         });
     }
@@ -423,10 +355,7 @@ function initDebugPanel() {
     const testProgressBtn = document.getElementById('bg-test-progress');
     if (testProgressBtn) {
         testProgressBtn.addEventListener('click', () => {
-            console.log('[BG-Engine] Test progress button clicked');
             updateProgress(0.1);
         });
     }
-    
-    console.log('[BG-Engine] Debug panel initialized successfully');
 }

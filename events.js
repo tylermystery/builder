@@ -72,17 +72,30 @@ export function triggerSave() {
 }
 
 export async function updateAllCardAvailabilityIcons() {
+    console.log('[updateAllCardAvailabilityIcons] Called');
+    console.log('[updateAllCardAvailabilityIcons] mainDatePicker:', mainDatePicker);
+    console.log('[updateAllCardAvailabilityIcons] mainDatePicker?.selectedDates:', mainDatePicker?.selectedDates);
+    
+    const allAvailabilityBtns = document.querySelectorAll('.availability-btn');
+    console.log('[updateAllCardAvailabilityIcons] Found .availability-btn elements:', allAvailabilityBtns.length);
+    
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
+        console.log('[updateAllCardAvailabilityIcons] No date range selected, setting all icons to calendar emoji');
         document.querySelectorAll('.availability-btn').forEach(icon => {
             if (icon._tippy) icon._tippy.destroy();
             icon.title = 'Select a date range to check availability';
             icon.textContent = '📅';
+            console.log('[updateAllCardAvailabilityIcons] Set icon to 📅:', icon);
         });
         return;
     }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
+    console.log('[updateAllCardAvailabilityIcons] Date range selected:', startDate, 'to', requestedEnd);
+    
     const cards = document.querySelectorAll('.event-card');
+    console.log('[updateAllCardAvailabilityIcons] Found event cards:', cards.length);
+    
     for (const card of cards) {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
@@ -91,6 +104,7 @@ export async function updateAllCardAvailabilityIcons() {
         const busyTimes = await api.fetchCalendarForRecord(record);
         const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
+        console.log('[updateAllCardAvailabilityIcons] Card recordId:', recordId, 'icon found:', !!icon, 'status:', rangeStatus.status);
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
@@ -549,19 +563,62 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     if (dateFilterInput) {
         dateFilterInput.addEventListener('focus', async function initializeDatePicker() {
             if (!mainDatePicker) {
-                if (!window.flatpickr) {
+                try {
                     log('Events', 'Loading Flatpickr dynamically...');
                     await loadFlatpickr();
+                    
+                    if (!window.flatpickr) {
+                        throw new Error('Flatpickr not available after loading');
+                    }
+                    
+                    mainDatePicker = window.flatpickr("#date-filter", {
+                        mode: "range",
+                        dateFormat: "M j, Y",
+                        onChange: async (selectedDates) => {
+                            if (state.ui.isInitializing) return;
+                            if (selectedDates.length > 0) {
+                                if (selectedDates.length === 2) {
+                                    selectedDates[1].setHours(23, 59, 59, 999);
+                                }
+                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
+                                triggerSave();
+                                await updateAllCardAvailabilityIcons();
+                            } else {
+                                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                                triggerSave();
+                                await updateAllCardAvailabilityIcons();
+                                await updateMobileBarAvailability();
+                            }
+                        },
+                    });
+                    log('Events', 'Date filter picker initialized successfully');
+                } catch (error) {
+                    log('Events', `Error initializing date picker: ${error.message}`);
+                    console.error('Flatpickr initialization error:', error);
                 }
-                mainDatePicker = flatpickr("#date-filter", {
+            }
+        }, { once: true });
+    }
+
+    safeAddEventListener('date-filter-group', 'click', async (e) => {
+        const quickButton = e.target.closest('[data-date-quick]');
+        if (!quickButton) return;
+        
+        if (!mainDatePicker) {
+            try {
+                log('Events', 'Loading Flatpickr for quick select button...');
+                await loadFlatpickr();
+                
+                if (!window.flatpickr) {
+                    throw new Error('Flatpickr not available after loading');
+                }
+                
+                mainDatePicker = window.flatpickr("#date-filter", {
                     mode: "range",
                     dateFormat: "M j, Y",
                     onChange: async (selectedDates) => {
-                        if (state.ui.isInitializing) return;
-                        if (selectedDates.length > 0) {
-                            if (selectedDates.length === 2) {
-                                selectedDates[1].setHours(23, 59, 59, 999);
-                            }
+                        if (selectedDates.length === 2) {
+                            selectedDates[1].setHours(23, 59, 59, 999);
                             state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates.map(d => d.toISOString()));
                             triggerSave();
                             await updateAllCardAvailabilityIcons();
@@ -573,13 +630,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                         }
                     },
                 });
+                log('Events', 'Date filter picker initialized from quick select');
+            } catch (error) {
+                log('Events', `Error initializing date picker: ${error.message}`);
+                console.error('Flatpickr initialization error:', error);
+                return;
             }
-        }, { once: true });
-    }
-
-    safeAddEventListener('date-filter-group', 'click', (e) => {
-        const quickButton = e.target.closest('[data-date-quick]');
-        if (!quickButton || !mainDatePicker) return;
+        }
+        
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let startDate = new Date(today);
@@ -884,6 +942,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await ui.updateIdeasCarousel();
             await ui.updateEventPlanSection();
             ui.updateTotalCost();
+            await updateAllCardAvailabilityIcons();
             updateMobileBarAvailability();
             triggerSave();
         } else if (demoteBtn) {
@@ -924,6 +983,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             await ui.updateIdeasCarousel();
             triggerSave();
+        } else if (e.target.closest('.availability-btn')) {
+            e.stopPropagation();
+            const calendarBtn = e.target.closest('.availability-btn');
+            const card = calendarBtn.closest('.event-card');
+            if (!card) return;
+            const recordId = card.dataset.recordId;
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) return;
+            
+            ui.showDetailModal(record);
+            
+            setTimeout(() => {
+                const modalCalendar = document.getElementById('modal-calendar-container');
+                if (modalCalendar && modalCalendar.style.display !== 'none') {
+                    modalCalendar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn')) {
             const recordId = card.dataset.recordId;
             const record = state.records.all.find(r => r.id === recordId);
@@ -1021,27 +1097,36 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     if (eventDateInput) {
         eventDateInput.addEventListener('focus', async function initializeEventDatePicker() {
             if (!eventPlanDatePicker) {
-                if (!window.flatpickr) {
-                    log('Events', 'Loading Flatpickr dynamically...');
+                try {
+                    log('Events', 'Loading Flatpickr dynamically for event date picker...');
                     await loadFlatpickr();
-                }
-                eventPlanDatePicker = flatpickr("#event-date-picker", {
-                    dateFormat: "M j, Y",
-                    onChange: async (selectedDates) => {
-                        if (state.ui.isInitializing) return;
-                        if (selectedDates.length > 0) {
-                            state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
-                            updateProgress(0.00015); // Adding date progresses the color wheel
-                        } else {
-                            state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
-                            updateProgress(-0.00015); // Removing date regresses the color wheel
-                        }
-                        await ui.updateEventPlanDateDisplay();
-                        await ui.updateLockedItemStatusIcons();
-                        await updateMobileBarAvailability();
-                        triggerSave();
+                    
+                    if (!window.flatpickr) {
+                        throw new Error('Flatpickr not available after loading');
                     }
-                });
+                    
+                    eventPlanDatePicker = window.flatpickr("#event-date-picker", {
+                        dateFormat: "M j, Y",
+                        onChange: async (selectedDates) => {
+                            if (state.ui.isInitializing) return;
+                            if (selectedDates.length > 0) {
+                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+                                updateProgress(0.00015);
+                            } else {
+                                state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
+                                updateProgress(-0.00015);
+                            }
+                            await ui.updateEventPlanDateDisplay();
+                            await ui.updateLockedItemStatusIcons();
+                            await updateMobileBarAvailability();
+                            triggerSave();
+                        }
+                    });
+                    log('Events', 'Event date picker initialized successfully');
+                } catch (error) {
+                    log('Events', `Error initializing event date picker: ${error.message}`);
+                    console.error('Flatpickr initialization error:', error);
+                }
             }
         }, { once: true });
     }
