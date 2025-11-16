@@ -450,14 +450,23 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 if (categoryRecord && categoryRecord.fields && categoryRecord.fields.Name) {
                     const categoryName = categoryRecord.fields.Name;
                     console.log(`[Events] Creating button for category: ${categoryName}`);
+                    console.log(`[Events] Category record fields:`, {
+                        Name: categoryRecord.fields.Name,
+                        Categories: categoryRecord.fields[CONSTANTS.FIELD_NAMES.CATEGORIES],
+                        ParentItem: categoryRecord.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM],
+                        Subcategories: categoryRecord.fields.Subcategories
+                    });
                     const categoryBtn = document.createElement('button');
                     categoryBtn.className = 'filter-btn category-filter-btn';
                     categoryBtn.dataset.filter = categoryName.toLowerCase();
                     categoryBtn.textContent = categoryName;
                     categoryBtn.addEventListener('click', () => {
+                        console.log('[Events] Category button clicked:', categoryName);
+                        console.log('[Events] Button dataset.filter value:', categoryBtn.dataset.filter);
                         document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
                         categoryBtn.classList.add('active');
                         updateUrl({ category: categoryBtn.dataset.filter, subcategory: null, view: null });
+                        console.log('[Events] URL updated, calling applyFiltersAndSort...');
                         applyFiltersAndSort(imageCache);
                     });
                     categoryFiltersRoot.appendChild(categoryBtn);

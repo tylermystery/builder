@@ -38,11 +38,18 @@ function parseCapacity(capacityStr) {
 }
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
+    console.log('[FilterDebug] === filterByCategoryAndSubcategory START ===');
+    console.log('[FilterDebug] selectedCategory:', selectedCategory);
+    console.log('[FilterDebug] activeSubcategories:', activeSubcategories);
+    console.log('[FilterDebug] Total records to filter:', records.length);
+    
     if (selectedCategory === 'all' || !selectedCategory) {
+        console.log('[FilterDebug] Category is "all" or empty, returning all records');
         return records;
     }
 
     const selectedCategoryLower = selectedCategory.toLowerCase();
+    console.log('[FilterDebug] selectedCategoryLower:', selectedCategoryLower);
     let categoryFilteredRecords = [];
 
     categoryFilteredRecords = records.filter(record => {
@@ -55,12 +62,24 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
             .split(',')
             .map(sc => sc.trim().toLowerCase());
 
-        return itemCategories.includes(selectedCategoryLower) || 
+        const matches = itemCategories.includes(selectedCategoryLower) || 
                parentNameLower === selectedCategoryLower ||       
-               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower); 
+               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
+        
+        if (matches) {
+            console.log('[FilterDebug] MATCH found for:', fields.Name);
+            console.log('  - itemCategories:', itemCategories);
+            console.log('  - parentNameLower:', parentNameLower);
+            console.log('  - itemSubcategoriesForCategoryCheck:', itemSubcategoriesForCategoryCheck);
+        }
+        
+        return matches;
     });
+    
+    console.log('[FilterDebug] Category filtered records count:', categoryFilteredRecords.length);
 
     if (activeSubcategories.length > 0) {
+        console.log('[FilterDebug] Applying subcategory filter...');
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             const fields = record.fields;
             const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
@@ -73,8 +92,12 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
                 parentNameLower === activeSubcat            
             );
         });
+        console.log('[FilterDebug] Subcategory filtered records count:', subcategoryFilteredRecords.length);
+        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return subcategoryFilteredRecords; 
     } else {
+        console.log('[FilterDebug] No subcategory filter applied');
+        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return categoryFilteredRecords;
     }
 }
@@ -247,12 +270,18 @@ function sortRecords(records, sortBy, goalBucket) {
 
 
 export async function applyFiltersAndSort(imageCache) {
+    console.log('[FilterDebug] ========================================');
+    console.log('[FilterDebug] applyFiltersAndSort called');
+    console.log('[FilterDebug] URL:', window.location.href);
     const catalogContainer = document.getElementById('catalog-container');
     
     const params = new URLSearchParams(window.location.search);
     const selectedCategory = params.get('category') || 'all';
     const activeSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
     const view = params.get('view');
+    console.log('[FilterDebug] selectedCategory from URL:', selectedCategory);
+    console.log('[FilterDebug] activeSubcategories from URL:', activeSubcategories);
+    console.log('[FilterDebug] view from URL:', view);
 
     // Get other filter values from UI elements (unchanged)
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -389,16 +418,34 @@ export async function applyFiltersAndSort(imageCache) {
         recordsToDisplay = categoryRecords;
         
     } else {
+         console.log('[FilterDebug] Standard filtering path (not plan/likes/etc)');
+         console.log('[FilterDebug] baseRecordsToFilter count:', baseRecordsToFilter.length);
+         
+         // Sample first 3 records to see their category data
+         console.log('[FilterDebug] Sample records (first 3):');
+         baseRecordsToFilter.slice(0, 3).forEach((rec, i) => {
+             console.log(`  Record ${i}: ${rec.fields.Name}`);
+             console.log(`    - Categories: "${rec.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]}"`);
+             console.log(`    - Parent Item: "${rec.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]}"`);
+             console.log(`    - Subcategories: "${rec.fields.Subcategories}"`);
+         });
+         
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
+         console.log('[FilterDebug] After category filter, recordsToDisplay count:', recordsToDisplay.length);
          
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+         console.log('[FilterDebug] After status filter:', recordsToDisplay.length);
          recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
+         console.log('[FilterDebug] After headcount filter:', recordsToDisplay.length);
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
+         console.log('[FilterDebug] After location filter:', recordsToDisplay.length);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+         console.log('[FilterDebug] After budget filter:', recordsToDisplay.length);
          
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+             console.log('[FilterDebug] After search term filter:', recordsToDisplay.length);
          }
     }
 
@@ -406,6 +453,12 @@ export async function applyFiltersAndSort(imageCache) {
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
+    
+    console.log('[FilterDebug] FINAL recordsToDisplay count:', recordsToDisplay.length);
+    if (recordsToDisplay.length > 0) {
+        console.log('[FilterDebug] First result:', recordsToDisplay[0].fields.Name);
+    }
+    console.log('[FilterDebug] ========================================');
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 
