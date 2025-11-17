@@ -291,19 +291,9 @@ export function updateEventHealthScore() {
             // The display name is the exact key from calculateMissingCategories (e.g., "Food & Drink")
             const displayName = cat; 
             
-            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---\
-            let filterTag = displayName.toLowerCase();
-            
-            if (displayName === "Food & Drink") {
-                // This tag MUST use the slash, as the filter logic in filtering.js expects "food/drink"
-                filterTag = "food/drink"; 
-            } else if (displayName === "Venues") {
-                filterTag = "venues"; 
-            } else if (displayName === "Activities") {
-                filterTag = "activities";
-            } else if (displayName === "Extras") {
-                filterTag = "extras";
-            }
+            // --- VVV FINAL, ROBUST FILTER TAG GENERATION VVV ---
+            // Normalize the filter tag consistently with the rest of the app
+            let filterTag = displayName.toLowerCase().replace(/\s+/g, ' ');
             // --- ^^^ END FINAL, ROBUST FILTER TAG GENERATION ^^^ ---
             
             // --- THIS IS THE FIX (Removed \") ---

@@ -577,7 +577,17 @@ export function updateCatalogHeader() {
     path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a>`);
 
     const findRecordByName = (filterName) => {
-        return state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
+        // First, check if filterName is actually a record ID (starts with 'rec')
+        if (filterName.startsWith('rec')) {
+            return state.records.all.find(r => r.id === filterName);
+        }
+        // Try exact match first (for new format with spaces)
+        let record = state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName);
+        // If no match, try converting dashes to spaces (for old URLs with dashes)
+        if (!record) {
+            record = state.records.all.find(r => r.fields.Name?.toLowerCase() === filterName.replace(/-/g, ' '));
+        }
+        return record;
     };
 
     if (categoryFilter) {

@@ -175,12 +175,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const groupingCard = eventCard;
         groupingCard.className = 'event-card grouping-card';
         groupingCard.dataset.categoryName = fields.Name;
-        const groupingNameForFilter = fields.Name.toLowerCase();
+        const groupingNameForFilter = fields.Name.toLowerCase().replace(/\s+/g, ' ');
         const childItems = allRecords.filter(r => {
             if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
             const itemCategories = (r.fields.Categories || '')
                 .split(',')
-                .map(cat => cat.trim().toLowerCase());
+                .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
             return itemCategories.includes(groupingNameForFilter);
         });
 
