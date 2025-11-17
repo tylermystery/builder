@@ -74,6 +74,35 @@ exports.handler = async (event) => {
         }
         // *** END NEW LOGIC ***
 
+        // Fetch liked items
+        let likedItemIds = [];
+        const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
+        const LIKED_BY_FIELD = 'Liked By Users';
+        const likedItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
+        const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`;
+        
+        console.log(`[auth-confirm] Fetching liked items for user ${userRecord.id}`);
+        const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        if (likedItemsRes.ok) {
+            const likedItemsData = await likedItemsRes.json();
+            likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
+            console.log(`[auth-confirm] Found ${likedItemIds.length} liked items`);
+        }
+
+        // Fetch RSVP'd items
+        let rsvpdItemIds = [];
+        const RSVPS_FIELD = 'RSVPs';
+        const rsvpdItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${RSVPS_FIELD}}))`;
+        const rsvpdItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(rsvpdItemsFormula)}&fields[]=`;
+        
+        console.log(`[auth-confirm] Fetching RSVP'd items for user ${userRecord.id}`);
+        const rsvpdItemsRes = await fetch(rsvpdItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        if (rsvpdItemsRes.ok) {
+            const rsvpdItemsData = await rsvpdItemsRes.json();
+            rsvpdItemIds = rsvpdItemsData.records ? rsvpdItemsData.records.map(rec => rec.id) : [];
+            console.log(`[auth-confirm] Found ${rsvpdItemIds.length} RSVP'd items`);
+        }
+
         const sessionToken = jwt.sign(
             { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner }, 
             JWT_SECRET, 
@@ -86,7 +115,11 @@ exports.handler = async (event) => {
                 id: userRecord.id, 
                 name: userRecord.fields.Name, 
                 email: userRecord.fields.Email,
-                associatedSessions: associatedSessions // Send the array of objects
+                phoneNumber: userRecord.fields.PhoneNumber || '',
+                notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
+                likedItemIds: likedItemIds,
+                rsvpdItemIds: rsvpdItemIds,
+                associatedSessions: associatedSessions
             },
             ownerData: ownerData
         });
