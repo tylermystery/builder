@@ -7,13 +7,19 @@
     <link rel="icon" href="data:;" />
     <!-- FIX: Removed Markdown []() wrapper from links -->
     <!-- Preload critical resources -->
-    <link rel="preconnect" href="https://unpkg.com">
-    <link rel="preconnect" href="https://js.pusher.com">
-    <link rel="preconnect" href="https://identity.netlify.com">
-    <link rel="preconnect" href="https://res.cloudinary.com">
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://js.pusher.com" crossorigin>
+    <link rel="preconnect" href="https://identity.netlify.com" crossorigin>
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     
     <!-- DNS prefetch for API endpoints -->
     <link rel="dns-prefetch" href="https://api.airtable.com">
+    
+    <!-- Preload critical scripts -->
+    <link rel="modulepreload" href="main.js">
+    <link rel="modulepreload" href="state.js">
+    <link rel="modulepreload" href="config.js">
     
     <!-- Load Flatpickr CSS asynchronously -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
