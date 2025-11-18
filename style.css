@@ -3590,57 +3590,7 @@ hr.total-divider {
 }
 
 @media print {
-    * {
-        visibility: hidden;
-        overflow: visible;
-    }
-    
-    body {
-        margin: 0;
-        padding: 0;
-    }
-    
-    #payment-receipt-view,
-    #payment-receipt-view * {
-        visibility: visible;
-    }
-    
-    #payment-receipt-view {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        page-break-after: avoid;
-        page-break-inside: avoid;
-    }
-    
-    #main-header,
-    .modal-close-btn,
-    #print-receipt-btn,
-    #back-to-payment-btn,
-    #view-receipt-link-btn,
-    #chat-widget-container,
-    #toast-notification,
-    .footer-link {
+    .print-button-container {
         display: none !important;
-        visibility: hidden !important;
-    }
-    
-    .checkout-modal-content {
-        box-shadow: none !important;
-        border: none !important;
-        max-width: 100% !important;
-        width: 100% !important;
-    }
-    
-    #checkout-modal-overlay {
-        background: white !important;
-        position: static !important;
-        overflow: visible !important;
-    }
-    
-    html, body {
-        height: auto;
-        overflow: visible;
     }
 }
