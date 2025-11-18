@@ -942,7 +942,7 @@ function _renderReceiptView() {
     }
 
     receiptEventDetails.innerHTML = '';
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.NAME) || 'Unnamed Event';
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Unnamed Event';
     const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     const eventGoals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS);
     
