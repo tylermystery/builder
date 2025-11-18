@@ -527,7 +527,95 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // --- END HEADER USER FILTER BUTTONS ---
 
     safeAddEventListener('print-receipt-btn', 'click', () => {
-        window.print();
+        const receiptView = document.getElementById('payment-receipt-view');
+        
+        if (!receiptView) {
+            alert('Error: Receipt view not found. Please try again.');
+            return;
+        }
+        
+        // Get the event name for the window title
+        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event';
+        
+        // Clone the receipt content
+        const receiptClone = receiptView.cloneNode(true);
+        receiptClone.style.display = 'block';
+        receiptClone.style.padding = '20px';
+        receiptClone.style.maxWidth = '800px';
+        receiptClone.style.margin = '0 auto';
+        
+        // Remove the action buttons from the cloned content
+        const buttonsDiv = receiptClone.querySelector('div[style*="display: flex"]');
+        if (buttonsDiv) {
+            buttonsDiv.remove();
+        }
+        
+        // Create the HTML for the new window
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+            return;
+        }
+        
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Receipt - ${eventName}</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #f5f5f5;
+                    }
+                    .receipt-container {
+                        background-color: white;
+                        max-width: 800px;
+                        margin: 0 auto;
+                        padding: 40px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    @media print {
+                        body {
+                            background-color: white;
+                        }
+                        .receipt-container {
+                            box-shadow: none;
+                            padding: 0;
+                        }
+                        .print-button {
+                            display: none;
+                        }
+                    }
+                    .print-button {
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        padding: 10px 20px;
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    }
+                    .print-button:hover {
+                        background-color: #0056b3;
+                    }
+                </style>
+            </head>
+            <body>
+                <button class="print-button" onclick="window.print()">🖨️ Print Receipt</button>
+                <div class="receipt-container">
+                    ${receiptClone.innerHTML}
+                </div>
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
     });
 
     const toggleFilter = (elementId, settingName) => {
