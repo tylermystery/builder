@@ -698,64 +698,136 @@ body.modal-open {
     <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
             <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
-            <h3>Checkout Summary</h3>
-            <div id="checkout-summary-details">
-                <p>This is a summary of the items in your plan.</p>
+            
+            <div id="payment-receipt-view" style="display: none;">
+                <div id="receipt-store-header" style="text-align: center; padding: 20px 0; border-bottom: 2px solid #28a745;">
+                </div>
+                <div style="text-align: center; padding: 15px 0;">
+                    <h3 style="margin: 0; color: #28a745;">✅ Thank You!</h3>
+                    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Receipt</p>
+                </div>
+                <div style="display: flex; gap: 10px; margin: 15px 0;">
+                    <button id="back-to-payment-btn" style="flex: 1; padding: 10px 20px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">← Back to Payment</button>
+                    <button id="print-receipt-btn" style="flex: 1; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">🖨️ Print Receipt</button>
+                    <button id="view-receipt-link-btn" style="flex: 1; padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;">🔗 View Online</button>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px; color: #333;">Event Details</h4>
+                    <div id="receipt-event-details" style="background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    </div>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px; color: #333;">Line Items</h4>
+                    <table id="receipt-line-items" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #dee2e6;">
+                                <th style="text-align: left; padding: 8px;">Item</th>
+                                <th style="text-align: center; padding: 8px;">Qty</th>
+                                <th style="text-align: right; padding: 8px;">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px; color: #333;">Payment Summary</h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tbody>
+                            <tr style="border-bottom: 1px solid #dee2e6;">
+                                <td style="padding: 8px;"><strong>Subtotal:</strong></td>
+                                <td id="receipt-subtotal" style="text-align: right; padding: 8px;"></td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #dee2e6;">
+                                <td style="padding: 8px;"><strong>Total Paid:</strong></td>
+                                <td id="receipt-total-paid" style="text-align: right; padding: 8px; color: #28a745;"></td>
+                            </tr>
+                            <tr style="border-bottom: 2px solid #28a745;">
+                                <td style="padding: 8px; font-size: 1.2em;"><strong>Balance Due:</strong></td>
+                                <td id="receipt-balance-due" style="text-align: right; padding: 8px; font-size: 1.2em; color: #28a745;"><strong>$0.00</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <h4 style="margin-bottom: 10px; color: #333;">Payment History</h4>
+                    <ul id="receipt-payment-history" style="list-style: none; padding: 0; margin: 0;">
+                    </ul>
+                </div>
+                
+                <div id="receipt-store-footer" style="text-align: center; padding: 20px 0; border-top: 2px solid #dee2e6; margin-top: 30px;">
+                </div>
             </div>
-            <hr>
-            <div class="checkout-total-deposit-section">
-                <div class="checkout-total">
-                    <span id="checkout-total-label">Total Estimated Cost:</span>
-                    <span id="full-total-price">$0.00</span>
+            
+            <div id="payment-form-view">
+                <div id="existing-payment-notice" style="display: none; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #155724;">✅ Payment Received</h4>
+                    <p style="margin: 0 0 10px 0; color: #155724;">A payment has been received for this plan.</p>
+                    <button id="view-receipt-from-form-btn" style="padding: 8px 16px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">📄 View Receipt</button>
                 </div>
-                <div class="tip-row">
-                    <label for="tip-amount">Add Tip:</label>
-                    <input type="number" id="tip-amount" placeholder="$0.00" min="0" step="0.01">
+                <h3>Checkout Summary</h3>
+                <div id="checkout-summary-details">
+                    <p>This is a summary of the items in your plan.</p>
                 </div>
-                <div class="checkout-deposit">
-                    <span id="deposit-label">Amount Due Today:</span>
-                    <span id="deposit-price">$0.00</span>
+                <hr>
+                <div class="checkout-total-deposit-section">
+                    <div class="checkout-total">
+                        <span id="checkout-total-label">Total Estimated Cost:</span>
+                        <span id="full-total-price">$0.00</span>
+                    </div>
+                    <div class="tip-row">
+                        <label for="tip-amount">Add Tip:</label>
+                        <input type="number" id="tip-amount" placeholder="$0.00" min="0" step="0.01">
+                    </div>
+                    <div class="checkout-deposit">
+                        <span id="deposit-label">Amount Due Today:</span>
+                        <span id="deposit-price">$0.00</span>
+                    </div>
                 </div>
-            </div>
-            <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
-                <h4 style="margin-top: 0;">Payment Option</h4>
-                <div style="display: flex; justify-content: space-around;">
-                    <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
-                    <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
+                <div id="payment-choice-container" style="display: none; margin: 15px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+                    <h4 style="margin-top: 0;">Payment Option</h4>
+                    <div style="display: flex; justify-content: space-around;">
+                        <label><input type="radio" name="paymentChoice" value="deposit" checked> Pay 35% Deposit</label>
+                        <label><input type="radio" name="paymentChoice" value="full"> Pay Full Amount</label>
+                    </div>
                 </div>
-            </div>
-            <div class="terms-and-conditions"></div>
-            <form id="payment-form">
-                <div class="form-row">
-                    <label for="customer-name">Full Name</label>
-                    <input type="text" id="customer-name" required autocomplete="cc-name">
-                </div>
-                <div class="form-row">
-                    <label for="customer-email">Email Address</label>
-                    <input type="email" id="customer-email" required autocomplete="email">
-                </div>
-                <div class="form-row">
-                    <label for="card-element">Payment Details</label>
-                    <div id="payment-element"></div> <div id="card-errors" role="alert"></div>
+                <div class="terms-and-conditions"></div>
+                <form id="payment-form">
+                    <div class="form-row">
+                        <label for="customer-name">Full Name</label>
+                        <input type="text" id="customer-name" required autocomplete="cc-name">
+                    </div>
+                    <div class="form-row">
+                        <label for="customer-email">Email Address</label>
+                        <input type="email" id="customer-email" required autocomplete="email">
+                    </div>
+                    <div class="form-row">
+                        <label for="card-element">Payment Details</label>
+                        <div id="payment-element"></div> <div id="card-errors" role="alert"></div>
 
-                    <div class="checkout-total-row processing-fee-row" style="font-size: 0.9em; color: #6c757d; margin-top: 10px; display: flex; justify-content: space-between;">
-                        <span>Processing Fee:</span>
-                        <span id="processing-fee-price">$0.00</span>
-                    </div>
-                    <hr class="total-divider" style="margin: 5px 0;">
-                    <div class="checkout-total-row final-total-row" style="font-size: 1.3em; font-weight: bold; display: flex; justify-content: space-between;">
-                        <strong>Total Charge:</strong>
-                        <strong id="final-charge-price">$0.00</strong>
-                    </div>
-                    </div>
-                <button id="payment-submit-btn" class="primary-action-btn" type="submit">
-                    <span class="button-text">Pay Now</span>
-                    <span class="spinner" style="display: none;">Processing...</span>
-                </button>
-        </form>
-            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
-                <h3 style="color: #28a745;">✅ Payment Successful!</h3>
-                <p>Your items are reserved. This window will close shortly.</p>
+                        <div class="checkout-total-row processing-fee-row" style="font-size: 0.9em; color: #6c757d; margin-top: 10px; display: flex; justify-content: space-between;">
+                            <span>Processing Fee:</span>
+                            <span id="processing-fee-price">$0.00</span>
+                        </div>
+                        <hr class="total-divider" style="margin: 5px 0;">
+                        <div class="checkout-total-row final-total-row" style="font-size: 1.3em; font-weight: bold; display: flex; justify-content: space-between;">
+                            <strong>Total Charge:</strong>
+                            <strong id="final-charge-price">$0.00</strong>
+                        </div>
+                        </div>
+                    <button id="payment-submit-btn" class="primary-action-btn" type="submit">
+                        <span class="button-text">Pay Now</span>
+                        <span class="spinner" style="display: none;">Processing...</span>
+                    </button>
+            </form>
+                <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
+                    <h3 style="color: #28a745;">✅ Payment Successful!</h3>
+                    <p>Your items are reserved. This window will close shortly.</p>
+                </div>
             </div>
         </div>
     </div>

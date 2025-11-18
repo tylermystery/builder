@@ -3545,3 +3545,84 @@ hr.total-divider {
         font-size: 16px;
     }
 }
+
+#payment-receipt-view {
+    padding: 30px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+#payment-receipt-view h2 {
+    font-size: 2em;
+    margin-bottom: 0.2em;
+}
+
+#payment-receipt-view h4 {
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+#payment-receipt-view table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+#payment-receipt-view table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+#payment-receipt-view ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#receipt-event-details {
+    font-size: 0.95em;
+    line-height: 1.6;
+}
+
+#receipt-event-details p {
+    margin: 5px 0;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    #payment-receipt-view,
+    #payment-receipt-view * {
+        visibility: visible;
+    }
+    
+    #payment-receipt-view {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    #main-header,
+    .modal-close-btn,
+    #print-receipt-btn,
+    #chat-widget-container,
+    #toast-notification,
+    .footer-link {
+        display: none !important;
+    }
+    
+    .checkout-modal-content {
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+    
+    #checkout-modal-overlay {
+        background: white !important;
+    }
+}
