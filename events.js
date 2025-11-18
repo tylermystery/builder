@@ -186,7 +186,8 @@ async function handlePaymentFormSubmit(event) {
             const newPayment = {
                 amount: amountPaid,
                 date: new Date().toISOString(),
-                note: `Stripe Payment on ${new Date().toLocaleDateString()}`
+                note: `Stripe Payment on ${new Date().toLocaleDateString()}`,
+                receiptUrl: paymentIntent.charges?.data?.[0]?.receipt_url || null
             };
             const updatedPaymentHistory = [...state.session.user.paymentHistory, newPayment];
             
@@ -196,6 +197,11 @@ async function handlePaymentFormSubmit(event) {
             state.session.user.amountReceived = updatedPaymentHistory.reduce((sum, p) => sum + p.amount, 0);
 
             ui.updateTotalCost();
+            
+            submitBtn.disabled = false;
+            buttonText.style.display = 'inline';
+            spinner.style.display = 'none';
+            
             document.getElementById('payment-form').style.display = 'none';
             document.getElementById('checkout-summary-details').style.display = 'none';
             document.querySelector('.checkout-total-deposit-section').style.display = 'none';
@@ -519,6 +525,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
     }
     // --- END HEADER USER FILTER BUTTONS ---
+
+    safeAddEventListener('print-receipt-btn', 'click', () => {
+        window.print();
+    });
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;

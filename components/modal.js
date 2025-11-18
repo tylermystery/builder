@@ -845,9 +845,233 @@ export function hideDetailModal() {
     }
 }
 
+function _renderReceiptView() {
+    log('Modal', 'Rendering receipt view');
+    console.log('[DEBUG] _renderReceiptView called');
+    
+    const receiptEventDetails = document.getElementById('receipt-event-details');
+    const receiptLineItemsBody = document.querySelector('#receipt-line-items tbody');
+    const receiptSubtotal = document.getElementById('receipt-subtotal');
+    const receiptTotalPaid = document.getElementById('receipt-total-paid');
+    const receiptPaymentHistory = document.getElementById('receipt-payment-history');
+    const receiptBalanceDue = document.getElementById('receipt-balance-due');
+    const receiptStoreHeader = document.getElementById('receipt-store-header');
+    const receiptStoreFooter = document.getElementById('receipt-store-footer');
+
+    console.log('[DEBUG] Receipt DOM elements found:', {
+        receiptStoreHeader: !!receiptStoreHeader,
+        receiptStoreFooter: !!receiptStoreFooter,
+        receiptEventDetails: !!receiptEventDetails
+    });
+
+    // Get active store and its details
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    let storeDetails = null;
+    let storeName = activeStore?.fields?.Name || 'Store';
+    
+    console.log('[DEBUG] Active shop ID:', state.ui.activeShopId);
+    console.log('[DEBUG] All stores:', state.stores.all);
+    console.log('[DEBUG] Active store object:', activeStore);
+    console.log('[DEBUG] Active store fields:', activeStore?.fields);
+    console.log('[DEBUG] Store name:', storeName);
+    
+    log('Modal', 'Active store:', activeStore);
+    log('Modal', 'Store Details json field:', activeStore?.fields?.['Store Details json']);
+    
+    if (activeStore?.fields?.['Store Details json']) {
+        try {
+            const jsonString = activeStore.fields['Store Details json'];
+            console.log('[DEBUG] Raw JSON string:', jsonString);
+            console.log('[DEBUG] JSON string type:', typeof jsonString);
+            console.log('[DEBUG] JSON string length:', jsonString?.length);
+            
+            log('Modal', 'Parsing Store Details json:', jsonString);
+            storeDetails = JSON.parse(jsonString);
+            
+            console.log('[DEBUG] Parsed storeDetails object:', storeDetails);
+            console.log('[DEBUG] storeDetails.businessInfo:', storeDetails?.businessInfo);
+            
+            log('Modal', 'Parsed store details:', storeDetails);
+        } catch (e) {
+            console.error('[DEBUG] Error parsing Store Details JSON:', e);
+            console.error('[DEBUG] Error message:', e.message);
+            console.error('[DEBUG] Error stack:', e.stack);
+            log('Modal', 'Error parsing Store Details JSON', e);
+            console.error('Error parsing Store Details JSON:', e);
+        }
+    } else {
+        console.log('[DEBUG] No Store Details json field found');
+        console.log('[DEBUG] Available fields on activeStore:', activeStore?.fields ? Object.keys(activeStore.fields) : 'No fields');
+    }
+
+    // Render store header
+    if (receiptStoreHeader) {
+        console.log('[DEBUG] Rendering store header');
+        let headerHtml = `<h2 style="margin: 0; color: #28a745;">${storeName}</h2>`;
+        console.log('[DEBUG] Initial header HTML:', headerHtml);
+        console.log('[DEBUG] Checking storeDetails?.businessInfo:', !!storeDetails?.businessInfo);
+        
+        if (storeDetails?.businessInfo) {
+            const biz = storeDetails.businessInfo;
+            console.log('[DEBUG] businessInfo object:', biz);
+            console.log('[DEBUG] businessInfo keys:', Object.keys(biz));
+            
+            log('Modal', 'Rendering business info:', biz);
+            
+            if (biz.companyName && biz.companyName !== storeName) {
+                console.log('[DEBUG] Setting company name:', biz.companyName);
+                headerHtml = `<h2 style="margin: 0; color: #28a745;">${biz.companyName}</h2>`;
+            }
+            if (biz.websiteUrl) {
+                console.log('[DEBUG] Adding website URL:', biz.websiteUrl);
+                headerHtml += `<p style="margin: 5px 0; font-size: 14px;"><a href="${biz.websiteUrl}" target="_blank">${biz.websiteUrl}</a></p>`;
+            }
+            if (biz.contact?.phone) {
+                console.log('[DEBUG] Adding phone:', biz.contact.phone);
+                headerHtml += `<p style="margin: 5px 0; font-size: 14px;">${biz.contact.phone}</p>`;
+            }
+        } else {
+            console.log('[DEBUG] No business info found in store details');
+            log('Modal', 'No business info found in store details');
+        }
+        console.log('[DEBUG] Final header HTML:', headerHtml);
+        receiptStoreHeader.innerHTML = headerHtml;
+        console.log('[DEBUG] Header HTML set successfully');
+    } else {
+        console.log('[DEBUG] receiptStoreHeader element not found');
+    }
+
+    receiptEventDetails.innerHTML = '';
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.NAME) || 'Unnamed Event';
+    const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const eventGoals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS);
+    
+    let eventDetailsHtml = `<p><strong>Event Name:</strong> ${eventName}</p>`;
+    if (eventDate) {
+        const dateObj = new Date(eventDate);
+        const dateStr = dateObj.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        eventDetailsHtml += `<p><strong>Date:</strong> ${dateStr}</p>`;
+    }
+    if (eventGoals && eventGoals.trim()) {
+        eventDetailsHtml += `<p><strong>Goals/Notes:</strong> ${eventGoals}</p>`;
+    }
+    receiptEventDetails.innerHTML = eventDetailsHtml;
+
+    receiptLineItemsBody.innerHTML = '';
+    let subtotal = 0;
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+        const itemTotal = price * (itemInfo.quantity || 1);
+        subtotal += itemTotal;
+
+        const row = document.createElement('tr');
+        row.style.borderBottom = '1px solid #dee2e6';
+        row.innerHTML = `
+            <td style="padding: 8px;">${record.fields.Name}</td>
+            <td style="text-align: center; padding: 8px;">${itemInfo.quantity || 1}</td>
+            <td style="text-align: right; padding: 8px;">$${itemTotal.toFixed(2)}</td>
+        `;
+        receiptLineItemsBody.appendChild(row);
+    }
+
+    receiptSubtotal.textContent = `$${subtotal.toFixed(2)}`;
+    receiptTotalPaid.textContent = `$${state.session.user.amountReceived.toFixed(2)}`;
+    
+    // Calculate and display balance due
+    const balanceDue = subtotal - state.session.user.amountReceived;
+    if (receiptBalanceDue) {
+        receiptBalanceDue.textContent = `$${Math.max(0, balanceDue).toFixed(2)}`;
+    }
+
+    receiptPaymentHistory.innerHTML = '';
+    const paymentHistory = state.session.user.paymentHistory || [];
+    if (paymentHistory.length === 0) {
+        receiptPaymentHistory.innerHTML = '<li style="padding: 8px; color: #6c757d;">No payment history available.</li>';
+    } else {
+        paymentHistory.forEach(payment => {
+            const li = document.createElement('li');
+            li.style.padding = '8px';
+            li.style.borderBottom = '1px solid #eee';
+            const date = payment.date ? new Date(payment.date).toLocaleDateString('en-US') : 'N/A';
+            const note = payment.note ? ` - ${payment.note}` : '';
+            
+            if (payment.receiptUrl) {
+                li.innerHTML = `${date}: $${payment.amount.toFixed(2)}${note} <a href="${payment.receiptUrl}" target="_blank" style="color: #007bff; text-decoration: none; margin-left: 8px;">View Receipt →</a>`;
+            } else {
+                li.textContent = `${date}: $${payment.amount.toFixed(2)}${note}`;
+            }
+            
+            receiptPaymentHistory.appendChild(li);
+        });
+    }
+    
+    // Render store footer with business details
+    console.log('[DEBUG] About to render store footer');
+    console.log('[DEBUG] receiptStoreFooter exists:', !!receiptStoreFooter);
+    console.log('[DEBUG] storeDetails exists:', !!storeDetails);
+    console.log('[DEBUG] storeDetails?.businessInfo exists:', !!storeDetails?.businessInfo);
+    
+    if (receiptStoreFooter && storeDetails?.businessInfo) {
+        console.log('[DEBUG] Rendering store footer with business details');
+        const biz = storeDetails.businessInfo;
+        console.log('[DEBUG] Footer businessInfo object:', biz);
+        let footerHtml = '';
+        
+        if (biz.address) {
+            const addr = biz.address;
+            console.log('[DEBUG] Adding address:', addr);
+            footerHtml += `<p style="margin: 5px 0; font-size: 12px; color: #666;">${addr.street}, ${addr.city}, ${addr.state} ${addr.zipCode}</p>`;
+        }
+        
+        if (biz.contact?.accountingEmail || biz.contact?.supportEmail) {
+            const email = biz.contact.accountingEmail || biz.contact.supportEmail;
+            console.log('[DEBUG] Adding email:', email);
+            footerHtml += `<p style="margin: 5px 0; font-size: 12px; color: #666;">Email: ${email}</p>`;
+        }
+        
+        if (biz.taxId) {
+            console.log('[DEBUG] Adding tax ID:', biz.taxId);
+            footerHtml += `<p style="margin: 5px 0; font-size: 12px; color: #666;">Tax ID: ${biz.taxId}</p>`;
+        }
+        
+        if (biz.site?.receiptFooter) {
+            console.log('[DEBUG] Adding receipt footer:', biz.site.receiptFooter);
+            footerHtml += `<p style="margin: 10px 0 5px 0; font-size: 14px; font-weight: 500;">${biz.site.receiptFooter}</p>`;
+        }
+        
+        if (biz.site?.copyright) {
+            console.log('[DEBUG] Adding copyright:', biz.site.copyright);
+            footerHtml += `<p style="margin: 5px 0; font-size: 11px; color: #999;">${biz.site.copyright}</p>`;
+        }
+        
+        console.log('[DEBUG] Final footer HTML:', footerHtml);
+        receiptStoreFooter.innerHTML = footerHtml;
+        console.log('[DEBUG] Footer HTML set successfully');
+    } else {
+        console.log('[DEBUG] Not rendering footer. Reasons:');
+        console.log('[DEBUG]   - receiptStoreFooter missing:', !receiptStoreFooter);
+        console.log('[DEBUG]   - storeDetails missing:', !storeDetails);
+        console.log('[DEBUG]   - businessInfo missing:', !storeDetails?.businessInfo);
+    }
+    
+    log('Modal', 'Receipt view rendered successfully');
+}
+
 export async function showCheckoutModal(shopSettings) {
     currentShopSettings = shopSettings;
     log('Modal', 'Showing checkout modal.');
+    console.log('[DEBUG] showCheckoutModal called');
+    console.log('[DEBUG] Current state.ui.activeShopId:', state.ui.activeShopId);
+    console.log('[DEBUG] Current state.stores.all:', state.stores.all);
+    
     const checkoutModalOverlay = document.getElementById('checkout-modal-overlay');
     const fullTotalEl = document.getElementById('full-total-price');
     const checkoutCloseBtn = document.getElementById('checkout-close-btn');
@@ -855,6 +1079,8 @@ export async function showCheckoutModal(shopSettings) {
     const tipAmountInput = document.getElementById('tip-amount');
     const paymentChoiceContainer = document.getElementById('payment-choice-container');
     const termsContainer = document.querySelector('.terms-and-conditions');
+    const existingPaymentNotice = document.getElementById('existing-payment-notice');
+    const viewReceiptFromFormBtn = document.getElementById('view-receipt-from-form-btn');
 
     // Get new fee/total elements
     const processingFeeEl = document.getElementById('processing-fee-price');
@@ -917,6 +1143,75 @@ export async function showCheckoutModal(shopSettings) {
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
+
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = finalTotal - amountReceived;
+    const hasPayment = amountReceived > 0;
+
+    // Show/hide existing payment notice
+    if (existingPaymentNotice) {
+        if (hasPayment) {
+            existingPaymentNotice.style.display = 'block';
+        } else {
+            existingPaymentNotice.style.display = 'none';
+        }
+    }
+
+    // Add event listener for "View Receipt" button in form view
+    if (viewReceiptFromFormBtn) {
+        viewReceiptFromFormBtn.onclick = () => {
+            console.log('[DEBUG] View Receipt button clicked');
+            console.log('[DEBUG] state.ui.activeShopId:', state.ui.activeShopId);
+            
+            const paymentFormView = document.getElementById('payment-form-view');
+            const paymentReceiptView = document.getElementById('payment-receipt-view');
+            if (paymentFormView) paymentFormView.style.display = 'none';
+            if (paymentReceiptView) {
+                paymentReceiptView.style.display = 'block';
+                _renderReceiptView();
+            }
+        };
+    }
+
+    // Add event listener for "Back to Payment" button in receipt view
+    const backToPaymentBtn = document.getElementById('back-to-payment-btn');
+    if (backToPaymentBtn) {
+        backToPaymentBtn.onclick = () => {
+            const paymentFormView = document.getElementById('payment-form-view');
+            const paymentReceiptView = document.getElementById('payment-receipt-view');
+            if (paymentFormView) paymentFormView.style.display = 'block';
+            if (paymentReceiptView) paymentReceiptView.style.display = 'none';
+        };
+    }
+
+    if (hasPayment) {
+        log('Modal', 'Payment received. Showing receipt view.');
+        console.log('[DEBUG] Payment received, rendering receipt');
+        console.log('[DEBUG] state.ui.activeShopId before render:', state.ui.activeShopId);
+        
+        const paymentFormView = document.getElementById('payment-form-view');
+        const paymentReceiptView = document.getElementById('payment-receipt-view');
+        
+        if (paymentFormView) paymentFormView.style.display = 'none';
+        if (paymentReceiptView) {
+            paymentReceiptView.style.display = 'block';
+            _renderReceiptView();
+        }
+        
+        checkoutModalOverlay.classList.add('active');
+        setTimeout(() => {
+            checkoutModalOverlay.style.display = 'flex';
+            if(checkoutCloseBtn) checkoutCloseBtn.focus();
+        }, 0);
+        document.body.classList.add('modal-open');
+        
+        return;
+    }
+
+    const paymentFormView = document.getElementById('payment-form-view');
+    const paymentReceiptView = document.getElementById('payment-receipt-view');
+    if (paymentFormView) paymentFormView.style.display = 'block';
+    if (paymentReceiptView) paymentReceiptView.style.display = 'none';
 
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';
