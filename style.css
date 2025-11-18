@@ -3550,6 +3550,10 @@ hr.total-divider {
     padding: 30px;
     max-width: 800px;
     margin: 0 auto;
+    background-color: white;
+    /* Ensure content is fully visible for PDF generation */
+    min-height: auto;
+    overflow: visible;
 }
 
 #payment-receipt-view h2 {
@@ -3590,57 +3594,80 @@ hr.total-divider {
 }
 
 @media print {
-    * {
-        visibility: hidden;
-        overflow: visible;
+    /* Hide everything except receipt */
+    body > *:not(#checkout-modal-overlay) {
+        display: none !important;
     }
     
     body {
         margin: 0;
         padding: 0;
+        background: white;
     }
     
-    #payment-receipt-view,
-    #payment-receipt-view * {
-        visibility: visible;
+    /* Show and position the modal overlay */
+    #checkout-modal-overlay {
+        display: block !important;
+        position: static !important;
+        background: white !important;
+        opacity: 1 !important;
+        overflow: visible !important;
     }
     
-    #payment-receipt-view {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        page-break-after: avoid;
-        page-break-inside: avoid;
-    }
-    
-    #main-header,
-    .modal-close-btn,
-    #print-receipt-btn,
-    #back-to-payment-btn,
-    #view-receipt-link-btn,
-    #chat-widget-container,
-    #toast-notification,
-    .footer-link {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
+    /* Show and position modal content */
     .checkout-modal-content {
         box-shadow: none !important;
         border: none !important;
         max-width: 100% !important;
         width: 100% !important;
-    }
-    
-    #checkout-modal-overlay {
-        background: white !important;
+        max-height: none !important;
+        transform: none !important;
         position: static !important;
         overflow: visible !important;
+        padding: 20px;
+    }
+    
+    /* Hide form view, show receipt view */
+    #payment-form-view {
+        display: none !important;
+    }
+    
+    #payment-receipt-view {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    
+    /* Hide buttons and interactive elements */
+    .modal-close-btn,
+    #checkout-close-btn,
+    #print-receipt-btn,
+    #back-to-payment-btn,
+    #view-receipt-link-btn,
+    #view-receipt-from-form-btn,
+    #chat-widget-container,
+    #toast-notification,
+    .footer-link,
+    #mobile-summary-bar,
+    #kaleidoscope-bg,
+    #main-header,
+    #left-sidebar,
+    #right-sidebar,
+    #catalog-area,
+    .main-content {
+        display: none !important;
     }
     
     html, body {
         height: auto;
         overflow: visible;
+    }
+    
+    /* Avoid page breaks inside content */
+    table, tr, td, th {
+        page-break-inside: avoid;
     }
 }
