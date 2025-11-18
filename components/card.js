@@ -22,51 +22,73 @@ export function getPlaceholderImage(imageUrls) {
 }
 
 export function updateCardIcon(recordId) {
+    console.log(`[Card] ========== UPDATE CARD ICON DEBUG START ==========`);
+    console.log(`[Card] Updating icon for record: ${recordId}`);
+    console.log(`[Card] User authenticated:`, state.session.user.isAuthenticated);
+    
     let isLiked = false;
 
     if (state.session.user.isAuthenticated) {
         isLiked = state.session.user.likedItemIds.has(recordId);
+        console.log(`[Card] User is authenticated, checking liked items`);
+        console.log(`[Card] Total liked items:`, state.session.user.likedItemIds.size);
+        console.log(`[Card] All liked item IDs:`, Array.from(state.session.user.likedItemIds));
+        console.log(`[Card] Is ${recordId} liked?`, isLiked);
     } else {
+        console.log(`[Card] User is not authenticated, checking tempLikes`);
         try {
             const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
             isLiked = tempLikes.has(recordId);
+            console.log(`[Card] TempLikes:`, Array.from(tempLikes));
+            console.log(`[Card] Is ${recordId} in tempLikes?`, isLiked);
         } catch (e) {
-            console.error('Error reading tempLikes for icon update:', e);
+            console.error('[Card] Error reading tempLikes for icon update:', e);
             isLiked = false;
         }
     }
 
-    // VVV Resilient SVG definition VVV
     const heartSVG = `<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>`;
-    // ^^^ End resilient SVG definition ^^^
 
-    // Query for all instances of the icon (card and modal)
-    document.querySelectorAll(`.event-card[data-record-id=\"${recordId}\"] .heart-icon, #modal-heart-btn[data-record-id=\"${recordId}\"]`).forEach(icon => {
+    const elements = document.querySelectorAll(`.event-card[data-record-id="${recordId}"] .heart-icon, #modal-heart-btn[data-record-id="${recordId}"]`);
+    console.log(`[Card] Found ${elements.length} icon elements to update for ${recordId}`);
+    
+    elements.forEach(icon => {
         if (!icon) return;
+
+        const isInModal = icon.id === 'modal-heart-btn';
+        const isInCard = icon.closest('.event-card');
 
         if (isLiked) {
             icon.className = 'heart-icon hearted';
             icon.title = 'Unlike this item';
+            icon.setAttribute('aria-label', 'Unlike this item');
+            console.log(`[Card] Set icon to HEARTED for ${recordId}`);
+            icon.innerHTML = heartSVG;
+            icon.style.display = 'block';
+            icon.style.pointerEvents = 'auto';
         } else {
             icon.className = 'heart-icon';
             icon.title = 'Like this item';
+            icon.setAttribute('aria-label', 'Like this item');
+            console.log(`[Card] Set icon to UNHEARTED for ${recordId}`);
+            icon.innerHTML = heartSVG;
+            icon.style.display = 'block';
+            icon.style.pointerEvents = 'auto';
         }
-        icon.innerHTML = heartSVG;
-        icon.style.display = 'block';
-        icon.style.pointerEvents = 'auto';
     });
+    console.log(`[Card] ========== UPDATE CARD ICON DEBUG END ==========`);
 }
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
-    log('Card', `Creating card for \"${record.fields.Name}\"`);
+    log('Card', `Creating card for "${record.fields.Name}"`);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
 
-    // --- ADD THIS \"PARTNER\" BADGE LOGIC ---
+    // --- ADD THIS "PARTNER" BADGE LOGIC ---
     let partnerBadge = '';
     if (fields.ServiceType === 'Partner Activity') {
-        partnerBadge = '<span class=\"partner-badge\">Partner</span>';
+        partnerBadge = '<span class="partner-badge">Partner</span>';
     }
     // --- END NEW LOGIC ---
 
@@ -108,6 +130,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         } else {
             imageContainerHTML += `<div class="collage-image lazy-load" data-bg-image="${imageUrlToLoad}"></div>`;
         }
+        imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
         imageContainerHTML += `</div>`;
         groupingCard.innerHTML = `
             ${imageContainerHTML}
@@ -151,7 +174,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${rsvpButtonHTML}
             </div>
         `;
-        setTimeout(() => updateCardIcon(record.id), 0);
         return eventCard;
     }
 
@@ -196,6 +218,5 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         });
     }
 
-    setTimeout(() => updateCardIcon(record.id), 0);
     return eventCard;
 }

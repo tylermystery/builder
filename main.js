@@ -38,19 +38,6 @@ console.log('[main.js] 4. Successfully imported fluidEffect.js.');
 const imageCache = new Map();
 window.imageCache = imageCache; 
 
-async function populateUserPlans(userId) {
-    if (typeof ui.populateMyPlansDropdown === 'function') {
-        if (userId) {
-            const plans = await api.fetchPlansForUser(userId);
-            ui.populateMyPlansDropdown(plans);
-        } else {
-            ui.populateMyPlansDropdown([]);
-        }
-    } else {
-        console.error("ui.populateMyPlansDropdown is not defined or imported correctly.");
-    }
-}
-
 window.applyFiltersAndSort = applyFiltersAndSort;
 
 
@@ -114,11 +101,14 @@ async function initialize() {
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
-         log('Main', "'userLoggedIn' event caught, repopulating user plans and chat.");
-         populateUserPlans(state.session.user.id);
+         log('Main', "'userLoggedIn' event caught, reapplying filters and reinitializing chat.");
          if (typeof applyFiltersAndSort === 'function') {
               applyFiltersAndSort(imageCache);
          }
+         // Update all heart icons to reflect the newly loaded liked items
+         document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
+             ui.updateCardIcon(card.dataset.recordId);
+         });
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat(); 
@@ -126,9 +116,7 @@ async function initialize() {
      });
 
     document.addEventListener('planCreated', () => {
-        if (state.session.user.isAuthenticated) {
-            populateUserPlans(state.session.user.id);
-        }
+        log('Main', 'New plan created.');
     });
     document.addEventListener('sessionReady', () => {
         log('Main', '"sessionReady" event received, re-initializing session chat.');
@@ -364,17 +352,23 @@ async function initialize() {
             }
         
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
+            console.log('[Main] ========== JWT RELOAD LIKED ITEMS DEBUG START ==========');
             log('Main', 'User authenticated by JWT, but no likes found. Fetching likes from /api/update-user-prefs?action=get-user-data...');
+            console.log('[Main] Current user state:', state.session.user);
+            console.log('[Main] Current liked items size:', state.session.user.likedItemIds.size);
             try {
                 const response = await fetch('/api/update-user-prefs?action=get-user-data', {
                     method: 'GET', 
                     headers: { 'Authorization': `Bearer ${jwt}` } 
                 });
+                console.log('[Main] Fetch response status:', response.status);
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.error || `Failed to fetch user data (Status: ${response.status})`);
                 }
                 const userData = await response.json();
+                console.log('[Main] Received user data:', userData);
+                console.log('[Main] Liked items from API:', userData.likedItemIds);
                 if (userData.likedItemIds) {
                     setState({
                         session: {
@@ -386,16 +380,17 @@ async function initialize() {
                         }
                     });
                     log('Main', `Successfully fetched and set ${userData.likedItemIds.length} liked items.`);
+                    console.log('[Main] Updated liked items in state:', Array.from(state.session.user.likedItemIds));
                     document.querySelectorAll('.event-card[data-record-id]').forEach(card => {
                         ui.updateCardIcon(card.dataset.recordId);
                     });
+                    console.log('[Main] Updated all card icons');
                 }
             } catch (error) {
-                console.error('Failed to fetch user data on reload:', error.message);
+                console.error('[Main] Failed to fetch user data on reload:', error.message);
             }
+            console.log('[Main] ========== JWT RELOAD LIKED ITEMS DEBUG END ==========');
         }
-
-        await populateUserPlans(state.session.user.id); 
 
         if (sessionId && state.session.id !== sessionId) {
               log('Main', `Session ID ${sessionId} detected, loading session data now.`);

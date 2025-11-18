@@ -71,6 +71,11 @@
   to = "/.netlify/functions/send-chat-to-admin"
   status = 200
 
+[[redirects]]
+  from = "/api/notify-rsvp-users"
+  to = "/.netlify/functions/notify-rsvp-users"
+  status = 200
+
 # --- ADD THIS NEW BLOCK ---
 [[redirects]]
   from = "/api/process-weblink"
@@ -119,5 +124,30 @@
   [[redirects]]
   from = "/api/get-items-for-profiling"
   to = "/.netlify/functions/airtable"
+  status = 200
+
+[[redirects]]
+  from = "/api/roadmap-get-features"
+  to = "/.netlify/functions/roadmap-get-features"
+  status = 200
+
+[[redirects]]
+  from = "/api/roadmap-create-feature"
+  to = "/.netlify/functions/roadmap-create-feature"
+  status = 200
+
+[[redirects]]
+  from = "/api/roadmap-update-feature"
+  to = "/.netlify/functions/roadmap-update-feature"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-team-ideator"
+  to = "/.netlify/functions/ai-team-ideator"
+  status = 200
+
+[[redirects]]
+  from = "/api/ai-team-prioritizer"
+  to = "/.netlify/functions/ai-team-prioritizer"
   status = 200
 

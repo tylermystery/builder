@@ -4,8 +4,8 @@ import * as api from '../api.js';
 import * as ui from '../ui.js';
 
 let fullEventList = [];
-let calendarInstance = null;
 let currentView = 'month';
+let currentDate = new Date();
 
 async function fetchUpcomingEvents() {
     log('Calendar', 'Fetching all public events from state...');
@@ -46,23 +46,41 @@ async function fetchUpcomingEvents() {
     });
 }
 
-function getEventsForDay(date) {
-    const targetDateStr = date.toISOString().split('T')[0];
-    console.log('[Calendar Debug] getEventsForDay - Looking for date:', targetDateStr);
-    console.log('[Calendar Debug] getEventsForDay - fullEventList:', fullEventList);
-    
-    return fullEventList.filter(event => {
-        const matches = event.date === targetDateStr;
-        if (matches) {
-            console.log('[Calendar Debug] getEventsForDay - Found matching event:', event);
-        }
-        return matches;
-    });
+function getDaysInMonth(year, month) {
+    return new Date(year, month + 1, 0).getDate();
 }
 
-function createEventCard(event) {
+function getFirstDayOfMonth(year, month) {
+    return new Date(year, month, 1).getDay();
+}
+
+function isSameDay(date1, date2) {
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+}
+
+function getEventsForDate(dateStr) {
+    return fullEventList.filter(event => event.date === dateStr);
+}
+
+function getWeekDates(date) {
+    const curr = new Date(date);
+    const first = curr.getDate() - curr.getDay();
+    const dates = [];
+    
+    for (let i = 0; i < 7; i++) {
+        const day = new Date(curr.setDate(first + i));
+        dates.push(new Date(day));
+    }
+    
+    return dates;
+}
+
+function createEventCard(event, compact = false) {
     const card = document.createElement('div');
     card.classList.add('event-card');
+    if (compact) card.classList.add('compact');
     card.dataset.recordId = event.recordId;
     
     const userRsvps = event.record.fields.RSVPs || [];
@@ -89,17 +107,26 @@ function createEventCard(event) {
         priceDisplay = '<div class="event-price">Free</div>';
     }
     
-    card.innerHTML = `
-        <div class="event-card-header">
-            <h4 class="event-card-title">${event.name} ${hasRsvpd ? '✅' : ''}</h4>
-            <div class="event-card-date">${dateStr}${timeStr ? ' • ' + timeStr : ''}</div>
-        </div>
-        <div class="event-card-body">
-            ${description ? `<p class="event-card-description">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>` : ''}
-            ${location ? `<div class="event-card-location">📍 ${location}</div>` : ''}
-            ${priceDisplay}
-        </div>
-    `;
+    if (compact) {
+        card.innerHTML = `
+            <div class="event-compact-content">
+                <div class="event-time">${timeStr || 'All Day'}</div>
+                <div class="event-name">${event.name} ${hasRsvpd ? '✅' : ''}</div>
+            </div>
+        `;
+    } else {
+        card.innerHTML = `
+            <div class="event-card-header">
+                <h4 class="event-card-title">${event.name} ${hasRsvpd ? '✅' : ''}</h4>
+                <div class="event-card-date">${dateStr}${timeStr ? ' • ' + timeStr : ''}</div>
+            </div>
+            <div class="event-card-body">
+                ${description ? `<p class="event-card-description">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>` : ''}
+                ${location ? `<div class="event-card-location">📍 ${location}</div>` : ''}
+                ${priceDisplay}
+            </div>
+        `;
+    }
     
     card.addEventListener('click', () => {
         log('Calendar', `Event card clicked: ${event.name}`);
@@ -111,62 +138,181 @@ function createEventCard(event) {
 }
 
 function renderMonthView() {
-    console.log('[Calendar Debug] Rendering month view');
-    const calendarContainer = document.getElementById('event-calendar');
+    console.log('[Calendar Debug] Rendering custom month view');
+    const container = document.getElementById('calendar-content');
     
-    if (calendarInstance) {
-        calendarInstance.destroy();
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    container.innerHTML = `
+        <div class="calendar-header-controls">
+            <button id="cal-prev-btn" class="cal-nav-btn">‹</button>
+            <h2 class="calendar-title">${monthNames[month]} ${year}</h2>
+            <button id="cal-next-btn" class="cal-nav-btn">›</button>
+        </div>
+        <div class="calendar-grid">
+            <div class="calendar-weekdays">
+                <div class="weekday">Sun</div>
+                <div class="weekday">Mon</div>
+                <div class="weekday">Tue</div>
+                <div class="weekday">Wed</div>
+                <div class="weekday">Thu</div>
+                <div class="weekday">Fri</div>
+                <div class="weekday">Sat</div>
+            </div>
+            <div class="calendar-days" id="calendar-days-grid"></div>
+        </div>
+    `;
+    
+    const daysGrid = document.getElementById('calendar-days-grid');
+    
+    for (let i = 0; i < firstDay; i++) {
+        const emptyDay = document.createElement('div');
+        emptyDay.classList.add('calendar-day', 'empty');
+        daysGrid.appendChild(emptyDay);
     }
     
-    const eventDates = fullEventList.map(e => e.date);
-    
-    calendarInstance = flatpickr(calendarContainer, {
-        inline: true,
-        onDayCreate: (dObj, dStr, fp, dayElem) => {
-            const dateStr = dayElem.dateObj.toISOString().split('T')[0];
-            const eventsOnDay = fullEventList.filter(e => e.date === dateStr);
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayDiv = document.createElement('div');
+        dayDiv.classList.add('calendar-day');
+        
+        const date = new Date(year, month, day);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayEvents = getEventsForDate(dateStr);
+        const today = new Date();
+        
+        if (isSameDay(date, today)) {
+            dayDiv.classList.add('today');
+        }
+        
+        dayDiv.innerHTML = `<div class="day-number">${day}</div>`;
+        
+        if (dayEvents.length > 0) {
+            dayDiv.classList.add('has-events');
+            const eventsContainer = document.createElement('div');
+            eventsContainer.classList.add('day-events');
             
-            if (eventsOnDay.length > 0) {
-                dayElem.classList.add('has-event');
-                dayElem.style.position = 'relative';
-                dayElem.style.cursor = 'default';
+            dayEvents.slice(0, 3).forEach(event => {
+                const eventBadge = document.createElement('div');
+                eventBadge.classList.add('event-badge');
+                const timeStr = event.record.fields.Time || '';
+                eventBadge.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
+                eventBadge.title = event.name;
                 
-                const eventListDiv = document.createElement('div');
-                eventListDiv.classList.add('day-event-list');
-                
-                eventsOnDay.forEach(event => {
-                    const userRsvps = event.record.fields.RSVPs || [];
-                    const hasRsvpd = state.session.user.isAuthenticated && userRsvps.includes(state.session.user.id);
-                    
-                    const eventItem = document.createElement('div');
-                    eventItem.classList.add('day-event-item');
-                    if (hasRsvpd) {
-                        eventItem.classList.add('event-rsvpd');
-                    }
-                    
-                    const timeStr = event.record.fields.Time || '';
-                    eventItem.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
-                    
-                    eventItem.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        console.log('[Calendar Debug] Event clicked:', event.name);
-                        ui.showDetailModal(event.record);
-                        hideCalendarModal();
-                    });
-                    
-                    eventListDiv.appendChild(eventItem);
+                eventBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    ui.showDetailModal(event.record);
+                    hideCalendarModal();
                 });
                 
-                dayElem.appendChild(eventListDiv);
+                eventsContainer.appendChild(eventBadge);
+            });
+            
+            if (dayEvents.length > 3) {
+                const moreSpan = document.createElement('div');
+                moreSpan.classList.add('more-events');
+                moreSpan.textContent = `+${dayEvents.length - 3} more`;
+                eventsContainer.appendChild(moreSpan);
             }
+            
+            dayDiv.appendChild(eventsContainer);
         }
+        
+        daysGrid.appendChild(dayDiv);
+    }
+    
+    document.getElementById('cal-prev-btn').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderMonthView();
+    });
+    
+    document.getElementById('cal-next-btn').addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderMonthView();
+    });
+}
+
+function renderWeekView() {
+    console.log('[Calendar Debug] Rendering week view');
+    const container = document.getElementById('calendar-content');
+    
+    const weekDates = getWeekDates(currentDate);
+    const startDate = weekDates[0];
+    const endDate = weekDates[6];
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const dateRange = `${monthNames[startDate.getMonth()]} ${startDate.getDate()} - ${monthNames[endDate.getMonth()]} ${endDate.getDate()}, ${endDate.getFullYear()}`;
+    
+    container.innerHTML = `
+        <div class="calendar-header-controls">
+            <button id="cal-prev-btn" class="cal-nav-btn">‹</button>
+            <h2 class="calendar-title">${dateRange}</h2>
+            <button id="cal-next-btn" class="cal-nav-btn">›</button>
+        </div>
+        <div class="week-grid" id="week-grid"></div>
+    `;
+    
+    const weekGrid = document.getElementById('week-grid');
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const today = new Date();
+    
+    weekDates.forEach((date, index) => {
+        const dayColumn = document.createElement('div');
+        dayColumn.classList.add('week-day-column');
+        
+        if (isSameDay(date, today)) {
+            dayColumn.classList.add('today');
+        }
+        
+        const dateStr = date.toISOString().split('T')[0];
+        const dayEvents = getEventsForDate(dateStr);
+        
+        dayColumn.innerHTML = `
+            <div class="week-day-header">
+                <div class="week-day-name">${dayNames[index]}</div>
+                <div class="week-day-date">${date.getMonth() + 1}/${date.getDate()}</div>
+            </div>
+            <div class="week-day-events"></div>
+        `;
+        
+        const eventsContainer = dayColumn.querySelector('.week-day-events');
+        
+        if (dayEvents.length === 0) {
+            eventsContainer.innerHTML = '<div class="no-events">No events</div>';
+        } else {
+            dayEvents.forEach(event => {
+                const card = createEventCard(event, true);
+                eventsContainer.appendChild(card);
+            });
+        }
+        
+        weekGrid.appendChild(dayColumn);
+    });
+    
+    document.getElementById('cal-prev-btn').addEventListener('click', () => {
+        currentDate.setDate(currentDate.getDate() - 7);
+        renderWeekView();
+    });
+    
+    document.getElementById('cal-next-btn').addEventListener('click', () => {
+        currentDate.setDate(currentDate.getDate() + 7);
+        renderWeekView();
     });
 }
 
 function renderListView() {
     console.log('[Calendar Debug] Rendering list view');
+    const container = document.getElementById('calendar-content');
+    
+    container.innerHTML = '<div id="events-list-container"></div>';
     const listContainer = document.getElementById('events-list-container');
-    listContainer.innerHTML = '';
     
     if (fullEventList.length === 0) {
         listContainer.innerHTML = '<div class="no-events-message">No upcoming events found.</div>';
@@ -178,7 +324,7 @@ function renderListView() {
     });
     
     sortedEvents.forEach(event => {
-        const card = createEventCard(event);
+        const card = createEventCard(event, false);
         listContainer.appendChild(card);
     });
 }
@@ -187,21 +333,21 @@ function switchView(view) {
     currentView = view;
     
     const monthBtn = document.getElementById('calendar-view-month');
+    const weekBtn = document.getElementById('calendar-view-week');
     const listBtn = document.getElementById('calendar-view-list');
-    const monthView = document.getElementById('calendar-month-view');
-    const listView = document.getElementById('calendar-list-view');
+    
+    monthBtn?.classList.remove('active');
+    weekBtn?.classList.remove('active');
+    listBtn?.classList.remove('active');
     
     if (view === 'month') {
         monthBtn?.classList.add('active');
-        listBtn?.classList.remove('active');
-        monthView.style.display = 'block';
-        listView.style.display = 'none';
         renderMonthView();
+    } else if (view === 'week') {
+        weekBtn?.classList.add('active');
+        renderWeekView();
     } else {
-        monthBtn?.classList.remove('active');
         listBtn?.classList.add('active');
-        monthView.style.display = 'none';
-        listView.style.display = 'block';
         renderListView();
     }
 }
@@ -220,6 +366,7 @@ export function setupCalendarEventListeners() {
     });
     
     document.getElementById('calendar-view-month')?.addEventListener('click', () => switchView('month'));
+    document.getElementById('calendar-view-week')?.addEventListener('click', () => switchView('week'));
     document.getElementById('calendar-view-list')?.addEventListener('click', () => switchView('list'));
 }
 
@@ -236,8 +383,12 @@ export async function showCalendarModal() {
         log('Calendar', 'No events found to display in calendar.');
     }
     
+    currentDate = new Date();
+    
     if (currentView === 'month') {
         renderMonthView();
+    } else if (currentView === 'week') {
+        renderWeekView();
     } else {
         renderListView();
     }
@@ -253,11 +404,6 @@ export function hideCalendarModal() {
     const calendarModal = document.getElementById('calendar-modal-overlay');
 
     log('Calendar', 'Hiding calendar modal.');
-    
-    if (calendarInstance) {
-        calendarInstance.destroy();
-        calendarInstance = null;
-    }
     
     if (calendarModal) {
         calendarModal.classList.remove('active');

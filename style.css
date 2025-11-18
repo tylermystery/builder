@@ -1,10 +1,18 @@
 /* ---\nCORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES\n--- */
 
+/* --- Global Improvements --- */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
 /* --- 1. CORE BODY & KALEIDOSCOPE CANVAS --- */
 body {
     padding-bottom: 150px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    /* Remove default background so canvas is visible */
     background-color: transparent;
 }
 
@@ -169,6 +177,31 @@ body.modal-open {
     align-items: center;
     gap: 15px; /* This will space out the WTF button, logo, and title */
     flex-shrink: 0; /* Don't shrink logo/title */
+}
+
+.header-icon-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+.header-icon-btn:active {
+    transform: scale(0.95);
 }
 
 /* --- NEW: Styles for WTF Button --- */
@@ -368,8 +401,8 @@ body.modal-open {
     max-width: 1200px;
     width: 90vw;
     height: 90vh;
-    display: flex;
-    flex-direction: column;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: hidden;
 }
 
@@ -409,136 +442,223 @@ body.modal-open {
     color: white;
 }
 
-#calendar-body {
+#calendar-content {
     flex: 1;
     min-height: 0;
     padding: 20px;
-    overflow: hidden;
-}
-
-.calendar-view-container {
-    height: 100%;
     overflow-y: auto;
-}
-
-#calendar-month-view {
     display: flex;
     flex-direction: column;
 }
 
-#event-calendar {
+.calendar-header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.calendar-title {
+    font-size: 1.8em;
+    margin: 0;
+    color: #212529;
+}
+
+.cal-nav-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5em;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cal-nav-btn:hover {
+    background-color: #0056b3;
+    transform: scale(1.1);
+}
+
+.calendar-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 5px;
+    flex-shrink: 0;
+}
+
+.weekday {
+    text-align: center;
+    font-weight: bold;
+    color: #6c757d;
+    padding: 10px 5px;
+    font-size: 1.1em;
+}
+
+.calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+}
+
+.calendar-day {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    background-color: white;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.calendar-day.empty {
+    background-color: #f8f9fa;
+}
+
+.calendar-day.today {
+    background-color: #fff3cd;
+    border-color: #ffc107;
+}
+
+.calendar-day.has-events {
+    background-color: #e7f3ff;
+}
+
+.day-number {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 5px;
+    color: #212529;
+}
+
+.day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
     flex: 1;
     overflow-y: auto;
 }
 
-.flatpickr-calendar.inline {
-    width: 100% !important;
-    max-width: none !important;
-    box-shadow: none;
+.event-badge {
+    background-color: #007bff;
+    color: white;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.2s;
+    font-weight: 600;
 }
 
-.flatpickr-calendar.inline .flatpickr-months {
-    padding: 15px 0 !important;
+.event-badge:hover {
+    background-color: #0056b3;
+    transform: scale(1.05);
 }
 
-.flatpickr-calendar.inline .flatpickr-month {
-    height: 60px !important;
+.more-events {
+    font-size: 0.7em;
+    color: #6c757d;
+    font-weight: 600;
+    padding: 2px 4px;
 }
 
-.flatpickr-calendar.inline .flatpickr-current-month {
-    font-size: 1.5em !important;
-    padding: 10px 0 !important;
+.week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
 }
 
-.flatpickr-calendar.inline .flatpickr-monthDropdown-months,
-.flatpickr-calendar.inline .numInputWrapper {
-    font-size: 1.3em !important;
+.week-day-column {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background-color: white;
 }
 
-.flatpickr-calendar.inline .flatpickr-weekdays {
-    height: 50px !important;
-    margin-bottom: 10px !important;
+.week-day-column.today {
+    border-color: #ffc107;
+    border-width: 2px;
+    background-color: #fff3cd;
 }
 
-.flatpickr-calendar.inline .flatpickr-weekday {
-    font-size: 1.2em !important;
-    line-height: 50px !important;
+.week-day-header {
+    background-color: #007bff;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    flex-shrink: 0;
 }
 
-.flatpickr-calendar.inline .flatpickr-days {
-    width: 100% !important;
-}
-
-.flatpickr-calendar.inline .dayContainer {
-    width: 100% !important;
-    min-width: 100% !important;
-    max-width: 100% !important;
-}
-
-.flatpickr-calendar.inline .flatpickr-day {
-    height: 100px !important;
-    max-height: none !important;
-    line-height: 1.4 !important;
-    font-size: 1.3em !important;
-    flex: 1 0 14.28% !important;
-    padding-top: 8px !important;
-}
-
-.flatpickr-calendar.inline .flatpickr-day.prevMonthDay,
-.flatpickr-calendar.inline .flatpickr-day.nextMonthDay {
-    opacity: 0.3;
-}
-
-.flatpickr-day.has-event {
-    background-color: #e7f3ff !important;
-    border-color: #007bff !important;
+.week-day-name {
     font-weight: bold;
-    height: 100px !important;
-    min-height: 100px !important;
-    padding: 8px 4px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    line-height: 1.4 !important;
+    font-size: 1em;
+    margin-bottom: 5px;
 }
 
-.day-event-list {
-    width: 100%;
-    font-size: 1em;
-    margin-top: 4px;
+.week-day-date {
+    font-size: 0.9em;
+}
+
+.week-day-events {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.no-events {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+.event-card.compact {
+    padding: 8px;
+    margin: 0;
+}
+
+.event-compact-content {
     display: flex;
     flex-direction: column;
     gap: 3px;
 }
 
-.day-event-item {
-    background-color: #007bff;
-    color: white;
-    padding: 4px 6px;
-    margin: 0;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: background-color 0.2s;
-    font-size: 0.75em;
-    line-height: 1.3;
+.event-time {
+    font-size: 0.85em;
+    color: #6c757d;
     font-weight: 600;
 }
 
-.day-event-item:hover {
-    background-color: #0056b3;
-}
-
-.day-event-item.event-rsvpd {
-    background-color: #28a745;
-    font-weight: bold;
-}
-
-.day-event-item.event-rsvpd:hover {
-    background-color: #1e7e34;
+.event-name {
+    font-size: 0.95em;
+    color: #212529;
+    font-weight: 500;
 }
 
 #events-list-container {
@@ -777,9 +897,9 @@ body.modal-open {
 }
 
 .event-card:hover {
-    transform: scale(1.02);
-    background-color: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    transform: translateY(-4px) scale(1.01);
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Card Shimmer Effect */
@@ -839,18 +959,43 @@ body.modal-open {
     cursor: pointer;
     z-index: 10;
     display: block;
+    padding: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.heart-icon:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 1);
+}
+.heart-icon:active {
+    transform: scale(0.95);
 }
 .heart-icon svg {
-    width: 28px;
-    height: 28px;
-    fill: #ccc;
-    stroke: #aaa;
-    stroke-width: 1.5;
-    transition: all 0.2s ease-in-out;
+    width: 24px;
+    height: 24px;
+    fill: #e0e0e0;
+    stroke: #999;
+    stroke-width: 2;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: block;
+}
+.heart-icon:hover svg {
+    stroke: #666;
+    fill: #f0f0f0;
 }
 .heart-icon.hearted svg {
     fill: #ff3b30;
     stroke: #ff3b30;
+    animation: heartPulse 0.4s ease;
+}
+.heart-icon.hearted:hover svg {
+    fill: #ff6b66;
+    stroke: #ff6b66;
 }
 .heart-icon.locked svg {
     fill: #34c759;
@@ -859,6 +1004,19 @@ body.modal-open {
 .heart-icon.locked {
     cursor: default;
     pointer-events: none;
+    background: rgba(240, 255, 240, 0.9);
+}
+
+@keyframes heartPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.3);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Make card content sit above the shimmer */
@@ -906,6 +1064,20 @@ body.modal-open {
     cursor: pointer;
     white-space: nowrap;
     position: relative;
+    transition: all 0.2s ease;
+}
+.card-action-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+.card-action-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(0, 123, 255, 0.2);
+}
+.card-action-btn:focus {
+    outline: 2px solid #0056b3;
+    outline-offset: 2px;
 }
 .card-action-btn:disabled {
     background-color: #5a6268;

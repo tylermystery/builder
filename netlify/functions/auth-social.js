@@ -104,16 +104,25 @@ exports.handler = async (event, context) => {
     const likedItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
     const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`;
 
+    console.log(`[auth-social] ========== LIKES FETCH DEBUG START ==========`);
+    console.log(`[auth-social] User ID: ${userRecord.id}`);
+    console.log(`[auth-social] Formula: ${likedItemsFormula}`);
+    console.log(`[auth-social] Full URL: ${likedItemsUrl}`);
     console.log(`[auth-social] Fetching liked items for user ${userRecord.id} with formula: ${likedItemsFormula}`);
     const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
 
     if (likedItemsRes.ok) {
         const likedItemsData = await likedItemsRes.json();
         likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
+        console.log(`[auth-social] ✓ Successfully fetched liked items`);
         console.log(`[auth-social] Found ${likedItemIds.length} liked items for user ${userRecord.id}.`);
+        console.log(`[auth-social] Liked item IDs:`, likedItemIds);
     } else {
-        console.warn(`[auth-social] Failed to fetch liked items for user ${userRecord.id}. Status: ${likedItemsRes.status}`);
+        const errorText = await likedItemsRes.text();
+        console.warn(`[auth-social] ✗ Failed to fetch liked items for user ${userRecord.id}. Status: ${likedItemsRes.status}`);
+        console.warn(`[auth-social] Error response:`, errorText);
     }
+    console.log(`[auth-social] ========== LIKES FETCH DEBUG END ==========`);
     // --- END NEW LIKES FETCH ---
 
   // In: netlify/functions/auth-social.js (after existing LIKES FETCH block, before JWT generation)
@@ -139,31 +148,45 @@ exports.handler = async (event, context) => {
     // --- END NEW RSVPS FETCH ---
 
     // 7. Generate Session JWT
-    const userPayloadForToken = {
-// ... existing payload ...
-    };
-    const sessionToken = jwt.sign(userPayloadForToken, JWT_SECRET, { expiresIn: '30d' });
+    const sessionToken = jwt.sign(
+        { 
+            userId: userRecord.id, 
+            name: userRecord.fields[NAME_FIELD], 
+            email: userRecord.fields[EMAIL_FIELD], 
+            isOwner: ownerData.isOwner 
+        },
+        JWT_SECRET,
+        { expiresIn: '30d' }
+    );
 
     // 8. Return Response to Client
+    console.log(`[auth-social] ========== RESPONSE DEBUG ==========`);
+    console.log(`[auth-social] Returning response with ${likedItemIds.length} liked items`);
+    console.log(`[auth-social] Liked item IDs being sent to client:`, likedItemIds);
+    console.log(`[auth-social] User ID: ${userRecord.id}`);
+    console.log(`[auth-social] ========== RESPONSE DEBUG END ==========`);
     return {
         statusCode: 200,
         body: JSON.stringify({
             token: sessionToken,
-            user: {
-// ... existing user payload ...
+            user: { 
+                id: userRecord.id, 
+                name: userRecord.fields[NAME_FIELD], 
+                email: userRecord.fields[EMAIL_FIELD],
+                phoneNumber: userRecord.fields.PhoneNumber || '',
+                notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
                 likedItemIds: likedItemIds,
-                rsvpdItemIds: rsvpdItemIds // NEW: Include the fetched RSVP item IDs here
+                rsvpdItemIds: rsvpdItemIds
             },
-            ownerData: ownerData
+            ownerData: ownerData,
+            associatedSessions: associatedSessions
         }),
     };
     } catch (error) {
-// ... existing catch block ...
-
-    console.error('[auth-social] Function Error:', error);
-    return {
-        statusCode: 500,
-        body: JSON.stringify({ error: error.message || 'An internal server error occurred.' })
-    };
-  }
+        console.error('[auth-social] Function Error:', error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: error.message || 'An internal server error occurred.' })
+        };
+    }
 };

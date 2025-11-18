@@ -3,6 +3,7 @@
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
+import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
 import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js'; 
 
@@ -245,15 +246,13 @@ function sortRecords(records, sortBy, goalBucket) {
 }
 
 
-export function applyFiltersAndSort(imageCache) {
+export async function applyFiltersAndSort(imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     
-    // --- NEW: Read filters directly from URL ---
     const params = new URLSearchParams(window.location.search);
     const selectedCategory = params.get('category') || 'all';
     const activeSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
     const view = params.get('view');
-    // --- END NEW ---
 
     // Get other filter values from UI elements (unchanged)
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -272,7 +271,6 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay;
 
-    // --- UPDATED: Check 'view' param from URL ---
     if (view === 'plan') {
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
@@ -291,8 +289,102 @@ export function applyFiltersAndSort(imageCache) {
         }
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
+    } else if (view === 'my-sessions') {
+        if (state.session.user.isAuthenticated && state.session.user.id) {
+            const userSessions = await api.fetchPlansForUser(state.session.user.id, true);
+            
+            // Transform sessions into catalog tiles
+            recordsToDisplay = userSessions.map(session => {
+                const sessionFields = session.fields || {};
+                const itemCount = (sessionFields.Items || []).length;
+                const totalCost = sessionFields.TotalCost || 0;
+                const dateStr = sessionFields.Date ? new Date(sessionFields.Date).toLocaleDateString() : 'No date set';
+                const eventName = sessionFields.Name || 'Untitled Session';
+                
+                return {
+                    id: session.id,
+                    fields: {
+                        Name: eventName,
+                        Description: `${itemCount} items • ${dateStr} • $${totalCost.toFixed(2)}`,
+                        'Item Type': 'Session',
+                        Status: 'Available',
+                        Price: totalCost,
+                        ServiceType: 'Session',
+                        Categories: 'My Sessions'
+                    },
+                    isSession: true,
+                    sessionData: session
+                };
+            });
+            
+            // Apply search filter if present
+            if (searchTerm) {
+                recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+            }
+        } else {
+            recordsToDisplay = [];
+        }
+        
+    } else if (view === 'rsvp-events') {
+        if (!state.session.user.isAuthenticated || !state.session.user.id) {
+            console.warn('[Filtering] RSVP events view requires authentication, but user is not authenticated or has no ID');
+            recordsToDisplay = [];
+        } else {
+            const userId = state.session.user.id;
+            console.log(`[Filtering] Filtering RSVP events for user: ${userId}`);
+            recordsToDisplay = baseRecordsToFilter.filter(record => {
+                const isEvent = record.fields['Item Type'] === 'Event';
+                if (!isEvent) return false;
+                
+                const userRsvpedYes = (record.fields.RSVPs || []).includes(userId);
+                const userRsvpedMaybe = (record.fields.RSVPMaybe || []).includes(userId);
+                const userRsvpedNo = (record.fields.RSVPNo || []).includes(userId);
+                
+                const hasRsvp = userRsvpedYes || userRsvpedMaybe || userRsvpedNo;
+                
+                if (hasRsvp) {
+                    console.log(`[Filtering] User RSVP found for event: ${record.fields.Name} (Yes: ${userRsvpedYes}, Maybe: ${userRsvpedMaybe}, No: ${userRsvpedNo})`);
+                }
+                
+                return hasRsvp;
+            });
+            console.log(`[Filtering] Found ${recordsToDisplay.length} RSVP events for user`);
+        }
+        
+    } else if (view === 'categories') {
+        // Get categories from the active store's Items field
+        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        let categories = [];
+        
+        if (activeShop && activeShop.fields && activeShop.fields.Items) {
+            // Items field contains top-level categories for the store
+            categories = activeShop.fields.Items
+                .split(',')
+                .map(cat => cat.trim())
+                .filter(Boolean);
+        } else {
+            // Fallback to extracting categories from items if store doesn't have Items field
+            categories = [...new Set(
+                baseRecordsToFilter
+                    .map(r => r.fields[CONSTANTS.FIELD_NAMES.CATEGORIES])
+                    .filter(Boolean)
+                    .flatMap(cat => cat.split(',').map(c => c.trim()))
+            )].sort();
+        }
+        
+        recordsToDisplay = categories.map(categoryName => {
+            return {
+                id: `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
+                fields: {
+                    Name: categoryName,
+                    Description: `View all items in ${categoryName}`,
+                    'Item Type': 'Grouping',
+                    Categories: categoryName
+                }
+            };
+        });
+        
     } else {
-         // --- Standard Category/All View ---
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
          
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
@@ -305,7 +397,6 @@ export function applyFiltersAndSort(imageCache) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
          }
     }
-    // --- END UPDATED BLOCK ---
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 

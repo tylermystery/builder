@@ -114,17 +114,26 @@ exports.handler = async (event) => {
         // We only need the record IDs, so don't request any specific fields.
         const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`; // Empty fields array means just get IDs
 
+        console.log(`[auth-verify] ========== LIKES FETCH DEBUG START ==========`);
+        console.log(`[auth-verify] User ID: ${userRecord.id}`);
+        console.log(`[auth-verify] Formula: ${likedItemsFormula}`);
+        console.log(`[auth-verify] Full URL: ${likedItemsUrl}`);
         console.log(`[auth-verify] Fetching liked items for user ${userRecord.id} with formula: ${likedItemsFormula}`);
         const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
 
         if (likedItemsRes.ok) {
             const likedItemsData = await likedItemsRes.json();
             likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
+            console.log(`[auth-verify] ✓ Successfully fetched liked items`);
             console.log(`[auth-verify] Found ${likedItemIds.length} liked items for user ${userRecord.id}.`);
+            console.log(`[auth-verify] Liked item IDs:`, likedItemIds);
         } else {
-            console.warn(`[auth-verify] Failed to fetch liked items for user ${userRecord.id}. Status: ${likedItemsRes.status}`);
+            const errorText = await likedItemsRes.text();
+            console.warn(`[auth-verify] ✗ Failed to fetch liked items for user ${userRecord.id}. Status: ${likedItemsRes.status}`);
+            console.warn(`[auth-verify] Error response:`, errorText);
             // Don't fail the login, just proceed without liked items if the fetch fails
         }
+        console.log(`[auth-verify] ========== LIKES FETCH DEBUG END ==========`);
   
 // In: netlify/functions/auth-verify.js (after existing LIKES FETCH block, before JWT generation)
 
@@ -149,28 +158,41 @@ exports.handler = async (event) => {
         // --- END NEW RSVPS FETCH ---
 
         // 7. Generate Session JWT
-        const userPayloadForToken = {
-// ... existing payload ...
-        };
-// ... existing JWT logic ...
+        const sessionToken = jwt.sign(
+            { 
+                userId: userRecord.id, 
+                name: userRecord.fields[NAME_FIELD], 
+                email: userRecord.fields[EMAIL_FIELD], 
+                isOwner: ownerData.isOwner 
+            },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
 
         // 8. Return Response to Client
+        console.log(`[auth-verify] ========== RESPONSE DEBUG ==========`);
+        console.log(`[auth-verify] Returning response with ${likedItemIds.length} liked items`);
+        console.log(`[auth-verify] Liked item IDs being sent to client:`, likedItemIds);
+        console.log(`[auth-verify] User ID: ${userRecord.id}`);
+        console.log(`[auth-verify] ========== RESPONSE DEBUG END ==========`);
         return {
             statusCode: 200,
             body: JSON.stringify({
                 token: sessionToken,
-                user: {
-// ... existing user payload ...
+                user: { 
+                    id: userRecord.id, 
+                    name: userRecord.fields[NAME_FIELD], 
+                    email: userRecord.fields[EMAIL_FIELD],
+                    phoneNumber: userRecord.fields.PhoneNumber || '',
+                    notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
                     likedItemIds: likedItemIds,
-                    rsvpdItemIds: rsvpdItemIds // NEW: Include the fetched RSVP item IDs here
+                    rsvpdItemIds: rsvpdItemIds
                 },
-                ownerData: ownerData
+                ownerData: ownerData,
+                associatedSessions: associatedSessions
             }),
         };
     } catch (error) {
-// ... existing catch block ...
-
-
         console.error('[auth-verify] Function Error:', error);
         return {
             statusCode: 500,

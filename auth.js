@@ -55,6 +55,11 @@ console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
 
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
+    console.log(`[Auth] ========== LOGIN DEBUG START ==========`);
+    console.log(`[Auth] Payload received:`, payload);
+    console.log(`[Auth] User from payload:`, payload.user);
+    console.log(`[Auth] Liked items from payload:`, payload.user.likedItemIds);
+    
     if (state.session.id) {
         await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
     }
@@ -63,6 +68,8 @@ async function _handleSuccessfulLogin(payload) {
 
     // --- MOVED STATE UPDATE HERE ---
     const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
+    console.log(`[Auth] Setting user state. Liked items from payload: ${initialLikedItemIdsFromPayload.length}`);
+    console.log(`[Auth] Full liked items array:`, initialLikedItemIdsFromPayload);
     setState({
         session: {
             ...state.session,
@@ -76,30 +83,41 @@ async function _handleSuccessfulLogin(payload) {
             }
         }
     });
-    console.log("[Auth] User state set immediately after login:", state.session.user);
+    console.log("[Auth] User state set immediately after login. Liked items count:", state.session.user.likedItemIds.size);
+    console.log("[Auth] Full user state:", state.session.user);
+    console.log("[Auth] Full likedItemIds Set:", Array.from(state.session.user.likedItemIds));
     // --- END MOVED STATE UPDATE ---
 
     // --- START LIKES SYNC (Now runs *after* state is updated) ---
     const currentLikedItemIds = state.session.user.likedItemIds;
     let syncPromises = [];
     const tempLikesString = localStorage.getItem('tempLikes');
+    console.log(`[Auth] ========== TEMP LIKES MERGE DEBUG START ==========`);
+    console.log(`[Auth] TempLikes from localStorage:`, tempLikesString);
+    
     if (tempLikesString) {
         try {
             const tempLikes = JSON.parse(tempLikesString);
+            console.log(`[Auth] Parsed temp likes:`, tempLikes);
             if (Array.isArray(tempLikes) && tempLikes.length > 0) {
                 console.log(`[Auth] Found ${tempLikes.length} temporary likes to sync.`);
+                console.log(`[Auth] Current authenticated liked items:`, Array.from(currentLikedItemIds));
                 tempLikes.forEach(itemId => {
                     if (!currentLikedItemIds.has(itemId)) {
                         console.log(`[Auth] Syncing temporary like for item: ${itemId}`);
                         syncPromises.push(
                             api.toggleUserLike(itemId) // Use imported api
                                 .then(result => {
+                                    console.log(`[Auth] Sync result for ${itemId}:`, result);
                                     if (result.success && result.liked) {
                                         state.session.user.likedItemIds.add(itemId);
+                                        console.log(`[Auth] Added ${itemId} to user liked items`);
                                     }
                                 })
                                 .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err.message))
                         );
+                    } else {
+                        console.log(`[Auth] Item ${itemId} already in user's liked items, skipping`);
                     }
                 });
             }
@@ -109,13 +127,19 @@ async function _handleSuccessfulLogin(payload) {
              localStorage.removeItem('tempLikes');
              console.log('[Auth] Cleared temporary likes from localStorage.');
         }
+    } else {
+        console.log('[Auth] No temporary likes found in localStorage');
     }
+    console.log(`[Auth] ========== TEMP LIKES MERGE DEBUG END ==========`);
     // --- END LIKES SYNC ---
 
     await Promise.allSettled(syncPromises);
     console.log('[Auth] Like sync process finished.');
+    console.log('[Auth] Final liked items count:', state.session.user.likedItemIds.size);
+    console.log('[Auth] Final liked items:', Array.from(state.session.user.likedItemIds));
     
     console.log("[Auth] Final user state after sync:", state.session.user);
+    console.log(`[Auth] ========== LOGIN DEBUG END ==========`);
 
     // Trigger events and update UI
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
@@ -360,6 +384,16 @@ export function updateUserProfileIcon() {
         userProfileButton.classList.remove('signed-in');
         userProfileButton.innerHTML = '&#128100;';
         userProfileButton.title = 'Sign In / My Account';
+    }
+
+    const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
+    const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
+    
+    if (mySessionsHeaderBtn) {
+        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+    }
+    if (rsvpEventsHeaderBtn) {
+        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
     }
 }
 
