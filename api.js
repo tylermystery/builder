@@ -476,7 +476,7 @@ export async function fetchAllStores() {
                 throw new Error(`Failed to fetch stores from Airtable. Status: ${response.status}`);
             }
             const data = await response.json();
-            records = records.concat(data.records);\
+            records = records.concat(data.records);
             offset = data.offset;
         } while (offset);
         log('API', `Total stores fetched: ${records.length}`);
@@ -686,7 +686,7 @@ export async function fetchCuratedImagesByRecord(record) {
         return imageUrls;
 
     } catch (error) {
-        console.error(`Error fetching curated images for item ${record.id}:`, error.message);\
+        console.error(`Error fetching curated images for item ${record.id}:`, error.message);
         return [];
     }
 }
