@@ -3590,8 +3590,14 @@ hr.total-divider {
 }
 
 @media print {
-    body * {
+    * {
         visibility: hidden;
+        overflow: visible;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
     }
     
     #payment-receipt-view,
@@ -3604,15 +3610,20 @@ hr.total-divider {
         left: 0;
         top: 0;
         width: 100%;
+        page-break-after: avoid;
+        page-break-inside: avoid;
     }
     
     #main-header,
     .modal-close-btn,
     #print-receipt-btn,
+    #back-to-payment-btn,
+    #view-receipt-link-btn,
     #chat-widget-container,
     #toast-notification,
     .footer-link {
         display: none !important;
+        visibility: hidden !important;
     }
     
     .checkout-modal-content {
@@ -3624,5 +3635,12 @@ hr.total-divider {
     
     #checkout-modal-overlay {
         background: white !important;
+        position: static !important;
+        overflow: visible !important;
+    }
+    
+    html, body {
+        height: auto;
+        overflow: visible;
     }
 }
