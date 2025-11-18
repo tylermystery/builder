@@ -89,13 +89,21 @@ function handleOverlayClick(event) {
 async function updateCheckoutDisplay() {
     const finalTotal = parseFloat(document.getElementById('full-total-price').dataset.total || 0);
     const amountReceived = state.session.user.amountReceived || 0;
-    const totalDue = finalTotal - amountReceived;
+    
+    // Check if deposit is already accounted for as a line item in locked items
+    const hasDepositLineItem = Array.from(state.cart.lockedItems.values()).some(
+        item => item.overridePrice < 0
+    );
+    
+    // Only subtract amountReceived if it's NOT already in the cart as a line item
+    const totalDue = hasDepositLineItem ? finalTotal : (finalTotal - amountReceived);
     const isFullyPaid = totalDue <= 0.009; // Check for paid status
     
     const choice = document.querySelector('input[name="paymentChoice"]:checked')?.value || 'deposit';
     let baseAmountToCharge = totalDue; // This is the amount *before* processing fees
     
-    const isInitialDeposit = amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
+    // Determine if this is an initial deposit scenario (no payment received yet and no deposit line item)
+    const isInitialDeposit = !hasDepositLineItem && amountReceived === 0 && (currentShopSettings.paymentOptions !== 'DepositOrFull' || choice === 'deposit');
     
     const tipRow = document.querySelector('.tip-row');
     if (tipRow) {
@@ -106,7 +114,12 @@ async function updateCheckoutDisplay() {
         }
     }
 
-    if (amountReceived === 0) {
+    // If there's a deposit line item, we're paying the remainder
+    if (hasDepositLineItem || amountReceived > 0) {
+        document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
+        // baseAmountToCharge already set to totalDue above
+    } else if (amountReceived === 0) {
+        // This is the initial deposit
         if (currentShopSettings.paymentOptions === 'DepositOrFull' && choice === 'full') {
             baseAmountToCharge = finalTotal;
             document.getElementById('deposit-label').textContent = 'Full Amount Due:';
@@ -114,8 +127,6 @@ async function updateCheckoutDisplay() {
             baseAmountToCharge = finalTotal * 0.35;
             document.getElementById('deposit-label').textContent = '35% Deposit Due:';
         }
-    } else {
-        document.getElementById('deposit-label').textContent = 'Remaining Balance Due:';
     }
     const tipAmount = parseFloat(document.getElementById('tip-amount').value) || 0;
     
