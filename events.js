@@ -526,8 +526,60 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
     // --- END HEADER USER FILTER BUTTONS ---
 
-    safeAddEventListener('print-receipt-btn', 'click', () => {
-        window.print();
+    safeAddEventListener('open-receipt-window-btn', 'click', () => {
+        const receiptContent = document.getElementById('payment-receipt-view').innerHTML;
+        const newWindow = window.open('', '_blank', 'width=800,height=900');
+        newWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Receipt</title>
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                        padding: 30px;
+                        max-width: 800px;
+                        margin: 0 auto;
+                    }
+                    h3, h4 { color: #333; }
+                    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #dee2e6; }
+                    th { background-color: #f8f9fa; font-weight: 600; }
+                    button { display: none; }
+                    #receipt-store-header, #receipt-store-footer { text-align: center; padding: 20px 0; }
+                    .print-button-container {
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        z-index: 1000;
+                    }
+                    .print-button {
+                        display: inline-block !important;
+                        padding: 10px 20px;
+                        background-color: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    }
+                    .print-button:hover {
+                        background-color: #0056b3;
+                    }
+                    @media print {
+                        .print-button-container { display: none !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="print-button-container">
+                    <button class="print-button" onclick="window.print()">🖨️ Print Receipt</button>
+                </div>
+                ${receiptContent}
+            </body>
+            </html>
+        `);
+        newWindow.document.close();
     });
 
     const toggleFilter = (elementId, settingName) => {
