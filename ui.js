@@ -142,8 +142,9 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             if (card) fragment.appendChild(card);
         });
         
-        catalogContainer.appendChild(fragment.cloneNode(true));
-        fragment.textContent = ''; // Clear fragment for next batch
+        catalogContainer.appendChild(fragment);
+        // Clear fragment for next batch by creating a new one
+        fragment.textContent = '';
         
         // Add energy burst as each chunk loads to animate the background
         addEnergy();
