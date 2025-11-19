@@ -382,6 +382,17 @@ export function showToast(message, duration = 5000) {
     }
 }
 
+export function showEventPlanNotification(message, duration = 5000) {
+    const notification = document.getElementById('event-plan-notification');
+    if (notification) {
+        notification.textContent = message;
+        notification.style.display = 'block';
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, duration);
+    }
+}
+
 export function renderSessionDropdown() {
     const container = document.getElementById('session-manager-container');
     const dropdown = document.getElementById('session-dropdown');
