@@ -379,11 +379,11 @@ body.modal-open {
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
     
     <!-- Tippy.js and Popper (small, needed early for tooltips) -->
-    <script defer src="https://unpkg.com/@popperjs/core@2"></script>
-    <script defer src="https://unpkg.com/tippy.js@6"></script>
+    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous"></script>
+    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous"></script>
     
     <!-- Other libraries will be lazy-loaded on demand -->
-    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous"></script>
     <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
     </head>
@@ -971,8 +971,7 @@ body.modal-open {
     
     
     <script type="module" src="main.js"></script>
-    <!-- FIX: Removed Markdown []() wrapper from link -->
-    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
 
 </body>
 </html>
