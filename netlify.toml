@@ -1,5 +1,6 @@
 
 [build]
+  command = "npm run build"
   functions = "netlify/functions"
 
 [build.processing]
@@ -29,6 +30,12 @@
   for = "*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Content-Type = "application/javascript; charset=utf-8"
     
 [[headers]]
   for = "*.js"

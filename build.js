@@ -240,10 +240,33 @@ function generateAndWriteRedirects(shortcutItems) {
     }
 }
 
+// --- Generate Service Worker with Build Timestamp ---
+function generateServiceWorker() {
+    console.log('\n⚙️ Generating service-worker.js with build timestamp...');
+    
+    const buildTimestamp = Date.now();
+    const serviceWorkerPath = path.join(STARTING_DIRECTORY, 'service-worker.js');
+    
+    try {
+        let swContent = fs.readFileSync(serviceWorkerPath, 'utf8');
+        
+        // Replace the cache version with the build timestamp
+        swContent = swContent.replace(
+            /const CACHE_VERSION = 'v-' \+ Date\.now\(\);/,
+            `const CACHE_VERSION = 'v-${buildTimestamp}';`
+        );
+        
+        fs.writeFileSync(serviceWorkerPath, swContent);
+        console.log(`✅ Service worker updated with cache version: v-${buildTimestamp}`);
+    } catch (error) {
+        console.error(`❌ Error updating service worker: ${error.message}`);
+    }
+}
+
 // --- Main Build Function ---
 async function buildSourceFile() {
     console.log('============================================================');
-    console.log('🚀 Starting build process: Text, JSON, and Redirects...');
+    console.log('🚀 Starting build process: Text, JSON, Redirects, and Service Worker...');
     console.log('============================================================');
 
     const timestamp = new Date().toISOString();
@@ -252,6 +275,7 @@ async function buildSourceFile() {
 
     const shortcutItems = await fetchShortcutsFromAirtable();
     generateAndWriteRedirects(shortcutItems);
+    generateServiceWorker();
     runTextExport(filePaths, timestamp);
     runJsonExport(filePaths, timestamp);
 
