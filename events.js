@@ -7,7 +7,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity } from './utils.js';
 import { sendMessage, initializeSessionChat } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -22,6 +22,70 @@ let aiSearchController = null;
 
 export function getMainDatePicker() {
     return mainDatePicker;
+}
+
+/**
+ * Handler for when Union Machine Works is added to the plan
+ * Adjusts all items back to their last attempted quantity (if below minimum)
+ */
+function handleUmwAddition() {
+    let adjustedItems = [];
+
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        // Skip UMW itself
+        if (record.fields.Name && record.fields.Name.includes("Union Machine Works")) continue;
+
+        const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const lastAttempted = itemInfo.lastAttemptedQuantity || itemInfo.quantity;
+
+        // If this item was forced to minimum and user wanted less, restore their original request
+        if (airtableMin > 1 && itemInfo.quantity === airtableMin && lastAttempted < airtableMin) {
+            itemInfo.quantity = lastAttempted;
+            state.cart.lockedItems.set(recordId, itemInfo);
+            adjustedItems.push(record.fields.Name);
+        }
+    }
+
+    if (adjustedItems.length > 0) {
+        ui.showToast(`Headcounts reduced to quantity requested per Union Machine Works inclusion in plan.`);
+        // Update UI
+        ui.updateEventPlanSection();
+        ui.updateTotalCost();
+    }
+}
+
+/**
+ * Handler for when Union Machine Works is removed from the plan
+ * Adjusts all items to meet minimum requirements
+ */
+function handleUmwRemoval() {
+    let adjustedItems = [];
+
+    for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) continue;
+
+        const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+
+        // If this item is now below minimum, adjust it
+        if (airtableMin > 1 && itemInfo.quantity < airtableMin) {
+            // Store current as last attempted before adjusting
+            itemInfo.lastAttemptedQuantity = itemInfo.quantity;
+            itemInfo.quantity = airtableMin;
+            state.cart.lockedItems.set(recordId, itemInfo);
+            adjustedItems.push(record.fields.Name);
+        }
+    }
+
+    if (adjustedItems.length > 0) {
+        ui.showToast(`Headcount adjusted to min per Union Machine Works removal.`);
+        // Update UI
+        ui.updateEventPlanSection();
+        ui.updateTotalCost();
+    }
 }
 
 function loadMoreRecords(imageCache) {
@@ -987,6 +1051,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             addEnergy();
 
+            // Check if this is Union Machine Works being added
+            const record = state.records.all.find(r => r.id === recordId);
+            if (!record) return;
+
+            const isUmwBeingAdded = record.fields.Name && record.fields.Name.includes("Union Machine Works");
+
+            // Store whether UMW was in plan BEFORE this addition
+            const wasUmwInPlan = Array.from(state.cart.lockedItems.keys()).some(id => {
+                const lockedRecord = state.records.all.find(r => r.id === id);
+                return lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works");
+            });
+
             if (state.cart.lockedItems.has(recordId)) {
                 console.log('[Events] Item already in plan, skipping');
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
@@ -1009,6 +1085,32 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 itemInfo = ui.getItemState(recordId);
             }
 
+            // Store the last attempted quantity
+            const lastAttemptedQuantity = itemInfo.quantity || 1;
+            itemInfo.lastAttemptedQuantity = lastAttemptedQuantity;
+
+            // Enforce effective minimum quantity
+            const effectiveMin = getEffectiveMinQuantity(record);
+            const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+            let quantityToSave = itemInfo.quantity || 1;
+
+            // Check if UMW is in plan NOW (after potential addition)
+            let isUmwInPlanNow = wasUmwInPlan || isUmwBeingAdded;
+
+            if (quantityToSave < effectiveMin) {
+                quantityToSave = effectiveMin;
+                // Only show toast if UMW is NOT in the plan (off-site event)
+                if (!isUmwInPlanNow && airtableMin > 1) {
+                    ui.showToast(`Quantity adjusted to minimum (${effectiveMin}) for off-site event.`);
+                } else if (isUmwInPlanNow && airtableMin > 1) {
+                    // UMW is in plan, show different message
+                    ui.showToast(`Headcount permitted below minimum as on-site at Union Machine Works.`);
+                }
+            }
+
+            // Update itemInfo with enforced quantity
+            itemInfo.quantity = quantityToSave;
+
             console.log('[Events] itemInfo:', itemInfo);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
@@ -1027,6 +1129,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await updateAllCardAvailabilityIcons();
             await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
+
+            // If UMW was just added, check all other items and adjust their quantities
+            if (isUmwBeingAdded && !wasUmwInPlan) {
+                handleUmwAddition();
+            }
+
             triggerSave();
         } else if (demoteBtn) {
             console.log('[Events] ========== DEMOTE CLICKED ==========');
@@ -1034,6 +1142,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const recordId = demoteBtn.closest('[data-record-id]')?.dataset.recordId;
             console.log('[Events] recordId:', recordId);
             if (!recordId || !state.cart.lockedItems.has(recordId)) return;
+
+            // Check if this is Union Machine Works being removed
+            const record = state.records.all.find(r => r.id === recordId);
+            const isUmwBeingRemoved = record && record.fields.Name && record.fields.Name.includes("Union Machine Works");
 
             const itemInfo = state.cart.lockedItems.get(recordId);
             console.log('[Events] itemInfo:', itemInfo);
@@ -1054,6 +1166,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await updateAllCardAvailabilityIcons();
             await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
+
+            // If UMW was just removed, check all other items and adjust their quantities
+            if (isUmwBeingRemoved) {
+                handleUmwRemoval();
+            }
+
             triggerSave();
         } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
             e.stopPropagation();

@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce, loadStripe, loadFlatpickr } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -650,9 +650,40 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalActionsContainer.style.display = 'block';
         modalNotesContainer.style.display = 'block';
         modalItemNote.value = itemState.note;
-        const headcountMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
-        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}" step="1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
-        
+
+        // Calculate effective minimum and Airtable minimum
+        const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const effectiveMin = getEffectiveMinQuantity(record);
+
+        modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
+
+        // Add sales nudge or benefit badge
+        let nudgeHTML = '';
+        if (effectiveMin < airtableMin) {
+            // Scenario B: UMW is booked, restriction removed
+            nudgeHTML = `<div class="umw-benefit-badge">✅ UMW Benefit: ${airtableMin}-person minimum waived.</div>`;
+        } else if (airtableMin > 1) {
+            // Scenario A: Restriction active, suggest UMW
+            nudgeHTML = `<div class="umw-sales-nudge">💡 <strong>Pro Tip:</strong> Host at <a href="#" class="search-link" data-term="Union Machine Works">Union Machine Works</a> to waive the ${airtableMin}-person minimum.</div>`;
+        }
+
+        if (nudgeHTML) {
+            modalActionsContainer.insertAdjacentHTML('beforeend', nudgeHTML);
+
+            // Add click handler for the search link if present
+            const searchLink = modalActionsContainer.querySelector('.search-link');
+            if (searchLink) {
+                searchLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const searchTerm = searchLink.dataset.term;
+                    document.getElementById('name-filter').value = searchTerm;
+                    closeDetailModal();
+                    // Trigger the search
+                    document.getElementById('name-filter').dispatchEvent(new Event('input', { bubbles: true }));
+                });
+            }
+        }
+
         const plusBtn = modalQuantitySelector.querySelector('.plus');
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
@@ -878,18 +909,29 @@ export async function showCheckoutModal(shopSettings) {
         }
     };
     checkoutModalOverlay.addEventListener('click', handleOverlayClick);
-    
+
     checkoutModalOverlay.removeEventListenerOnClick = () => {
         checkoutModalOverlay.removeEventListener('click', handleOverlayClick);
     };
 
     if (checkoutCloseBtn) checkoutCloseBtn.addEventListener('click', hideCheckoutModal);
-    
+
     // --- 1. Calculate Base Total ---\
     summaryDetailsEl.innerHTML = '';
     tipAmountInput.value = '';
     let finalTotal = 0; // This is the plan subtotal
     const summaryList = document.createElement('ul');
+
+    // Check if UMW is in plan
+    let isUmwInPlan = false;
+    for (const [id] of state.cart.lockedItems) {
+        const lockedRecord = state.records.all.find(r => r.id === id);
+        if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
+            isUmwInPlan = true;
+            break;
+        }
+    }
+
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
@@ -899,15 +941,31 @@ export async function showCheckoutModal(shopSettings) {
         const itemTotal = price * (itemInfo.quantity || 1);
         finalTotal += itemTotal;
         const listItem = document.createElement('li');
-        
+
+        // Check for edge case notes
+        const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const effectiveMin = getEffectiveMinQuantity(record);
+        let edgeCaseNote = '';
+
+        if (airtableMin > 1) {
+            if (!isUmwInPlan && itemInfo.quantity === effectiveMin) {
+                // Off-site at minimum
+                edgeCaseNote = '<small class="checkout-edge-case-note" style="color: #fd7e14; font-style: italic; display: block;">* At minimum headcount for off-site event</small>';
+            } else if (isUmwInPlan && itemInfo.quantity < airtableMin) {
+                // On-site below standard minimum
+                edgeCaseNote = '<small class="checkout-edge-case-note" style="color: #28a745; font-style: italic; display: block;">✓ Below standard minimum (Union Machine Works venue)</small>';
+            }
+        }
+
         let noteHtml = '';
         if (itemInfo.note && itemInfo.note.trim() !== '') {
             noteHtml = `<small class="checkout-summary-note">Note: ${itemInfo.note}</small>`;
         }
-        
+
         listItem.innerHTML = `
             <div class="summary-item-details">
                 <span class="summary-item-name">${record.fields.Name} (x${itemInfo.quantity || 1})</span>
+                ${edgeCaseNote}
                 ${noteHtml}
             </div>
             <span class="summary-item-price">$${itemTotal.toFixed(2)}</span>

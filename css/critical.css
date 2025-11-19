@@ -351,4 +351,33 @@ body.modal-open {
     right: 20px;
     z-index: 10000;
     max-width: 350px;
+    background-color: rgba(34, 139, 34, 0.95);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 0.9em;
+    font-weight: 500;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+}
+
+#toast-notification.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Mobile: Move toast below header to prevent overlap */
+@media (max-width: 999px) {
+    #toast-notification {
+        top: 90px;
+        right: 15px;
+        left: 15px;
+        max-width: none;
+        font-size: 0.85em;
+        padding: 10px 15px;
+    }
 }

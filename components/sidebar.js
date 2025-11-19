@@ -6,7 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
-import { parseOptions, getRecordPrice } from '../utils.js';
+import { parseOptions, getRecordPrice, getEffectiveMinQuantity } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
@@ -91,14 +91,40 @@ async function createLockedInItemElement(record, itemInfo) {
     let price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
     const total = (price || 0) * (itemInfo.quantity || 1);
     let priceDisplay = `$${(price || 0).toFixed(2)}`;
-    
+
     if (isCustomItem && itemInfo.overridePrice == null && price > 0) {
         priceDisplay = `$${price.toFixed(2)} (Est.)`;
     }
-    
+
     if (itemInfo.overridePrice != null) {
         let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
         priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+    }
+
+    // Calculate effective minimum and add warning if applicable
+    const effectiveMin = getEffectiveMinQuantity(record);
+    const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    let quantityDisplay = `Qty ${itemInfo.quantity || 1}`;
+
+    // Check if UMW is in plan
+    let isUmwInPlan = false;
+    for (const [id] of state.cart.lockedItems) {
+        const lockedRecord = state.records.all.find(r => r.id === id);
+        if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
+            isUmwInPlan = true;
+            break;
+        }
+    }
+
+    // Add warning/note for edge cases
+    if (airtableMin > 1) {
+        if (!isUmwInPlan && itemInfo.quantity === effectiveMin) {
+            // Off-site at minimum: show asterisk with tooltip
+            quantityDisplay += ` <span class="min-qty-warning" data-tippy-content="Minimum of ${effectiveMin} required for off-site events.<br><strong>Host at Union Machine Works to waive.</strong>">*</span>`;
+        } else if (isUmwInPlan && itemInfo.quantity < airtableMin) {
+            // On-site below minimum: show check mark with tooltip
+            quantityDisplay += ` <span class="umw-benefit-indicator" data-tippy-content="Below standard minimum of ${airtableMin}<br><strong>Allowed due to Union Machine Works venue</strong>" style="color: #28a745; font-weight: bold; cursor: help; margin-left: 2px;">✓</span>`;
+        }
     }
 
     itemElement.innerHTML = `
@@ -106,13 +132,36 @@ async function createLockedInItemElement(record, itemInfo) {
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
-            <p class="locked-item-pricing">Qty ${itemInfo.quantity || 1} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
+            <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
         <div class="locked-item-actions">
             <button class="demote-locked-item-btn" title="Remove from Plan">Unsave</button>
         </div>
     `;
+
+    // Initialize Tippy tooltip for the warning asterisk if present
+    const warningSpan = itemElement.querySelector('.min-qty-warning');
+    if (warningSpan) {
+        tippy(warningSpan, {
+            content: warningSpan.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // Initialize Tippy tooltip for the UMW benefit indicator if present
+    const benefitSpan = itemElement.querySelector('.umw-benefit-indicator');
+    if (benefitSpan) {
+        tippy(benefitSpan, {
+            content: benefitSpan.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
     return itemElement;
 }
 // --- END REPLACED FUNCTION ---\

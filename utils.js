@@ -269,3 +269,26 @@ export function getRecordPrice(record, optionIndex = null) {
     }
     return isNaN(price) ? 0 : price;
 }
+
+/**
+ * Calculate the effective minimum quantity for a record based on Union Machine Works presence
+ * @param {Object} record - The record to calculate the minimum for
+ * @returns {number} The effective minimum quantity (1 if UMW is booked, otherwise the Airtable minimum)
+ */
+export function getEffectiveMinQuantity(record) {
+    // 1. Check if Union Machine Works is in the plan
+    let isUmwInPlan = false;
+    for (const [id] of state.cart.lockedItems) {
+        const lockedRecord = state.records.all.find(r => r.id === id);
+        if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
+            isUmwInPlan = true;
+            break;
+        }
+    }
+
+    // 2. Get the base minimum from Airtable (default to 1)
+    const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+
+    // 3. Return 1 if UMW is booked, otherwise return the specific item minimum
+    return isUmwInPlan ? 1 : airtableMin;
+}
