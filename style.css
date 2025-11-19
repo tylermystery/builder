@@ -859,6 +859,17 @@ body.modal-open {
 #cart-items-container {
     flex-grow: 1;
 }
+#event-plan-notification {
+    margin: 10px 0;
+    padding: 10px 15px;
+    background-color: rgba(34, 139, 34, 0.95);
+    color: white;
+    border-radius: 6px;
+    font-size: 0.85em;
+    line-height: 1.4;
+    text-align: left;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
 #cart-footer {
     margin-top: 20px;
     padding-top: 15px;

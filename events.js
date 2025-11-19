@@ -50,7 +50,7 @@ function handleUmwAddition() {
     }
 
     if (adjustedItems.length > 0) {
-        ui.showToast(`Headcounts reduced to quantity requested per Union Machine Works inclusion in plan.`);
+        ui.showEventPlanNotification(`Headcounts reduced to quantity requested per Union Machine Works inclusion in plan.`);
         // Update UI
         ui.updateEventPlanSection();
         ui.updateTotalCost();
@@ -81,7 +81,7 @@ function handleUmwRemoval() {
     }
 
     if (adjustedItems.length > 0) {
-        ui.showToast(`Headcount adjusted to min per Union Machine Works removal.`);
+        ui.showEventPlanNotification(`Headcount adjusted to min per Union Machine Works removal.`);
         // Update UI
         ui.updateEventPlanSection();
         ui.updateTotalCost();
@@ -1099,12 +1099,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             if (quantityToSave < effectiveMin) {
                 quantityToSave = effectiveMin;
-                // Only show toast if UMW is NOT in the plan (off-site event)
+                // Only show notification if UMW is NOT in the plan (off-site event)
                 if (!isUmwInPlanNow && airtableMin > 1) {
-                    ui.showToast(`Quantity adjusted to minimum (${effectiveMin}) for off-site event.`);
+                    ui.showEventPlanNotification(`Quantity adjusted to minimum (${effectiveMin}) for off-site event.`);
                 } else if (isUmwInPlanNow && airtableMin > 1) {
                     // UMW is in plan, show different message
-                    ui.showToast(`Headcount permitted below minimum as on-site at Union Machine Works.`);
+                    ui.showEventPlanNotification(`Headcount permitted below minimum as on-site at Union Machine Works.`);
                 }
             }
 
