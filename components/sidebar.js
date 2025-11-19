@@ -440,14 +440,15 @@ export function updateTotalCost() {
     }
 
     const isPlanEmpty = subtotal === 0;
-    const isFullyPaid = totalDue <= 0.009;
+    // Only consider fully paid if amount has actually been received
+    const isFullyPaid = totalDue <= 0.009 && amountReceived > 0;
 
     if (isPlanEmpty || isFullyPaid) {
         document.body.classList.remove('mobile-bar-active');
     } else {
         document.body.classList.add('mobile-bar-active');
     }
-    
+
     if (checkoutBtn) {
         checkoutBtn.style.display = 'block';
         document.getElementById('total-breakdown').style.display = 'block';
@@ -456,7 +457,7 @@ export function updateTotalCost() {
             // --- THIS BLOCK IS MODIFIED (and fixed) ---
             checkoutBtn.textContent = 'View Receipt';
             checkoutBtn.disabled = false;
-            if (amountReceived > 0 && statusMessageEl) {
+            if (statusMessageEl) {
                 statusMessageEl.innerHTML = '<span style="color: #28a745; font-weight: bold; font-size: 1.2em; text-align: center; display: block; margin-bottom: 10px;">✅ Paid in Full</span>';
             }
             // --- END MODIFICATION ---
