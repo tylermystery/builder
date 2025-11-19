@@ -2,12 +2,28 @@
 [build]
   functions = "netlify/functions"
 
-# Performance optimizations
+[build.processing]
+  skip_processing = false
+[build.processing.css]
+  bundle = true
+  minify = true
+[build.processing.js]
+  bundle = true
+  minify = true
+[build.processing.html]
+  pretty_urls = true
+[build.processing.images]
+  compress = true
+
+# Performance and security optimizations
 [[headers]]
   for = "/*"
   [headers.values]
-    # Enable browser caching
     Cache-Control = "public, max-age=31536000, immutable"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
     
 [[headers]]
   for = "*.html"
