@@ -8,6 +8,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce, 
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
+import { showReceiptModal } from './receipt.js';
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -917,6 +918,53 @@ export async function showCheckoutModal(shopSettings) {
 
     fullTotalEl.textContent = `$${finalTotal.toFixed(2)}`;
     fullTotalEl.dataset.total = finalTotal;
+    
+    const paymentHistory = state.session.user.paymentHistory || [];
+    const amountReceived = state.session.user.amountReceived || 0;
+    
+    if (paymentHistory.length > 0) {
+        const paymentsReceivedSection = document.createElement('div');
+        paymentsReceivedSection.className = 'checkout-payments-received';
+        paymentsReceivedSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
+        
+        let paymentsHtml = '<h4 style="margin-top: 0; color: #28a745;">✅ Payments Received</h4>';
+        paymentsHtml += '<div class="payment-receipts-list">';
+        
+        // Sort payments by date (oldest first) and create index mapping
+        const sortedPayments = paymentHistory
+            .map((payment, originalIndex) => ({ ...payment, originalIndex }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        sortedPayments.forEach((payment, displayIndex) => {
+            const paymentDate = new Date(payment.date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+            });
+            paymentsHtml += `
+                <div class="payment-receipt-row" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px;">
+                    <div>
+                        <strong>Payment ${displayIndex + 1}</strong>
+                        <small style="display: block; color: #6c757d;">${paymentDate}</small>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: bold;">$${payment.amount.toFixed(2)}</span>
+                        <button class="receipt-btn" data-payment-index="${payment.originalIndex}" style="padding: 5px 10px; font-size: 0.85em; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Receipt</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        paymentsHtml += '</div>';
+        paymentsHtml += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6; text-align: right;"><strong>Total Paid: $${amountReceived.toFixed(2)}</strong></div>`;
+        
+        paymentsReceivedSection.innerHTML = paymentsHtml;
+        
+        const totalDepositSection = document.querySelector('.checkout-total-deposit-section');
+        if (totalDepositSection) {
+            totalDepositSection.parentNode.insertBefore(paymentsReceivedSection, totalDepositSection);
+        }
+    }
 
     if (currentShopSettings.paymentOptions === 'DepositOrFull' && state.session.user.amountReceived === 0) {
         paymentChoiceContainer.style.display = 'block';

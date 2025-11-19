@@ -15,12 +15,14 @@ import { setupCalendarEventListeners } from './components/calendarView.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
 import * as backgroundEngine from './components/backgroundEngine.js'; 
 import fluidEffect from './components/effects/fluid.js';
+import { showReceiptModal } from './components/receipt.js';
 
 
 const imageCache = new Map();
 window.imageCache = imageCache; 
 
 window.applyFiltersAndSort = applyFiltersAndSort;
+window.showReceiptModal = showReceiptModal;
 
 
 function syncUiWithUrl() {

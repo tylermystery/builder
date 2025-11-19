@@ -13,6 +13,7 @@ import { showItineraryModal, setupItineraryEventListeners } from './components/i
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
+import { showReceiptModal } from './components/receipt.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -781,10 +782,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const saveShareBtn = e.target.closest('#save-share-btn');
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
+        const receiptLink = e.target.closest('.receipt-link, .receipt-btn');
 
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
 
-        if (healthSuggestionBtn) {
+        if (receiptLink) {
+            e.preventDefault();
+            e.stopPropagation();
+            const paymentIndex = parseInt(receiptLink.dataset.paymentIndex, 10);
+            if (!isNaN(paymentIndex)) {
+                showReceiptModal(paymentIndex);
+            }
+        } else if (healthSuggestionBtn) {
             e.stopPropagation();
             const categoryToFilter = healthSuggestionBtn.dataset.categoryFilter;
             const normalizedCategory = categoryToFilter.toLowerCase().replace(/\s+/g, ' ');

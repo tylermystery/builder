@@ -4,13 +4,12 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
-// VVV FINAL IMPORT FIX: Direct imports from availability.js VVV
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
-import { calculateRecommendationScore } from '../availability.js'; // <-- Direct import fixed
-// ^^^ END FINAL IMPORT FIX ^^^\
+import { calculateRecommendationScore } from '../availability.js';
 import { parseOptions, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
+import { showReceiptModal } from './receipt.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -354,7 +353,30 @@ export function updateTotalCost() {
     }
     
     if (amountReceived > 0) {
-        amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        const paymentHistory = state.session.user.paymentHistory || [];
+        
+        if (paymentHistory.length === 1) {
+            amountPaidCostEl.innerHTML = `<a href="#" class="receipt-link" data-payment-index="0" title="View Receipt">-$${amountReceived.toFixed(2)}</a>`;
+        } else if (paymentHistory.length > 1) {
+            // Sort payments by date (oldest first) and create index mapping
+            const sortedPayments = paymentHistory
+                .map((payment, originalIndex) => ({ ...payment, originalIndex }))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            let paymentsHtml = '<div class="multiple-payments">';
+            sortedPayments.forEach((payment, displayIndex) => {
+                paymentsHtml += `<div class="payment-item">
+                    <a href="#" class="receipt-link" data-payment-index="${payment.originalIndex}" title="View Receipt #${displayIndex + 1}">
+                        Payment ${displayIndex + 1}: -$${payment.amount.toFixed(2)}
+                    </a>
+                </div>`;
+            });
+            paymentsHtml += '</div>';
+            amountPaidCostEl.innerHTML = paymentsHtml;
+        } else {
+            amountPaidCostEl.textContent = `-$${amountReceived.toFixed(2)}`;
+        }
+        
         amountPaidRowEl.style.display = 'flex';
         totalDividerEl.style.display = 'block';
     } else {
