@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice } from '../utils.js';
+import { getRecordPrice, getEffectiveMinQuantity } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 export function showReceiptModal(paymentIndex) {
@@ -34,22 +34,47 @@ export function showReceiptModal(paymentIndex) {
     });
     
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
-    
+
+    // Check if UMW is in plan
+    let isUmwInPlan = false;
+    for (const [id] of state.cart.lockedItems) {
+        const lockedRecord = state.records.all.find(r => r.id === id);
+        if (lockedRecord && lockedRecord.fields.Name && lockedRecord.fields.Name.includes("Union Machine Works")) {
+            isUmwInPlan = true;
+            break;
+        }
+    }
+
     let itemsHtml = '';
     let itemsSubtotal = 0;
     
     for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        
+
         const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
         const quantity = itemInfo.quantity || 1;
         const itemTotal = unitPrice * quantity;
         itemsSubtotal += itemTotal;
-        
+
+        // Check for edge case notes
+        const airtableMin = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+        const effectiveMin = getEffectiveMinQuantity(record);
+        let edgeCaseNote = '';
+
+        if (airtableMin > 1) {
+            if (!isUmwInPlan && quantity === effectiveMin) {
+                // Off-site at minimum
+                edgeCaseNote = '<br><small style="color: #fd7e14; font-style: italic;">* At minimum headcount for off-site event</small>';
+            } else if (isUmwInPlan && quantity < airtableMin) {
+                // On-site below standard minimum
+                edgeCaseNote = '<br><small style="color: #28a745; font-style: italic;">✓ Below standard minimum (Union Machine Works venue)</small>';
+            }
+        }
+
         itemsHtml += `
             <tr>
-                <td>${record.fields.Name}</td>
+                <td>${record.fields.Name}${edgeCaseNote}</td>
                 <td style="text-align: center;">${quantity}</td>
                 <td style="text-align: right;">$${unitPrice.toFixed(2)}</td>
                 <td style="text-align: right;">$${itemTotal.toFixed(2)}</td>

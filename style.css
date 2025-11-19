@@ -1364,6 +1364,44 @@ body.modal-open {
     cursor: pointer;
 }
 
+/* --- Minimum Headcount Warning Styles --- */
+.min-qty-warning {
+    color: #fd7e14; /* Orange */
+    font-weight: bold;
+    cursor: help;
+    margin-left: 2px;
+}
+
+/* The Sales Nudge (Off-site) */
+.umw-sales-nudge {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 10px;
+    font-size: 0.9em;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
+.umw-sales-nudge a {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+.umw-sales-nudge a:hover {
+    color: #003d82;
+}
+
+/* The Benefit Badge (On-site) */
+.umw-benefit-badge {
+    background-color: #d4edda;
+    border-left: 4px solid #28a745;
+    color: #155724;
+    padding: 10px;
+    font-size: 0.9em;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
 /* --- 8. MODAL STYLES (Original) --- */
 .modal-overlay {
     display: none;
