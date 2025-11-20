@@ -657,6 +657,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         modalQuantitySelector.innerHTML = `<div class="quantity-selector" data-record-id="${record.id}"><button type="button" class="quantity-btn minus" aria-label="Decrease quantity">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1"><button type="button" class="quantity-btn plus" aria-label="Increase quantity">+</button></div>`;
 
+        // Remove any existing nudge/badge elements to prevent duplication
+        const existingNudge = modalActionsContainer.querySelector('.umw-sales-nudge');
+        const existingBadge = modalActionsContainer.querySelector('.umw-benefit-badge');
+        if (existingNudge) existingNudge.remove();
+        if (existingBadge) existingBadge.remove();
+
         // Add sales nudge or benefit badge
         let nudgeHTML = '';
         if (effectiveMin < airtableMin) {
