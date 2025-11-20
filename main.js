@@ -114,10 +114,15 @@ async function initialize() {
 
         ui.updateHeader();
         ui.updateEventPlanSection();
-        ui.updateIdeasCarousel(); 
+        ui.updateIdeasCarousel();
         ui.updateTotalCost();
         const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
         if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
+
+        // Verify no duplicate items after a short delay to ensure DOM updates complete
+        setTimeout(() => {
+            ui.verifyNoDuplicateItems();
+        }, 100);
     });
 
     ui.toggleLoading(true);
@@ -396,8 +401,13 @@ async function initialize() {
              }
              ui.updateHeader();
              ui.updateEventPlanSection();
-             ui.updateIdeasCarousel(); 
+             ui.updateIdeasCarousel();
              ui.updateTotalCost();
+
+             // Verify no duplicate items after a short delay
+             setTimeout(() => {
+                 ui.verifyNoDuplicateItems();
+             }, 100);
         } else {
              log('Main', 'No active session ID found (this should not happen after the guest-session fix).');
         }
