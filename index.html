@@ -8,19 +8,18 @@
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
     <!-- FIX: Removed Markdown []() wrapper from links -->
-    <!-- Preload critical resources -->
+    <!-- Preconnect to critical third-party origins for faster resource loading -->
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <link rel="preconnect" href="https://js.pusher.com" crossorigin>
     <link rel="preconnect" href="https://identity.netlify.com" crossorigin>
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
-    <!-- DNS prefetch for API endpoints -->
+    <!-- DNS prefetch for API endpoints and other domains -->
     <link rel="dns-prefetch" href="https://api.airtable.com">
-    
-    <!-- Load Flatpickr CSS asynchronously -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"></noscript>
+    <link rel="dns-prefetch" href="https://js.stripe.com">
+
+    <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
     <!-- Inline Critical CSS -->
     <style>
@@ -381,8 +380,14 @@ body.modal-open {
     <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
 
-    <!-- Preload main JavaScript module -->
+    <!-- Preload main JavaScript module and critical dependencies -->
     <link rel="modulepreload" href="main.js">
+    <link rel="modulepreload" href="state.js">
+    <link rel="modulepreload" href="config.js">
+    <link rel="modulepreload" href="api.js">
+    <link rel="modulepreload" href="ui.js">
+    <link rel="modulepreload" href="events.js">
+    <link rel="modulepreload" href="components/backgroundEngine.js">
 
     <!-- Tippy.js and Popper (small, needed early for tooltips) -->
     <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous" fetchpriority="low"></script>
@@ -984,9 +989,9 @@ body.modal-open {
         </div>
     </div>
     
-    
+
     <script type="module" src="main.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous" fetchpriority="low"></script>
+    <!-- SortableJS will be loaded on-demand when needed -->
 
     <!-- Service Worker Registration for Cache Management -->
     <script>
