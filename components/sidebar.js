@@ -216,35 +216,99 @@ function updateTotalPlanScoreDisplay(score) {
     }
 }
 
-// --- 2. THIS FUNCTION IS REPLACED ---\
+// --- 2. THIS FUNCTION IS REPLACED ---
+let isUpdatingEventPlan = false;
+let pendingEventPlanUpdate = false;
+
 export async function updateEventPlanSection() {
-    log('Sidebar', 'Updating event plan panel.');
-    const container = document.getElementById('cart-items-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    if (state.cart.lockedItems.size === 0) {
-        container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
-    } else {
-        for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-            // Find the record in state.records.all (where custom items now live)
-            const record = state.records.all.find(r => r.id === recordId);
-            if (record) {
-                const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
-                container.appendChild(itemElement);
-            } else {
-                log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
+    // If already updating, mark that another update is needed and return
+    if (isUpdatingEventPlan) {
+        pendingEventPlanUpdate = true;
+        log('Sidebar', 'Event plan update already in progress, will retry after completion.');
+        return;
+    }
+
+    isUpdatingEventPlan = true;
+    pendingEventPlanUpdate = false;
+
+    try {
+        log('Sidebar', 'Updating event plan panel.');
+        const container = document.getElementById('cart-items-container');
+        if (!container) return;
+
+        // Clear container to prevent duplicates
+        container.innerHTML = '';
+
+        if (state.cart.lockedItems.size === 0) {
+            container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
+        } else {
+            // Create a document fragment to batch DOM updates
+            const fragment = document.createDocumentFragment();
+
+            for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+                // Find the record in state.records.all (where custom items now live)
+                const record = state.records.all.find(r => r.id === recordId);
+                if (record) {
+                    const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
+                    fragment.appendChild(itemElement);
+                } else {
+                    log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
+                }
             }
+
+            // Append all items at once to minimize reflows
+            container.appendChild(fragment);
+        }
+
+        ui.observeLazyImages(container);
+
+        updateEventHealthScore(); // --- ADDED THIS LINE ---
+        updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // --- ADDED THIS LINE ---
+    } finally {
+        isUpdatingEventPlan = false;
+
+        // If another update was requested while we were updating, run it now
+        if (pendingEventPlanUpdate) {
+            log('Sidebar', 'Running pending event plan update.');
+            updateEventPlanSection();
         }
     }
-    ui.observeLazyImages(container);
-    
-    updateEventHealthScore(); // --- ADDED THIS LINE ---\
-    updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // --- ADDED THIS LINE ---\
 }
-// --- END REPLACED FUNCTION ---\
+// --- END REPLACED FUNCTION ---
 
+
+/**
+ * Verifies that items in the event plan panel are not duplicated
+ * This function checks the DOM and logs warnings if duplicates are found
+ */
+export function verifyNoDuplicateItems() {
+    const container = document.getElementById('cart-items-container');
+    if (!container) return;
+
+    const itemElements = container.querySelectorAll('.locked-item-card[data-record-id]');
+    const seenIds = new Set();
+    const duplicates = [];
+
+    itemElements.forEach(element => {
+        const recordId = element.dataset.recordId;
+        if (seenIds.has(recordId)) {
+            duplicates.push(recordId);
+            log('Sidebar', `WARNING: Duplicate item found in event plan panel: ${recordId}`);
+            // Remove the duplicate element
+            element.remove();
+        } else {
+            seenIds.add(recordId);
+        }
+    });
+
+    if (duplicates.length > 0) {
+        log('Sidebar', `Removed ${duplicates.length} duplicate items from event plan panel`);
+        return duplicates;
+    } else {
+        log('Sidebar', 'Event plan panel verification: No duplicates found');
+        return [];
+    }
+}
 
 export async function updateIdeasCarousel() { 
     log('Sidebar', `Updating ideas carousel with ${state.cart.items.size} items.`);
