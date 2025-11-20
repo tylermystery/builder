@@ -7,7 +7,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js'; 
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getTempLikes } from '../utils.js';
+import { getRecordPrice, getTempLikes, getEffectiveMinQuantity } from '../utils.js';
 import { log } from '../utils/debug.js';
 
 // Helper to generate optimized Cloudinary URLs with responsive sizing
@@ -258,9 +258,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
-    const headcountMin = fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+    const effectiveMin = getEffectiveMinQuantity(record);
     const isLocked = state.cart.lockedItems.has(record.id);
-    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${headcountMin}" step="1"><button type="button" class="quantity-btn plus">+</button></div>`;
+    const quantitySelectorHTML = `<div class="quantity-selector"><button type="button" class="quantity-btn minus">-</button><input type="number" class="quantity-input" value="${itemState.quantity}" min="${effectiveMin}" step="1"><button type="button" class="quantity-btn plus">+</button></div>`;
     const displayPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
