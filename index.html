@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WTFun - Event Planning and Activity Discovery">
+    <meta name="theme-color" content="#007bff">
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
     <!-- FIX: Removed Markdown []() wrapper from links -->
     <!-- Preload critical resources -->
-    <link rel="preconnect" href="https://unpkg.com">
-    <link rel="preconnect" href="https://js.pusher.com">
-    <link rel="preconnect" href="https://identity.netlify.com">
-    <link rel="preconnect" href="https://res.cloudinary.com">
-    
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://js.pusher.com" crossorigin>
+    <link rel="preconnect" href="https://identity.netlify.com" crossorigin>
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
     <!-- DNS prefetch for API endpoints -->
     <link rel="dns-prefetch" href="https://api.airtable.com">
     
@@ -377,14 +380,17 @@ body.modal-open {
     <!-- Load Deferred CSS Asynchronously -->
     <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
-    
+
+    <!-- Preload main JavaScript module -->
+    <link rel="modulepreload" href="main.js">
+
     <!-- Tippy.js and Popper (small, needed early for tooltips) -->
-    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous"></script>
-    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous"></script>
-    
+    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous" fetchpriority="low"></script>
+    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous" fetchpriority="low"></script>
+
     <!-- Other libraries will be lazy-loaded on demand -->
-    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous"></script>
-    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous" fetchpriority="low"></script>
+    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js" fetchpriority="low"></script>
 
     </head>
 <body>
@@ -980,10 +986,15 @@ body.modal-open {
     
     
     <script type="module" src="main.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous" fetchpriority="low"></script>
 
     <!-- Service Worker Registration for Cache Management -->
     <script>
+    // Mark the start of page load for performance monitoring
+    if ('performance' in window && 'mark' in performance) {
+      performance.mark('page-load-start');
+    }
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
@@ -1011,10 +1022,10 @@ body.modal-open {
               });
             });
             
-            // Check for updates periodically (every 5 minutes)
+            // Check for updates periodically (every 30 minutes)
             setInterval(() => {
               registration.update();
-            }, 5 * 60 * 1000);
+            }, 30 * 60 * 1000);
           })
           .catch((error) => {
             console.warn('[App] Service Worker registration failed:', error);

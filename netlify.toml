@@ -25,6 +25,8 @@
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # Performance optimization headers
+    Timing-Allow-Origin = "*"
     
 [[headers]]
   for = "*.html"
