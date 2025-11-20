@@ -679,13 +679,28 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             // Add click handler for the search link if present
             const searchLink = modalActionsContainer.querySelector('.search-link');
             if (searchLink) {
-                searchLink.addEventListener('click', (e) => {
+                searchLink.addEventListener('click', async (e) => {
                     e.preventDefault();
                     const searchTerm = searchLink.dataset.term;
-                    document.getElementById('name-filter').value = searchTerm;
-                    closeDetailModal();
-                    // Trigger the search
-                    document.getElementById('name-filter').dispatchEvent(new Event('input', { bubbles: true }));
+
+                    // Find the Union Machine Works record in the catalog
+                    const umwRecord = state.records.all.find(r =>
+                        r.fields.Name && r.fields.Name.includes(searchTerm)
+                    );
+
+                    if (umwRecord) {
+                        // Open the Union Machine Works detail modal directly
+                        closeDetailModal();
+                        // Small delay to ensure current modal closes cleanly
+                        setTimeout(() => {
+                            showDetailModal(umwRecord, 0);
+                        }, 100);
+                    } else {
+                        // Fallback to search filter if record not found
+                        document.getElementById('name-filter').value = searchTerm;
+                        closeDetailModal();
+                        document.getElementById('name-filter').dispatchEvent(new Event('input', { bubbles: true }));
+                    }
                 });
             }
         }
