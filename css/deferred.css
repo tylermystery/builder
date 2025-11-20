@@ -97,9 +97,9 @@
     text-decoration: line-through;
 }
 
-/* Reserve space for calendar to prevent layout shift */
+/* Calendar container - no min-height to prevent extra whitespace */
 #modal-calendar-container {
-    min-height: 320px; /* Typical height of flatpickr inline calendar */
+    /* Removed min-height to eliminate whitespace above calendar */
 }
 
 /* --- NEW CALENDAR STYLES --- */
