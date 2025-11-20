@@ -20,6 +20,7 @@ let settings = {};
 
 let loopIterations = 0;
 let lastProgressLog = 0;
+let isPageVisible = true;
 
 function animationLoop(timestamp) {
     if (!currentEffect) {
@@ -27,10 +28,16 @@ function animationLoop(timestamp) {
         return;
     }
 
+    // Pause rendering when page is hidden to save CPU/GPU resources
+    if (!isPageVisible) {
+        animationFrameId = requestAnimationFrame(animationLoop);
+        return;
+    }
+
     const currentProgress = state.ui.currentProgress;
-    
+
     loopIterations++;
-    
+
     updateDebugPanel(currentProgress, currentEnergy, timestamp / 1000.0, loopIterations);
 
     if (currentEffect.type === 'webgl') {
@@ -39,13 +46,13 @@ function animationLoop(timestamp) {
              return;
         }
         const elapsedTime = (timestamp - startTime) / 1000.0;
-        currentEnergy *= energyDecayRate; 
+        currentEnergy *= energyDecayRate;
         if (currentEnergy < 0.01) currentEnergy = 0.0;
-        
+
         if (currentProgress !== lastProgressLog) {
             lastProgressLog = currentProgress;
         }
-        
+
         currentEffect.draw(gl, canvas.width, canvas.height, elapsedTime, currentEnergy, currentProgress);
 
     } else if (currentEffect.type === 'canvas') {
@@ -220,16 +227,16 @@ export function loadEffect(effect, controlsContainer) {
 }
 
 export function initBackgroundEngine() {
-    canvas = document.getElementById('kaleidoscope-bg'); 
+    canvas = document.getElementById('kaleidoscope-bg');
     if (!canvas) {
         console.error('[BG-Engine] FATAL: Background canvas not found in DOM!');
         return;
     }
-    
+
     const resizeCanvas = () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        
+
         if (currentEffect && typeof currentEffect.resize === 'function') {
             if (currentEffect.type === 'webgl' && gl) {
                 gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -240,15 +247,27 @@ export function initBackgroundEngine() {
     };
 
     window.addEventListener('resize', resizeCanvas);
-    
+
+    // Use Page Visibility API to pause animations when tab is hidden
+    document.addEventListener('visibilitychange', () => {
+        isPageVisible = !document.hidden;
+        if (isPageVisible) {
+            // Reset timestamp to prevent large time jumps
+            lastTimestamp_2d = performance.now();
+            log('BG-Engine', 'Page visible - resuming animations');
+        } else {
+            log('BG-Engine', 'Page hidden - pausing animations to save resources');
+        }
+    });
+
     startTime = performance.now();
     lastTimestamp_2d = startTime;
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     animationFrameId = requestAnimationFrame(animationLoop);
-    
+
     initDebugPanel();
-    
-    log('BG-Engine', 'Hybrid WebGL/2D Engine Initialized.');
+
+    log('BG-Engine', 'Hybrid WebGL/2D Engine Initialized with Page Visibility optimization.');
 }
 
 function updateDebugPanel(progress, energy, time, drawCalls) {

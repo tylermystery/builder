@@ -101,28 +101,62 @@ export async function loadStripe() {
 }
 
 /**
- * Lazy loads Flatpickr library on demand
+ * Lazy loads Flatpickr library and CSS on demand
  * @returns {Promise<void>}
  */
 export async function loadFlatpickr() {
     if (window.flatpickr) {
         return Promise.resolve();
     }
-    
+
+    // Load Flatpickr CSS first
+    if (!document.querySelector('link[href*="flatpickr.min.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css';
+        document.head.appendChild(link);
+        log('LazyLoad', 'Flatpickr CSS loaded');
+    }
+
     await loadScript('https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js', 'flatpickr');
-    
+
     // Wait for flatpickr to be available on window object
     let attempts = 0;
     while (!window.flatpickr && attempts < 50) {
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
     }
-    
+
     if (!window.flatpickr) {
         throw new Error('Flatpickr failed to load after 5 seconds');
     }
-    
+
     log('LazyLoad', 'Flatpickr is now available on window object');
+}
+
+/**
+ * Lazy loads SortableJS library on demand
+ * @returns {Promise<void>}
+ */
+export async function loadSortable() {
+    if (window.Sortable) {
+        return Promise.resolve();
+    }
+
+    await loadScript('https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js', 'sortable');
+
+    // Wait for Sortable to be available on window object
+    let attempts = 0;
+    while (!window.Sortable && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+
+    if (!window.Sortable) {
+        throw new Error('Sortable failed to load after 5 seconds');
+    }
+
+    log('LazyLoad', 'SortableJS is now available on window object');
 }
 
 /**
