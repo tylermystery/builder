@@ -276,6 +276,7 @@ function getBreadcrumbs(record) {
 
 function resetModalState() {
     const elements = {
+        modalHeaderActions: document.getElementById('modal-header-actions'),
         modalItemName: document.getElementById('modal-item-name'),
         modalItemPrice: document.getElementById('modal-item-price'),
         modalItemDescription: document.getElementById('modal-item-description'),
@@ -300,6 +301,11 @@ function resetModalState() {
             else elements[key].innerHTML = '';
         }
     }
+
+    // Remove dynamically created event-specific sections that persist between modal opens
+    const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section');
+    dynamicSections.forEach(section => section.remove());
+
     log('Modal', 'Reset modal state.');
 }
 
