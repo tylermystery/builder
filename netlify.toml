@@ -20,54 +20,63 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
     # Performance optimization headers
     Timing-Allow-Origin = "*"
-    
+
 [[headers]]
   for = "*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+    # Enable early hints for better performance
+    Link = "</main.js>; rel=modulepreload, </style.css>; rel=preload; as=style"
 
 [[headers]]
   for = "/service-worker.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
     Content-Type = "application/javascript; charset=utf-8"
-    
+
 [[headers]]
   for = "*.js"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "text/javascript; charset=utf-8"
-    
+
 [[headers]]
   for = "*.css"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "text/css; charset=utf-8"
-    
+
 [[headers]]
   for = "*.jpg"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/jpeg"
-    
+    # Enable compression
+    Content-Encoding = "gzip"
+
 [[headers]]
   for = "*.png"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/png"
-    
+
 [[headers]]
   for = "*.webp"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/webp"
+
+[[headers]]
+  for = "*.avif"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "image/avif"
 
 [[redirects]]
   from = "/api/update-user-prefs"

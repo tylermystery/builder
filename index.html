@@ -7,7 +7,6 @@
     <meta name="theme-color" content="#007bff">
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
-    <!-- FIX: Removed Markdown []() wrapper from links -->
     <!-- Preconnect to critical third-party origins for faster resource loading -->
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <link rel="preconnect" href="https://js.pusher.com" crossorigin>
@@ -18,6 +17,17 @@
     <!-- DNS prefetch for API endpoints and other domains -->
     <link rel="dns-prefetch" href="https://api.airtable.com">
     <link rel="dns-prefetch" href="https://js.stripe.com">
+
+    <!-- Preload critical JavaScript modules for faster execution -->
+    <link rel="modulepreload" href="/main.js">
+    <link rel="modulepreload" href="/state.js">
+    <link rel="modulepreload" href="/config.js">
+    <link rel="modulepreload" href="/ui.js">
+    <link rel="modulepreload" href="/api.js">
+
+    <!-- Preload critical CSS for immediate rendering -->
+    <link rel="preload" href="/css/critical.css" as="style">
+    <link rel="preload" href="/style.css" as="style">
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
@@ -993,6 +1003,76 @@ body.modal-open {
     <script type="module" src="utils/calendarExport.js"></script>
     <script type="module" src="main.js"></script>
     <!-- SortableJS will be loaded on-demand when needed -->
+
+    <!-- Web Vitals Performance Monitoring -->
+    <script type="module">
+    // Lightweight Web Vitals tracking
+    function sendToAnalytics(metric) {
+      // Send metrics to console for monitoring
+      console.log(`[Performance] ${metric.name}:`, Math.round(metric.value), metric.rating);
+
+      // Could send to analytics service here in production
+      // Example: navigator.sendBeacon('/analytics', JSON.stringify(metric));
+    }
+
+    // Track Core Web Vitals
+    if ('PerformanceObserver' in window) {
+      // Largest Contentful Paint (LCP)
+      try {
+        const lcpObserver = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          const lastEntry = entries[entries.length - 1];
+          const lcp = lastEntry.renderTime || lastEntry.loadTime;
+          const rating = lcp < 2500 ? 'good' : lcp < 4000 ? 'needs-improvement' : 'poor';
+          sendToAnalytics({ name: 'LCP', value: lcp, rating });
+        });
+        lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
+      } catch (e) { console.warn('LCP tracking failed:', e); }
+
+      // First Input Delay (FID) / Interaction to Next Paint (INP)
+      try {
+        const fidObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            const fid = entry.processingStart - entry.startTime;
+            const rating = fid < 100 ? 'good' : fid < 300 ? 'needs-improvement' : 'poor';
+            sendToAnalytics({ name: 'FID', value: fid, rating });
+          }
+        });
+        fidObserver.observe({ type: 'first-input', buffered: true });
+      } catch (e) { console.warn('FID tracking failed:', e); }
+
+      // Cumulative Layout Shift (CLS)
+      try {
+        let clsValue = 0;
+        const clsObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              clsValue += entry.value;
+            }
+          }
+        });
+        clsObserver.observe({ type: 'layout-shift', buffered: true });
+
+        // Report CLS on page unload
+        addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            const rating = clsValue < 0.1 ? 'good' : clsValue < 0.25 ? 'needs-improvement' : 'poor';
+            sendToAnalytics({ name: 'CLS', value: clsValue, rating });
+          }
+        });
+      } catch (e) { console.warn('CLS tracking failed:', e); }
+    }
+
+    // Track basic load metrics
+    window.addEventListener('load', () => {
+      const perfData = performance.getEntriesByType('navigation')[0];
+      if (perfData) {
+        sendToAnalytics({ name: 'TTFB', value: perfData.responseStart, rating: perfData.responseStart < 800 ? 'good' : 'needs-improvement' });
+        sendToAnalytics({ name: 'DOMContentLoaded', value: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart, rating: 'info' });
+        sendToAnalytics({ name: 'LoadComplete', value: perfData.loadEventEnd - perfData.fetchStart, rating: 'info' });
+      }
+    });
+    </script>
 
     <!-- Service Worker Registration for Cache Management -->
     <script>
