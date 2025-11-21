@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar Export Test</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div style="padding: 20px; max-width: 800px; margin: 0 auto;">
+        <h1>Calendar Export Test</h1>
+        <p>This page tests the calendar export functionality for events.</p>
+
+        <div id="test-container"></div>
+    </div>
+
+    <script type="module">
+        import { createCalendarExportButtons, initializeCalendarExportListeners } from './utils/calendarExport.js';
+
+        // Mock event data
+        const mockEvent = {
+            id: 'test123',
+            fields: {
+                Name: 'Summer Music Festival',
+                Description: 'Join us for an amazing outdoor music festival featuring local bands and food trucks. Bring your friends and family for a day of fun!',
+                Date: '2025-07-15',
+                Time: '6:00 PM',
+                'Location Details': 'Golden Gate Park, San Francisco, CA',
+                'Duration (hours)': 4
+            }
+        };
+
+        // Create and insert the calendar export buttons
+        const container = document.getElementById('test-container');
+        const buttonsHTML = createCalendarExportButtons(mockEvent);
+
+        if (buttonsHTML) {
+            container.innerHTML = buttonsHTML;
+            initializeCalendarExportListeners(mockEvent, container);
+            console.log('✅ Calendar export buttons created successfully!');
+        } else {
+            container.innerHTML = '<p style="color: red;">❌ Failed to create calendar export buttons</p>';
+            console.error('Failed to create calendar export buttons');
+        }
+
+        // Test individual functions
+        console.log('Testing calendar export functions:');
+
+        // Test iCal generation
+        try {
+            const { generateICalFile } = await import('./utils/calendarExport.js');
+            const icalContent = generateICalFile(mockEvent);
+            console.log('✅ iCal generation works!');
+            console.log('iCal content preview:', icalContent.substring(0, 200));
+        } catch (e) {
+            console.error('❌ iCal generation failed:', e);
+        }
+
+        // Test URL generation
+        try {
+            const { generateGoogleCalendarUrl, generateOutlookCalendarUrl, generateYahooCalendarUrl } = await import('./utils/calendarExport.js');
+
+            const googleUrl = generateGoogleCalendarUrl(mockEvent);
+            console.log('✅ Google Calendar URL:', googleUrl);
+
+            const outlookUrl = generateOutlookCalendarUrl(mockEvent);
+            console.log('✅ Outlook Calendar URL:', outlookUrl);
+
+            const yahooUrl = generateYahooCalendarUrl(mockEvent);
+            console.log('✅ Yahoo Calendar URL:', yahooUrl);
+        } catch (e) {
+            console.error('❌ URL generation failed:', e);
+        }
+    </script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMi
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
+import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -359,8 +360,19 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
-    
+
+    // Parse options and record names early for event logic
+    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
+
     if (record.fields['Item Type'] === 'Event') {
+        // Check if this event has child options that are themselves event records
+        // (indicating this is a parent event with multiple date options)
+        const hasChildEventOptions = rawOptions.some(opt => allRecordNames.has(opt.name));
+
+        // Only show event-specific sections for individual events, not parent events with child date options
+        // This prevents duplicate RSVP lists and calendar exports when viewing parent events
+        if (!hasChildEventOptions) {
         const eventDateStr = record.fields.Date;
         const eventTime = record.fields.Time || '';
         const eventLocation = record.fields.Location || '';
@@ -419,6 +431,21 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             
             rsvpListSection.innerHTML = rsvpHTML;
             modalItemDescription.parentElement.insertBefore(rsvpListSection, modalItemDescription);
+        }
+
+        // Add calendar export buttons for events
+        const calendarExportHTML = createCalendarExportButtons(record);
+        if (calendarExportHTML) {
+            const calendarExportSection = document.createElement('div');
+            calendarExportSection.className = 'calendar-export-section';
+            calendarExportSection.innerHTML = calendarExportHTML;
+            modalItemDescription.parentElement.insertBefore(calendarExportSection, modalItemDescription);
+
+            // Initialize calendar export listeners after a short delay to ensure DOM is ready
+            setTimeout(() => {
+                initializeCalendarExportListeners(record, calendarExportSection);
+            }, 100);
+        }
         }
     }
     
@@ -503,8 +530,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalAdditionalDetails.appendChild(fragment);
     }
 
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-    const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
     const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];

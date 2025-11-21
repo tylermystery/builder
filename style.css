@@ -3768,3 +3768,141 @@ hr.total-divider {
         display: none;
     }
 }
+
+/* --- CALENDAR EXPORT BUTTONS --- */
+.calendar-export-container {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.calendar-export-label {
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 0.95em;
+}
+
+.calendar-export-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.calendar-export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 0.9em;
+    font-weight: 500;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    background-color: white;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.calendar-export-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.calendar-export-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-export-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.google-calendar-btn {
+    background: linear-gradient(135deg, #4285f4 0%, #357ae8 100%);
+    color: white;
+    border-color: #357ae8;
+}
+
+.google-calendar-btn:hover {
+    background: linear-gradient(135deg, #357ae8 0%, #2a67d6 100%);
+}
+
+.outlook-calendar-btn {
+    background: linear-gradient(135deg, #0078d4 0%, #006cbd 100%);
+    color: white;
+    border-color: #006cbd;
+}
+
+.outlook-calendar-btn:hover {
+    background: linear-gradient(135deg, #006cbd 0%, #005ba1 100%);
+}
+
+.apple-calendar-btn {
+    background: linear-gradient(135deg, #555555 0%, #333333 100%);
+    color: white;
+    border-color: #333333;
+}
+
+.apple-calendar-btn:hover {
+    background: linear-gradient(135deg, #333333 0%, #222222 100%);
+}
+
+.yahoo-calendar-btn {
+    background: linear-gradient(135deg, #6001d2 0%, #5000b8 100%);
+    color: white;
+    border-color: #5000b8;
+}
+
+.yahoo-calendar-btn:hover {
+    background: linear-gradient(135deg, #5000b8 0%, #40009e 100%);
+}
+
+.ical-download-btn {
+    background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    color: white;
+    border-color: #218838;
+}
+
+.ical-download-btn:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .calendar-export-buttons {
+        flex-direction: column;
+    }
+
+    .calendar-export-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Compact version for cards */
+.calendar-export-compact .calendar-export-container {
+    margin: 10px 0;
+    padding: 10px;
+}
+
+.calendar-export-compact .calendar-export-label {
+    font-size: 0.85em;
+    margin-bottom: 8px;
+}
+
+.calendar-export-compact .calendar-export-btn {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    gap: 4px;
+}
+
+.calendar-export-compact .calendar-export-btn svg {
+    width: 14px;
+    height: 14px;
+}
