@@ -604,11 +604,12 @@ export function updateCatalogHeader() {
 
     if (categoryFilter) {
         const categoryRecord = findRecordByName(categoryFilter);
-        const categoryName = categoryRecord?.fields.Name || categoryFilter; 
-        
-        activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
-        filterCount++; 
-        
+        const categoryName = categoryRecord?.fields.Name || categoryFilter;
+
+        // Category is shown in breadcrumbs, so don't add to active filters
+        // activeFiltersHtml.push(createFilterChip('Category: ' + categoryName, 'category-filter', categoryFilter));
+        // filterCount++;
+
         path.push(`<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"${categoryFilter}\">${categoryName}</a>`);
     }
 
@@ -616,8 +617,9 @@ export function updateCatalogHeader() {
         const subcatRecord = findRecordByName(subcatFilter);
         const subcatName = subcatRecord?.fields.Name || subcatFilter;
 
-        activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', subcatFilter));
-        filterCount++; 
+        // Subcategory is shown in breadcrumbs, so don't add to active filters
+        // activeFiltersHtml.push(createFilterChip(subcatName, 'subcategory-filter', subcatFilter));
+        // filterCount++;
         path.push(`<span>${subcatName}</span>`);
     });
 
