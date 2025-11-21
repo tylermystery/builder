@@ -24,28 +24,63 @@ export { showPresentationView, hidePresentationView, setupPresentationEventListe
 export { initializeItemChat };
 
 
+// Optimized lazy loading with responsive images and modern format support
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             const element = entry.target;
             if (element.dataset.bgImage) {
+                // Optimize Cloudinary URL for responsive delivery
+                let imageUrl = element.dataset.bgImage;
+
+                // Add format optimization and quality to Cloudinary URLs
+                if (imageUrl.includes('cloudinary.com')) {
+                    const width = element.offsetWidth || 400;
+                    const dpr = window.devicePixelRatio || 1;
+                    const optimalWidth = Math.ceil(width * dpr);
+
+                    // Insert Cloudinary transformations: auto format (WebP/AVIF), quality, width
+                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
+                }
+
                 // Create a new image to preload
                 const img = new Image();
                 img.onload = () => {
+                    element.style.backgroundImage = `url('${imageUrl}')`;
+                    element.classList.add('loaded');
+                    element.classList.remove('lazy-load');
+                };
+                img.onerror = () => {
+                    // Fallback to original URL if optimized version fails
                     element.style.backgroundImage = `url('${element.dataset.bgImage}')`;
                     element.classList.add('loaded');
                     element.classList.remove('lazy-load');
                 };
-                img.src = element.dataset.bgImage;
+                img.src = imageUrl;
             }
             if (element.dataset.src) {
+                let imageUrl = element.dataset.src;
+
+                // Optimize Cloudinary URLs for img elements
+                if (imageUrl.includes('cloudinary.com')) {
+                    const width = element.offsetWidth || 400;
+                    const dpr = window.devicePixelRatio || 1;
+                    const optimalWidth = Math.ceil(width * dpr);
+                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
+                }
+
                 const img = new Image();
                 img.onload = () => {
+                    element.src = imageUrl;
+                    element.classList.add('loaded');
+                    element.classList.remove('lazy-load');
+                };
+                img.onerror = () => {
                     element.src = element.dataset.src;
                     element.classList.add('loaded');
                     element.classList.remove('lazy-load');
                 };
-                img.src = element.dataset.src;
+                img.src = imageUrl;
             }
             observer.unobserve(element);
         }
