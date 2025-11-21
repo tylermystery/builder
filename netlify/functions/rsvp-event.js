@@ -129,11 +129,11 @@ exports.handler = async (event, context) => {
                             const icalAttachment = Buffer.from(icalContent).toString('base64');
                             
                             const eventName = eventRecord.fields.Name || 'Event';
-                            const eventDate = new Date(eventRecord.fields.Date).toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
+                            const eventDate = new Date(eventRecord.fields.Date + 'T00:00:00').toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
                             });
                             const eventTime = eventRecord.fields.Time || '';
                             

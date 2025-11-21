@@ -13,9 +13,10 @@ function formatICalDate(date, time = null) {
   let dateObj;
 
   if (typeof date === 'string') {
-    dateObj = new Date(date);
+    // Parse date in local timezone to avoid timezone conversion issues
+    dateObj = new Date(date + 'T00:00:00');
   } else {
-    dateObj = date;
+    dateObj = new Date(date);
   }
 
   // If time is provided, parse and set it
@@ -24,6 +25,9 @@ function formatICalDate(date, time = null) {
     if (timeParts) {
       dateObj.setHours(timeParts.hours, timeParts.minutes, 0, 0);
     }
+  } else {
+    // Default to 11:00 AM if no time is provided
+    dateObj.setHours(11, 0, 0, 0);
   }
 
   // Format as iCal date: YYYYMMDDTHHMMSSZ
@@ -66,10 +70,10 @@ function parseTime(timeStr) {
 /**
  * Calculate end date based on duration
  * @param {Date} startDate - Start date
- * @param {number} durationHours - Duration in hours
+ * @param {number} durationHours - Duration in hours (defaults to 8 hours: 11 AM to 7 PM)
  * @returns {Date} End date
  */
-function calculateEndDate(startDate, durationHours = 2) {
+function calculateEndDate(startDate, durationHours = 8) {
   const endDate = new Date(startDate);
   endDate.setHours(endDate.getHours() + durationHours);
   return endDate;
@@ -103,15 +107,19 @@ function generateICalFile(event) {
   const location = escapeICalText(fields['Location Details'] || '');
   const date = fields.Date;
   const time = fields.Time;
-  const duration = fields['Duration (hours)'] || 2;
+  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
+  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date
-  const startDate = new Date(date);
+  // Create start date in local timezone
+  const startDate = new Date(date + 'T00:00:00');
   if (time) {
     const timeParts = parseTime(time);
     if (timeParts) {
       startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
     }
+  } else {
+    // Default to 11:00 AM if no time is provided
+    startDate.setHours(11, 0, 0, 0);
   }
 
   // Calculate end date
@@ -182,15 +190,19 @@ function generateGoogleCalendarUrl(event) {
   const location = encodeURIComponent(fields['Location Details'] || '');
   const date = fields.Date;
   const time = fields.Time;
-  const duration = fields['Duration (hours)'] || 2;
+  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
+  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date
-  const startDate = new Date(date);
+  // Create start date in local timezone
+  const startDate = new Date(date + 'T00:00:00');
   if (time) {
     const timeParts = parseTime(time);
     if (timeParts) {
       startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
     }
+  } else {
+    // Default to 11:00 AM if no time is provided
+    startDate.setHours(11, 0, 0, 0);
   }
 
   // Calculate end date
@@ -225,15 +237,19 @@ function generateOutlookCalendarUrl(event) {
   const location = encodeURIComponent(fields['Location Details'] || '');
   const date = fields.Date;
   const time = fields.Time;
-  const duration = fields['Duration (hours)'] || 2;
+  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
+  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date
-  const startDate = new Date(date);
+  // Create start date in local timezone
+  const startDate = new Date(date + 'T00:00:00');
   if (time) {
     const timeParts = parseTime(time);
     if (timeParts) {
       startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
     }
+  } else {
+    // Default to 11:00 AM if no time is provided
+    startDate.setHours(11, 0, 0, 0);
   }
 
   // Calculate end date
@@ -259,15 +275,19 @@ function generateYahooCalendarUrl(event) {
   const location = encodeURIComponent(fields['Location Details'] || '');
   const date = fields.Date;
   const time = fields.Time;
-  const duration = fields['Duration (hours)'] || 2;
+  // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use Duration field or 2 hours default
+  const duration = time ? (fields['Duration (hours)'] || 2) : 8;
 
-  // Create start date
-  const startDate = new Date(date);
+  // Create start date in local timezone
+  const startDate = new Date(date + 'T00:00:00');
   if (time) {
     const timeParts = parseTime(time);
     if (timeParts) {
       startDate.setHours(timeParts.hours, timeParts.minutes, 0, 0);
     }
+  } else {
+    // Default to 11:00 AM if no time is provided
+    startDate.setHours(11, 0, 0, 0);
   }
 
   // Calculate end date

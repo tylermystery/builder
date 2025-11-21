@@ -378,12 +378,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const eventLocation = record.fields.Location || '';
         
         if (eventDateStr) {
-            const eventDate = new Date(eventDateStr);
-            const dateStr = eventDate.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
+            // Parse date in local timezone to avoid timezone shift issues
+            const eventDate = new Date(eventDateStr + 'T00:00:00');
+            const dateStr = eventDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
             });
             
             const eventInfoSection = document.createElement('div');

@@ -221,7 +221,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
 
     if (fields['Item Type'] === 'Event') {
         eventCard.className = 'event-card event-type-card';
-        const eventDate = fields.Date ? new Date(fields.Date) : null;
+        const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
