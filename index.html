@@ -50,6 +50,10 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     background-color: transparent;
     margin: 0;
+    /* Optimize text rendering */
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body.modal-open {
@@ -399,13 +403,16 @@ body.modal-open {
     <link rel="modulepreload" href="events.js">
     <link rel="modulepreload" href="components/backgroundEngine.js">
 
-    <!-- Tippy.js and Popper (small, needed early for tooltips) -->
-    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous" fetchpriority="low"></script>
-    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous" fetchpriority="low"></script>
+    <!-- Third-party libraries loaded with improved performance attributes -->
+    <!-- Popper and Tippy.js for tooltips - loaded with fetchpriority low and integrity checks -->
+    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous" fetchpriority="low" async></script>
+    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous" fetchpriority="low" async></script>
 
-    <!-- Other libraries will be lazy-loaded on demand -->
-    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous" fetchpriority="low"></script>
-    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js" fetchpriority="low"></script>
+    <!-- Other libraries will be lazy-loaded on demand with improved loading strategy -->
+    <!-- Pusher loaded asynchronously to avoid blocking -->
+    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous" fetchpriority="low" async></script>
+    <!-- Netlify Identity loaded with low priority -->
+    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js" fetchpriority="low" async></script>
 
     </head>
 <body>

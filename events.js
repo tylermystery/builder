@@ -452,6 +452,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
 
     let scrollTimeout;
+    // Passive event listener for better scroll performance
     window.addEventListener('scroll', () => {
         if (scrollTimeout) return;
         scrollTimeout = setTimeout(() => {
@@ -461,7 +462,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
             scrollTimeout = null;
         }, 100);
-    });
+    }, { passive: true });
 
     // --- START CONSOLIDATED BUTTON GENERATION --
     const categoryFiltersRoot = document.getElementById('category-filters'); 
