@@ -105,6 +105,9 @@ async function initialize() {
         log('Main', 'New plan created.');
     });
     document.addEventListener('sessionReady', () => {
+        console.log('[DEBUG] sessionReady event fired');
+        console.log('[DEBUG] state.eventDetails.combined at sessionReady:', Object.fromEntries(state.eventDetails.combined));
+        console.log('[DEBUG] Date value in state at sessionReady:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
         log('Main', '"sessionReady" event received, re-initializing session chat.');
         if (typeof initializeSessionChat === 'function') {
              initializeSessionChat();
@@ -116,6 +119,8 @@ async function initialize() {
         ui.updateEventPlanSection();
         ui.updateIdeasCarousel();
         ui.updateTotalCost();
+        console.log('[DEBUG] About to call updateEventPlanDateDisplay from sessionReady');
+        ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
         const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
         if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
 
