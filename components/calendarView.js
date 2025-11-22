@@ -71,14 +71,20 @@ function getEventsForDate(dateStr) {
 
 function getWeekDates(date) {
     const curr = new Date(date);
-    const first = curr.getDate() - curr.getDay();
+    const day = curr.getDay(); // 0 = Sunday, 6 = Saturday
     const dates = [];
-    
+
+    // Calculate the Sunday of the current week
+    const sunday = new Date(curr);
+    sunday.setDate(curr.getDate() - day);
+
+    // Generate all 7 days starting from Sunday
     for (let i = 0; i < 7; i++) {
-        const day = new Date(curr.setDate(first + i));
-        dates.push(new Date(day));
+        const weekDay = new Date(sunday);
+        weekDay.setDate(sunday.getDate() + i);
+        dates.push(weekDay);
     }
-    
+
     return dates;
 }
 
@@ -186,9 +192,13 @@ function renderMonthView() {
     for (let day = 1; day <= daysInMonth; day++) {
         const dayDiv = document.createElement('div');
         dayDiv.classList.add('calendar-day');
-        
+
         const date = new Date(year, month, day);
-        const dateStr = date.toISOString().split('T')[0];
+        // Format date as YYYY-MM-DD in local timezone to avoid UTC conversion issues
+        const dateYear = date.getFullYear();
+        const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const dateDay = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${dateYear}-${dateMonth}-${dateDay}`;
         const dayEvents = getEventsForDate(dateStr);
         const today = new Date();
         
@@ -246,16 +256,16 @@ function renderMonthView() {
 function renderWeekView() {
     console.log('[Calendar Debug] Rendering week view');
     const container = document.getElementById('calendar-content');
-    
+
     const weekDates = getWeekDates(currentDate);
     const startDate = weekDates[0];
     const endDate = weekDates[6];
-    
+
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                         'July', 'August', 'September', 'October', 'November', 'December'];
-    
+
     const dateRange = `${monthNames[startDate.getMonth()]} ${startDate.getDate()} - ${monthNames[endDate.getMonth()]} ${endDate.getDate()}, ${endDate.getFullYear()}`;
-    
+
     container.innerHTML = `
         <div class="calendar-header-controls">
             <button id="cal-prev-btn" class="cal-nav-btn">‹</button>
@@ -264,20 +274,24 @@ function renderWeekView() {
         </div>
         <div class="week-grid" id="week-grid"></div>
     `;
-    
+
     const weekGrid = document.getElementById('week-grid');
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const today = new Date();
-    
+
     weekDates.forEach((date, index) => {
         const dayColumn = document.createElement('div');
         dayColumn.classList.add('week-day-column');
-        
+
         if (isSameDay(date, today)) {
             dayColumn.classList.add('today');
         }
-        
-        const dateStr = date.toISOString().split('T')[0];
+
+        // Format date as YYYY-MM-DD in local timezone to avoid UTC conversion issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         const dayEvents = getEventsForDate(dateStr);
         
         dayColumn.innerHTML = `
