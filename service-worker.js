@@ -151,8 +151,11 @@ self.addEventListener('fetch', (event) => {
       Promise.race([
         fetch(request).then((response) => {
           if (response.ok) {
+            const responseClone = response.clone();
             caches.open(DYNAMIC_CACHE).then((cache) => {
-              cache.put(request, response.clone());
+              cache.put(request, responseClone);
+            }).catch((err) => {
+              console.warn('[SW] Failed to cache HTML response:', err);
             });
           }
           return response;

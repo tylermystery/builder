@@ -8,8 +8,8 @@ let currentView = 'month';
 let currentDate = new Date();
 
 async function fetchUpcomingEvents() {
-    log('Calendar', 'Fetching all public events from state...');
-    
+    log('Calendar', 'Fetching all public events and plans from state...');
+
     if (!state.records.all || state.records.all.length === 0) {
         log('Calendar', 'Records not loaded yet.');
         return [];
@@ -17,38 +17,77 @@ async function fetchUpcomingEvents() {
 
     console.log(`[Calendar Debug] Checking ${state.records.all.length} total records from state.records.all.`);
     let checkedCount = 0;
-    
+
+    // Fetch event items from the Items table (existing behavior)
     const eventItems = state.records.all.filter(record => {
         checkedCount++;
         const itemType = record.fields['Item Type'];
         const hasDate = record.fields.Date;
         const isEvent = itemType === 'Event';
-        
+
         const eventName = record.fields.Name || 'Unnamed Record';
         const isOneOfYourEvents = eventName.includes("EVENT_NAME_1") || eventName.includes("EVENT_NAME_2");
 
         if (checkedCount <= 25 || isOneOfYourEvents) {
             console.log(`[Calendar Debug] Checking: "${eventName}" | Item Type: "${itemType}" | Has Date: ${!!hasDate} | Is "Event": ${isEvent}`);
         }
-        
+
         return isEvent && hasDate;
     });
 
     log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
-    
-    return eventItems.map(record => {
-        // Parse date and ensure it's in Pacific timezone
-        // Append 'T00:00:00' to treat as local date without timezone conversion
-        const dateStr = record.fields.Date;
-        const localDate = new Date(dateStr + 'T00:00:00');
 
+    // Map event items to calendar format
+    const eventList = eventItems.map(record => {
+        const dateStr = record.fields.Date;
         return {
             recordId: record.id,
             name: record.fields.Name || 'Unnamed Event',
-            date: dateStr.split('T')[0], // Use the date string directly without conversion
-            record: record
+            date: dateStr.split('T')[0],
+            record: record,
+            type: 'event'
         };
     });
+
+    // Fetch sessions with dates for the current store
+    let sessionList = [];
+    console.log('[Calendar Debug] Checking for activeShopId:', state.ui.activeShopId);
+    if (state.ui.activeShopId) {
+        try {
+            console.log('[Calendar Debug] Calling fetchSessionsWithDatesForStore with shopId:', state.ui.activeShopId);
+            const sessionRecords = await api.fetchSessionsWithDatesForStore(state.ui.activeShopId);
+            console.log('[Calendar Debug] Received sessionRecords:', sessionRecords);
+            console.log('[Calendar Debug] Number of session records:', sessionRecords?.length || 0);
+
+            sessionList = sessionRecords.map(record => {
+                const dateStr = record.fields.Date;
+                console.log('[Calendar Debug] Mapping session record:', {
+                    id: record.id,
+                    name: record.fields.Name,
+                    dateStr: dateStr,
+                    parsedDate: dateStr.split('T')[0]
+                });
+                return {
+                    recordId: record.id,
+                    name: record.fields.Name || 'Unnamed Plan',
+                    date: dateStr.split('T')[0],
+                    record: record,
+                    type: 'session'
+                };
+            });
+            console.log('[Calendar Debug] Created sessionList:', sessionList);
+        } catch (error) {
+            console.error('[Calendar Debug] Error fetching sessions for calendar:', error);
+        }
+    } else {
+        console.log('[Calendar Debug] No active shop ID, skipping session fetch');
+    }
+
+    // Combine events and sessions
+    const combinedList = [...eventList, ...sessionList];
+    log('Calendar', `Total calendar entries: ${combinedList.length} (${eventList.length} events + ${sessionList.length} plans)`);
+
+    return combinedList;
 }
 
 function getDaysInMonth(year, month) {
@@ -93,59 +132,105 @@ function createEventCard(event, compact = false) {
     card.classList.add('event-card');
     if (compact) card.classList.add('compact');
     card.dataset.recordId = event.recordId;
-    
-    const userRsvps = event.record.fields.RSVPs || [];
-    const hasRsvpd = state.session.user.isAuthenticated && userRsvps.includes(state.session.user.id);
-    
-    // Parse date in local timezone to avoid timezone shift issues
-    const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
-    const dateStr = eventDate.toLocaleDateString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-    
-    const timeStr = event.record.fields.Time || '';
-    const description = event.record.fields.Description || '';
-    const location = event.record.fields.Location || '';
-    const price = event.record.fields.Price || 0;
-    const pricingType = event.record.fields['Pricing Type'] || 'Per Person';
-    
-    let priceDisplay = '';
-    if (price > 0) {
-        priceDisplay = `<div class="event-price">$${price} ${pricingType}</div>`;
+
+    const isSession = event.type === 'session';
+
+    if (isSession) {
+        // Render session/plan card
+        const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
+        const dateStr = eventDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+
+        const guestCount = event.record.fields['Guest Count'] || null;
+        const goals = event.record.fields.Goals || '';
+
+        if (compact) {
+            card.innerHTML = `
+                <div class="event-compact-content">
+                    <div class="event-time">📅 Plan</div>
+                    <div class="event-name">${event.name}</div>
+                </div>
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="event-card-header">
+                    <h4 class="event-card-title">📅 ${event.name}</h4>
+                    <div class="event-card-date">${dateStr}</div>
+                </div>
+                <div class="event-card-body">
+                    ${guestCount ? `<div class="event-card-location">👥 ${guestCount} guests</div>` : ''}
+                    ${goals ? `<p class="event-card-description">${goals.substring(0, 150)}${goals.length > 150 ? '...' : ''}</p>` : ''}
+                    <div class="event-price">Event Plan</div>
+                </div>
+            `;
+        }
+
+        card.addEventListener('click', () => {
+            log('Calendar', `Session card clicked: ${event.name}`);
+            // Load the session instead of showing detail modal
+            if (event.recordId) {
+                window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+            }
+        });
+
     } else {
-        priceDisplay = '<div class="event-price">Free</div>';
+        // Render event card (existing behavior)
+        const userRsvps = event.record.fields.RSVPs || [];
+        const hasRsvpd = state.session.user.isAuthenticated && userRsvps.includes(state.session.user.id);
+
+        const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
+        const dateStr = eventDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+
+        const timeStr = event.record.fields.Time || '';
+        const description = event.record.fields.Description || '';
+        const location = event.record.fields.Location || '';
+        const price = event.record.fields.Price || 0;
+        const pricingType = event.record.fields['Pricing Type'] || 'Per Person';
+
+        let priceDisplay = '';
+        if (price > 0) {
+            priceDisplay = `<div class="event-price">$${price} ${pricingType}</div>`;
+        } else {
+            priceDisplay = '<div class="event-price">Free</div>';
+        }
+
+        if (compact) {
+            card.innerHTML = `
+                <div class="event-compact-content">
+                    <div class="event-time">${timeStr || 'All Day'}</div>
+                    <div class="event-name">${event.name} ${hasRsvpd ? '✅' : ''}</div>
+                </div>
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="event-card-header">
+                    <h4 class="event-card-title">${event.name} ${hasRsvpd ? '✅' : ''}</h4>
+                    <div class="event-card-date">${dateStr}${timeStr ? ' • ' + timeStr : ''}</div>
+                </div>
+                <div class="event-card-body">
+                    ${description ? `<p class="event-card-description">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>` : ''}
+                    ${location ? `<div class="event-card-location">📍 ${location}</div>` : ''}
+                    ${priceDisplay}
+                </div>
+            `;
+        }
+
+        card.addEventListener('click', () => {
+            log('Calendar', `Event card clicked: ${event.name}`);
+            ui.showDetailModal(event.record);
+            hideCalendarModal();
+        });
     }
-    
-    if (compact) {
-        card.innerHTML = `
-            <div class="event-compact-content">
-                <div class="event-time">${timeStr || 'All Day'}</div>
-                <div class="event-name">${event.name} ${hasRsvpd ? '✅' : ''}</div>
-            </div>
-        `;
-    } else {
-        card.innerHTML = `
-            <div class="event-card-header">
-                <h4 class="event-card-title">${event.name} ${hasRsvpd ? '✅' : ''}</h4>
-                <div class="event-card-date">${dateStr}${timeStr ? ' • ' + timeStr : ''}</div>
-            </div>
-            <div class="event-card-body">
-                ${description ? `<p class="event-card-description">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</p>` : ''}
-                ${location ? `<div class="event-card-location">📍 ${location}</div>` : ''}
-                ${priceDisplay}
-            </div>
-        `;
-    }
-    
-    card.addEventListener('click', () => {
-        log('Calendar', `Event card clicked: ${event.name}`);
-        ui.showDetailModal(event.record);
-        hideCalendarModal();
-    });
-    
+
     return card;
 }
 
@@ -216,16 +301,27 @@ function renderMonthView() {
             dayEvents.slice(0, 3).forEach(event => {
                 const eventBadge = document.createElement('div');
                 eventBadge.classList.add('event-badge');
-                const timeStr = event.record.fields.Time || '';
-                eventBadge.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
-                eventBadge.title = event.name;
-                
-                eventBadge.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    ui.showDetailModal(event.record);
-                    hideCalendarModal();
-                });
-                
+
+                if (event.type === 'session') {
+                    // Session/plan badge
+                    eventBadge.textContent = `📅 ${event.name}`;
+                    eventBadge.title = `Plan: ${event.name}`;
+                    eventBadge.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+                    });
+                } else {
+                    // Event badge (existing behavior)
+                    const timeStr = event.record.fields.Time || '';
+                    eventBadge.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
+                    eventBadge.title = event.name;
+                    eventBadge.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        ui.showDetailModal(event.record);
+                        hideCalendarModal();
+                    });
+                }
+
                 eventsContainer.appendChild(eventBadge);
             });
             

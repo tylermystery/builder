@@ -26,7 +26,7 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
     const encodedFormula = encodeURIComponent(formula);
     // Fetch sessions where the user is a collaborator
     let url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
-    
+
     if (!includeFullDetails) {
         url += '&fields%5B%5D=Name'; // Only fetch Name for dropdown
     }
@@ -51,6 +51,178 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
         return [];
     }
 }
+
+export async function fetchSessionsWithDatesForStore(storeId) {
+    console.log('[FETCH SESSIONS] ========== fetchSessionsWithDatesForStore START ==========');
+    console.log('[FETCH SESSIONS] Requested storeId:', storeId);
+
+    if (!storeId) {
+        console.log('[FETCH SESSIONS] ⚠️ No storeId provided, returning empty array');
+        return [];
+    }
+
+    console.log('[FETCH SESSIONS] Building Airtable query...');
+
+    // Create formula to filter sessions that:
+    // 1. Have the specified store ID in their Stores field
+    // 2. Have a non-empty Date field
+    // Using OR to try both approaches: FIND in ARRAYJOIN or direct field check
+    const formula = `AND(OR(FIND('${storeId}', ARRAYJOIN({Stores})), FIND('${storeId}', {Stores}&'')), {Date} != '')`;
+    const encodedFormula = encodeURIComponent(formula);
+    console.log('[FETCH SESSIONS] Airtable formula:', formula);
+    console.log('[FETCH SESSIONS] Encoded formula:', encodedFormula);
+
+    // Request specific fields needed for calendar display
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Guest Count',
+        'Goals',
+        'Stores',
+        'Collaborators'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+    console.log('[FETCH SESSIONS] Full API URL:', url);
+
+    try {
+        console.log('[FETCH SESSIONS] Making fetch request...');
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        console.log('[FETCH SESSIONS] Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[FETCH SESSIONS] ⚠️ Airtable Error response:', errorText);
+            throw new Error('Failed to fetch sessions with dates from Airtable.');
+        }
+
+        const data = await response.json();
+        console.log('[FETCH SESSIONS] ========== QUERY RESULTS ==========');
+        console.log('[FETCH SESSIONS] Number of records returned:', data.records?.length || 0);
+
+        // Log details of each record
+        if (data.records && data.records.length > 0) {
+            console.log('[FETCH SESSIONS] ✅ Found', data.records.length, 'matching session(s)!');
+            data.records.forEach((record, index) => {
+                console.log(`[FETCH SESSIONS] --- Session ${index + 1} ---`);
+                console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
+                console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
+                console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
+                console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(record.fields.Stores)}`);
+                console.log(`[FETCH SESSIONS]   Stores type: ${typeof record.fields.Stores}`);
+                console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(record.fields.Stores)}`);
+            });
+            console.log('[FETCH SESSIONS] ==================================================');
+            console.log('[FETCH SESSIONS] Returning', data.records.length, 'session(s) to calendar');
+            return data.records;
+        } else {
+            console.log('[FETCH SESSIONS] ⚠️ No sessions matched the query');
+            console.log('[FETCH SESSIONS] This means either:');
+            console.log('[FETCH SESSIONS]   1. No sessions have dates set');
+            console.log('[FETCH SESSIONS]   2. No sessions have the Stores field set to:', storeId);
+            console.log('[FETCH SESSIONS]   3. Sessions exist but the formula didnt match');
+
+            // Fallback: Try to fetch ALL sessions with dates to debug
+            console.log('[FETCH SESSIONS] ========== FALLBACK QUERY ==========');
+            console.log('[FETCH SESSIONS] Attempting to fetch ALL sessions with dates...');
+            const fallbackFormula = `{Date} != ''`;
+            const fallbackEncodedFormula = encodeURIComponent(fallbackFormula);
+            const fallbackUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${fallbackEncodedFormula}&${fieldsQuery}`;
+
+            try {
+                const fallbackResponse = await fetch(fallbackUrl, {
+                    headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                });
+
+                if (fallbackResponse.ok) {
+                    const fallbackData = await fallbackResponse.json();
+                    console.log('[FETCH SESSIONS] Fallback query found', fallbackData.records?.length || 0, 'sessions with dates');
+                    if (fallbackData.records && fallbackData.records.length > 0) {
+                        console.log('[FETCH SESSIONS] --- All Sessions with Dates ---');
+                        fallbackData.records.forEach((record, index) => {
+                            const stores = record.fields.Stores;
+                            const matchesStore = stores ?
+                                (Array.isArray(stores) ? stores.includes(storeId) : stores === storeId)
+                                : false;
+                            console.log(`[FETCH SESSIONS] Session ${index + 1}:`);
+                            console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
+                            console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
+                            console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
+                            console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(stores)}`);
+                            console.log(`[FETCH SESSIONS]   Stores type: ${typeof stores}`);
+                            console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(stores)}`);
+                            console.log(`[FETCH SESSIONS]   Matches storeId '${storeId}'? ${matchesStore ? '✅ YES' : '❌ NO'}`);
+                            console.log('[FETCH SESSIONS]   ---');
+                        });
+
+                        // Filter manually to sessions that match the storeId
+                        const matchingSessions = fallbackData.records.filter(record => {
+                            const stores = record.fields.Stores;
+                            if (!stores) {
+                                console.log(`[FETCH SESSIONS] Excluding ${record.id}: No Stores field`);
+                                return false;
+                            }
+                            if (Array.isArray(stores)) {
+                                const matches = stores.includes(storeId);
+                                console.log(`[FETCH SESSIONS] ${record.id}: Stores array ${matches ? 'includes' : 'does NOT include'} storeId`);
+                                return matches;
+                            }
+                            const matches = stores === storeId;
+                            console.log(`[FETCH SESSIONS] ${record.id}: Stores string ${matches ? 'matches' : 'does NOT match'} storeId`);
+                            return matches;
+                        });
+                        console.log('[FETCH SESSIONS] ==================================================');
+                        console.log('[FETCH SESSIONS] Manual filtering found', matchingSessions.length, 'matching session(s)');
+                        console.log('[FETCH SESSIONS] Returning manually filtered results');
+                        return matchingSessions;
+                    } else {
+                        console.log('[FETCH SESSIONS] ⚠️ Fallback query found NO sessions with dates at all!');
+                        console.log('[FETCH SESSIONS] This means no sessions in Airtable have the Date field set.');
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('[FETCH SESSIONS] Fallback query also failed:', fallbackError);
+            }
+        }
+
+        console.log('[FETCH SESSIONS] ==================================================');
+        console.log('[FETCH SESSIONS] Returning empty array');
+        return [];
+    } catch (error) {
+        console.error("[Calendar API Debug] Error fetching sessions with dates:", error);
+        return [];
+    }
+}
+
+// Debug helper function - can be called manually from console to verify a specific session
+window.debugFetchSession = async function(sessionId) {
+    console.log('[DEBUG] Manually fetching session:', sessionId);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            console.error('[DEBUG] Failed to fetch session:', response.status, response.statusText);
+            return null;
+        }
+        const data = await response.json();
+        console.log('[DEBUG] Session data from Airtable:', data);
+        console.log('[DEBUG] Session Name:', data.fields?.Name);
+        console.log('[DEBUG] Session Date:', data.fields?.Date);
+        console.log('[DEBUG] Session Stores:', data.fields?.Stores);
+        console.log('[DEBUG] Stores type:', typeof data.fields?.Stores);
+        console.log('[DEBUG] Stores is array?', Array.isArray(data.fields?.Stores));
+        console.log('[DEBUG] Stores value:', JSON.stringify(data.fields?.Stores));
+        return data;
+    } catch (error) {
+        console.error('[DEBUG] Error fetching session:', error);
+        return null;
+    }
+};
 
 
 export async function associateSessionWithUser(sessionId, userId) {
@@ -139,6 +311,10 @@ export async function loadSessionFromAirtable(sessionId) {
             throw new Error(`Could not fetch session data. Status: ${response.status}`);
         }
         const record = await response.json();
+        console.log('[DEBUG] loadSessionFromAirtable - Fetched record from Airtable:', record.id);
+        console.log('[DEBUG] loadSessionFromAirtable - Record Date field:', record.fields.Date);
+        console.log('[DEBUG] loadSessionFromAirtable - Record Guest Count:', record.fields['Guest Count']);
+        console.log('[DEBUG] loadSessionFromAirtable - Record Goals:', record.fields.Goals);
         log('API', `Session loaded: ${record.fields.Name || 'Unnamed Session'} (ID: ${sessionId})`);
 
         // Reset parts of state before loading new session data
@@ -175,9 +351,11 @@ export async function loadSessionFromAirtable(sessionId) {
         log('API', `Loaded Amount Received: ${state.session.user.amountReceived}`);
 
         const sessionDataString = record.fields['Items with Variations'];
+        console.log('[DEBUG] loadSessionFromAirtable - Items with Variations field exists:', !!sessionDataString);
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
+                console.log('[DEBUG] loadSessionFromAirtable - Parsed savedState.eventDetails:', savedState.eventDetails);
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
@@ -189,6 +367,8 @@ export async function loadSessionFromAirtable(sessionId) {
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
                 state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {}));
+                console.log('[DEBUG] loadSessionFromAirtable - state.eventDetails.combined after loading:', Object.fromEntries(state.eventDetails.combined));
+                console.log('[DEBUG] loadSessionFromAirtable - Date value in eventDetails:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
@@ -262,13 +442,23 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
 
 
 export async function saveSessionToAirtable() {
+    console.log('[SAVE DEBUG] ========== saveSessionToAirtable START ==========');
+    console.log('[SAVE DEBUG] state.ui.activeShopId:', state.ui.activeShopId);
+    console.log('[SAVE DEBUG] state.session.id:', state.session.id);
+
     const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
     const hasDetails = state.eventDetails.combined.size > 0;
     const hasReactions = state.session.reactions.size > 0;
     const needsInitialSave = !state.session.id;
 
+    console.log('[SAVE DEBUG] hasPlanData:', hasPlanData);
+    console.log('[SAVE DEBUG] hasDetails:', hasDetails);
+    console.log('[SAVE DEBUG] hasReactions:', hasReactions);
+    console.log('[SAVE DEBUG] needsInitialSave:', needsInitialSave);
+
     if (!hasPlanData && !hasDetails && !hasReactions && !needsInitialSave) {
         log('API', 'saveSessionToAirtable: No changes or data to save, skipping.');
+        console.log('[SAVE DEBUG] Skipping save - no data');
         state.ui.saveState = 'SAVED';
         // Check if ui.updateSaveShareButton exists before calling
         if (typeof ui !== 'undefined' && ui.updateSaveShareButton) {
@@ -279,6 +469,7 @@ export async function saveSessionToAirtable() {
 
     const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
     log('API', `saveSessionToAirtable: Triggered for ${sessionStatus}`);
+    console.log('[SAVE DEBUG] Proceeding with save:', sessionStatus);
     state.ui.saveState = 'SAVING';
     if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
 
@@ -298,13 +489,21 @@ export async function saveSessionToAirtable() {
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    console.log('[DEBUG] saveSessionToAirtable - Raw dateValue from state:', dateValue);
+    console.log('[DEBUG] saveSessionToAirtable - Is dateValue an array?', Array.isArray(dateValue));
     let formattedDate = null;
     if (dateValue) {
         const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        console.log('[DEBUG] saveSessionToAirtable - dateToFormat:', dateToFormat);
         const dateObj = new Date(dateToFormat);
+        console.log('[DEBUG] saveSessionToAirtable - dateObj:', dateObj);
+        console.log('[DEBUG] saveSessionToAirtable - Is valid date?', !isNaN(dateObj.getTime()));
         if (!isNaN(dateObj.getTime())) {
              formattedDate = dateObj.toISOString().split('T')[0];
+             console.log('[DEBUG] saveSessionToAirtable - formattedDate for Airtable:', formattedDate);
         }
+    } else {
+        console.log('[DEBUG] saveSessionToAirtable - No date value found in state');
     }
 
     const allUserIds = Array.from(state.session.userProfiles.keys());
@@ -312,6 +511,19 @@ export async function saveSessionToAirtable() {
      if (state.session.user.isAuthenticated && state.session.user.id && !validCollaboratorIds.includes(state.session.user.id)) {
           validCollaboratorIds.push(state.session.user.id);
      }
+
+    const storesValue = state.ui.activeShopId ? [state.ui.activeShopId] : null;
+    console.log('[SAVE DEBUG] ========== STORES FIELD CONFIGURATION ==========');
+    console.log('[SAVE DEBUG] state.ui.activeShopId:', state.ui.activeShopId);
+    console.log('[SAVE DEBUG] storesValue being sent to Airtable:', storesValue);
+    console.log('[SAVE DEBUG] storesValue type:', typeof storesValue);
+    console.log('[SAVE DEBUG] storesValue is array?', Array.isArray(storesValue));
+    console.log('[SAVE DEBUG] storesValue is null?', storesValue === null);
+    if (storesValue && Array.isArray(storesValue)) {
+        console.log('[SAVE DEBUG] storesValue array length:', storesValue.length);
+        console.log('[SAVE DEBUG] storesValue array contents:', JSON.stringify(storesValue));
+    }
+    console.log('[SAVE DEBUG] ====================================================');
 
     const fields = {
         "Name": sessionName,
@@ -321,14 +533,21 @@ export async function saveSessionToAirtable() {
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
         // --- THIS IS THE FIX for "Shop Link" ---
         // Change "Shop Link" to the exact name from your Airtable Sessions table
-        "Stores": state.ui.activeShopId ? [state.ui.activeShopId] : null 
+        "Stores": storesValue
     };
     if (formattedDate) {
         fields["Date"] = formattedDate;
+        console.log('[DEBUG] saveSessionToAirtable - Adding Date field to payload:', formattedDate);
+    } else {
+        console.log('[DEBUG] saveSessionToAirtable - NOT adding Date field to payload (no formatted date)');
     }
 
+    console.log('[DEBUG] saveSessionToAirtable - Complete fields object being sent:', JSON.stringify(fields, null, 2));
+
+    console.log('[DEBUG] saveSessionToAirtable - sessionData.eventDetails:', sessionData.eventDetails);
     const payload = { fields };
     const isUpdate = state.session.id !== null;
+    console.log('[DEBUG] saveSessionToAirtable - isUpdate:', isUpdate, 'session.id:', state.session.id);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
 
@@ -345,9 +564,28 @@ export async function saveSessionToAirtable() {
         }
 
         const result = await response.json();
+        console.log('[SAVE DEBUG] ========== AIRTABLE RESPONSE ==========');
+        console.log('[SAVE DEBUG] Full response:', isUpdate ? result : result.records[0]);
 
         if (!isUpdate && result.records && result.records.length > 0) {
             const newSessionId = result.records[0].id;
+            const savedFields = result.records[0].fields;
+            console.log('[SAVE DEBUG] ***** NEW SESSION CREATED *****');
+            console.log('[SAVE DEBUG] Session ID:', newSessionId);
+            console.log('[SAVE DEBUG] Saved Name:', savedFields?.Name);
+            console.log('[SAVE DEBUG] Saved Date:', savedFields?.Date);
+            console.log('[SAVE DEBUG] Saved Stores:', savedFields?.Stores);
+            console.log('[SAVE DEBUG] Stores type:', typeof savedFields?.Stores);
+            console.log('[SAVE DEBUG] Stores is array?', Array.isArray(savedFields?.Stores));
+            console.log('[SAVE DEBUG] Stores is null?', savedFields?.Stores === null);
+            console.log('[SAVE DEBUG] Stores is undefined?', savedFields?.Stores === undefined);
+            if (savedFields?.Stores) {
+                console.log('[SAVE DEBUG] Stores value:', JSON.stringify(savedFields.Stores));
+            } else {
+                console.log('[SAVE DEBUG] ⚠️ WARNING: Stores field is NOT set in Airtable response!');
+            }
+            console.log('[SAVE DEBUG] ==========================================');
+
             state.session.id = newSessionId;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${newSessionId}${window.location.search.includes('shopId') ? `&shopId=${state.ui.activeShopId}` : ''}`);
@@ -358,6 +596,22 @@ export async function saveSessionToAirtable() {
             document.dispatchEvent(new CustomEvent('sessionReady'));
             document.dispatchEvent(new CustomEvent('planCreated'));
         } else if (isUpdate) {
+             const savedFields = result.fields;
+             console.log('[SAVE DEBUG] ***** SESSION UPDATED *****');
+             console.log('[SAVE DEBUG] Session ID:', state.session.id);
+             console.log('[SAVE DEBUG] Saved Name:', savedFields?.Name);
+             console.log('[SAVE DEBUG] Saved Date:', savedFields?.Date);
+             console.log('[SAVE DEBUG] Saved Stores:', savedFields?.Stores);
+             console.log('[SAVE DEBUG] Stores type:', typeof savedFields?.Stores);
+             console.log('[SAVE DEBUG] Stores is array?', Array.isArray(savedFields?.Stores));
+             console.log('[SAVE DEBUG] Stores is null?', savedFields?.Stores === null);
+             console.log('[SAVE DEBUG] Stores is undefined?', savedFields?.Stores === undefined);
+             if (savedFields?.Stores) {
+                 console.log('[SAVE DEBUG] Stores value:', JSON.stringify(savedFields.Stores));
+             } else {
+                 console.log('[SAVE DEBUG] ⚠️ WARNING: Stores field is NOT set in Airtable response!');
+             }
+             console.log('[SAVE DEBUG] ==========================================');
              log('API', `Successfully updated session ${state.session.id}`);
         }
 

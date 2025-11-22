@@ -1312,21 +1312,34 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     if (typeof window.flatpickr !== 'function') {
                         throw new Error(`Flatpickr is not a function, got type: ${typeof window.flatpickr}`);
                     }
-                    
+
+                    // Clear placeholder text before initializing flatpickr to avoid parse errors
+                    if (eventDateInput.value === 'Select a date') {
+                        eventDateInput.value = '';
+                    }
+
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
+                            console.log('[DEBUG] Date picker onChange triggered');
+                            console.log('[DEBUG] selectedDates:', selectedDates);
+                            console.log('[DEBUG] state.ui.isInitializing:', state.ui.isInitializing);
                             if (state.ui.isInitializing) return;
                             if (selectedDates.length > 0) {
-                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, selectedDates[0].toISOString());
+                                const isoDate = selectedDates[0].toISOString();
+                                console.log('[DEBUG] Setting date in state to:', isoDate);
+                                state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, isoDate);
+                                console.log('[DEBUG] Date now in state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
                                 updateProgress(0.00015);
                             } else {
+                                console.log('[DEBUG] No date selected, deleting from state');
                                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                                 updateProgress(-0.00015);
                             }
                             await ui.updateEventPlanDateDisplay();
                             await ui.updateLockedItemStatusIcons();
                             await updateMobileBarAvailability();
+                            console.log('[DEBUG] About to trigger save...');
                             triggerSave();
                         }
                     });

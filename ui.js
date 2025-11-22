@@ -290,18 +290,27 @@ export function applyCartLabels(labels) {
 
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
+    console.log('[DEBUG] updateEventPlanDateDisplay called');
     const dateInput = document.getElementById('event-date-picker');
-    if (!dateInput) return;
+    if (!dateInput) {
+        console.log('[DEBUG] updateEventPlanDateDisplay - dateInput element not found');
+        return;
+    }
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    console.log('[DEBUG] updateEventPlanDateDisplay - selectedDateISO from state:', selectedDateISO);
     if (!selectedDateISO) {
+        console.log('[DEBUG] updateEventPlanDateDisplay - No date in state, setting placeholder');
         dateInput.value = 'Select a date';
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
         return;
     }
     const selectedDate = new Date(selectedDateISO);
+    console.log('[DEBUG] updateEventPlanDateDisplay - Parsed selectedDate:', selectedDate);
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
-    dateInput.value = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const displayValue = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    console.log('[DEBUG] updateEventPlanDateDisplay - Setting dateInput.value to:', displayValue);
+    dateInput.value = displayValue;
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
     switch (overallStatus) {
         case AVAILABILITY_STATUS.FULL:
@@ -314,6 +323,7 @@ export async function updateEventPlanDateDisplay() {
             dateInput.classList.add('unavailable');
             break;
     }
+    console.log('[DEBUG] updateEventPlanDateDisplay - Overall status:', overallStatus);
 }
 
 export async function updateLockedItemStatusIcons() {
