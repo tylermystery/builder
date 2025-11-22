@@ -26,6 +26,8 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     # Performance optimization headers
     Timing-Allow-Origin = "*"
+    # Enable early hints for better performance
+    Accept-CH = "DPR, Width, Viewport-Width"
 
 [[headers]]
   for = "*.html"
@@ -57,8 +59,6 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/jpeg"
-    # Enable compression
-    Content-Encoding = "gzip"
 
 [[headers]]
   for = "*.png"
