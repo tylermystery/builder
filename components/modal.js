@@ -697,11 +697,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         // Add sales nudge or benefit badge
         let nudgeHTML = '';
-        if (effectiveMin < airtableMin) {
-            // Scenario B: UMW is booked, restriction removed
+        const currentQuantity = itemState.quantity || 1;
+        if (effectiveMin < airtableMin && currentQuantity <= airtableMin) {
+            // Scenario B: UMW is booked, restriction removed (only show when quantity is at or below the original minimum)
             nudgeHTML = `<div class="umw-benefit-badge">✅ UMW Benefit: ${airtableMin}-person minimum waived.</div>`;
-        } else if (airtableMin > 1) {
-            // Scenario A: Restriction active, suggest UMW
+        } else if (airtableMin > 1 && currentQuantity <= airtableMin) {
+            // Scenario A: Restriction active, suggest UMW (only show when quantity is at or below minimum)
             nudgeHTML = `<div class="umw-sales-nudge">💡 <strong>Pro Tip:</strong> Host at <a href="#" class="search-link" data-term="Union Machine Works">Union Machine Works</a> to waive the ${airtableMin}-person minimum.</div>`;
         }
 
@@ -741,12 +742,72 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const minusBtn = modalQuantitySelector.querySelector('.minus');
         const input = modalQuantitySelector.querySelector('input');
         if (plusBtn && minusBtn && input) {
+            // Function to update pro-tip visibility based on current quantity
+            const updateProTipVisibility = () => {
+                const currentQty = parseInt(input.value, 10) || 1;
+                const existingNudge = modalActionsContainer.querySelector('.umw-sales-nudge');
+                const existingBadge = modalActionsContainer.querySelector('.umw-benefit-badge');
+
+                // Determine if pro-tip should be shown
+                const shouldShowProTip = effectiveMin >= airtableMin && airtableMin > 1 && currentQty <= airtableMin;
+                const shouldShowBadge = effectiveMin < airtableMin && currentQty <= airtableMin;
+
+                // Update pro-tip display
+                if (shouldShowProTip && !existingNudge) {
+                    // Add pro-tip if it should be shown and doesn't exist
+                    const nudgeHTML = `<div class="umw-sales-nudge">💡 <strong>Pro Tip:</strong> Host at <a href="#" class="search-link" data-term="Union Machine Works">Union Machine Works</a> to waive the ${airtableMin}-person minimum.</div>`;
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = nudgeHTML;
+                    const nudgeElement = tempDiv.firstElementChild;
+                    modalActionsContainer.appendChild(nudgeElement);
+
+                    // Re-attach click handler for the search link
+                    const searchLink = nudgeElement.querySelector('.search-link');
+                    if (searchLink) {
+                        searchLink.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            const searchTerm = searchLink.dataset.term;
+                            const umwRecord = state.records.all.find(r =>
+                                r.fields.Name && r.fields.Name.includes(searchTerm)
+                            );
+                            if (umwRecord) {
+                                closeDetailModal();
+                                setTimeout(() => {
+                                    showDetailModal(umwRecord, 0);
+                                }, 100);
+                            } else {
+                                document.getElementById('name-filter').value = searchTerm;
+                                closeDetailModal();
+                                document.getElementById('name-filter').dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        });
+                    }
+                } else if (!shouldShowProTip && existingNudge) {
+                    // Remove pro-tip if it shouldn't be shown but exists
+                    existingNudge.remove();
+                }
+
+                // Update benefit badge display
+                if (shouldShowBadge && !existingBadge) {
+                    // Add badge if it should be shown and doesn't exist
+                    const badgeHTML = `<div class="umw-benefit-badge">✅ UMW Benefit: ${airtableMin}-person minimum waived.</div>`;
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = badgeHTML;
+                    const badgeElement = tempDiv.firstElementChild;
+                    modalActionsContainer.appendChild(badgeElement);
+                } else if (!shouldShowBadge && existingBadge) {
+                    // Remove badge if it shouldn't be shown but exists
+                    existingBadge.remove();
+                }
+            };
+
             const handlePlus = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const currentValue = parseInt(input.value, 10) || 1;
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
+                updateProTipVisibility();
             };
             const handleMinus = (e) => {
                 e.preventDefault();
@@ -756,6 +817,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 if (currentValue > minValue) {
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
+                    updateProTipVisibility();
                 }
             };
             const handleTouchEnd = (e) => {
