@@ -313,77 +313,143 @@ async function handleSignIn(e) {
 let currentSmsPhoneNumber = null;
 
 async function handleSmsSignIn(e) {
+    console.log('[SMS-DEBUG] ========== handleSmsSignIn CALLED ==========');
+    console.log('[SMS-DEBUG] Event object:', e);
+    console.log('[SMS-DEBUG] Event type:', e?.type);
+
     e.preventDefault();
+    console.log('[SMS-DEBUG] preventDefault() called successfully');
+
     const phoneInput = document.getElementById('signin-phone');
     const smsMessage = document.getElementById('sms-message');
+    const consentCheckbox = document.getElementById('sms-consent-checkbox');
+    console.log('[SMS-DEBUG] Phone input element:', phoneInput);
+    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
+    console.log('[SMS-DEBUG] Consent checkbox element:', consentCheckbox);
+
     const phoneNumber = phoneInput.value.trim();
+    console.log('[SMS-DEBUG] Phone number value:', phoneNumber);
+    console.log('[SMS-DEBUG] Consent checkbox checked:', consentCheckbox?.checked);
 
     if (!phoneNumber) {
+        console.log('[SMS-DEBUG] Phone number validation failed - empty');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Please enter a phone number.';
         return;
     }
 
+    if (!consentCheckbox || !consentCheckbox.checked) {
+        console.log('[SMS-DEBUG] Consent validation failed - not checked');
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = 'Please agree to receive SMS messages by checking the consent box.';
+        return;
+    }
+
     log('Auth', `SMS sign-in initiated for: ${phoneNumber}`);
+    console.log('[SMS-DEBUG] Storing phone number to currentSmsPhoneNumber');
     currentSmsPhoneNumber = phoneNumber;
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Sending SMS code...';
+    console.log('[SMS-DEBUG] UI updated - showing "Sending SMS code..." message');
 
     try {
+        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-start');
+        console.log('[SMS-DEBUG] Request payload:', { phoneNumber: phoneNumber });
+
         const response = await fetch('/api/auth-sms-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phoneNumber: phoneNumber }),
         });
 
+        console.log('[SMS-DEBUG] Fetch completed');
+        console.log('[SMS-DEBUG] Response status:', response.status);
+        console.log('[SMS-DEBUG] Response ok:', response.ok);
+        console.log('[SMS-DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
         const data = await response.json();
+        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to send SMS code.');
+            console.log('[SMS-DEBUG] Response not OK, throwing error');
+            const errorMessage = data.error || 'Failed to send SMS code.';
+            console.log('[SMS-DEBUG] Error message from server:', errorMessage);
+            throw new Error(errorMessage);
         }
 
+        console.log('[SMS-DEBUG] Success! Updating UI to show verification section');
         smsMessage.style.color = '#28a745';
         smsMessage.textContent = `A 6-digit code has been sent to ${phoneNumber}. Check your messages!`;
 
         // Hide phone form, show OTP verification form
-        document.getElementById('sms-signin-form').style.display = 'none';
-        document.getElementById('sms-verify-section').style.display = 'block';
+        const smsForm = document.getElementById('sms-signin-form');
+        const verifySection = document.getElementById('sms-verify-section');
+        console.log('[SMS-DEBUG] SMS form element:', smsForm);
+        console.log('[SMS-DEBUG] Verify section element:', verifySection);
+
+        smsForm.style.display = 'none';
+        verifySection.style.display = 'block';
+        console.log('[SMS-DEBUG] UI visibility updated - form hidden, verify section shown');
 
         // Focus on OTP input
-        document.getElementById('signin-otp').focus();
+        const otpInput = document.getElementById('signin-otp');
+        console.log('[SMS-DEBUG] OTP input element:', otpInput);
+        otpInput.focus();
+        console.log('[SMS-DEBUG] Focus set on OTP input');
 
         log('Auth', 'SMS code sent successfully');
+        console.log('[SMS-DEBUG] ========== handleSmsSignIn COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
+        console.error('[SMS-DEBUG] ========== ERROR IN handleSmsSignIn ==========');
+        console.error('[SMS-DEBUG] Error object:', error);
+        console.error('[SMS-DEBUG] Error message:', error.message);
+        console.error('[SMS-DEBUG] Error stack:', error.stack);
+
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
         log('Auth', `SMS error: ${error.message}`);
+        console.log('[SMS-DEBUG] ========== handleSmsSignIn FAILED ==========');
     }
 }
 
 async function handleSmsVerify() {
+    console.log('[SMS-DEBUG] ========== handleSmsVerify CALLED ==========');
+
     const otpInput = document.getElementById('signin-otp');
     const smsMessage = document.getElementById('sms-message');
+    console.log('[SMS-DEBUG] OTP input element:', otpInput);
+    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
+
     const otpCode = otpInput.value.trim();
+    console.log('[SMS-DEBUG] OTP code value:', otpCode);
+    console.log('[SMS-DEBUG] OTP code length:', otpCode.length);
 
     if (!otpCode || otpCode.length !== 6) {
+        console.log('[SMS-DEBUG] OTP validation failed - invalid length or empty');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Please enter a valid 6-digit code.';
         return;
     }
 
     if (!currentSmsPhoneNumber) {
+        console.log('[SMS-DEBUG] ERROR: currentSmsPhoneNumber is null or undefined');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Phone number not found. Please start over.';
         return;
     }
 
+    console.log('[SMS-DEBUG] Current phone number:', currentSmsPhoneNumber);
     log('Auth', `Verifying SMS code for: ${currentSmsPhoneNumber}`);
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Verifying code...';
+    console.log('[SMS-DEBUG] UI updated - showing "Verifying code..." message');
 
     try {
+        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-verify');
+        console.log('[SMS-DEBUG] Request payload:', { code: otpCode, phoneNumber: currentSmsPhoneNumber });
+
         const response = await fetch('/api/auth-sms-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -393,19 +459,29 @@ async function handleSmsVerify() {
             }),
         });
 
+        console.log('[SMS-DEBUG] Fetch completed');
+        console.log('[SMS-DEBUG] Response status:', response.status);
+        console.log('[SMS-DEBUG] Response ok:', response.ok);
+
         const data = await response.json();
+        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
+            console.log('[SMS-DEBUG] Response not OK, throwing error');
             throw new Error(data.error || 'Invalid code. Please try again.');
         }
 
+        console.log('[SMS-DEBUG] Verification successful!');
         smsMessage.style.color = '#28a745';
         smsMessage.textContent = 'Success! Signing you in...';
 
         // Handle successful login
+        console.log('[SMS-DEBUG] Calling _handleSuccessfulLogin with data');
         await _handleSuccessfulLogin(data);
+        console.log('[SMS-DEBUG] _handleSuccessfulLogin completed');
 
         // Reset SMS form
+        console.log('[SMS-DEBUG] Resetting SMS form UI');
         otpInput.value = '';
         currentSmsPhoneNumber = null;
         document.getElementById('sms-signin-form').style.display = 'block';
@@ -413,37 +489,59 @@ async function handleSmsVerify() {
         document.getElementById('signin-phone').value = '';
 
         log('Auth', 'SMS authentication successful');
+        console.log('[SMS-DEBUG] ========== handleSmsVerify COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
+        console.error('[SMS-DEBUG] ========== ERROR IN handleSmsVerify ==========');
+        console.error('[SMS-DEBUG] Error object:', error);
+        console.error('[SMS-DEBUG] Error message:', error.message);
+        console.error('[SMS-DEBUG] Error stack:', error.stack);
+
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
         log('Auth', `SMS verification error: ${error.message}`);
+        console.log('[SMS-DEBUG] ========== handleSmsVerify FAILED ==========');
     }
 }
 
 async function handleResendSms() {
+    console.log('[SMS-DEBUG] ========== handleResendSms CALLED ==========');
+
     const smsMessage = document.getElementById('sms-message');
+    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
 
     if (!currentSmsPhoneNumber) {
+        console.log('[SMS-DEBUG] ERROR: currentSmsPhoneNumber is null or undefined');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Phone number not found. Please start over.';
         return;
     }
 
+    console.log('[SMS-DEBUG] Current phone number:', currentSmsPhoneNumber);
     log('Auth', `Resending SMS code to: ${currentSmsPhoneNumber}`);
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Resending code...';
+    console.log('[SMS-DEBUG] UI updated - showing "Resending code..." message');
 
     try {
+        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-start');
+        console.log('[SMS-DEBUG] Request payload:', { phoneNumber: currentSmsPhoneNumber });
+
         const response = await fetch('/api/auth-sms-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phoneNumber: currentSmsPhoneNumber }),
         });
 
+        console.log('[SMS-DEBUG] Fetch completed');
+        console.log('[SMS-DEBUG] Response status:', response.status);
+        console.log('[SMS-DEBUG] Response ok:', response.ok);
+
         const data = await response.json();
+        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
+            console.log('[SMS-DEBUG] Response not OK, throwing error');
             throw new Error(data.error || 'Failed to resend SMS code.');
         }
 
@@ -451,10 +549,17 @@ async function handleResendSms() {
         smsMessage.textContent = `New code sent to ${currentSmsPhoneNumber}!`;
 
         log('Auth', 'SMS code resent successfully');
+        console.log('[SMS-DEBUG] ========== handleResendSms COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
+        console.error('[SMS-DEBUG] ========== ERROR IN handleResendSms ==========');
+        console.error('[SMS-DEBUG] Error object:', error);
+        console.error('[SMS-DEBUG] Error message:', error.message);
+        console.error('[SMS-DEBUG] Error stack:', error.stack);
+
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
         log('Auth', `Resend SMS error: ${error.message}`);
+        console.log('[SMS-DEBUG] ========== handleResendSms FAILED ==========');
     }
 }
 
@@ -572,30 +677,60 @@ export function setupAuthEventListeners() {
     });
 
     // --- SMS AUTHENTICATION EVENT LISTENERS ---
+    console.log('[SMS-DEBUG] ========== Setting up SMS event listeners ==========');
+
     const smsSigninForm = document.getElementById('sms-signin-form');
     const verifyOtpBtn = document.getElementById('verify-otp-btn');
     const resendSmsBtn = document.getElementById('resend-sms-btn');
 
+    console.log('[SMS-DEBUG] sms-signin-form element:', smsSigninForm);
+    console.log('[SMS-DEBUG] verify-otp-btn element:', verifyOtpBtn);
+    console.log('[SMS-DEBUG] resend-sms-btn element:', resendSmsBtn);
+
     if (smsSigninForm) {
+        console.log('[SMS-DEBUG] Attaching submit listener to sms-signin-form');
         smsSigninForm.addEventListener('submit', handleSmsSignIn);
+        console.log('[SMS-DEBUG] Submit listener attached successfully');
+    } else {
+        console.warn('[SMS-DEBUG] WARNING: sms-signin-form element not found!');
     }
+
     if (verifyOtpBtn) {
+        console.log('[SMS-DEBUG] Attaching click listener to verify-otp-btn');
         verifyOtpBtn.addEventListener('click', handleSmsVerify);
+        console.log('[SMS-DEBUG] Click listener attached successfully');
+    } else {
+        console.warn('[SMS-DEBUG] WARNING: verify-otp-btn element not found!');
     }
+
     if (resendSmsBtn) {
+        console.log('[SMS-DEBUG] Attaching click listener to resend-sms-btn');
         resendSmsBtn.addEventListener('click', handleResendSms);
+        console.log('[SMS-DEBUG] Click listener attached successfully');
+    } else {
+        console.warn('[SMS-DEBUG] WARNING: resend-sms-btn element not found!');
     }
 
     // Allow Enter key to submit OTP
     const otpInput = document.getElementById('signin-otp');
+    console.log('[SMS-DEBUG] signin-otp element:', otpInput);
+
     if (otpInput) {
+        console.log('[SMS-DEBUG] Attaching keypress listener to signin-otp');
         otpInput.addEventListener('keypress', (e) => {
+            console.log('[SMS-DEBUG] Keypress event in OTP input:', e.key);
             if (e.key === 'Enter') {
+                console.log('[SMS-DEBUG] Enter key detected - calling handleSmsVerify');
                 e.preventDefault();
                 handleSmsVerify();
             }
         });
+        console.log('[SMS-DEBUG] Keypress listener attached successfully');
+    } else {
+        console.warn('[SMS-DEBUG] WARNING: signin-otp element not found!');
     }
+
+    console.log('[SMS-DEBUG] ========== SMS event listeners setup complete ==========');
 
     // --- NETLIFY IDENTITY SSO SETUP ---
     // Wait for Netlify Identity to be ready before setting up SSO

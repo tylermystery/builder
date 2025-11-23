@@ -917,46 +917,52 @@ body.modal-open {
                 <h3>Sign In or Create Account</h3>
                 <p>Choose your preferred sign-in method. Once logged in, your plans are saved to your account automatically!</p>
 
-                <!-- SMS Authentication (NEW - Recommended) -->
-                <div id="sms-auth-section" style="margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 10px; color: #4CAF50;">Recommended: Sign In with Phone</h4>
-                    <form id="sms-signin-form">
+                <!-- Email Magic Link Authentication (Recommended) -->
+                <div id="email-auth-section" style="margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 10px; color: #007bff;">Sign In with Email</h4>
+                    <form id="signin-form">
                         <div class="form-row">
-                            <label for="signin-phone">Phone Number (with country code)</label>
-                            <input type="tel" id="signin-phone" placeholder="+1234567890" autocomplete="tel">
+                            <label for="signin-email">Email Address</label>
+                            <input type="email" id="signin-email" autocomplete="email" required>
                         </div>
-                        <button class="primary-action-btn" type="submit" style="background-color: #4CAF50;">Send SMS Code</button>
+                        <button class="primary-action-btn" type="submit" style="background-color: #007bff;">Send Magic Link</button>
                     </form>
-
-                    <!-- OTP Verification Form (hidden initially) -->
-                    <div id="sms-verify-section" style="display: none; margin-top: 15px;">
-                        <div class="form-row">
-                            <label for="signin-otp">Enter 6-digit code</label>
-                            <input type="text" id="signin-otp" maxlength="6" pattern="[0-9]{6}" placeholder="123456" autocomplete="one-time-code">
-                        </div>
-                        <button class="primary-action-btn" id="verify-otp-btn" style="background-color: #4CAF50;">Verify Code</button>
-                        <button class="secondary-action-btn" id="resend-sms-btn" style="margin-top: 10px;">Resend Code</button>
-                    </div>
-                    <p id="sms-message" style="margin-top: 10px;"></p>
+                    <p id="signin-message" style="margin-top: 10px;"></p>
                 </div>
 
                 <div class="sso-divider">
                     <span>OR</span>
                 </div>
 
-                <!-- Email Magic Link (Temporarily Unreliable) -->
+                <!-- SMS Authentication (Awaiting Approval) -->
                 <details style="margin-bottom: 15px;">
-                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Email (Currently Limited)</summary>
+                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone (Currently Limited)</summary>
                     <div style="padding: 15px 0;">
-                        <p style="margin-bottom: 10px; color: #ff9800; font-size: 0.9em;">Note: Email delivery is currently limited during service approval. SMS authentication is more reliable.</p>
-                        <form id="signin-form">
+                        <p style="margin-bottom: 10px; color: #ff9800; font-size: 0.9em;">Note: SMS authentication is currently pending carrier approval. Email authentication is more reliable.</p>
+                        <form id="sms-signin-form">
                             <div class="form-row">
-                                <label for="signin-email">Email Address</label>
-                                <input type="email" id="signin-email" autocomplete="email">
+                                <label for="signin-phone">Phone Number (with country code)</label>
+                                <input type="tel" id="signin-phone" placeholder="+1234567890" autocomplete="tel">
                             </div>
-                            <button class="primary-action-btn" type="submit">Send Magic Link</button>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.9em;">
+                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 8px; margin-top: 3px; cursor: pointer;">
+                                    <span style="line-height: 1.4;">I agree to receive text messages for authentication purposes. Message and data rates may apply. Reply STOP to opt out. <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a></span>
+                                </label>
+                            </div>
+                            <button class="primary-action-btn" type="submit" style="background-color: #4CAF50;">Send SMS Code</button>
                         </form>
-                        <p id="signin-message"></p>
+
+                        <!-- OTP Verification Form (hidden initially) -->
+                        <div id="sms-verify-section" style="display: none; margin-top: 15px;">
+                            <div class="form-row">
+                                <label for="signin-otp">Enter 6-digit code</label>
+                                <input type="text" id="signin-otp" maxlength="6" pattern="[0-9]{6}" placeholder="123456" autocomplete="one-time-code">
+                            </div>
+                            <button class="primary-action-btn" id="verify-otp-btn" style="background-color: #4CAF50;">Verify Code</button>
+                            <button class="secondary-action-btn" id="resend-sms-btn" style="margin-top: 10px;">Resend Code</button>
+                        </div>
+                        <p id="sms-message" style="margin-top: 10px;"></p>
                     </div>
                 </details>
 
