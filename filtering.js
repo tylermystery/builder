@@ -327,7 +327,7 @@ export async function applyFiltersAndSort(imageCache) {
                 const sessionFields = session.fields || {};
                 const itemCount = (sessionFields.Items || []).length;
                 const totalCost = sessionFields.TotalCost || 0;
-                const dateStr = sessionFields.Date ? new Date(sessionFields.Date).toLocaleDateString() : 'No date set';
+                const dateStr = sessionFields.Date ? new Date(sessionFields.Date + 'T00:00:00').toLocaleDateString() : 'No date set';
                 const eventName = sessionFields.Name || 'Untitled Session';
                 
                 return {

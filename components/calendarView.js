@@ -37,10 +37,15 @@ async function fetchUpcomingEvents() {
     log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
     
     return eventItems.map(record => {
+        // Parse date and ensure it's in Pacific timezone
+        // Append 'T00:00:00' to treat as local date without timezone conversion
+        const dateStr = record.fields.Date;
+        const localDate = new Date(dateStr + 'T00:00:00');
+
         return {
             recordId: record.id,
             name: record.fields.Name || 'Unnamed Event',
-            date: new Date(record.fields.Date).toISOString().split('T')[0], 
+            date: dateStr.split('T')[0], // Use the date string directly without conversion
             record: record
         };
     });
@@ -86,12 +91,13 @@ function createEventCard(event, compact = false) {
     const userRsvps = event.record.fields.RSVPs || [];
     const hasRsvpd = state.session.user.isAuthenticated && userRsvps.includes(state.session.user.id);
     
-    const eventDate = new Date(event.record.fields.Date);
-    const dateStr = eventDate.toLocaleDateString('en-US', { 
-        weekday: 'short', 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
+    // Parse date in local timezone to avoid timezone shift issues
+    const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
+    const dateStr = eventDate.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
     });
     
     const timeStr = event.record.fields.Time || '';

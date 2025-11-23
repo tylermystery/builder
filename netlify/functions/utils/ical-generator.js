@@ -1,13 +1,15 @@
 function formatICalDate(dateStr, timeStr) {
-    const date = new Date(dateStr);
-    
+    // Parse date in local timezone to avoid timezone conversion issues
+    const date = new Date(dateStr + 'T00:00:00');
+
     if (timeStr) {
         const [hours, minutes] = timeStr.split(':');
         date.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
     } else {
-        date.setHours(0, 0, 0, 0);
+        // Default to 11:00 AM if no time is provided
+        date.setHours(11, 0, 0, 0);
     }
-    
+
     return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 }
 
@@ -19,13 +21,15 @@ function generateICalContent(event) {
     }
     
     const startDate = formatICalDate(eventDate, eventTime);
-    
-    const endDate = new Date(eventDate);
+
+    // Parse date in local timezone
+    const endDate = new Date(eventDate + 'T00:00:00');
     if (eventTime) {
         const [hours, minutes] = eventTime.split(':');
         endDate.setHours(parseInt(hours, 10) + 2, parseInt(minutes, 10), 0, 0);
     } else {
-        endDate.setHours(23, 59, 59, 999);
+        // Default end time: 11 AM + 8 hours = 7 PM
+        endDate.setHours(19, 0, 0, 0);
     }
     const formattedEndDate = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     
@@ -69,15 +73,20 @@ function generateCalendarLinks(event, siteUrl) {
     const eventName = encodeURIComponent(Name || 'Event');
     const eventDesc = encodeURIComponent(Description || '');
     const eventLoc = encodeURIComponent(Location || '');
-    
-    const startDate = new Date(eventDate);
+
+    // Parse date in local timezone
+    const startDate = new Date(eventDate + 'T00:00:00');
     if (eventTime) {
         const [hours, minutes] = eventTime.split(':');
         startDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+    } else {
+        // Default to 11:00 AM if no time is provided
+        startDate.setHours(11, 0, 0, 0);
     }
-    
+
     const endDate = new Date(startDate);
-    endDate.setHours(endDate.getHours() + 2);
+    // If no time provided, use 8 hours (11 AM to 7 PM); otherwise use 2 hours default
+    endDate.setHours(endDate.getHours() + (eventTime ? 2 : 8));
     
     const formatGoogleDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const googleStart = formatGoogleDate(startDate);
