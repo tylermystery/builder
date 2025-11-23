@@ -220,6 +220,178 @@ function updateTotalPlanScoreDisplay(score) {
 let isUpdatingEventPlan = false;
 let pendingEventPlanUpdate = false;
 
+/**
+ * Updates the RSVP statistics and Publish Event button for published sessions
+ */
+async function updateSessionPublishingControls() {
+    // Remove any existing publishing controls
+    const existingControls = document.getElementById('session-publishing-controls');
+    if (existingControls) {
+        existingControls.remove();
+    }
+
+    // Only show if we have an active session
+    if (!state.session.id) {
+        log('Sidebar', 'No active session, skipping publishing controls');
+        return;
+    }
+
+    try {
+        const session = await api.fetchSessionById(state.session.id);
+        if (!session) {
+            log('Sidebar', 'Could not fetch session data');
+            return;
+        }
+
+        const controlsContainer = document.createElement('div');
+        controlsContainer.id = 'session-publishing-controls';
+        controlsContainer.style.cssText = 'margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
+
+        let controlsHTML = '';
+
+        // Check if this session is linked to a published event
+        const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
+
+        if (linkedItemId) {
+            // Session is published, show RSVP statistics
+            const linkedItem = state.records.all.find(r => r.id === linkedItemId);
+            if (linkedItem) {
+                const rsvpYes = linkedItem.fields.RSVPs ? linkedItem.fields.RSVPs.length : 0;
+                const rsvpMaybe = linkedItem.fields.RSVPMaybe ? linkedItem.fields.RSVPMaybe.length : 0;
+                const rsvpNo = linkedItem.fields.RSVPNo ? linkedItem.fields.RSVPNo.length : 0;
+                const totalRsvps = rsvpYes + rsvpMaybe + rsvpNo;
+
+                controlsHTML += `
+                    <div class="rsvp-statistics" style="margin-bottom: 15px;">
+                        <h4 style="margin-top: 0; color: #495057; font-size: 1em;">📊 RSVP Statistics</h4>
+                        <div style="display: flex; justify-content: space-between; margin: 10px 0;">
+                            <div style="text-align: center; flex: 1;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: #28a745;">${rsvpYes}</div>
+                                <div style="font-size: 0.85em; color: #6c757d;">Going</div>
+                            </div>
+                            <div style="text-align: center; flex: 1;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: #ffc107;">${rsvpMaybe}</div>
+                                <div style="font-size: 0.85em; color: #6c757d;">Maybe</div>
+                            </div>
+                            <div style="text-align: center; flex: 1;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: #dc3545;">${rsvpNo}</div>
+                                <div style="font-size: 0.85em; color: #6c757d;">Can't Go</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                            <strong>Total Responses: ${totalRsvps}</strong>
+                        </div>
+                    </div>
+                `;
+
+                // Update button
+                controlsHTML += `
+                    <button id="update-published-event-btn" style="width: 100%; padding: 10px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px;">
+                        🔄 Update Published Event
+                    </button>
+                `;
+            }
+        } else {
+            // Session is not published, show publish button
+            controlsHTML += `
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <p style="color: #6c757d; font-size: 0.9em; margin: 0 0 10px 0;">This plan is not yet published as a public event.</p>
+                </div>
+                <button id="publish-event-btn" style="width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    🌐 Publish as Public Event
+                </button>
+            `;
+        }
+
+        controlsContainer.innerHTML = controlsHTML;
+
+        // Insert at the top of the cart container
+        const cartContainer = document.getElementById('cart-items-container');
+        if (cartContainer && cartContainer.parentElement) {
+            cartContainer.parentElement.insertBefore(controlsContainer, cartContainer);
+        }
+
+        // Add event listeners for the buttons
+        const publishBtn = document.getElementById('publish-event-btn');
+        const updateBtn = document.getElementById('update-published-event-btn');
+
+        if (publishBtn) {
+            publishBtn.addEventListener('click', async () => {
+                await handlePublishEvent();
+            });
+        }
+
+        if (updateBtn) {
+            updateBtn.addEventListener('click', async () => {
+                await handlePublishEvent();
+            });
+        }
+
+        log('Sidebar', 'Session publishing controls updated');
+    } catch (error) {
+        console.error('Error updating session publishing controls:', error);
+    }
+}
+
+/**
+ * Handles publishing or updating a session as a public event
+ */
+async function handlePublishEvent() {
+    if (!state.session.id) {
+        alert('No active session to publish');
+        return;
+    }
+
+    try {
+        // Gather event data from session details
+        const eventData = {
+            Name: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event',
+            Date: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE),
+            Goals: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS),
+            GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT)
+        };
+
+        log('Sidebar', `Publishing session ${state.session.id} as event with data:`, eventData);
+
+        // Disable the button to prevent double-clicks
+        const publishBtn = document.getElementById('publish-event-btn');
+        const updateBtn = document.getElementById('update-published-event-btn');
+        if (publishBtn) {
+            publishBtn.disabled = true;
+            publishBtn.textContent = 'Publishing...';
+        }
+        if (updateBtn) {
+            updateBtn.disabled = true;
+            updateBtn.textContent = 'Updating...';
+        }
+
+        // Call the API to publish/update
+        const result = await api.publishSessionAsEvent(state.session.id, eventData);
+
+        log('Sidebar', 'Event published/updated successfully:', result);
+        alert('Event published successfully! It will now appear in the catalog.');
+
+        // Reload to show updated RSVP stats
+        await updateSessionPublishingControls();
+
+    } catch (error) {
+        console.error('Error publishing event:', error);
+        alert(`Failed to publish event: ${error.message}`);
+
+        // Re-enable the button
+        const publishBtn = document.getElementById('publish-event-btn');
+        const updateBtn = document.getElementById('update-published-event-btn');
+        if (publishBtn) {
+            publishBtn.disabled = false;
+            publishBtn.textContent = '🌐 Publish as Public Event';
+        }
+        if (updateBtn) {
+            updateBtn.disabled = false;
+            updateBtn.textContent = '🔄 Update Published Event';
+        }
+    }
+}
+
 export async function updateEventPlanSection() {
     // If already updating, mark that another update is needed and return
     if (isUpdatingEventPlan) {
@@ -239,6 +411,9 @@ export async function updateEventPlanSection() {
         // Clear container to prevent duplicates
         container.innerHTML = '';
 
+        // Check if this session is published and display RSVP stats + Publish button
+        await updateSessionPublishingControls();
+
         if (state.cart.lockedItems.size === 0) {
             container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
         } else {
@@ -246,13 +421,17 @@ export async function updateEventPlanSection() {
             const fragment = document.createDocumentFragment();
 
             for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
-                // Find the record in state.records.all (where custom items now live)
-                const record = state.records.all.find(r => r.id === recordId);
+                // Find the record in state.records.all or state.records.archive (for ghost items)
+                let record = state.records.all.find(r => r.id === recordId);
+                if (!record) {
+                    record = state.records.archive.find(r => r.id === recordId);
+                }
+
                 if (record) {
                     const itemElement = await createLockedInItemElement(record, itemInfo); // Pass the full record
                     fragment.appendChild(itemElement);
                 } else {
-                    log('Sidebar', `Could not render item ${recordId}, it was not found in state.records.all.`);
+                    log('Sidebar', `Could not render item ${recordId}, not found in state.records.all or archive.`);
                 }
             }
 
