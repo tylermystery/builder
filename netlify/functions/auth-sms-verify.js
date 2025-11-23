@@ -19,14 +19,24 @@ const EMAIL_FIELD = 'Email';
 const PHONE_FIELD = 'PhoneNumber';
 
 exports.handler = async (event) => {
+    console.log('[SMS-VERIFY-DEBUG] ========== Function invoked ==========');
+    console.log('[SMS-VERIFY-DEBUG] HTTP Method:', event.httpMethod);
+    console.log('[SMS-VERIFY-DEBUG] Request headers:', JSON.stringify(event.headers));
+    console.log('[SMS-VERIFY-DEBUG] Request body (raw):', event.body);
+
     if (event.httpMethod !== 'POST') {
+        console.log('[SMS-VERIFY-DEBUG] Invalid HTTP method - returning 405');
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
+        console.log('[SMS-VERIFY-DEBUG] Parsing request body');
         const { code, phoneNumber } = JSON.parse(event.body);
+        console.log('[SMS-VERIFY-DEBUG] Parsed code:', code);
+        console.log('[SMS-VERIFY-DEBUG] Parsed phoneNumber:', phoneNumber);
 
         if (!code || !phoneNumber) {
+            console.log('[SMS-VERIFY-DEBUG] Validation failed - missing code or phone number');
             return {
                 statusCode: 400,
                 body: JSON.stringify({ error: 'Code and phone number are required.' })
@@ -35,19 +45,35 @@ exports.handler = async (event) => {
 
         // Normalize phone number
         const normalizedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+        console.log('[SMS-VERIFY-DEBUG] Normalized phone number:', normalizedPhone);
 
         console.log(`[auth-sms-verify] Verification attempt for: ${normalizedPhone} with code: ${code}`);
 
+        // Check environment variables
+        console.log('[SMS-VERIFY-DEBUG] Environment variable checks:');
+        console.log('[SMS-VERIFY-DEBUG] - AIRTABLE_PAT exists:', !!AIRTABLE_PAT);
+        console.log('[SMS-VERIFY-DEBUG] - BASE_ID exists:', !!BASE_ID);
+        console.log('[SMS-VERIFY-DEBUG] - JWT_SECRET exists:', !!JWT_SECRET);
+
         // 1. Verify SMS Code
         const findCodeUrl = `https://api.airtable.com/v0/${BASE_ID}/SMS%20Codes?filterByFormula=AND({Code}='${code}',{PhoneNumber}='${normalizedPhone}')`;
+        console.log('[SMS-VERIFY-DEBUG] Airtable find code URL:', findCodeUrl);
+        console.log('[SMS-VERIFY-DEBUG] Fetching SMS code from Airtable...');
+
         const codeRes = await fetch(findCodeUrl, {
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
         });
 
+        console.log('[SMS-VERIFY-DEBUG] Airtable response status:', codeRes.status);
+        console.log('[SMS-VERIFY-DEBUG] Airtable response ok:', codeRes.ok);
+
         const codeData = await codeRes.json();
+        console.log('[SMS-VERIFY-DEBUG] Airtable response data:', JSON.stringify(codeData));
+        console.log('[SMS-VERIFY-DEBUG] Number of records found:', codeData.records?.length || 0);
 
         if (!codeData.records || codeData.records.length === 0) {
             console.warn(`[auth-sms-verify] Invalid code or phone number mismatch.`);
+            console.warn('[SMS-VERIFY-DEBUG] Code verification failed - no matching records');
             return {
                 statusCode: 401,
                 body: JSON.stringify({ error: 'Invalid or expired code.' })
@@ -55,17 +81,26 @@ exports.handler = async (event) => {
         }
 
         const smsCodeRecord = codeData.records[0];
+        console.log('[SMS-VERIFY-DEBUG] SMS code record ID:', smsCodeRecord.id);
+        console.log('[SMS-VERIFY-DEBUG] SMS code record fields:', JSON.stringify(smsCodeRecord.fields));
+
         const { PhoneNumber, ExpiresAt } = smsCodeRecord.fields;
+        console.log('[SMS-VERIFY-DEBUG] Code phone number:', PhoneNumber);
+        console.log('[SMS-VERIFY-DEBUG] Code expires at:', ExpiresAt);
+        console.log('[SMS-VERIFY-DEBUG] Current time:', new Date().toISOString());
 
         // Check expiration
         if (new Date() > new Date(ExpiresAt)) {
             console.warn(`[auth-sms-verify] Code expired for: ${PhoneNumber}`);
+            console.warn('[SMS-VERIFY-DEBUG] Code has expired');
 
             // Clean up expired code
-            await fetch(`https://api.airtable.com/v0/${BASE_ID}/SMS%20Codes/${smsCodeRecord.id}`, {
+            console.log('[SMS-VERIFY-DEBUG] Deleting expired code...');
+            const deleteResponse = await fetch(`https://api.airtable.com/v0/${BASE_ID}/SMS%20Codes/${smsCodeRecord.id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
             });
+            console.log('[SMS-VERIFY-DEBUG] Delete expired code response status:', deleteResponse.status);
 
             return {
                 statusCode: 401,
@@ -74,54 +109,76 @@ exports.handler = async (event) => {
         }
 
         // Delete the used SMS code immediately
-        await fetch(`https://api.airtable.com/v0/${BASE_ID}/SMS%20Codes/${smsCodeRecord.id}`, {
+        console.log('[SMS-VERIFY-DEBUG] Deleting used SMS code...');
+        const deleteUsedResponse = await fetch(`https://api.airtable.com/v0/${BASE_ID}/SMS%20Codes/${smsCodeRecord.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
         });
+        console.log('[SMS-VERIFY-DEBUG] Delete used code response status:', deleteUsedResponse.status);
 
         console.log(`[auth-sms-verify] Code verified successfully for: ${PhoneNumber}`);
 
         // 2. Find or Create User by Phone Number
         const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(USERS_TABLE)}?filterByFormula=({${PHONE_FIELD}}='${PhoneNumber}')`;
+        console.log('[SMS-VERIFY-DEBUG] Finding user in Airtable...');
+        console.log('[SMS-VERIFY-DEBUG] Find user URL:', findUserUrl);
+
         const userRes = await fetch(findUserUrl, {
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
         });
 
+        console.log('[SMS-VERIFY-DEBUG] Find user response status:', userRes.status);
+        console.log('[SMS-VERIFY-DEBUG] Find user response ok:', userRes.ok);
+
         let userData = await userRes.json();
+        console.log('[SMS-VERIFY-DEBUG] Find user response data:', JSON.stringify(userData));
+
         let userRecord;
 
         if (userData.records && userData.records.length > 0) {
             userRecord = userData.records[0];
             console.log(`[auth-sms-verify] Found existing user: ${userRecord.id}`);
+            console.log('[SMS-VERIFY-DEBUG] Existing user fields:', JSON.stringify(userRecord.fields));
         } else {
             console.log(`[auth-sms-verify] Creating new user for phone: ${PhoneNumber}`);
+            console.log('[SMS-VERIFY-DEBUG] No existing user found - creating new user...');
 
             // Create new user with phone number
             const createUserUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(USERS_TABLE)}`;
+            console.log('[SMS-VERIFY-DEBUG] Create user URL:', createUserUrl);
+
+            const createUserPayload = {
+                records: [{
+                    fields: {
+                        [PHONE_FIELD]: PhoneNumber,
+                        [NAME_FIELD]: `User ${PhoneNumber.slice(-4)}`,
+                        [EMAIL_FIELD]: `sms-user-${Date.now()}@temp.local` // Temporary email
+                    }
+                }]
+            };
+            console.log('[SMS-VERIFY-DEBUG] Create user payload:', JSON.stringify(createUserPayload));
+
             const createUserRes = await fetch(createUserUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${AIRTABLE_PAT}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    records: [{
-                        fields: {
-                            [PHONE_FIELD]: PhoneNumber,
-                            [NAME_FIELD]: `User ${PhoneNumber.slice(-4)}`,
-                            [EMAIL_FIELD]: `sms-user-${Date.now()}@temp.local` // Temporary email
-                        }
-                    }]
-                })
+                body: JSON.stringify(createUserPayload)
             });
+
+            console.log('[SMS-VERIFY-DEBUG] Create user response status:', createUserRes.status);
+            console.log('[SMS-VERIFY-DEBUG] Create user response ok:', createUserRes.ok);
 
             if (!createUserRes.ok) {
                 const errorData = await createUserRes.json();
                 console.error('[auth-sms-verify] Failed to create user:', errorData);
+                console.error('[SMS-VERIFY-DEBUG] Create user error details:', JSON.stringify(errorData));
                 throw new Error('Failed to create user in Airtable.');
             }
 
             const newUserData = await createUserRes.json();
+            console.log('[SMS-VERIFY-DEBUG] Create user response data:', JSON.stringify(newUserData));
             userRecord = newUserData.records[0];
             console.log(`[auth-sms-verify] Created new user: ${userRecord.id}`);
         }
@@ -198,6 +255,7 @@ exports.handler = async (event) => {
         }
 
         // 7. Generate Session JWT
+        console.log('[SMS-VERIFY-DEBUG] Generating JWT token...');
         const sessionToken = jwt.sign(
             {
                 userId: userRecord.id,
@@ -211,27 +269,42 @@ exports.handler = async (event) => {
         );
 
         console.log(`[auth-sms-verify] Authentication successful for user ${userRecord.id}`);
+        console.log('[SMS-VERIFY-DEBUG] JWT token generated successfully');
 
         // 8. Return Response to Client
+        const responsePayload = {
+            token: sessionToken,
+            user: {
+                id: userRecord.id,
+                name: userRecord.fields[NAME_FIELD],
+                email: userRecord.fields[EMAIL_FIELD],
+                phoneNumber: userRecord.fields[PHONE_FIELD] || '',
+                notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
+                likedItemIds: likedItemIds,
+                rsvpdItemIds: rsvpdItemIds
+            },
+            ownerData: ownerData,
+            associatedSessions: associatedSessions
+        };
+
+        console.log('[SMS-VERIFY-DEBUG] Response payload prepared:', JSON.stringify({
+            ...responsePayload,
+            token: '[REDACTED]'
+        }));
+        console.log('[SMS-VERIFY-DEBUG] ========== Function completed successfully ==========');
+
         return {
             statusCode: 200,
-            body: JSON.stringify({
-                token: sessionToken,
-                user: {
-                    id: userRecord.id,
-                    name: userRecord.fields[NAME_FIELD],
-                    email: userRecord.fields[EMAIL_FIELD],
-                    phoneNumber: userRecord.fields[PHONE_FIELD] || '',
-                    notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
-                    likedItemIds: likedItemIds,
-                    rsvpdItemIds: rsvpdItemIds
-                },
-                ownerData: ownerData,
-                associatedSessions: associatedSessions
-            }),
+            body: JSON.stringify(responsePayload),
         };
     } catch (error) {
         console.error('[auth-sms-verify] Function Error:', error);
+        console.error('[SMS-VERIFY-DEBUG] ========== ERROR IN FUNCTION ==========');
+        console.error('[SMS-VERIFY-DEBUG] Error name:', error.name);
+        console.error('[SMS-VERIFY-DEBUG] Error message:', error.message);
+        console.error('[SMS-VERIFY-DEBUG] Error stack:', error.stack);
+        console.error('[SMS-VERIFY-DEBUG] Full error object:', JSON.stringify(error, null, 2));
+
         return {
             statusCode: 500,
             body: JSON.stringify({

@@ -60,7 +60,7 @@ exports.handler = async (event) => {
             }
         }
         
-        // *** NEW LOGIC TO FETCH SESSION NAMES ***
+        // *** FETCH SESSION NAMES ***
         let associatedSessions = [];
         const sessionIds = userRecord.fields['Associated Sessions'];
         if (sessionIds && sessionIds.length > 0) {
@@ -72,7 +72,30 @@ exports.handler = async (event) => {
                 associatedSessions = sessionsData.records.map(rec => ({ id: rec.id, name: rec.fields.Name }));
             }
         }
-        // *** END NEW LOGIC ***
+
+        // *** FETCH LIKED ITEMS ***
+        const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
+        const LIKED_BY_FIELD = 'Liked By Users';
+        const RSVPS_FIELD = 'RSVPs';
+
+        let likedItemIds = [];
+        const likedItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${LIKED_BY_FIELD}}))`;
+        const likedItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(likedItemsFormula)}&fields[]=`;
+        const likedItemsRes = await fetch(likedItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        if (likedItemsRes.ok) {
+            const likedItemsData = await likedItemsRes.json();
+            likedItemIds = likedItemsData.records ? likedItemsData.records.map(rec => rec.id) : [];
+        }
+
+        // *** FETCH RSVP'D ITEMS ***
+        let rsvpdItemIds = [];
+        const rsvpdItemsFormula = `FIND('${userRecord.id}', ARRAYJOIN({${RSVPS_FIELD}}))`;
+        const rsvpdItemsUrl = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(ITEMS_TABLE)}?filterByFormula=${encodeURIComponent(rsvpdItemsFormula)}&fields[]=`;
+        const rsvpdItemsRes = await fetch(rsvpdItemsUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+        if (rsvpdItemsRes.ok) {
+            const rsvpdItemsData = await rsvpdItemsRes.json();
+            rsvpdItemIds = rsvpdItemsData.records ? rsvpdItemsData.records.map(rec => rec.id) : [];
+        }
 
         const sessionToken = jwt.sign(
             { userId: userRecord.id, name: userRecord.fields.Name, email: userRecord.fields.Email, isOwner: ownerData.isOwner }, 
@@ -82,13 +105,17 @@ exports.handler = async (event) => {
 
         await pusher.trigger(`private-auth-${ChannelID}`, "auth-success", {
             token: sessionToken,
-            user: { 
-                id: userRecord.id, 
-                name: userRecord.fields.Name, 
+            user: {
+                id: userRecord.id,
+                name: userRecord.fields.Name,
                 email: userRecord.fields.Email,
-                associatedSessions: associatedSessions // Send the array of objects
+                phoneNumber: userRecord.fields.PhoneNumber || '',
+                notificationFrequency: userRecord.fields.NotificationFrequency || 'None',
+                likedItemIds: likedItemIds,
+                rsvpdItemIds: rsvpdItemIds
             },
-            ownerData: ownerData
+            ownerData: ownerData,
+            associatedSessions: associatedSessions
         });
 
         return {
