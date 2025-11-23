@@ -22,6 +22,7 @@ let catalogMap = new Map();
 let archivedSessionIds = new Set();
 let unreadArchivedSessions = new Set();
 let pusherChannelMap = new Map();
+let pendingNewItemData = null; // Store parsed data for confirmation
 
 // --- DOM Elements ---
 const loadingIndicator = document.getElementById('loading');
@@ -250,16 +251,19 @@ function renderChatPane(sessionId) {
  * @param {object} results - The aggregated data from the handleOmniSearch function.
  */
 function renderOmniSearchResults(results) {
+    console.log('[DEBUG] renderOmniSearchResults called with:', results);
     omniSearchResults.innerHTML = ''; // Clear loading/previous results
     let html = '';
     const { item, session, user, itemMessages, sessionMessages } = results;
 
     if (!item && !session && !user) {
+        console.log('[DEBUG] No matches found in local data');
         omniSearchResults.innerHTML = `<p style="color: #7f8c8d; text-align: center;">No matches found in local data. Attempting to parse as new item...</p>`;
         return false; // Signal that no results were found
     }
 
     if (item) {
+        console.log('[DEBUG] Found catalog item:', item.fields.Name);
         html += `<h5>✅ Found Catalog Item: ${item.fields.Name}</h5>`;
         html += `<pre>ID: ${item.id}</pre>`;
         // Note: Image/Message data isn't pre-loaded in crm.js, so we can't show it here in the MVP
@@ -268,6 +272,7 @@ function renderOmniSearchResults(results) {
     }
 
     if (session) {
+        console.log('[DEBUG] Found session:', session.fields.Name);
         html += `<h5>✅ Found Session: ${session.fields.Name}</h5>`;
         html += `<pre>ID: ${session.id} (Click session in list to load)</pre>`;
         if (sessionMessages && sessionMessages.length > 0) {
@@ -279,6 +284,7 @@ function renderOmniSearchResults(results) {
     }
 
     if (user) {
+        console.log('[DEBUG] Found user:', user.fields.Name);
         html += `<h5>✅ Found User: ${user.fields.Name} (${user.fields.Email})</h5>`;
         html += `<pre>ID: ${user.id}</pre>`;
         const userSessions = allSessions.filter(s => (s.fields.Collaborators || []).includes(user.id));
@@ -290,8 +296,155 @@ function renderOmniSearchResults(results) {
     }
 
     omniSearchResults.innerHTML = html;
+    console.log('[DEBUG] Rendered search results');
     return true; // Signal that results were found
 }
+
+// --- COMPARISON MODAL FUNCTIONS ---
+/**
+ * Opens the comparison modal with parsed item data
+ * @param {object} itemData - The parsed item data from weblink parser
+ */
+function openComparisonModal(itemData) {
+    console.log('[DEBUG] Opening comparison modal with data:', itemData);
+    pendingNewItemData = itemData;
+
+    const tableBody = document.getElementById('comparison-table-body');
+    tableBody.innerHTML = '';
+
+    // Create editable rows for each field
+    const fields = ['Name', 'Description', 'Price', 'ServiceType', 'SearchTerms'];
+    fields.forEach(field => {
+        const row = document.createElement('tr');
+        const value = itemData[field];
+        const displayValue = Array.isArray(value) ? value.join(', ') : value;
+
+        row.innerHTML = `
+            <td><strong>${field}</strong></td>
+            <td>
+                ${field === 'Description'
+                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${displayValue || ''}</textarea>`
+                    : field === 'SearchTerms'
+                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${displayValue || ''}</textarea>`
+                    : `<input type="text" id="edit-${field}" value="${displayValue || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`
+                }
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+
+    document.getElementById('comparison-modal').classList.add('active');
+    console.log('[DEBUG] Comparison modal opened');
+}
+
+/**
+ * Closes the comparison modal
+ */
+function closeComparisonModal() {
+    console.log('[DEBUG] Closing comparison modal');
+    document.getElementById('comparison-modal').classList.remove('active');
+    document.getElementById('comparison-status').textContent = '';
+    pendingNewItemData = null;
+}
+
+/**
+ * Confirms the new item and creates it in Airtable
+ */
+async function confirmNewItem(event) {
+    console.log('[DEBUG] confirmNewItem called');
+    const statusDiv = document.getElementById('comparison-status');
+    statusDiv.textContent = 'Creating item in Airtable...';
+    statusDiv.style.color = '#3498db';
+
+    // Get edited values from the form
+    const editedData = {
+        Name: document.getElementById('edit-Name').value.trim(),
+        Description: document.getElementById('edit-Description').value.trim(),
+        Price: parseFloat(document.getElementById('edit-Price').value) || 0,
+        ServiceType: document.getElementById('edit-ServiceType').value.trim(),
+        SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
+    };
+
+    console.log('[DEBUG] Edited data:', editedData);
+
+    // Disable confirm button
+    if (event && event.target) {
+        event.target.disabled = true;
+    }
+
+    try {
+        // Call the create-catalog-item function
+        const response = await fetch('/api/create-catalog-item', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(editedData)
+        });
+
+        console.log('[DEBUG] Create item response status:', response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[DEBUG] Create item error:', errorText);
+            throw new Error(`Failed to create item: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('[DEBUG] Create item result:', result);
+
+        statusDiv.textContent = `✅ Item created successfully! Record ID: ${result.recordId}`;
+        statusDiv.style.color = '#28a745';
+
+        // Optionally trigger auto-profile
+        if (result.recordId) {
+            console.log('[DEBUG] Triggering auto-profile for:', result.recordId);
+            statusDiv.textContent += ' | Generating AI profile...';
+
+            try {
+                const profileResponse = await fetch('/api/profile-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recordId: result.recordId })
+                });
+
+                console.log('[DEBUG] Profile response status:', profileResponse.status);
+
+                if (profileResponse.ok) {
+                    statusDiv.textContent += ' ✅ Profile generated!';
+                    console.log('[DEBUG] Profile generated successfully');
+                } else {
+                    statusDiv.textContent += ' ⚠️ Profile generation failed (item still created)';
+                    console.error('[DEBUG] Profile generation failed');
+                }
+            } catch (profileError) {
+                console.error('[DEBUG] Profile error:', profileError);
+                statusDiv.textContent += ' ⚠️ Profile generation error';
+            }
+        }
+
+        // Close modal after 3 seconds
+        setTimeout(() => {
+            closeComparisonModal();
+            // Refresh catalog items
+            fetchAirtableData(CATALOG_TABLE).then(data => {
+                allCatalogItems = data;
+                catalogMap = new Map(allCatalogItems.map(item => [item.id, item]));
+                console.log('[DEBUG] Catalog refreshed');
+            });
+        }, 3000);
+
+    } catch (error) {
+        console.error('[DEBUG] Error creating item:', error);
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        statusDiv.style.color = '#dc3545';
+        if (event && event.target) {
+            event.target.disabled = false;
+        }
+    }
+}
+
+// Make functions globally available
+window.closeComparisonModal = closeComparisonModal;
+window.confirmNewItem = confirmNewItem;
 
 // --- NEW OMNI-SEARCH HANDLER ---
 /**
@@ -325,6 +478,7 @@ async function handleOmniSearch(query) {
 
     // 3. If no item (specifically) was found, try to parse it
     if (!results.item) {
+        console.log('[DEBUG] No item found, calling weblink parser for:', query);
         omniSearchResults.innerHTML += `<p style="color: #3498db; text-align: center;">No item match found. Calling external parser for "${query}"...</p>`;
         try {
             const parseResponse = await fetch('/api/process-weblink', {
@@ -332,23 +486,29 @@ async function handleOmniSearch(query) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query })
             });
+
+            console.log('[DEBUG] Parser response status:', parseResponse.status);
+
             if (!parseResponse.ok) {
                  const errorText = await parseResponse.text();
+                 console.error('[DEBUG] Parser error response:', errorText);
                  throw new Error(`Weblink Parser API failed: ${errorText}`);
             }
 
             const newItemData = await parseResponse.json();
+            console.log('[DEBUG] Parsed new item data:', newItemData);
+
+            // Open comparison modal instead of just displaying
+            openComparisonModal(newItemData);
+
             omniSearchResults.innerHTML += `
-                <h5>✅ Parsed as New Item (Stub)</h5>
-                <p style="font-size: 0.9em;">This item is not in Airtable yet. This is the data that would be used to create it.</p>
-                <pre>${JSON.stringify(newItemData, null, 2)}</pre>
+                <h5>✅ Item Parsed Successfully</h5>
+                <p style="font-size: 0.9em; color: #28a745;">Review the parsed data in the modal to confirm or edit before adding to catalog.</p>
             `;
-            // In a real implementation, you would now POST this data to Airtable
-            // For the MVP, just displaying it is sufficient.
-            
+
         } catch (error) {
+            console.error('[DEBUG] Weblink Parser Error:', error);
             omniSearchResults.innerHTML += `<p style="color: #dc3545; text-align: center;"><strong>Parser Error:</strong> ${error.message}</p>`;
-            console.error('Weblink Parser Error:', error);
         }
     }
 }
@@ -565,29 +725,59 @@ Storage
 }
 
 function setupPusher() {
-    if (sessionMap.size === 0) return; 
+    if (sessionMap.size === 0) return;
 
-    const pusher = new Pusher(PUSHER_KEY, {
-        cluster: PUSHER_CLUSTER,
-        authEndpoint: '/api/pusher-auth',
-        auth: { params: { user_id: `admin-${Date.now()}`, user_name: 'Dashboard Admin' } }
-    });
-    sessionMap.forEach((name, id) => {
-        const channel = pusher.subscribe(`presence-session-${id}`);
-        pusherChannelMap.set(id, channel);
-        channel.bind('client-new-message', (data) => {
-            if (data.senderId === 'admin-dashboard') return;
-
-            const fakeMessageRecord = { fields: { Content: data.content, SenderName: data.senderName, SessionID: [id], Timestamp: data.timestamp } };
-            allMessages.unshift(fakeMessageRecord);
-            renderActivityItem(fakeMessageRecord, name, true);
-            if (archivedSessionIds.has(id)) {
-                unreadArchivedSessions.add(id);
-            }
-            renderSessionLists();
-            if (id === currentlySelectedSessionId) renderChatPane(id);
+    try {
+        const pusher = new Pusher(PUSHER_KEY, {
+            cluster: PUSHER_CLUSTER,
+            authEndpoint: '/api/pusher-auth',
+            auth: { params: { user_id: `admin-${Date.now()}`, user_name: 'Dashboard Admin' } },
+            // Add error handling and connection management
+            enabledTransports: ['ws', 'wss'],
+            disabledTransports: [],
+            // Prevent too many reconnection attempts
+            activityTimeout: 120000,
+            pongTimeout: 30000,
+            unavailableTimeout: 10000
         });
-    });
+
+        // Handle connection errors
+        pusher.connection.bind('error', (err) => {
+            console.error('[DEBUG] Pusher connection error:', err);
+        });
+
+        pusher.connection.bind('failed', () => {
+            console.error('[DEBUG] Pusher connection failed - check credentials');
+        });
+
+        pusher.connection.bind('connected', () => {
+            console.log('[DEBUG] Pusher connected successfully');
+        });
+
+        sessionMap.forEach((name, id) => {
+            const channel = pusher.subscribe(`presence-session-${id}`);
+            pusherChannelMap.set(id, channel);
+
+            channel.bind('pusher:subscription_error', (status) => {
+                console.error('[DEBUG] Pusher subscription error for session', id, ':', status);
+            });
+
+            channel.bind('client-new-message', (data) => {
+                if (data.senderId === 'admin-dashboard') return;
+
+                const fakeMessageRecord = { fields: { Content: data.content, SenderName: data.senderName, SessionID: [id], Timestamp: data.timestamp } };
+                allMessages.unshift(fakeMessageRecord);
+                renderActivityItem(fakeMessageRecord, name, true);
+                if (archivedSessionIds.has(id)) {
+                    unreadArchivedSessions.add(id);
+                }
+                renderSessionLists();
+                if (id === currentlySelectedSessionId) renderChatPane(id);
+            });
+        });
+    } catch (error) {
+        console.error('[DEBUG] Failed to initialize Pusher:', error);
+    }
 }
 
 initializeDashboard();

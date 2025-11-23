@@ -175,21 +175,19 @@
   to = "/.netlify/functions/generate-products"
   status = 200
 
-# Add this rule to netlify.toml
-[[redirects]]
-  from = "/api/profile-item"
-  to = "/.netlify/functions/hello-world"
-  status = 200
-
 [[redirects]]
   from = "/api/toggle-like"
   to = "/.netlify/functions/toggle-like"
   status = 200
 
-# --- ADD THIS NEW REDIRECT ---
 [[redirects]]
   from = "/api/profile-item"
   to = "/.netlify/functions/profile-item"
+  status = 200
+
+[[redirects]]
+  from = "/api/create-catalog-item"
+  to = "/.netlify/functions/create-catalog-item"
   status = 200
 
 [[redirects]]

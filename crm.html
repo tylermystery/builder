@@ -129,6 +129,94 @@
             padding-left: 20px;
             margin: 5px 0;
         }
+
+        /* Comparison Modal */
+        #comparison-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        #comparison-modal.active {
+            display: flex;
+        }
+        .comparison-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .comparison-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+        .comparison-close {
+            cursor: pointer;
+            font-size: 1.5em;
+            color: #999;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .comparison-table th {
+            background: var(--bg-light);
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .comparison-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+        }
+        .comparison-table tr:hover {
+            background: #f9f9f9;
+        }
+        .comparison-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        .comparison-actions button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-confirm {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-cancel {
+            background-color: #dc3545;
+            color: white;
+        }
+        .btn-edit {
+            background-color: var(--highlight-blue);
+            color: white;
+        }
+        .field-diff {
+            color: var(--highlight-blue);
+            font-weight: bold;
+        }
         /* --- END NEW STYLES --- */
         
     </style>
@@ -202,6 +290,33 @@
                 </div>
                 <div id="chat-placeholder" class="pane-placeholder">Select a session to view its chat.</div>
             </aside>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparison-modal">
+        <div class="comparison-content">
+            <div class="comparison-header">
+                <h2>Review New Item</h2>
+                <span class="comparison-close" onclick="closeComparisonModal()">&times;</span>
+            </div>
+            <p style="color: #666; margin-bottom: 20px;">Review the AI-parsed data below. You can edit fields before confirming.</p>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>AI-Suggested Value</th>
+                    </tr>
+                </thead>
+                <tbody id="comparison-table-body">
+                    <!-- Rows will be dynamically inserted here -->
+                </tbody>
+            </table>
+            <div class="comparison-actions">
+                <button class="btn-cancel" onclick="closeComparisonModal()">Cancel</button>
+                <button class="btn-confirm" onclick="confirmNewItem()">Confirm & Add to Catalog</button>
+            </div>
+            <div id="comparison-status" style="margin-top: 15px; text-align: center; color: #666;"></div>
         </div>
     </div>
 

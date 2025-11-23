@@ -53,7 +53,8 @@ async function getProfileFromGemini(itemName, itemDescription) {
         "Vibe": { "Energy": 0, "Relaxation": 0, "Formality": 0, "Novelty": 0 },
         "Intellect": { "Creative": 0, "Analytical": 0 },
         "Physicality": { "Intensity": 0, "Accessibility": 0 },
-        "Tags": []
+        "Tags": [],
+        "SearchTerms": []
       }
 
       INSTRUCTIONS:
@@ -63,6 +64,13 @@ async function getProfileFromGemini(itemName, itemDescription) {
       4.  **Tags (CRITICAL):** Populate this array with lowercase string keywords.
           * **Attribute Tags:** Descriptive words (e.g., "competitive", "outdoor", "relaxing", "loud", "daytime").
           * **Concrete Noun Tags:** Specific keywords for content, theme, or category (e.g., "go-kart", "racing", "museum", "art", "science", "tacos", "mexican food", "bar").
+      5.  **SearchTerms (CRITICAL):** Populate this array with 10-20 lowercase search terms for better matching including:
+          * The exact name (lowercase) and common variations
+          * Synonyms and related activity types
+          * Category keywords (e.g., "restaurant", "museum", "outdoor activity")
+          * Descriptive attributes that someone might search for
+          * Related concepts and themes
+          * Common misspellings or alternate names if applicable
     `;
 
     const payload = {
@@ -77,8 +85,9 @@ async function getProfileFromGemini(itemName, itemDescription) {
     };
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
-    
+
     console.log(`[Debug] getProfileFromGemini: Sending request to Gemini...`);
+    console.log(`[Debug] getProfileFromGemini: Item name: "${itemName}", Description length: ${(itemDescription || '').length} chars`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] getProfileFromGemini: Received status ${response.status} from Gemini.`);
 
@@ -89,6 +98,7 @@ async function getProfileFromGemini(itemName, itemDescription) {
     }
 
     const result = await response.json();
+    console.log('[Debug] getProfileFromGemini: Full response structure:', JSON.stringify(result, null, 2));
     let jsonText = '';
     try {
         jsonText = result.candidates[0].content.parts[0].text;
