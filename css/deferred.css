@@ -416,6 +416,32 @@
     gap: 8px;
 }
 
+/* Locked calendar item styles */
+.event-card.locked {
+    opacity: 0.85;
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    position: relative;
+}
+
+.event-card.locked:hover {
+    opacity: 0.95;
+}
+
+.event-lock-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 1.2em;
+    opacity: 0.7;
+    cursor: help;
+}
+
+.event-badge.locked {
+    opacity: 0.8;
+    background-color: #e9ecef !important;
+}
+
 .event-card-description {
     color: #495057;
     line-height: 1.5;
