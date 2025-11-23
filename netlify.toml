@@ -110,6 +110,16 @@
   to = "/.netlify/functions/auth-confirm"
   status = 200
 
+[[redirects]]
+  from = "/api/auth-sms-start"
+  to = "/.netlify/functions/auth-sms-start"
+  status = 200
+
+[[redirects]]
+  from = "/api/auth-sms-verify"
+  to = "/.netlify/functions/auth-sms-verify"
+  status = 200
+
 # Core service proxies
 [[redirects]]
   from = "/api/calendar"

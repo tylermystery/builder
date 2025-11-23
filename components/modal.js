@@ -344,7 +344,19 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     resetModalState();
     modalOverlay.dataset.recordId = record.id;
-    currentItemChatRecordId = record.id;
+
+    // Check if this item is linked to a session (unified view mode)
+    let linkedSession = null;
+    let linkedSessionId = null;
+    if (record.fields.LinkedSession && record.fields.LinkedSession.length > 0) {
+        linkedSessionId = record.fields.LinkedSession[0];
+        linkedSession = await api.fetchSessionById(linkedSessionId);
+        log('Modal', `Item linked to session ${linkedSessionId}, using session chat context`);
+        // Use session ID for chat initialization
+        currentItemChatRecordId = linkedSessionId;
+    } else {
+        currentItemChatRecordId = record.id;
+    }
 
     const isLocked = state.cart.lockedItems.has(record.id);
     modalOverlay.dataset.mode = isLocked ? 'edit-locked' : 'edit-favorite';
@@ -455,7 +467,75 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
         }
     }
-    
+
+    // Display session components if this is a published session/event
+    if (linkedSession && linkedSession.fields) {
+        log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
+
+        // Parse session history to get component items
+        const sessionHistory = linkedSession.fields.History ? JSON.parse(linkedSession.fields.History) : [];
+        const componentIds = sessionHistory.map(item => item.id).filter(id => id);
+
+        if (componentIds.length > 0) {
+            const sessionComponentsSection = document.createElement('div');
+            sessionComponentsSection.className = 'session-components-section';
+            sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
+
+            let componentsHTML = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
+            componentsHTML += '<div class="session-components-list">';
+
+            // Fetch component items (check both active and archive)
+            for (const componentId of componentIds) {
+                let componentRecord = state.records.all.find(r => r.id === componentId);
+
+                // If not found in active records, check archive
+                if (!componentRecord && state.records.archive) {
+                    componentRecord = state.records.archive.find(r => r.id === componentId);
+                }
+
+                if (componentRecord) {
+                    const componentName = componentRecord.fields.Name || 'Untitled';
+                    const historyItem = sessionHistory.find(item => item.id === componentId);
+                    const quantity = historyItem?.quantity || 1;
+                    const isGhost = !state.records.all.find(r => r.id === componentId);
+
+                    componentsHTML += `
+                        <div class="session-component-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; ${isGhost ? 'opacity: 0.7;' : ''}">
+                            <div>
+                                <strong>${componentName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
+                                ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            componentsHTML += '</div>';
+            sessionComponentsSection.innerHTML = componentsHTML;
+            modalItemDescription.parentElement.insertBefore(sessionComponentsSection, modalItemDescription);
+        }
+
+        // Check if user is a collaborator and add Edit Plan button
+        const isCollaborator = linkedSession.fields.Collaborators &&
+                               linkedSession.fields.Collaborators.includes(state.session.user.id);
+        const isOwner = state.session.user.isOwner;
+
+        if (isCollaborator || isOwner) {
+            log('Modal', 'User is collaborator or owner, showing Edit Plan button');
+            const editPlanBtn = document.createElement('button');
+            editPlanBtn.className = 'edit-plan-btn';
+            editPlanBtn.style.cssText = 'margin: 10px 0; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;';
+            editPlanBtn.textContent = '✏️ Edit Plan';
+            editPlanBtn.addEventListener('click', () => {
+                log('Modal', `Navigating to edit session ${linkedSessionId}`);
+                closeDetailModal();
+                // Redirect to session with sidebar open
+                window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+            });
+            modalHeaderActions.appendChild(editPlanBtn);
+        }
+    }
+
     try {
         const blurbHtml = generateRecommendationBlurb(record);
         if (blurbHtml && modalRecBlurb) {

@@ -276,7 +276,7 @@ async function handleSignIn(e) {
         if (!response.ok) {
             throw new Error(data.error || 'Failed to send confirmation email.');
         }
-        
+
         signinMessage.style.color = '#28a745';
         signinMessage.textContent = `A confirmation link has been sent to ${email}. Please check your inbox. Waiting for confirmation...`;
         signinEmailInput.value = '';
@@ -306,6 +306,155 @@ async function handleSignIn(e) {
     } catch (error) {
         signinMessage.style.color = '#dc3545';
         signinMessage.textContent = error.message;
+    }
+}
+
+// SMS Authentication Handlers
+let currentSmsPhoneNumber = null;
+
+async function handleSmsSignIn(e) {
+    e.preventDefault();
+    const phoneInput = document.getElementById('signin-phone');
+    const smsMessage = document.getElementById('sms-message');
+    const phoneNumber = phoneInput.value.trim();
+
+    if (!phoneNumber) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = 'Please enter a phone number.';
+        return;
+    }
+
+    log('Auth', `SMS sign-in initiated for: ${phoneNumber}`);
+    currentSmsPhoneNumber = phoneNumber;
+
+    smsMessage.style.color = '#333';
+    smsMessage.textContent = 'Sending SMS code...';
+
+    try {
+        const response = await fetch('/api/auth-sms-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber: phoneNumber }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to send SMS code.');
+        }
+
+        smsMessage.style.color = '#28a745';
+        smsMessage.textContent = `A 6-digit code has been sent to ${phoneNumber}. Check your messages!`;
+
+        // Hide phone form, show OTP verification form
+        document.getElementById('sms-signin-form').style.display = 'none';
+        document.getElementById('sms-verify-section').style.display = 'block';
+
+        // Focus on OTP input
+        document.getElementById('signin-otp').focus();
+
+        log('Auth', 'SMS code sent successfully');
+    } catch (error) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = error.message;
+        log('Auth', `SMS error: ${error.message}`);
+    }
+}
+
+async function handleSmsVerify() {
+    const otpInput = document.getElementById('signin-otp');
+    const smsMessage = document.getElementById('sms-message');
+    const otpCode = otpInput.value.trim();
+
+    if (!otpCode || otpCode.length !== 6) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = 'Please enter a valid 6-digit code.';
+        return;
+    }
+
+    if (!currentSmsPhoneNumber) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = 'Phone number not found. Please start over.';
+        return;
+    }
+
+    log('Auth', `Verifying SMS code for: ${currentSmsPhoneNumber}`);
+
+    smsMessage.style.color = '#333';
+    smsMessage.textContent = 'Verifying code...';
+
+    try {
+        const response = await fetch('/api/auth-sms-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: otpCode,
+                phoneNumber: currentSmsPhoneNumber
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Invalid code. Please try again.');
+        }
+
+        smsMessage.style.color = '#28a745';
+        smsMessage.textContent = 'Success! Signing you in...';
+
+        // Handle successful login
+        await _handleSuccessfulLogin(data);
+
+        // Reset SMS form
+        otpInput.value = '';
+        currentSmsPhoneNumber = null;
+        document.getElementById('sms-signin-form').style.display = 'block';
+        document.getElementById('sms-verify-section').style.display = 'none';
+        document.getElementById('signin-phone').value = '';
+
+        log('Auth', 'SMS authentication successful');
+    } catch (error) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = error.message;
+        log('Auth', `SMS verification error: ${error.message}`);
+    }
+}
+
+async function handleResendSms() {
+    const smsMessage = document.getElementById('sms-message');
+
+    if (!currentSmsPhoneNumber) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = 'Phone number not found. Please start over.';
+        return;
+    }
+
+    log('Auth', `Resending SMS code to: ${currentSmsPhoneNumber}`);
+
+    smsMessage.style.color = '#333';
+    smsMessage.textContent = 'Resending code...';
+
+    try {
+        const response = await fetch('/api/auth-sms-start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumber: currentSmsPhoneNumber }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to resend SMS code.');
+        }
+
+        smsMessage.style.color = '#28a745';
+        smsMessage.textContent = `New code sent to ${currentSmsPhoneNumber}!`;
+
+        log('Auth', 'SMS code resent successfully');
+    } catch (error) {
+        smsMessage.style.color = '#dc3545';
+        smsMessage.textContent = error.message;
+        log('Auth', `Resend SMS error: ${error.message}`);
     }
 }
 
@@ -421,6 +570,32 @@ export function setupAuthEventListeners() {
             hideUserModal();
         }
     });
+
+    // --- SMS AUTHENTICATION EVENT LISTENERS ---
+    const smsSigninForm = document.getElementById('sms-signin-form');
+    const verifyOtpBtn = document.getElementById('verify-otp-btn');
+    const resendSmsBtn = document.getElementById('resend-sms-btn');
+
+    if (smsSigninForm) {
+        smsSigninForm.addEventListener('submit', handleSmsSignIn);
+    }
+    if (verifyOtpBtn) {
+        verifyOtpBtn.addEventListener('click', handleSmsVerify);
+    }
+    if (resendSmsBtn) {
+        resendSmsBtn.addEventListener('click', handleResendSms);
+    }
+
+    // Allow Enter key to submit OTP
+    const otpInput = document.getElementById('signin-otp');
+    if (otpInput) {
+        otpInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSmsVerify();
+            }
+        });
+    }
 
     // --- NETLIFY IDENTITY SSO SETUP ---
     // Wait for Netlify Identity to be ready before setting up SSO

@@ -27,6 +27,7 @@ export let state = {
     records: {
         all: [],
         filtered: [],
+        archive: [], // Ghost items (archived/deleted items referenced in session history)
     },
     cart: {
         items: new Map(),       // \"Ideas\" (formerly Favorites), populated by \"Save for Later\"

@@ -399,6 +399,23 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
+                // Fetch ghost items (archived/deleted items in the plan)
+                const allItemIds = [
+                    ...Array.from(state.cart.lockedItems.keys()),
+                    ...Array.from(state.cart.items.keys())
+                ];
+                const missingItemIds = allItemIds.filter(id =>
+                    !state.records.all.some(r => r.id === id) &&
+                    id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
+                );
+
+                if (missingItemIds.length > 0) {
+                    log('API', `Found ${missingItemIds.length} ghost items in session, fetching...`);
+                    const ghostItems = await fetchGhostItems(missingItemIds);
+                    setState({ records: { ...state.records, archive: ghostItems } });
+                    log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
+                }
+
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
                 console.error("Session Data String:", sessionDataString);
@@ -1363,3 +1380,163 @@ export async function toggleUserLike(itemId) {
         throw error; // Re-throw the error to be caught by the caller
     }
 }
+
+/**
+ * Fetches ghost items (archived/deleted items) that are referenced in a session's history
+ * @param {Array<string>} recordIds - Array of record IDs to fetch
+ * @returns {Promise<Array>} Array of item records
+ */
+export async function fetchGhostItems(recordIds) {
+    if (!recordIds || recordIds.length === 0) {
+        return [];
+    }
+
+    // Filter out IDs that don't look like Airtable record IDs
+    const validIds = recordIds.filter(id => id && id.startsWith('rec'));
+    if (validIds.length === 0) {
+        return [];
+    }
+
+    // Build OR formula for multiple records
+    const formula = `OR(${validIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+    const encodedFormula = encodeURIComponent(formula);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?filterByFormula=${encodedFormula}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching ghost items:', errorText);
+            return []; // Return empty array instead of throwing
+        }
+
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} ghost items`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching ghost items:", error);
+        return []; // Return empty array on error
+    }
+}
+
+/**
+ * Publishes or updates a Session as a public Event item
+ * @param {string} sessionId - The session record ID
+ * @param {Object} eventData - Event data (Name, Date, Goals, etc.)
+ * @returns {Promise<Object>} The created or updated item record
+ */
+export async function publishSessionAsEvent(sessionId, eventData) {
+    if (!sessionId) {
+        throw new Error('Session ID is required to publish as event');
+    }
+
+    const session = await fetchSessionById(sessionId);
+    if (!session) {
+        throw new Error('Session not found');
+    }
+
+    // Check if this session is already linked to an event
+    const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
+
+    const itemFields = {
+        'Name': eventData.Name || session.fields.Name || 'Untitled Event',
+        'Description': eventData.Description || session.fields.Goals || '',
+        'Item Type': 'Event',
+        'Status': 'Available',
+        'Date': eventData.Date || session.fields.Date || null,
+        'LinkedSession': [sessionId], // Link back to the session
+        'Goals': eventData.Goals || session.fields.Goals || null,
+        'Guest Count': eventData.GuestCount || session.fields['Guest Count'] || null,
+    };
+
+    let itemRecord;
+
+    if (linkedItemId) {
+        // Update existing event
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${linkedItemId}`;
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to update event: ${errorText}`);
+        }
+
+        itemRecord = await response.json();
+        log('API', `Updated event ${linkedItemId} from session ${sessionId}`);
+    } else {
+        // Create new event
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to create event: ${errorText}`);
+        }
+
+        itemRecord = await response.json();
+        log('API', `Created event ${itemRecord.id} from session ${sessionId}`);
+
+        // Update session with link to new event
+        const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        await fetch(updateSessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { 'LinkedItem': [itemRecord.id] } })
+        });
+    }
+
+    return itemRecord;
+}
+
+/**
+ * Fetches a single session by ID
+ * @param {string} sessionId - The session record ID
+ * @returns {Promise<Object>} The session record
+ */
+export async function fetchSessionById(sessionId) {
+    if (!sessionId) {
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching session:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error("Error fetching session:", error);
+        return null;
+    }
+}
+
