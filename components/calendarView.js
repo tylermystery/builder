@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
+import { showUserModal } from '../auth.js';
 
 let fullEventList = [];
 let currentView = 'month';
@@ -136,6 +137,12 @@ function createEventCard(event, compact = false) {
     const isSession = event.type === 'session';
 
     if (isSession) {
+        // Check if user can access this session
+        const isAuthenticated = state.session.user.isAuthenticated;
+        const collaborators = event.record.fields.Collaborators || [];
+        const isCollaborator = isAuthenticated && collaborators.includes(state.session.user.id);
+        const isLocked = !isAuthenticated || !isCollaborator;
+
         // Render session/plan card
         const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
         const dateStr = eventDate.toLocaleDateString('en-US', {
@@ -152,7 +159,7 @@ function createEventCard(event, compact = false) {
             card.innerHTML = `
                 <div class="event-compact-content">
                     <div class="event-time">📅 Plan</div>
-                    <div class="event-name">${event.name}</div>
+                    <div class="event-name">${event.name}${isLocked ? ' 🔒' : ''}</div>
                 </div>
             `;
         } else {
@@ -166,11 +173,32 @@ function createEventCard(event, compact = false) {
                     ${goals ? `<p class="event-card-description">${goals.substring(0, 150)}${goals.length > 150 ? '...' : ''}</p>` : ''}
                     <div class="event-price">Event Plan</div>
                 </div>
+                ${isLocked ? '<div class="event-lock-badge" title="Sign in as collaborator to edit">🔒</div>' : ''}
             `;
         }
 
-        card.addEventListener('click', () => {
+        if (isLocked) {
+            card.classList.add('locked');
+        }
+
+        card.addEventListener('click', (e) => {
             log('Calendar', `Session card clicked: ${event.name}`);
+
+            // Prevent access to locked sessions
+            if (isLocked) {
+                e.preventDefault();
+                log('Calendar', `Access denied: Session is locked. User must be authenticated as collaborator.`);
+
+                // Show authentication modal if not authenticated
+                if (!isAuthenticated) {
+                    showUserModal();
+                } else {
+                    // User is authenticated but not a collaborator
+                    alert('You must be a collaborator to access this plan.');
+                }
+                return;
+            }
+
             // Load the session instead of showing detail modal
             if (event.recordId) {
                 window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
@@ -303,11 +331,35 @@ function renderMonthView() {
                 eventBadge.classList.add('event-badge');
 
                 if (event.type === 'session') {
+                    // Check if session is locked
+                    const isAuthenticated = state.session.user.isAuthenticated;
+                    const collaborators = event.record.fields.Collaborators || [];
+                    const isCollaborator = isAuthenticated && collaborators.includes(state.session.user.id);
+                    const isLocked = !isAuthenticated || !isCollaborator;
+
                     // Session/plan badge
-                    eventBadge.textContent = `📅 ${event.name}`;
-                    eventBadge.title = `Plan: ${event.name}`;
+                    eventBadge.textContent = `📅 ${event.name}${isLocked ? ' 🔒' : ''}`;
+                    eventBadge.title = isLocked ? `Plan: ${event.name} (Sign in as collaborator to edit)` : `Plan: ${event.name}`;
+                    if (isLocked) {
+                        eventBadge.classList.add('locked');
+                    }
                     eventBadge.addEventListener('click', (e) => {
                         e.stopPropagation();
+
+                        // Prevent access to locked sessions
+                        if (isLocked) {
+                            log('Calendar', `Access denied: Session badge clicked but locked. User must be authenticated as collaborator.`);
+
+                            // Show authentication modal if not authenticated
+                            if (!isAuthenticated) {
+                                showUserModal();
+                            } else {
+                                // User is authenticated but not a collaborator
+                                alert('You must be a collaborator to access this plan.');
+                            }
+                            return;
+                        }
+
                         window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
                     });
                 } else {

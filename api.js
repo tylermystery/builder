@@ -341,6 +341,33 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.isOwned = (record.fields.Collaborators || []).includes(state.session.user.id);
         log('API', `Session ownership for current user (${state.session.user.id}): ${state.session.isOwned}`);
 
+        // Access control: prevent unauthenticated or non-collaborator users from accessing sessions
+        const isAuthenticated = state.session.user.isAuthenticated;
+        const isCollaborator = state.session.isOwned;
+
+        if (!isAuthenticated || !isCollaborator) {
+            log('API', `Access denied: User is ${!isAuthenticated ? 'not authenticated' : 'not a collaborator'} for session ${sessionId}`);
+
+            // Clear the session from URL
+            const url = new URL(window.location);
+            url.searchParams.delete('session');
+            window.history.replaceState({}, '', url);
+
+            // Show authentication modal if not authenticated
+            if (!isAuthenticated) {
+                const { showUserModal } = await import('./auth.js');
+                showUserModal();
+            } else {
+                // User is authenticated but not a collaborator
+                alert('You must be a collaborator to access this plan.');
+            }
+
+            // Reset session state
+            state.session.id = null;
+            state.session.isOwned = false;
+            return;
+        }
+
         state.session.user.amountReceived = record.fields['Amount Received'] || 0;
         try {
             state.session.user.paymentHistory = JSON.parse(record.fields.PaymentHistory || '[]');
