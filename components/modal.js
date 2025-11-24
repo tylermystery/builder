@@ -303,10 +303,153 @@ function resetModalState() {
     }
 
     // Remove dynamically created event-specific sections that persist between modal opens
-    const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section');
+    const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section');
     dynamicSections.forEach(section => section.remove());
 
     log('Modal', 'Reset modal state.');
+}
+
+/**
+ * Initialize the plan items carousel
+ */
+async function initializePlanCarousel(componentRecords) {
+    if (componentRecords.length === 0) return;
+
+    let currentIndex = 0;
+    const carouselImage = document.getElementById('plan-carousel-image');
+    const carouselItemName = document.getElementById('carousel-item-name');
+    const carouselItemDetails = document.getElementById('carousel-item-details');
+    const dotsContainer = document.getElementById('carousel-dots-container');
+    const prevButton = document.querySelector('.carousel-prev');
+    const nextButton = document.querySelector('.carousel-next');
+
+    if (!carouselImage || !carouselItemName || !carouselItemDetails || !dotsContainer) {
+        console.warn('Carousel elements not found in DOM');
+        return;
+    }
+
+    // Fetch images for all component records
+    const componentImages = [];
+    for (const componentData of componentRecords) {
+        const record = componentData.record;
+        let imageUrl = ui.getPlaceholderImage([]);
+
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+            try {
+                const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+                if (fetchedUrls && fetchedUrls.length > 0) {
+                    imageUrl = fetchedUrls[0];
+                }
+            } catch (e) {
+                console.warn('Failed to fetch image for component:', record.id, e);
+            }
+        }
+
+        componentImages.push({
+            ...componentData,
+            imageUrl: imageUrl
+        });
+    }
+
+    // Function to update the carousel display
+    function updateCarousel() {
+        const current = componentImages[currentIndex];
+        const record = current.record;
+        const history = current.history;
+        const type = current.type;
+
+        // Update image with optimization
+        const optimizedImage = current.imageUrl.includes('cloudinary')
+            ? current.imageUrl.replace('/upload/', '/upload/w_800,h_600,c_fill,f_auto,q_auto/')
+            : current.imageUrl;
+        carouselImage.src = optimizedImage;
+
+        // Update item name with status badge
+        const statusBadge = type === 'locked'
+            ? '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 8px;">✅ Locked In</span>'
+            : '<span style="background: #ffc107; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-left: 8px;">💡 Idea</span>';
+        carouselItemName.innerHTML = `${record.fields.Name || 'Untitled'} ${statusBadge}`;
+
+        // Update item details
+        const quantity = history?.quantity || 1;
+        const note = history?.note || '';
+        const isGhost = !state.records.all.find(r => r.id === record.id);
+
+        let detailsHTML = '';
+        if (quantity > 1) {
+            detailsHTML += `Quantity: ${quantity}`;
+        }
+        if (isGhost) {
+            detailsHTML += (detailsHTML ? ' • ' : '') + 'Archived Item';
+        }
+        if (note) {
+            detailsHTML += (detailsHTML ? ' • ' : '') + `Note: ${note}`;
+        }
+
+        carouselItemDetails.innerHTML = detailsHTML || 'No additional details';
+
+        // Update dots
+        dotsContainer.innerHTML = '';
+        componentImages.forEach((_, index) => {
+            const dot = document.createElement('button');
+            dot.style.cssText = `
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                border: none;
+                cursor: pointer;
+                transition: background-color 0.3s;
+                ${index === currentIndex ? 'background-color: #007bff;' : 'background-color: #ccc;'}
+            `;
+            dot.addEventListener('click', () => {
+                currentIndex = index;
+                updateCarousel();
+            });
+            dotsContainer.appendChild(dot);
+        });
+
+        // Update button visibility
+        if (prevButton && nextButton) {
+            prevButton.style.display = componentImages.length > 1 ? 'block' : 'none';
+            nextButton.style.display = componentImages.length > 1 ? 'block' : 'none';
+        }
+    }
+
+    // Navigation handlers
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + componentImages.length) % componentImages.length;
+            updateCarousel();
+        });
+    }
+
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % componentImages.length;
+            updateCarousel();
+        });
+    }
+
+    // Keyboard navigation
+    const handleKeydown = (e) => {
+        if (e.key === 'ArrowLeft' && componentImages.length > 1) {
+            currentIndex = (currentIndex - 1 + componentImages.length) % componentImages.length;
+            updateCarousel();
+        } else if (e.key === 'ArrowRight' && componentImages.length > 1) {
+            currentIndex = (currentIndex + 1) % componentImages.length;
+            updateCarousel();
+        }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    // Clean up on modal close
+    const cleanup = () => {
+        document.removeEventListener('keydown', handleKeydown);
+    };
+    modalOverlay.addEventListener('transitionend', cleanup, { once: true });
+
+    // Initialize the carousel
+    updateCarousel();
 }
 
 export async function showDetailModal(record, startPhotoIndex = 0) {
@@ -317,15 +460,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         { fieldName: 'Additional Information', label: 'Good to Know' },
     ];
 
-    console.log('[DEBUG MODAL] ===== showDetailModal called =====');
-    console.log('[DEBUG MODAL] Record ID:', record.id);
-    console.log('[DEBUG MODAL] Record name:', record.fields.Name);
-    console.log('[DEBUG MODAL] Record type:', record.fields['Item Type']);
-    console.log('[DEBUG MODAL] Record fields:', record.fields);
-    console.log('[DEBUG MODAL] Has LinkedSession:', !!record.fields.LinkedSession);
-    console.log('[DEBUG MODAL] LinkedSession value:', record.fields.LinkedSession);
 
-    console.log('[showDetailModal] Called for item:', record.id);
     log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
     updateUrl({ openItem: record.id });
     const modalHeaderActions = document.getElementById('modal-header-actions');
@@ -358,28 +493,18 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     let linkedSessionId = null;
     if (record.fields.LinkedSession && record.fields.LinkedSession.length > 0) {
         linkedSessionId = record.fields.LinkedSession[0];
-        console.log('[DEBUG MODAL] Found LinkedSession, fetching session ID:', linkedSessionId);
         linkedSession = await api.fetchSessionById(linkedSessionId);
-        console.log('[DEBUG MODAL] Fetched linkedSession:', linkedSession);
-        console.log('[DEBUG MODAL] linkedSession fields:', linkedSession?.fields);
         log('Modal', `Item linked to session ${linkedSessionId}, using session chat context`);
-        // Use session ID for chat initialization
         currentItemChatRecordId = linkedSessionId;
     } else {
-        console.log('[DEBUG MODAL] No LinkedSession found for this record');
-
         // FALLBACK: For Events that were published before LinkedSession was added,
         // try to find the session by searching for which session has this event in its LinkedItem field
         if (record.fields['Item Type'] === 'Event') {
-            console.log('[DEBUG MODAL] This is an Event, attempting fallback: searching for session by LinkedItem');
             linkedSession = await api.fetchSessionByLinkedItem(record.id);
             if (linkedSession) {
                 linkedSessionId = linkedSession.id;
-                console.log('[DEBUG MODAL] FALLBACK SUCCESS: Found session via LinkedItem:', linkedSessionId);
-                console.log('[DEBUG MODAL] linkedSession fields:', linkedSession?.fields);
                 currentItemChatRecordId = linkedSessionId;
             } else {
-                console.log('[DEBUG MODAL] FALLBACK FAILED: No session found with this event in LinkedItem');
                 currentItemChatRecordId = record.id;
             }
         } else {
@@ -500,10 +625,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     // Display session components if this is a published session/event
     if (linkedSession && linkedSession.fields) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
-        console.log('[DEBUG MODAL] linkedSession object:', linkedSession);
-        console.log('[DEBUG MODAL] linkedSession.fields:', linkedSession.fields);
-        console.log('[DEBUG MODAL] Items with Variations field exists:', !!linkedSession.fields['Items with Variations']);
-        console.log('[DEBUG MODAL] Items with Variations raw value:', linkedSession.fields['Items with Variations']);
 
         // Parse session data to get locked items (components) and ideas
         let lockedInHistory = [];
@@ -511,15 +632,9 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         if (linkedSession.fields['Items with Variations']) {
             try {
                 const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
-                console.log('[DEBUG MODAL] Parsed sessionData:', sessionData);
 
                 const lockedInItems = sessionData.lockedInItems || {};
                 const ideasItems = sessionData.ideasItems || {};
-
-                console.log('[DEBUG MODAL] lockedInItems:', lockedInItems);
-                console.log('[DEBUG MODAL] lockedInItems count:', Object.keys(lockedInItems).length);
-                console.log('[DEBUG MODAL] ideasItems:', ideasItems);
-                console.log('[DEBUG MODAL] ideasItems count:', Object.keys(ideasItems).length);
 
                 // Convert locked items to history format
                 lockedInHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
@@ -539,63 +654,124 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     overridePrice: itemInfo.overridePrice
                 }));
 
-                console.log('[DEBUG MODAL] lockedInHistory array:', lockedInHistory);
-                console.log('[DEBUG MODAL] lockedInHistory length:', lockedInHistory.length);
-                console.log('[DEBUG MODAL] ideasHistory array:', ideasHistory);
-                console.log('[DEBUG MODAL] ideasHistory length:', ideasHistory.length);
             } catch (e) {
                 console.warn('Could not parse Items with Variations for session:', linkedSessionId, e);
-                console.error('[DEBUG MODAL] Parse error details:', e);
                 lockedInHistory = [];
                 ideasHistory = [];
             }
-        } else {
-            console.log('[DEBUG MODAL] No Items with Variations field found in linkedSession');
         }
 
         const lockedComponentIds = lockedInHistory.map(item => item.id).filter(id => id);
         const ideaComponentIds = ideasHistory.map(item => item.id).filter(id => id);
 
-        console.log('[DEBUG MODAL] lockedComponentIds:', lockedComponentIds);
-        console.log('[DEBUG MODAL] lockedComponentIds length:', lockedComponentIds.length);
-        console.log('[DEBUG MODAL] ideaComponentIds:', ideaComponentIds);
-        console.log('[DEBUG MODAL] ideaComponentIds length:', ideaComponentIds.length);
+        // Fetch any missing component items (ghost items) that aren't in state.records.all
+        const allComponentIds = [...lockedComponentIds, ...ideaComponentIds];
+        const missingItemIds = allComponentIds.filter(id =>
+            !state.records.all.some(r => r.id === id) &&
+            (!state.records.archive || !state.records.archive.some(r => r.id === id)) &&
+            id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
+        );
+
+        if (missingItemIds.length > 0) {
+            log('Modal', `Found ${missingItemIds.length} missing component items, fetching...`);
+            try {
+                const ghostItems = await api.fetchGhostItems(missingItemIds);
+                if (ghostItems.length > 0) {
+                    // Merge with existing archive or create new archive array
+                    const existingArchive = state.records.archive || [];
+                    state.records.archive = [...existingArchive, ...ghostItems];
+                    log('Modal', `Fetched and stored ${ghostItems.length} ghost component items`);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch ghost items for modal:', e);
+            }
+        }
 
         if (lockedComponentIds.length > 0 || ideaComponentIds.length > 0) {
-            console.log('[DEBUG MODAL] ENTERING section to render components - locked:', lockedComponentIds.length, 'ideas:', ideaComponentIds.length);
+            // Collect all component records for the carousel
+            const allComponentRecords = [];
+            const componentHistoryMap = new Map();
+
+            // Process locked items
+            for (const componentId of lockedComponentIds) {
+                let componentRecord = state.records.all.find(r => r.id === componentId);
+                if (!componentRecord && state.records.archive) {
+                    componentRecord = state.records.archive.find(r => r.id === componentId);
+                }
+                if (componentRecord) {
+                    allComponentRecords.push({
+                        record: componentRecord,
+                        type: 'locked',
+                        history: lockedInHistory.find(item => item.id === componentId)
+                    });
+                    componentHistoryMap.set(componentId, lockedInHistory.find(item => item.id === componentId));
+                }
+            }
+
+            // Process idea items
+            for (const ideaId of ideaComponentIds) {
+                let ideaRecord = state.records.all.find(r => r.id === ideaId);
+                if (!ideaRecord && state.records.archive) {
+                    ideaRecord = state.records.archive.find(r => r.id === ideaId);
+                }
+                if (ideaRecord) {
+                    allComponentRecords.push({
+                        record: ideaRecord,
+                        type: 'idea',
+                        history: ideasHistory.find(item => item.id === ideaId)
+                    });
+                    componentHistoryMap.set(ideaId, ideasHistory.find(item => item.id === ideaId));
+                }
+            }
+
+            // Create the main session components section
             const sessionComponentsSection = document.createElement('div');
             sessionComponentsSection.className = 'session-components-section';
             sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
             let componentsHTML = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
 
+            // Add image carousel for browsing items
+            if (allComponentRecords.length > 0) {
+                componentsHTML += `
+                    <div class="plan-items-carousel" style="margin: 15px 0; position: relative; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <div class="carousel-container" style="position: relative;">
+                            <div class="carousel-image-container" style="width: 100%; height: 300px; position: relative; background: #000;">
+                                <img id="plan-carousel-image" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Item image">
+                                <div class="carousel-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 15px; color: white;">
+                                    <div id="carousel-item-name" style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;"></div>
+                                    <div id="carousel-item-details" style="font-size: 0.9em; opacity: 0.9;"></div>
+                                </div>
+                            </div>
+                            <button class="carousel-nav carousel-prev" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">‹</button>
+                            <button class="carousel-nav carousel-next" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 10;">›</button>
+                        </div>
+                        <div class="carousel-dots" style="display: flex; justify-content: center; padding: 10px; gap: 8px;" id="carousel-dots-container"></div>
+                    </div>
+                `;
+            }
+
             // Display Locked In Items section
             if (lockedComponentIds.length > 0) {
-                console.log('[DEBUG MODAL] Rendering locked-in section for', lockedComponentIds.length, 'items');
                 componentsHTML += '<div class="locked-in-section" style="margin-bottom: 15px;">';
                 componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #28a745; font-size: 0.95em;">✅ Locked In</h5>';
                 componentsHTML += '<div class="session-components-list">';
 
                 // Fetch component items (check both active and archive)
                 for (const componentId of lockedComponentIds) {
-                    console.log('[DEBUG MODAL] Processing locked component ID:', componentId);
                     let componentRecord = state.records.all.find(r => r.id === componentId);
 
                     // If not found in active records, check archive
                     if (!componentRecord && state.records.archive) {
                         componentRecord = state.records.archive.find(r => r.id === componentId);
-                        console.log('[DEBUG MODAL] Component found in archive:', !!componentRecord);
                     }
 
                     if (componentRecord) {
-                        console.log('[DEBUG MODAL] Found record for component:', componentRecord.fields.Name);
                         const componentName = componentRecord.fields.Name || 'Untitled';
                         const historyItem = lockedInHistory.find(item => item.id === componentId);
                         const quantity = historyItem?.quantity || 1;
                         const note = historyItem?.note || '';
                         const isGhost = !state.records.all.find(r => r.id === componentId);
-
-                        console.log('[DEBUG MODAL] Adding to HTML - name:', componentName, 'qty:', quantity, 'isGhost:', isGhost);
 
                         componentsHTML += `
                             <div class="session-component-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #28a745; ${isGhost ? 'opacity: 0.7;' : ''}">
@@ -607,43 +783,34 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                             </div>
                         `;
                     } else {
-                        console.warn('[DEBUG MODAL] Could not find record for locked component ID:', componentId);
+                        console.warn('Could not find record for locked component ID:', componentId);
                     }
                 }
 
                 componentsHTML += '</div></div>';
-                console.log('[DEBUG MODAL] Locked-in section HTML complete');
-            } else {
-                console.log('[DEBUG MODAL] No locked component IDs to render');
             }
 
             // Display Ideas section
             if (ideaComponentIds.length > 0) {
-                console.log('[DEBUG MODAL] Rendering ideas section for', ideaComponentIds.length, 'items');
                 componentsHTML += '<div class="ideas-section">';
                 componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #ffc107; font-size: 0.95em;">💡 Ideas for the Session</h5>';
                 componentsHTML += '<div class="session-ideas-list">';
 
                 // Fetch idea items (check both active and archive)
                 for (const ideaId of ideaComponentIds) {
-                    console.log('[DEBUG MODAL] Processing idea ID:', ideaId);
                     let ideaRecord = state.records.all.find(r => r.id === ideaId);
 
                     // If not found in active records, check archive
                     if (!ideaRecord && state.records.archive) {
                         ideaRecord = state.records.archive.find(r => r.id === ideaId);
-                        console.log('[DEBUG MODAL] Idea found in archive:', !!ideaRecord);
                     }
 
                     if (ideaRecord) {
-                        console.log('[DEBUG MODAL] Found record for idea:', ideaRecord.fields.Name);
                         const ideaName = ideaRecord.fields.Name || 'Untitled';
                         const historyItem = ideasHistory.find(item => item.id === ideaId);
                         const quantity = historyItem?.quantity || 1;
                         const note = historyItem?.note || '';
                         const isGhost = !state.records.all.find(r => r.id === ideaId);
-
-                        console.log('[DEBUG MODAL] Adding to HTML - name:', ideaName, 'qty:', quantity, 'isGhost:', isGhost);
 
                         componentsHTML += `
                             <div class="session-idea-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #ffc107; ${isGhost ? 'opacity: 0.7;' : ''}">
@@ -655,52 +822,82 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                             </div>
                         `;
                     } else {
-                        console.warn('[DEBUG MODAL] Could not find record for idea ID:', ideaId);
+                        console.warn('Could not find record for idea ID:', ideaId);
                     }
                 }
 
                 componentsHTML += '</div></div>';
-                console.log('[DEBUG MODAL] Ideas section HTML complete');
-            } else {
-                console.log('[DEBUG MODAL] No idea component IDs to render');
             }
 
             sessionComponentsSection.innerHTML = componentsHTML;
-            console.log('[DEBUG MODAL] Final componentsHTML:', componentsHTML);
-            console.log('[DEBUG MODAL] Inserting section before modalItemDescription.parentElement');
-            console.log('[DEBUG MODAL] modalItemDescription:', modalItemDescription);
-            console.log('[DEBUG MODAL] modalItemDescription.parentElement:', modalItemDescription.parentElement);
             modalItemDescription.parentElement.insertBefore(sessionComponentsSection, modalItemDescription);
-            console.log('[DEBUG MODAL] Section inserted successfully');
+
+            // Initialize the carousel after the HTML is inserted
+            if (allComponentRecords.length > 0) {
+                initializePlanCarousel(allComponentRecords);
+            }
+
+            // Check if user is a collaborator or store owner and add Edit Plan button inside the components section
+            const isCollaborator = linkedSession.fields.Collaborators &&
+                                   linkedSession.fields.Collaborators.includes(state.session.user.id);
+
+            // Check if user owns the store that this session belongs to
+            const sessionStoreId = linkedSession.fields.Stores && linkedSession.fields.Stores.length > 0
+                                 ? linkedSession.fields.Stores[0]
+                                 : null;
+            const isOwnerOfSessionStore = state.session.user.isOwner &&
+                                         state.session.user.ownedStoreId &&
+                                         sessionStoreId === state.session.user.ownedStoreId;
+
+            if (isCollaborator || isOwnerOfSessionStore) {
+                log('Modal', 'User is collaborator or owns the session store, showing Edit Plan button');
+                const editPlanBtn = document.createElement('button');
+                editPlanBtn.className = 'edit-plan-btn';
+                editPlanBtn.style.cssText = 'margin: 15px 0 0 0; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; transition: background-color 0.2s;';
+                editPlanBtn.textContent = '✏️ Edit Plan';
+                editPlanBtn.onmouseover = () => editPlanBtn.style.backgroundColor = '#0056b3';
+                editPlanBtn.onmouseout = () => editPlanBtn.style.backgroundColor = '#007bff';
+                editPlanBtn.addEventListener('click', () => {
+                    log('Modal', `Navigating to edit session ${linkedSessionId}`);
+                    closeDetailModal();
+                    // Redirect to session with sidebar open
+                    window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+                });
+                sessionComponentsSection.appendChild(editPlanBtn);
+            }
         } else {
-            console.log('[DEBUG MODAL] NO COMPONENTS TO DISPLAY - lockedComponentIds.length:', lockedComponentIds.length, 'ideaComponentIds.length:', ideaComponentIds.length);
-        }
+            // If there are no plan components but user is still a collaborator, show the edit button separately
+            const isCollaborator = linkedSession.fields.Collaborators &&
+                                   linkedSession.fields.Collaborators.includes(state.session.user.id);
 
-        // Check if user is a collaborator or store owner and add Edit Plan button
-        const isCollaborator = linkedSession.fields.Collaborators &&
-                               linkedSession.fields.Collaborators.includes(state.session.user.id);
+            const sessionStoreId = linkedSession.fields.Stores && linkedSession.fields.Stores.length > 0
+                                 ? linkedSession.fields.Stores[0]
+                                 : null;
+            const isOwnerOfSessionStore = state.session.user.isOwner &&
+                                         state.session.user.ownedStoreId &&
+                                         sessionStoreId === state.session.user.ownedStoreId;
 
-        // Check if user owns the store that this session belongs to
-        const sessionStoreId = linkedSession.fields.Stores && linkedSession.fields.Stores.length > 0
-                             ? linkedSession.fields.Stores[0]
-                             : null;
-        const isOwnerOfSessionStore = state.session.user.isOwner &&
-                                     state.session.user.ownedStoreId &&
-                                     sessionStoreId === state.session.user.ownedStoreId;
+            if (isCollaborator || isOwnerOfSessionStore) {
+                log('Modal', 'User is collaborator or owns the session store (no components yet), showing Edit Plan button');
+                const editPlanSection = document.createElement('div');
+                editPlanSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
-        if (isCollaborator || isOwnerOfSessionStore) {
-            log('Modal', 'User is collaborator or owns the session store, showing Edit Plan button');
-            const editPlanBtn = document.createElement('button');
-            editPlanBtn.className = 'edit-plan-btn';
-            editPlanBtn.style.cssText = 'margin: 10px 0; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;';
-            editPlanBtn.textContent = '✏️ Edit Plan';
-            editPlanBtn.addEventListener('click', () => {
-                log('Modal', `Navigating to edit session ${linkedSessionId}`);
-                closeDetailModal();
-                // Redirect to session with sidebar open
-                window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
-            });
-            modalHeaderActions.appendChild(editPlanBtn);
+                const editPlanBtn = document.createElement('button');
+                editPlanBtn.className = 'edit-plan-btn';
+                editPlanBtn.style.cssText = 'padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; transition: background-color 0.2s;';
+                editPlanBtn.textContent = '✏️ Edit Plan';
+                editPlanBtn.onmouseover = () => editPlanBtn.style.backgroundColor = '#0056b3';
+                editPlanBtn.onmouseout = () => editPlanBtn.style.backgroundColor = '#007bff';
+                editPlanBtn.addEventListener('click', () => {
+                    log('Modal', `Navigating to edit session ${linkedSessionId}`);
+                    closeDetailModal();
+                    // Redirect to session with sidebar open
+                    window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+                });
+
+                editPlanSection.appendChild(editPlanBtn);
+                modalItemDescription.parentElement.insertBefore(editPlanSection, modalItemDescription);
+            }
         }
     }
 
