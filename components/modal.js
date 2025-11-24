@@ -317,6 +317,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         { fieldName: 'Additional Information', label: 'Good to Know' },
     ];
 
+    console.log('[DEBUG MODAL] ===== showDetailModal called =====');
+    console.log('[DEBUG MODAL] Record ID:', record.id);
+    console.log('[DEBUG MODAL] Record name:', record.fields.Name);
+    console.log('[DEBUG MODAL] Record type:', record.fields['Item Type']);
+    console.log('[DEBUG MODAL] Record fields:', record.fields);
+    console.log('[DEBUG MODAL] Has LinkedSession:', !!record.fields.LinkedSession);
+    console.log('[DEBUG MODAL] LinkedSession value:', record.fields.LinkedSession);
+
     console.log('[showDetailModal] Called for item:', record.id);
     log('Modal', `Showing detail modal for \"${record.fields.Name}\"`);
     updateUrl({ openItem: record.id });
@@ -350,12 +358,33 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     let linkedSessionId = null;
     if (record.fields.LinkedSession && record.fields.LinkedSession.length > 0) {
         linkedSessionId = record.fields.LinkedSession[0];
+        console.log('[DEBUG MODAL] Found LinkedSession, fetching session ID:', linkedSessionId);
         linkedSession = await api.fetchSessionById(linkedSessionId);
+        console.log('[DEBUG MODAL] Fetched linkedSession:', linkedSession);
+        console.log('[DEBUG MODAL] linkedSession fields:', linkedSession?.fields);
         log('Modal', `Item linked to session ${linkedSessionId}, using session chat context`);
         // Use session ID for chat initialization
         currentItemChatRecordId = linkedSessionId;
     } else {
-        currentItemChatRecordId = record.id;
+        console.log('[DEBUG MODAL] No LinkedSession found for this record');
+
+        // FALLBACK: For Events that were published before LinkedSession was added,
+        // try to find the session by searching for which session has this event in its LinkedItem field
+        if (record.fields['Item Type'] === 'Event') {
+            console.log('[DEBUG MODAL] This is an Event, attempting fallback: searching for session by LinkedItem');
+            linkedSession = await api.fetchSessionByLinkedItem(record.id);
+            if (linkedSession) {
+                linkedSessionId = linkedSession.id;
+                console.log('[DEBUG MODAL] FALLBACK SUCCESS: Found session via LinkedItem:', linkedSessionId);
+                console.log('[DEBUG MODAL] linkedSession fields:', linkedSession?.fields);
+                currentItemChatRecordId = linkedSessionId;
+            } else {
+                console.log('[DEBUG MODAL] FALLBACK FAILED: No session found with this event in LinkedItem');
+                currentItemChatRecordId = record.id;
+            }
+        } else {
+            currentItemChatRecordId = record.id;
+        }
     }
 
     const isLocked = state.cart.lockedItems.has(record.id);
@@ -471,65 +500,180 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     // Display session components if this is a published session/event
     if (linkedSession && linkedSession.fields) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
+        console.log('[DEBUG MODAL] linkedSession object:', linkedSession);
+        console.log('[DEBUG MODAL] linkedSession.fields:', linkedSession.fields);
+        console.log('[DEBUG MODAL] Items with Variations field exists:', !!linkedSession.fields['Items with Variations']);
+        console.log('[DEBUG MODAL] Items with Variations raw value:', linkedSession.fields['Items with Variations']);
 
-        // Parse session data to get locked items (components)
-        let sessionHistory = [];
+        // Parse session data to get locked items (components) and ideas
+        let lockedInHistory = [];
+        let ideasHistory = [];
         if (linkedSession.fields['Items with Variations']) {
             try {
                 const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
+                console.log('[DEBUG MODAL] Parsed sessionData:', sessionData);
+
                 const lockedInItems = sessionData.lockedInItems || {};
+                const ideasItems = sessionData.ideasItems || {};
+
+                console.log('[DEBUG MODAL] lockedInItems:', lockedInItems);
+                console.log('[DEBUG MODAL] lockedInItems count:', Object.keys(lockedInItems).length);
+                console.log('[DEBUG MODAL] ideasItems:', ideasItems);
+                console.log('[DEBUG MODAL] ideasItems count:', Object.keys(ideasItems).length);
+
                 // Convert locked items to history format
-                sessionHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
+                lockedInHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
                     id: id,
                     quantity: itemInfo.quantity || 1,
                     selectedOptionIndex: itemInfo.selectedOptionIndex,
                     note: itemInfo.note,
                     overridePrice: itemInfo.overridePrice
                 }));
+
+                // Convert ideas items to history format
+                ideasHistory = Object.entries(ideasItems).map(([id, itemInfo]) => ({
+                    id: id,
+                    quantity: itemInfo.quantity || 1,
+                    selectedOptionIndex: itemInfo.selectedOptionIndex,
+                    note: itemInfo.note,
+                    overridePrice: itemInfo.overridePrice
+                }));
+
+                console.log('[DEBUG MODAL] lockedInHistory array:', lockedInHistory);
+                console.log('[DEBUG MODAL] lockedInHistory length:', lockedInHistory.length);
+                console.log('[DEBUG MODAL] ideasHistory array:', ideasHistory);
+                console.log('[DEBUG MODAL] ideasHistory length:', ideasHistory.length);
             } catch (e) {
                 console.warn('Could not parse Items with Variations for session:', linkedSessionId, e);
-                sessionHistory = [];
+                console.error('[DEBUG MODAL] Parse error details:', e);
+                lockedInHistory = [];
+                ideasHistory = [];
             }
+        } else {
+            console.log('[DEBUG MODAL] No Items with Variations field found in linkedSession');
         }
-        const componentIds = sessionHistory.map(item => item.id).filter(id => id);
 
-        if (componentIds.length > 0) {
+        const lockedComponentIds = lockedInHistory.map(item => item.id).filter(id => id);
+        const ideaComponentIds = ideasHistory.map(item => item.id).filter(id => id);
+
+        console.log('[DEBUG MODAL] lockedComponentIds:', lockedComponentIds);
+        console.log('[DEBUG MODAL] lockedComponentIds length:', lockedComponentIds.length);
+        console.log('[DEBUG MODAL] ideaComponentIds:', ideaComponentIds);
+        console.log('[DEBUG MODAL] ideaComponentIds length:', ideaComponentIds.length);
+
+        if (lockedComponentIds.length > 0 || ideaComponentIds.length > 0) {
+            console.log('[DEBUG MODAL] ENTERING section to render components - locked:', lockedComponentIds.length, 'ideas:', ideaComponentIds.length);
             const sessionComponentsSection = document.createElement('div');
             sessionComponentsSection.className = 'session-components-section';
             sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
             let componentsHTML = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
-            componentsHTML += '<div class="session-components-list">';
 
-            // Fetch component items (check both active and archive)
-            for (const componentId of componentIds) {
-                let componentRecord = state.records.all.find(r => r.id === componentId);
+            // Display Locked In Items section
+            if (lockedComponentIds.length > 0) {
+                console.log('[DEBUG MODAL] Rendering locked-in section for', lockedComponentIds.length, 'items');
+                componentsHTML += '<div class="locked-in-section" style="margin-bottom: 15px;">';
+                componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #28a745; font-size: 0.95em;">✅ Locked In</h5>';
+                componentsHTML += '<div class="session-components-list">';
 
-                // If not found in active records, check archive
-                if (!componentRecord && state.records.archive) {
-                    componentRecord = state.records.archive.find(r => r.id === componentId);
-                }
+                // Fetch component items (check both active and archive)
+                for (const componentId of lockedComponentIds) {
+                    console.log('[DEBUG MODAL] Processing locked component ID:', componentId);
+                    let componentRecord = state.records.all.find(r => r.id === componentId);
 
-                if (componentRecord) {
-                    const componentName = componentRecord.fields.Name || 'Untitled';
-                    const historyItem = sessionHistory.find(item => item.id === componentId);
-                    const quantity = historyItem?.quantity || 1;
-                    const isGhost = !state.records.all.find(r => r.id === componentId);
+                    // If not found in active records, check archive
+                    if (!componentRecord && state.records.archive) {
+                        componentRecord = state.records.archive.find(r => r.id === componentId);
+                        console.log('[DEBUG MODAL] Component found in archive:', !!componentRecord);
+                    }
 
-                    componentsHTML += `
-                        <div class="session-component-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; ${isGhost ? 'opacity: 0.7;' : ''}">
-                            <div>
-                                <strong>${componentName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
-                                ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
+                    if (componentRecord) {
+                        console.log('[DEBUG MODAL] Found record for component:', componentRecord.fields.Name);
+                        const componentName = componentRecord.fields.Name || 'Untitled';
+                        const historyItem = lockedInHistory.find(item => item.id === componentId);
+                        const quantity = historyItem?.quantity || 1;
+                        const note = historyItem?.note || '';
+                        const isGhost = !state.records.all.find(r => r.id === componentId);
+
+                        console.log('[DEBUG MODAL] Adding to HTML - name:', componentName, 'qty:', quantity, 'isGhost:', isGhost);
+
+                        componentsHTML += `
+                            <div class="session-component-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #28a745; ${isGhost ? 'opacity: 0.7;' : ''}">
+                                <div>
+                                    <strong>${componentName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
+                                    ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
+                                    ${note ? `<div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">Note: ${note}</div>` : ''}
+                                </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    } else {
+                        console.warn('[DEBUG MODAL] Could not find record for locked component ID:', componentId);
+                    }
                 }
+
+                componentsHTML += '</div></div>';
+                console.log('[DEBUG MODAL] Locked-in section HTML complete');
+            } else {
+                console.log('[DEBUG MODAL] No locked component IDs to render');
             }
 
-            componentsHTML += '</div>';
+            // Display Ideas section
+            if (ideaComponentIds.length > 0) {
+                console.log('[DEBUG MODAL] Rendering ideas section for', ideaComponentIds.length, 'items');
+                componentsHTML += '<div class="ideas-section">';
+                componentsHTML += '<h5 style="margin: 10px 0 8px 0; color: #ffc107; font-size: 0.95em;">💡 Ideas for the Session</h5>';
+                componentsHTML += '<div class="session-ideas-list">';
+
+                // Fetch idea items (check both active and archive)
+                for (const ideaId of ideaComponentIds) {
+                    console.log('[DEBUG MODAL] Processing idea ID:', ideaId);
+                    let ideaRecord = state.records.all.find(r => r.id === ideaId);
+
+                    // If not found in active records, check archive
+                    if (!ideaRecord && state.records.archive) {
+                        ideaRecord = state.records.archive.find(r => r.id === ideaId);
+                        console.log('[DEBUG MODAL] Idea found in archive:', !!ideaRecord);
+                    }
+
+                    if (ideaRecord) {
+                        console.log('[DEBUG MODAL] Found record for idea:', ideaRecord.fields.Name);
+                        const ideaName = ideaRecord.fields.Name || 'Untitled';
+                        const historyItem = ideasHistory.find(item => item.id === ideaId);
+                        const quantity = historyItem?.quantity || 1;
+                        const note = historyItem?.note || '';
+                        const isGhost = !state.records.all.find(r => r.id === ideaId);
+
+                        console.log('[DEBUG MODAL] Adding to HTML - name:', ideaName, 'qty:', quantity, 'isGhost:', isGhost);
+
+                        componentsHTML += `
+                            <div class="session-idea-item" style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 8px; background-color: white; border-radius: 4px; border-left: 3px solid #ffc107; ${isGhost ? 'opacity: 0.7;' : ''}">
+                                <div>
+                                    <strong>${ideaName}</strong> ${quantity > 1 ? `(x${quantity})` : ''}
+                                    ${isGhost ? '<span style="color: #6c757d; font-size: 0.85em; margin-left: 8px;">[Archived]</span>' : ''}
+                                    ${note ? `<div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">Note: ${note}</div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        console.warn('[DEBUG MODAL] Could not find record for idea ID:', ideaId);
+                    }
+                }
+
+                componentsHTML += '</div></div>';
+                console.log('[DEBUG MODAL] Ideas section HTML complete');
+            } else {
+                console.log('[DEBUG MODAL] No idea component IDs to render');
+            }
+
             sessionComponentsSection.innerHTML = componentsHTML;
+            console.log('[DEBUG MODAL] Final componentsHTML:', componentsHTML);
+            console.log('[DEBUG MODAL] Inserting section before modalItemDescription.parentElement');
+            console.log('[DEBUG MODAL] modalItemDescription:', modalItemDescription);
+            console.log('[DEBUG MODAL] modalItemDescription.parentElement:', modalItemDescription.parentElement);
             modalItemDescription.parentElement.insertBefore(sessionComponentsSection, modalItemDescription);
+            console.log('[DEBUG MODAL] Section inserted successfully');
+        } else {
+            console.log('[DEBUG MODAL] NO COMPONENTS TO DISPLAY - lockedComponentIds.length:', lockedComponentIds.length, 'ideaComponentIds.length:', ideaComponentIds.length);
         }
 
         // Check if user is a collaborator or store owner and add Edit Plan button

@@ -1706,3 +1706,53 @@ export async function fetchSessionById(sessionId) {
     }
 }
 
+/**
+ * Finds a session by searching for which session has this event in its LinkedItem field
+ * This is a fallback for when an Event record doesn't have a LinkedSession field
+ * @param {string} eventId - The event/item record ID to search for
+ * @returns {Promise<Object|null>} The session record if found, null otherwise
+ */
+export async function fetchSessionByLinkedItem(eventId) {
+    if (!eventId) {
+        console.log('[FETCH SESSION BY LINKED] No eventId provided');
+        return null;
+    }
+
+    console.log('[FETCH SESSION BY LINKED] Searching for session with LinkedItem:', eventId);
+
+    // Build a formula to find sessions where LinkedItem contains this event ID
+    const formula = `FIND('${eventId}', ARRAYJOIN({LinkedItem}))`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[FETCH SESSION BY LINKED] Airtable Error:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        console.log('[FETCH SESSION BY LINKED] Found', data.records?.length || 0, 'session(s)');
+
+        if (data.records && data.records.length > 0) {
+            const session = data.records[0]; // Take the first match
+            console.log('[FETCH SESSION BY LINKED] Session found:', session.id);
+            console.log('[FETCH SESSION BY LINKED] Session.fields keys:', Object.keys(session.fields || {}));
+            console.log('[FETCH SESSION BY LINKED] Session.fields.Name:', session.fields?.Name);
+            console.log('[FETCH SESSION BY LINKED] Session.fields.LinkedItem:', session.fields?.LinkedItem);
+            return session;
+        } else {
+            console.log('[FETCH SESSION BY LINKED] No session found with LinkedItem:', eventId);
+            return null;
+        }
+    } catch (error) {
+        console.error("[FETCH SESSION BY LINKED] Error:", error);
+        return null;
+    }
+}
+
