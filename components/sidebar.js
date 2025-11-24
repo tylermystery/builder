@@ -344,13 +344,18 @@ async function handlePublishEvent() {
 
     try {
         // Gather event data from session details
+        const rawDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+        console.log('[PUBLISH DEBUG - Sidebar] Raw date from state:', rawDate);
+        console.log('[PUBLISH DEBUG - Sidebar] Raw date type:', typeof rawDate);
+
         const eventData = {
             Name: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event',
-            Date: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE),
+            Date: rawDate,
             Goals: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS),
             GuestCount: state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT)
         };
 
+        console.log('[PUBLISH DEBUG - Sidebar] Complete eventData object:', eventData);
         log('Sidebar', `Publishing session ${state.session.id} as event with data:`, eventData);
 
         // Disable the button to prevent double-clicks

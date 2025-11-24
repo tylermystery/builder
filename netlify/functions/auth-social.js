@@ -131,7 +131,7 @@ exports.handler = async (event, context) => {
     }
 
     // 3. Check for Store Ownership (Copied from auth-verify)
-    let ownerData = { isOwner: false, ownerDashboardId: null };
+    let ownerData = { isOwner: false, ownerDashboardId: null, ownedStoreId: null };
     if (userRecord.fields[OWNED_STORE_FIELD] && userRecord.fields[OWNED_STORE_FIELD].length > 0) {
         const storeId = userRecord.fields[OWNED_STORE_FIELD][0];
         const storeUrl = `https://api.airtable.com/v0/${BASE_ID}/Stores/${storeId}?fields[]=${encodeURIComponent(OWNER_DASHBOARD_ID_FIELD)}`;
@@ -141,6 +141,7 @@ exports.handler = async (event, context) => {
             if (storeRecord.fields[OWNER_DASHBOARD_ID_FIELD]) {
                 ownerData.isOwner = true;
                 ownerData.ownerDashboardId = storeRecord.fields[OWNER_DASHBOARD_ID_FIELD];
+                ownerData.ownedStoreId = storeId;
                 console.log(`[auth-social] User ${userRecord.id} is owner of store ${storeId}. Dashboard ID: ${ownerData.ownerDashboardId}`);
             }
         } else {

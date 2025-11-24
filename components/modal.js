@@ -515,13 +515,20 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             modalItemDescription.parentElement.insertBefore(sessionComponentsSection, modalItemDescription);
         }
 
-        // Check if user is a collaborator and add Edit Plan button
+        // Check if user is a collaborator or store owner and add Edit Plan button
         const isCollaborator = linkedSession.fields.Collaborators &&
                                linkedSession.fields.Collaborators.includes(state.session.user.id);
-        const isOwner = state.session.user.isOwner;
 
-        if (isCollaborator || isOwner) {
-            log('Modal', 'User is collaborator or owner, showing Edit Plan button');
+        // Check if user owns the store that this session belongs to
+        const sessionStoreId = linkedSession.fields.Stores && linkedSession.fields.Stores.length > 0
+                             ? linkedSession.fields.Stores[0]
+                             : null;
+        const isOwnerOfSessionStore = state.session.user.isOwner &&
+                                     state.session.user.ownedStoreId &&
+                                     sessionStoreId === state.session.user.ownedStoreId;
+
+        if (isCollaborator || isOwnerOfSessionStore) {
+            log('Modal', 'User is collaborator or owns the session store, showing Edit Plan button');
             const editPlanBtn = document.createElement('button');
             editPlanBtn.className = 'edit-plan-btn';
             editPlanBtn.style.cssText = 'margin: 10px 0; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;';
