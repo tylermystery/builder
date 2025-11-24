@@ -219,6 +219,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/update-catalog-item"
+  to = "/.netlify/functions/update-catalog-item"
+  status = 200
+
+[[redirects]]
   from = "/api/get-store-data-by-owner-id"
   to = "/.netlify/functions/get-store-data-by-owner-id"
   status = 200

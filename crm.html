@@ -18,23 +18,72 @@
             --text-light: #7f8c8d;
         }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-light); color: #333; margin: 0; }
-        #dashboard-wrapper { display: none; } 
-        .dashboard-container { display: grid; grid-template-columns: auto 320px 1fr 1fr 380px; height: 100vh; }
-        .panel { background-color: var(--bg-white); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; box-sizing: border-box;}
-        
-        /* Archive Panel (Pane 0) */
-        .archive-pane { width: 60px; padding: 20px 10px; transition: width 0.3s ease; text-align: center; }
-        .archive-pane.expanded { width: 300px; }
-        #archive-toggle { cursor: pointer; font-size: 1.5rem; margin-bottom: 20px; }
-        .archive-pane .archive-content { display: none; }
-        .archive-pane.expanded .archive-content { display: block; }
-        .archive-pane .session-list-item { padding: 8px; }
-        .archive-pane.expanded .session-list-item { padding: 12px; }
+        #dashboard-wrapper { display: none; }
+        .dashboard-container { display: flex; flex-direction: column; height: 100vh; }
 
-        /* Sessions, Feed, Plan, Chat Panes */
-        .sessions-pane { padding: 20px; }
-        .feed-pane, .plan-pane { padding: 30px; }
-        .chat-pane-container { border-right: none; }
+        /* Module Selector Bar */
+        .module-selector-bar {
+            background-color: var(--bg-white);
+            border-bottom: 2px solid var(--border-color);
+            padding: 15px 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .module-selector-bar h3 {
+            margin: 0;
+            font-size: 1.1em;
+            color: var(--text-dark);
+            margin-right: 15px;
+        }
+        .module-toggle {
+            padding: 8px 15px;
+            border: 2px solid var(--border-color);
+            background-color: var(--bg-light);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+        .module-toggle:hover {
+            background-color: #e0e6e8;
+        }
+        .module-toggle.active {
+            background-color: var(--highlight-blue);
+            color: white;
+            border-color: var(--highlight-blue);
+        }
+
+        /* Dynamic Module Grid */
+        .modules-grid {
+            display: grid;
+            flex-grow: 1;
+            overflow: hidden;
+            gap: 0;
+        }
+        .modules-grid.cols-1 { grid-template-columns: 1fr; }
+        .modules-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .modules-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .modules-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        .modules-grid.cols-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+        .panel {
+            background-color: var(--bg-white);
+            border-right: 1px solid var(--border-color);
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+            box-sizing: border-box;
+            padding: 20px;
+        }
+        .panel.visible { display: flex; }
+
+        /* Module-specific styling */
+        .module-archive .archive-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .module-sessions { min-width: 320px; }
+        .module-feed, .module-plan { padding: 30px; }
+        .module-chat { border-right: none; min-width: 380px; }
 
         h1, h2, h3 { color: var(--text-dark); }
         h2, h3 { border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 0; }
@@ -82,34 +131,34 @@
         
         /* --- NEW PARSER STYLES --- */
         #asset-parser-section, #ai-tools-section {
-            margin-top: 20px; 
-            padding: 15px; 
-            border: 1px solid #ddd; 
-            border-radius: 8px; 
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
             background: #f9f9f9;
         }
         #omni-search-form { display: flex; gap: 10px; }
         #omni-search-input {
-            width: 100%; 
-            padding: 10px; 
-            border: 1px solid #ddd; 
-            border-radius: 4px; 
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             box-sizing: border-box;
         }
         #omni-search-btn {
-            padding: 10px 15px; 
-            background-color: #28a745; 
-            color: white; border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
+            padding: 10px 15px;
+            background-color: #28a745;
+            color: white; border: none;
+            border-radius: 5px;
+            cursor: pointer;
             font-weight: bold;
         }
         #omni-search-results {
-            margin-top: 15px; 
-            background: white; 
-            padding: 10px; 
-            border-radius: 4px; 
-            border: 1px solid #eee; 
+            margin-top: 15px;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
             min-height: 50px;
             font-size: 0.9em;
         }
@@ -118,9 +167,9 @@
             color: var(--text-dark);
         }
         #omni-search-results pre {
-            font-size: 0.9em; 
-            background: #eee; 
-            padding: 5px; 
+            font-size: 0.9em;
+            background: #eee;
+            padding: 5px;
             border-radius: 4px;
             word-wrap: break-word;
             white-space: pre-wrap;
@@ -128,6 +177,21 @@
         #omni-search-results ul {
             padding-left: 20px;
             margin: 5px 0;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1600px) {
+            .modules-grid.cols-5 { grid-template-columns: repeat(3, 1fr); }
+            .modules-grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 1200px) {
+            .modules-grid.cols-4,
+            .modules-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 768px) {
+            .modules-grid { grid-template-columns: 1fr !important; }
+            .module-selector-bar { padding: 10px; }
+            .module-toggle { font-size: 0.8em; padding: 6px 12px; }
         }
 
         /* Comparison Modal */
@@ -178,6 +242,16 @@
             padding: 12px;
             text-align: left;
             border-bottom: 2px solid var(--border-color);
+            width: 33%;
+        }
+        .comparison-table th:first-child {
+            width: 20%;
+        }
+        .comparison-table th:nth-child(2) {
+            width: 40%;
+        }
+        .comparison-table th:nth-child(3) {
+            width: 40%;
         }
         .comparison-table td {
             padding: 12px;
@@ -217,6 +291,19 @@
             color: var(--highlight-blue);
             font-weight: bold;
         }
+        .existing-value {
+            background-color: #fff3cd;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .parsed-value {
+            background-color: #d4edda;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .value-unchanged {
+            color: #999;
+        }
         /* --- END NEW STYLES --- */
         
     </style>
@@ -224,22 +311,45 @@
 <body>
 
     <div id="dashboard-wrapper">
-        <div class="dashboard-container">
-            <aside id="archive-pane" class="panel archive-pane">
-                <div id="archive-toggle">🗄️</div>
-                <div class="archive-content">
-                    <h2>Archive</h2>
-                    <div id="archive-list" class="session-list"></div>
-                </div>
-            </aside>
+        <!-- Module Selector Bar -->
+        <div class="module-selector-bar">
+            <h3>Active Modules:</h3>
+            <button class="module-toggle active" data-module="sessions">📋 Sessions</button>
+            <button class="module-toggle active" data-module="feed">📰 Activity Feed</button>
+            <button class="module-toggle" data-module="plan">📅 Event Plan</button>
+            <button class="module-toggle" data-module="chat">💬 Chat</button>
+            <button class="module-toggle" data-module="archive">🗄️ Archive</button>
+            <button class="module-toggle" data-module="tools">🔧 Tools</button>
+        </div>
 
-            <aside class="panel sessions-pane">
+        <!-- Dynamic Modules Grid -->
+        <div class="modules-grid cols-2">
+            <!-- Archive Module -->
+            <section id="module-archive" class="panel module-archive">
+                <div class="archive-header">
+                    <h2>📦 Archived Sessions</h2>
+                </div>
+                <div id="archive-list" class="session-list"></div>
+            </section>
+
+            <!-- Sessions Module -->
+            <section id="module-sessions" class="panel module-sessions visible">
                 <h2>Active Sessions</h2>
                 <div id="session-list" class="session-list"></div>
-                
+
+                <section id="teammates-section" style="margin-top: 30px;">
+                    <h2>Teammates</h2>
+                    <div id="teammates-list"></div>
+                </section>
+            </section>
+
+            <!-- Tools Module -->
+            <section id="module-tools" class="panel module-tools">
+                <h2>🔧 Asset Parser & AI Tools</h2>
+
                 <section id="asset-parser-section">
-                    <h2 style="margin-top: 30px;">Asset Parser</h2>
-                    <p style="font-size: 0.9em; color: #666; margin-top: 0;">Search for an item, session, or client. If no item is found, the parser will create a new one.</p>
+                    <h3 style="margin-top: 0;">Asset Parser</h3>
+                    <p style="font-size: 0.9em; color: #666;">Search for an item, session, or client. If no item is found, the parser will create a new one.</p>
                     <form id="omni-search-form">
                         <input type="search" id="omni-search-input" placeholder="Item Name, Session Name, or Client Email...">
                         <button type="submit" id="omni-search-btn">Find/Create</button>
@@ -248,11 +358,11 @@
                         <p style="font-size: 0.9em; color: #7f8c8d; text-align: center;">Results will appear here.</p>
                     </div>
                 </section>
-                
+
                 <section id="ai-tools-section">
-                    <h2 style="margin-top: 30px;">AI Image Tools</h2>
-                    <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 10px;">
-                        <h3 style="border-bottom: none; padding-bottom: 0;">Test AI Tagger</h3>
+                    <h3>AI Image Tools</h3>
+                    <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px;">
+                        <h4 style="margin-top: 0;">Test AI Tagger</h4>
                         <form id="test-ai-form">
                             <label for="test-public-id" style="font-size: 0.9em; display: block; margin-bottom: 5px;">Cloudinary Public ID</label>
                             <input type="text" id="test-public-id" placeholder="e.g., my/item/photo_01" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px;" required>
@@ -263,24 +373,27 @@
                         <p id="single-ai-status" style="margin-top: 10px; font-size: 0.9em; color: #7f8c8d;">Status: Ready</p>
                     </div>
                 </section>
-                </aside>
+            </section>
 
-            <main class="panel feed-pane">
+            <!-- Activity Feed Module -->
+            <section id="module-feed" class="panel module-feed visible">
                 <h1>Real-Time Activity Feed</h1>
                 <div id="loading">Loading session data...</div>
                 <div id="activity-feed" class="activity-feed"></div>
-            </main>
-
-            <section class="panel plan-pane">
-                 <div id="plan-view-placeholder" class="pane-placeholder">Select a session to see the event plan.</div>
-                 <div id="plan-view" style="display: none;"></div>
             </section>
 
-            <aside class="panel chat-pane-container">
+            <!-- Event Plan Module -->
+            <section id="module-plan" class="panel module-plan">
+                <div id="plan-view-placeholder" class="pane-placeholder">Select a session to see the event plan.</div>
+                <div id="plan-view" style="display: none;"></div>
+            </section>
+
+            <!-- Chat Module -->
+            <section id="module-chat" class="panel module-chat">
                 <div id="chat-pane" class="chat-pane" style="display: none;">
                     <div class="pane-header">
                         <h3 id="chat-header-title">Chat</h3>
-                        <a id="chat-open-link" href="#" target="\_blank" class="open-new-tab">Open in New Tab ↗</a>
+                        <a id="chat-open-link" href="#" target="_blank" class="open-new-tab">Open in New Tab ↗</a>
                     </div>
                     <div id="chat-messages" class="chat-messages"></div>
                     <form id="chat-form">
@@ -289,7 +402,7 @@
                     </form>
                 </div>
                 <div id="chat-placeholder" class="pane-placeholder">Select a session to view its chat.</div>
-            </aside>
+            </section>
         </div>
     </div>
 
@@ -301,8 +414,11 @@
                 <span class="comparison-close" onclick="closeComparisonModal()">&times;</span>
             </div>
             <p style="color: #666; margin-bottom: 20px;">Review the AI-parsed data below. You can edit fields before confirming.</p>
+            <div id="comparison-mode-indicator" style="display: none; background: #e7f3ff; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <strong>Mode:</strong> <span id="comparison-mode-text">New Item</span>
+            </div>
             <table class="comparison-table">
-                <thead>
+                <thead id="comparison-table-header">
                     <tr>
                         <th>Field</th>
                         <th>AI-Suggested Value</th>

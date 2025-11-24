@@ -34,6 +34,20 @@ exports.handler = async (event) => {
       'Service Type': itemData.ServiceType || 'Partner Activity'
     };
 
+    // Store Rankings in the Rankings field
+    if (itemData.Rankings) {
+      airtableFields['Rankings'] = typeof itemData.Rankings === 'string'
+        ? itemData.Rankings
+        : JSON.stringify(itemData.Rankings, null, 2);
+    }
+
+    // Store Profile in the Profile field (new profiling attributes)
+    if (itemData.Profile) {
+      airtableFields['Profile'] = typeof itemData.Profile === 'string'
+        ? itemData.Profile
+        : JSON.stringify(itemData.Profile, null, 2);
+    }
+
     // Store SearchTerms in AI_Profile as a simple JSON structure
     // This allows it to be searched and profiled later
     if (itemData.SearchTerms && Array.isArray(itemData.SearchTerms) && itemData.SearchTerms.length > 0) {
