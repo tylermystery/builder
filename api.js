@@ -1535,8 +1535,8 @@ export async function publishSessionAsEvent(sessionId, eventData) {
         'Item Type': 'Event',
         'Status': 'Available',
         'LinkedSession': [sessionId], // Link back to the session
-        'Goals': eventData.Goals || session.fields.Goals || null,
-        'Guest Count': eventData.GuestCount || session.fields['Guest Count'] || null,
+        // Note: Goals and Guest Count exist in Sessions table, not Items table
+        // They are stored in the linked Session record
     };
 
     // Airtable Date fields (not DateTime fields) require YYYY-MM-DD format only
@@ -1673,19 +1673,10 @@ export async function fetchSessionById(sessionId) {
         return null;
     }
 
-    // Explicitly request all fields we need, including Date
-    const fieldsQuery = [
-        'Name',
-        'Date',
-        'Goals',
-        'Guest Count',
-        'Stores',
-        'Collaborators',
-        'Items with Variations',
-        'LinkedItem'
-    ].map(field => `fields[]=${encodeURIComponent(field)}`).join('&');
-
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}?${fieldsQuery}`;
+    // Fetch all fields from the session record
+    // Note: Not using fields[] parameter to avoid 422 errors from fields that may not exist
+    // and to ensure we get all fields including LinkedItem if it exists
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
 
     try {
         const response = await fetch(url, {
@@ -1703,6 +1694,7 @@ export async function fetchSessionById(sessionId) {
         console.log('[FETCH SESSION DEBUG] Session.fields keys:', Object.keys(data.fields || {}));
         console.log('[FETCH SESSION DEBUG] Session.fields.Date:', data.fields?.Date);
         console.log('[FETCH SESSION DEBUG] Session.fields.Name:', data.fields?.Name);
+        console.log('[FETCH SESSION DEBUG] Session.fields.LinkedItem:', data.fields?.LinkedItem);
         return data;
     } catch (error) {
         console.error("Error fetching session:", error);

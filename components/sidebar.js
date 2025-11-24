@@ -224,17 +224,24 @@ let pendingEventPlanUpdate = false;
  * Updates the RSVP statistics and Publish Event button for published sessions
  */
 async function updateSessionPublishingControls() {
+    console.log('[PUBLISH DEBUG] updateSessionPublishingControls called');
+    console.log('[PUBLISH DEBUG] state.session.id:', state.session.id);
+
     // Remove any existing publishing controls
     const existingControls = document.getElementById('session-publishing-controls');
     if (existingControls) {
+        console.log('[PUBLISH DEBUG] Removing existing controls');
         existingControls.remove();
     }
 
     // Only show if we have an active session
     if (!state.session.id) {
+        console.log('[PUBLISH DEBUG] No active session, skipping publishing controls');
         log('Sidebar', 'No active session, skipping publishing controls');
         return;
     }
+
+    console.log('[PUBLISH DEBUG] Active session found, proceeding to create controls');
 
     try {
         const session = await api.fetchSessionById(state.session.id);
@@ -307,28 +314,42 @@ async function updateSessionPublishingControls() {
 
         // Insert at the top of the cart container
         const cartContainer = document.getElementById('cart-items-container');
+        console.log('[PUBLISH DEBUG] cartContainer found:', !!cartContainer);
+        console.log('[PUBLISH DEBUG] cartContainer.parentElement found:', !!cartContainer?.parentElement);
+
         if (cartContainer && cartContainer.parentElement) {
             cartContainer.parentElement.insertBefore(controlsContainer, cartContainer);
+            console.log('[PUBLISH DEBUG] Controls inserted into DOM');
+            console.log('[PUBLISH DEBUG] Controls container HTML:', controlsContainer.innerHTML.substring(0, 200));
+        } else {
+            console.error('[PUBLISH DEBUG] ERROR: Could not find cart container or its parent!');
         }
 
         // Add event listeners for the buttons
         const publishBtn = document.getElementById('publish-event-btn');
         const updateBtn = document.getElementById('update-published-event-btn');
 
+        console.log('[PUBLISH DEBUG] publishBtn found:', !!publishBtn);
+        console.log('[PUBLISH DEBUG] updateBtn found:', !!updateBtn);
+
         if (publishBtn) {
             publishBtn.addEventListener('click', async () => {
                 await handlePublishEvent();
             });
+            console.log('[PUBLISH DEBUG] Event listener added to publish button');
         }
 
         if (updateBtn) {
             updateBtn.addEventListener('click', async () => {
                 await handlePublishEvent();
             });
+            console.log('[PUBLISH DEBUG] Event listener added to update button');
         }
 
+        console.log('[PUBLISH DEBUG] Session publishing controls updated successfully');
         log('Sidebar', 'Session publishing controls updated');
     } catch (error) {
+        console.error('[PUBLISH DEBUG] ERROR in updateSessionPublishingControls:', error);
         console.error('Error updating session publishing controls:', error);
     }
 }
@@ -398,10 +419,15 @@ async function handlePublishEvent() {
 }
 
 export async function updateEventPlanSection() {
+    console.log('[PUBLISH DEBUG] ========== updateEventPlanSection CALLED ==========');
+    console.log('[PUBLISH DEBUG] state.session.id at entry:', state.session.id);
+    console.log('[PUBLISH DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+
     // If already updating, mark that another update is needed and return
     if (isUpdatingEventPlan) {
         pendingEventPlanUpdate = true;
         log('Sidebar', 'Event plan update already in progress, will retry after completion.');
+        console.log('[PUBLISH DEBUG] Already updating, will retry later');
         return;
     }
 
@@ -411,13 +437,18 @@ export async function updateEventPlanSection() {
     try {
         log('Sidebar', 'Updating event plan panel.');
         const container = document.getElementById('cart-items-container');
-        if (!container) return;
+        if (!container) {
+            console.log('[PUBLISH DEBUG] ERROR: cart-items-container not found!');
+            return;
+        }
 
         // Clear container to prevent duplicates
         container.innerHTML = '';
 
         // Check if this session is published and display RSVP stats + Publish button
+        console.log('[PUBLISH DEBUG] About to call updateSessionPublishingControls');
         await updateSessionPublishingControls();
+        console.log('[PUBLISH DEBUG] updateSessionPublishingControls completed');
 
         if (state.cart.lockedItems.size === 0) {
             container.innerHTML = `<p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>`;
