@@ -305,14 +305,28 @@ export async function sendMessage(message, recordId = null) {
 export async function initializeItemChat(recordId) {
     log('Chat', `Initializing item chat for recordId: ${recordId}`);
     if (!state.session.user.isAuthenticated) {
-        document.getElementById('modal-chat-container').style.display = 'none';
+        const chatContainer = document.getElementById('modal-chat-container');
+        if (chatContainer) chatContainer.style.display = 'none';
         return;
     }
-    document.getElementById('modal-chat-container').style.display = 'block';
+    const chatContainer = document.getElementById('modal-chat-container');
+    if (chatContainer) chatContainer.style.display = 'block';
+
     currentUser = getCurrentUser();
     const messagesList = document.getElementById('messages-list-item');
     const messageForm = document.getElementById('message-form-item');
     const messageInput = document.getElementById('message-input-item');
+
+    // Guard against missing elements
+    if (!messagesList) {
+        console.warn('Chat: messages-list-item element not found');
+        return;
+    }
+    if (!messageForm || !messageForm.parentNode) {
+        console.warn('Chat: message-form-item element not found or not in DOM');
+        return;
+    }
+
     messagesList.innerHTML = '';
     itemChatChannels.forEach((channel) => channel.unsubscribe());
     itemChatChannels.clear();
@@ -331,7 +345,7 @@ export async function initializeItemChat(recordId) {
                 user_name: currentUser.name
             }
         }
- 
+
        });
     const channelName = `presence-item-${recordId}`;
     const channel = pusher.subscribe(channelName);
