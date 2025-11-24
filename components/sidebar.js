@@ -45,12 +45,14 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
             <span class="favorite-item-name">${fields.Name || 'Untitled'}</span>
         </div>
     `;
-    tippy(itemCard.querySelector('.favorite-item-overlay'), {
-        content: tooltipContent,
-        allowHTML: true,
-        placement: 'top',
-        theme: 'light',
-    });
+    if (window.tippy) {
+        tippy(itemCard.querySelector('.favorite-item-overlay'), {
+            content: tooltipContent,
+            allowHTML: true,
+            placement: 'top',
+            theme: 'light',
+        });
+    }
     return itemCard;
 }
 
@@ -142,7 +144,7 @@ async function createLockedInItemElement(record, itemInfo) {
 
     // Initialize Tippy tooltip for the warning asterisk if present
     const warningSpan = itemElement.querySelector('.min-qty-warning');
-    if (warningSpan) {
+    if (warningSpan && window.tippy) {
         tippy(warningSpan, {
             content: warningSpan.dataset.tippyContent,
             allowHTML: true,
@@ -153,7 +155,7 @@ async function createLockedInItemElement(record, itemInfo) {
 
     // Initialize Tippy tooltip for the UMW benefit indicator if present
     const benefitSpan = itemElement.querySelector('.umw-benefit-indicator');
-    if (benefitSpan) {
+    if (benefitSpan && window.tippy) {
         tippy(benefitSpan, {
             content: benefitSpan.dataset.tippyContent,
             allowHTML: true,

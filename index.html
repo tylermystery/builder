@@ -488,9 +488,9 @@ body.modal-open {
                 <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
                 <h1 id="main-shop-title"></h1>
                 <div id="user-filter-buttons" style="display: flex; gap: 8px; margin-left: 12px;">
-                    <button id="liked-items-header-btn" class="header-icon-btn" title="My Likes" style="display: none;">❤️</button>
-                    <button id="my-sessions-header-btn" class="header-icon-btn" title="My Sessions" style="display: none;">📋</button>
-                    <button id="rsvp-events-header-btn" class="header-icon-btn" title="My RSVP Events" style="display: none;">📅</button>
+                    <button id="liked-items-header-btn" class="header-icon-btn" title="My Likes" aria-label="View my liked items" style="display: none;">❤️</button>
+                    <button id="my-sessions-header-btn" class="header-icon-btn" title="My Sessions" aria-label="View my sessions" style="display: none;">📋</button>
+                    <button id="rsvp-events-header-btn" class="header-icon-btn" title="My RSVP Events" aria-label="View my RSVP events" style="display: none;">📅</button>
                 </div>
             </div>
 
@@ -503,9 +503,9 @@ body.modal-open {
 
             <!-- Right Section: Calendar, Background Settings, and Account -->
             <div id="header-right">
-                <button id="bg-settings-trigger" class="header-icon-btn" title="Background Settings" style="position: relative;">🎨</button>
-                <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
-                <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
+                <button id="bg-settings-trigger" class="header-icon-btn" title="Background Settings" aria-label="Open background settings" style="position: relative;">🎨</button>
+                <button id="calendar-view-btn" title="View Upcoming Events" aria-label="View upcoming events calendar">📅</button>
+                <button id="user-profile-button" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
             </div>
         </div>
     </header>
@@ -524,7 +524,7 @@ body.modal-open {
                 </div>
                 <div class="toolbar-group">
                     <label for="event-date-picker">Event Date</label>
-                    <input type="text" id="event-date-picker" placeholder="Select date">
+                    <input type="text" id="event-date-picker" placeholder="Select your event date">
                 </div>
      
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
@@ -548,7 +548,7 @@ body.modal-open {
                 <div id="event-plan-notification" style="display: none;"></div>
 
                 <div id="cart-items-container">
-                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                     <p style="font-size: 0.9em; color: #6c757d; text-align: center; padding: 20px 10px;">Your event plan is empty. Browse the catalog and add items to get started!</p>
                 </div>
                 <div id="event-health-score" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
                     <p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Plan Health.</p>
@@ -580,7 +580,7 @@ body.modal-open {
            </div>
         </div>
         
-        <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
+        <button id="mobile-filter-trigger" aria-label="Toggle search and filter panel" aria-expanded="false">Search & Filter <span class="caret">▼</span></button>
         
 <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
@@ -672,7 +672,7 @@ body.modal-open {
 
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
@@ -696,7 +696,7 @@ body.modal-open {
                 <div id="modal-quantity-selector"></div>
 
                 <div id="modal-calendar-container" style="margin-bottom: 20px;"></div> <div id="modal-notes-container">
-                    <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
+                    <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
                 </div>
 
                 <div id="modal-actions-container">
@@ -721,7 +721,7 @@ body.modal-open {
     
     <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="checkout-close-btn" class="modal-close-btn" title="Close" aria-label="Close checkout modal">×</button>
             <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
@@ -777,9 +777,10 @@ body.modal-open {
                     <span class="spinner" style="display: none;">Processing...</span>
                 </button>
         </form>
-            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
-                <h3 style="color: #28a745;">✅ Payment Successful!</h3>
-                <p>Your items are reserved. This window will close shortly.</p>
+            <div id="payment-success-message" style="display: none; text-align: center; padding: 30px;">
+                <div style="font-size: 64px; margin-bottom: 20px; animation: checkmark-bounce 0.6s ease-out;">✅</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">Payment Successful!</h3>
+                <p style="color: #6c757d;">Your items are reserved. This window will close shortly.</p>
             </div>
         </div>
     </div>

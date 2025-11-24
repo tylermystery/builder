@@ -16,6 +16,11 @@
 [build.processing.images]
   compress = true
 
+# Netlify Functions configuration for better performance
+[functions]
+  # Use esbuild for faster function bundling
+  node_bundler = "esbuild"
+
 # Performance and security optimizations
 [[headers]]
   for = "/*"
@@ -77,6 +82,19 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/avif"
+
+# Add Font caching for better performance
+[[headers]]
+  for = "*.woff2"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "font/woff2"
+
+[[headers]]
+  for = "*.woff"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "font/woff"
 
 [[redirects]]
   from = "/api/update-user-prefs"

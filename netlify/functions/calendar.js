@@ -34,7 +34,15 @@ function parseICal(icalData) {
 }
 
 exports.handler = async function (event, context) {
-    const { url } = event.queryStringParameters;
+    // Validate HTTP method
+    if (event.httpMethod !== 'GET') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: 'Method not allowed. Use GET.' }),
+        };
+    }
+
+    const { url } = event.queryStringParameters || {};
 
     if (!url) {
         return {
@@ -43,21 +51,70 @@ exports.handler = async function (event, context) {
         };
     }
 
+    // Validate URL format
+    let decodedUrl;
     try {
-        const response = await fetch(decodeURIComponent(url));
-        if (!response.ok) {
-            throw new Error(`Failed to fetch iCal feed with status: ${response.statusText}`);
+        decodedUrl = decodeURIComponent(url);
+        const urlObj = new URL(decodedUrl);
+        // Only allow http and https protocols for security
+        if (!['http:', 'https:'].includes(urlObj.protocol)) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: 'Invalid URL protocol. Only HTTP and HTTPS are allowed.' }),
+            };
         }
+    } catch (urlError) {
+        return {
+            statusCode: 400,
+            body: JSON.stringify({ error: 'Invalid URL format.' }),
+        };
+    }
+
+    try {
+        // Add timeout to prevent hanging requests
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(decodedUrl, {
+            signal: controller.signal,
+            headers: {
+                'User-Agent': 'Netlify-Calendar-Proxy/1.0'
+            }
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch iCal feed with status: ${response.status} ${response.statusText}`);
+        }
+
         const icalData = await response.text();
+
+        // Validate that we received some data
+        if (!icalData || icalData.trim().length === 0) {
+            throw new Error('Received empty iCal data');
+        }
+
         const busyTimes = parseICal(icalData);
 
         return {
             statusCode: 200,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'public, max-age=300' // Cache for 5 minutes
+            },
             body: JSON.stringify(busyTimes),
         };
     } catch (error) {
         console.error('iCal fetch/parse error:', error);
+
+        // Handle specific error types
+        if (error.name === 'AbortError') {
+            return {
+                statusCode: 504,
+                body: JSON.stringify({ error: 'Request timeout while fetching calendar data.' }),
+            };
+        }
+
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Failed to process calendar data.' }),

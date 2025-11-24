@@ -151,8 +151,32 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         }
     }
     if (recordsToRender.length === 0 && !append) {
-        log('UI', "No records to render, displaying 'No items to show.'");
-        catalogContainer.innerHTML = "<p style='text-align: center;'>No items to show.</p>";
+        log('UI', "No records to render, displaying empty state message.");
+
+        // Check if filters are active
+        const hasActiveFilters = state.ui.selectedCategory !== 'all' ||
+                                 state.ui.activeSubcategories.size > 0 ||
+                                 state.ui.nameFilter ||
+                                 state.ui.selectedDateRange.start;
+
+        let emptyMessage = '';
+        if (hasActiveFilters) {
+            emptyMessage = `
+                <div style='text-align: center; padding: 40px 20px; color: #6c757d;'>
+                    <p style='font-size: 1.2em; margin-bottom: 10px;'>No items match your filters</p>
+                    <p>Try adjusting your search criteria or filters to see more results.</p>
+                </div>
+            `;
+        } else {
+            emptyMessage = `
+                <div style='text-align: center; padding: 40px 20px; color: #6c757d;'>
+                    <p style='font-size: 1.2em; margin-bottom: 10px;'>No items available</p>
+                    <p>Check back soon for new event options!</p>
+                </div>
+            `;
+        }
+
+        catalogContainer.innerHTML = emptyMessage;
         if (loadingMessage) {
             loadingMessage.style.display = 'none';
         }

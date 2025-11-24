@@ -160,9 +160,15 @@ async function initialize() {
 
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error loading catalog: ${error.message}. Please refresh.</p>`;
-        ui.toggleLoading(true); 
-        return; 
+        document.getElementById('loading-message').innerHTML = `
+            <div style='color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 20px; text-align: center; max-width: 500px; margin: 0 auto;'>
+                <p style='margin: 0 0 15px 0; font-weight: bold;'>Unable to Load Catalog</p>
+                <p style='margin: 0 0 15px 0;'>We couldn't connect to load the event catalog. Please check your internet connection and try again.</p>
+                <button onclick="window.location.reload()" style='background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;'>Retry</button>
+            </div>
+        `;
+        ui.toggleLoading(true);
+        return;
     }
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -454,7 +460,14 @@ async function initialize() {
 
     } else {
         console.error("CRITICAL: Could not determine an active shop. Catalog cannot be displayed.");
-        document.getElementById('loading-message').innerHTML = `<p style='color:red;'>Error: Could not find a valid shop to display. Please check configuration.</p>`;
+        document.getElementById('loading-message').innerHTML = `
+            <div style='color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 20px; text-align: center; max-width: 500px; margin: 0 auto;'>
+                <p style='margin: 0 0 15px 0; font-weight: bold;'>Shop Not Found</p>
+                <p style='margin: 0 0 15px 0;'>We couldn't find a valid event shop to display. Please contact support or try again.</p>
+                <button onclick="window.location.href='/'" style='background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px;'>Go Home</button>
+                <button onclick="window.location.reload()" style='background-color: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px;'>Retry</button>
+            </div>
+        `;
         ui.toggleLoading(true); 
     }
 }

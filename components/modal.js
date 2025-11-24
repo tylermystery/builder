@@ -472,8 +472,25 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     if (linkedSession && linkedSession.fields) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
 
-        // Parse session history to get component items
-        const sessionHistory = linkedSession.fields.History ? JSON.parse(linkedSession.fields.History) : [];
+        // Parse session data to get locked items (components)
+        let sessionHistory = [];
+        if (linkedSession.fields['Items with Variations']) {
+            try {
+                const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
+                const lockedInItems = sessionData.lockedInItems || {};
+                // Convert locked items to history format
+                sessionHistory = Object.entries(lockedInItems).map(([id, itemInfo]) => ({
+                    id: id,
+                    quantity: itemInfo.quantity || 1,
+                    selectedOptionIndex: itemInfo.selectedOptionIndex,
+                    note: itemInfo.note,
+                    overridePrice: itemInfo.overridePrice
+                }));
+            } catch (e) {
+                console.warn('Could not parse Items with Variations for session:', linkedSessionId, e);
+                sessionHistory = [];
+            }
+        }
         const componentIds = sessionHistory.map(item => item.id).filter(id => id);
 
         if (componentIds.length > 0) {

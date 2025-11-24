@@ -237,10 +237,23 @@ async function handlePaymentFormSubmit(event) {
 
         if (error) {
             if (error.type === "card_error" || error.type === "validation_error") {
-                throw new Error(error.message);
+                // Translate common Stripe errors to user-friendly messages
+                let userMessage = error.message;
+                if (error.code === 'card_declined') {
+                    userMessage = "Your card was declined. Please try another payment method.";
+                } else if (error.code === 'insufficient_funds') {
+                    userMessage = "Insufficient funds. Please use a different card.";
+                } else if (error.code === 'expired_card') {
+                    userMessage = "Your card has expired. Please use a different card.";
+                } else if (error.code === 'incorrect_cvc') {
+                    userMessage = "The security code (CVC) is incorrect. Please check and try again.";
+                } else if (error.code === 'processing_error') {
+                    userMessage = "An error occurred while processing your card. Please try again.";
+                }
+                throw new Error(userMessage);
             } else {
                 console.error('Stripe confirmPayment error:', error);
-                throw new Error("An unexpected error occurred during payment. Please try again.");
+                throw new Error("An unexpected error occurred during payment. Please try again or contact support.");
             }
         }
 
