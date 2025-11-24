@@ -595,9 +595,23 @@ export async function saveSessionToAirtable() {
     }
     console.log('[SAVE DEBUG] ====================================================');
 
+    // Create History array from locked items for display in detail modal
+    const historyArray = [];
+    for (const [itemId, itemInfo] of state.cart.lockedItems.entries()) {
+        historyArray.push({
+            id: itemId,
+            quantity: itemInfo.quantity || 1,
+            selectedOptionIndex: itemInfo.selectedOptionIndex,
+            note: itemInfo.note,
+            overridePrice: itemInfo.overridePrice
+        });
+    }
+    console.log('[SAVE DEBUG] Created History array with', historyArray.length, 'locked items');
+
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData, null, 2),
+        "History": JSON.stringify(historyArray),
         "Collaborators": validCollaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
