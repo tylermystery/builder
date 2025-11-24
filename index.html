@@ -501,9 +501,8 @@ body.modal-open {
                </div>
             </div>
 
-            <!-- Right Section: Calendar, Background Settings, and Account -->
+            <!-- Right Section: Calendar and Account -->
             <div id="header-right">
-                <button id="bg-settings-trigger" class="header-icon-btn" title="Background Settings" aria-label="Open background settings" style="position: relative;">🎨</button>
                 <button id="calendar-view-btn" title="View Upcoming Events" aria-label="View upcoming events calendar">📅</button>
                 <button id="user-profile-button" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
             </div>
@@ -996,7 +995,15 @@ body.modal-open {
                                 <option value="None">Off</option>
                             </select>
                         </div>
-                        
+
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+
+                        <div class="form-row">
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Background Animation</label>
+                            <button id="bg-settings-trigger" class="primary-action-btn" type="button" style="background-color: #6c757d; width: 100%;">🎨 Background Settings</button>
+                            <p style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">Customize the animated background effects</p>
+                        </div>
+
                         <button class="primary-action-btn" type="submit" style="margin-top: 15px;">Save Preferences</button>
                         <p id="prefs-message" style="margin-top: 10px; min-height: 1em;"></p>
                         <a href="#" id="owner-dashboard-link" class="primary-action-btn" style="display: none; margin-top: 15px; text-align: center; text-decoration: none; background-color: #555;">Store Dashboard</a>
