@@ -5,30 +5,31 @@ const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b48
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const SESSIONS_TABLE = 'Sessions';
 const MESSAGES_TABLE = 'Messages';
-const CATALOG_TABLE = 'tblUA4uuS8IYlhKpD'; 
+const CATALOG_TABLE = 'tblUA4uuS8IYlhKpD';
 const TEAMMATES_TABLE = 'Teammates';
 const PUSHER_KEY = '236f480714e5001590b5';
 const PUSHER_CLUSTER = 'us3';
 const ARCHIVE_STORAGE_KEY = 'tmt-archived-sessions';
+const MODULE_STATE_KEY = 'tmt-active-modules';
 
 // --- State ---
 let currentlySelectedSessionId = null;
 let allSessions = [];
 let allMessages = [];
 let allCatalogItems = [];
-let allTeammates = []; // <-- Made this global for the search
+let allTeammates = [];
 let sessionMap = new Map();
 let catalogMap = new Map();
 let archivedSessionIds = new Set();
 let unreadArchivedSessions = new Set();
 let pusherChannelMap = new Map();
-let pendingNewItemData = null; // Store parsed data for confirmation
+let pendingNewItemData = null;
+let activeModules = new Set(['sessions', 'feed']); // Default active modules
 
 // --- DOM Elements ---
 const loadingIndicator = document.getElementById('loading');
 const sessionListContainer = document.getElementById('session-list');
 const archiveListContainer = document.getElementById('archive-list');
-const archivePane = document.getElementById('archive-pane');
 const activityFeed = document.getElementById('activity-feed');
 const planView = document.getElementById('plan-view');
 const planViewPlaceholder = document.getElementById('plan-view-placeholder');
@@ -37,11 +38,76 @@ const chatPlaceholder = document.getElementById('chat-placeholder');
 const chatMessagesContainer = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
-// --- NEW OMNI-SEARCH DOM ELEMENTS ---
 const omniSearchForm = document.getElementById('omni-search-form');
 const omniSearchInput = document.getElementById('omni-search-input');
 const omniSearchBtn = document.getElementById('omni-search-btn');
 const omniSearchResults = document.getElementById('omni-search-results');
+const modulesGrid = document.querySelector('.modules-grid');
+
+// --- Module Management Functions ---
+function loadModuleState() {
+    const stored = localStorage.getItem(MODULE_STATE_KEY);
+    if (stored) {
+        activeModules = new Set(JSON.parse(stored));
+    }
+}
+
+function saveModuleState() {
+    localStorage.setItem(MODULE_STATE_KEY, JSON.stringify(Array.from(activeModules)));
+}
+
+function updateModuleVisibility() {
+    const moduleToggleButtons = document.querySelectorAll('.module-toggle');
+
+    // Update button states
+    moduleToggleButtons.forEach(btn => {
+        const moduleName = btn.dataset.module;
+        if (activeModules.has(moduleName)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update panel visibility
+    const allPanels = document.querySelectorAll('.panel');
+    allPanels.forEach(panel => {
+        const moduleName = panel.id.replace('module-', '');
+        if (activeModules.has(moduleName)) {
+            panel.classList.add('visible');
+        } else {
+            panel.classList.remove('visible');
+        }
+    });
+
+    // Update grid columns based on active module count
+    const activeCount = activeModules.size;
+    modulesGrid.className = 'modules-grid';
+    if (activeCount === 1) modulesGrid.classList.add('cols-1');
+    else if (activeCount === 2) modulesGrid.classList.add('cols-2');
+    else if (activeCount === 3) modulesGrid.classList.add('cols-3');
+    else if (activeCount === 4) modulesGrid.classList.add('cols-4');
+    else modulesGrid.classList.add('cols-5');
+}
+
+function toggleModule(moduleName) {
+    if (activeModules.has(moduleName)) {
+        activeModules.delete(moduleName);
+    } else {
+        activeModules.add(moduleName);
+    }
+    saveModuleState();
+    updateModuleVisibility();
+}
+
+function setupModuleToggles() {
+    const moduleToggleButtons = document.querySelectorAll('.module-toggle');
+    moduleToggleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            toggleModule(btn.dataset.module);
+        });
+    });
+}
 
 
 // --- Airtable & Storage ---
@@ -266,9 +332,34 @@ function renderOmniSearchResults(results) {
         console.log('[DEBUG] Found catalog item:', item.fields.Name);
         html += `<h5>✅ Found Catalog Item: ${item.fields.Name}</h5>`;
         html += `<pre>ID: ${item.id}</pre>`;
-        // Note: Image/Message data isn't pre-loaded in crm.js, so we can't show it here in the MVP
-        // We'll add a note for the admin.
-        html += `<p style="font-size: 0.8em; color: #666;"><i>Full item details, photos, and item-specific messages are visible on the main catalog page.</i></p>`;
+
+        // Show current item details
+        html += `<div style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin: 10px 0;">`;
+        html += `<p style="margin: 5px 0;"><strong>Description:</strong> ${item.fields.Description || 'N/A'}</p>`;
+        html += `<p style="margin: 5px 0;"><strong>Price:</strong> $${item.fields.Price || 0}</p>`;
+        html += `<p style="margin: 5px 0;"><strong>Service Type:</strong> ${item.fields['Service Type'] || 'N/A'}</p>`;
+        html += `</div>`;
+
+        // Add Global Parse button
+        html += `<button
+            id="global-parse-btn"
+            data-item-id="${item.id}"
+            data-item-name="${item.fields.Name}"
+            style="
+                width: 100%;
+                padding: 12px;
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                margin-top: 10px;
+            ">
+            🌐 Global Parse - Compare with Internet Data
+        </button>`;
+
+        html += `<p style="font-size: 0.8em; color: #666; margin-top: 10px;"><i>Click "Global Parse" to fetch current information from the internet and compare with this item's data.</i></p>`;
     }
 
     if (session) {
@@ -297,6 +388,77 @@ function renderOmniSearchResults(results) {
 
     omniSearchResults.innerHTML = html;
     console.log('[DEBUG] Rendered search results');
+
+    // Attach event listener to Global Parse button if it exists
+    const globalParseBtn = document.getElementById('global-parse-btn');
+    if (globalParseBtn) {
+        globalParseBtn.addEventListener('click', async () => {
+            const itemId = globalParseBtn.dataset.itemId;
+            const itemName = globalParseBtn.dataset.itemName;
+            console.log('[DEBUG] Global Parse clicked for item:', itemId, itemName);
+
+            // Show loading state
+            globalParseBtn.disabled = true;
+            globalParseBtn.textContent = 'Fetching data from internet...';
+
+            try {
+                // Get the full item data
+                const fullItem = allCatalogItems.find(i => i.id === itemId);
+                if (!fullItem) {
+                    throw new Error('Item not found in local data');
+                }
+
+                // Extract search terms from AI_Profile if available
+                let searchTerms = [];
+                if (fullItem.fields.AI_Profile) {
+                    try {
+                        const profile = JSON.parse(fullItem.fields.AI_Profile);
+                        searchTerms = profile.SearchTerms || [];
+                    } catch (e) {
+                        console.warn('[DEBUG] Could not parse AI_Profile');
+                    }
+                }
+
+                // Prepare existing item data
+                const existingItemData = {
+                    Name: fullItem.fields.Name,
+                    Description: fullItem.fields.Description,
+                    Price: fullItem.fields.Price,
+                    ServiceType: fullItem.fields['Service Type'],
+                    SearchTerms: searchTerms
+                };
+
+                // Call parser with existing item data
+                const parseResponse = await fetch('/api/process-weblink', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: itemName,
+                        existingItem: existingItemData
+                    })
+                });
+
+                if (!parseResponse.ok) {
+                    const errorText = await parseResponse.text();
+                    throw new Error(`Parser failed: ${errorText}`);
+                }
+
+                const parsedData = await parseResponse.json();
+                console.log('[DEBUG] Parsed data from internet:', parsedData);
+
+                // Open comparison modal with both existing and parsed data
+                openComparisonModalForExisting(fullItem, parsedData);
+
+                globalParseBtn.textContent = '✅ Data Fetched - See Comparison';
+            } catch (error) {
+                console.error('[DEBUG] Global Parse error:', error);
+                globalParseBtn.textContent = '❌ Error - Try Again';
+                globalParseBtn.disabled = false;
+                alert(`Error fetching data: ${error.message}`);
+            }
+        });
+    }
+
     return true; // Signal that results were found
 }
 
@@ -313,11 +475,21 @@ function openComparisonModal(itemData) {
     tableBody.innerHTML = '';
 
     // Create editable rows for each field
-    const fields = ['Name', 'Description', 'Price', 'ServiceType', 'SearchTerms'];
+    const fields = ['Name', 'Description', 'Price', 'ServiceType', 'SearchTerms', 'Rankings', 'Profile'];
     fields.forEach(field => {
         const row = document.createElement('tr');
         const value = itemData[field];
-        const displayValue = Array.isArray(value) ? value.join(', ') : value;
+        let displayValue;
+
+        if (field === 'Rankings' && value && typeof value === 'object') {
+            // Format Rankings as a readable string
+            displayValue = JSON.stringify(value, null, 2);
+        } else if (field === 'Profile' && value && typeof value === 'object') {
+            // Format Profile as a readable string
+            displayValue = JSON.stringify(value, null, 2);
+        } else {
+            displayValue = Array.isArray(value) ? value.join(', ') : value;
+        }
 
         row.innerHTML = `
             <td><strong>${field}</strong></td>
@@ -326,6 +498,10 @@ function openComparisonModal(itemData) {
                     ? `<textarea id="edit-${field}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${displayValue || ''}</textarea>`
                     : field === 'SearchTerms'
                     ? `<textarea id="edit-${field}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${displayValue || ''}</textarea>`
+                    : field === 'Rankings'
+                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"google": 4.5, "yelp": 4.0, ...}'>${displayValue || ''}</textarea>`
+                    : field === 'Profile'
+                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"activityLevel": 5, "indoorOutdoor": 5, ...}'>${displayValue || ''}</textarea>`
                     : `<input type="text" id="edit-${field}" value="${displayValue || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`
                 }
             </td>
@@ -338,13 +514,290 @@ function openComparisonModal(itemData) {
 }
 
 /**
+ * Opens the comparison modal for an existing item with parsed data comparison
+ * @param {object} existingItem - The existing Airtable item record
+ * @param {object} parsedData - The parsed item data from weblink parser
+ */
+function openComparisonModalForExisting(existingItem, parsedData) {
+    console.log('[DEBUG] Opening comparison modal for existing item with parsed data');
+    pendingNewItemData = {
+        mode: 'update',
+        existingItem: existingItem,
+        parsedData: parsedData
+    };
+
+    // Update modal header
+    const modalHeader = document.querySelector('.comparison-header h2');
+    modalHeader.textContent = 'Compare Current vs Parsed Data';
+
+    // Show mode indicator
+    const modeIndicator = document.getElementById('comparison-mode-indicator');
+    const modeText = document.getElementById('comparison-mode-text');
+    modeIndicator.style.display = 'block';
+    modeText.textContent = `Updating Existing Item: ${existingItem.fields.Name}`;
+
+    // Update table header
+    const tableHeader = document.getElementById('comparison-table-header');
+    tableHeader.innerHTML = `
+        <tr>
+            <th>Field</th>
+            <th>Current Value</th>
+            <th>Parsed Value (from Internet)</th>
+        </tr>
+    `;
+
+    const tableBody = document.getElementById('comparison-table-body');
+    tableBody.innerHTML = '';
+
+    // Extract search terms from AI_Profile if available
+    let existingSearchTerms = [];
+    if (existingItem.fields.AI_Profile) {
+        try {
+            const profile = JSON.parse(existingItem.fields.AI_Profile);
+            existingSearchTerms = profile.SearchTerms || [];
+        } catch (e) {
+            console.warn('[DEBUG] Could not parse AI_Profile');
+        }
+    }
+
+    // Extract existing Rankings if available
+    let existingRankings = null;
+    if (existingItem.fields.Rankings) {
+        try {
+            existingRankings = typeof existingItem.fields.Rankings === 'string'
+                ? JSON.parse(existingItem.fields.Rankings)
+                : existingItem.fields.Rankings;
+        } catch (e) {
+            console.warn('[DEBUG] Could not parse Rankings');
+        }
+    }
+
+    // Extract existing Profile if available
+    let existingProfile = null;
+    if (existingItem.fields.Profile) {
+        try {
+            existingProfile = typeof existingItem.fields.Profile === 'string'
+                ? JSON.parse(existingItem.fields.Profile)
+                : existingItem.fields.Profile;
+        } catch (e) {
+            console.warn('[DEBUG] Could not parse Profile');
+        }
+    }
+
+    // Create comparison rows for each field
+    const fields = [
+        { key: 'Name', label: 'Name', existingKey: 'Name' },
+        { key: 'Description', label: 'Description', existingKey: 'Description' },
+        { key: 'Price', label: 'Price', existingKey: 'Price' },
+        { key: 'ServiceType', label: 'Service Type', existingKey: 'Service Type' },
+        { key: 'SearchTerms', label: 'Search Terms', existingKey: null, customExisting: existingSearchTerms },
+        { key: 'Rankings', label: 'Rankings', existingKey: null, customExisting: existingRankings },
+        { key: 'Profile', label: 'Profile', existingKey: null, customExisting: existingProfile }
+    ];
+
+    fields.forEach(field => {
+        const row = document.createElement('tr');
+
+        // Get existing value
+        let existingValue = field.customExisting !== undefined
+            ? field.customExisting
+            : existingItem.fields[field.existingKey];
+
+        // Get parsed value
+        const parsedValue = parsedData[field.key];
+
+        // Format values for display
+        let existingDisplay, parsedDisplay;
+
+        if (field.key === 'Rankings' || field.key === 'Profile') {
+            existingDisplay = existingValue
+                ? (typeof existingValue === 'object' ? JSON.stringify(existingValue, null, 2) : existingValue)
+                : 'N/A';
+            parsedDisplay = parsedValue
+                ? (typeof parsedValue === 'object' ? JSON.stringify(parsedValue, null, 2) : parsedValue)
+                : 'N/A';
+        } else {
+            existingDisplay = Array.isArray(existingValue) ? existingValue.join(', ') : (existingValue || 'N/A');
+            parsedDisplay = Array.isArray(parsedValue) ? parsedValue.join(', ') : (parsedValue || 'N/A');
+        }
+
+        // Check if values differ
+        const isDifferent = JSON.stringify(existingValue) !== JSON.stringify(parsedValue);
+
+        row.innerHTML = `
+            <td><strong>${field.label}</strong></td>
+            <td class="${isDifferent ? 'existing-value' : 'value-unchanged'}">
+                ${field.key === 'Description'
+                    ? `<div style="max-height: 100px; overflow-y: auto;">${existingDisplay}</div>`
+                    : field.key === 'Rankings' || field.key === 'Profile'
+                    ? `<pre style="margin: 0; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 0.85em; max-height: 120px; overflow-y: auto;">${existingDisplay}</pre>`
+                    : existingDisplay}
+            </td>
+            <td class="${isDifferent ? 'parsed-value' : 'value-unchanged'}">
+                ${field.key === 'Description'
+                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${parsedDisplay}</textarea>`
+                    : field.key === 'SearchTerms'
+                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${parsedDisplay}</textarea>`
+                    : field.key === 'Rankings'
+                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"google": 4.5, ...}'>${parsedDisplay}</textarea>`
+                    : field.key === 'Profile'
+                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"activityLevel": 5, ...}'>${parsedDisplay}</textarea>`
+                    : `<input type="text" id="edit-${field.key}" value="${parsedDisplay}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`
+                }
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+
+    // Update the action buttons
+    const actionsDiv = document.querySelector('.comparison-actions');
+    actionsDiv.innerHTML = `
+        <button class="btn-cancel" onclick="closeComparisonModal()">Cancel</button>
+        <button class="btn-confirm" onclick="adoptParsedData()">Adopt Parsed Data</button>
+    `;
+
+    document.getElementById('comparison-modal').classList.add('active');
+    console.log('[DEBUG] Comparison modal opened for existing item');
+}
+
+/**
  * Closes the comparison modal
  */
 function closeComparisonModal() {
     console.log('[DEBUG] Closing comparison modal');
     document.getElementById('comparison-modal').classList.remove('active');
     document.getElementById('comparison-status').textContent = '';
+
+    // Reset modal state
+    const modalHeader = document.querySelector('.comparison-header h2');
+    modalHeader.textContent = 'Review New Item';
+
+    const modeIndicator = document.getElementById('comparison-mode-indicator');
+    modeIndicator.style.display = 'none';
+
+    const tableHeader = document.getElementById('comparison-table-header');
+    tableHeader.innerHTML = `
+        <tr>
+            <th>Field</th>
+            <th>AI-Suggested Value</th>
+        </tr>
+    `;
+
+    const actionsDiv = document.querySelector('.comparison-actions');
+    actionsDiv.innerHTML = `
+        <button class="btn-cancel" onclick="closeComparisonModal()">Cancel</button>
+        <button class="btn-confirm" onclick="confirmNewItem()">Confirm & Add to Catalog</button>
+    `;
+
     pendingNewItemData = null;
+}
+
+/**
+ * Adopts the parsed data and updates the existing item in Airtable
+ */
+async function adoptParsedData() {
+    console.log('[DEBUG] adoptParsedData called');
+
+    if (!pendingNewItemData || pendingNewItemData.mode !== 'update') {
+        console.error('[DEBUG] Invalid state for adoptParsedData');
+        return;
+    }
+
+    const statusDiv = document.getElementById('comparison-status');
+    statusDiv.textContent = 'Updating item in Airtable...';
+    statusDiv.style.color = '#3498db';
+
+    const { existingItem } = pendingNewItemData;
+
+    // Get edited values from the form
+    const updates = {
+        Name: document.getElementById('edit-Name').value.trim(),
+        Description: document.getElementById('edit-Description').value.trim(),
+        Price: parseFloat(document.getElementById('edit-Price').value) || 0,
+        ServiceType: document.getElementById('edit-ServiceType').value.trim(),
+        SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
+    };
+
+    // Handle Rankings if present
+    const rankingsTextarea = document.getElementById('edit-Rankings');
+    if (rankingsTextarea) {
+        const rankingsValue = rankingsTextarea.value.trim();
+        if (rankingsValue && rankingsValue !== 'N/A') {
+            try {
+                updates.Rankings = JSON.parse(rankingsValue);
+            } catch (e) {
+                console.warn('[DEBUG] Could not parse Rankings JSON, storing as string:', e);
+                updates.Rankings = rankingsValue;
+            }
+        }
+    }
+
+    // Handle Profile if present
+    const profileTextarea = document.getElementById('edit-Profile');
+    if (profileTextarea) {
+        const profileValue = profileTextarea.value.trim();
+        if (profileValue && profileValue !== 'N/A') {
+            try {
+                updates.Profile = JSON.parse(profileValue);
+            } catch (e) {
+                console.warn('[DEBUG] Could not parse Profile JSON, storing as string:', e);
+                updates.Profile = profileValue;
+            }
+        }
+    }
+
+    console.log('[DEBUG] Updates to apply:', updates);
+
+    // Disable adopt button
+    const adoptBtn = document.querySelector('.btn-confirm');
+    if (adoptBtn) {
+        adoptBtn.disabled = true;
+    }
+
+    try {
+        // Call the update-catalog-item function
+        const response = await fetch('/api/update-catalog-item', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recordId: existingItem.id,
+                updates: updates
+            })
+        });
+
+        console.log('[DEBUG] Update item response status:', response.status);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[DEBUG] Update item error:', errorText);
+            throw new Error(`Failed to update item: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('[DEBUG] Update item result:', result);
+
+        statusDiv.textContent = `✅ Item updated successfully!`;
+        statusDiv.style.color = '#28a745';
+
+        // Close modal after 2 seconds
+        setTimeout(() => {
+            closeComparisonModal();
+            // Refresh catalog items
+            fetchAirtableData(CATALOG_TABLE).then(data => {
+                allCatalogItems = data;
+                catalogMap = new Map(allCatalogItems.map(item => [item.id, item]));
+                console.log('[DEBUG] Catalog refreshed');
+            });
+        }, 2000);
+
+    } catch (error) {
+        console.error('[DEBUG] Error updating item:', error);
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        statusDiv.style.color = '#dc3545';
+        if (adoptBtn) {
+            adoptBtn.disabled = false;
+        }
+    }
 }
 
 /**
@@ -364,6 +817,34 @@ async function confirmNewItem(event) {
         ServiceType: document.getElementById('edit-ServiceType').value.trim(),
         SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
     };
+
+    // Handle Rankings if present
+    const rankingsTextarea = document.getElementById('edit-Rankings');
+    if (rankingsTextarea) {
+        const rankingsValue = rankingsTextarea.value.trim();
+        if (rankingsValue) {
+            try {
+                editedData.Rankings = JSON.parse(rankingsValue);
+            } catch (e) {
+                console.warn('[DEBUG] Could not parse Rankings JSON, storing as string:', e);
+                editedData.Rankings = rankingsValue;
+            }
+        }
+    }
+
+    // Handle Profile if present
+    const profileTextarea = document.getElementById('edit-Profile');
+    if (profileTextarea) {
+        const profileValue = profileTextarea.value.trim();
+        if (profileValue) {
+            try {
+                editedData.Profile = JSON.parse(profileValue);
+            } catch (e) {
+                console.warn('[DEBUG] Could not parse Profile JSON, storing as string:', e);
+                editedData.Profile = profileValue;
+            }
+        }
+    }
 
     console.log('[DEBUG] Edited data:', editedData);
 
@@ -445,6 +926,7 @@ async function confirmNewItem(event) {
 // Make functions globally available
 window.closeComparisonModal = closeComparisonModal;
 window.confirmNewItem = confirmNewItem;
+window.adoptParsedData = adoptParsedData;
 
 // --- NEW OMNI-SEARCH HANDLER ---
 /**
@@ -562,7 +1044,9 @@ function setupDragAndDrop() {
 
 async function initializeDashboard() {
     loadArchivedState();
-    
+    loadModuleState();
+    updateModuleVisibility();
+
     try {
         const [allSessionsData, allMessagesData, allCatalogItemsData, allTeammatesData] = await Promise.all([
             fetchAirtableData(SESSIONS_TABLE),
@@ -575,14 +1059,14 @@ async function initializeDashboard() {
         allSessions = allSessionsData;
         allMessages = allMessagesData;
         allCatalogItems = allCatalogItemsData;
-        allTeammates = allTeammatesData; // Now globally accessible
+        allTeammates = allTeammatesData;
 
         loadingIndicator.style.display = 'none';
 
         sessionMap = new Map(allSessions.map(s => [s.id, s.fields.Name]));
         catalogMap = new Map(allCatalogItems.map(item => [item.id, item]));
         allMessages.sort((a, b) => new Date(b.fields.Timestamp) - new Date(a.fields.Timestamp));
-        
+
         activityFeed.innerHTML = '';
         allMessages.forEach(message => {
             if (message.fields.SessionID && message.fields.SessionID[0]) {
@@ -590,14 +1074,14 @@ async function initializeDashboard() {
                 renderActivityItem(message, sessionName);
             }
         });
-        
+
         renderSessionLists();
         setupPusher();
         setupDragAndDrop();
+        setupModuleToggles();
 
-        const teammateListContainer = document.createElement('div');
-        teammateListContainer.innerHTML = '<h2 style="margin-top: 30px;">Teammates</h2>';
-        
+        const teammateListContainer = document.getElementById('teammates-list');
+
         allTeammates.forEach(tm => {
             const link = document.createElement('a');
             link.href = `/teammate.html?id=${tm.id}`;
@@ -605,18 +1089,16 @@ async function initializeDashboard() {
             link.className = 'session-list-item';
             teammateListContainer.appendChild(link);
         });
-        
-        document.querySelector('.sessions-pane').appendChild(teammateListContainer);
 
     } catch (e) {
         console.error("Catastrophic error during Dashboard Initialization:", e);
         loadingIndicator.textContent = `CRITICAL ERROR: Failed to load data from Airtable (${e.message}). Please check API keys or table configuration.`;
         loadingIndicator.style.color = '#dc3545';
-        return; 
+        return;
     }
 
     // --- Attach All Event Listeners ---
-    
+
     document.body.addEventListener('click', (e) => {
         const sessionItem = e.target.closest('.session-list-item, .feed-item');
         if (sessionItem) {
@@ -651,10 +1133,6 @@ async function initializeDashboard() {
                 });
             }
         }
-    });
-
-    document.getElementById('archive-toggle').addEventListener('click', () => {
-        archivePane.classList.toggle('expanded');
     });
 
     // --- AI QA TESTER LISTENER (Restored) ---
@@ -699,18 +1177,17 @@ async function initializeDashboard() {
             }
         });
     }
-    
+
     // --- NEW OMNI-SEARCH LISTENER ---
     if (omniSearchForm) {
         omniSearchForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-Storage
             const query = omniSearchInput.value.trim();
             if (!query) return;
-            
+
             omniSearchBtn.disabled = true;
             omniSearchResults.innerHTML = `<p style="color: #3498db; text-align: center;">Searching local data for "${query}"...</p>`;
-            
+
             // Use a try/finally to ensure button is re-enabled
             try {
                 await handleOmniSearch(query);
