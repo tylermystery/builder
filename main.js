@@ -318,12 +318,24 @@ async function initialize() {
         if (jwt) {
             try {
                 const payload = JSON.parse(atob(jwt.split('.')[1]));
-                if (payload.exp * 1000 > Date.now()) { 
+                if (payload.exp * 1000 > Date.now()) {
                     setState({
-                        session: { ...state.session, user: { ...state.session.user, isAuthenticated: true, id: payload.userId, name: payload.name, email: payload.email, isOwner: payload.isOwner } }
+                        session: {
+                            ...state.session,
+                            user: {
+                                ...state.session.user,
+                                isAuthenticated: true,
+                                id: payload.userId,
+                                name: payload.name,
+                                email: payload.email,
+                                isOwner: payload.isOwner,
+                                ownedStoreId: payload.ownedStoreId || null,
+                                ownerDashboardId: payload.ownerDashboardId || null
+                            }
+                        }
                     });
                     initialUserId = payload.userId;
-                    log('Main', `User authenticated via existing JWT: ${initialUserId}`);
+                    log('Main', `User authenticated via existing JWT: ${initialUserId}, isOwner: ${payload.isOwner}, ownedStoreId: ${payload.ownedStoreId}`);
                 } else {
                     localStorage.removeItem('jwt');
                     log('Main', 'Existing JWT expired.');

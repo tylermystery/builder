@@ -21,10 +21,25 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
     if (!userId) {
         return [];
     }
-    // Assuming 'Collaborators' field directly links to Users table
-    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+
+    // Check if user is a store owner
+    const isStoreOwner = state.session.user.isOwner;
+    const ownedStoreId = state.session.user.ownedStoreId;
+
+    let formula;
+    if (isStoreOwner && ownedStoreId) {
+        // If user is a store owner, fetch plans where:
+        // 1. User is a collaborator OR
+        // 2. Plan belongs to their store
+        formula = `OR(FIND('${userId}', ARRAYJOIN({Collaborators})), FIND('${ownedStoreId}', ARRAYJOIN({Stores})))`;
+        log('API', `Fetching plans for store owner: collaborator plans + store plans (Store ID: ${ownedStoreId})`);
+    } else {
+        // Regular user: only fetch plans where they are a collaborator
+        formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+        log('API', `Fetching plans for regular user: collaborator plans only`);
+    }
+
     const encodedFormula = encodeURIComponent(formula);
-    // Fetch sessions where the user is a collaborator
     let url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
 
     if (!includeFullDetails) {
@@ -341,12 +356,23 @@ export async function loadSessionFromAirtable(sessionId) {
         state.session.isOwned = (record.fields.Collaborators || []).includes(state.session.user.id);
         log('API', `Session ownership for current user (${state.session.user.id}): ${state.session.isOwned}`);
 
-        // Access control: prevent unauthenticated or non-collaborator users from accessing sessions
+        // Check if user is a store owner who owns this plan's store
+        const isStoreOwner = state.session.user.isOwner;
+        const ownedStoreId = state.session.user.ownedStoreId;
+        const planStoreId = state.session.storeId;
+        const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
+
+        if (isOwnerOfPlanStore) {
+            log('API', `Store owner access granted: User owns store ${ownedStoreId} which contains this plan`);
+        }
+
+        // Access control: prevent unauthenticated users or users who are neither collaborators nor store owners from accessing sessions
         const isAuthenticated = state.session.user.isAuthenticated;
         const isCollaborator = state.session.isOwned;
+        const hasAccess = isCollaborator || isOwnerOfPlanStore;
 
-        if (!isAuthenticated || !isCollaborator) {
-            log('API', `Access denied: User is ${!isAuthenticated ? 'not authenticated' : 'not a collaborator'} for session ${sessionId}`);
+        if (!isAuthenticated || !hasAccess) {
+            log('API', `Access denied: User is ${!isAuthenticated ? 'not authenticated' : 'neither a collaborator nor the store owner'} for session ${sessionId}`);
 
             // Clear the session from URL
             const url = new URL(window.location);
@@ -358,8 +384,8 @@ export async function loadSessionFromAirtable(sessionId) {
                 const { showUserModal } = await import('./auth.js');
                 showUserModal();
             } else {
-                // User is authenticated but not a collaborator
-                alert('You must be a collaborator to access this plan.');
+                // User is authenticated but not a collaborator or store owner
+                alert('You must be a collaborator or the store owner to access this plan.');
             }
 
             // Reset session state
@@ -1430,6 +1456,12 @@ export async function fetchGhostItems(recordIds) {
  * @returns {Promise<Object>} The created or updated item record
  */
 export async function publishSessionAsEvent(sessionId, eventData) {
+    console.log('[PUBLISH DEBUG] ========== publishSessionAsEvent START ==========');
+    console.log('[PUBLISH DEBUG] sessionId:', sessionId);
+    console.log('[PUBLISH DEBUG] eventData received:', JSON.stringify(eventData, null, 2));
+    console.log('[PUBLISH DEBUG] eventData.Date value:', eventData.Date);
+    console.log('[PUBLISH DEBUG] eventData.Date type:', typeof eventData.Date);
+
     if (!sessionId) {
         throw new Error('Session ID is required to publish as event');
     }
@@ -1439,24 +1471,95 @@ export async function publishSessionAsEvent(sessionId, eventData) {
         throw new Error('Session not found');
     }
 
+    console.log('[PUBLISH DEBUG] Session fetched:', session.id);
+    console.log('[PUBLISH DEBUG] Session.fields.Date:', session.fields.Date);
+    console.log('[PUBLISH DEBUG] Session.fields.LinkedItem:', session.fields.LinkedItem);
+
     // Check if this session is already linked to an event
     const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
+
+    // Format the date properly for Airtable
+    // Items table Date field may be a DateTime type requiring full ISO 8601 format
+    // Sessions table Date field accepts YYYY-MM-DD format
+    let formattedDateOnly = null;  // YYYY-MM-DD format for simple date fields
+    let formattedDateTime = null;  // Full ISO 8601 for datetime fields
+    const dateValue = eventData.Date || session.fields.Date;
+    console.log('[PUBLISH DEBUG] Raw dateValue:', dateValue);
+    console.log('[PUBLISH DEBUG] dateValue type:', typeof dateValue);
+    console.log('[PUBLISH DEBUG] eventData.Date:', eventData.Date);
+    console.log('[PUBLISH DEBUG] session.fields.Date:', session.fields.Date);
+
+    if (dateValue) {
+        const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        console.log('[PUBLISH DEBUG] dateToFormat:', dateToFormat);
+        console.log('[PUBLISH DEBUG] dateToFormat type:', typeof dateToFormat);
+
+        // Check if it's already in YYYY-MM-DD format (no time component)
+        if (typeof dateToFormat === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateToFormat)) {
+            console.log('[PUBLISH DEBUG] Date is already in YYYY-MM-DD format');
+            formattedDateOnly = dateToFormat;
+            // Also create a full ISO datetime string for datetime fields
+            // Use noon UTC to avoid timezone issues
+            formattedDateTime = `${dateToFormat}T12:00:00.000Z`;
+        } else if (typeof dateToFormat === 'string' && dateToFormat.includes('T')) {
+            // It's already a full ISO datetime string
+            console.log('[PUBLISH DEBUG] Date is already in ISO datetime format');
+            formattedDateTime = dateToFormat;
+            formattedDateOnly = dateToFormat.split('T')[0];
+        } else {
+            // Parse and format the date
+            const dateObj = new Date(dateToFormat);
+            console.log('[PUBLISH DEBUG] dateObj:', dateObj);
+            console.log('[PUBLISH DEBUG] dateObj.toString():', dateObj.toString());
+            console.log('[PUBLISH DEBUG] Is valid date?', !isNaN(dateObj.getTime()));
+
+            if (!isNaN(dateObj.getTime())) {
+                // Create both formats
+                formattedDateTime = dateObj.toISOString();  // Full ISO 8601 with time
+                formattedDateOnly = formattedDateTime.split('T')[0]; // Date only YYYY-MM-DD
+                console.log('[PUBLISH DEBUG] Generated full ISO datetime:', formattedDateTime);
+                console.log('[PUBLISH DEBUG] Generated date-only format:', formattedDateOnly);
+            } else {
+                console.log('[PUBLISH DEBUG] Invalid date detected, both formats will remain null');
+            }
+        }
+    } else {
+        console.log('[PUBLISH DEBUG] No dateValue found');
+    }
+    console.log('[PUBLISH DEBUG] Final formattedDateOnly:', formattedDateOnly);
+    console.log('[PUBLISH DEBUG] Final formattedDateTime:', formattedDateTime);
 
     const itemFields = {
         'Name': eventData.Name || session.fields.Name || 'Untitled Event',
         'Description': eventData.Description || session.fields.Goals || '',
         'Item Type': 'Event',
         'Status': 'Available',
-        'Date': eventData.Date || session.fields.Date || null,
         'LinkedSession': [sessionId], // Link back to the session
         'Goals': eventData.Goals || session.fields.Goals || null,
         'Guest Count': eventData.GuestCount || session.fields['Guest Count'] || null,
     };
 
+    // Airtable Date fields (not DateTime fields) require YYYY-MM-DD format only
+    // The Items table Date field appears to be a Date field, not DateTime
+    console.log('[PUBLISH DEBUG] ========== DATE FIELD STRATEGY ==========');
+    console.log('[PUBLISH DEBUG] Will send date in YYYY-MM-DD format (Date field, not DateTime)');
+
+    if (formattedDateOnly) {
+        // Send ONLY the date portion (YYYY-MM-DD) for Airtable Date fields
+        itemFields['Date'] = formattedDateOnly;
+        console.log('[PUBLISH DEBUG] Added "Date" field with date-only format:', formattedDateOnly);
+    } else {
+        console.log('[PUBLISH DEBUG] No valid date available, omitting Date field');
+    }
+
+    console.log('[PUBLISH DEBUG] ========================================');
+    console.log('[PUBLISH DEBUG] itemFields to send to Airtable:', JSON.stringify(itemFields, null, 2));
+
     let itemRecord;
 
     if (linkedItemId) {
         // Update existing event
+        console.log('[PUBLISH DEBUG] Updating existing event:', linkedItemId);
         const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${linkedItemId}`;
         const response = await fetch(url, {
             method: 'PATCH',
@@ -1469,6 +1572,8 @@ export async function publishSessionAsEvent(sessionId, eventData) {
 
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('[PUBLISH DEBUG] Update failed with status:', response.status);
+            console.error('[PUBLISH DEBUG] Error response:', errorText);
             throw new Error(`Failed to update event: ${errorText}`);
         }
 
@@ -1476,6 +1581,7 @@ export async function publishSessionAsEvent(sessionId, eventData) {
         log('API', `Updated event ${linkedItemId} from session ${sessionId}`);
     } else {
         // Create new event
+        console.log('[PUBLISH DEBUG] Creating new event');
         const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
         const response = await fetch(url, {
             method: 'POST',
@@ -1488,12 +1594,55 @@ export async function publishSessionAsEvent(sessionId, eventData) {
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Failed to create event: ${errorText}`);
+            console.error('[PUBLISH DEBUG] Create failed with status:', response.status);
+            console.error('[PUBLISH DEBUG] Error response:', errorText);
+            console.error('[PUBLISH DEBUG] Attempted fields:', JSON.stringify(itemFields, null, 2));
+
+            // Check if the error is specifically about the Date field
+            if (response.status === 422 && errorText.toLowerCase().includes('date')) {
+                console.warn('[PUBLISH DEBUG] ========== DATE FIELD REJECTION DETECTED ==========');
+                console.warn('[PUBLISH DEBUG] Date field was rejected by Airtable');
+                console.warn('[PUBLISH DEBUG] Original Date value sent:', itemFields['Date']);
+                console.warn('[PUBLISH DEBUG] Retrying without Date field...');
+
+                // Remove the Date field and try again
+                const itemFieldsWithoutDate = { ...itemFields };
+                delete itemFieldsWithoutDate['Date'];
+
+                console.log('[PUBLISH DEBUG] Retrying with fields:', JSON.stringify(itemFieldsWithoutDate, null, 2));
+
+                const retryResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fields: itemFieldsWithoutDate })
+                });
+
+                if (!retryResponse.ok) {
+                    const retryErrorText = await retryResponse.text();
+                    console.error('[PUBLISH DEBUG] Retry also failed:', retryErrorText);
+                    throw new Error(`Failed to create event even without Date field: ${retryErrorText}`);
+                }
+
+                itemRecord = await retryResponse.json();
+                console.warn('[PUBLISH DEBUG] ========== SUCCESS WITHOUT DATE ==========');
+                console.warn('[PUBLISH DEBUG] Successfully created event WITHOUT Date field');
+                console.warn('[PUBLISH DEBUG] Created event ID:', itemRecord.id);
+                console.warn('[PUBLISH DEBUG] Note: The Items table Date field may not exist, or requires a different format');
+                console.warn('[PUBLISH DEBUG] Consider checking the Airtable schema for the Date field configuration');
+                log('API', `Created event ${itemRecord.id} from session ${sessionId} (without date)`);
+            } else {
+                throw new Error(`Failed to create event: ${errorText}`);
+            }
+        } else {
+            itemRecord = await response.json();
+            console.log('[PUBLISH DEBUG] ========== SUCCESS WITH DATE ==========');
+            console.log('[PUBLISH DEBUG] Successfully created event WITH Date field');
+            console.log('[PUBLISH DEBUG] Created event ID:', itemRecord.id);
+            log('API', `Created event ${itemRecord.id} from session ${sessionId}`);
         }
-
-        itemRecord = await response.json();
-        log('API', `Created event ${itemRecord.id} from session ${sessionId}`);
-
         // Update session with link to new event
         const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
         await fetch(updateSessionUrl, {
@@ -1505,6 +1654,11 @@ export async function publishSessionAsEvent(sessionId, eventData) {
             body: JSON.stringify({ fields: { 'LinkedItem': [itemRecord.id] } })
         });
     }
+
+    console.log('[PUBLISH DEBUG] ========== publishSessionAsEvent COMPLETE ==========');
+    console.log('[PUBLISH DEBUG] Final event record ID:', itemRecord.id);
+    console.log('[PUBLISH DEBUG] Final event record fields:', Object.keys(itemRecord.fields || {}));
+    console.log('[PUBLISH DEBUG] Final event Date value:', itemRecord.fields?.Date);
 
     return itemRecord;
 }
@@ -1519,7 +1673,19 @@ export async function fetchSessionById(sessionId) {
         return null;
     }
 
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    // Explicitly request all fields we need, including Date
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Goals',
+        'Guest Count',
+        'Stores',
+        'Collaborators',
+        'Items with Variations',
+        'LinkedItem'
+    ].map(field => `fields[]=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}?${fieldsQuery}`;
 
     try {
         const response = await fetch(url, {
@@ -1533,6 +1699,10 @@ export async function fetchSessionById(sessionId) {
         }
 
         const data = await response.json();
+        console.log('[FETCH SESSION DEBUG] Fetched session:', sessionId);
+        console.log('[FETCH SESSION DEBUG] Session.fields keys:', Object.keys(data.fields || {}));
+        console.log('[FETCH SESSION DEBUG] Session.fields.Date:', data.fields?.Date);
+        console.log('[FETCH SESSION DEBUG] Session.fields.Name:', data.fields?.Name);
         return data;
     } catch (error) {
         console.error("Error fetching session:", error);

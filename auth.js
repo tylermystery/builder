@@ -87,6 +87,7 @@ async function _handleSuccessfulLogin(payload) {
                 isAuthenticated: true,
                 isOwner: payload.ownerData.isOwner,
                 ownerDashboardId: payload.ownerData.ownerDashboardId,
+                ownedStoreId: payload.ownerData.ownedStoreId,
                 likedItemIds: new Set(initialLikedItemIdsFromPayload)
             }
         }

@@ -51,13 +51,14 @@ export let state = {
             rsvps: new Set(),
             isOwner: false,
             ownerDashboardId: null,
+            ownedStoreId: null,
             likedItemIds: new Set(), // ADDED: Stores persistent liked item IDs
         },
         userProfiles: new Map(),
         reactions: new Map(),
         flaggedUsers: new Set(),
         bannedUsers: new Set(),
-        
+
         // --- THIS IS THE NEW LINE ---
         itemPositions: new Map(), // Stores { x: 120, y: 50, z: 1 } for each recordId
         // --- END NEW LINE ---

@@ -181,7 +181,7 @@ function createEventCard(event, compact = false) {
             card.classList.add('locked');
         }
 
-        card.addEventListener('click', (e) => {
+        card.addEventListener('click', async (e) => {
             log('Calendar', `Session card clicked: ${event.name}`);
 
             // Prevent access to locked sessions
@@ -199,9 +199,28 @@ function createEventCard(event, compact = false) {
                 return;
             }
 
-            // Load the session instead of showing detail modal
+            // Load the session dynamically without page refresh
             if (event.recordId) {
-                window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+                log('Calendar', `Loading session ${event.recordId} dynamically...`);
+                try {
+                    // Close the calendar modal
+                    hideCalendarModal();
+
+                    // Update URL without refresh
+                    const newUrl = new URL(window.location);
+                    newUrl.searchParams.set('session', event.recordId);
+                    if (state.ui.activeShopId) {
+                        newUrl.searchParams.set('shopId', state.ui.activeShopId);
+                    }
+                    window.history.pushState({}, '', newUrl);
+
+                    // Load the session
+                    await api.loadSessionFromAirtable(event.recordId);
+                    log('Calendar', `Session ${event.recordId} loaded successfully`);
+                } catch (error) {
+                    console.error('[Calendar] Error loading session:', error);
+                    alert('Failed to load session. Please try again.');
+                }
             }
         });
 
@@ -343,7 +362,7 @@ function renderMonthView() {
                     if (isLocked) {
                         eventBadge.classList.add('locked');
                     }
-                    eventBadge.addEventListener('click', (e) => {
+                    eventBadge.addEventListener('click', async (e) => {
                         e.stopPropagation();
 
                         // Prevent access to locked sessions
@@ -360,7 +379,27 @@ function renderMonthView() {
                             return;
                         }
 
-                        window.location.href = `?session=${event.recordId}${state.ui.activeShopId ? `&shopId=${state.ui.activeShopId}` : ''}`;
+                        // Load the session dynamically without page refresh
+                        log('Calendar', `Loading session ${event.recordId} dynamically from badge...`);
+                        try {
+                            // Close the calendar modal
+                            hideCalendarModal();
+
+                            // Update URL without refresh
+                            const newUrl = new URL(window.location);
+                            newUrl.searchParams.set('session', event.recordId);
+                            if (state.ui.activeShopId) {
+                                newUrl.searchParams.set('shopId', state.ui.activeShopId);
+                            }
+                            window.history.pushState({}, '', newUrl);
+
+                            // Load the session
+                            await api.loadSessionFromAirtable(event.recordId);
+                            log('Calendar', `Session ${event.recordId} loaded successfully from badge`);
+                        } catch (error) {
+                            console.error('[Calendar] Error loading session from badge:', error);
+                            alert('Failed to load session. Please try again.');
+                        }
                     });
                 } else {
                     // Event badge (existing behavior)
