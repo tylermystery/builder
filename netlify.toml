@@ -237,3 +237,9 @@
   to = "/.netlify/functions/airtable"
   status = 200
 
+# AI Strategic Project Manager
+[[redirects]]
+  from = "/api/ai-project-manager"
+  to = "/.netlify/functions/ai-project-manager"
+  status = 200
+

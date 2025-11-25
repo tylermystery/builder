@@ -1,12 +1,16 @@
 // In: store-dashboard.js
-// Action: REPLACE THE ENTIRE FILE with this code.
+// Store Dashboard with AI Strategic Project Manager
 
-// --- NEW: API Configuration ---\nconst AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
+import { initAiManager } from './components/aiManager.js';
+
+// --- API Configuration ---
+const AIRTABLE_PAT = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
 const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD';
 // Use the *relative* path to the Netlify function
 const PROFILE_ENDPOINT = '/api/profile-item';
-// --- NEW: Use the relative path to our proxy function ---\nconst GET_ITEMS_ENDPOINT = '/api/get-items-for-profiling';
+// Use the relative path to our proxy function
+const GET_ITEMS_ENDPOINT = '/api/get-items-for-profiling';
 
 
 /**
@@ -140,6 +144,9 @@ async function initializeDashboard() {
 
         // Setup the admin tools
         setupAdminTools();
+
+        // Initialize the AI Strategic Project Manager
+        initAiManager();
 
     } catch (error) {
         document.body.innerHTML = `<h1>Error: ${error.message}</h1>`;
