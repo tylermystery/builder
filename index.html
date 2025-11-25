@@ -11,23 +11,19 @@
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
     <link rel="preconnect" href="https://api.airtable.com" crossorigin>
 
-    <!-- DNS prefetch for less critical domains - deferred connection -->
-    <link rel="dns-prefetch" href="https://unpkg.com">
-    <link rel="dns-prefetch" href="https://js.pusher.com">
-    <link rel="dns-prefetch" href="https://identity.netlify.com">
+    <!-- DNS prefetch for domains used conditionally (lazy-loaded) -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link rel="dns-prefetch" href="https://js.stripe.com">
+    <link rel="dns-prefetch" href="https://js.pusher.com">
+
+    <!-- Preload critical CSS for immediate rendering -->
+    <link rel="preload" href="/css/critical.css" as="style">
+    <link rel="preload" href="/style.css" as="style">
 
     <!-- Preload critical JavaScript modules for faster execution -->
     <link rel="modulepreload" href="/main.js">
     <link rel="modulepreload" href="/state.js">
     <link rel="modulepreload" href="/config.js">
-    <link rel="modulepreload" href="/ui.js">
     <link rel="modulepreload" href="/api.js">
-
-    <!-- Preload critical CSS for immediate rendering -->
-    <link rel="preload" href="/css/critical.css" as="style">
-    <link rel="preload" href="/style.css" as="style">
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
@@ -393,15 +389,6 @@ body.modal-open {
     <!-- Load Deferred CSS Asynchronously -->
     <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
-
-    <!-- Preload main JavaScript module and critical dependencies -->
-    <link rel="modulepreload" href="main.js">
-    <link rel="modulepreload" href="state.js">
-    <link rel="modulepreload" href="config.js">
-    <link rel="modulepreload" href="api.js">
-    <link rel="modulepreload" href="ui.js">
-    <link rel="modulepreload" href="events.js">
-    <link rel="modulepreload" href="components/backgroundEngine.js">
 
     <!-- Third-party libraries - load on demand after page interactive -->
     <!-- Tippy.js/Popper for tooltips - loaded late as non-critical -->
@@ -1095,9 +1082,8 @@ body.modal-open {
     </div>
 
 
-    <script type="module" src="utils/calendarExport.js"></script>
     <script type="module" src="main.js"></script>
-    <!-- SortableJS will be loaded on-demand when needed -->
+    <!-- SortableJS and calendarExport will be loaded on-demand when needed -->
 
     <!-- Web Vitals Performance Monitoring -->
     <script type="module">
