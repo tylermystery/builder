@@ -3920,3 +3920,355 @@ hr.total-divider {
     width: 14px;
     height: 14px;
 }
+
+/* ===================================================================
+   AI STRATEGIC PROJECT MANAGER STYLES
+   =================================================================== */
+
+/* Main container card */
+.ai-manager-card {
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Header section */
+.ai-manager-header {
+    margin-bottom: 20px;
+}
+
+.ai-manager-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.ai-manager-card h3 {
+    margin: 0;
+    font-size: 1.4em;
+    color: #1a1a2e;
+    font-weight: 600;
+}
+
+.ai-beta-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 0.7em;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-manager-subtitle {
+    color: #666;
+    font-size: 0.95em;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Input section */
+.ai-manager-input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ai-manager-textarea {
+    width: 100%;
+    padding: 14px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1em;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 100px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ai-manager-textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.ai-manager-textarea::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+/* Submit button */
+.ai-manager-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    align-self: flex-start;
+}
+
+.ai-manager-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.35);
+}
+
+.ai-manager-submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.ai-manager-submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.ai-manager-submit-btn .btn-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Loading spinner */
+.ai-manager-submit-btn .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: ai-spinner 0.8s linear infinite;
+}
+
+@keyframes ai-spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* Error message */
+.ai-manager-error {
+    background-color: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 0.95em;
+    margin-top: 12px;
+}
+
+/* Results section */
+.ai-manager-results {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.ai-results-summary {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+
+.ai-results-summary h4 {
+    margin: 0 0 8px 0;
+    color: #0369a1;
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.ai-results-summary p {
+    margin: 0;
+    color: #0c4a6e;
+    font-size: 1.05em;
+    line-height: 1.5;
+}
+
+.ai-results-tasks h4 {
+    margin: 0 0 16px 0;
+    color: #1a1a2e;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+/* Strategy grid */
+.strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+/* Strategy card */
+.strategy-card {
+    background: white;
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-left: 4px solid #6b7280;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.strategy-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Priority colors */
+.strategy-card.priority-high {
+    border-left-color: #dc2626;
+}
+
+.strategy-card.priority-medium {
+    border-left-color: #f59e0b;
+}
+
+.strategy-card.priority-low {
+    border-left-color: #10b981;
+}
+
+/* Card header */
+.strategy-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.strategy-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background-color: #f3f4f6;
+    color: #4b5563;
+    font-size: 0.75em;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.strategy-priority-badge {
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+
+.priority-high .strategy-priority-badge {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.priority-medium .strategy-priority-badge {
+    background-color: #fffbeb;
+    color: #d97706;
+}
+
+.priority-low .strategy-priority-badge {
+    background-color: #ecfdf5;
+    color: #059669;
+}
+
+/* Card title */
+.strategy-card-title {
+    margin: 0 0 12px 0;
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.4;
+}
+
+/* Card meta info */
+.strategy-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.strategy-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.strategy-meta-item .meta-label {
+    font-size: 0.75em;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.strategy-meta-item .meta-value {
+    font-size: 0.9em;
+    color: #374151;
+    line-height: 1.4;
+}
+
+/* No tasks message */
+.no-tasks-message {
+    text-align: center;
+    color: #6b7280;
+    padding: 24px;
+    font-style: italic;
+}
+
+/* Responsive adjustments for AI Manager */
+@media (max-width: 768px) {
+    .ai-manager-card {
+        padding: 16px;
+    }
+
+    .ai-manager-title-row {
+        flex-wrap: wrap;
+    }
+
+    .ai-manager-submit-btn {
+        width: 100%;
+    }
+
+    .strategy-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Dashboard wrapper specific styles */
+#dashboard-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#dashboard-wrapper header {
+    margin-bottom: 20px;
+}
+
+#dashboard-wrapper h1 {
+    color: #1a1a2e;
+    font-size: 1.8em;
+}
+
+#dashboard-wrapper h2 {
+    color: #374151;
+    font-size: 1.3em;
+    margin-top: 24px;
+    margin-bottom: 16px;
+}
+
+#dashboard-wrapper main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
