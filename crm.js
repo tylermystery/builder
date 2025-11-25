@@ -337,7 +337,7 @@ function renderOmniSearchResults(results) {
         html += `<div style="background: #f9f9f9; padding: 10px; border-radius: 4px; margin: 10px 0;">`;
         html += `<p style="margin: 5px 0;"><strong>Description:</strong> ${item.fields.Description || 'N/A'}</p>`;
         html += `<p style="margin: 5px 0;"><strong>Price:</strong> $${item.fields.Price || 0}</p>`;
-        html += `<p style="margin: 5px 0;"><strong>Service Type:</strong> ${item.fields['Service Type'] || 'N/A'}</p>`;
+        html += `<p style="margin: 5px 0;"><strong>Service Type:</strong> ${item.fields['Item Type'] || 'N/A'}</p>`;
         html += `</div>`;
 
         // Add Global Parse button
@@ -424,7 +424,7 @@ function renderOmniSearchResults(results) {
                     Name: fullItem.fields.Name,
                     Description: fullItem.fields.Description,
                     Price: fullItem.fields.Price,
-                    ServiceType: fullItem.fields['Service Type'],
+                    ServiceType: fullItem.fields['Item Type'],
                     SearchTerms: searchTerms
                 };
 
@@ -589,7 +589,7 @@ function openComparisonModalForExisting(existingItem, parsedData) {
         { key: 'Name', label: 'Name', existingKey: 'Name' },
         { key: 'Description', label: 'Description', existingKey: 'Description' },
         { key: 'Price', label: 'Price', existingKey: 'Price' },
-        { key: 'ServiceType', label: 'Service Type', existingKey: 'Service Type' },
+        { key: 'ServiceType', label: 'Service Type', existingKey: 'Item Type' },
         { key: 'SearchTerms', label: 'Search Terms', existingKey: null, customExisting: existingSearchTerms },
         { key: 'Rankings', label: 'Rankings', existingKey: null, customExisting: existingRankings },
         { key: 'Profile', label: 'Profile', existingKey: null, customExisting: existingProfile }
@@ -616,6 +616,15 @@ function openComparisonModalForExisting(existingItem, parsedData) {
             parsedDisplay = parsedValue
                 ? (typeof parsedValue === 'object' ? JSON.stringify(parsedValue, null, 2) : parsedValue)
                 : 'N/A';
+        } else if (field.key === 'Price') {
+            // Special handling for Price field - treat 0 as a valid value, not N/A
+            existingDisplay = (existingValue !== null && existingValue !== undefined)
+                ? existingValue
+                : 'N/A';
+            parsedDisplay = (parsedValue !== null && parsedValue !== undefined)
+                ? parsedValue
+                : 'N/A';
+            console.log('[DEBUG] Price field display values:', { existingDisplay, parsedDisplay, existingValue, parsedValue });
         } else {
             existingDisplay = Array.isArray(existingValue) ? existingValue.join(', ') : (existingValue || 'N/A');
             parsedDisplay = Array.isArray(parsedValue) ? parsedValue.join(', ') : (parsedValue || 'N/A');
@@ -710,10 +719,25 @@ async function adoptParsedData() {
     const { existingItem } = pendingNewItemData;
 
     // Get edited values from the form
+    const priceInputRaw = document.getElementById('edit-Price').value;
+    const priceInputTrimmed = priceInputRaw.trim();
+    // Strip currency symbols, commas, and handle "N/A" case
+    const priceInputCleaned = priceInputTrimmed === 'N/A' ? '0' : priceInputTrimmed.replace(/[$,]/g, '');
+    const priceParsed = parseFloat(priceInputCleaned);
+
+    console.log('[DEBUG] Price field processing:', {
+        raw: priceInputRaw,
+        trimmed: priceInputTrimmed,
+        cleaned: priceInputCleaned,
+        parsed: priceParsed,
+        isNaN: isNaN(priceParsed),
+        finalValue: isNaN(priceParsed) ? 0 : priceParsed
+    });
+
     const updates = {
         Name: document.getElementById('edit-Name').value.trim(),
         Description: document.getElementById('edit-Description').value.trim(),
-        Price: parseFloat(document.getElementById('edit-Price').value) || 0,
+        Price: isNaN(priceParsed) ? 0 : priceParsed,
         ServiceType: document.getElementById('edit-ServiceType').value.trim(),
         SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
     };
@@ -810,10 +834,22 @@ async function confirmNewItem(event) {
     statusDiv.style.color = '#3498db';
 
     // Get edited values from the form
+    const priceInputRaw = document.getElementById('edit-Price').value;
+    // Strip currency symbols, commas, and handle "N/A" case
+    const priceInputCleaned = priceInputRaw.trim() === 'N/A' ? '0' : priceInputRaw.trim().replace(/[$,]/g, '');
+    const priceParsed = parseFloat(priceInputCleaned);
+
+    console.log('[DEBUG] Price field processing (confirmNewItem):', {
+        raw: priceInputRaw,
+        cleaned: priceInputCleaned,
+        parsed: priceParsed,
+        finalValue: isNaN(priceParsed) ? 0 : priceParsed
+    });
+
     const editedData = {
         Name: document.getElementById('edit-Name').value.trim(),
         Description: document.getElementById('edit-Description').value.trim(),
-        Price: parseFloat(document.getElementById('edit-Price').value) || 0,
+        Price: isNaN(priceParsed) ? 0 : priceParsed,
         ServiceType: document.getElementById('edit-ServiceType').value.trim(),
         SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
     };
