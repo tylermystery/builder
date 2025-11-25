@@ -304,11 +304,6 @@ export async function sendMessage(message, recordId = null) {
 
 export async function initializeItemChat(recordId) {
     log('Chat', `Initializing item chat for recordId: ${recordId}`);
-    if (!state.session.user.isAuthenticated) {
-        const chatContainer = document.getElementById('modal-chat-container');
-        if (chatContainer) chatContainer.style.display = 'none';
-        return;
-    }
     const chatContainer = document.getElementById('modal-chat-container');
     if (chatContainer) chatContainer.style.display = 'block';
 
