@@ -353,45 +353,19 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', 'Session not linked to a specific store (Shop Link field is empty).');
         }
 
-        state.session.isOwned = (record.fields.Collaborators || []).includes(state.session.user.id);
-        log('API', `Session ownership for current user (${state.session.user.id}): ${state.session.isOwned}`);
-
-        // Check if user is a store owner who owns this plan's store
-        const isStoreOwner = state.session.user.isOwner;
-        const ownedStoreId = state.session.user.ownedStoreId;
-        const planStoreId = state.session.storeId;
-        const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
-
-        if (isOwnerOfPlanStore) {
-            log('API', `Store owner access granted: User owns store ${ownedStoreId} which contains this plan`);
-        }
-
-        // Access control: prevent unauthenticated users or users who are neither collaborators nor store owners from accessing sessions
-        const isAuthenticated = state.session.user.isAuthenticated;
-        const isCollaborator = state.session.isOwned;
-        const hasAccess = isCollaborator || isOwnerOfPlanStore;
-
-        if (!isAuthenticated || !hasAccess) {
-            log('API', `Access denied: User is ${!isAuthenticated ? 'not authenticated' : 'neither a collaborator nor the store owner'} for session ${sessionId}`);
-
-            // Clear the session from URL
-            const url = new URL(window.location);
-            url.searchParams.delete('session');
-            window.history.replaceState({}, '', url);
-
-            // Show authentication modal if not authenticated
-            if (!isAuthenticated) {
-                const { showUserModal } = await import('./auth.js');
-                showUserModal();
-            } else {
-                // User is authenticated but not a collaborator or store owner
-                alert('You must be a collaborator or the store owner to access this plan.');
-            }
-
-            // Reset session state
-            state.session.id = null;
+        // If user is authenticated, check if they are a collaborator or owner.
+        // If not authenticated, they are a guest with no ownership.
+        if (state.session.user.isAuthenticated && state.session.user.id) {
+            const isCollaborator = (record.fields.Collaborators || []).includes(state.session.user.id);
+            const isStoreOwner = state.session.user.isOwner;
+            const ownedStoreId = state.session.user.ownedStoreId;
+            const planStoreId = state.session.storeId;
+            const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
+            state.session.isOwned = isCollaborator || isOwnerOfPlanStore;
+            log('API', `Authenticated user. Access level (isOwned): ${state.session.isOwned}`);
+        } else {
             state.session.isOwned = false;
-            return;
+            log('API', `Unauthenticated user. Access level (isOwned): false`);
         }
 
         state.session.user.amountReceived = record.fields['Amount Received'] || 0;
