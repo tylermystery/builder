@@ -1,10 +1,11 @@
 // Optimized Service Worker for cache management
 // This ensures users always see the latest version of the site
 
-const CACHE_VERSION = 'v-1732423200000'; // Dynamically set based on build time - Updated to force cache refresh
+const CACHE_VERSION = 'v-1732423200001'; // Updated version for performance improvements
 const STATIC_CACHE = 'wtfun-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
+const FONT_CACHE = 'wtfun-fonts-' + CACHE_VERSION;
 
 // Only cache essential files immediately - lazy load the rest
 const STATIC_FILES = [
@@ -12,6 +13,14 @@ const STATIC_FILES = [
   '/index.html',
   '/main.js',
   '/css/critical.css'
+];
+
+// Preload essential resources in the background during idle time
+const BACKGROUND_PRELOAD = [
+  '/state.js',
+  '/api.js',
+  '/config.js',
+  '/css/deferred.css'
 ];
 
 // Cache strategy per resource type
@@ -22,6 +31,8 @@ const CACHE_STRATEGIES = {
   scripts: 'stale-while-revalidate',
   // Images - Cache first with expiration
   images: 'cache-first',
+  // Fonts - Cache first (long-lived)
+  fonts: 'cache-first',
   // API calls - Network only (never cache)
   api: 'network-only'
 };
@@ -29,7 +40,7 @@ const CACHE_STRATEGIES = {
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker...', CACHE_VERSION);
-  
+
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       console.log('[SW] Caching static assets');
@@ -45,20 +56,32 @@ self.addEventListener('install', (event) => {
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating new service worker...', CACHE_VERSION);
-  
+
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           // Delete all caches that don't match current version
-          if (cacheName.startsWith('wtfun-') && 
-              cacheName !== STATIC_CACHE && 
-              cacheName !== DYNAMIC_CACHE) {
+          if (cacheName.startsWith('wtfun-') &&
+              cacheName !== STATIC_CACHE &&
+              cacheName !== DYNAMIC_CACHE &&
+              cacheName !== IMAGE_CACHE &&
+              cacheName !== FONT_CACHE) {
             console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
+    }).then(() => {
+      // Background preload additional resources
+      return caches.open(STATIC_CACHE).then((cache) => {
+        console.log('[SW] Background preloading additional resources...');
+        return Promise.allSettled(
+          BACKGROUND_PRELOAD.map(url =>
+            cache.add(url).catch(err => console.log('[SW] Preload skipped:', url))
+          )
+        );
+      });
     }).then(() => {
       return self.clients.claim(); // Take control of all pages immediately
     })
@@ -75,22 +98,46 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip API calls, Netlify functions, and external domains
+  // Skip API calls, Netlify functions, and external domains (except Netlify Image CDN)
   if (url.pathname.includes('/api/') ||
-      url.pathname.includes('/.netlify/') ||
+      (url.pathname.includes('/.netlify/') && !url.pathname.includes('/.netlify/images')) ||
       url.pathname.includes('airtable.com') ||
-      url.pathname.includes('cloudinary.com') ||
-      url.hostname !== self.location.hostname) {
+      (url.hostname !== self.location.hostname && !url.pathname.includes('/.netlify/images'))) {
     return;
   }
 
   // Determine resource type and apply appropriate strategy
-  const isImage = /\.(png|jpg|jpeg|gif|webp|svg|avif)$/i.test(url.pathname);
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg|avif)$/i.test(url.pathname) ||
+                  url.pathname.includes('/.netlify/images') ||
+                  url.hostname.includes('cloudinary.com');
+  const isFont = /\.(woff2?|ttf|otf|eot)$/i.test(url.pathname);
   const isScript = /\.(js|mjs)$/i.test(url.pathname);
   const isStyle = /\.css$/i.test(url.pathname);
   const isHTML = request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname === '/';
 
+  // Font caching strategy: Cache-first with 30-day expiration (fonts rarely change)
+  if (isFont) {
+    event.respondWith(
+      caches.open(FONT_CACHE).then((cache) => {
+        return cache.match(request).then((cached) => {
+          if (cached) {
+            return cached;
+          }
+
+          return fetch(request).then((response) => {
+            if (response.ok) {
+              cache.put(request, response.clone());
+            }
+            return response;
+          }).catch(() => new Response('Font unavailable', { status: 404 }));
+        });
+      })
+    );
+    return;
+  }
+
   // Image caching strategy: Cache-first with 7-day expiration
+  // Also cache Netlify Image CDN responses for faster subsequent loads
   if (isImage) {
     event.respondWith(
       caches.open(IMAGE_CACHE).then((cache) => {
@@ -205,7 +252,7 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
+
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     event.waitUntil(
       caches.keys().then((cacheNames) => {
@@ -222,5 +269,35 @@ self.addEventListener('message', (event) => {
         clients.forEach(client => client.postMessage({ type: 'CACHE_CLEARED' }));
       })
     );
+  }
+
+  // Prefetch images for upcoming content
+  if (event.data && event.data.type === 'PREFETCH_IMAGES') {
+    const images = event.data.images || [];
+    if (images.length > 0) {
+      event.waitUntil(
+        caches.open(IMAGE_CACHE).then((cache) => {
+          return Promise.allSettled(
+            images.map(url => {
+              return cache.match(url).then(cached => {
+                if (!cached) {
+                  return fetch(url).then(response => {
+                    if (response.ok) {
+                      const headers = new Headers(response.headers);
+                      headers.append('sw-cached-date', new Date().toISOString());
+                      return cache.put(url, new Response(response.body, {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: headers
+                      }));
+                    }
+                  }).catch(() => {});
+                }
+              });
+            })
+          );
+        })
+      );
+    }
   }
 });
