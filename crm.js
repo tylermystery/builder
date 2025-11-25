@@ -464,6 +464,125 @@ function renderOmniSearchResults(results) {
 
 // --- COMPARISON MODAL FUNCTIONS ---
 /**
+ * Gets all unique categories from catalog items
+ * @returns {Array<string>} Sorted array of unique category names
+ */
+function getAllCategories() {
+    const categories = new Set();
+    allCatalogItems.forEach(item => {
+        if (item.fields.Categories) {
+            item.fields.Categories.split(',').forEach(cat => {
+                const trimmed = cat.trim();
+                if (trimmed) categories.add(trimmed);
+            });
+        }
+    });
+    return Array.from(categories).sort();
+}
+
+/**
+ * Gets all items that can be parent items (Groupings and regular items)
+ * @returns {Array<object>} Sorted array of items with id and name
+ */
+function getParentItemOptions() {
+    return allCatalogItems
+        .filter(item => item.fields.Name) // Only items with names
+        .map(item => ({
+            id: item.id,
+            name: item.fields.Name,
+            isGrouping: item.fields['Item Type'] === 'Grouping'
+        }))
+        .sort((a, b) => {
+            // Sort groupings first, then alphabetically
+            if (a.isGrouping && !b.isGrouping) return -1;
+            if (!a.isGrouping && b.isGrouping) return 1;
+            return a.name.localeCompare(b.name);
+        });
+}
+
+/**
+ * Creates the category multi-select HTML
+ * @param {string} selectedCategories - Comma-separated list of selected categories
+ * @returns {string} HTML string for category multi-select
+ */
+function createCategoryMultiSelect(selectedCategories = '') {
+    const allCategories = getAllCategories();
+    const selectedSet = new Set(
+        selectedCategories.split(',').map(c => c.trim()).filter(c => c)
+    );
+
+    let html = '<div class="category-multi-select" id="category-multi-select">';
+    allCategories.forEach(category => {
+        const isSelected = selectedSet.has(category);
+        html += `
+            <label class="category-checkbox-label ${isSelected ? 'selected' : ''}">
+                <input type="checkbox" value="${category}" ${isSelected ? 'checked' : ''} onchange="toggleCategorySelection(this)">
+                ${category}
+            </label>
+        `;
+    });
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Creates the parent item dropdown HTML
+ * @param {string} selectedParent - Name of the selected parent item
+ * @returns {string} HTML string for parent item dropdown
+ */
+function createParentItemDropdown(selectedParent = '') {
+    const parentOptions = getParentItemOptions();
+
+    let html = '<select class="parent-item-select" id="edit-ParentItem">';
+    html += '<option value="">-- No Parent Item --</option>';
+
+    let currentGroup = null;
+    parentOptions.forEach(option => {
+        if (option.isGrouping && currentGroup !== 'grouping') {
+            if (currentGroup !== null) html += '</optgroup>';
+            html += '<optgroup label="📁 Groupings">';
+            currentGroup = 'grouping';
+        } else if (!option.isGrouping && currentGroup !== 'regular') {
+            if (currentGroup !== null) html += '</optgroup>';
+            html += '<optgroup label="📦 Items">';
+            currentGroup = 'regular';
+        }
+
+        const isSelected = selectedParent === option.name;
+        html += `<option value="${option.name}" ${isSelected ? 'selected' : ''}>${option.name}</option>`;
+    });
+
+    if (currentGroup !== null) html += '</optgroup>';
+    html += '</select>';
+    return html;
+}
+
+/**
+ * Toggles category selection styling
+ * @param {HTMLInputElement} checkbox - The checkbox element
+ */
+function toggleCategorySelection(checkbox) {
+    const label = checkbox.parentElement;
+    if (checkbox.checked) {
+        label.classList.add('selected');
+    } else {
+        label.classList.remove('selected');
+    }
+}
+
+/**
+ * Gets the selected categories from the multi-select
+ * @returns {string} Comma-separated list of selected categories
+ */
+function getSelectedCategories() {
+    const checkboxes = document.querySelectorAll('#category-multi-select input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value).join(', ');
+}
+
+// Make category functions globally available
+window.toggleCategorySelection = toggleCategorySelection;
+
+/**
  * Opens the comparison modal with parsed item data
  * @param {object} itemData - The parsed item data from weblink parser
  */
@@ -474,8 +593,8 @@ function openComparisonModal(itemData) {
     const tableBody = document.getElementById('comparison-table-body');
     tableBody.innerHTML = '';
 
-    // Create editable rows for each field
-    const fields = ['Name', 'Description', 'Price', 'ServiceType', 'SearchTerms', 'Rankings', 'Profile'];
+    // Create editable rows for each field (including new Category and Parent Item fields)
+    const fields = ['Name', 'Description', 'Price', 'ServiceType', 'Categories', 'ParentItem', 'SearchTerms', 'Rankings', 'Profile'];
     fields.forEach(field => {
         const row = document.createElement('tr');
         const value = itemData[field];
@@ -491,20 +610,27 @@ function openComparisonModal(itemData) {
             displayValue = Array.isArray(value) ? value.join(', ') : value;
         }
 
+        let fieldHtml;
+        if (field === 'Categories') {
+            fieldHtml = createCategoryMultiSelect(displayValue || '');
+        } else if (field === 'ParentItem') {
+            fieldHtml = createParentItemDropdown(displayValue || '');
+        } else if (field === 'Description') {
+            fieldHtml = `<textarea id="edit-${field}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${displayValue || ''}</textarea>`;
+        } else if (field === 'SearchTerms') {
+            fieldHtml = `<textarea id="edit-${field}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${displayValue || ''}</textarea>`;
+        } else if (field === 'Rankings') {
+            fieldHtml = `<textarea id="edit-${field}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"google": 4.5, "yelp": 4.0, ...}'>${displayValue || ''}</textarea>`;
+        } else if (field === 'Profile') {
+            fieldHtml = `<textarea id="edit-${field}" style="width: 100%; min-height: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"activityLevel": 5, "indoorOutdoor": 5, ...}'>${displayValue || ''}</textarea>`;
+        } else {
+            fieldHtml = `<input type="text" id="edit-${field}" value="${displayValue || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`;
+        }
+
+        const fieldLabel = field === 'ParentItem' ? 'Parent Item' : field;
         row.innerHTML = `
-            <td><strong>${field}</strong></td>
-            <td>
-                ${field === 'Description'
-                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${displayValue || ''}</textarea>`
-                    : field === 'SearchTerms'
-                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${displayValue || ''}</textarea>`
-                    : field === 'Rankings'
-                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"google": 4.5, "yelp": 4.0, ...}'>${displayValue || ''}</textarea>`
-                    : field === 'Profile'
-                    ? `<textarea id="edit-${field}" style="width: 100%; min-height: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.9em;" placeholder='{"activityLevel": 5, "indoorOutdoor": 5, ...}'>${displayValue || ''}</textarea>`
-                    : `<input type="text" id="edit-${field}" value="${displayValue || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`
-                }
-            </td>
+            <td><strong>${fieldLabel}</strong></td>
+            <td>${fieldHtml}</td>
         `;
         tableBody.appendChild(row);
     });
@@ -584,12 +710,14 @@ function openComparisonModalForExisting(existingItem, parsedData) {
         }
     }
 
-    // Create comparison rows for each field
+    // Create comparison rows for each field (including Categories and Parent Item)
     const fields = [
         { key: 'Name', label: 'Name', existingKey: 'Name' },
         { key: 'Description', label: 'Description', existingKey: 'Description' },
         { key: 'Price', label: 'Price', existingKey: 'Price' },
         { key: 'ServiceType', label: 'Service Type', existingKey: 'Item Type' },
+        { key: 'Categories', label: 'Categories', existingKey: 'Categories' },
+        { key: 'ParentItem', label: 'Parent Item', existingKey: 'Parent Item' },
         { key: 'SearchTerms', label: 'Search Terms', existingKey: null, customExisting: existingSearchTerms },
         { key: 'Rankings', label: 'Rankings', existingKey: null, customExisting: existingRankings },
         { key: 'Profile', label: 'Profile', existingKey: null, customExisting: existingProfile }
@@ -633,6 +761,24 @@ function openComparisonModalForExisting(existingItem, parsedData) {
         // Check if values differ
         const isDifferent = JSON.stringify(existingValue) !== JSON.stringify(parsedValue);
 
+        // Create field-specific edit controls
+        let editFieldHtml;
+        if (field.key === 'Categories') {
+            editFieldHtml = createCategoryMultiSelect(parsedDisplay !== 'N/A' ? parsedDisplay : (existingDisplay !== 'N/A' ? existingDisplay : ''));
+        } else if (field.key === 'ParentItem') {
+            editFieldHtml = createParentItemDropdown(parsedDisplay !== 'N/A' ? parsedDisplay : (existingDisplay !== 'N/A' ? existingDisplay : ''));
+        } else if (field.key === 'Description') {
+            editFieldHtml = `<textarea id="edit-${field.key}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${parsedDisplay}</textarea>`;
+        } else if (field.key === 'SearchTerms') {
+            editFieldHtml = `<textarea id="edit-${field.key}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${parsedDisplay}</textarea>`;
+        } else if (field.key === 'Rankings') {
+            editFieldHtml = `<textarea id="edit-${field.key}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"google": 4.5, ...}'>${parsedDisplay}</textarea>`;
+        } else if (field.key === 'Profile') {
+            editFieldHtml = `<textarea id="edit-${field.key}" style="width: 100%; min-height: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"activityLevel": 5, ...}'>${parsedDisplay}</textarea>`;
+        } else {
+            editFieldHtml = `<input type="text" id="edit-${field.key}" value="${parsedDisplay}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`;
+        }
+
         row.innerHTML = `
             <td><strong>${field.label}</strong></td>
             <td class="${isDifferent ? 'existing-value' : 'value-unchanged'}">
@@ -643,16 +789,7 @@ function openComparisonModalForExisting(existingItem, parsedData) {
                     : existingDisplay}
             </td>
             <td class="${isDifferent ? 'parsed-value' : 'value-unchanged'}">
-                ${field.key === 'Description'
-                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">${parsedDisplay}</textarea>`
-                    : field.key === 'SearchTerms'
-                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Comma-separated terms">${parsedDisplay}</textarea>`
-                    : field.key === 'Rankings'
-                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"google": 4.5, ...}'>${parsedDisplay}</textarea>`
-                    : field.key === 'Profile'
-                    ? `<textarea id="edit-${field.key}" style="width: 100%; min-height: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 0.85em;" placeholder='{"activityLevel": 5, ...}'>${parsedDisplay}</textarea>`
-                    : `<input type="text" id="edit-${field.key}" value="${parsedDisplay}" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">`
-                }
+                ${editFieldHtml}
             </td>
         `;
         tableBody.appendChild(row);
@@ -739,6 +876,8 @@ async function adoptParsedData() {
         Description: document.getElementById('edit-Description').value.trim(),
         Price: isNaN(priceParsed) ? 0 : priceParsed,
         ServiceType: document.getElementById('edit-ServiceType').value.trim(),
+        Categories: getSelectedCategories(),
+        ParentItem: document.getElementById('edit-ParentItem').value.trim(),
         SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
     };
 
@@ -851,6 +990,8 @@ async function confirmNewItem(event) {
         Description: document.getElementById('edit-Description').value.trim(),
         Price: isNaN(priceParsed) ? 0 : priceParsed,
         ServiceType: document.getElementById('edit-ServiceType').value.trim(),
+        Categories: getSelectedCategories(),
+        ParentItem: document.getElementById('edit-ParentItem').value.trim(),
         SearchTerms: document.getElementById('edit-SearchTerms').value.split(',').map(t => t.trim()).filter(t => t)
     };
 

@@ -37,26 +37,37 @@ exports.handler = async (event) => {
     if (updates.Name !== undefined) airtableFields['Name'] = updates.Name;
     if (updates.Description !== undefined) airtableFields['Description'] = updates.Description;
 
-    // Note: The "Price" field in Airtable appears to be a computed/formula field
-    // that cannot be written to directly. We skip setting it here.
-    if (updates.Price !== undefined) {
-      let priceValue = updates.Price;
-      console.log('[DEBUG] Price field received (not writing to Airtable - field may be computed):', {
-        value: priceValue,
-        type: typeof priceValue,
-        isNull: priceValue === null,
-        isUndefined: priceValue === undefined
-      });
-      // Price is preserved in the Profile JSON if the user wants to track AI-suggested prices
+    // Price field in Airtable is a single line text field - must be written as a string
+    if (updates.Price !== undefined && updates.Price !== null) {
+      // Convert to string for text field
+      airtableFields['Price'] = String(updates.Price);
+      console.log('[DEBUG] Price field set as string:', airtableFields['Price']);
     }
 
     if (updates.ServiceType !== undefined) airtableFields['Item Type'] = updates.ServiceType;
 
+    // Handle Categories field (comma-separated string)
+    if (updates.Categories !== undefined) {
+      airtableFields['Categories'] = updates.Categories;
+      console.log('[DEBUG] Categories field set:', airtableFields['Categories']);
+    }
+
+    // Handle Parent Item field
+    if (updates.ParentItem !== undefined) {
+      airtableFields['Parent Item'] = updates.ParentItem;
+      console.log('[DEBUG] Parent Item field set:', airtableFields['Parent Item']);
+    }
+
+    // Map SearchTerms to Subcategories field (comma-separated string)
+    if (updates.SearchTerms !== undefined && Array.isArray(updates.SearchTerms) && updates.SearchTerms.length > 0) {
+      airtableFields['Subcategories'] = updates.SearchTerms.join(', ');
+      console.log('[DEBUG] Subcategories field set from SearchTerms:', airtableFields['Subcategories']);
+    }
+
     // Build/update the AI_Profile object which combines:
-    // - SearchTerms from the AI parser
+    // - SearchTerms from the AI parser (also stored in Subcategories field)
     // - Profile attributes (activity level, social level, etc.)
-    // - Suggested price (since the Price field is computed/read-only)
-    // Note: "Profile" is not a valid Airtable field, so we merge Profile data into AI_Profile
+    // - Suggested price as a backup reference
     const hasSearchTerms = updates.SearchTerms !== undefined && Array.isArray(updates.SearchTerms);
     const hasProfile = updates.Profile !== undefined;
     const hasPrice = updates.Price !== undefined && updates.Price !== null;
