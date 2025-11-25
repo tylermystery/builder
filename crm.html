@@ -304,6 +304,54 @@
         .value-unchanged {
             color: #999;
         }
+        /* Category Multi-select and Parent Dropdown Styles */
+        .category-multi-select {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+        .category-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 10px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+        .category-checkbox-label:hover {
+            background: #d0d0d0;
+        }
+        .category-checkbox-label.selected {
+            background: var(--highlight-blue);
+            color: white;
+        }
+        .category-checkbox-label input[type="checkbox"] {
+            display: none;
+        }
+        .parent-item-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+            background: white;
+        }
+        .field-section-header {
+            font-weight: bold;
+            color: #333;
+            margin: 15px 0 8px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+        }
         /* --- END NEW STYLES --- */
         
     </style>

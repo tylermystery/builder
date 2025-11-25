@@ -33,20 +33,30 @@ exports.handler = async (event) => {
       'Item Type': itemData.ServiceType || 'Partner Activity'
     };
 
-    // Note: The "Price" field in Airtable appears to be a computed/formula field
-    // that cannot be written to directly. We skip setting it here.
-    // If the Price needs to be stored, it should be set via Airtable's "Options" field
-    // or another writable field that feeds into the Price formula.
+    // Price field in Airtable is a single line text field - must be written as a string
     let priceValue = itemData.Price;
-    console.log('[DEBUG] Price field received (not writing to Airtable - field may be computed):', {
-      value: priceValue,
-      type: typeof priceValue,
-      isNull: priceValue === null,
-      isUndefined: priceValue === undefined
-    });
+    if (priceValue !== undefined && priceValue !== null) {
+      airtableFields['Price'] = String(priceValue);
+      console.log('[DEBUG] Price field set as string:', airtableFields['Price']);
+    }
 
-    // Store Price in Profile JSON if provided, so it can be referenced later
-    // This preserves the AI-suggested price without trying to write to a computed field
+    // Handle Categories field (comma-separated string)
+    if (itemData.Categories) {
+      airtableFields['Categories'] = itemData.Categories;
+      console.log('[DEBUG] Categories field set:', airtableFields['Categories']);
+    }
+
+    // Handle Parent Item field
+    if (itemData.ParentItem) {
+      airtableFields['Parent Item'] = itemData.ParentItem;
+      console.log('[DEBUG] Parent Item field set:', airtableFields['Parent Item']);
+    }
+
+    // Map SearchTerms to Subcategories field (comma-separated string)
+    if (itemData.SearchTerms && Array.isArray(itemData.SearchTerms) && itemData.SearchTerms.length > 0) {
+      airtableFields['Subcategories'] = itemData.SearchTerms.join(', ');
+      console.log('[DEBUG] Subcategories field set from SearchTerms:', airtableFields['Subcategories']);
+    }
 
     // Store Rankings in the Rankings field
     if (itemData.Rankings) {
@@ -56,10 +66,9 @@ exports.handler = async (event) => {
     }
 
     // Build the AI_Profile object which combines:
-    // - SearchTerms from the AI parser
+    // - SearchTerms from the AI parser (also stored in Subcategories field)
     // - Profile attributes (activity level, social level, etc.)
-    // - Suggested price (since the Price field is computed/read-only)
-    // Note: "Profile" is not a valid Airtable field, so we merge Profile data into AI_Profile
+    // - Suggested price as a backup reference
     let aiProfileData = {
       source: 'weblink_parser',
       createdAt: new Date().toISOString()
