@@ -36,34 +36,82 @@ exports.handler = async (event) => {
     // Allow updating these fields
     if (updates.Name !== undefined) airtableFields['Name'] = updates.Name;
     if (updates.Description !== undefined) airtableFields['Description'] = updates.Description;
-    if (updates.Price !== undefined) airtableFields['Price'] = updates.Price;
-    if (updates.ServiceType !== undefined) airtableFields['Service Type'] = updates.ServiceType;
 
-    // Handle SearchTerms - store in AI_Profile
-    if (updates.SearchTerms !== undefined && Array.isArray(updates.SearchTerms)) {
+    // Note: The "Price" field in Airtable appears to be a computed/formula field
+    // that cannot be written to directly. We skip setting it here.
+    if (updates.Price !== undefined) {
+      let priceValue = updates.Price;
+      console.log('[DEBUG] Price field received (not writing to Airtable - field may be computed):', {
+        value: priceValue,
+        type: typeof priceValue,
+        isNull: priceValue === null,
+        isUndefined: priceValue === undefined
+      });
+      // Price is preserved in the Profile JSON if the user wants to track AI-suggested prices
+    }
+
+    if (updates.ServiceType !== undefined) airtableFields['Item Type'] = updates.ServiceType;
+
+    // Build/update the AI_Profile object which combines:
+    // - SearchTerms from the AI parser
+    // - Profile attributes (activity level, social level, etc.)
+    // - Suggested price (since the Price field is computed/read-only)
+    // Note: "Profile" is not a valid Airtable field, so we merge Profile data into AI_Profile
+    const hasSearchTerms = updates.SearchTerms !== undefined && Array.isArray(updates.SearchTerms);
+    const hasProfile = updates.Profile !== undefined;
+    const hasPrice = updates.Price !== undefined && updates.Price !== null;
+
+    if (hasSearchTerms || hasProfile || hasPrice) {
       // Fetch existing AI_Profile to merge data
       const fetchUrl = `https://api.airtable.com/v0/${BASE_ID}/${CATALOG_TABLE}/${recordId}?fields[]=AI_Profile`;
       const fetchResponse = await fetch(fetchUrl, {
         headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
       });
 
-      let existingProfile = {};
+      let existingAiProfile = {};
       if (fetchResponse.ok) {
         const record = await fetchResponse.json();
         try {
-          existingProfile = record.fields.AI_Profile ? JSON.parse(record.fields.AI_Profile) : {};
+          existingAiProfile = record.fields.AI_Profile ? JSON.parse(record.fields.AI_Profile) : {};
         } catch (e) {
           console.warn('[DEBUG] Could not parse existing AI_Profile, starting fresh');
         }
       }
 
-      // Merge the search terms
-      airtableFields['AI_Profile'] = JSON.stringify({
-        ...existingProfile,
-        SearchTerms: updates.SearchTerms,
-        source: existingProfile.source || 'weblink_parser',
+      // Build the updated AI_Profile
+      let aiProfileData = {
+        ...existingAiProfile,
         updatedAt: new Date().toISOString()
-      }, null, 2);
+      };
+      if (!aiProfileData.source) {
+        aiProfileData.source = 'weblink_parser';
+      }
+
+      // Update SearchTerms if provided
+      if (hasSearchTerms) {
+        aiProfileData.SearchTerms = updates.SearchTerms;
+      }
+
+      // Update Profile attributes if provided
+      if (hasProfile) {
+        const profileData = typeof updates.Profile === 'string'
+          ? JSON.parse(updates.Profile)
+          : updates.Profile;
+        aiProfileData.Profile = profileData;
+      }
+
+      // Update suggested price if provided
+      if (hasPrice) {
+        const parsedPrice = typeof updates.Price === 'string'
+          ? parseFloat(String(updates.Price).replace(/[$,]/g, ''))
+          : updates.Price;
+        if (!isNaN(parsedPrice)) {
+          aiProfileData.suggestedPrice = parsedPrice;
+        }
+      }
+
+      // Write the combined AI_Profile data
+      airtableFields['AI_Profile'] = JSON.stringify(aiProfileData, null, 2);
     }
 
     // Handle Rankings (AI Profile data)
@@ -73,26 +121,22 @@ exports.handler = async (event) => {
         : JSON.stringify(updates.Rankings, null, 2);
     }
 
-    // Handle Profile (new profiling attributes for sorting/comparing)
-    if (updates.Profile !== undefined) {
-      airtableFields['Profile'] = typeof updates.Profile === 'string'
-        ? updates.Profile
-        : JSON.stringify(updates.Profile, null, 2);
-    }
-
     console.log('[DEBUG] Airtable fields to update:', JSON.stringify(airtableFields, null, 2));
 
     // Update the record in Airtable
     const url = `https://api.airtable.com/v0/${BASE_ID}/${CATALOG_TABLE}/${recordId}`;
+    const requestBody = JSON.stringify({
+      fields: airtableFields
+    });
+    console.log('[DEBUG] Airtable request body:', requestBody);
+
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${AIRTABLE_PAT}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        fields: airtableFields
-      })
+      body: requestBody
     });
 
     console.log('[DEBUG] Airtable response status:', response.status);
