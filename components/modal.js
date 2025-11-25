@@ -9,7 +9,6 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMi
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
-import { createCalendarExportButtons, initializeCalendarExportListeners } from '../utils/calendarExport.js';
 
 /**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
@@ -542,13 +541,20 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         // (indicating this is a parent event with multiple date options)
         const hasChildEventOptions = rawOptions.some(opt => allRecordNames.has(opt.name));
 
+        // Check if the current user has RSVPed (registered) to this event
+        const rsvpYes = record.fields.RSVPs || [];
+        const rsvpMaybe = record.fields.RSVPMaybe || [];
+        const rsvpNo = record.fields.RSVPNo || [];
+        const userId = state.session.user.id;
+        const isUserRegistered = rsvpYes.includes(userId) || rsvpMaybe.includes(userId) || rsvpNo.includes(userId);
+
         // Only show event-specific sections for individual events, not parent events with child date options
-        // This prevents duplicate RSVP lists and calendar exports when viewing parent events
-        if (!hasChildEventOptions) {
+        // For registered users, skip the RSVP list and duplicate event info sections
+        if (!hasChildEventOptions && !isUserRegistered) {
         const eventDateStr = record.fields.Date;
         const eventTime = record.fields.Time || '';
         const eventLocation = record.fields.Location || '';
-        
+
         if (eventDateStr) {
             // Parse date in local timezone to avoid timezone shift issues
             const eventDate = new Date(eventDateStr + 'T00:00:00');
@@ -558,7 +564,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 month: 'long',
                 day: 'numeric'
             });
-            
+
             const eventInfoSection = document.createElement('div');
             eventInfoSection.className = 'event-info-section';
             eventInfoSection.innerHTML = `
@@ -567,63 +573,56 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 </div>
                 ${eventLocation ? `<div class="event-location">📍 ${eventLocation}</div>` : ''}
             `;
-            
+
             modalItemDescription.parentElement.insertBefore(eventInfoSection, modalItemDescription);
         }
-        
-        const rsvpYes = record.fields.RSVPs || [];
-        const rsvpMaybe = record.fields.RSVPMaybe || [];
-        const rsvpNo = record.fields.RSVPNo || [];
-        
+
+        // RSVP list section - only shown for non-registered users
         if (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0) {
             const rsvpListSection = document.createElement('div');
             rsvpListSection.className = 'rsvp-list-section';
-            
+
             let rsvpHTML = '<div class="rsvp-list-header"><strong>RSVPs</strong></div>';
-            
+
             if (rsvpYes.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Going (${rsvpYes.length})</div>
                     <div class="rsvp-list-items">Anonymous users</div>
                 </div>`;
             }
-            
+
             if (rsvpMaybe.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Maybe (${rsvpMaybe.length})</div>
                     <div class="rsvp-list-items">Anonymous users</div>
                 </div>`;
             }
-            
+
             if (rsvpNo.length > 0) {
                 rsvpHTML += `<div class="rsvp-list-group">
                     <div class="rsvp-list-label">Can't Go (${rsvpNo.length})</div>
                     <div class="rsvp-list-items">Anonymous users</div>
                 </div>`;
             }
-            
+
             rsvpListSection.innerHTML = rsvpHTML;
             modalItemDescription.parentElement.insertBefore(rsvpListSection, modalItemDescription);
         }
 
-        // Add calendar export buttons for events
-        const calendarExportHTML = createCalendarExportButtons(record);
-        if (calendarExportHTML) {
-            const calendarExportSection = document.createElement('div');
-            calendarExportSection.className = 'calendar-export-section';
-            calendarExportSection.innerHTML = calendarExportHTML;
-            modalItemDescription.parentElement.insertBefore(calendarExportSection, modalItemDescription);
-
-            // Initialize calendar export listeners after a short delay to ensure DOM is ready
-            setTimeout(() => {
-                initializeCalendarExportListeners(record, calendarExportSection);
-            }, 100);
-        }
+        // Calendar export buttons removed for published events - not needed for viewing
         }
     }
 
     // Display session components if this is a published session/event
-    if (linkedSession && linkedSession.fields) {
+    // Skip for registered event users - they don't need to see plan components
+    const isEventType = record.fields['Item Type'] === 'Event';
+    const eventRsvpYes = record.fields.RSVPs || [];
+    const eventRsvpMaybe = record.fields.RSVPMaybe || [];
+    const eventRsvpNo = record.fields.RSVPNo || [];
+    const currentUserId = state.session.user.id;
+    const isCurrentUserRegistered = eventRsvpYes.includes(currentUserId) || eventRsvpMaybe.includes(currentUserId) || eventRsvpNo.includes(currentUserId);
+
+    if (linkedSession && linkedSession.fields && !(isEventType && isCurrentUserRegistered)) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
 
         // Parse session data to get locked items (components) and ideas
@@ -1126,9 +1125,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
+    // Also hide notes for published events - they use the description field for goals/notes instead
+    const isEvent = record.fields['Item Type'] === 'Event';
     if (!isGrouping) {
         modalActionsContainer.style.display = 'block';
-        modalNotesContainer.style.display = 'block';
+        // Hide notes container for events - not needed for published event viewing
+        modalNotesContainer.style.display = isEvent ? 'none' : 'block';
         modalItemNote.value = itemState.note;
 
         // Calculate effective minimum and Airtable minimum
@@ -1288,7 +1290,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalCalendarContainer.innerHTML = '';
     const iCalUrl = record.fields[CONSTANTS.FIELD_NAMES.ICAL_URL];
 
-    if (iCalUrl) {
+    // Hide availability calendar for events - not needed for published event viewing
+    if (iCalUrl && !isEvent) {
         try {
             modalCalendarContainer.style.display = 'block';
             log('Modal', `iCal URL found for ${record.id}, initializing calendar.`);
