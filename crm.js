@@ -698,15 +698,18 @@ function openComparisonModalForExisting(existingItem, parsedData) {
         }
     }
 
-    // Extract existing Profile if available
+    // Extract existing Profile if available (stored inside AI_Profile.Profile)
     let existingProfile = null;
-    if (existingItem.fields.Profile) {
+    if (existingItem.fields.AI_Profile) {
         try {
-            existingProfile = typeof existingItem.fields.Profile === 'string'
-                ? JSON.parse(existingItem.fields.Profile)
-                : existingItem.fields.Profile;
+            const aiProfile = typeof existingItem.fields.AI_Profile === 'string'
+                ? JSON.parse(existingItem.fields.AI_Profile)
+                : existingItem.fields.AI_Profile;
+            if (aiProfile && aiProfile.Profile) {
+                existingProfile = aiProfile.Profile;
+            }
         } catch (e) {
-            console.warn('[DEBUG] Could not parse Profile');
+            console.warn('[DEBUG] Could not parse AI_Profile for Profile extraction');
         }
     }
 

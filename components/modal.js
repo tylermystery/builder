@@ -938,12 +938,15 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             try {
                 // --- V2.1: Check for new profile structure ---\
                 const rankingsObject = JSON.parse(rankingsJsonString);
-                
+
                 let displayRankings = {};
                 // Check if it's the new v2.1 profile
                 if (rankingsObject.profileSource && rankingsObject.Vibe) {
                     // Extract vibe/intellect/physicality for display
                     displayRankings = { ...rankingsObject.Vibe, ...rankingsObject.Intellect, ...rankingsObject.Physicality };
+                } else if (rankingsObject.Profile) {
+                    // Handle AI_Profile structure where Profile is nested
+                    displayRankings = rankingsObject.Profile;
                 } else {
                     // Fallback to old v1.2 structure
                     displayRankings = rankingsObject;
