@@ -176,6 +176,39 @@ async function initialize() {
     let shopId = urlParams.get('shopId');
     let activeShop = null;
 
+    // CRITICAL FIX: Restore authentication state from JWT BEFORE loading session
+    // This prevents the "collaborator or store owner" error on page reload
+    const jwt = localStorage.getItem('jwt');
+    if (jwt) {
+        try {
+            const payload = JSON.parse(atob(jwt.split('.')[1]));
+            if (payload.exp * 1000 > Date.now()) {
+                setState({
+                    session: {
+                        ...state.session,
+                        user: {
+                            ...state.session.user,
+                            isAuthenticated: true,
+                            id: payload.userId,
+                            name: payload.name,
+                            email: payload.email,
+                            isOwner: payload.isOwner,
+                            ownedStoreId: payload.ownedStoreId || null,
+                            ownerDashboardId: payload.ownerDashboardId || null
+                        }
+                    }
+                });
+                log('Main', `User authenticated via JWT (early init): ${payload.userId}, isOwner: ${payload.isOwner}, ownedStoreId: ${payload.ownedStoreId}`);
+            } else {
+                localStorage.removeItem('jwt');
+                log('Main', 'Existing JWT expired (early init).');
+            }
+        } catch (e) {
+            localStorage.removeItem('jwt');
+            console.error("[Main] Failed to parse existing JWT (early init):", e);
+        }
+    }
+
     if (shopId) {
         activeShop = state.stores.all.find(s => s.id === shopId);
         log('Main', `Shop ID found in URL: ${shopId}. Found shop: ${!!activeShop}`);
@@ -183,7 +216,7 @@ async function initialize() {
 
     if (sessionId) {
          log('Main', `Session ID found in URL: ${sessionId}. Loading session...`);
-         await api.loadSessionFromAirtable(sessionId); 
+         await api.loadSessionFromAirtable(sessionId);
          if (!activeShop && state.session.storeId) {
               activeShop = state.stores.all.find(s => s.id === state.session.storeId);
               log('Main', `Determined shop from loaded session: ${state.session.storeId}. Found shop: ${!!activeShop}`);
@@ -316,41 +349,11 @@ async function initialize() {
         } else {
             console.warn('Marquee container or text element not found.');
         }
-        ui.applyCartLabels(shopSettings.cartLabels); 
-        initializeEventListeners(imageCache, window.flatpickr, shopSettings); 
+        ui.applyCartLabels(shopSettings.cartLabels);
+        initializeEventListeners(imageCache, window.flatpickr, shopSettings);
 
-        const jwt = localStorage.getItem('jwt');
-        let initialUserId = null;
-        if (jwt) {
-            try {
-                const payload = JSON.parse(atob(jwt.split('.')[1]));
-                if (payload.exp * 1000 > Date.now()) {
-                    setState({
-                        session: {
-                            ...state.session,
-                            user: {
-                                ...state.session.user,
-                                isAuthenticated: true,
-                                id: payload.userId,
-                                name: payload.name,
-                                email: payload.email,
-                                isOwner: payload.isOwner,
-                                ownedStoreId: payload.ownedStoreId || null,
-                                ownerDashboardId: payload.ownerDashboardId || null
-                            }
-                        }
-                    });
-                    initialUserId = payload.userId;
-                    log('Main', `User authenticated via existing JWT: ${initialUserId}, isOwner: ${payload.isOwner}, ownedStoreId: ${payload.ownedStoreId}`);
-                } else {
-                    localStorage.removeItem('jwt');
-                    log('Main', 'Existing JWT expired.');
-                }
-            } catch (e) {
-                localStorage.removeItem('jwt');
-                console.error("[Main] Failed to parse existing JWT:", e);
-            }
-        }
+        // Note: JWT authentication is now handled earlier in initialization (before session load)
+        // to prevent the "collaborator or store owner" race condition error
 
         const loginToken = urlParams.get('token');
         if (loginToken) {
@@ -382,10 +385,11 @@ async function initialize() {
         
         } else if (state.session.user.isAuthenticated && state.session.user.likedItemIds.size === 0) {
             log('Main', 'User authenticated by JWT, but no likes found. Fetching full user data from /api/update-user-prefs?action=get-user-data...');
+            const storedJwt = localStorage.getItem('jwt');
             try {
                 const response = await fetch('/api/update-user-prefs?action=get-user-data', {
-                    method: 'GET', 
-                    headers: { 'Authorization': `Bearer ${jwt}` } 
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${storedJwt}` }
                 });
                 if (!response.ok) {
                     const errorData = await response.json();
