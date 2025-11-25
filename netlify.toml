@@ -3,6 +3,10 @@
   command = "npm run build"
   functions = "netlify/functions"
 
+# Enable Netlify Image CDN for external images (Cloudinary)
+[images]
+  remote_images = ["https://res.cloudinary.com/.*"]
+
 [build.processing]
   skip_processing = false
 [build.processing.css]

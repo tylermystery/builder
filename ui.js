@@ -11,6 +11,7 @@ import * as api from '../api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
+import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimizer.js';
 
 
 // Re-export functions from component modules
@@ -24,22 +25,30 @@ export { showPresentationView, hidePresentationView, setupPresentationEventListe
 export { initializeItemChat };
 
 
-// Optimized lazy loading with responsive images and modern format support
+// Optimized lazy loading with Netlify Image CDN, responsive images and modern format support
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
             const element = entry.target;
             if (element.dataset.bgImage) {
-                // Optimize Cloudinary URL for responsive delivery
                 let imageUrl = element.dataset.bgImage;
+                const width = element.offsetWidth || 400;
+                const height = element.offsetHeight || 300;
+                const dpr = window.devicePixelRatio || 1;
+                const optimalWidth = Math.min(Math.ceil(width * dpr), 1200);
+                const optimalHeight = Math.min(Math.ceil(height * dpr), 900);
 
-                // Add format optimization and quality to Cloudinary URLs
-                if (imageUrl.includes('cloudinary.com')) {
-                    const width = element.offsetWidth || 400;
-                    const dpr = window.devicePixelRatio || 1;
-                    const optimalWidth = Math.ceil(width * dpr);
-
-                    // Insert Cloudinary transformations: auto format (WebP/AVIF), quality, width
+                // Use Netlify Image CDN for supported images (provides auto WebP/AVIF)
+                if (shouldUseNetlifyImageCDN(imageUrl)) {
+                    imageUrl = optimizeImageUrl(imageUrl, {
+                        width: optimalWidth,
+                        height: optimalHeight,
+                        fit: 'cover',
+                        format: 'webp',
+                        quality: 80
+                    });
+                } else if (imageUrl.includes('cloudinary.com')) {
+                    // Fallback: direct Cloudinary transformations
                     imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
                 }
 
@@ -60,12 +69,23 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
             }
             if (element.dataset.src) {
                 let imageUrl = element.dataset.src;
+                const width = element.offsetWidth || 400;
+                const height = element.offsetHeight || 300;
+                const dpr = window.devicePixelRatio || 1;
+                const optimalWidth = Math.min(Math.ceil(width * dpr), 1200);
+                const optimalHeight = Math.min(Math.ceil(height * dpr), 900);
 
-                // Optimize Cloudinary URLs for img elements
-                if (imageUrl.includes('cloudinary.com')) {
-                    const width = element.offsetWidth || 400;
-                    const dpr = window.devicePixelRatio || 1;
-                    const optimalWidth = Math.ceil(width * dpr);
+                // Use Netlify Image CDN for supported images
+                if (shouldUseNetlifyImageCDN(imageUrl)) {
+                    imageUrl = optimizeImageUrl(imageUrl, {
+                        width: optimalWidth,
+                        height: optimalHeight,
+                        fit: 'cover',
+                        format: 'webp',
+                        quality: 80
+                    });
+                } else if (imageUrl.includes('cloudinary.com')) {
+                    // Fallback: direct Cloudinary transformations
                     imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
                 }
 
@@ -92,14 +112,27 @@ export function observeLazyImages(container) {
     const lazyElements = container.querySelectorAll('.lazy-load');
     lazyElements.forEach(el => lazyLoadObserver.observe(el));
     // --- ADD THIS ---
-    // Initialize tooltips for new partner badges
+    // Initialize tooltips for new partner badges - load libraries on demand
     const partnerBadges = container.querySelectorAll('.partner-badge');
-    if (partnerBadges.length > 0 && typeof tippy === 'function') {
-        tippy(partnerBadges, {
-            content: "This is a partner activity. We handle all booking and logistics to ensure it's a seamless part of your event.",
-            placement: 'top',
-            theme: 'light',
-        });
+    if (partnerBadges.length > 0) {
+        // Lazy-load tooltip libraries only when needed
+        if (typeof window.loadTooltipLibraries === 'function') {
+            window.loadTooltipLibraries().then(() => {
+                if (typeof tippy === 'function') {
+                    tippy(partnerBadges, {
+                        content: "This is a partner activity. We handle all booking and logistics to ensure it's a seamless part of your event.",
+                        placement: 'top',
+                        theme: 'light',
+                    });
+                }
+            });
+        } else if (typeof tippy === 'function') {
+            tippy(partnerBadges, {
+                content: "This is a partner activity. We handle all booking and logistics to ensure it's a seamless part of your event.",
+                placement: 'top',
+                theme: 'light',
+            });
+        }
     }
     // --- END ADD ---
 }

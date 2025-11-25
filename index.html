@@ -8,14 +8,14 @@
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
     <!-- Preconnect to critical third-party origins for faster resource loading -->
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="preconnect" href="https://js.pusher.com" crossorigin>
-    <link rel="preconnect" href="https://identity.netlify.com" crossorigin>
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://api.airtable.com" crossorigin>
 
-    <!-- DNS prefetch for API endpoints and other domains -->
-    <link rel="dns-prefetch" href="https://api.airtable.com">
+    <!-- DNS prefetch for less critical domains - deferred connection -->
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://js.pusher.com">
+    <link rel="dns-prefetch" href="https://identity.netlify.com">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://js.stripe.com">
 
     <!-- Preload critical JavaScript modules for faster execution -->
@@ -403,16 +403,52 @@ body.modal-open {
     <link rel="modulepreload" href="events.js">
     <link rel="modulepreload" href="components/backgroundEngine.js">
 
-    <!-- Third-party libraries loaded with improved performance attributes -->
-    <!-- Popper and Tippy.js for tooltips - loaded with fetchpriority low and integrity checks -->
-    <script defer src="https://unpkg.com/@popperjs/core@2" crossorigin="anonymous" fetchpriority="low" async></script>
-    <script defer src="https://unpkg.com/tippy.js@6" crossorigin="anonymous" fetchpriority="low" async></script>
+    <!-- Third-party libraries - load on demand after page interactive -->
+    <!-- Tippy.js/Popper for tooltips - loaded late as non-critical -->
+    <script>
+    // Lazy-load third-party tooltip libraries only when first tooltip is needed
+    window.loadTooltipLibraries = function() {
+      if (window._tooltipLoading) return window._tooltipLoading;
+      window._tooltipLoading = new Promise((resolve) => {
+        const popper = document.createElement('script');
+        popper.src = 'https://unpkg.com/@popperjs/core@2';
+        popper.onload = () => {
+          const tippy = document.createElement('script');
+          tippy.src = 'https://unpkg.com/tippy.js@6';
+          tippy.onload = resolve;
+          document.head.appendChild(tippy);
+        };
+        document.head.appendChild(popper);
+      });
+      return window._tooltipLoading;
+    };
+    </script>
 
-    <!-- Other libraries will be lazy-loaded on demand with improved loading strategy -->
-    <!-- Pusher loaded asynchronously to avoid blocking -->
-    <script defer src="https://js.pusher.com/8.2.0/pusher.min.js" crossorigin="anonymous" fetchpriority="low" async></script>
-    <!-- Netlify Identity loaded with low priority -->
-    <script defer type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js" fetchpriority="low" async></script>
+    <!-- Pusher loaded after DOMContentLoaded for real-time features -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Delay Pusher load by 2 seconds to prioritize main content
+      setTimeout(function() {
+        var pusherScript = document.createElement('script');
+        pusherScript.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
+        document.head.appendChild(pusherScript);
+      }, 2000);
+    });
+    </script>
+
+    <!-- Netlify Identity loaded on demand when auth is needed -->
+    <script>
+    window.loadNetlifyIdentity = function() {
+      if (window._identityLoading) return window._identityLoading;
+      window._identityLoading = new Promise((resolve) => {
+        var script = document.createElement('script');
+        script.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
+        script.onload = resolve;
+        document.head.appendChild(script);
+      });
+      return window._identityLoading;
+    };
+    </script>
 
     </head>
 <body>
