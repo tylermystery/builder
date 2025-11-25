@@ -1,7 +1,7 @@
 // Optimized Service Worker for cache management
 // This ensures users always see the latest version of the site
 
-const CACHE_VERSION = 'v-1732423200001'; // Updated version for performance improvements
+const CACHE_VERSION = 'v-' + Date.now(); // Auto-update on each build
 const STATIC_CACHE = 'wtfun-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
@@ -20,8 +20,16 @@ const BACKGROUND_PRELOAD = [
   '/state.js',
   '/api.js',
   '/config.js',
-  '/css/deferred.css'
+  '/css/deferred.css',
+  '/ui.js'
 ];
+
+// Cache size limits to prevent storage bloat
+const CACHE_LIMITS = {
+  images: 100,    // Max cached images
+  dynamic: 50,    // Max dynamic responses
+  fonts: 20       // Max cached fonts
+};
 
 // Cache strategy per resource type
 const CACHE_STRATEGIES = {
@@ -36,6 +44,20 @@ const CACHE_STRATEGIES = {
   // API calls - Network only (never cache)
   api: 'network-only'
 };
+
+// Trim cache to specified limit
+async function trimCache(cacheName, maxItems) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxItems) {
+    // Delete oldest entries (FIFO)
+    const deleteCount = keys.length - maxItems;
+    for (let i = 0; i < deleteCount; i++) {
+      await cache.delete(keys[i]);
+    }
+    console.log(`[SW] Trimmed ${deleteCount} items from ${cacheName}`);
+  }
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -73,15 +95,31 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      // Background preload additional resources
-      return caches.open(STATIC_CACHE).then((cache) => {
-        console.log('[SW] Background preloading additional resources...');
-        return Promise.allSettled(
-          BACKGROUND_PRELOAD.map(url =>
-            cache.add(url).catch(err => console.log('[SW] Preload skipped:', url))
-          )
-        );
-      });
+      // Background preload additional resources during idle time
+      if ('requestIdleCallback' in self) {
+        self.requestIdleCallback(() => {
+          caches.open(STATIC_CACHE).then((cache) => {
+            console.log('[SW] Background preloading additional resources...');
+            return Promise.allSettled(
+              BACKGROUND_PRELOAD.map(url =>
+                cache.add(url).catch(err => console.log('[SW] Preload skipped:', url))
+              )
+            );
+          });
+        }, { timeout: 5000 });
+      } else {
+        // Fallback for environments without requestIdleCallback
+        setTimeout(() => {
+          caches.open(STATIC_CACHE).then((cache) => {
+            console.log('[SW] Background preloading additional resources...');
+            return Promise.allSettled(
+              BACKGROUND_PRELOAD.map(url =>
+                cache.add(url).catch(err => console.log('[SW] Preload skipped:', url))
+              )
+            );
+          });
+        }, 2000);
+      }
     }).then(() => {
       return self.clients.claim(); // Take control of all pages immediately
     })
@@ -162,7 +200,10 @@ self.addEventListener('fetch', (event) => {
                 status: responseToCache.status,
                 statusText: responseToCache.statusText,
                 headers: headers
-              }));
+              })).then(() => {
+                // Trim image cache to prevent storage bloat
+                trimCache(IMAGE_CACHE, CACHE_LIMITS.images);
+              });
             }
             return response;
           }).catch(() => cached || new Response('Image unavailable', { status: 404 }));
