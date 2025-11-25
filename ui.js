@@ -26,6 +26,7 @@ export { initializeItemChat };
 
 
 // Optimized lazy loading with Netlify Image CDN, responsive images and modern format support
+// Increased rootMargin for earlier loading, threshold for smoother transitions
 const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -35,8 +36,10 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
                 const width = element.offsetWidth || 400;
                 const height = element.offsetHeight || 300;
                 const dpr = window.devicePixelRatio || 1;
-                const optimalWidth = Math.min(Math.ceil(width * dpr), 1200);
-                const optimalHeight = Math.min(Math.ceil(height * dpr), 900);
+                // Cap DPR at 2 for performance (most users won't notice above 2x)
+                const effectiveDpr = Math.min(dpr, 2);
+                const optimalWidth = Math.min(Math.ceil(width * effectiveDpr), 1200);
+                const optimalHeight = Math.min(Math.ceil(height * effectiveDpr), 900);
 
                 // Use Netlify Image CDN for supported images (provides auto WebP/AVIF)
                 if (shouldUseNetlifyImageCDN(imageUrl)) {
@@ -45,19 +48,32 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
                         height: optimalHeight,
                         fit: 'cover',
                         format: 'webp',
-                        quality: 80
+                        quality: 75 // Reduced quality for better performance
                     });
                 } else if (imageUrl.includes('cloudinary.com')) {
-                    // Fallback: direct Cloudinary transformations
-                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
+                    // Fallback: direct Cloudinary transformations with progressive loading
+                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto:good,w_${optimalWidth},fl_progressive/`);
                 }
 
                 // Create a new image to preload
                 const img = new Image();
+                // Use decode() for smoother image rendering when available
                 img.onload = () => {
-                    element.style.backgroundImage = `url('${imageUrl}')`;
-                    element.classList.add('loaded');
-                    element.classList.remove('lazy-load');
+                    if ('decode' in img) {
+                        img.decode().then(() => {
+                            element.style.backgroundImage = `url('${imageUrl}')`;
+                            element.classList.add('loaded');
+                            element.classList.remove('lazy-load');
+                        }).catch(() => {
+                            element.style.backgroundImage = `url('${imageUrl}')`;
+                            element.classList.add('loaded');
+                            element.classList.remove('lazy-load');
+                        });
+                    } else {
+                        element.style.backgroundImage = `url('${imageUrl}')`;
+                        element.classList.add('loaded');
+                        element.classList.remove('lazy-load');
+                    }
                 };
                 img.onerror = () => {
                     // Fallback to original URL if optimized version fails
@@ -72,8 +88,9 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
                 const width = element.offsetWidth || 400;
                 const height = element.offsetHeight || 300;
                 const dpr = window.devicePixelRatio || 1;
-                const optimalWidth = Math.min(Math.ceil(width * dpr), 1200);
-                const optimalHeight = Math.min(Math.ceil(height * dpr), 900);
+                const effectiveDpr = Math.min(dpr, 2);
+                const optimalWidth = Math.min(Math.ceil(width * effectiveDpr), 1200);
+                const optimalHeight = Math.min(Math.ceil(height * effectiveDpr), 900);
 
                 // Use Netlify Image CDN for supported images
                 if (shouldUseNetlifyImageCDN(imageUrl)) {
@@ -82,18 +99,30 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
                         height: optimalHeight,
                         fit: 'cover',
                         format: 'webp',
-                        quality: 80
+                        quality: 75
                     });
                 } else if (imageUrl.includes('cloudinary.com')) {
                     // Fallback: direct Cloudinary transformations
-                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto,w_${optimalWidth}/`);
+                    imageUrl = imageUrl.replace('/upload/', `/upload/f_auto,q_auto:good,w_${optimalWidth},fl_progressive/`);
                 }
 
                 const img = new Image();
                 img.onload = () => {
-                    element.src = imageUrl;
-                    element.classList.add('loaded');
-                    element.classList.remove('lazy-load');
+                    if ('decode' in img) {
+                        img.decode().then(() => {
+                            element.src = imageUrl;
+                            element.classList.add('loaded');
+                            element.classList.remove('lazy-load');
+                        }).catch(() => {
+                            element.src = imageUrl;
+                            element.classList.add('loaded');
+                            element.classList.remove('lazy-load');
+                        });
+                    } else {
+                        element.src = imageUrl;
+                        element.classList.add('loaded');
+                        element.classList.remove('lazy-load');
+                    }
                 };
                 img.onerror = () => {
                     element.src = element.dataset.src;
@@ -105,7 +134,10 @@ const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
             observer.unobserve(element);
         }
     });
-}, { rootMargin: "0px 0px 300px 0px" });
+}, {
+    rootMargin: "0px 0px 500px 0px", // Load images 500px before they enter viewport
+    threshold: 0.01 // Trigger when even 1% is visible
+});
 
 let promptTimeout;
 export function observeLazyImages(container) {

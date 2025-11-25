@@ -7,9 +7,14 @@
     <meta name="theme-color" content="#007bff">
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
+
     <!-- Preconnect to critical third-party origins for faster resource loading -->
+    <!-- Priority: Cloudinary for hero images, Airtable for initial data -->
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
     <link rel="preconnect" href="https://api.airtable.com" crossorigin>
+
+    <!-- Preconnect to Netlify Image CDN for optimized images -->
+    <link rel="preconnect" href="/.netlify/images" crossorigin>
 
     <!-- DNS prefetch for less critical domains - deferred connection -->
     <link rel="dns-prefetch" href="https://unpkg.com">
@@ -18,12 +23,16 @@
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://js.stripe.com">
 
-    <!-- Preload critical JavaScript modules for faster execution -->
-    <link rel="modulepreload" href="/main.js">
+    <!-- Preload critical JavaScript modules with fetchpriority for faster execution -->
+    <link rel="modulepreload" href="/main.js" fetchpriority="high">
     <link rel="modulepreload" href="/state.js">
     <link rel="modulepreload" href="/config.js">
     <link rel="modulepreload" href="/ui.js">
     <link rel="modulepreload" href="/api.js">
+
+    <!-- Preload system fonts to prevent FOIT/FOUT -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"></noscript>
 
     <!-- Preload critical CSS for immediate rendering -->
     <link rel="preload" href="/css/critical.css" as="style">
@@ -54,6 +63,29 @@ body {
     text-rendering: optimizeSpeed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+/* Performance: GPU acceleration hints for animated elements */
+#kaleidoscope-bg,
+.modal-overlay,
+.event-card {
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Lazy-loaded image transitions for smoother UX */
+.lazy-load {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.lazy-load.loaded {
+    opacity: 1;
+}
+
+/* Contain paint for cards to improve rendering performance */
+.event-card {
+    contain: layout style paint;
 }
 
 body.modal-open {
@@ -412,9 +444,11 @@ body.modal-open {
       window._tooltipLoading = new Promise((resolve) => {
         const popper = document.createElement('script');
         popper.src = 'https://unpkg.com/@popperjs/core@2';
+        popper.async = true;
         popper.onload = () => {
           const tippy = document.createElement('script');
           tippy.src = 'https://unpkg.com/tippy.js@6';
+          tippy.async = true;
           tippy.onload = resolve;
           document.head.appendChild(tippy);
         };
@@ -424,16 +458,24 @@ body.modal-open {
     };
     </script>
 
-    <!-- Pusher loaded after DOMContentLoaded for real-time features -->
+    <!-- Pusher loaded after page is interactive for real-time features -->
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Delay Pusher load by 2 seconds to prioritize main content
-      setTimeout(function() {
-        var pusherScript = document.createElement('script');
-        pusherScript.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
-        document.head.appendChild(pusherScript);
-      }, 2000);
-    });
+    // Use requestIdleCallback for non-critical third-party scripts
+    function loadPusherWhenIdle() {
+      var pusherScript = document.createElement('script');
+      pusherScript.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
+      pusherScript.async = true;
+      document.head.appendChild(pusherScript);
+    }
+
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(loadPusherWhenIdle, { timeout: 3000 });
+    } else {
+      // Fallback: load after page load event
+      window.addEventListener('load', function() {
+        setTimeout(loadPusherWhenIdle, 1000);
+      });
+    }
     </script>
 
     <!-- Netlify Identity loaded on demand when auth is needed -->
@@ -443,6 +485,7 @@ body.modal-open {
       window._identityLoading = new Promise((resolve) => {
         var script = document.createElement('script');
         script.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
+        script.async = true;
         script.onload = resolve;
         document.head.appendChild(script);
       });

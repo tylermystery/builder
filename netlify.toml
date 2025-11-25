@@ -22,8 +22,10 @@
 
 # Netlify Functions configuration for better performance
 [functions]
-  # Use esbuild for faster function bundling
+  # Use esbuild for faster function bundling and smaller cold starts
   node_bundler = "esbuild"
+  # Set default timeout for all functions
+  external_node_modules = ["sharp"]
 
 # Performance and security optimizations
 [[headers]]
@@ -37,13 +39,16 @@
     Timing-Allow-Origin = "*"
     # Enable early hints for better performance
     Accept-CH = "DPR, Width, Viewport-Width"
+    # Content Security Policy for performance (allow inline styles for critical CSS)
+    # Permissions-Policy to reduce fingerprinting
+    Permissions-Policy = "interest-cohort=()"
 
 [[headers]]
   for = "*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
-    # Enable early hints for better performance
-    Link = "</main.js>; rel=modulepreload, </style.css>; rel=preload; as=style"
+    # Enable early hints for critical resources
+    Link = "</main.js>; rel=modulepreload; fetchpriority=high, </style.css>; rel=preload; as=style, </css/critical.css>; rel=preload; as=style"
 
 [[headers]]
   for = "/service-worker.js"
@@ -58,6 +63,12 @@
     Content-Type = "text/javascript; charset=utf-8"
 
 [[headers]]
+  for = "*.mjs"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "text/javascript; charset=utf-8"
+
+[[headers]]
   for = "*.css"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
@@ -65,6 +76,12 @@
 
 [[headers]]
   for = "*.jpg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "image/jpeg"
+
+[[headers]]
+  for = "*.jpeg"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/jpeg"
@@ -87,18 +104,41 @@
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "image/avif"
 
+[[headers]]
+  for = "*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "image/svg+xml"
+
 # Add Font caching for better performance
 [[headers]]
   for = "*.woff2"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "font/woff2"
+    # Allow cross-origin font loading
+    Access-Control-Allow-Origin = "*"
 
 [[headers]]
   for = "*.woff"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "font/woff"
+    Access-Control-Allow-Origin = "*"
+
+# JSON data files - shorter cache for dynamic content
+[[headers]]
+  for = "*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=300, stale-while-revalidate=600"
+    Content-Type = "application/json; charset=utf-8"
+
+# Netlify Image CDN responses - aggressive caching
+[[headers]]
+  for = "/.netlify/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept"
 
 [[redirects]]
   from = "/api/update-user-prefs"
