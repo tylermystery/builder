@@ -227,6 +227,20 @@ let pendingEventPlanUpdate = false;
  */
 async function updateSessionPublishingControls() {
     console.log('[PUBLISH DEBUG] updateSessionPublishingControls called');
+    
+    // --- PERMISSION CHECK ---
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const currentUser = state.session.user;
+
+    if (activeStore && currentUser) {
+        const allowedUsers = activeStore.fields.PublishPermission || [];
+        if (!allowedUsers.includes(currentUser.id)) {
+            log('Sidebar', 'User does not have permission to publish, hiding controls.');
+            return; // Exit if user is not in the allowed list
+        }
+    }
+    // --- END PERMISSION CHECK ---
+
     console.log('[PUBLISH DEBUG] state.session.id:', state.session.id);
 
     // Remove any existing publishing controls
