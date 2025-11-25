@@ -738,7 +738,8 @@ export async function fetchAllRecords() {
         'Location Details',
         'Additional Information',
         'Rankings',
-        'AI_Profile'
+        'AI_Profile',
+        'LinkedSession'
     ];
     // --- END OF FIELD LIST ---
 
