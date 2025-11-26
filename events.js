@@ -478,20 +478,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }, { passive: true });
 
     // --- START CONSOLIDATED BUTTON GENERATION --
-    const categoryFiltersRoot = document.getElementById('category-filters'); 
-    if (categoryFiltersRoot) { 
-        const planFilterBtn = document.createElement('button');
-        planFilterBtn.className = 'filter-btn';
-        planFilterBtn.id = 'plan-filter-btn';
-        planFilterBtn.textContent = '⭐ My Plan';
-        planFilterBtn.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            planFilterBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'plan' });
-            applyFiltersAndSort(imageCache);
-        });
-        categoryFiltersRoot.appendChild(planFilterBtn);
-
+    const categoryFiltersRoot = document.getElementById('category-filters');
+    if (categoryFiltersRoot) {
         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
         const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
@@ -499,11 +487,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const itemRecordIds = Array.isArray(activeShop.fields.Items)
                 ? activeShop.fields.Items
                 : activeShop.fields.Items.split(',').map(id => id.trim());
-            
+
             let firstCategoryButton = true;
             itemRecordIds.forEach(recordId => {
                 if (!recordId.startsWith('rec')) return;
-                
+
                 const categoryRecord = state.records.all.find(r => r.id === recordId);
                 if (categoryRecord && categoryRecord.fields && categoryRecord.fields.Name) {
                     const categoryName = categoryRecord.fields.Name;
@@ -527,6 +515,19 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     categoryFiltersRoot.appendChild(categoryBtn);
                 }
             });
+
+            // Add "All" button at the end after store categories
+            const allButton = document.createElement('button');
+            allButton.className = 'filter-btn category-filter-btn';
+            allButton.dataset.filter = 'all';
+            allButton.textContent = 'All';
+            allButton.addEventListener('click', () => {
+                document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                allButton.classList.add('active');
+                updateUrl({ category: null, subcategory: null, view: null });
+                applyFiltersAndSort(imageCache);
+            });
+            categoryFiltersRoot.appendChild(allButton);
         } else {
             const allButton = document.createElement('button');
             allButton.className = 'filter-btn category-filter-btn active';
@@ -542,17 +543,26 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
 
     }  else {
-        console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
+        console.warn("Could not find #category-filters container to add category filter buttons.");
     }
     // --- END CONSOLIDATED BUTTON GENERATION --
 
     // --- START HEADER USER FILTER BUTTONS ---
+    const myPlanHeaderBtn = document.getElementById('my-plan-header-btn');
     const likedItemsHeaderBtn = document.getElementById('liked-items-header-btn');
     const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
     const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
 
+    if (myPlanHeaderBtn) {
+        myPlanHeaderBtn.addEventListener('click', () => {
+            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
+            applyFiltersAndSort(imageCache);
+        });
+    }
+
     if (likedItemsHeaderBtn) {
-        likedItemsHeaderBtn.style.display = 'block';
+        // Likes button is now always visible in the hamburger menu
         likedItemsHeaderBtn.addEventListener('click', () => {
             updateUrl({ category: null, subcategory: null, view: 'likes' });
             applyFiltersAndSort(imageCache);
@@ -560,7 +570,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
 
     if (mySessionsHeaderBtn) {
-        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        // Show only if authenticated - controlled via CSS display
+        if (state.session.user.isAuthenticated) {
+            mySessionsHeaderBtn.style.display = 'flex';
+        }
         mySessionsHeaderBtn.addEventListener('click', () => {
             if (!state.session.user.isAuthenticated) {
                 showUserModal();
@@ -572,7 +585,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
 
     if (rsvpEventsHeaderBtn) {
-        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        // Show only if authenticated - controlled via CSS display
+        if (state.session.user.isAuthenticated) {
+            rsvpEventsHeaderBtn.style.display = 'flex';
+        }
         rsvpEventsHeaderBtn.addEventListener('click', () => {
             if (!state.session.user.isAuthenticated) {
                 showUserModal();
@@ -583,6 +599,73 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
     }
     // --- END HEADER USER FILTER BUTTONS ---
+
+    // --- START HAMBURGER MENU EVENT LISTENERS ---
+    const setupHamburgerMenus = () => {
+        const leftHamburgerBtn = document.getElementById('left-hamburger-btn');
+        const leftDropdown = document.getElementById('left-hamburger-dropdown');
+        const rightHamburgerBtn = document.getElementById('right-hamburger-btn');
+        const rightDropdown = document.getElementById('right-hamburger-dropdown');
+
+        // Function to close all dropdowns
+        const closeAllDropdowns = () => {
+            leftDropdown?.classList.remove('active');
+            rightDropdown?.classList.remove('active');
+            leftHamburgerBtn?.setAttribute('aria-expanded', 'false');
+            rightHamburgerBtn?.setAttribute('aria-expanded', 'false');
+        };
+
+        // Toggle left hamburger menu
+        if (leftHamburgerBtn && leftDropdown) {
+            leftHamburgerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isActive = leftDropdown.classList.contains('active');
+                closeAllDropdowns();
+                if (!isActive) {
+                    leftDropdown.classList.add('active');
+                    leftHamburgerBtn.setAttribute('aria-expanded', 'true');
+                }
+            });
+        }
+
+        // Toggle right hamburger menu
+        if (rightHamburgerBtn && rightDropdown) {
+            rightHamburgerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isActive = rightDropdown.classList.contains('active');
+                closeAllDropdowns();
+                if (!isActive) {
+                    rightDropdown.classList.add('active');
+                    rightHamburgerBtn.setAttribute('aria-expanded', 'true');
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.hamburger-menu-container')) {
+                closeAllDropdowns();
+            }
+        });
+
+        // Close dropdown when pressing Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeAllDropdowns();
+            }
+        });
+
+        // Close dropdown when a menu item is clicked
+        document.querySelectorAll('.hamburger-menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                // Small delay to allow the action to register
+                setTimeout(closeAllDropdowns, 100);
+            });
+        });
+    };
+
+    setupHamburgerMenus();
+    // --- END HAMBURGER MENU EVENT LISTENERS ---
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;
