@@ -1,6 +1,6 @@
 
 [build]
-  command = "npm run build"
+  command = "npm install && npm run build"
   functions = "netlify/functions"
 
 # Enable Netlify Image CDN for external images (Cloudinary)
@@ -13,8 +13,9 @@
   bundle = true
   minify = true
 [build.processing.js]
-  bundle = true
-  minify = true
+  # Disable Netlify JS processing since we use esbuild for bundling
+  bundle = false
+  minify = false
 [build.processing.html]
   pretty_urls = true
 [build.processing.images]
@@ -42,8 +43,15 @@
   for = "*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
-    # Enable early hints for better performance
-    Link = "</main.js>; rel=modulepreload, </style.css>; rel=preload; as=style"
+    # Enable early hints for bundled JavaScript
+    Link = "</dist/main.bundle.js>; rel=modulepreload, </style.css>; rel=preload; as=style"
+
+# Bundled JavaScript - long cache with immutable
+[[headers]]
+  for = "/dist/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "text/javascript; charset=utf-8"
 
 [[headers]]
   for = "/service-worker.js"

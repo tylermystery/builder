@@ -110,7 +110,8 @@ function setupAdminTools() {
 
         } catch (err) {
             statusMessage.style.color = '#dc3545';
-            statusMessage.textContent = `Error: ${err.message}`;\n            bulkProfileBtn.disabled = false;
+            statusMessage.textContent = `Error: ${err.message}`;
+            bulkProfileBtn.disabled = false;
         }
     });
 }

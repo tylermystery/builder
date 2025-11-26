@@ -7,7 +7,7 @@ import { createInteractiveCard, updateCardIcon } from './components/card.js';
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
 import { updateAllCardAvailabilityIcons } from './events.js';
-import * as api from '../api.js';
+import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
 import { initializeItemChat } from './chat.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
@@ -18,7 +18,7 @@ import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimiz
 export * from './components/card.js';
 export * from './components/modal.js';
 export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader, verifyNoDuplicateItems } from './components/sidebar.js';
-export * from '../utils.js';
+export * from './utils.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };

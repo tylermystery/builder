@@ -1,8 +1,17 @@
-// REPLACE THE ENTIRE CONTENTS of build.js with this corrected version:
+/**
+ * Build Script for WTFun
+ *
+ * This script handles:
+ * 1. JavaScript bundling (via esbuild) - reduces HTTP requests and file sizes
+ * 2. Airtable shortcut redirects generation
+ * 3. Service worker cache version updates
+ * 4. Project source exports (JSON/text)
+ */
 
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // --- Configuration ---
 const JSON_OUTPUT_FILE = 'project_source.json';
@@ -240,6 +249,168 @@ function generateAndWriteRedirects(shortcutItems) {
     }
 }
 
+// --- JavaScript Bundling Function ---
+async function runBundler() {
+    console.log('\n📦 Running JavaScript bundler (esbuild)...');
+
+    try {
+        // Check if esbuild is available
+        const esbuild = require('esbuild');
+        const OUTPUT_DIR = 'dist';
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.CONTEXT === 'production';
+
+        // Ensure output directory exists
+        if (!fs.existsSync(OUTPUT_DIR)) {
+            fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+        }
+
+        const buildTimestamp = Date.now();
+        const startTime = Date.now();
+
+        // Bundle main application
+        console.log('   Bundling main.js...');
+        const mainResult = await esbuild.build({
+            entryPoints: ['main.js'],
+            bundle: true,
+            outfile: path.join(OUTPUT_DIR, 'main.bundle.js'),
+            format: 'esm',
+            target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+            minify: isProduction,
+            sourcemap: true,
+            treeShaking: true,
+            metafile: true,
+            define: {
+                'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+            },
+            platform: 'browser',
+            splitting: false,
+            logLevel: 'warning',
+        });
+
+        const mainBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'main.bundle.js')).size;
+        const mainInputFiles = Object.keys(mainResult.metafile.inputs).length;
+        console.log(`   ✅ main.bundle.js: ${(mainBundleSize / 1024).toFixed(2)} KB (${mainInputFiles} modules bundled)`);
+
+        // Bundle CRM dashboard
+        console.log('   Bundling crm.js...');
+        const crmResult = await esbuild.build({
+            entryPoints: ['crm.js'],
+            bundle: true,
+            outfile: path.join(OUTPUT_DIR, 'crm.bundle.js'),
+            format: 'esm',
+            target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+            minify: isProduction,
+            sourcemap: true,
+            treeShaking: true,
+            metafile: true,
+            define: {
+                'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+            },
+            platform: 'browser',
+            splitting: false,
+            logLevel: 'warning',
+        });
+
+        const crmBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'crm.bundle.js')).size;
+        console.log(`   ✅ crm.bundle.js: ${(crmBundleSize / 1024).toFixed(2)} KB`);
+
+        // Bundle store dashboard if it exists
+        if (fs.existsSync('store-dashboard.js')) {
+            console.log('   Bundling store-dashboard.js...');
+            await esbuild.build({
+                entryPoints: ['store-dashboard.js'],
+                bundle: true,
+                outfile: path.join(OUTPUT_DIR, 'store-dashboard.bundle.js'),
+                format: 'esm',
+                target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+                minify: isProduction,
+                sourcemap: true,
+                treeShaking: true,
+                define: {
+                    'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                },
+                platform: 'browser',
+                splitting: false,
+                logLevel: 'warning',
+            });
+            const dashboardBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'store-dashboard.bundle.js')).size;
+            console.log(`   ✅ store-dashboard.bundle.js: ${(dashboardBundleSize / 1024).toFixed(2)} KB`);
+        }
+
+        // Bundle teammate page if it exists
+        if (fs.existsSync('teammate.js')) {
+            console.log('   Bundling teammate.js...');
+            await esbuild.build({
+                entryPoints: ['teammate.js'],
+                bundle: true,
+                outfile: path.join(OUTPUT_DIR, 'teammate.bundle.js'),
+                format: 'esm',
+                target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+                minify: isProduction,
+                sourcemap: true,
+                treeShaking: true,
+                define: {
+                    'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                },
+                platform: 'browser',
+                splitting: false,
+                logLevel: 'warning',
+            });
+            const teammateBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'teammate.bundle.js')).size;
+            console.log(`   ✅ teammate.bundle.js: ${(teammateBundleSize / 1024).toFixed(2)} KB`);
+        }
+
+        // Bundle eventHub if it exists
+        if (fs.existsSync('eventHub.js')) {
+            console.log('   Bundling eventHub.js...');
+            await esbuild.build({
+                entryPoints: ['eventHub.js'],
+                bundle: true,
+                outfile: path.join(OUTPUT_DIR, 'eventHub.bundle.js'),
+                format: 'esm',
+                target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+                minify: isProduction,
+                sourcemap: true,
+                treeShaking: true,
+                define: {
+                    'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                },
+                platform: 'browser',
+                splitting: false,
+                logLevel: 'warning',
+            });
+            const eventHubBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'eventHub.bundle.js')).size;
+            console.log(`   ✅ eventHub.bundle.js: ${(eventHubBundleSize / 1024).toFixed(2)} KB`);
+        }
+
+        // Generate manifest for cache busting
+        const manifest = {
+            version: buildTimestamp,
+            bundles: {
+                main: `main.bundle.js?v=${buildTimestamp}`,
+                crm: `crm.bundle.js?v=${buildTimestamp}`,
+            },
+            generated: new Date().toISOString(),
+        };
+        fs.writeFileSync(path.join(OUTPUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));
+
+        const endTime = Date.now();
+        console.log(`   ⏱️  Bundling completed in ${endTime - startTime}ms`);
+
+        return true;
+
+    } catch (error) {
+        if (error.code === 'MODULE_NOT_FOUND') {
+            console.log('   ⚠️ esbuild not found, skipping bundling step.');
+            console.log('   Run "npm install" to enable JavaScript bundling.');
+            return false;
+        }
+        console.error('   ❌ Bundling failed:', error.message);
+        // Don't fail the entire build, just continue without bundling
+        return false;
+    }
+}
+
 // --- Generate Service Worker with Build Timestamp ---
 function generateServiceWorker() {
     console.log('\n⚙️ Generating service-worker.js with build timestamp...');
@@ -266,20 +437,33 @@ function generateServiceWorker() {
 // --- Main Build Function ---
 async function buildSourceFile() {
     console.log('============================================================');
-    console.log('🚀 Starting build process: Text, JSON, Redirects, and Service Worker...');
+    console.log('🚀 Starting build process: Bundle, Redirects, Service Worker...');
     console.log('============================================================');
 
     const timestamp = new Date().toISOString();
-    const filePaths = getAllFiles(STARTING_DIRECTORY); // Ensure getAllFiles is defined above
-    console.log(`\n➡️ Found ${filePaths.length} project files to include in exports.`);
 
+    // Step 1: Run JavaScript bundler (esbuild)
+    const bundleSuccess = await runBundler();
+
+    // Step 2: Fetch shortcuts and generate redirects
     const shortcutItems = await fetchShortcutsFromAirtable();
     generateAndWriteRedirects(shortcutItems);
+
+    // Step 3: Update service worker cache version
     generateServiceWorker();
+
+    // Step 4: Generate project exports (optional, for debugging)
+    const filePaths = getAllFiles(STARTING_DIRECTORY);
+    console.log(`\n➡️ Found ${filePaths.length} project files to include in exports.`);
     runTextExport(filePaths, timestamp);
     runJsonExport(filePaths, timestamp);
 
-    console.log('\n✨ All build steps completed successfully! ✨');
+    console.log('\n============================================================');
+    console.log('✨ All build steps completed successfully! ✨');
+    if (bundleSuccess) {
+        console.log('   📦 JavaScript bundles ready in dist/');
+    }
+    console.log('============================================================');
 }
 
 // Run the build process
