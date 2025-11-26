@@ -40,18 +40,30 @@ function syncUiWithUrl() {
     if (categoryFilters) {
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
         let buttonToActivate;
-        const categoryFilter = params.get('category');
-        
+        let categoryFilter = params.get('category');
+        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
+
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
         } else if (view === 'likes') {
-            buttonToActivate = document.getElementById('liked-items-filter-btn');
+            buttonToActivate = document.getElementById('liked-items-header-btn');
         } else if (categoryFilter) {
             buttonToActivate = categoryFilters.querySelector(`.filter-btn[data-filter="${categoryFilter}"]`);
+        } else if (hasStoreCategories) {
+            buttonToActivate = categoryFilters.querySelector('.filter-btn.category-filter-btn');
+            if (buttonToActivate) {
+                const newCategory = buttonToActivate.dataset.filter;
+                updateUrl({ category: newCategory, subcategory: null, view: null });
+                params.set('category', newCategory); // Update params for the current execution
+            }
         } else {
             buttonToActivate = categoryFilters.querySelector('.filter-btn[data-filter="all"]');
         }
-        if (buttonToActivate) buttonToActivate.classList.add('active');
+        
+        if (buttonToActivate) {
+            buttonToActivate.classList.add('active');
+        }
     }
 
     // Re-apply filters based on the URL
