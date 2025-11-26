@@ -505,6 +505,7 @@ export async function updateEventPlanSection() {
         // Check if this session is published and display RSVP stats + Publish button
         console.log('[PUBLISH DEBUG] About to call updateSessionPublishingControls');
         await updateSessionPublishingControls();
+        await updateInviteControls(); // <-- Added Invite Controls
         console.log('[PUBLISH DEBUG] updateSessionPublishingControls completed');
 
         if (state.cart.lockedItems.size === 0) {
@@ -547,6 +548,134 @@ export async function updateEventPlanSection() {
     }
 }
 // --- END REPLACED FUNCTION ---
+
+async function handleInvite() {
+    const nameInput = document.getElementById('collab-name');
+    const emailInput = document.getElementById('collab-email');
+    const statusEl = document.getElementById('invite-status');
+    const btn = document.getElementById('invite-btn');
+
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+
+    if (!name || !email) {
+        statusEl.textContent = "Please enter both name and email.";
+        statusEl.style.color = "#dc3545"; // Bootstrap danger red
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    statusEl.textContent = "";
+
+    try {
+        // Generate summary HTML
+        let summaryHtml = `
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                    <tr style="background-color: #f8f9fa; text-align: left;">
+                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Item</th>
+                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6; text-align: center;">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        state.cart.lockedItems.forEach((info, id) => {
+            const record = state.records.all.find(r => r.id === id);
+            if (record) {
+                summaryHtml += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>${record.fields.Name}</strong></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${info.quantity || 1}</td>
+                    </tr>
+                `;
+            }
+        });
+        summaryHtml += '</tbody></table>';
+
+        const inviterName = state.session.user.name || "A friend";
+
+        const response = await fetch('/api/invite-collaborator', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                eventId: state.session.id,
+                collaboratorName: name,
+                collaboratorEmail: email,
+                inviterName: inviterName,
+                planSummaryHtml: summaryHtml
+            })
+        });
+
+        if (response.ok) {
+            statusEl.textContent = "Invitation sent!";
+            statusEl.style.color = "#28a745"; // Bootstrap success green
+            nameInput.value = '';
+            emailInput.value = '';
+            setTimeout(() => {
+                 statusEl.textContent = "";
+                 btn.textContent = "Send Invite";
+                 btn.disabled = false;
+            }, 3000);
+        } else {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to send');
+        }
+    } catch (e) {
+        console.error(e);
+        statusEl.textContent = "Error sending invite.";
+        statusEl.style.color = "#dc3545";
+        btn.textContent = "Send Invite";
+        btn.disabled = false;
+    }
+}
+
+async function updateInviteControls() {
+    // Locate the container for the event plan items
+    const container = document.getElementById('cart-items-container');
+    if (!container || !container.parentElement) return;
+
+    let inviteSection = document.getElementById('invite-collaborator-section');
+    
+    // If we have a session but no invite section, create it
+    if (state.session.id && !inviteSection) {
+        inviteSection = document.createElement('div');
+        inviteSection.id = 'invite-collaborator-section';
+        inviteSection.style.cssText = 'margin: 15px 0; padding: 15px; background-color: #f0f8ff; border-radius: 5px; border: 1px solid #cce5ff;';
+        
+        // Insert it after the "Publish" controls if they exist, or before cart items container
+        const publishingControls = document.getElementById('session-publishing-controls');
+        if (publishingControls) {
+             publishingControls.insertAdjacentElement('afterend', inviteSection);
+        } else {
+             container.parentElement.insertBefore(inviteSection, container);
+        }
+
+        inviteSection.innerHTML = `
+            <h4 style="margin-top: 0; color: #0056b3; font-size: 1em; display: flex; align-items: center; gap: 5px;">💌 Invite Collaborator</h4>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px; margin-top: 5px;">Share this plan with a friend.</p>
+            <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                <input type="text" id="collab-name" placeholder="Friend's Name" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
+            </div>
+            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                <input type="email" id="collab-email" placeholder="Friend's Email" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
+            </div>
+            <button id="invite-btn" style="width: 100%; padding: 8px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9em; transition: background-color 0.2s;">Send Invite</button>
+            <div id="invite-status" style="font-size: 0.85em; margin-top: 5px; text-align: center; min-height: 1.2em;"></div>
+        `;
+        
+        // Add hover effect to button
+        const btn = inviteSection.querySelector('#invite-btn');
+        btn.onmouseover = () => btn.style.backgroundColor = "#0056b3";
+        btn.onmouseout = () => btn.style.backgroundColor = "#007bff";
+        
+        btn.addEventListener('click', handleInvite);
+    } else if (!state.session.id && inviteSection) {
+        // If no session (e.g. logged out/cleared?), remove it
+        inviteSection.remove();
+    }
+}
 
 
 /**
