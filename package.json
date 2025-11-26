@@ -2,15 +2,20 @@
   "name": "tmt-catalog-functions",
   "version": "1.0.0",
   "dependencies": {
-    "node-fetch": "^2.6.7",
-    "pusher": "^5.2.0",
-    "stripe": "^13.2.0",
     "@sendgrid/mail": "^8.1.3",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.6.7",
+    "pusher": "^5.2.0",
+    "stripe": "^13.2.0",
     "twilio": "^5.2.0"
   },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
+  },
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "bundle": "node bundle.js",
+    "build:all": "node bundle.js && node build.js"
   }
 }

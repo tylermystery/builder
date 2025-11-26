@@ -19,11 +19,8 @@
     <link rel="preload" href="/css/critical.css" as="style">
     <link rel="preload" href="/style.css" as="style">
 
-    <!-- Preload critical JavaScript modules for faster execution -->
-    <link rel="modulepreload" href="/main.js">
-    <link rel="modulepreload" href="/state.js">
-    <link rel="modulepreload" href="/config.js">
-    <link rel="modulepreload" href="/api.js">
+    <!-- Preload critical JavaScript bundle for faster execution -->
+    <link rel="modulepreload" href="/dist/main.bundle.js">
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
@@ -1082,7 +1079,7 @@ body.modal-open {
     </div>
 
 
-    <script type="module" src="main.js"></script>
+    <script type="module" src="/dist/main.bundle.js"></script>
     <!-- SortableJS and calendarExport will be loaded on-demand when needed -->
 
     <!-- Web Vitals Performance Monitoring -->
