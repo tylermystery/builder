@@ -1548,11 +1548,37 @@ body.modal-open {
     font-weight: bold; 
     margin: 10px 0;
 }
-#modal-options-container { 
+#modal-options-container {
     margin: 20px 0;
-    display: flex; 
-    flex-wrap: wrap; 
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Option Group Styles */
+.option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.option-group-header {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 5px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+.option-group-modifier {
+    font-weight: 400;
+    font-style: italic;
+    color: #666;
+    font-size: 0.9em;
+}
+.option-group-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 .option-btn {
     padding: 8px 12px;
@@ -1564,6 +1590,14 @@ body.modal-open {
 .option-btn.selected {
     border-color: #007bff;
     background-color: #e7f3ff;
+}
+.option-btn.navigation-option {
+    border-style: dashed;
+    border-color: #6c757d;
+}
+.option-btn .image-indicator {
+    font-size: 0.85em;
+    opacity: 0.7;
 }
 #modal-quantity-selector { 
     margin: 20px 0;

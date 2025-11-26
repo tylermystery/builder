@@ -290,7 +290,8 @@ export function getItemState(recordId) {
     if (state.cart.items.has(recordId)) {
         return state.cart.items.get(recordId);
     }
-    return { quantity: 1, selectedOptionIndex: 0, note: '' };
+    // Return default state with both legacy and new format support
+    return { quantity: 1, selectedOptionIndex: 0, selections: {}, note: '' };
 }
 
 export function updateItemState(recordId, updates) {
