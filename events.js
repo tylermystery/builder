@@ -492,68 +492,53 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
         categoryFiltersRoot.appendChild(planFilterBtn);
 
-        const allButton = document.createElement('button');
-        allButton.className = 'filter-btn category-filter-btn active';
-        allButton.dataset.filter = 'all';
-        allButton.textContent = 'All';
-        allButton.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            allButton.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: null });
-            applyFiltersAndSort(imageCache);
-        });
-        categoryFiltersRoot.appendChild(allButton);
-
         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
-        if (activeShop && activeShop.fields && activeShop.fields.Items) {
-            // Items field contains Airtable record IDs, not category names
-            const itemRecordIds = Array.isArray(activeShop.fields.Items) 
-                ? activeShop.fields.Items 
+        const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
+
+        if (hasStoreCategories) {
+            const itemRecordIds = Array.isArray(activeShop.fields.Items)
+                ? activeShop.fields.Items
                 : activeShop.fields.Items.split(',').map(id => id.trim());
             
-            console.log('[Events] Store Items field:', activeShop.fields.Items);
-            console.log('[Events] Parsed itemRecordIds:', itemRecordIds);
-            console.log('[Events] Total records in state.records.all:', state.records.all.length);
-            
-            // Look up the actual category records by their IDs
+            let firstCategoryButton = true;
             itemRecordIds.forEach(recordId => {
-                // Skip if this looks like it's already a resolved name (doesn't start with 'rec')
-                if (!recordId.startsWith('rec')) {
-                    console.warn(`[Events] Skipping non-record-ID value in Items field: ${recordId}`);
-                    return;
-                }
+                if (!recordId.startsWith('rec')) return;
                 
                 const categoryRecord = state.records.all.find(r => r.id === recordId);
-                console.log(`[Events] Looking for recordId: ${recordId}, found:`, categoryRecord);
-                
                 if (categoryRecord && categoryRecord.fields && categoryRecord.fields.Name) {
                     const categoryName = categoryRecord.fields.Name;
-                    console.log(`[Events] Creating button for category: ${categoryName}`);
-                    console.log(`[Events] Category record fields:`, {
-                        Name: categoryRecord.fields.Name,
-                        Categories: categoryRecord.fields[CONSTANTS.FIELD_NAMES.CATEGORIES],
-                        ParentItem: categoryRecord.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM],
-                        Subcategories: categoryRecord.fields.Subcategories
-                    });
                     const categoryBtn = document.createElement('button');
                     categoryBtn.className = 'filter-btn category-filter-btn';
                     const normalizedCategoryName = categoryName.toLowerCase().replace(/\s+/g, ' ');
                     categoryBtn.dataset.filter = normalizedCategoryName;
                     categoryBtn.textContent = categoryName;
+
+                    if (firstCategoryButton) {
+                        categoryBtn.classList.add('active');
+                        firstCategoryButton = false;
+                    }
+
                     categoryBtn.addEventListener('click', () => {
-                        console.log('[Events] Category button clicked:', categoryName);
-                        console.log('[Events] Button dataset.filter value:', categoryBtn.dataset.filter);
                         document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
                         categoryBtn.classList.add('active');
                         updateUrl({ category: normalizedCategoryName, subcategory: null, view: null });
-                        console.log('[Events] URL updated, calling applyFiltersAndSort...');
                         applyFiltersAndSort(imageCache);
                     });
                     categoryFiltersRoot.appendChild(categoryBtn);
-                } else {
-                    console.warn(`[Events] Could not find category record for ID: ${recordId} or it has no Name field`);
                 }
             });
+        } else {
+            const allButton = document.createElement('button');
+            allButton.className = 'filter-btn category-filter-btn active';
+            allButton.dataset.filter = 'all';
+            allButton.textContent = 'All';
+            allButton.addEventListener('click', () => {
+                document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
+                allButton.classList.add('active');
+                updateUrl({ category: null, subcategory: null, view: null });
+                applyFiltersAndSort(imageCache);
+            });
+            categoryFiltersRoot.appendChild(allButton);
         }
 
     }  else {
