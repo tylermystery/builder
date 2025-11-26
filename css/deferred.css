@@ -2202,17 +2202,6 @@ hr.total-divider {
 /* --- (End of @media (max-width: 999px)) --- */
 
 
-#plan-filter-btn {
-    background-color: #f0f8ff;
-    font-weight: bold;
-    border-color: #cce5ff; /* Added from snippet */
-}
-
-#plan-filter-btn.active {
-    background-color: #cce5ff;
-    border-color: #007bff;
-}
-
 #catalog-title {
     font-size: 1.5em;
     font-weight: bold;

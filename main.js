@@ -45,7 +45,7 @@ function syncUiWithUrl() {
         const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
         if (view === 'plan') {
-            buttonToActivate = document.getElementById('plan-filter-btn');
+            buttonToActivate = document.getElementById('my-plan-header-btn');
         } else if (view === 'likes') {
             buttonToActivate = document.getElementById('liked-items-header-btn');
         } else if (categoryFilter) {
@@ -297,6 +297,32 @@ async function initialize() {
             if (parentCollectiveTrigger) parentCollectiveTrigger.addEventListener('click', () => {
                 ui.showShopSwitcher();
             });
+
+            // Set up shop website button from Store Details JSON field
+            const shopWebsiteBtn = document.getElementById('shop-website-btn');
+            if (shopWebsiteBtn) {
+                let websiteUrl = null;
+                try {
+                    const storeDetailsJson = activeShop.fields['Store Details'];
+                    if (storeDetailsJson) {
+                        const storeDetails = JSON.parse(storeDetailsJson);
+                        websiteUrl = storeDetails.websiteUrl;
+                    }
+                } catch (e) {
+                    console.warn('[Main] Could not parse Store Details JSON for website URL:', e);
+                }
+
+                if (websiteUrl) {
+                    shopWebsiteBtn.style.display = 'flex';
+                    shopWebsiteBtn.addEventListener('click', () => {
+                        window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+                    });
+                    log('Main', `Shop website button configured with URL: ${websiteUrl}`);
+                } else {
+                    shopWebsiteBtn.style.display = 'none';
+                    log('Main', 'No website URL found in Store Details, hiding website button.');
+                }
+            }
         }
         
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');

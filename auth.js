@@ -644,24 +644,44 @@ export function handleSignOut() {
 }
 
 export function updateUserProfileIcon() {
+    const accountTextEl = userProfileButton?.querySelector('.menu-text');
+    const accountIconEl = userProfileButton?.querySelector('.menu-icon');
+
     if (state.session.user.isAuthenticated && state.session.user.name) {
-        userProfileButton.classList.add('signed-in');
-        userProfileButton.textContent = state.session.user.name.charAt(0).toUpperCase();
-        userProfileButton.title = `Logged in as ${state.session.user.name}`;
+        userProfileButton?.classList.add('signed-in');
+        // Update the account icon to show the first letter of the user's name
+        if (accountIconEl) {
+            accountIconEl.textContent = state.session.user.name.charAt(0).toUpperCase();
+        }
+        // Update the text to show "Account" or user name
+        if (accountTextEl) {
+            accountTextEl.textContent = `Hi, ${state.session.user.name.split(' ')[0]}`;
+        }
+        if (userProfileButton) {
+            userProfileButton.title = `Logged in as ${state.session.user.name}`;
+        }
     } else {
-        userProfileButton.classList.remove('signed-in');
-        userProfileButton.innerHTML = '&#128100;';
-        userProfileButton.title = 'Sign In / My Account';
+        userProfileButton?.classList.remove('signed-in');
+        // Reset to default icon and text
+        if (accountIconEl) {
+            accountIconEl.innerHTML = '&#128100;';
+        }
+        if (accountTextEl) {
+            accountTextEl.textContent = 'Account Settings';
+        }
+        if (userProfileButton) {
+            userProfileButton.title = 'Sign In / My Account';
+        }
     }
 
     const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
     const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
-    
+
     if (mySessionsHeaderBtn) {
-        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'flex' : 'none';
     }
     if (rsvpEventsHeaderBtn) {
-        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'flex' : 'none';
     }
 }
 

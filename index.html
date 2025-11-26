@@ -117,22 +117,118 @@ body.modal-open {
     transform: scale(0.95);
 }
 
-#parent-collective-trigger {
+/* Hamburger Menu Styles */
+.hamburger-menu-container {
+    position: relative;
+    display: inline-block;
+}
+
+.hamburger-btn {
     background-color: #343a40;
     color: white;
     border: none;
     border-radius: 8px;
-    font-weight: bold;
-    font-size: 1.1em;
     width: 44px;
     height: 44px;
     cursor: pointer;
     transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
 }
 
-#parent-collective-trigger:hover {
+.hamburger-btn:hover {
     background-color: #007bff;
+}
+
+.hamburger-icon {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background-color: white;
+    position: relative;
+}
+
+.hamburger-icon::before,
+.hamburger-icon::after {
+    content: '';
+    display: block;
+    width: 20px;
+    height: 2px;
+    background-color: white;
+    position: absolute;
+    left: 0;
+}
+
+.hamburger-icon::before {
+    top: -6px;
+}
+
+.hamburger-icon::after {
+    top: 6px;
+}
+
+.hamburger-account-icon {
+    font-size: 1.3em;
+}
+
+.hamburger-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1001;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.hamburger-dropdown-right {
+    left: auto;
+    right: 0;
+}
+
+.hamburger-dropdown.active {
+    display: block;
+}
+
+.hamburger-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: #333;
+    transition: background-color 0.2s;
+}
+
+.hamburger-menu-item:hover {
+    background-color: #f8f9fa;
+}
+
+.hamburger-menu-item .menu-icon {
+    font-size: 1.1em;
+    width: 24px;
+    text-align: center;
+}
+
+.hamburger-menu-item .menu-text {
+    flex: 1;
+}
+
+.hamburger-menu-divider {
+    height: 1px;
+    background-color: #e9ecef;
+    margin: 4px 0;
 }
 
 #shop-logo-container {
@@ -502,16 +598,30 @@ body.modal-open {
 
     <header id="main-header">
         <div class="header-content">
-            <!-- Left Section: Logo and Shop Name -->
+            <!-- Left Section: Hamburger Menu and Logo -->
             <div id="header-left">
-                <button id="parent-collective-trigger" title="What The Fun Collective">WTF</button>
-                <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
-                <h1 id="main-shop-title"></h1>
-                <div id="user-filter-buttons" style="display: flex; gap: 8px; margin-left: 12px;">
-                    <button id="liked-items-header-btn" class="header-icon-btn" title="My Likes" aria-label="View my liked items" style="display: none;">❤️</button>
-                    <button id="my-sessions-header-btn" class="header-icon-btn" title="My Sessions" aria-label="View my sessions" style="display: none;">📋</button>
-                    <button id="rsvp-events-header-btn" class="header-icon-btn" title="My RSVP Events" aria-label="View my RSVP events" style="display: none;">📅</button>
+                <!-- Left Hamburger Menu (WTF + Calendar) -->
+                <div class="hamburger-menu-container" id="left-menu-container">
+                    <button id="left-hamburger-btn" class="hamburger-btn" title="Menu" aria-label="Open navigation menu" aria-expanded="false">
+                        <span class="hamburger-icon"></span>
+                    </button>
+                    <div id="left-hamburger-dropdown" class="hamburger-dropdown">
+                        <button id="calendar-view-btn" class="hamburger-menu-item" title="View Upcoming Events" aria-label="View upcoming events calendar">
+                            <span class="menu-icon">📅</span>
+                            <span class="menu-text">Event Calendar</span>
+                        </button>
+                        <button id="shop-website-btn" class="hamburger-menu-item" title="Visit Shop Website" aria-label="Visit shop website" style="display: none;">
+                            <span class="menu-icon">🌐</span>
+                            <span class="menu-text">Website</span>
+                        </button>
+                        <button id="parent-collective-trigger" class="hamburger-menu-item">
+                            <span class="menu-icon">🎉</span>
+                            <span class="menu-text">WTF Collective</span>
+                        </button>
+                    </div>
                 </div>
+                <div id="shop-logo-container"></div>
+                <h1 id="main-shop-title"></h1>
             </div>
 
             <!-- Center Section: Marquee -->
@@ -521,10 +631,37 @@ body.modal-open {
                </div>
             </div>
 
-            <!-- Right Section: Calendar and Account -->
+            <!-- Right Section: Account Hamburger Menu -->
             <div id="header-right">
-                <button id="calendar-view-btn" title="View Upcoming Events" aria-label="View upcoming events calendar">📅</button>
-                <button id="user-profile-button" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
+                <!-- Right Hamburger Menu (Account related) -->
+                <div class="hamburger-menu-container" id="right-menu-container">
+                    <button id="right-hamburger-btn" class="hamburger-btn" title="My Account" aria-label="Open account menu" aria-expanded="false">
+                        <span class="hamburger-account-icon">&#128100;</span>
+                    </button>
+                    <div id="right-hamburger-dropdown" class="hamburger-dropdown hamburger-dropdown-right">
+                        <button id="user-profile-button" class="hamburger-menu-item" title="Sign In / My Account" aria-label="Sign in or view my account">
+                            <span class="menu-icon">&#128100;</span>
+                            <span class="menu-text">Account Settings</span>
+                        </button>
+                        <div class="hamburger-menu-divider"></div>
+                        <button id="my-plan-header-btn" class="hamburger-menu-item" title="My Plan" aria-label="View my current plan">
+                            <span class="menu-icon">⭐</span>
+                            <span class="menu-text">My Plan</span>
+                        </button>
+                        <button id="liked-items-header-btn" class="hamburger-menu-item" title="My Likes" aria-label="View my liked items">
+                            <span class="menu-icon">❤️</span>
+                            <span class="menu-text">My Likes</span>
+                        </button>
+                        <button id="my-sessions-header-btn" class="hamburger-menu-item" title="My Sessions" aria-label="View my sessions" style="display: none;">
+                            <span class="menu-icon">📋</span>
+                            <span class="menu-text">My Plans</span>
+                        </button>
+                        <button id="rsvp-events-header-btn" class="hamburger-menu-item" title="My RSVP Events" aria-label="View my RSVP events" style="display: none;">
+                            <span class="menu-icon">📅</span>
+                            <span class="menu-text">My RSVPs</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
