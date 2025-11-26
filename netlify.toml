@@ -245,6 +245,11 @@
   to = "/.netlify/functions/airtable"
   status = 200
 
+[[redirects]]
+  from = "/api/invite-collaborator"
+  to = "/.netlify/functions/invite-collaborator"
+  status = 200
+
 # AI Strategic Project Manager
 [[redirects]]
   from = "/api/ai-project-manager"
