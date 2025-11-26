@@ -6,7 +6,7 @@ import * as api from '../api.js';
 import { CONSTANTS, CLOUDINARY_CLOUD_NAME } from '../config.js';
 import { calculateMissingCategories, buildGoalBucket } from '../availability.js';
 import { calculateRecommendationScore } from '../availability.js';
-import { parseOptions, getRecordPrice, getEffectiveMinQuantity } from '../utils.js';
+import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
@@ -17,10 +17,10 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const itemCard = document.createElement('div');
     itemCard.className = `favorite-item lazy-load`;
     itemCard.dataset.recordId = record.id;
-    
+
     // This will use the default placeholder for custom items, which is correct
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
-    
+
     // Optimize background image with proper Cloudinary transformations
     const defaultPlaceholder = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
     const bgImageUrl = imageUrls[0] || defaultPlaceholder;
@@ -28,7 +28,12 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
         ? bgImageUrl.replace('/upload/', '/upload/c_fill,w_600,h_520,f_auto,q_auto/')
         : bgImageUrl;
 
-    const price = getRecordPrice(record, itemInfo.selectedOptionIndex);
+    // Use selections for price if available, otherwise fall back to selectedOptionIndex
+    const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+        ? itemInfo.selections
+        : itemInfo.selectedOptionIndex;
+
+    const price = getRecordPrice(record, priceParam);
     const tooltipContent = `
         <strong>${fields.Name || 'Untitled'}</strong><br>
         <small>${fields.Description || 'No description.'}</small><br>
@@ -81,16 +86,52 @@ async function createLockedInItemElement(record, itemInfo) {
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';
     itemElement.dataset.recordId = record.id;
-    
-    let optionName = '';
+
+    // Build selected options display string from either selections or legacy selectedOptionIndex
+    let optionNames = [];
     if (!isCustomItem) { // Custom items don't have options
-        const options = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        if (itemInfo.selectedOptionIndex != null && options[itemInfo.selectedOptionIndex]) {
-            optionName = options[itemInfo.selectedOptionIndex].name;
+        const optionGroups = parseOptions(fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
+        if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
+            // New format: selections object with groupIndex -> optionIndex mapping
+            const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
+                const indexA = parseInt(a.replace('group', ''), 10) || 0;
+                const indexB = parseInt(b.replace('group', ''), 10) || 0;
+                return indexA - indexB;
+            });
+
+            for (const groupKey of sortedKeys) {
+                const optionIndex = itemInfo.selections[groupKey];
+                const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+                if (!groupIndexMatch) continue;
+
+                const groupIndex = parseInt(groupIndexMatch[1], 10);
+                const group = optionGroups[groupIndex];
+                if (!group || !group.options) continue;
+
+                const option = group.options[optionIndex];
+                if (option && option.name) {
+                    optionNames.push(option.name);
+                }
+            }
+        } else if (itemInfo.selectedOptionIndex != null) {
+            // Legacy format: single selectedOptionIndex
+            const flatOptions = flattenOptionGroups(optionGroups);
+            if (flatOptions[itemInfo.selectedOptionIndex]) {
+                optionNames.push(flatOptions[itemInfo.selectedOptionIndex].name);
+            }
         }
     }
 
-    let price = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+    // Build display string: "Color: Red, Size: Large" or just "Red, Large"
+    const optionDisplay = optionNames.join(', ');
+
+    // Use selections for price if available, otherwise fall back to selectedOptionIndex
+    const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+        ? itemInfo.selections
+        : itemInfo.selectedOptionIndex;
+
+    let price = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
     const total = (price || 0) * (itemInfo.quantity || 1);
     let priceDisplay = `$${(price || 0).toFixed(2)}`;
 
@@ -99,7 +140,7 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     if (itemInfo.overridePrice != null) {
-        let originalPrice = getRecordPrice(record, itemInfo.selectedOptionIndex);
+        let originalPrice = getRecordPrice(record, priceParam);
         priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
     }
 
@@ -133,7 +174,7 @@ async function createLockedInItemElement(record, itemInfo) {
         <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
-            ${optionName ? `<p class="locked-item-option">${optionName}</p>` : ''}
+            ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
             <p class="locked-item-pricing">${quantityDisplay} @ ${priceDisplay} = <strong>$${total.toFixed(2)}</strong></p>
             ${itemInfo.note ? `<p class="locked-item-note"><em>Note: ${itemInfo.note}</em></p>` : ''}
         </div>
@@ -674,10 +715,15 @@ export function updateTotalCost() {
     state.cart.lockedItems.forEach((itemInfo, recordId) => {
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) return;
-        
-        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, itemInfo.selectedOptionIndex);
+
+        // Use selections for price if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+
+        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
         if (isNaN(unitPrice)) return;
-        
+
         // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         // Use itemInfo.quantity for all items

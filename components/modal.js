@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -533,13 +533,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalItemDescription.textContent = record.fields.Description || '';
 
     // Parse options and record names early for event logic
-    const rawOptions = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const parsedOptionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const flatOptions = flattenOptionGroups(parsedOptionGroups);
     const allRecordNames = new Set(state.records.all.map(r => r.fields.Name));
 
     if (record.fields['Item Type'] === 'Event') {
         // Check if this event has child options that are themselves event records
         // (indicating this is a parent event with multiple date options)
-        const hasChildEventOptions = rawOptions.some(opt => allRecordNames.has(opt.name));
+        const hasChildEventOptions = flatOptions.some(opt => allRecordNames.has(opt.name));
 
         // Check if the current user has RSVPed (registered) to this event
         const rsvpYes = record.fields.RSVPs || [];
@@ -1078,50 +1079,172 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
 
     modalOptionsContainer.innerHTML = '';
-    rawOptions.forEach((opt, index) => {
-        const optionButton = document.createElement('button');
-        optionButton.className = 'option-btn';
-        optionButton.dataset.optionIndex = index;
-        if (itemState.selectedOptionIndex === index) {
-            optionButton.classList.add('selected');
-        }
-        let priceModText = '';
-        if (opt.price !== null) {
-            priceModText = `$${opt.price.toFixed(2)}`;
-        } else if (opt.priceChange !== null) {
-            priceModText = `${opt.priceChange >= 0 ? '+' : ''}$${opt.priceChange.toFixed(2)}`;
-        }
-        optionButton.innerHTML = `${opt.name} <span class="price-mod">${priceModText}</span>`;
 
-        if (allRecordNames.has(opt.name)) {
-            optionButton.dataset.childName = opt.name;
-            optionButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const childName = e.currentTarget.dataset.childName;
-                const childRecord = state.records.all.find(r => r.fields.Name === childName);
-                if (childRecord) {
-                    log('Modal', `Navigating from option to item: ${childName}`);
-                    showDetailModal(childRecord);
-                } else {
-                    log('Modal', `Could not find record for child option: ${childName}`);
+    // Parse options into groups
+    const optionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
+    // Track current selections for this modal instance
+    // Initialize from itemState.selections or build from legacy selectedOptionIndex
+    let currentSelections = { ...itemState.selections } || {};
+
+    // Backward compatibility: if using legacy selectedOptionIndex, map to selections
+    if (Object.keys(currentSelections).length === 0 && itemState.selectedOptionIndex !== undefined) {
+        const flatOptions = flattenOptionGroups(optionGroups);
+        if (flatOptions.length > 0 && itemState.selectedOptionIndex < flatOptions.length) {
+            // Find which group contains this option
+            let flatIndex = 0;
+            for (let gIdx = 0; gIdx < optionGroups.length; gIdx++) {
+                const group = optionGroups[gIdx];
+                for (let oIdx = 0; oIdx < group.options.length; oIdx++) {
+                    if (flatIndex === itemState.selectedOptionIndex) {
+                        currentSelections[`group${gIdx}`] = oIdx;
+                        break;
+                    }
+                    flatIndex++;
                 }
-            });
-        } else {
-            optionButton.addEventListener('click', (e) => {
-                modalOptionsContainer.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
-                e.currentTarget.classList.add('selected');
-                const newIndex = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                e.currentTarget.dispatchEvent(new CustomEvent('change', {
-                    bubbles: true,
-                    detail: { selectedOptionIndex: newIndex }
-                }));
-                modalItemDescription.textContent = opt.description || record.fields.Description || '';
-                const newPrice = getRecordPrice(record, newIndex);
-                modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+            }
+        }
+    }
+
+    // Helper function to update UI when selections change
+    const updateOptionsUI = () => {
+        // Update price display
+        const newPrice = getRecordPrice(record, currentSelections);
+        modalItemPrice.innerHTML = (typeof newPrice === 'number' ? `$${newPrice.toFixed(2)}` : 'N/A') + pricingTypeHTML;
+
+        // Update description with appended text from selected options
+        const fullDescription = getRecordDescription(record, currentSelections);
+        modalItemDescription.textContent = fullDescription;
+
+        // Handle image tag changes
+        const imageTag = getActiveImageTag(record, currentSelections);
+        if (imageTag) {
+            // Fetch and display the image by tag
+            api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
+                if (taggedImages && taggedImages.length > 0) {
+                    const optimizedImage = taggedImages[0].includes('cloudinary')
+                        ? taggedImages[0].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                        : taggedImages[0];
+                    modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
+                }
+            }).catch(err => {
+                log('Modal', `Failed to fetch image for tag ${imageTag}: ${err.message}`);
             });
         }
-        modalOptionsContainer.appendChild(optionButton);
-    });
+
+        // Dispatch change event with selections
+        modalOptionsContainer.dispatchEvent(new CustomEvent('change', {
+            bubbles: true,
+            detail: { selections: currentSelections }
+        }));
+    };
+
+    // Render option groups
+    if (optionGroups.length > 0) {
+        optionGroups.forEach((group, groupIndex) => {
+            // Create group container
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'option-group';
+            groupContainer.dataset.groupIndex = groupIndex;
+
+            // Only show group header if there are multiple groups or group has a non-default name
+            if (optionGroups.length > 1 || group.name !== 'Options') {
+                const groupHeader = document.createElement('h4');
+                groupHeader.className = 'option-group-header';
+                groupHeader.textContent = group.name;
+                if (group.modifier) {
+                    const modifierSpan = document.createElement('span');
+                    modifierSpan.className = 'option-group-modifier';
+                    modifierSpan.textContent = ` (${group.modifier})`;
+                    groupHeader.appendChild(modifierSpan);
+                }
+                groupContainer.appendChild(groupHeader);
+            }
+
+            // Create options within this group
+            const optionsWrapper = document.createElement('div');
+            optionsWrapper.className = 'option-group-options';
+
+            group.options.forEach((opt, optionIndex) => {
+                const optionButton = document.createElement('button');
+                optionButton.className = 'option-btn';
+                optionButton.dataset.groupIndex = groupIndex;
+                optionButton.dataset.optionIndex = optionIndex;
+
+                // Check if this option is currently selected
+                const groupKey = `group${groupIndex}`;
+                if (currentSelections[groupKey] === optionIndex) {
+                    optionButton.classList.add('selected');
+                }
+
+                // Build price modifier text
+                let priceModText = '';
+                if (opt.priceOverride !== null) {
+                    priceModText = `$${opt.priceOverride.toFixed(2)}`;
+                } else if (opt.priceModifier !== null) {
+                    priceModText = `${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}`;
+                }
+
+                // Build button content with optional image tag indicator
+                let buttonContent = opt.name;
+                if (priceModText) {
+                    buttonContent += ` <span class="price-mod">${priceModText}</span>`;
+                }
+                if (opt.imageTag) {
+                    buttonContent += ' <span class="image-indicator" title="Changes image">📷</span>';
+                }
+                optionButton.innerHTML = buttonContent;
+
+                // Check if option name matches a child record (navigation option)
+                if (allRecordNames.has(opt.name)) {
+                    optionButton.dataset.childName = opt.name;
+                    optionButton.classList.add('navigation-option');
+                    optionButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const childName = e.currentTarget.dataset.childName;
+                        const childRecord = state.records.all.find(r => r.fields.Name === childName);
+                        if (childRecord) {
+                            log('Modal', `Navigating from option to item: ${childName}`);
+                            showDetailModal(childRecord);
+                        } else {
+                            log('Modal', `Could not find record for child option: ${childName}`);
+                        }
+                    });
+                } else {
+                    // Regular option selection
+                    optionButton.addEventListener('click', (e) => {
+                        e.stopPropagation();
+
+                        // Deselect other options in the same group
+                        optionsWrapper.querySelectorAll('.option-btn').forEach(btn => {
+                            btn.classList.remove('selected');
+                        });
+
+                        // Select this option
+                        e.currentTarget.classList.add('selected');
+
+                        // Update selections
+                        const gIdx = parseInt(e.currentTarget.dataset.groupIndex, 10);
+                        const oIdx = parseInt(e.currentTarget.dataset.optionIndex, 10);
+                        currentSelections[`group${gIdx}`] = oIdx;
+
+                        // Update UI reactively
+                        updateOptionsUI();
+                    });
+                }
+
+                optionsWrapper.appendChild(optionButton);
+            });
+
+            groupContainer.appendChild(optionsWrapper);
+            modalOptionsContainer.appendChild(groupContainer);
+        });
+
+        // Initialize UI based on current selections
+        if (Object.keys(currentSelections).length > 0) {
+            updateOptionsUI();
+        }
+    }
 
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block

@@ -160,19 +160,159 @@ export async function loadSortable() {
 }
 
 /**
- * Parses the raw string from Airtable's 'Options' field into a structured array of objects.
- * This function handles various formats, including price changes, absolute prices,
- * durations, and descriptions.
- * @param {string} rawOptionsString The comma-separated string from the Airtable field.
- * @returns {Array<Object>} An array of option objects, each with standardized properties.
+ * Parses the raw string from Airtable's 'Options' field into a structured array of option groups.
+ * Supports rich modifiers with bracket syntax:
+ *   [Group Name] (optional_modifier) - Creates a new option group
+ *   Option Name [price: +X] [img: tag] [desc: text] [time: +X] - Option with modifiers
+ *
+ * Falls back to legacy comma-separated format for backward compatibility.
+ *
+ * @param {string} rawOptionsString The multi-line string from the Airtable field.
+ * @returns {Array<Object>} An array of group objects, each with name and options array.
+ *   Each option has: { name, priceModifier, priceOverride, imageTag, descriptionAppend, durationChange }
  */
 export function parseOptions(rawOptionsString) {
     if (!rawOptionsString || typeof rawOptionsString !== 'string') {
         return [];
     }
-    
-    const optionsArray = rawOptionsString.split(/\r?\n/).map(option => option.trim()).filter(Boolean);
-    return optionsArray.map(option => {
+
+    const lines = rawOptionsString.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+    // Check if new bracket syntax is used (group headers start with [ at beginning)
+    const hasGroupHeaders = lines.some(line => /^\[.+\]\s*(\(.+\))?$/.test(line));
+
+    if (hasGroupHeaders) {
+        // New bracket syntax parsing
+        return parseOptionsWithGroups(lines);
+    } else {
+        // Legacy parsing - return as single "Options" group for backward compatibility
+        return parseLegacyOptions(lines);
+    }
+}
+
+/**
+ * Parses options using the new bracket group syntax.
+ * @param {Array<string>} lines - Array of trimmed, non-empty lines
+ * @returns {Array<Object>} Array of group objects with name and options array
+ */
+function parseOptionsWithGroups(lines) {
+    const groups = [];
+    let currentGroup = null;
+
+    for (const line of lines) {
+        // Check if this is a group header: [Group Name] or [Group Name] (modifier)
+        const groupMatch = line.match(/^\[(.+?)\]\s*(?:\((.+?)\))?$/);
+
+        if (groupMatch) {
+            // Start a new group
+            currentGroup = {
+                name: groupMatch[1].trim(),
+                modifier: groupMatch[2] ? groupMatch[2].trim() : null,
+                options: []
+            };
+            groups.push(currentGroup);
+        } else if (currentGroup) {
+            // Parse option line with potential modifiers
+            const option = parseOptionLine(line);
+            currentGroup.options.push(option);
+        } else {
+            // Line before any group header - create a default group
+            currentGroup = {
+                name: 'Options',
+                modifier: null,
+                options: []
+            };
+            groups.push(currentGroup);
+            const option = parseOptionLine(line);
+            currentGroup.options.push(option);
+        }
+    }
+
+    return groups;
+}
+
+/**
+ * Parses a single option line with bracket modifiers.
+ * Format: Option Name [price: +10] [img: image_tag] [desc: description text] [time: +30]
+ *
+ * @param {string} line - A single option line
+ * @returns {Object} Parsed option with all modifier fields
+ */
+function parseOptionLine(line) {
+    let name = line;
+    let priceModifier = null;  // +X or -X (adds/subtracts from base)
+    let priceOverride = null;  // X (replaces base price)
+    let imageTag = null;
+    let descriptionAppend = null;
+    let durationChange = null;
+
+    // Extract all bracket modifiers using regex
+    // Pattern: [key: value] or [key:value]
+    const modifierPattern = /\[(\w+):\s*([^\]]+)\]/gi;
+    let match;
+
+    while ((match = modifierPattern.exec(line)) !== null) {
+        const key = match[1].toLowerCase();
+        const value = match[2].trim();
+
+        switch (key) {
+            case 'price':
+                // Check if it's a modifier (+X or -X) or override (X)
+                if (value.startsWith('+') || value.startsWith('-')) {
+                    priceModifier = parseFloat(value);
+                } else {
+                    priceOverride = parseFloat(value);
+                }
+                break;
+            case 'img':
+            case 'image':
+                imageTag = value;
+                break;
+            case 'desc':
+            case 'description':
+                descriptionAppend = value;
+                break;
+            case 'time':
+            case 'duration':
+                // Parse duration change (typically in minutes, +X or -X)
+                durationChange = parseFloat(value);
+                break;
+        }
+    }
+
+    // Remove all bracket modifiers from the name
+    name = line.replace(/\[(\w+):\s*([^\]]+)\]/gi, '').trim();
+
+    // Legacy: Check for inline $X price in the name itself
+    const namePriceMatch = name.match(/\$(\d+(\.\d{1,2})?)/);
+    if (namePriceMatch && priceOverride === null && priceModifier === null) {
+        priceOverride = parseFloat(namePriceMatch[1]);
+        name = name.replace(namePriceMatch[0], '').trim();
+    }
+
+    return {
+        name: name || 'Unnamed Option',
+        priceModifier: isNaN(priceModifier) ? null : priceModifier,
+        priceOverride: isNaN(priceOverride) ? null : priceOverride,
+        imageTag: imageTag,
+        descriptionAppend: descriptionAppend,
+        durationChange: isNaN(durationChange) ? null : durationChange,
+        // Legacy compatibility fields
+        price: priceOverride,
+        priceChange: priceModifier,
+        description: descriptionAppend
+    };
+}
+
+/**
+ * Parses options using legacy format (comma-separated on single lines).
+ * Returns result in new group format for consistency.
+ *
+ * @param {Array<string>} lines - Array of trimmed, non-empty lines
+ * @returns {Array<Object>} Array with single "Options" group
+ */
+function parseLegacyOptions(lines) {
+    const options = lines.map(option => {
         let name = option;
         let price = null;
         let priceChange = null;
@@ -181,7 +321,7 @@ export function parseOptions(rawOptionsString) {
 
         const parts = option.split(',').map(part => part.trim());
         name = parts.shift() || '';
-        
+
         parts.forEach(part => {
             let match;
             if (match = part.match(/price:\s*(\-?\d+(\.\d{1,2})?)/i)) {
@@ -202,13 +342,46 @@ export function parseOptions(rawOptionsString) {
         }
 
         return {
-            name: name,
+            name: name || 'Unnamed Option',
+            priceModifier: priceChange,
+            priceOverride: price,
+            imageTag: null,
+            descriptionAppend: description,
+            durationChange: durationChange,
+            // Legacy compatibility fields
             price: price,
             priceChange: priceChange,
-            durationChange: durationChange,
             description: description
         };
     });
+
+    // Return as single group for backward compatibility
+    if (options.length === 0) {
+        return [];
+    }
+
+    return [{
+        name: 'Options',
+        modifier: null,
+        options: options
+    }];
+}
+
+/**
+ * Helper function to get a flat list of all options from parsed groups.
+ * Useful for backward compatibility where code expects flat option arrays.
+ *
+ * @param {Array<Object>} groups - Parsed option groups from parseOptions
+ * @returns {Array<Object>} Flat array of all options across all groups
+ */
+export function flattenOptionGroups(groups) {
+    if (!Array.isArray(groups)) return [];
+    return groups.reduce((acc, group) => {
+        if (group.options && Array.isArray(group.options)) {
+            return acc.concat(group.options);
+        }
+        return acc;
+    }, []);
 }
 export function debounce(func, delay = 300) {
     let timeout;
@@ -291,17 +464,174 @@ export function getGroupPriceRange(record) {
     });
     return (minPrice === Infinity) ? null : { min: minPrice, max: maxPrice };
 }
-export function getRecordPrice(record, optionIndex = null) {
+/**
+ * Calculates the final price for a record based on selected options.
+ * Supports both legacy single optionIndex and new selections object format.
+ *
+ * @param {Object} record - The Airtable record
+ * @param {number|Object} selectionsOrIndex - Either a single option index (legacy)
+ *   or a selections object mapping groupIndex to optionIndex: { group0: 0, group1: 2 }
+ * @returns {number} The calculated final price
+ */
+export function getRecordPrice(record, selectionsOrIndex = null) {
     let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-    if (optionIndex !== null) {
-        const options = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
-        const variation = options[optionIndex];
+
+    if (selectionsOrIndex === null) {
+        return isNaN(price) ? 0 : price;
+    }
+
+    const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
+    // Handle legacy single index format
+    if (typeof selectionsOrIndex === 'number') {
+        const flatOptions = flattenOptionGroups(groups);
+        const variation = flatOptions[selectionsOrIndex];
         if (variation) {
-            if (variation.price !== null) return variation.price;
-            if (variation.priceChange !== null) price += variation.priceChange;
+            if (variation.priceOverride !== null) return variation.priceOverride;
+            if (variation.priceModifier !== null) price += variation.priceModifier;
+        }
+        return isNaN(price) ? 0 : price;
+    }
+
+    // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
+    if (typeof selectionsOrIndex === 'object') {
+        // Iterate through each group selection
+        for (const [groupKey, optionIndex] of Object.entries(selectionsOrIndex)) {
+            // Extract group index from key like "group0", "group1", etc.
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            const option = group.options[optionIndex];
+            if (!option) continue;
+
+            // Apply price modifications - override takes precedence
+            if (option.priceOverride !== null) {
+                price = option.priceOverride;
+            } else if (option.priceModifier !== null) {
+                price += option.priceModifier;
+            }
         }
     }
+
     return isNaN(price) ? 0 : price;
+}
+
+/**
+ * Gets the active image tag from selected options.
+ * Returns the image tag from the last selected option that has an [img:...] modifier.
+ *
+ * @param {Object} record - The Airtable record
+ * @param {number|Object} selectionsOrIndex - Either a single option index or selections object
+ * @returns {string|null} The image tag to use, or null if none specified
+ */
+export function getActiveImageTag(record, selectionsOrIndex = null) {
+    if (selectionsOrIndex === null) {
+        return null;
+    }
+
+    const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    let imageTag = null;
+
+    // Handle legacy single index format
+    if (typeof selectionsOrIndex === 'number') {
+        const flatOptions = flattenOptionGroups(groups);
+        const option = flatOptions[selectionsOrIndex];
+        if (option && option.imageTag) {
+            return option.imageTag;
+        }
+        return null;
+    }
+
+    // Handle new selections object format
+    if (typeof selectionsOrIndex === 'object') {
+        // Iterate through selections in order, last one with imageTag wins
+        const sortedKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
+            const indexA = parseInt(a.replace('group', ''), 10) || 0;
+            const indexB = parseInt(b.replace('group', ''), 10) || 0;
+            return indexA - indexB;
+        });
+
+        for (const groupKey of sortedKeys) {
+            const optionIndex = selectionsOrIndex[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            const option = group.options[optionIndex];
+            if (option && option.imageTag) {
+                imageTag = option.imageTag;
+            }
+        }
+    }
+
+    return imageTag;
+}
+
+/**
+ * Gets the full description for a record based on selected options.
+ * Appends description text from selected options that have [desc:...] modifiers.
+ *
+ * @param {Object} record - The Airtable record
+ * @param {number|Object} selectionsOrIndex - Either a single option index or selections object
+ * @returns {string} The base description plus any appended text from selected options
+ */
+export function getRecordDescription(record, selectionsOrIndex = null) {
+    const baseDescription = record?.fields?.Description || '';
+
+    if (selectionsOrIndex === null) {
+        return baseDescription;
+    }
+
+    const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+    const appendedParts = [];
+
+    // Handle legacy single index format
+    if (typeof selectionsOrIndex === 'number') {
+        const flatOptions = flattenOptionGroups(groups);
+        const option = flatOptions[selectionsOrIndex];
+        if (option && option.descriptionAppend) {
+            appendedParts.push(option.descriptionAppend);
+        }
+    }
+
+    // Handle new selections object format
+    if (typeof selectionsOrIndex === 'object') {
+        const sortedKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
+            const indexA = parseInt(a.replace('group', ''), 10) || 0;
+            const indexB = parseInt(b.replace('group', ''), 10) || 0;
+            return indexA - indexB;
+        });
+
+        for (const groupKey of sortedKeys) {
+            const optionIndex = selectionsOrIndex[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            const option = group.options[optionIndex];
+            if (option && option.descriptionAppend) {
+                appendedParts.push(option.descriptionAppend);
+            }
+        }
+    }
+
+    if (appendedParts.length === 0) {
+        return baseDescription;
+    }
+
+    // Join base description with appended parts
+    const separator = baseDescription ? '\n\n' : '';
+    return baseDescription + separator + appendedParts.join('\n');
 }
 
 /**

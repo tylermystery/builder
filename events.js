@@ -1075,9 +1075,36 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const modalOverlay = document.getElementById('detail-modal-overlay');
             if (modalOverlay?.classList.contains('active') && modalOverlay.dataset.recordId === recordId) {
                 const quantity = parseInt(document.querySelector('#modal-quantity-selector .quantity-input')?.value, 10) || 1;
-                const selectedOptionIndex = parseInt(document.querySelector('#modal-options-container .option-btn.selected')?.dataset.optionIndex, 10) || 0;
                 const note = document.getElementById('modal-item-note')?.value || '';
-                itemInfo = { quantity, selectedOptionIndex, note };
+
+                // Extract selections from option groups
+                const selections = {};
+                const optionGroups = document.querySelectorAll('#modal-options-container .option-group');
+                if (optionGroups.length > 0) {
+                    optionGroups.forEach((group) => {
+                        const groupIndex = group.dataset.groupIndex;
+                        const selectedBtn = group.querySelector('.option-btn.selected');
+                        if (selectedBtn && groupIndex !== undefined) {
+                            selections[`group${groupIndex}`] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                        }
+                    });
+                } else {
+                    // Legacy: single flat list of options
+                    const selectedBtn = document.querySelector('#modal-options-container .option-btn.selected');
+                    if (selectedBtn) {
+                        const selectedOptionIndex = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                        selections['group0'] = selectedOptionIndex;
+                    }
+                }
+
+                // Compute legacy selectedOptionIndex from selections for backward compatibility
+                let selectedOptionIndex = 0;
+                if (Object.keys(selections).length > 0) {
+                    // For now, use the first group's selection as the legacy index
+                    selectedOptionIndex = selections['group0'] || 0;
+                }
+
+                itemInfo = { quantity, selectedOptionIndex, selections, note };
                 updateUrl({ openItem: null });
                 ui.hideDetailModal();
             } else {
@@ -1259,7 +1286,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const isLocked = state.cart.lockedItems.has(recordId);
         const isInIdeas = state.cart.items.has(recordId);
         let updates = {};
-        
+
         // Track old quantity for progress calculation
         let oldQuantity = 0;
         if (target.matches('.quantity-input')) {
@@ -1268,17 +1295,27 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             updates.quantity = parseInt(target.value, 10);
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
+        } else if (e.detail?.selections !== undefined) {
+            // New: Handle selections object from option groups
+            updates.selections = e.detail.selections;
+            // Also update legacy selectedOptionIndex for backward compatibility
+            if (Object.keys(e.detail.selections).length > 0) {
+                updates.selectedOptionIndex = e.detail.selections['group0'] || 0;
+            }
         } else if (e.detail?.selectedOptionIndex !== undefined) {
-             updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+            // Legacy: Handle single selectedOptionIndex
+            updates.selectedOptionIndex = e.detail.selectedOptionIndex;
+            // Also create selections object for new format
+            updates.selections = { group0: e.detail.selectedOptionIndex };
         }
-        
+
         if (Object.keys(updates).length > 0) {
             // Calculate progress based on quantity changes
             if (updates.quantity !== undefined && updates.quantity !== oldQuantity) {
                 const quantityDelta = updates.quantity - oldQuantity;
                 updateProgress(0.0001 * quantityDelta);
             }
-            
+
             if (isLocked) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
