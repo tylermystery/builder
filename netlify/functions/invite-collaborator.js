@@ -55,7 +55,7 @@ exports.handler = async (event) => {
 
     // 3. Construct Email
     const baseUrl = SITE_URL || URL || 'https://whatthefunfinder.com';
-    const link = `${baseUrl}/?session=${eventId}`;
+    const link = `${baseUrl}/?session=${eventId}&view=plan`;
     
     const emailContent = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
