@@ -164,6 +164,160 @@ function createSkeletonCard() {
     return skeleton;
 }
 
+// Helper function to find child items for a grouping
+function getChildItemsForGrouping(groupingRecord, allRecords) {
+    const groupingNameForFilter = groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
+
+    const results = allRecords.filter(r => {
+        if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
+        const itemCategories = (r.fields.Categories || '')
+            .split(',')
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
+        return itemCategories.includes(groupingNameForFilter);
+    });
+
+    return results;
+}
+
+// Helper function to create a grouping carousel section
+async function createGroupingCarouselSection(groupingRecord, childItems, allRecords, imageCache) {
+    const section = document.createElement('div');
+    section.className = 'grouping-carousel-section';
+    section.dataset.groupingId = groupingRecord.id;
+    section.dataset.categoryName = groupingRecord.fields.Name;
+
+    const fields = groupingRecord.fields;
+    const groupingName = fields.Name || 'Untitled Collection';
+    const description = fields.Description || '';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'grouping-carousel-header';
+    header.innerHTML = `
+        <h3 class="grouping-carousel-title">${groupingName}</h3>
+        <span class="grouping-carousel-count">${childItems.length} items</span>
+    `;
+    header.addEventListener('click', () => {
+        // Navigate to the grouping category when header is clicked
+        const params = new URLSearchParams(window.location.search);
+        params.set('subcategory', groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' '));
+        params.delete('view');
+        window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+        if (window.applyFiltersAndSort) {
+            window.applyFiltersAndSort(imageCache);
+        }
+    });
+    section.appendChild(header);
+
+    // Add description if present
+    if (description) {
+        const descEl = document.createElement('p');
+        descEl.className = 'grouping-carousel-description';
+        descEl.textContent = description;
+        section.appendChild(descEl);
+    }
+
+    // Create carousel wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'grouping-carousel-wrapper';
+
+    // Create carousel container
+    const container = document.createElement('div');
+    container.className = 'grouping-carousel-container';
+
+    // Create cards for child items (limit to first 10 for carousel)
+    const itemsToShow = childItems.slice(0, 10);
+
+    const cardPromises = itemsToShow.map(record => createInteractiveCard(record, allRecords, imageCache));
+    const cards = await Promise.all(cardPromises);
+
+    cards.forEach((card) => {
+        if (card) {
+            container.appendChild(card);
+        }
+    });
+
+    wrapper.appendChild(container);
+
+    // Helper function to calculate scroll distance based on card width
+    const getScrollDistance = () => {
+        const card = container.querySelector('.event-card');
+        if (card) {
+            return card.offsetWidth + 20; // 20px gap
+        }
+        return container.clientWidth;
+    };
+
+    // Add navigation buttons
+    const leftNav = document.createElement('button');
+    leftNav.className = 'grouping-carousel-nav left';
+    leftNav.innerHTML = '◄';
+    leftNav.setAttribute('aria-label', 'Scroll left');
+    leftNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: -getScrollDistance(), behavior: 'smooth' });
+    });
+
+    const rightNav = document.createElement('button');
+    rightNav.className = 'grouping-carousel-nav right';
+    rightNav.innerHTML = '►';
+    rightNav.setAttribute('aria-label', 'Scroll right');
+    rightNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: getScrollDistance(), behavior: 'smooth' });
+    });
+
+    wrapper.appendChild(leftNav);
+    wrapper.appendChild(rightNav);
+
+    // Update navigation button visibility based on scroll position
+    const updateNavVisibility = () => {
+        const hasOverflow = container.scrollWidth > container.clientWidth;
+
+        if (hasOverflow) {
+            wrapper.classList.add('has-overflow');
+            // Fade left button at start
+            leftNav.style.opacity = container.scrollLeft <= 0 ? '0.3' : '';
+            leftNav.style.pointerEvents = container.scrollLeft <= 0 ? 'none' : '';
+            // Fade right button at end
+            const atEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 5;
+            rightNav.style.opacity = atEnd ? '0.3' : '';
+            rightNav.style.pointerEvents = atEnd ? 'none' : '';
+        } else {
+            wrapper.classList.remove('has-overflow');
+        }
+    };
+
+    // Listen for scroll events to update nav visibility
+    container.addEventListener('scroll', updateNavVisibility);
+
+    // Check for overflow and update nav visibility after render
+    setTimeout(updateNavVisibility, 100);
+    setTimeout(updateNavVisibility, 500);
+
+    section.appendChild(wrapper);
+
+    // Add "View All" link if there are more items
+    if (childItems.length > 10) {
+        const viewAll = document.createElement('a');
+        viewAll.className = 'grouping-carousel-view-all';
+        viewAll.textContent = `View all ${childItems.length} items →`;
+        viewAll.addEventListener('click', (e) => {
+            e.preventDefault();
+            const params = new URLSearchParams(window.location.search);
+            params.set('subcategory', groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' '));
+            params.delete('view');
+            window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+            if (window.applyFiltersAndSort) {
+                window.applyFiltersAndSort(imageCache);
+            }
+        });
+        section.appendChild(viewAll);
+    }
+
+    return section;
+}
+
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
     const catalogContainer = document.getElementById('catalog-container');
@@ -216,64 +370,130 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         return;
     }
 
-    const fragment = document.createDocumentFragment();
-    const CHUNK_SIZE = 4; // Smaller chunks to yield to browser more frequently
-    
-    // Progressive rendering with skeleton replacement - yield to browser between chunks
-    for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
-        const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
-        const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
-        const cards = await Promise.all(cardPromises);
-        
-        // Replace skeletons with real cards or append new ones
-        if (!append && i === 0) {
-            catalogContainer.innerHTML = ''; // Clear skeletons on first batch
-        }
-        
-        cards.forEach(card => {
-            if (card) fragment.appendChild(card);
-        });
-        
-        catalogContainer.appendChild(fragment);
-        // Clear fragment for next batch by creating a new one
-        fragment.textContent = '';
-        
-        // Add energy burst as each chunk loads to animate the background
-        addEnergy();
-        
-        // Progress the color wheel slightly as catalog items load (browsing behavior)
-        updateProgress(0.00005 * chunk.length);
-        
-        // Yield to browser between chunks to avoid blocking main thread
-        if (i + CHUNK_SIZE < recordsToRender.length) {
-            await new Promise(resolve => {
-                if (window.requestIdleCallback) {
-                    requestIdleCallback(resolve, { timeout: 50 });
-                } else {
-                    setTimeout(resolve, 0);
-                }
+    // Separate groupings from regular items
+    const groupings = recordsToRender.filter(r => r.fields['Item Type'] === 'Grouping');
+    const nonGroupingRecords = recordsToRender.filter(r => r.fields['Item Type'] !== 'Grouping');
+
+    // Check if we're viewing a specific subcategory (filtered view) - don't show carousels in filtered views
+    const params = new URLSearchParams(window.location.search);
+    const hasSubcategoryFilter = params.get('subcategory');
+    const hasViewFilter = params.get('view');
+    const isFilteredView = hasSubcategoryFilter || hasViewFilter || state.ui.nameFilter;
+
+    // Clear container for fresh render
+    if (!append) {
+        catalogContainer.innerHTML = '';
+    }
+
+    // If in filtered view or no groupings, render normally
+    if (isFilteredView || groupings.length === 0) {
+        const fragment = document.createDocumentFragment();
+        const CHUNK_SIZE = 4;
+
+        for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
+            const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
+            const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
+            const cards = await Promise.all(cardPromises);
+
+            cards.forEach(card => {
+                if (card) fragment.appendChild(card);
             });
+
+            catalogContainer.appendChild(fragment);
+            fragment.textContent = '';
+
+            addEnergy();
+            updateProgress(0.00005 * chunk.length);
+
+            if (i + CHUNK_SIZE < recordsToRender.length) {
+                await new Promise(resolve => {
+                    if (window.requestIdleCallback) {
+                        requestIdleCallback(resolve, { timeout: 50 });
+                    } else {
+                        setTimeout(resolve, 0);
+                    }
+                });
+            }
+        }
+    } else {
+        // Render groupings as horizontal carousel sections
+        for (const grouping of groupings) {
+            const childItems = getChildItemsForGrouping(grouping, state.records.all);
+            if (childItems.length > 0) {
+                const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
+                catalogContainer.appendChild(carouselSection);
+                addEnergy();
+                updateProgress(0.00005);
+
+                // Yield to browser
+                await new Promise(resolve => {
+                    if (window.requestIdleCallback) {
+                        requestIdleCallback(resolve, { timeout: 50 });
+                    } else {
+                        setTimeout(resolve, 0);
+                    }
+                });
+            }
+        }
+
+        // Also render any non-grouped items that don't belong to any grouping
+        // Find items that aren't in any grouping's child items
+        const allGroupedItemIds = new Set();
+        groupings.forEach(g => {
+            const children = getChildItemsForGrouping(g, state.records.all);
+            children.forEach(c => allGroupedItemIds.add(c.id));
+        });
+
+        const ungroupedItems = nonGroupingRecords.filter(r => !allGroupedItemIds.has(r.id));
+
+        if (ungroupedItems.length > 0) {
+            // Create a section for ungrouped items
+            const ungroupedSection = document.createElement('div');
+            ungroupedSection.className = 'ungrouped-items-section';
+            ungroupedSection.style.display = 'grid';
+            ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
+            ungroupedSection.style.gap = '25px';
+            ungroupedSection.style.marginTop = '20px';
+
+            const fragment = document.createDocumentFragment();
+            const CHUNK_SIZE = 4;
+
+            for (let i = 0; i < ungroupedItems.length; i += CHUNK_SIZE) {
+                const chunk = ungroupedItems.slice(i, i + CHUNK_SIZE);
+                const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
+                const cards = await Promise.all(cardPromises);
+
+                cards.forEach(card => {
+                    if (card) fragment.appendChild(card);
+                });
+
+                addEnergy();
+                updateProgress(0.00005 * chunk.length);
+            }
+
+            ungroupedSection.appendChild(fragment);
+            catalogContainer.appendChild(ungroupedSection);
         }
     }
-    
+
     // Initialize heart icons for all newly rendered cards
     recordsToRender.forEach(record => {
         updateCardIcon(record.id);
     });
-    
+
     // Update availability icons if a date range is selected
     if (!append) {
-        console.log('[renderRecords] Calling updateAllCardAvailabilityIcons after rendering');
         updateAllCardAvailabilityIcons().catch(err => {
             log('UI', `Error updating availability icons: ${err.message}`);
         });
     }
-    
+
     observeLazyImages(catalogContainer);
 
     if (loadingMessage) {
         loadingMessage.style.display = 'none';
     }
+
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
 
@@ -348,26 +568,20 @@ export function applyCartLabels(labels) {
 
 export async function updateEventPlanDateDisplay() {
     log('UI', 'Updating event plan date display.');
-    console.log('[DEBUG] updateEventPlanDateDisplay called');
     const dateInput = document.getElementById('event-date-picker');
     if (!dateInput) {
-        console.log('[DEBUG] updateEventPlanDateDisplay - dateInput element not found');
         return;
     }
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    console.log('[DEBUG] updateEventPlanDateDisplay - selectedDateISO from state:', selectedDateISO);
     if (!selectedDateISO) {
-        console.log('[DEBUG] updateEventPlanDateDisplay - No date in state, setting placeholder');
         dateInput.value = 'Select a date';
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
         return;
     }
     const selectedDate = new Date(selectedDateISO);
-    console.log('[DEBUG] updateEventPlanDateDisplay - Parsed selectedDate:', selectedDate);
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
     const displayValue = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    console.log('[DEBUG] updateEventPlanDateDisplay - Setting dateInput.value to:', displayValue);
     dateInput.value = displayValue;
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
     switch (overallStatus) {
@@ -381,7 +595,6 @@ export async function updateEventPlanDateDisplay() {
             dateInput.classList.add('unavailable');
             break;
     }
-    console.log('[DEBUG] updateEventPlanDateDisplay - Overall status:', overallStatus);
 }
 
 export async function updateLockedItemStatusIcons() {
