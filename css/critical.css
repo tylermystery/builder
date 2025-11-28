@@ -443,3 +443,8 @@ body.modal-open {
     max-width: 320px;
     flex-shrink: 0;
 }
+
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
+}

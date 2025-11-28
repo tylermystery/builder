@@ -2788,6 +2788,11 @@ hr.total-divider {
     scroll-snap-align: start;
 }
 
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
+}
+
 .grouping-carousel-nav {
     position: absolute;
     top: 50%;
