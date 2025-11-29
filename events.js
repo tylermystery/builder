@@ -892,39 +892,83 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             ui.showCheckoutModal(shopSettings);
         } else if (rsvpBtn) {
             e.stopPropagation();
+            console.log('[RSVP DEBUG] ========== RSVP BUTTON CLICK HANDLER START ==========');
             if (!state.session.user.isAuthenticated) {
+                console.log('[RSVP DEBUG] User not authenticated, showing modal');
                 showUserModal();
                 return;
             }
             const cardEl = rsvpBtn.closest('.event-card') || rsvpBtn.closest('[data-record-id]');
             const recordId = cardEl?.dataset.recordId;
-            if (!recordId) return;
+            console.log('[RSVP DEBUG] cardEl:', cardEl);
+            console.log('[RSVP DEBUG] recordId:', recordId);
+            if (!recordId) {
+                console.log('[RSVP DEBUG] No recordId found, returning');
+                return;
+            }
 
             const rsvpType = rsvpBtn.dataset.rsvpType || 'yes';
             const wasActive = rsvpBtn.classList.contains('active');
+            const optionIndexRaw = rsvpBtn.dataset.optionIndex;
+            const optionIndex = optionIndexRaw !== undefined && optionIndexRaw !== ''
+                ? parseInt(optionIndexRaw, 10)
+                : null;
+
+            console.log('[RSVP DEBUG] Button data attributes:');
+            console.log('[RSVP DEBUG]   rsvpType:', rsvpType);
+            console.log('[RSVP DEBUG]   wasActive:', wasActive);
+            console.log('[RSVP DEBUG]   optionIndexRaw (from dataset):', optionIndexRaw);
+            console.log('[RSVP DEBUG]   optionIndexRaw type:', typeof optionIndexRaw);
+            console.log('[RSVP DEBUG]   optionIndex (parsed):', optionIndex);
+            console.log('[RSVP DEBUG]   optionIndex type:', typeof optionIndex);
+            console.log('[RSVP DEBUG]   optionIndex !== null:', optionIndex !== null);
 
             rsvpBtn.disabled = true;
             const originalText = rsvpBtn.innerHTML;
-            rsvpBtn.textContent = 'Saving...';
-            
+            rsvpBtn.textContent = '...';
+
             try {
                 let updatedRecord;
-                if (wasActive) {
-                    updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, null);
+                console.log('[RSVP DEBUG] Deciding which API function to call...');
+                console.log('[RSVP DEBUG]   optionIndex !== null:', optionIndex !== null);
+                if (optionIndex !== null) {
+                    // Date-specific RSVP
+                    console.log('[RSVP DEBUG] Calling updateRsvpForDateOption (date-specific)');
+                    if (wasActive) {
+                        console.log('[RSVP DEBUG]   Action: REMOVING RSVP (wasActive=true)');
+                        updatedRecord = await api.updateRsvpForDateOption(recordId, state.session.user.id, null, optionIndex);
+                    } else {
+                        console.log('[RSVP DEBUG]   Action: ADDING RSVP type:', rsvpType);
+                        updatedRecord = await api.updateRsvpForDateOption(recordId, state.session.user.id, rsvpType, optionIndex);
+                    }
                 } else {
-                    updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, rsvpType);
+                    // Standard RSVP (no date option)
+                    console.log('[RSVP DEBUG] Calling updateRsvpForEvent (standard, no optionIndex)');
+                    if (wasActive) {
+                        console.log('[RSVP DEBUG]   Action: REMOVING RSVP (wasActive=true)');
+                        updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, null);
+                    } else {
+                        console.log('[RSVP DEBUG]   Action: ADDING RSVP type:', rsvpType);
+                        updatedRecord = await api.updateRsvpForEvent(recordId, state.session.user.id, rsvpType);
+                    }
                 }
-                
+
+                console.log('[RSVP DEBUG] API call completed, updatedRecord:', updatedRecord ? 'received' : 'null');
                 if (updatedRecord) {
+                    console.log('[RSVP DEBUG] Updated record RSVPs:', JSON.stringify(updatedRecord.fields?.RSVPs));
+                    console.log('[RSVP DEBUG] Updated record RSVPMaybe:', JSON.stringify(updatedRecord.fields?.RSVPMaybe));
+                    console.log('[RSVP DEBUG] Updated record RSVPNo:', JSON.stringify(updatedRecord.fields?.RSVPNo));
                     const recordIndex = state.records.all.findIndex(r => r.id === recordId);
                     if (recordIndex > -1) state.records.all[recordIndex] = updatedRecord;
-                    
+
                     if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
+                        console.log('[RSVP DEBUG] Modal is open, refreshing modal with updated record');
                         ui.showDetailModal(updatedRecord);
                     }
                 } else {
                     throw new Error('RSVP update failed.');
                 }
+                console.log('[RSVP DEBUG] ========== RSVP BUTTON CLICK HANDLER END ==========');
             } catch (error) {
                 console.error("RSVP Error:", error);
                 ui.showToast(`RSVP Error: ${error.message}`);

@@ -1042,40 +1042,161 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     modalHeaderActions.appendChild(heartBtnContainer);
 
     if (record.fields['Item Type'] === 'Event') {
-        const rsvpYes = record.fields.RSVPs || [];
-        const rsvpMaybe = record.fields.RSVPMaybe || [];
-        const rsvpNo = record.fields.RSVPNo || [];
         const userId = state.session.user.id;
-        
-        const hasRsvpdYes = rsvpYes.includes(userId);
-        const hasRsvpdMaybe = rsvpMaybe.includes(userId);
-        const hasRsvpdNo = rsvpNo.includes(userId);
+        console.log('[RSVP DEBUG] ========== MODAL RSVP UI RENDERING START ==========');
+        console.log('[RSVP DEBUG] Rendering RSVP UI for Event:', record.fields.Name);
+        console.log('[RSVP DEBUG] Current userId:', userId);
 
-        const rsvpContainer = document.createElement('div');
-        rsvpContainer.className = 'rsvp-button-group';
-        
-        const yesBtn = document.createElement('button');
-        yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
-        yesBtn.dataset.recordId = record.id;
-        yesBtn.dataset.rsvpType = 'yes';
-        yesBtn.innerHTML = hasRsvpdYes ? "Going ✅" : 'Yes';
-        
-        const maybeBtn = document.createElement('button');
-        maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
-        maybeBtn.dataset.recordId = record.id;
-        maybeBtn.dataset.rsvpType = 'maybe';
-        maybeBtn.innerHTML = hasRsvpdMaybe ? "Maybe ❓" : 'Maybe';
-        
-        const noBtn = document.createElement('button');
-        noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
-        noBtn.dataset.recordId = record.id;
-        noBtn.dataset.rsvpType = 'no';
-        noBtn.innerHTML = hasRsvpdNo ? "Can't Go ❌" : 'No';
-        
-        rsvpContainer.appendChild(yesBtn);
-        rsvpContainer.appendChild(maybeBtn);
-        rsvpContainer.appendChild(noBtn);
-        modalHeaderActions.appendChild(rsvpContainer);
+        // Check if this event has date-specific options
+        const dateOptions = flatOptions.filter(opt => opt.effectiveDate);
+        console.log('[RSVP DEBUG] flatOptions count:', flatOptions.length);
+        console.log('[RSVP DEBUG] dateOptions (with effectiveDate) count:', dateOptions.length);
+        console.log('[RSVP DEBUG] dateOptions:', dateOptions.map(o => ({ name: o.name, effectiveDate: o.effectiveDate })));
+
+        if (dateOptions.length > 0) {
+            // Event has multiple date options - create per-date RSVP interface
+            console.log('[RSVP DEBUG] Creating per-date RSVP interface');
+            const dateRsvpSection = document.createElement('div');
+            dateRsvpSection.className = 'date-rsvp-section';
+            dateRsvpSection.innerHTML = '<h4 class="date-rsvp-title">RSVP to Dates</h4>';
+
+            dateOptions.forEach((option, idx) => {
+                const optionIndex = flatOptions.indexOf(option);
+                console.log('[RSVP DEBUG] Processing date option:', option.name);
+                console.log('[RSVP DEBUG]   idx in dateOptions:', idx);
+                console.log('[RSVP DEBUG]   optionIndex in flatOptions:', optionIndex);
+                console.log('[RSVP DEBUG]   effectiveDate:', option.effectiveDate);
+                console.log('[RSVP DEBUG]   Calling getUserRsvpForDateOption with optionIndex:', optionIndex);
+
+                const rsvpStatus = api.getUserRsvpForDateOption(record, userId, optionIndex);
+                console.log('[RSVP DEBUG]   rsvpStatus returned:', JSON.stringify(rsvpStatus));
+
+                const dateRow = document.createElement('div');
+                dateRow.className = 'date-rsvp-row';
+                dateRow.dataset.optionIndex = optionIndex;
+
+                // Format the date nicely
+                let displayDate = option.effectiveDate;
+                try {
+                    // Try to parse and format the date
+                    const dateMatch = option.effectiveDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                    if (dateMatch) {
+                        let [_, month, day, year] = dateMatch;
+                        if (year.length === 2) {
+                            year = parseInt(year) > 50 ? `19${year}` : `20${year}`;
+                        }
+                        const dateObj = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+                        if (!isNaN(dateObj.getTime())) {
+                            displayDate = dateObj.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric'
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // Keep original date string
+                }
+
+                const dateLabel = document.createElement('div');
+                dateLabel.className = 'date-rsvp-label';
+                dateLabel.innerHTML = `<span class="date-name">${option.name}</span><span class="date-value">${displayDate}</span>`;
+
+                const rsvpBtnGroup = document.createElement('div');
+                rsvpBtnGroup.className = 'rsvp-button-group rsvp-button-group-compact';
+
+                const hasRsvpdYes = rsvpStatus.rsvpType === 'yes';
+                const hasRsvpdMaybe = rsvpStatus.rsvpType === 'maybe';
+                const hasRsvpdNo = rsvpStatus.rsvpType === 'no';
+
+                console.log('[RSVP DEBUG]   Button active states: yes=', hasRsvpdYes, 'maybe=', hasRsvpdMaybe, 'no=', hasRsvpdNo);
+
+                const yesBtn = document.createElement('button');
+                yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
+                yesBtn.dataset.recordId = record.id;
+                yesBtn.dataset.rsvpType = 'yes';
+                yesBtn.dataset.optionIndex = optionIndex;
+                yesBtn.innerHTML = hasRsvpdYes ? '✅' : 'Yes';
+                yesBtn.title = 'Going';
+
+                console.log('[RSVP DEBUG]   Created yesBtn with data-option-index:', yesBtn.dataset.optionIndex);
+
+                const maybeBtn = document.createElement('button');
+                maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
+                maybeBtn.dataset.recordId = record.id;
+                maybeBtn.dataset.rsvpType = 'maybe';
+                maybeBtn.dataset.optionIndex = optionIndex;
+                maybeBtn.innerHTML = hasRsvpdMaybe ? '❓' : 'Maybe';
+                maybeBtn.title = 'Maybe';
+
+                console.log('[RSVP DEBUG]   Created maybeBtn with data-option-index:', maybeBtn.dataset.optionIndex);
+
+                const noBtn = document.createElement('button');
+                noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
+                noBtn.dataset.recordId = record.id;
+                noBtn.dataset.rsvpType = 'no';
+                noBtn.dataset.optionIndex = optionIndex;
+                noBtn.innerHTML = hasRsvpdNo ? '❌' : 'No';
+                noBtn.title = "Can't Go";
+
+                console.log('[RSVP DEBUG]   Created noBtn with data-option-index:', noBtn.dataset.optionIndex);
+
+                rsvpBtnGroup.appendChild(yesBtn);
+                rsvpBtnGroup.appendChild(maybeBtn);
+                rsvpBtnGroup.appendChild(noBtn);
+
+                dateRow.appendChild(dateLabel);
+                dateRow.appendChild(rsvpBtnGroup);
+                dateRsvpSection.appendChild(dateRow);
+                console.log('[RSVP DEBUG]   Date row created for optionIndex:', optionIndex);
+            });
+
+            modalHeaderActions.appendChild(dateRsvpSection);
+            console.log('[RSVP DEBUG] ========== MODAL RSVP UI RENDERING END (per-date) ==========');
+        } else {
+            // No date options - use original single RSVP interface
+            console.log('[RSVP DEBUG] No date options, creating standard single RSVP interface');
+            const rsvpYes = record.fields.RSVPs || [];
+            const rsvpMaybe = record.fields.RSVPMaybe || [];
+            const rsvpNo = record.fields.RSVPNo || [];
+
+            console.log('[RSVP DEBUG] Standard RSVP fields:');
+            console.log('[RSVP DEBUG]   rsvpYes:', JSON.stringify(rsvpYes));
+            console.log('[RSVP DEBUG]   rsvpMaybe:', JSON.stringify(rsvpMaybe));
+            console.log('[RSVP DEBUG]   rsvpNo:', JSON.stringify(rsvpNo));
+
+            const hasRsvpdYes = rsvpYes.includes(userId);
+            const hasRsvpdMaybe = rsvpMaybe.includes(userId);
+            const hasRsvpdNo = rsvpNo.includes(userId);
+
+            console.log('[RSVP DEBUG] Standard button active states: yes=', hasRsvpdYes, 'maybe=', hasRsvpdMaybe, 'no=', hasRsvpdNo);
+
+            const rsvpContainer = document.createElement('div');
+            rsvpContainer.className = 'rsvp-button-group';
+
+            const yesBtn = document.createElement('button');
+            yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
+            yesBtn.dataset.recordId = record.id;
+            yesBtn.dataset.rsvpType = 'yes';
+            yesBtn.innerHTML = hasRsvpdYes ? "Going ✅" : 'Yes';
+
+            const maybeBtn = document.createElement('button');
+            maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
+            maybeBtn.dataset.recordId = record.id;
+            maybeBtn.dataset.rsvpType = 'maybe';
+            maybeBtn.innerHTML = hasRsvpdMaybe ? "Maybe ❓" : 'Maybe';
+
+            const noBtn = document.createElement('button');
+            noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
+            noBtn.dataset.recordId = record.id;
+            noBtn.dataset.rsvpType = 'no';
+            noBtn.innerHTML = hasRsvpdNo ? "Can't Go ❌" : 'No';
+
+            rsvpContainer.appendChild(yesBtn);
+            rsvpContainer.appendChild(maybeBtn);
+            rsvpContainer.appendChild(noBtn);
+            modalHeaderActions.appendChild(rsvpContainer);
+        }
     }
 
     modalOptionsContainer.innerHTML = '';
