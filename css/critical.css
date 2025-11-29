@@ -7,6 +7,8 @@
 
 html {
     scroll-behavior: smooth;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
 }
 
 /* Core Body & Kaleidoscope Canvas */
@@ -15,6 +17,8 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     background-color: transparent;
     margin: 0;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
 }
 
 body.modal-open {
@@ -154,7 +158,12 @@ body.modal-open {
         gap: 25px;
     }
     #left-sidebar { order: 1; }
-    #catalog-area { order: 2; }
+    #catalog-area {
+        order: 2;
+        /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
+        min-width: 0;
+        overflow: hidden;
+    }
     #right-sidebar { order: 3; }
 }
 
@@ -259,6 +268,22 @@ body.modal-open {
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 25px;
     min-height: 420px; /* Reserve space for at least one row of cards - prevents layout shift */
+    /* CRITICAL: Prevent catalog container from expanding beyond parent */
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* When catalog contains carousel sections, switch to column layout */
+#catalog-container:has(.grouping-carousel-section) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* CRITICAL: Force container to shrink to parent width */
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* Skeleton Loading - Critical for perceived performance */
@@ -380,4 +405,46 @@ body.modal-open {
         font-size: 0.85em;
         padding: 10px 15px;
     }
+}
+
+/* CRITICAL: Grouping carousel layout constraints - needed before deferred CSS loads */
+.grouping-carousel-section {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-wrapper {
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container .event-card {
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+    flex-shrink: 0;
+}
+
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
 }

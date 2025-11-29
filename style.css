@@ -7,6 +7,8 @@
 
 html {
     scroll-behavior: smooth;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
 }
 
 /* --- 1. CORE BODY & KALEIDOSCOPE CANVAS --- */
@@ -14,6 +16,8 @@ body {
     padding-bottom: 150px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     background-color: transparent;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
 }
 
 body.modal-open {
@@ -287,7 +291,12 @@ body.modal-open {
         gap: 25px;
     }
     #left-sidebar { order: 1; }
-    #catalog-area { order: 2; }
+    #catalog-area {
+        order: 2;
+        /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
+        min-width: 0;
+        overflow: hidden;
+    }
     #right-sidebar { order: 3; }
 }
 
@@ -963,6 +972,22 @@ body.modal-open {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 25px;
+    /* CRITICAL: Prevent catalog container from expanding beyond parent */
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* When catalog contains carousel sections, switch to column layout */
+#catalog-container:has(.grouping-carousel-section) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* CRITICAL: Force container to shrink to parent width */
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* --- 7. FROSTED GLASS: EVENT CARD & SHIMMER --- */
@@ -2644,6 +2669,216 @@ hr.total-divider {
 .grouping-card .card-footer {
     justify-content: center;
 }
+
+/* --- GROUPING CAROUSEL SECTION STYLES --- */
+.grouping-carousel-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    /* CRITICAL: Constrain section width to parent container */
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    /* In flex column, prevent stretching beyond parent */
+    align-self: stretch;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    cursor: pointer;
+}
+
+.grouping-carousel-header:hover .grouping-carousel-title {
+    color: #007bff;
+}
+
+.grouping-carousel-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+    transition: color 0.2s;
+}
+
+.grouping-carousel-description {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin: 0 0 15px 0;
+}
+
+.grouping-carousel-count {
+    font-size: 0.85em;
+    color: #6c757d;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.grouping-carousel-wrapper {
+    position: relative;
+    /* Key: wrapper clips the overflow so only visible cards show */
+    overflow: hidden;
+    /* CRITICAL: Force wrapper to constrain to parent width */
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container {
+    display: flex;
+    gap: 20px;
+    /* Enable horizontal scrolling ONLY on the container */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    padding: 10px 5px;
+    /* Custom scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+    /* Snap scrolling for better UX */
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    /* Prevent scroll chaining to parent elements */
+    overscroll-behavior-x: contain;
+    /* Allow horizontal touch scrolling */
+    touch-action: pan-x;
+    /* CRITICAL: Container must inherit parent width, NOT expand to fit content */
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.grouping-carousel-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.grouping-carousel-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.grouping-carousel-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.grouping-carousel-container .event-card {
+    /* Desktop: Fixed width cards to show 3 at a time */
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+    height: auto;
+    scroll-snap-align: start;
+}
+
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
+}
+
+.grouping-carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    opacity: 0.7;
+}
+
+.grouping-carousel-nav:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.grouping-carousel-nav.left {
+    left: -15px;
+}
+
+.grouping-carousel-nav.right {
+    right: -15px;
+}
+
+.grouping-carousel-view-all {
+    display: block;
+    text-align: center;
+    margin-top: 15px;
+    color: #007bff;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 0.95em;
+    transition: color 0.2s;
+}
+
+.grouping-carousel-view-all:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+/* Hide nav buttons when not needed */
+.grouping-carousel-wrapper:not(.has-overflow) .grouping-carousel-nav {
+    display: none;
+}
+
+/* Mobile responsiveness for grouping carousels */
+@media (max-width: 768px) {
+    .grouping-carousel-section {
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .grouping-carousel-container .event-card {
+        /* Mobile: Show exactly 1 card at full width minus padding */
+        flex: 0 0 calc(100vw - 70px);
+        width: calc(100vw - 70px);
+        min-width: 280px;
+        max-width: calc(100vw - 70px);
+    }
+
+    .grouping-carousel-nav {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+
+    .grouping-carousel-nav.left {
+        left: -10px;
+    }
+
+    .grouping-carousel-nav.right {
+        right: -10px;
+    }
+}
+/* --- END GROUPING CAROUSEL SECTION STYLES --- */
 
 @media (max-width: 768px) {
     .modal-content {
