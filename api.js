@@ -704,6 +704,7 @@ export async function fetchAllRecords() {
         'RSVPs',
         'RSVPMaybe',
         'RSVPNo',
+        'RSVPsByDate',
         'Date',
         'Time',
         'Chat Enabled',
@@ -1329,6 +1330,297 @@ export async function updateRsvpForEvent(eventId, userId, rsvpType) {
 
 export async function addRsvpToEvent(eventId, userId) {
     return updateRsvpForEvent(eventId, userId, 'yes');
+}
+
+/**
+ * Updates RSVP for a specific date option within an event.
+ * Date-specific RSVPs are stored in the RSVPsByDate JSON text field.
+ * The linked record fields (RSVPs, RSVPMaybe, RSVPNo) are kept for base event RSVPs only.
+ *
+ * @param {string} eventId - The event record ID
+ * @param {string} userId - The user ID
+ * @param {string} rsvpType - 'yes', 'maybe', 'no', or null to remove
+ * @param {number|null} optionIndex - The option index for date-specific RSVP, null for base event
+ * @returns {Promise<Object|null>} The updated record or null on failure
+ */
+export async function updateRsvpForDateOption(eventId, userId, rsvpType, optionIndex = null) {
+    console.log('[RSVP DEBUG] ========== updateRsvpForDateOption START ==========');
+    console.log('[RSVP DEBUG] Parameters received:');
+    console.log('[RSVP DEBUG]   eventId:', eventId);
+    console.log('[RSVP DEBUG]   userId:', userId);
+    console.log('[RSVP DEBUG]   rsvpType:', rsvpType);
+    console.log('[RSVP DEBUG]   optionIndex:', optionIndex);
+    console.log('[RSVP DEBUG]   optionIndex type:', typeof optionIndex);
+    console.log('[RSVP DEBUG]   optionIndex !== null:', optionIndex !== null);
+
+    if (!eventId || !userId) {
+        log('API', 'updateRsvpForDateOption: Missing eventId or userId.');
+        console.log('[RSVP DEBUG] ERROR: Missing eventId or userId, returning null');
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    try {
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
+            throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+        }
+
+        const existingRecord = await getResponse.json();
+        console.log('[RSVP DEBUG] Existing record fetched from Airtable:');
+        console.log('[RSVP DEBUG]   Record ID:', existingRecord.id);
+
+        let rsvpPayload;
+
+        if (optionIndex !== null) {
+            // DATE-SPECIFIC RSVP: Use the RSVPsByDate JSON text field
+            console.log('[RSVP DEBUG] Using RSVPsByDate JSON field for date-specific RSVP');
+
+            // Parse existing RSVPsByDate or initialize empty object
+            let rsvpsByDate = {};
+            try {
+                const existingJson = existingRecord.fields.RSVPsByDate;
+                if (existingJson && typeof existingJson === 'string') {
+                    rsvpsByDate = JSON.parse(existingJson);
+                }
+            } catch (e) {
+                console.log('[RSVP DEBUG] Could not parse existing RSVPsByDate, starting fresh');
+                rsvpsByDate = {};
+            }
+
+            console.log('[RSVP DEBUG] Current RSVPsByDate:', JSON.stringify(rsvpsByDate));
+
+            // Structure: { [optionIndex]: { [userId]: 'yes'|'maybe'|'no' } }
+            if (!rsvpsByDate[optionIndex]) {
+                rsvpsByDate[optionIndex] = {};
+            }
+
+            if (rsvpType === null) {
+                // Remove the RSVP
+                delete rsvpsByDate[optionIndex][userId];
+                // Clean up empty option objects
+                if (Object.keys(rsvpsByDate[optionIndex]).length === 0) {
+                    delete rsvpsByDate[optionIndex];
+                }
+            } else {
+                // Set or update the RSVP
+                rsvpsByDate[optionIndex][userId] = rsvpType;
+            }
+
+            console.log('[RSVP DEBUG] Updated RSVPsByDate:', JSON.stringify(rsvpsByDate));
+
+            rsvpPayload = {
+                fields: {
+                    'RSVPsByDate': JSON.stringify(rsvpsByDate)
+                }
+            };
+        } else {
+            // BASE EVENT RSVP: Use the linked record fields (original behavior)
+            console.log('[RSVP DEBUG] Using linked record fields for base event RSVP');
+
+            const rsvpYes = new Set(existingRecord.fields.RSVPs || []);
+            const rsvpMaybe = new Set(existingRecord.fields.RSVPMaybe || []);
+            const rsvpNo = new Set(existingRecord.fields.RSVPNo || []);
+
+            // Remove user from all RSVP sets first
+            rsvpYes.delete(userId);
+            rsvpMaybe.delete(userId);
+            rsvpNo.delete(userId);
+
+            // Add to the appropriate set based on rsvpType
+            if (rsvpType === 'yes') {
+                rsvpYes.add(userId);
+            } else if (rsvpType === 'maybe') {
+                rsvpMaybe.add(userId);
+            } else if (rsvpType === 'no') {
+                rsvpNo.add(userId);
+            }
+
+            rsvpPayload = {
+                fields: {
+                    'RSVPs': Array.from(rsvpYes),
+                    'RSVPMaybe': Array.from(rsvpMaybe),
+                    'RSVPNo': Array.from(rsvpNo)
+                }
+            };
+        }
+
+        console.log('[RSVP DEBUG] Payload to send to Airtable:', JSON.stringify(rsvpPayload));
+
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(rsvpPayload)
+        });
+
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+        }
+
+        log('API', `Successfully updated RSVP for user ${userId} to event ${eventId}, option ${optionIndex}`);
+        const updatedRecord = await patchResponse.json();
+
+        // Update the local record cache if available
+        const localRecord = state.records.all.find(r => r.id === eventId);
+        if (localRecord && optionIndex !== null) {
+            localRecord.fields.RSVPsByDate = rsvpPayload.fields.RSVPsByDate;
+        }
+
+        return updatedRecord;
+
+    } catch (error) {
+        console.error(`Failed to update RSVP for event ${eventId}:`, error);
+        log('API', `Failed to update RSVP: ${error.message}`);
+        if (typeof ui !== 'undefined' && ui.showToast) {
+            ui.showToast(`RSVP Error: ${error.message}`);
+        }
+        return null;
+    }
+}
+
+/**
+ * Helper function to check if a user has RSVPed to a specific date option.
+ * For date-specific RSVPs, reads from the RSVPsByDate JSON text field.
+ * For base event RSVPs, reads from the linked record fields.
+ * @param {Object} record - The event record
+ * @param {string} userId - The user ID to check
+ * @param {number|null} optionIndex - The option index to check, null for base event
+ * @returns {Object} Object with { hasRsvp: boolean, rsvpType: 'yes'|'maybe'|'no'|null }
+ */
+export function getUserRsvpForDateOption(record, userId, optionIndex = null) {
+    console.log('[RSVP DEBUG] ========== getUserRsvpForDateOption START ==========');
+    console.log('[RSVP DEBUG] Parameters:');
+    console.log('[RSVP DEBUG]   record.id:', record?.id);
+    console.log('[RSVP DEBUG]   userId:', userId);
+    console.log('[RSVP DEBUG]   optionIndex:', optionIndex);
+    console.log('[RSVP DEBUG]   optionIndex type:', typeof optionIndex);
+
+    if (!record || !userId) {
+        console.log('[RSVP DEBUG] Missing record or userId, returning no RSVP');
+        return { hasRsvp: false, rsvpType: null };
+    }
+
+    // For date-specific RSVPs, check the RSVPsByDate JSON field first
+    if (optionIndex !== null) {
+        console.log('[RSVP DEBUG] Checking RSVPsByDate JSON field for date-specific RSVP');
+
+        try {
+            const rsvpsByDateJson = record.fields.RSVPsByDate;
+            console.log('[RSVP DEBUG]   RSVPsByDate raw:', rsvpsByDateJson);
+
+            if (rsvpsByDateJson && typeof rsvpsByDateJson === 'string') {
+                const rsvpsByDate = JSON.parse(rsvpsByDateJson);
+                console.log('[RSVP DEBUG]   RSVPsByDate parsed:', JSON.stringify(rsvpsByDate));
+
+                const optionRsvps = rsvpsByDate[optionIndex];
+                if (optionRsvps && optionRsvps[userId]) {
+                    const rsvpType = optionRsvps[userId];
+                    console.log('[RSVP DEBUG]   FOUND in RSVPsByDate: optionIndex', optionIndex, 'userId', userId, 'rsvpType', rsvpType);
+                    return { hasRsvp: true, rsvpType };
+                }
+                console.log('[RSVP DEBUG]   No RSVP found in RSVPsByDate for this option/user');
+            } else {
+                console.log('[RSVP DEBUG]   RSVPsByDate field is empty or not a string');
+            }
+        } catch (e) {
+            console.log('[RSVP DEBUG]   Could not parse RSVPsByDate:', e.message);
+        }
+
+        // No date-specific RSVP found, return no RSVP
+        // We intentionally DON'T fall back to base RSVPs for date-specific queries
+        // to allow independent RSVPs per date option
+        console.log('[RSVP DEBUG] No date-specific RSVP found, returning no RSVP');
+        return { hasRsvp: false, rsvpType: null };
+    }
+
+    // For base event RSVP (optionIndex is null), check linked record fields
+    console.log('[RSVP DEBUG] Checking linked record fields for base event RSVP');
+
+    const rsvpYes = record.fields.RSVPs || [];
+    const rsvpMaybe = record.fields.RSVPMaybe || [];
+    const rsvpNo = record.fields.RSVPNo || [];
+
+    console.log('[RSVP DEBUG] Current RSVP fields from record:');
+    console.log('[RSVP DEBUG]   rsvpYes:', JSON.stringify(rsvpYes));
+    console.log('[RSVP DEBUG]   rsvpMaybe:', JSON.stringify(rsvpMaybe));
+    console.log('[RSVP DEBUG]   rsvpNo:', JSON.stringify(rsvpNo));
+
+    // Check for userId in the linked record fields
+    if (rsvpYes.includes(userId)) {
+        console.log('[RSVP DEBUG] FOUND userId in rsvpYes');
+        return { hasRsvp: true, rsvpType: 'yes' };
+    }
+    if (rsvpMaybe.includes(userId)) {
+        console.log('[RSVP DEBUG] FOUND userId in rsvpMaybe');
+        return { hasRsvp: true, rsvpType: 'maybe' };
+    }
+    if (rsvpNo.includes(userId)) {
+        console.log('[RSVP DEBUG] FOUND userId in rsvpNo');
+        return { hasRsvp: true, rsvpType: 'no' };
+    }
+
+    console.log('[RSVP DEBUG] Returning no RSVP found');
+    return { hasRsvp: false, rsvpType: null };
+}
+
+/**
+ * Gets all date options a user has RSVPed to for an event.
+ * Reads from the RSVPsByDate JSON text field for date-specific RSVPs
+ * and from linked record fields for base event RSVPs.
+ * @param {Object} record - The event record
+ * @param {string} userId - The user ID to check
+ * @returns {Array<Object>} Array of { optionIndex: number|null, rsvpType: 'yes'|'maybe'|'no' }
+ */
+export function getAllUserRsvpsForEvent(record, userId) {
+    if (!record || !userId) {
+        return [];
+    }
+
+    const results = [];
+
+    // Check RSVPsByDate JSON field for date-specific RSVPs
+    try {
+        const rsvpsByDateJson = record.fields.RSVPsByDate;
+        if (rsvpsByDateJson && typeof rsvpsByDateJson === 'string') {
+            const rsvpsByDate = JSON.parse(rsvpsByDateJson);
+            for (const optionIndexStr in rsvpsByDate) {
+                const optionRsvps = rsvpsByDate[optionIndexStr];
+                if (optionRsvps && optionRsvps[userId]) {
+                    results.push({
+                        optionIndex: parseInt(optionIndexStr, 10),
+                        rsvpType: optionRsvps[userId]
+                    });
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[RSVP DEBUG] Could not parse RSVPsByDate in getAllUserRsvpsForEvent:', e.message);
+    }
+
+    // Check linked record fields for base event RSVP
+    const rsvpYes = record.fields.RSVPs || [];
+    const rsvpMaybe = record.fields.RSVPMaybe || [];
+    const rsvpNo = record.fields.RSVPNo || [];
+
+    if (rsvpYes.includes(userId)) {
+        results.push({ optionIndex: null, rsvpType: 'yes' });
+    }
+    if (rsvpMaybe.includes(userId)) {
+        results.push({ optionIndex: null, rsvpType: 'maybe' });
+    }
+    if (rsvpNo.includes(userId)) {
+        results.push({ optionIndex: null, rsvpType: 'no' });
+    }
+
+    return results;
 }
 
 

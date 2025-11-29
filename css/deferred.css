@@ -3205,6 +3205,92 @@ hr.total-divider {
     cursor: not-allowed;
 }
 
+/* Date-specific RSVP section styles */
+.date-rsvp-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+    width: 100%;
+}
+
+.date-rsvp-title {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #555;
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.date-rsvp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    gap: 12px;
+}
+
+.date-rsvp-row:last-child {
+    border-bottom: none;
+}
+
+.date-rsvp-label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.date-rsvp-label .date-name {
+    font-weight: 500;
+    font-size: 0.9em;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.date-rsvp-label .date-value {
+    font-size: 0.8em;
+    color: #666;
+}
+
+.rsvp-button-group-compact {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.rsvp-button-group-compact .rsvp-btn {
+    flex: none;
+    padding: 4px 10px;
+    font-size: 0.8em;
+    min-width: 40px;
+}
+
+.rsvp-button-group-compact .rsvp-btn.active {
+    font-size: 0.9em;
+}
+
+@media (max-width: 480px) {
+    .date-rsvp-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .rsvp-button-group-compact {
+        width: 100%;
+    }
+
+    .rsvp-button-group-compact .rsvp-btn {
+        flex: 1;
+    }
+}
+
 .rsvp-list-section {
     background-color: #f0f8ff;
     border-radius: 6px;

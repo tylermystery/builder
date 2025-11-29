@@ -3,6 +3,7 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import * as ui from '../ui.js';
 import { showUserModal } from '../auth.js';
+import { parseOptions, flattenOptionGroups } from '../utils.js';
 
 let fullEventList = [];
 let currentView = 'month';
@@ -23,32 +24,66 @@ async function fetchUpcomingEvents() {
     const eventItems = state.records.all.filter(record => {
         checkedCount++;
         const itemType = record.fields['Item Type'];
-        const hasDate = record.fields.Date;
         const isEvent = itemType === 'Event';
 
         const eventName = record.fields.Name || 'Unnamed Record';
         const isOneOfYourEvents = eventName.includes("EVENT_NAME_1") || eventName.includes("EVENT_NAME_2");
 
         if (checkedCount <= 25 || isOneOfYourEvents) {
-            console.log(`[Calendar Debug] Checking: "${eventName}" | Item Type: "${itemType}" | Has Date: ${!!hasDate} | Is "Event": ${isEvent}`);
+            console.log(`[Calendar Debug] Checking: "${eventName}" | Item Type: "${itemType}" | Is "Event": ${isEvent}`);
         }
 
-        return isEvent && hasDate;
+        return isEvent;
     });
 
-    log('Calendar', `Found ${eventItems.length} public events after checking ${checkedCount} total records.`);
+    log('Calendar', `Found ${eventItems.length} event items after checking ${checkedCount} total records.`);
 
     // Map event items to calendar format
-    const eventList = eventItems.map(record => {
-        const dateStr = record.fields.Date;
-        return {
-            recordId: record.id,
-            name: record.fields.Name || 'Unnamed Event',
-            date: dateStr.split('T')[0],
-            record: record,
-            type: 'event'
-        };
-    });
+    // For each event, check if it has a Date field OR options with [date:] modifiers
+    const eventList = [];
+
+    for (const record of eventItems) {
+        const baseDate = record.fields.Date;
+        const optionsRaw = record.fields.Options || '';
+        const groups = parseOptions(optionsRaw);
+        const allOptions = flattenOptionGroups(groups);
+
+        // Find all options that have an effectiveDate
+        const dateOptions = allOptions.filter(opt => opt.effectiveDate);
+
+        if (dateOptions.length > 0) {
+            // Create a calendar entry for each date option
+            for (let i = 0; i < dateOptions.length; i++) {
+                const option = dateOptions[i];
+                const dateStr = parseOptionDateToISO(option.effectiveDate);
+
+                if (dateStr) {
+                    eventList.push({
+                        recordId: record.id,
+                        name: record.fields.Name || 'Unnamed Event',
+                        optionName: option.name,
+                        date: dateStr,
+                        record: record,
+                        type: 'event',
+                        optionIndex: allOptions.indexOf(option),
+                        effectiveDate: option.effectiveDate
+                    });
+                    console.log(`[Calendar Debug] Added date option: "${option.name}" on ${dateStr} for event "${record.fields.Name}"`);
+                }
+            }
+        } else if (baseDate) {
+            // No date options, but has a base Date field - use existing behavior
+            eventList.push({
+                recordId: record.id,
+                name: record.fields.Name || 'Unnamed Event',
+                date: baseDate.split('T')[0],
+                record: record,
+                type: 'event'
+            });
+        }
+    }
+
+    log('Calendar', `Generated ${eventList.length} calendar entries from ${eventItems.length} event items.`);
 
     // Fetch sessions with dates for the current store
     let sessionList = [];
@@ -89,6 +124,52 @@ async function fetchUpcomingEvents() {
     log('Calendar', `Total calendar entries: ${combinedList.length} (${eventList.length} events + ${sessionList.length} plans)`);
 
     return combinedList;
+}
+
+/**
+ * Parses a date string from option's effectiveDate to YYYY-MM-DD format.
+ * Handles various formats like "6/2/25", "June 2nd, 2025", "2025-06-02", etc.
+ *
+ * @param {string} dateStr - The date string from [date: ...] modifier
+ * @returns {string|null} The date in YYYY-MM-DD format, or null if parsing fails
+ */
+function parseOptionDateToISO(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') {
+        return null;
+    }
+
+    const cleaned = dateStr.trim();
+
+    // Try ISO format first (2025-06-02)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+        return cleaned;
+    }
+
+    // Try MM/DD/YY or M/D/YY format
+    const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (slashMatch) {
+        let [_, month, day, year] = slashMatch;
+        // Convert 2-digit year to 4-digit
+        if (year.length === 2) {
+            year = parseInt(year) > 50 ? `19${year}` : `20${year}`;
+        }
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    // Try to parse using Date constructor as a fallback
+    try {
+        const parsed = new Date(cleaned);
+        if (!isNaN(parsed.getTime())) {
+            const year = parsed.getFullYear();
+            const month = String(parsed.getMonth() + 1).padStart(2, '0');
+            const day = String(parsed.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+    } catch (e) {
+        console.warn(`[Calendar] Failed to parse date: "${dateStr}"`);
+    }
+
+    return null;
 }
 
 function getDaysInMonth(year, month) {
@@ -226,10 +307,48 @@ function createEventCard(event, compact = false) {
 
     } else {
         // Render event card (existing behavior)
-        const userRsvps = event.record.fields.RSVPs || [];
-        const hasRsvpd = state.session.user.isAuthenticated && userRsvps.includes(state.session.user.id);
+        // For date option events, check the date-specific RSVP status
+        let hasRsvpd = false;
+        let rsvpIcon = '';
 
-        const eventDate = new Date(event.record.fields.Date + 'T00:00:00');
+        console.log('[RSVP DEBUG CalendarView] ========== createEventCard RSVP check START ==========');
+        console.log('[RSVP DEBUG CalendarView] Event name:', event.name);
+        console.log('[RSVP DEBUG CalendarView] event.optionIndex:', event.optionIndex);
+        console.log('[RSVP DEBUG CalendarView] event.optionIndex type:', typeof event.optionIndex);
+        console.log('[RSVP DEBUG CalendarView] User authenticated:', state.session.user.isAuthenticated);
+
+        if (state.session.user.isAuthenticated) {
+            if (event.optionIndex !== undefined && event.optionIndex !== null) {
+                // This is a date-specific event - check date-specific RSVP
+                console.log('[RSVP DEBUG CalendarView] Calling getUserRsvpForDateOption with optionIndex:', event.optionIndex);
+                const rsvpStatus = api.getUserRsvpForDateOption(event.record, state.session.user.id, event.optionIndex);
+                console.log('[RSVP DEBUG CalendarView] rsvpStatus returned:', JSON.stringify(rsvpStatus));
+                if (rsvpStatus.hasRsvp) {
+                    hasRsvpd = true;
+                    if (rsvpStatus.rsvpType === 'yes') {
+                        rsvpIcon = '✅';
+                    } else if (rsvpStatus.rsvpType === 'maybe') {
+                        rsvpIcon = '❓';
+                    } else if (rsvpStatus.rsvpType === 'no') {
+                        rsvpIcon = '❌';
+                    }
+                }
+            } else {
+                // Regular event - use legacy check
+                console.log('[RSVP DEBUG CalendarView] No optionIndex, using legacy RSVP check');
+                const userRsvps = event.record.fields.RSVPs || [];
+                console.log('[RSVP DEBUG CalendarView] userRsvps:', JSON.stringify(userRsvps));
+                hasRsvpd = userRsvps.includes(state.session.user.id);
+                rsvpIcon = hasRsvpd ? '✅' : '';
+            }
+            console.log('[RSVP DEBUG CalendarView] Final hasRsvpd:', hasRsvpd, 'rsvpIcon:', rsvpIcon);
+        }
+        console.log('[RSVP DEBUG CalendarView] ========== createEventCard RSVP check END ==========');
+
+        // For date option events, use the event.date directly since it's already parsed
+        // For regular events, use the record's Date field
+        const eventDateStr = event.effectiveDate ? event.date : event.record.fields.Date;
+        const eventDate = new Date(eventDateStr + 'T00:00:00');
         const dateStr = eventDate.toLocaleDateString('en-US', {
             weekday: 'short',
             year: 'numeric',
@@ -243,6 +362,11 @@ function createEventCard(event, compact = false) {
         const price = event.record.fields.Price || 0;
         const pricingType = event.record.fields['Pricing Type'] || 'Per Person';
 
+        // For date option events, display the option name as a subtitle
+        const hasOptionName = event.optionName && event.optionName !== event.name;
+        const displayTitle = event.name;
+        const optionSubtitle = hasOptionName ? `<div class="event-option-name">${event.optionName}</div>` : '';
+
         let priceDisplay = '';
         if (price > 0) {
             priceDisplay = `<div class="event-price">$${price} ${pricingType}</div>`;
@@ -254,13 +378,14 @@ function createEventCard(event, compact = false) {
             card.innerHTML = `
                 <div class="event-compact-content">
                     <div class="event-time">${timeStr || 'All Day'}</div>
-                    <div class="event-name">${event.name} ${hasRsvpd ? '✅' : ''}</div>
+                    <div class="event-name">${displayTitle}${hasOptionName ? ': ' + event.optionName : ''} ${rsvpIcon}</div>
                 </div>
             `;
         } else {
             card.innerHTML = `
                 <div class="event-card-header">
-                    <h4 class="event-card-title">${event.name} ${hasRsvpd ? '✅' : ''}</h4>
+                    <h4 class="event-card-title">${displayTitle} ${rsvpIcon}</h4>
+                    ${optionSubtitle}
                     <div class="event-card-date">${dateStr}${timeStr ? ' • ' + timeStr : ''}</div>
                 </div>
                 <div class="event-card-body">
@@ -404,8 +529,11 @@ function renderMonthView() {
                 } else {
                     // Event badge (existing behavior)
                     const timeStr = event.record.fields.Time || '';
-                    eventBadge.textContent = `${timeStr ? timeStr + ' ' : ''}${event.name}`;
-                    eventBadge.title = event.name;
+                    // For date option events, show the option name
+                    const hasOptionName = event.optionName && event.optionName !== event.name;
+                    const displayName = hasOptionName ? `${event.name}: ${event.optionName}` : event.name;
+                    eventBadge.textContent = `${timeStr ? timeStr + ' ' : ''}${displayName}`;
+                    eventBadge.title = hasOptionName ? `${event.name} - ${event.optionName}` : event.name;
                     eventBadge.addEventListener('click', (e) => {
                         e.stopPropagation();
                         ui.showDetailModal(event.record);

@@ -4,6 +4,34 @@ import { log } from './utils/debug.js';
 import { CONSTANTS } from './config.js';
 import { state } from './state.js';
 
+/**
+ * Extracts a date from an option description string.
+ * Looks for the format [date: DATE_STRING] where DATE_STRING can be any date format
+ * (e.g., "6/2/25", "June 2nd, 2025", "2025-06-02").
+ *
+ * @param {string} description - The raw description string to parse
+ * @returns {Object} An object with:
+ *   - date: The extracted date string, or null if no match found
+ *   - cleanDescription: The description with the [date: ...] modifier removed
+ */
+export function extractOptionDate(description) {
+    if (!description || typeof description !== 'string') {
+        return { date: null, cleanDescription: description || '' };
+    }
+
+    // Regex to match [date: DATE_STRING] format
+    const datePattern = /\[date:\s*(.*?)\]/i;
+    const match = description.match(datePattern);
+
+    if (match) {
+        const date = match[1].trim();
+        const cleanDescription = description.replace(datePattern, '').trim();
+        return { date, cleanDescription };
+    }
+
+    return { date: null, cleanDescription: description };
+}
+
 const loadedLibraries = new Set();
 const loadingPromises = new Map();
 
@@ -233,7 +261,7 @@ function parseOptionsWithGroups(lines) {
 
 /**
  * Parses a single option line with bracket modifiers.
- * Format: Option Name [price: +10] [img: image_tag] [desc: description text] [time: +30]
+ * Format: Option Name [price: +10] [img: image_tag] [desc: description text] [time: +30] [date: 6/2/25]
  *
  * @param {string} line - A single option line
  * @returns {Object} Parsed option with all modifier fields
@@ -245,6 +273,7 @@ function parseOptionLine(line) {
     let imageTag = null;
     let descriptionAppend = null;
     let durationChange = null;
+    let effectiveDate = null;  // Date extracted from [date: ...] modifier
 
     // Extract all bracket modifiers using regex
     // Pattern: [key: value] or [key:value]
@@ -277,6 +306,10 @@ function parseOptionLine(line) {
                 // Parse duration change (typically in minutes, +X or -X)
                 durationChange = parseFloat(value);
                 break;
+            case 'date':
+                // Extract the effective date for this option
+                effectiveDate = value;
+                break;
         }
     }
 
@@ -297,6 +330,7 @@ function parseOptionLine(line) {
         imageTag: imageTag,
         descriptionAppend: descriptionAppend,
         durationChange: isNaN(durationChange) ? null : durationChange,
+        effectiveDate: effectiveDate,  // New field for date-specific options
         // Legacy compatibility fields
         price: priceOverride,
         priceChange: priceModifier,
@@ -576,11 +610,12 @@ export function getActiveImageTag(record, selectionsOrIndex = null) {
 
 /**
  * Gets the full description for a record based on selected options.
- * Appends description text from selected options that have [desc:...] modifiers.
+ * Prioritizes displaying the effective date from selected options,
+ * then appends description text from options that have [desc:...] modifiers.
  *
  * @param {Object} record - The Airtable record
  * @param {number|Object} selectionsOrIndex - Either a single option index or selections object
- * @returns {string} The base description plus any appended text from selected options
+ * @returns {string} The description with date prioritized, base description, and appended parts
  */
 export function getRecordDescription(record, selectionsOrIndex = null) {
     const baseDescription = record?.fields?.Description || '';
@@ -591,13 +626,20 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
 
     const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
     const appendedParts = [];
+    let effectiveDate = null;
 
     // Handle legacy single index format
     if (typeof selectionsOrIndex === 'number') {
         const flatOptions = flattenOptionGroups(groups);
         const option = flatOptions[selectionsOrIndex];
-        if (option && option.descriptionAppend) {
-            appendedParts.push(option.descriptionAppend);
+        if (option) {
+            // Extract effective date from selected option
+            if (option.effectiveDate) {
+                effectiveDate = option.effectiveDate;
+            }
+            if (option.descriptionAppend) {
+                appendedParts.push(option.descriptionAppend);
+            }
         }
     }
 
@@ -619,19 +661,91 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
             if (!group || !group.options) continue;
 
             const option = group.options[optionIndex];
-            if (option && option.descriptionAppend) {
-                appendedParts.push(option.descriptionAppend);
+            if (option) {
+                // Extract effective date from selected option (first found date wins)
+                if (option.effectiveDate && !effectiveDate) {
+                    effectiveDate = option.effectiveDate;
+                }
+                if (option.descriptionAppend) {
+                    appendedParts.push(option.descriptionAppend);
+                }
             }
         }
     }
 
-    if (appendedParts.length === 0) {
+    // Build the final description with date prioritized at the beginning
+    const parts = [];
+
+    // Add effective date at the beginning if present
+    if (effectiveDate) {
+        parts.push(`Date: ${effectiveDate}`);
+    }
+
+    // Add appended parts from options
+    if (appendedParts.length > 0) {
+        parts.push(...appendedParts);
+    }
+
+    // If no parts to add, just return base description
+    if (parts.length === 0) {
         return baseDescription;
     }
 
-    // Join base description with appended parts
+    // Join base description with the parts
     const separator = baseDescription ? '\n\n' : '';
-    return baseDescription + separator + appendedParts.join('\n');
+    return baseDescription + separator + parts.join('\n');
+}
+
+/**
+ * Gets the effective date from selected options for a record.
+ * Returns the first effective date found across all selected options.
+ *
+ * @param {Object} record - The Airtable record
+ * @param {number|Object} selectionsOrIndex - Either a single option index or selections object
+ * @returns {string|null} The effective date string, or null if none specified
+ */
+export function getEffectiveDate(record, selectionsOrIndex = null) {
+    if (selectionsOrIndex === null) {
+        return null;
+    }
+
+    const groups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
+
+    // Handle legacy single index format
+    if (typeof selectionsOrIndex === 'number') {
+        const flatOptions = flattenOptionGroups(groups);
+        const option = flatOptions[selectionsOrIndex];
+        if (option && option.effectiveDate) {
+            return option.effectiveDate;
+        }
+        return null;
+    }
+
+    // Handle new selections object format
+    if (typeof selectionsOrIndex === 'object') {
+        const sortedKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
+            const indexA = parseInt(a.replace('group', ''), 10) || 0;
+            const indexB = parseInt(b.replace('group', ''), 10) || 0;
+            return indexA - indexB;
+        });
+
+        for (const groupKey of sortedKeys) {
+            const optionIndex = selectionsOrIndex[groupKey];
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            const option = group.options[optionIndex];
+            if (option && option.effectiveDate) {
+                return option.effectiveDate;
+            }
+        }
+    }
+
+    return null;
 }
 
 /**
