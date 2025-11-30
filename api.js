@@ -1841,3 +1841,81 @@ export async function fetchSessionByLinkedItem(eventId) {
     }
 }
 
+/**
+ * Finds sessions that contain a specific item in their lockedInItems or ideasItems
+ * This is used to show plan membership for event items that have been added to plans
+ * @param {string} itemId - The item record ID to search for
+ * @param {string} storeId - Optional store ID to filter sessions
+ * @returns {Promise<Object|null>} The first matching session record if found, null otherwise
+ */
+export async function fetchSessionContainingItem(itemId, storeId = null) {
+    if (!itemId) {
+        return null;
+    }
+
+    log('API', `Searching for sessions containing item ${itemId}...`);
+
+    // Build formula to fetch sessions - optionally filtered by store
+    let formula;
+    if (storeId) {
+        formula = `FIND('${storeId}', ARRAYJOIN({Stores}))`;
+    } else {
+        formula = `TRUE()`; // Fetch all sessions if no store filter
+    }
+    const encodedFormula = encodeURIComponent(formula);
+
+    // We need to fetch the "Items with Variations" field to search within the JSON
+    const fieldsQuery = [
+        'Name',
+        'Items with Variations',
+        'Stores',
+        'Collaborators',
+        'LinkedItem'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error searching sessions for item:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+
+        if (data.records && data.records.length > 0) {
+            // Search through each session's Items with Variations for the item ID
+            for (const session of data.records) {
+                const itemsWithVariations = session.fields['Items with Variations'];
+                if (itemsWithVariations) {
+                    try {
+                        const sessionData = JSON.parse(itemsWithVariations);
+                        const lockedInItems = sessionData.lockedInItems || {};
+                        const ideasItems = sessionData.ideasItems || {};
+
+                        // Check if itemId is in lockedInItems or ideasItems
+                        if (lockedInItems[itemId] || ideasItems[itemId]) {
+                            log('API', `Found item ${itemId} in session ${session.id} (${session.fields.Name})`);
+                            return session;
+                        }
+                    } catch (e) {
+                        console.warn('Could not parse Items with Variations for session:', session.id, e);
+                    }
+                }
+            }
+            log('API', `Item ${itemId} not found in any session's plan items`);
+            return null;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching sessions containing item:", error);
+        return null;
+    }
+}
+
