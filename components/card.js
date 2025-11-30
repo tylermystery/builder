@@ -4,11 +4,12 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 // VVV FINAL IMPORT FIX VVV
-import { buildGoalBucket, calculateRecommendationScore } from '../availability.js'; 
+import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getTempLikes, getEffectiveMinQuantity } from '../utils.js';
 import { log } from '../utils/debug.js';
+import * as tileSizingDebug from '../utils/tileSizingDebug.js';
 
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
@@ -144,6 +145,20 @@ export function updateCardButtonText(recordId, isLocked) {
 
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
+
+    // === TILE SIZING DEBUG: Card creation start ===
+    const cardCreationStart = performance.now();
+    const itemType = record.fields['Item Type'] || 'Unknown';
+
+    console.log('[TileSizing][Card] === CARD CREATION START ===');
+    console.log('[TileSizing][Card] Creating card:', {
+        recordId: record.id,
+        name: record.fields.Name,
+        itemType: itemType,
+        viewport: tileSizingDebug.getViewportInfo()
+    });
+    tileSizingDebug.logCardCreation(record.id, itemType, { name: record.fields.Name });
+
     console.log('[createInteractiveCard] Creating card for record:', record.id, record.fields.Name);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
@@ -172,6 +187,13 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
+        // === TILE SIZING DEBUG: Grouping card ===
+        console.log('[TileSizing][Card] Creating GROUPING card:', {
+            recordId: record.id,
+            name: fields.Name,
+            expectedClasses: 'event-card grouping-card'
+        });
+
         const groupingCard = eventCard;
         groupingCard.className = 'event-card grouping-card';
         groupingCard.dataset.categoryName = fields.Name;
@@ -216,10 +238,30 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         console.log('[createInteractiveCard] Grouping card created, checking for availability-btn');
         const availBtn = groupingCard.querySelector('.availability-btn');
         console.log('[createInteractiveCard] Grouping card availability-btn found:', !!availBtn, availBtn);
+
+        // === TILE SIZING DEBUG: Grouping card complete ===
+        const cardCreationEnd = performance.now();
+        console.log('[TileSizing][Card] GROUPING card created:', {
+            recordId: record.id,
+            name: fields.Name,
+            className: groupingCard.className,
+            childItemCount: childItems.length,
+            collageImageCount: collageImages.length,
+            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
+        });
+
         return groupingCard;
     }
 
     if (fields['Item Type'] === 'Event') {
+        // === TILE SIZING DEBUG: Event card ===
+        console.log('[TileSizing][Card] Creating EVENT card:', {
+            recordId: record.id,
+            name: fields.Name,
+            date: fields.Date,
+            expectedClasses: 'event-card event-type-card'
+        });
+
         eventCard.className = 'event-card event-type-card';
         const eventDate = fields.Date ? new Date(fields.Date + 'T00:00:00') : null;
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
@@ -253,8 +295,27 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         console.log('[createInteractiveCard] Event card created, checking for availability-btn');
         const eventAvailBtn = eventCard.querySelector('.availability-btn');
         console.log('[createInteractiveCard] Event card availability-btn found:', !!eventAvailBtn, eventAvailBtn);
+
+        // === TILE SIZING DEBUG: Event card complete ===
+        const cardCreationEnd = performance.now();
+        console.log('[TileSizing][Card] EVENT card created:', {
+            recordId: record.id,
+            name: fields.Name,
+            className: eventCard.className,
+            hasRsvpd: hasRsvpd,
+            eventDate: fields.Date,
+            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
+        });
+
         return eventCard;
     }
+
+    // === TILE SIZING DEBUG: BookableItem card ===
+    console.log('[TileSizing][Card] Creating BOOKABLE ITEM card:', {
+        recordId: record.id,
+        name: fields.Name,
+        expectedClasses: 'event-card'
+    });
 
     eventCard.className = 'event-card';
     const itemState = ui.getItemState(record.id);
@@ -319,6 +380,18 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         minusBtn.addEventListener('click', handleMinus);
         minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
     }
+
+    // === TILE SIZING DEBUG: BookableItem card complete ===
+    const cardCreationEnd = performance.now();
+    console.log('[TileSizing][Card] BOOKABLE ITEM card created:', {
+        recordId: record.id,
+        name: fields.Name,
+        className: eventCard.className,
+        price: displayPrice,
+        isLocked: isLocked,
+        creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
+    });
+    console.log('[TileSizing][Card] === CARD CREATION COMPLETE ===');
 
     return eventCard;
 }
