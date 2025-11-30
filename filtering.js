@@ -5,7 +5,8 @@ import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js'; 
+import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
+import * as tileSizingDebug from './utils/tileSizingDebug.js'; 
 
 
 // --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
@@ -273,7 +274,21 @@ export async function applyFiltersAndSort(imageCache) {
     console.log('[FilterDebug] ========================================');
     console.log('[FilterDebug] applyFiltersAndSort called');
     console.log('[FilterDebug] URL:', window.location.href);
+
+    // === TILE SIZING DEBUG: Filter/Sort start ===
+    console.log('[TileSizing][Filter] === FILTER/SORT START ===');
+    console.log('[TileSizing][Filter] Viewport:', tileSizingDebug.getViewportInfo());
+
     const catalogContainer = document.getElementById('catalog-container');
+
+    // === TILE SIZING DEBUG: Catalog container pre-filter state ===
+    if (catalogContainer) {
+        console.log('[TileSizing][Filter] Catalog container PRE-filter state:', {
+            childCount: catalogContainer.children.length,
+            hasCarouselSections: !!catalogContainer.querySelector('.grouping-carousel-section'),
+            sizing: tileSizingDebug.getElementSizing(catalogContainer)
+        });
+    }
     
     const params = new URLSearchParams(window.location.search);
     const rawCategory = params.get('category');
@@ -462,12 +477,45 @@ export async function applyFiltersAndSort(imageCache) {
     }
     console.log('[FilterDebug] ========================================');
 
+    // === TILE SIZING DEBUG: Records to display breakdown ===
+    const typeBreakdown = {
+        groupings: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping').length,
+        events: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event').length,
+        bookableItems: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item').length,
+        sessions: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Session' || r.isSession).length,
+        other: recordsToDisplay.filter(r => !['Grouping', 'Event', 'Bookable Item', 'Session'].includes(r.fields['Item Type']) && !r.isSession).length
+    };
+
+    console.log('[TileSizing][Filter] Records to display breakdown:', typeBreakdown);
+    console.log('[TileSizing][Filter] View type:', view || 'catalog');
+    console.log('[TileSizing][Filter] Expected layout:', {
+        isFilteredView: !!view || !!params.get('subcategory') || !!searchTerm,
+        hasGroupings: typeBreakdown.groupings > 0,
+        willUseCarousels: !view && !params.get('subcategory') && !searchTerm && typeBreakdown.groupings > 0
+    });
+
     if (catalogContainer) catalogContainer.innerHTML = '';
 
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+
+    // === TILE SIZING DEBUG: About to render ===
+    console.log('[TileSizing][Filter] About to call renderRecords with:', {
+        recordCount: initialRecords.length,
+        totalFiltered: state.records.filtered.length,
+        loadSize: RECORDS_PER_LOAD
+    });
+
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+
+        // === TILE SIZING DEBUG: Post-render state ===
+        console.log('[TileSizing][Filter] Post-render state:', {
+            recordsDisplayed: state.ui.recordsCurrentlyDisplayed,
+            catalogContainerChildren: catalogContainer ? catalogContainer.children.length : 0
+        });
     });
 
     ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
+
+    console.log('[TileSizing][Filter] === FILTER/SORT COMPLETE ===');
 }

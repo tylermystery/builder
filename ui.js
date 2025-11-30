@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { CONSTANTS } from './config.js';
 import { log } from './utils/debug.js';
 import { createInteractiveCard, updateCardIcon } from './components/card.js';
+import * as tileSizingDebug from './utils/tileSizingDebug.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 import { setupItineraryEventListeners, showItineraryModal, hideItineraryModal } from './components/itinerary.js';
 import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailability, buildGoalBucket } from './availability.js';
@@ -181,6 +182,15 @@ function getChildItemsForGrouping(groupingRecord, allRecords) {
 
 // Helper function to create a grouping carousel section
 async function createGroupingCarouselSection(groupingRecord, childItems, allRecords, imageCache) {
+    // === TILE SIZING DEBUG: Carousel creation start ===
+    console.log('[TileSizing][Carousel] Creating carousel section:', {
+        groupingId: groupingRecord.id,
+        groupingName: groupingRecord.fields.Name,
+        childItemCount: childItems.length,
+        viewport: tileSizingDebug.getViewportInfo()
+    });
+    tileSizingDebug.logCarouselCreation(groupingRecord.fields.Name, childItems.length);
+
     const section = document.createElement('div');
     section.className = 'grouping-carousel-section';
     section.dataset.groupingId = groupingRecord.id;
@@ -235,6 +245,15 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
         if (card) {
             container.appendChild(card);
         }
+    });
+
+    // === TILE SIZING DEBUG: Log carousel cards after creation ===
+    console.log('[TileSizing][Carousel] Cards created for carousel:', {
+        groupingName: groupingRecord.fields.Name,
+        cardCount: cards.filter(c => c).length,
+        containerWidth: container.offsetWidth,
+        expectedCardWidth: tileSizingDebug.getViewportInfo().breakpoint === 'mobile' ? 'calc(100vw - 70px)' :
+                          tileSizingDebug.getViewportInfo().breakpoint === 'tablet' ? '280px' : '320px'
     });
 
     wrapper.appendChild(container);
@@ -320,12 +339,41 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
 
 export async function renderRecords(recordsToRender, imageCache, append = false) {
     log('UI', `renderRecords called. Attempting to render ${recordsToRender.length} records.`);
+
+    // === TILE SIZING DEBUG START ===
+    const renderStartTime = performance.now();
+    tileSizingDebug.logRenderStart(recordsToRender.length, { append });
+
+    console.log('[TileSizing][RenderRecords] === RENDER START ===');
+    console.log('[TileSizing][RenderRecords] Records to render:', recordsToRender.length);
+    console.log('[TileSizing][RenderRecords] Append mode:', append);
+    console.log('[TileSizing][RenderRecords] Viewport:', tileSizingDebug.getViewportInfo());
+
+    // Log record types breakdown
+    const recordTypes = {
+        groupings: recordsToRender.filter(r => r.fields['Item Type'] === 'Grouping').length,
+        events: recordsToRender.filter(r => r.fields['Item Type'] === 'Event').length,
+        bookableItems: recordsToRender.filter(r => r.fields['Item Type'] === 'Bookable Item').length,
+        other: recordsToRender.filter(r => !['Grouping', 'Event', 'Bookable Item'].includes(r.fields['Item Type'])).length
+    };
+    console.log('[TileSizing][RenderRecords] Record types breakdown:', recordTypes);
+    // === TILE SIZING DEBUG END ===
+
     const catalogContainer = document.getElementById('catalog-container');
     const loadingMessage = document.getElementById('loading-message');
     if (!catalogContainer) {
         console.error("UI ERROR: catalog-container element not found in the DOM!");
+        console.error('[TileSizing][RenderRecords] CRITICAL: catalog-container not found!');
         return;
     }
+
+    // === TILE SIZING DEBUG: Log catalog container state ===
+    console.log('[TileSizing][RenderRecords] Catalog container found:', {
+        id: catalogContainer.id,
+        className: catalogContainer.className,
+        childCount: catalogContainer.children.length,
+        sizing: tileSizingDebug.getElementSizing(catalogContainer)
+    });
     if (!append) {
         // Show skeleton cards immediately for better perceived performance
         catalogContainer.innerHTML = '';
@@ -374,19 +422,98 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     const groupings = recordsToRender.filter(r => r.fields['Item Type'] === 'Grouping');
     const nonGroupingRecords = recordsToRender.filter(r => r.fields['Item Type'] !== 'Grouping');
 
+    // === TILE SIZING DEBUG: Layout decision ===
+    console.log('[TileSizing][RenderRecords] Layout decision inputs:', {
+        groupingsCount: groupings.length,
+        nonGroupingCount: nonGroupingRecords.length,
+        groupingNames: groupings.map(g => g.fields.Name)
+    });
+
     // Check if we're viewing a specific subcategory (filtered view) - don't show carousels in filtered views
     const params = new URLSearchParams(window.location.search);
     const hasSubcategoryFilter = params.get('subcategory');
     const hasViewFilter = params.get('view');
     const isFilteredView = hasSubcategoryFilter || hasViewFilter || state.ui.nameFilter;
 
+    // Check if carousel layout is already established in the container
+    const existingCarouselSections = catalogContainer.querySelector('.grouping-carousel-section');
+    const existingUngroupedSection = catalogContainer.querySelector('.ungrouped-items-section');
+    const hasExistingCarouselLayout = existingCarouselSections !== null;
+
+    // === TILE SIZING DEBUG: Layout mode determination ===
+    // When appending, respect the existing layout structure
+    let layoutMode;
+    if (append && hasExistingCarouselLayout) {
+        // Append mode with existing carousel layout - add to ungrouped section
+        layoutMode = 'append-to-ungrouped';
+    } else if (isFilteredView || groupings.length === 0) {
+        layoutMode = 'grid';
+    } else {
+        layoutMode = 'carousel-sections';
+    }
+
+    console.log('[TileSizing][RenderRecords] Layout mode:', layoutMode, {
+        hasSubcategoryFilter,
+        hasViewFilter,
+        nameFilter: state.ui.nameFilter,
+        isFilteredView,
+        append,
+        hasExistingCarouselLayout,
+        willUseCarousels: !isFilteredView && groupings.length > 0
+    });
+    tileSizingDebug.logLayoutMode(layoutMode, isFilteredView ? 'Filtered view active' :
+        (append && hasExistingCarouselLayout) ? 'Appending to existing carousel layout' :
+        `${groupings.length} groupings found`);
+
     // Clear container for fresh render
     if (!append) {
         catalogContainer.innerHTML = '';
     }
 
-    // If in filtered view or no groupings, render normally
-    if (isFilteredView || groupings.length === 0) {
+    // If appending to existing carousel layout, add items to the ungrouped section
+    if (layoutMode === 'append-to-ungrouped') {
+        // Find or create the ungrouped items section
+        let ungroupedSection = existingUngroupedSection;
+        if (!ungroupedSection) {
+            ungroupedSection = document.createElement('div');
+            ungroupedSection.className = 'ungrouped-items-section';
+            ungroupedSection.style.display = 'grid';
+            ungroupedSection.style.gridTemplateColumns = 'repeat(auto-fill, minmax(320px, 1fr))';
+            ungroupedSection.style.gap = '25px';
+            ungroupedSection.style.marginTop = '20px';
+            catalogContainer.appendChild(ungroupedSection);
+        }
+
+        const fragment = document.createDocumentFragment();
+        const CHUNK_SIZE = 4;
+
+        for (let i = 0; i < recordsToRender.length; i += CHUNK_SIZE) {
+            const chunk = recordsToRender.slice(i, i + CHUNK_SIZE);
+            const cardPromises = chunk.map(record => createInteractiveCard(record, state.records.all, imageCache));
+            const cards = await Promise.all(cardPromises);
+
+            cards.forEach(card => {
+                if (card) fragment.appendChild(card);
+            });
+
+            ungroupedSection.appendChild(fragment);
+            fragment.textContent = '';
+
+            addEnergy();
+            updateProgress(0.00005 * chunk.length);
+
+            if (i + CHUNK_SIZE < recordsToRender.length) {
+                await new Promise(resolve => {
+                    if (window.requestIdleCallback) {
+                        requestIdleCallback(resolve, { timeout: 50 });
+                    } else {
+                        setTimeout(resolve, 0);
+                    }
+                });
+            }
+        }
+    } else if (isFilteredView || groupings.length === 0) {
+        // If in filtered view or no groupings, render normally
         const fragment = document.createDocumentFragment();
         const CHUNK_SIZE = 4;
 
@@ -493,6 +620,41 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     if (loadingMessage) {
         loadingMessage.style.display = 'none';
     }
+
+    // === TILE SIZING DEBUG: Render complete ===
+    const renderEndTime = performance.now();
+    const renderDuration = renderEndTime - renderStartTime;
+
+    console.log('[TileSizing][RenderRecords] === RENDER COMPLETE ===');
+    console.log('[TileSizing][RenderRecords] Render duration:', renderDuration.toFixed(2) + 'ms');
+    console.log('[TileSizing][RenderRecords] Final catalog container state:', {
+        childCount: catalogContainer.children.length,
+        sizing: tileSizingDebug.getElementSizing(catalogContainer),
+        hasCarouselSections: catalogContainer.querySelector('.grouping-carousel-section') !== null,
+        carouselSectionCount: catalogContainer.querySelectorAll('.grouping-carousel-section').length,
+        gridCardCount: catalogContainer.querySelectorAll('.event-card:not(.grouping-carousel-container .event-card)').length,
+        carouselCardCount: catalogContainer.querySelectorAll('.grouping-carousel-container .event-card').length
+    });
+
+    // Log sizing of first few cards for quick inspection
+    const allRenderedCards = catalogContainer.querySelectorAll('.event-card');
+    if (allRenderedCards.length > 0) {
+        console.log('[TileSizing][RenderRecords] Sample card sizing (first 3):');
+        Array.from(allRenderedCards).slice(0, 3).forEach((card, i) => {
+            const rect = card.getBoundingClientRect();
+            console.log(`  Card ${i}:`, {
+                recordId: card.dataset.recordId,
+                type: card.classList.contains('grouping-card') ? 'Grouping' :
+                      card.classList.contains('event-type-card') ? 'Event' : 'BookableItem',
+                inCarousel: !!card.closest('.grouping-carousel-container'),
+                width: rect.width.toFixed(1) + 'px',
+                height: rect.height.toFixed(1) + 'px'
+            });
+        });
+    }
+
+    tileSizingDebug.logRenderComplete(recordsToRender.length, renderDuration);
+    // === TILE SIZING DEBUG END ===
 
     log('UI', `Rendered ${recordsToRender.length} records to the DOM.`);
 }
