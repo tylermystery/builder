@@ -490,6 +490,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     // Check if this item is linked to a session (unified view mode)
     let linkedSession = null;
     let linkedSessionId = null;
+    let itemIsContainedInSession = false; // Flag to indicate item is a component of a plan
     if (record.fields.LinkedSession && record.fields.LinkedSession.length > 0) {
         linkedSessionId = record.fields.LinkedSession[0];
         linkedSession = await api.fetchSessionById(linkedSessionId);
@@ -504,7 +505,17 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 linkedSessionId = linkedSession.id;
                 currentItemChatRecordId = linkedSessionId;
             } else {
-                currentItemChatRecordId = record.id;
+                // NEW: Check if this event item is contained as a component in another plan
+                // This handles the case where an event item was added to a plan via "Add to Plan"
+                linkedSession = await api.fetchSessionContainingItem(record.id, state.ui.activeShopId);
+                if (linkedSession) {
+                    linkedSessionId = linkedSession.id;
+                    currentItemChatRecordId = linkedSessionId;
+                    itemIsContainedInSession = true; // This item is a component, not the parent event
+                    log('Modal', `Event item found as component in session ${linkedSessionId}`);
+                } else {
+                    currentItemChatRecordId = record.id;
+                }
             }
         } else {
             currentItemChatRecordId = record.id;
@@ -729,7 +740,17 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             sessionComponentsSection.className = 'session-components-section';
             sessionComponentsSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
-            let componentsHTML = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
+            // Use different header text based on whether this item is a contained component or the parent event
+            const planName = linkedSession.fields.Name || 'Plan';
+            let sectionHeader;
+            if (itemIsContainedInSession) {
+                // This event item is contained as a component in another plan
+                sectionHeader = `<h4 style="margin-top: 0; color: #495057;">📋 Part of Plan: ${planName}</h4>`;
+            } else {
+                // This is the parent event with its own linked session
+                sectionHeader = '<h4 style="margin-top: 0; color: #495057;">📋 Plan Components</h4>';
+            }
+            let componentsHTML = sectionHeader;
 
             // Add image carousel for browsing items
             if (allComponentRecords.length > 0) {
@@ -837,7 +858,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 initializePlanCarousel(allComponentRecords);
             }
 
-            // Check if user is a collaborator or store owner and add Edit Plan button inside the components section
+            // Check if user is a collaborator, store owner, or has publish permission - add Edit Plan button inside the components section
             const isCollaborator = linkedSession.fields.Collaborators &&
                                    linkedSession.fields.Collaborators.includes(state.session.user.id);
 
@@ -849,8 +870,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                                          state.session.user.ownedStoreId &&
                                          sessionStoreId === state.session.user.ownedStoreId;
 
-            if (isCollaborator || isOwnerOfSessionStore) {
-                log('Modal', 'User is collaborator or owns the session store, showing Edit Plan button');
+            // Check if user has publish permission for the current store
+            const userHasPublishAccess = api.userHasPublishPermission();
+
+            if (isCollaborator || isOwnerOfSessionStore || userHasPublishAccess) {
+                log('Modal', 'User is collaborator, owns the session store, or has publish access, showing Edit Plan button');
                 const editPlanBtn = document.createElement('button');
                 editPlanBtn.className = 'edit-plan-btn';
                 editPlanBtn.style.cssText = 'margin: 15px 0 0 0; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; transition: background-color 0.2s;';
@@ -866,7 +890,8 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 sessionComponentsSection.appendChild(editPlanBtn);
             }
         } else {
-            // If there are no plan components but user is still a collaborator, show the edit button separately
+            // If there are no plan components (or the only component is this item itself)
+            // but we still have a linked session, show appropriate content
             const isCollaborator = linkedSession.fields.Collaborators &&
                                    linkedSession.fields.Collaborators.includes(state.session.user.id);
 
@@ -877,25 +902,44 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                                          state.session.user.ownedStoreId &&
                                          sessionStoreId === state.session.user.ownedStoreId;
 
-            if (isCollaborator || isOwnerOfSessionStore) {
-                log('Modal', 'User is collaborator or owns the session store (no components yet), showing Edit Plan button');
+            // Check if user has publish permission for the current store
+            const userHasPublishAccess = api.userHasPublishPermission();
+
+            // For contained items, show "Part of Plan" even without other components
+            // Also show for collaborators, owners, or users with publish access
+            if (itemIsContainedInSession || isCollaborator || isOwnerOfSessionStore || userHasPublishAccess) {
+                const planName = linkedSession.fields.Name || 'Plan';
                 const editPlanSection = document.createElement('div');
                 editPlanSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
-                const editPlanBtn = document.createElement('button');
-                editPlanBtn.className = 'edit-plan-btn';
-                editPlanBtn.style.cssText = 'padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; transition: background-color 0.2s;';
-                editPlanBtn.textContent = '✏️ Edit Plan';
-                editPlanBtn.onmouseover = () => editPlanBtn.style.backgroundColor = '#0056b3';
-                editPlanBtn.onmouseout = () => editPlanBtn.style.backgroundColor = '#007bff';
-                editPlanBtn.addEventListener('click', () => {
-                    log('Modal', `Navigating to edit session ${linkedSessionId}`);
-                    closeDetailModal();
-                    // Redirect to session with sidebar open
-                    window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
-                });
+                // Add header for contained items
+                if (itemIsContainedInSession) {
+                    const headerEl = document.createElement('h4');
+                    headerEl.style.cssText = 'margin-top: 0; margin-bottom: 10px; color: #495057;';
+                    headerEl.textContent = `Part of Plan: ${planName}`;
+                    editPlanSection.appendChild(headerEl);
+                    log('Modal', `Showing "Part of Plan" indicator for contained item in session ${linkedSessionId}`);
+                } else {
+                    log('Modal', 'User is collaborator, owns the session store, or has publish access (no components yet), showing Edit Plan button');
+                }
 
-                editPlanSection.appendChild(editPlanBtn);
+                // Show Edit Plan button for collaborators/owners/users with publish access
+                if (isCollaborator || isOwnerOfSessionStore || userHasPublishAccess) {
+                    const editPlanBtn = document.createElement('button');
+                    editPlanBtn.className = 'edit-plan-btn';
+                    editPlanBtn.style.cssText = 'padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; font-size: 1em; transition: background-color 0.2s;';
+                    editPlanBtn.textContent = '✏️ Edit Plan';
+                    editPlanBtn.onmouseover = () => editPlanBtn.style.backgroundColor = '#0056b3';
+                    editPlanBtn.onmouseout = () => editPlanBtn.style.backgroundColor = '#007bff';
+                    editPlanBtn.addEventListener('click', () => {
+                        log('Modal', `Navigating to edit session ${linkedSessionId}`);
+                        closeDetailModal();
+                        // Redirect to session with sidebar open
+                        window.location.href = `${window.location.pathname}?session=${linkedSessionId}&shopId=${state.ui.activeShopId}`;
+                    });
+                    editPlanSection.appendChild(editPlanBtn);
+                }
+
                 modalItemDescription.parentElement.insertBefore(editPlanSection, modalItemDescription);
             }
         }
