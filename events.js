@@ -846,8 +846,72 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const breadcrumbLink = e.target.closest('.breadcrumb-link');
         const addToPlanBtn = e.target.closest('.add-to-plan-btn, #modal-add-to-plan-btn');
         const receiptLink = e.target.closest('.receipt-link, .receipt-btn');
+        const openToEditBtn = e.target.closest('.open-to-edit-btn');
+        const editEventBtn = e.target.closest('.edit-event-btn');
 
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
+
+        // Handle "Edit Event" button for events that already have a linked session
+        if (editEventBtn) {
+            e.stopPropagation();
+            const sessionId = editEventBtn.dataset.sessionId;
+            if (!sessionId) {
+                ui.showToast('Session not found');
+                return;
+            }
+
+            log('Events', `Navigating to edit existing session ${sessionId}`);
+            const currentShopId = state.ui.activeShopId;
+            window.location.href = `${window.location.pathname}?session=${sessionId}&shopId=${currentShopId}`;
+            return;
+        }
+
+        // Handle "Open to Edit" button for unaffiliated events
+        if (openToEditBtn) {
+            e.stopPropagation();
+            const eventId = openToEditBtn.dataset.eventId;
+            if (!eventId) return;
+
+            const eventRecord = state.records.all.find(r => r.id === eventId);
+            if (!eventRecord) {
+                ui.showToast('Event not found');
+                return;
+            }
+
+            // Show loading state
+            openToEditBtn.disabled = true;
+            const originalText = openToEditBtn.textContent;
+            openToEditBtn.textContent = 'Creating Plan...';
+
+            try {
+                // Create a new session from this event
+                const newSession = await api.createSessionFromEvent(
+                    eventId,
+                    eventRecord,
+                    state.ui.activeShopId,
+                    state.session.user.id
+                );
+
+                if (newSession && newSession.id) {
+                    log('Events', `Created session ${newSession.id} from event ${eventId}, redirecting...`);
+
+                    // Update the event record locally to reflect the new linked session
+                    eventRecord.fields.LinkedSession = [newSession.id];
+
+                    // Redirect to the new session for editing
+                    const currentShopId = state.ui.activeShopId;
+                    window.location.href = `${window.location.pathname}?session=${newSession.id}&shopId=${currentShopId}`;
+                } else {
+                    throw new Error('Failed to create session');
+                }
+            } catch (error) {
+                console.error('Error creating session from event:', error);
+                ui.showToast(`Error: ${error.message}`);
+                openToEditBtn.disabled = false;
+                openToEditBtn.textContent = originalText;
+            }
+            return;
+        }
 
         if (receiptLink) {
             e.preventDefault();

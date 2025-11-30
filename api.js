@@ -382,7 +382,11 @@ export async function loadSessionFromAirtable(sessionId) {
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
-                console.log('[DEBUG] loadSessionFromAirtable - Parsed savedState.eventDetails:', savedState.eventDetails);
+                console.log('[DEBUG] loadSessionFromAirtable - ========== EVENT DETAILS MAPPING DEBUG ==========');
+                console.log('[DEBUG] loadSessionFromAirtable - Raw savedState.eventDetails (BEFORE normalization):', savedState.eventDetails);
+                console.log('[DEBUG] loadSessionFromAirtable - Expected normalized keys: eventName, goals, date');
+                console.log('[DEBUG] loadSessionFromAirtable - Actual keys received (may need normalization):', Object.keys(savedState.eventDetails || {}));
+                console.log('[DEBUG] loadSessionFromAirtable - ===============================================');
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
@@ -393,9 +397,46 @@ export async function loadSessionFromAirtable(sessionId) {
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
-                state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {}));
-                console.log('[DEBUG] loadSessionFromAirtable - state.eventDetails.combined after loading:', Object.fromEntries(state.eventDetails.combined));
-                console.log('[DEBUG] loadSessionFromAirtable - Date value in eventDetails:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
+
+                // Normalize eventDetails keys to handle legacy format
+                // Legacy keys: 'Event Name', 'Goals', 'Date' -> New keys: 'eventName', 'goals', 'date'
+                const rawEventDetails = savedState.eventDetails || savedState.favoritedDetails || {};
+                const normalizedEventDetails = {};
+
+                // Key normalization mapping (legacy -> current)
+                const keyMapping = {
+                    'Event Name': CONSTANTS.DETAIL_TYPES.EVENT_NAME,  // 'eventName'
+                    'Goals': CONSTANTS.DETAIL_TYPES.GOALS,            // 'goals'
+                    'Date': CONSTANTS.DETAIL_TYPES.DATE,              // 'date'
+                    // Also handle already-correct camelCase keys
+                    'eventName': CONSTANTS.DETAIL_TYPES.EVENT_NAME,
+                    'goals': CONSTANTS.DETAIL_TYPES.GOALS,
+                    'date': CONSTANTS.DETAIL_TYPES.DATE,
+                    'guestCount': CONSTANTS.DETAIL_TYPES.GUEST_COUNT,
+                    'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS
+                };
+
+                console.log('[DEBUG] loadSessionFromAirtable - Normalizing eventDetails keys...');
+                console.log('[DEBUG] loadSessionFromAirtable - Raw keys before normalization:', Object.keys(rawEventDetails));
+
+                for (const [key, value] of Object.entries(rawEventDetails)) {
+                    const normalizedKey = keyMapping[key] || key; // Use mapping if exists, otherwise keep original
+                    normalizedEventDetails[normalizedKey] = value;
+                    if (key !== normalizedKey) {
+                        console.log(`[DEBUG] loadSessionFromAirtable - Normalized key '${key}' -> '${normalizedKey}'`);
+                    }
+                }
+
+                console.log('[DEBUG] loadSessionFromAirtable - Normalized keys:', Object.keys(normalizedEventDetails));
+
+                state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
+                console.log('[DEBUG] loadSessionFromAirtable - state.eventDetails.combined after normalization:', Object.fromEntries(state.eventDetails.combined));
+                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.EVENT_NAME:', CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.GOALS:', CONSTANTS.DETAIL_TYPES.GOALS);
+                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.DATE:', CONSTANTS.DETAIL_TYPES.DATE);
+                console.log('[DEBUG] loadSessionFromAirtable - Event Name from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME));
+                console.log('[DEBUG] loadSessionFromAirtable - Goals from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS));
+                console.log('[DEBUG] loadSessionFromAirtable - Date from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
@@ -1607,6 +1648,157 @@ export async function fetchSessionById(sessionId) {
         console.error("Error fetching session:", error);
         return null;
     }
+}
+
+/**
+ * Creates a new session from an existing event item that doesn't have a linked session.
+ * This allows users with publish access to "adopt" unaffiliated events and manage them.
+ * @param {string} eventId - The event/item record ID
+ * @param {Object} eventRecord - The event record object
+ * @param {string} storeId - The store ID to associate with the session
+ * @param {string} userId - The user ID creating the session
+ * @returns {Promise<Object>} The created session record
+ */
+export async function createSessionFromEvent(eventId, eventRecord, storeId, userId) {
+    console.log('[DEBUG createSessionFromEvent] ========== START ==========');
+    console.log('[DEBUG createSessionFromEvent] eventId:', eventId);
+    console.log('[DEBUG createSessionFromEvent] eventRecord:', eventRecord);
+    console.log('[DEBUG createSessionFromEvent] eventRecord.fields:', eventRecord?.fields);
+    console.log('[DEBUG createSessionFromEvent] storeId:', storeId);
+    console.log('[DEBUG createSessionFromEvent] userId:', userId);
+
+    if (!eventId || !eventRecord) {
+        throw new Error('Event ID and record are required');
+    }
+
+    const fields = eventRecord.fields || {};
+    console.log('[DEBUG createSessionFromEvent] Event fields.Name:', fields.Name);
+    console.log('[DEBUG createSessionFromEvent] Event fields.Description:', fields.Description);
+    console.log('[DEBUG createSessionFromEvent] Event fields.Date:', fields.Date);
+
+    // Format the date if available - needed for both eventDetails and the session Date field
+    let formattedDate = null;
+    let isoDate = null;
+    if (fields.Date) {
+        const dateValue = Array.isArray(fields.Date) ? fields.Date[0] : fields.Date;
+        console.log('[DEBUG createSessionFromEvent] Raw date value:', dateValue);
+        const dateObj = new Date(dateValue);
+        console.log('[DEBUG createSessionFromEvent] Parsed dateObj:', dateObj);
+        console.log('[DEBUG createSessionFromEvent] Is valid date?', !isNaN(dateObj.getTime()));
+        if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString().split('T')[0];
+            isoDate = dateObj.toISOString();
+            console.log('[DEBUG createSessionFromEvent] formattedDate for Airtable Date field:', formattedDate);
+            console.log('[DEBUG createSessionFromEvent] isoDate for eventDetails:', isoDate);
+        }
+    } else {
+        console.log('[DEBUG createSessionFromEvent] No Date field in event record');
+    }
+
+    // Build session data from event fields
+    // CRITICAL: Use the correct keys that match CONSTANTS.DETAIL_TYPES
+    // eventName (not 'Event Name'), goals (not 'Goals'), date (not 'Date')
+    const sessionData = {
+        ideasItems: {},
+        lockedInItems: {},
+        itemReactions: {},
+        userProfiles: userId ? { [userId]: 'Event Manager' } : {},
+        eventDetails: {
+            'eventName': fields.Name || 'Untitled Event',
+            'goals': fields.Description || '',
+        },
+        itemPositions: {}
+    };
+
+    // Add date to eventDetails if available (using ISO format for consistency)
+    if (isoDate) {
+        sessionData.eventDetails['date'] = isoDate;
+        console.log('[DEBUG createSessionFromEvent] Added date to eventDetails:', isoDate);
+    }
+
+    console.log('[DEBUG createSessionFromEvent] sessionData.eventDetails:', sessionData.eventDetails);
+    console.log('[DEBUG createSessionFromEvent] Full sessionData:', JSON.stringify(sessionData, null, 2));
+
+    const sessionFields = {
+        "Name": fields.Name || 'Untitled Event',
+        "Items with Variations": JSON.stringify(sessionData, null, 2),
+        "Collaborators": userId ? [userId] : [],
+        "Goals": fields.Description || null,
+        "Stores": storeId ? [storeId] : null,
+        "LinkedItem": [eventId] // Link this session to the event
+    };
+
+    if (formattedDate) {
+        sessionFields["Date"] = formattedDate;
+    }
+
+    console.log('[DEBUG createSessionFromEvent] sessionFields being sent to Airtable:', JSON.stringify(sessionFields, null, 2));
+    console.log('[DEBUG createSessionFromEvent] Items with Variations JSON contains eventDetails:', sessionFields["Items with Variations"]);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+
+    try {
+        console.log('[DEBUG createSessionFromEvent] Sending POST request to create session...');
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ records: [{ fields: sessionFields }] })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[DEBUG createSessionFromEvent] Failed to create session:', errorText);
+            throw new Error(`Failed to create session: ${errorText}`);
+        }
+
+        const result = await response.json();
+        const newSession = result.records[0];
+        console.log('[DEBUG createSessionFromEvent] Session created successfully!');
+        console.log('[DEBUG createSessionFromEvent] New session ID:', newSession.id);
+        console.log('[DEBUG createSessionFromEvent] New session fields:', newSession.fields);
+
+        log('API', `Created session ${newSession.id} from event ${eventId}`);
+
+        // Update the event to link back to the new session
+        const updateEventUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+        console.log('[DEBUG createSessionFromEvent] Updating event with LinkedSession reference...');
+        await fetch(updateEventUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { 'LinkedSession': [newSession.id] } })
+        });
+
+        log('API', `Updated event ${eventId} with LinkedSession ${newSession.id}`);
+        console.log('[DEBUG createSessionFromEvent] ========== END (SUCCESS) ==========');
+
+        return newSession;
+    } catch (error) {
+        console.error('[DEBUG createSessionFromEvent] Error creating session from event:', error);
+        console.log('[DEBUG createSessionFromEvent] ========== END (ERROR) ==========');
+        throw error;
+    }
+}
+
+/**
+ * Checks if the current user has publish permission for the active store
+ * @returns {boolean} True if user has publish permission
+ */
+export function userHasPublishPermission() {
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const currentUser = state.session.user;
+
+    if (!activeStore || !currentUser || !currentUser.id) {
+        return false;
+    }
+
+    const allowedUsers = activeStore.fields.PublishPermission || [];
+    return allowedUsers.includes(currentUser.id);
 }
 
 /**

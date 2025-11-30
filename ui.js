@@ -729,21 +729,34 @@ export function applyCartLabels(labels) {
 }
 
 export async function updateEventPlanDateDisplay() {
+    console.log('[DEBUG updateEventPlanDateDisplay] ========== DATE DISPLAY UPDATE DEBUG ==========');
+    console.log('[DEBUG updateEventPlanDateDisplay] state.eventDetails.combined contents:', Object.fromEntries(state.eventDetails.combined));
+    console.log('[DEBUG updateEventPlanDateDisplay] CONSTANTS.DETAIL_TYPES.DATE:', CONSTANTS.DETAIL_TYPES.DATE);
+
     log('UI', 'Updating event plan date display.');
     const dateInput = document.getElementById('event-date-picker');
     if (!dateInput) {
+        console.log('[DEBUG updateEventPlanDateDisplay] WARNING: event-date-picker NOT found!');
         return;
     }
     const selectedDateISO = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    console.log('[DEBUG updateEventPlanDateDisplay] Retrieved date from state:', selectedDateISO);
+
     if (!selectedDateISO) {
+        console.log('[DEBUG updateEventPlanDateDisplay] No date in state, setting placeholder');
         dateInput.value = 'Select a date';
         dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
+        console.log('[DEBUG updateEventPlanDateDisplay] ========== END DATE DISPLAY UPDATE DEBUG ==========');
         return;
     }
     const selectedDate = new Date(selectedDateISO);
+    console.log('[DEBUG updateEventPlanDateDisplay] Parsed date object:', selectedDate);
+    console.log('[DEBUG updateEventPlanDateDisplay] Is valid date?', !isNaN(selectedDate.getTime()));
+
     const lockedItems = Array.from(state.cart.lockedItems.keys()).map(recordId => state.records.all.find(r => r.id === recordId)).filter(Boolean);
     const overallStatus = await getCombinedPlanStatus(selectedDate, lockedItems);
     const displayValue = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    console.log('[DEBUG updateEventPlanDateDisplay] Display value:', displayValue);
     dateInput.value = displayValue;
     dateInput.classList.remove('available-full', 'available-partial', 'unavailable');
     switch (overallStatus) {
@@ -757,6 +770,7 @@ export async function updateEventPlanDateDisplay() {
             dateInput.classList.add('unavailable');
             break;
     }
+    console.log('[DEBUG updateEventPlanDateDisplay] ========== END DATE DISPLAY UPDATE DEBUG ==========');
 }
 
 export async function updateLockedItemStatusIcons() {
