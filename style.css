@@ -2696,37 +2696,31 @@ hr.total-divider {
 }
 
 /* Filter-based color variations for each carousel section - using backdrop-filter with hue-rotate */
-.grouping-carousel-section:nth-child(6n+1) {
-    backdrop-filter: blur(8px) saturate(1.4) hue-rotate(0deg);
-    -webkit-backdrop-filter: blur(8px) saturate(1.4) hue-rotate(0deg);
-    border-color: rgba(255, 255, 255, 0.3);
-}
-
-.grouping-carousel-section:nth-child(6n+2) {
+.grouping-carousel-section:nth-child(5n+1) {
     backdrop-filter: blur(8px) saturate(1.5) hue-rotate(60deg);
     -webkit-backdrop-filter: blur(8px) saturate(1.5) hue-rotate(60deg);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-.grouping-carousel-section:nth-child(6n+3) {
+.grouping-carousel-section:nth-child(5n+2) {
     backdrop-filter: blur(8px) saturate(1.3) hue-rotate(120deg);
     -webkit-backdrop-filter: blur(8px) saturate(1.3) hue-rotate(120deg);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-.grouping-carousel-section:nth-child(6n+4) {
+.grouping-carousel-section:nth-child(5n+3) {
     backdrop-filter: blur(8px) saturate(1.6) hue-rotate(180deg);
     -webkit-backdrop-filter: blur(8px) saturate(1.6) hue-rotate(180deg);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-.grouping-carousel-section:nth-child(6n+5) {
+.grouping-carousel-section:nth-child(5n+4) {
     backdrop-filter: blur(8px) saturate(1.4) hue-rotate(240deg);
     -webkit-backdrop-filter: blur(8px) saturate(1.4) hue-rotate(240deg);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-.grouping-carousel-section:nth-child(6n+6) {
+.grouping-carousel-section:nth-child(5n+5) {
     backdrop-filter: blur(8px) saturate(1.5) hue-rotate(300deg);
     -webkit-backdrop-filter: blur(8px) saturate(1.5) hue-rotate(300deg);
     border-color: rgba(255, 255, 255, 0.3);
