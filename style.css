@@ -1333,6 +1333,22 @@ body.modal-open {
     white-space: nowrap;
     z-index: 10;
 }
+
+/* Open to Edit button - for unaffiliated events, admin/publish permission users */
+.open-to-edit-btn {
+    background-color: #6f42c1;  /* Purple to indicate admin action */
+}
+.open-to-edit-btn:hover:not(:disabled) {
+    background-color: #5a32a3;
+    box-shadow: 0 2px 8px rgba(111, 66, 193, 0.3);
+}
+.open-to-edit-btn:active:not(:disabled) {
+    box-shadow: 0 1px 4px rgba(111, 66, 193, 0.2);
+}
+.open-to-edit-btn:disabled {
+    background-color: #9683b8;
+}
+
 .parent-link {
     font-size: 0.8em;
     margin: 0 0 5px 0;

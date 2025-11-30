@@ -1046,32 +1046,60 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const rsvpMaybe = record.fields.RSVPMaybe || [];
         const rsvpNo = record.fields.RSVPNo || [];
         const userId = state.session.user.id;
-        
+
         const hasRsvpdYes = rsvpYes.includes(userId);
         const hasRsvpdMaybe = rsvpMaybe.includes(userId);
         const hasRsvpdNo = rsvpNo.includes(userId);
 
+        // Check if event has a linked session (is affiliated to a plan)
+        const hasLinkedSession = !!(record.fields.LinkedSession && record.fields.LinkedSession.length > 0);
+
+        // Check if user has publish permission
+        const userHasPublishAccess = api.userHasPublishPermission();
+
+        // Add edit button for publish access users on ALL events
+        if (userHasPublishAccess) {
+            if (hasLinkedSession) {
+                // Event already has a linked session - show "Edit Event" button to navigate to it
+                const editEventBtn = document.createElement('button');
+                editEventBtn.className = 'card-action-btn edit-event-btn';
+                editEventBtn.dataset.eventId = record.id;
+                editEventBtn.dataset.sessionId = record.fields.LinkedSession[0];
+                editEventBtn.textContent = 'Edit Event';
+                editEventBtn.style.marginRight = '10px';
+                modalHeaderActions.appendChild(editEventBtn);
+            } else {
+                // Unaffiliated event - show "Open to Edit" button to create a session
+                const openToEditBtn = document.createElement('button');
+                openToEditBtn.className = 'card-action-btn open-to-edit-btn';
+                openToEditBtn.dataset.eventId = record.id;
+                openToEditBtn.textContent = 'Open to Edit';
+                openToEditBtn.style.marginRight = '10px';
+                modalHeaderActions.appendChild(openToEditBtn);
+            }
+        }
+
         const rsvpContainer = document.createElement('div');
         rsvpContainer.className = 'rsvp-button-group';
-        
+
         const yesBtn = document.createElement('button');
         yesBtn.className = `rsvp-btn rsvp-yes ${hasRsvpdYes ? 'active' : ''}`;
         yesBtn.dataset.recordId = record.id;
         yesBtn.dataset.rsvpType = 'yes';
         yesBtn.innerHTML = hasRsvpdYes ? "Going ✅" : 'Yes';
-        
+
         const maybeBtn = document.createElement('button');
         maybeBtn.className = `rsvp-btn rsvp-maybe ${hasRsvpdMaybe ? 'active' : ''}`;
         maybeBtn.dataset.recordId = record.id;
         maybeBtn.dataset.rsvpType = 'maybe';
         maybeBtn.innerHTML = hasRsvpdMaybe ? "Maybe ❓" : 'Maybe';
-        
+
         const noBtn = document.createElement('button');
         noBtn.className = `rsvp-btn rsvp-no ${hasRsvpdNo ? 'active' : ''}`;
         noBtn.dataset.recordId = record.id;
         noBtn.dataset.rsvpType = 'no';
         noBtn.innerHTML = hasRsvpdNo ? "Can't Go ❌" : 'No';
-        
+
         rsvpContainer.appendChild(yesBtn);
         rsvpContainer.appendChild(maybeBtn);
         rsvpContainer.appendChild(noBtn);

@@ -745,15 +745,35 @@ export async function updateIdeasCarousel() {
 }
 
 export function updateHeader() {
+    console.log('[DEBUG updateHeader] ========== HEADER UPDATE DEBUG ==========');
+    console.log('[DEBUG updateHeader] state.eventDetails.combined contents:', Object.fromEntries(state.eventDetails.combined));
+    console.log('[DEBUG updateHeader] CONSTANTS.DETAIL_TYPES.EVENT_NAME:', CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+    console.log('[DEBUG updateHeader] CONSTANTS.DETAIL_TYPES.GOALS:', CONSTANTS.DETAIL_TYPES.GOALS);
+
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || '';
+    console.log('[DEBUG updateHeader] Retrieved eventName:', eventName);
+
     const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
     const shopName = activeShop?.fields?.Name || '';
     document.title = eventName || (shopName ? `WTFun ${shopName}` : 'WTFun');
     const eventNameInput = document.getElementById('header-event-name');
-    if (eventNameInput) eventNameInput.value = eventName;
-    
+    if (eventNameInput) {
+        console.log('[DEBUG updateHeader] Setting header-event-name input to:', eventName);
+        eventNameInput.value = eventName;
+    } else {
+        console.log('[DEBUG updateHeader] WARNING: header-event-name input NOT found!');
+    }
+
     const goalsInput = document.getElementById('header-goals');
-    if(goalsInput) goalsInput.value = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    const goalsValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
+    console.log('[DEBUG updateHeader] Retrieved goals:', goalsValue);
+    if(goalsInput) {
+        console.log('[DEBUG updateHeader] Setting header-goals input to:', goalsValue);
+        goalsInput.value = goalsValue;
+    } else {
+        console.log('[DEBUG updateHeader] WARNING: header-goals input NOT found!');
+    }
+    console.log('[DEBUG updateHeader] ========== END HEADER UPDATE DEBUG ==========');
 }
 
 // In: components/sidebar.js

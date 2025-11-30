@@ -267,16 +267,43 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         const month = eventDate ? eventDate.toLocaleString('default', { month: 'short' }).toUpperCase() : 'TBD';
         const day = eventDate ? eventDate.getDate() : '??';
         const hasRsvpd = (record.fields.RSVPs || []).includes(state.session.user.id);
+
+        // Check if event has a linked session (is affiliated to a plan)
+        const hasLinkedSession = !!(fields.LinkedSession && fields.LinkedSession.length > 0);
+
+        // Check if user has publish permission
+        const userHasPublishAccess = api.userHasPublishPermission();
+
+        // Determine which buttons to show
+        let footerButtonsHTML = '';
+
+        // Regular RSVP button for all events
         const buttonText = hasRsvpd ? "You're Going! ✅" : 'RSVP';
-        const rsvpButtonHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+        footerButtonsHTML = `<button class="card-action-btn rsvp-btn" ${hasRsvpd ? 'disabled' : ''}>${buttonText}</button>`;
+
+        // Add edit button for publish access users
+        if (userHasPublishAccess) {
+            if (hasLinkedSession) {
+                // Event already has a linked session - show "Edit Event" button to navigate to it
+                footerButtonsHTML += `
+                    <button class="card-action-btn edit-event-btn" data-event-id="${record.id}" data-session-id="${fields.LinkedSession[0]}">Edit Event</button>
+                `;
+            } else {
+                // Unaffiliated event - show "Open to Edit" button to create a session
+                footerButtonsHTML += `
+                    <button class="card-action-btn open-to-edit-btn" data-event-id="${record.id}">Open to Edit</button>
+                `;
+            }
+        }
+
         const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
         eventCard.innerHTML = `
             <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
                 <div class="heart-icon" data-record-id="${record.id}"></div>
                 <button class="availability-btn" title="Select a date range to check availability">📅</button>
-                ${partnerBadge} 
-                ${scoreBanner} 
+                ${partnerBadge}
+                ${scoreBanner}
             </div>
             <div class="event-card-content">
                 <div class="event-date-display">
@@ -289,7 +316,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 </div>
             </div>
             <div class="card-footer">
-                ${rsvpButtonHTML}
+                ${footerButtonsHTML}
             </div>
         `;
         console.log('[createInteractiveCard] Event card created, checking for availability-btn');
@@ -303,6 +330,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             name: fields.Name,
             className: eventCard.className,
             hasRsvpd: hasRsvpd,
+            hasLinkedSession: hasLinkedSession,
+            userHasPublishAccess: userHasPublishAccess,
             eventDate: fields.Date,
             creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
         });
