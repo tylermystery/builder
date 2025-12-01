@@ -477,11 +477,33 @@ body.modal-open {
 
     <!-- Pusher loaded after DOMContentLoaded for real-time features -->
     <script>
+    // Create a promise that resolves when Pusher is loaded
+    window.pusherLoadPromise = new Promise(function(resolve) {
+      window._resolvePusherLoad = resolve;
+    });
+
+    // Function to wait for Pusher to be available
+    window.waitForPusher = function() {
+      if (typeof Pusher !== 'undefined') {
+        return Promise.resolve();
+      }
+      return window.pusherLoadPromise;
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
       // Delay Pusher load by 2 seconds to prioritize main content
       setTimeout(function() {
         var pusherScript = document.createElement('script');
         pusherScript.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
+        pusherScript.onload = function() {
+          console.log('[Pusher] Library loaded successfully');
+          if (window._resolvePusherLoad) {
+            window._resolvePusherLoad();
+          }
+        };
+        pusherScript.onerror = function() {
+          console.error('[Pusher] Failed to load Pusher library');
+        };
         document.head.appendChild(pusherScript);
       }, 2000);
     });

@@ -209,6 +209,39 @@ function displayDebugMessage(message) {
 // --- END NEW DEBUG FUNCTION ---
 
 export async function initializeSessionChat() {
+    log('Chat', 'initializeSessionChat called, waiting for Pusher library...');
+
+    // Show loading state in the message input while waiting for Pusher
+    const messageInput = document.getElementById('message-input');
+    const messageForm = document.getElementById('message-form');
+    if (messageInput && messageForm) {
+        messageInput.disabled = true;
+        messageForm.querySelector('button').disabled = true;
+        messageInput.placeholder = 'Connecting to chat...';
+    }
+
+    // Wait for Pusher library to be loaded
+    if (typeof window.waitForPusher === 'function') {
+        try {
+            await window.waitForPusher();
+            log('Chat', 'Pusher library is now available');
+        } catch (err) {
+            console.error('[Chat] Failed to wait for Pusher:', err);
+            if (messageInput) {
+                messageInput.placeholder = 'Chat unavailable - please refresh';
+            }
+            displayDebugMessage('Error: Could not load real-time chat library. Please refresh the page.');
+            return;
+        }
+    } else if (typeof Pusher === 'undefined') {
+        console.error('[Chat] Pusher is not defined and waitForPusher is not available');
+        if (messageInput) {
+            messageInput.placeholder = 'Chat unavailable - please refresh';
+        }
+        displayDebugMessage('Error: Real-time chat library not loaded. Please refresh the page.');
+        return;
+    }
+
     if (pusher) {
         pusher.disconnect();
         log('Chat', 'Disconnected from previous Pusher instance.');
@@ -322,6 +355,21 @@ export async function sendMessage(message, recordId = null) {
 
 export async function initializeItemChat(recordId) {
     log('Chat', `Initializing item chat for recordId: ${recordId}`);
+
+    // Wait for Pusher library to be loaded
+    if (typeof window.waitForPusher === 'function') {
+        try {
+            await window.waitForPusher();
+            log('Chat', 'Pusher library is now available for item chat');
+        } catch (err) {
+            console.error('[Chat] Failed to wait for Pusher for item chat:', err);
+            return;
+        }
+    } else if (typeof Pusher === 'undefined') {
+        console.error('[Chat] Pusher is not defined for item chat');
+        return;
+    }
+
     const chatContainer = document.getElementById('modal-chat-container');
     if (chatContainer) chatContainer.style.display = 'block';
 
