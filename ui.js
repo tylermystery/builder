@@ -24,6 +24,7 @@ export * from './utils.js';
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
+export { updateFooter, initializeFooter } from './components/footer.js';
 
 
 // Optimized lazy loading with Netlify Image CDN, responsive images and modern format support

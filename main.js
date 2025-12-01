@@ -9,13 +9,14 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
 import { debounce, updateUrl } from './utils.js';
-import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js'; 
+import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
-import { setupCalendarEventListeners } from './components/calendarView.js'; 
+import { setupCalendarEventListeners } from './components/calendarView.js';
 import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
-import * as backgroundEngine from './components/backgroundEngine.js'; 
+import * as backgroundEngine from './components/backgroundEngine.js';
 import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
+import { updateFooter } from './components/footer.js';
 
 
 const imageCache = new Map();
@@ -368,6 +369,9 @@ async function initialize() {
         }
         ui.applyCartLabels(shopSettings.cartLabels);
         initializeEventListeners(imageCache, window.flatpickr, shopSettings);
+
+        // Update footer with store details
+        updateFooter(activeShop);
 
         // Note: JWT authentication is now handled earlier in initialization (before session load)
         // to prevent the "collaborator or store owner" race condition error
