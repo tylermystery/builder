@@ -62,6 +62,9 @@ export let state = {
         // --- THIS IS THE NEW LINE ---
         itemPositions: new Map(), // Stores { x: 120, y: 50, z: 1 } for each recordId
         // --- END NEW LINE ---
+
+        // Recent chats list for expandable chat history
+        recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }
     },
     calendar: {
         busyTimes: new Map(),
