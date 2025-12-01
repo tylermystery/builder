@@ -478,20 +478,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }, { passive: true });
 
     // --- START CONSOLIDATED BUTTON GENERATION --
-    const categoryFiltersRoot = document.getElementById('category-filters'); 
-    if (categoryFiltersRoot) { 
-        const planFilterBtn = document.createElement('button');
-        planFilterBtn.className = 'filter-btn';
-        planFilterBtn.id = 'plan-filter-btn';
-        planFilterBtn.textContent = '⭐ My Plan';
-        planFilterBtn.addEventListener('click', () => {
-            document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-            planFilterBtn.classList.add('active');
-            updateUrl({ category: null, subcategory: null, view: 'plan' });
-            applyFiltersAndSort(imageCache);
-        });
-        categoryFiltersRoot.appendChild(planFilterBtn);
-
+    const categoryFiltersRoot = document.getElementById('category-filters');
+    if (categoryFiltersRoot) {
         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
         const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
@@ -542,12 +530,13 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         }
 
     }  else {
-        console.warn("Could not find #category-filters container to add 'My Plan'/'My Likes' buttons.");
+        console.warn("Could not find #category-filters container to add category buttons.");
     }
     // --- END CONSOLIDATED BUTTON GENERATION --
 
     // --- START HEADER USER FILTER BUTTONS ---
     const catalogHeaderBtn = document.getElementById('catalog-header-btn');
+    const myPlanHeaderBtn = document.getElementById('my-plan-header-btn');
     const likedItemsHeaderBtn = document.getElementById('liked-items-header-btn');
     const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
 
@@ -555,6 +544,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         catalogHeaderBtn.style.display = 'block';
         catalogHeaderBtn.addEventListener('click', () => {
             updateUrl({ category: null, subcategory: null, view: null });
+            applyFiltersAndSort(imageCache);
+        });
+    }
+
+    if (myPlanHeaderBtn) {
+        myPlanHeaderBtn.style.display = 'block';
+        myPlanHeaderBtn.addEventListener('click', () => {
+            updateUrl({ category: null, subcategory: null, view: 'plan' });
             applyFiltersAndSort(imageCache);
         });
     }
