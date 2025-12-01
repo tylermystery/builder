@@ -4,6 +4,7 @@ import { state, setState } from './state.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
+import { updateUrl } from './utils.js';
 
 let currentUser = null;
 let pusher = null;
@@ -491,11 +492,30 @@ async function handleRecentChatClick(chat) {
             alert(`Item chat: ${chat.name}`);
         }
     } else if (chat.type === 'session') {
-        // For session chats, the current session chat is already open
-        // Just scroll to the messages
-        const messagesContainer = document.getElementById('messages-container');
-        if (messagesContainer) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        // For session chats, open the session for collaborators
+        log('Chat', `Opening session ${chat.id} from recent chats`);
+
+        // Update URL with session parameter and clear view filters
+        updateUrl({ session: chat.id, view: null, category: null, subcategory: null });
+
+        // Load the session data (this will fire sessionReady event when complete)
+        try {
+            await api.loadSessionFromAirtable(chat.id);
+            log('Chat', `Session ${chat.id} loaded successfully`);
+
+            // Refresh the catalog view to show items instead of sessions list
+            if (typeof window.applyFiltersAndSort === 'function' && window.imageCache) {
+                window.applyFiltersAndSort(window.imageCache);
+            }
+
+            // Scroll to the messages after session loads
+            const messagesContainer = document.getElementById('messages-container');
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        } catch (err) {
+            console.error('Failed to load session from recent chat:', err);
+            log('Chat', `Failed to load session ${chat.id}: ${err.message}`);
         }
     }
 
