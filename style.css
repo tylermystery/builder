@@ -2999,17 +2999,57 @@ hr.total-divider {
 
 /* Mobile responsiveness for grouping carousels */
 @media (max-width: 768px) {
+    /* Force main content to respect viewport width on mobile */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
     .grouping-carousel-section {
-        padding: 15px;
+        padding: 10px;
         margin-bottom: 20px;
+        margin-left: 0;
+        margin-right: 0;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .grouping-carousel-wrapper {
+        max-width: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .grouping-carousel-container {
+        max-width: 100%;
+        width: 100%;
+        padding: 8px 5px;
+        gap: 12px;
     }
 
     .grouping-carousel-container .event-card {
-        /* Mobile: Show exactly 1 card at full width minus padding */
-        flex: 0 0 calc(100vw - 70px);
-        width: calc(100vw - 70px);
-        min-width: 280px;
-        max-width: calc(100vw - 70px);
+        /* Mobile: Use percentage of parent container, not viewport */
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
     }
 
     .grouping-carousel-nav {
@@ -3018,12 +3058,13 @@ hr.total-divider {
         font-size: 14px;
     }
 
+    /* Keep nav buttons inside the container on mobile */
     .grouping-carousel-nav.left {
-        left: -10px;
+        left: 5px;
     }
 
     .grouping-carousel-nav.right {
-        right: -10px;
+        right: 5px;
     }
 }
 /* --- END GROUPING CAROUSEL SECTION STYLES --- */

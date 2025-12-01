@@ -149,6 +149,17 @@ body.modal-open {
     max-width: 1800px;
     margin: 0 auto;
     padding: 20px;
+    /* CRITICAL: Prevent horizontal overflow on mobile */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Mobile: Constrain catalog area to prevent horizontal overflow */
+#catalog-area {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 @media (min-width: 1000px) {
@@ -156,6 +167,7 @@ body.modal-open {
         display: grid;
         grid-template-columns: 300px 1fr 380px;
         gap: 25px;
+        max-width: 1800px;
     }
     #left-sidebar { order: 1; }
     #catalog-area {
@@ -447,4 +459,60 @@ body.modal-open {
 /* Hide descriptions for cards in carousel view to reduce clutter */
 .grouping-carousel-container .event-card .event-card-content .description {
     display: none;
+}
+
+/* CRITICAL: Mobile carousel width constraints - prevent horizontal overflow */
+@media (max-width: 768px) {
+    /* Force main content to respect viewport width on mobile */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .grouping-carousel-section {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 10px;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    /* Wrapper clips the scrollable area */
+    .grouping-carousel-wrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Container that scrolls horizontally */
+    .grouping-carousel-container {
+        width: 100%;
+        max-width: 100%;
+        gap: 12px;
+        padding: 8px 5px;
+    }
+
+    /* Cards inside carousel - use percentage of parent, not viewport */
+    .grouping-carousel-container .event-card {
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
+    }
 }
