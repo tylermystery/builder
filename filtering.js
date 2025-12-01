@@ -334,18 +334,26 @@ export async function applyFiltersAndSort(imageCache) {
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
     } else if (view === 'my-sessions') {
+        console.log('[DEBUG MY-SESSIONS VIEW] ========== MY SESSIONS VIEW ACTIVE ==========');
+        console.log('[DEBUG MY-SESSIONS VIEW] state.session.user.isAuthenticated:', state.session.user.isAuthenticated);
+        console.log('[DEBUG MY-SESSIONS VIEW] state.session.user.id:', state.session.user.id);
         if (state.session.user.isAuthenticated && state.session.user.id) {
+            console.log('[DEBUG MY-SESSIONS VIEW] User is authenticated, fetching plans...');
             const userSessions = await api.fetchPlansForUser(state.session.user.id, true);
-            
+            console.log('[DEBUG MY-SESSIONS VIEW] api.fetchPlansForUser returned:', userSessions?.length, 'sessions');
+            console.log('[DEBUG MY-SESSIONS VIEW] Raw userSessions:', userSessions);
+
             // Transform sessions into catalog tiles
-            recordsToDisplay = userSessions.map(session => {
+            recordsToDisplay = userSessions.map((session, index) => {
+                console.log(`[DEBUG MY-SESSIONS VIEW] Processing session ${index + 1}:`, session.id);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - session.fields:`, session.fields);
                 const sessionFields = session.fields || {};
                 const itemCount = (sessionFields.Items || []).length;
                 const totalCost = sessionFields.TotalCost || 0;
                 const dateStr = sessionFields.Date ? new Date(sessionFields.Date + 'T00:00:00').toLocaleDateString() : 'No date set';
                 const eventName = sessionFields.Name || 'Untitled Session';
-                
-                return {
+
+                const transformedRecord = {
                     id: session.id,
                     fields: {
                         Name: eventName,
@@ -359,13 +367,25 @@ export async function applyFiltersAndSort(imageCache) {
                     isSession: true,
                     sessionData: session
                 };
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - Transformed record:`, transformedRecord);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - isSession: ${transformedRecord.isSession}`);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - sessionData present: ${!!transformedRecord.sessionData}`);
+                return transformedRecord;
             });
-            
+
+            console.log('[DEBUG MY-SESSIONS VIEW] Total transformed records:', recordsToDisplay.length);
+            console.log('[DEBUG MY-SESSIONS VIEW] First record isSession:', recordsToDisplay[0]?.isSession);
+            console.log('[DEBUG MY-SESSIONS VIEW] First record sessionData:', recordsToDisplay[0]?.sessionData);
+
             // Apply search filter if present
             if (searchTerm) {
+                console.log('[DEBUG MY-SESSIONS VIEW] Applying search filter:', searchTerm);
                 recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+                console.log('[DEBUG MY-SESSIONS VIEW] After search filter:', recordsToDisplay.length, 'records');
             }
+            console.log('[DEBUG MY-SESSIONS VIEW] ========== MY SESSIONS VIEW COMPLETE ==========');
         } else {
+            console.log('[DEBUG MY-SESSIONS VIEW] ⚠️ User not authenticated, returning empty array');
             recordsToDisplay = [];
         }
         

@@ -376,3 +376,191 @@ export async function flagMessage(messageId) {
     }
     log('Moderation', `Flagging message: ${messageId}`);
 }
+
+// --- RECENT CHATS FUNCTIONALITY ---
+
+let recentChatsExpanded = false;
+
+export async function loadRecentChats() {
+    const currentUserData = getCurrentUser();
+    if (!currentUserData || !currentUserData.id) {
+        log('Chat', 'loadRecentChats: No current user available.');
+        return;
+    }
+
+    const recentChatsList = document.getElementById('recent-chats-list');
+    const loadingEl = document.getElementById('recent-chats-loading');
+
+    if (loadingEl) {
+        loadingEl.style.display = 'block';
+        loadingEl.textContent = 'Loading recent chats...';
+    }
+
+    try {
+        const chats = await api.fetchRecentChats(currentUserData.id, 10);
+        state.session.recentChats = chats;
+
+        renderRecentChatsList(chats);
+    } catch (error) {
+        console.error('Error loading recent chats:', error);
+        if (loadingEl) {
+            loadingEl.textContent = 'Failed to load recent chats';
+        }
+    }
+}
+
+function renderRecentChatsList(chats) {
+    const recentChatsList = document.getElementById('recent-chats-list');
+    const loadingEl = document.getElementById('recent-chats-loading');
+
+    if (!recentChatsList) return;
+
+    // Clear existing content
+    recentChatsList.innerHTML = '';
+
+    if (!chats || chats.length === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'recent-chat-empty';
+        emptyEl.textContent = 'No recent chats';
+        recentChatsList.appendChild(emptyEl);
+        return;
+    }
+
+    chats.forEach(chat => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'recent-chat-item';
+        chatItem.dataset.chatId = chat.id;
+        chatItem.dataset.chatType = chat.type;
+
+        const icon = chat.type === 'session' ? '💬' : '📦';
+        const timeAgo = formatTimeAgo(chat.lastMessageTime);
+        const truncatedMessage = chat.lastMessage.length > 30
+            ? chat.lastMessage.substring(0, 30) + '...'
+            : chat.lastMessage;
+
+        chatItem.innerHTML = `
+            <div class="recent-chat-icon">${icon}</div>
+            <div class="recent-chat-content">
+                <div class="recent-chat-name">${escapeHtml(chat.name)}</div>
+                <div class="recent-chat-preview">${escapeHtml(truncatedMessage)}</div>
+            </div>
+            <div class="recent-chat-time">${timeAgo}</div>
+        `;
+
+        chatItem.addEventListener('click', () => handleRecentChatClick(chat));
+        recentChatsList.appendChild(chatItem);
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffMs = now - time;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'now';
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays < 7) return `${diffDays}d`;
+
+    return time.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+async function handleRecentChatClick(chat) {
+    log('Chat', `Clicked recent chat: ${chat.type} - ${chat.id}`);
+
+    if (chat.type === 'item') {
+        // For item chats, try to open the item detail modal
+        // This requires integration with the modal system
+        const record = state.records.all.find(r => r.id === chat.id);
+        if (record && typeof window.openDetailModal === 'function') {
+            window.openDetailModal(record);
+        } else {
+            // If we can't find the record or open modal, just log
+            log('Chat', `Could not open detail modal for item ${chat.id}`);
+            alert(`Item chat: ${chat.name}`);
+        }
+    } else if (chat.type === 'session') {
+        // For session chats, the current session chat is already open
+        // Just scroll to the messages
+        const messagesContainer = document.getElementById('messages-container');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    }
+
+    // Collapse the recent chats list after selection
+    toggleRecentChats(false);
+}
+
+export function toggleRecentChats(forceState = null) {
+    const recentChatsList = document.getElementById('recent-chats-list');
+    const toggleIcon = document.querySelector('#recent-chats-toggle .toggle-icon');
+
+    if (!recentChatsList || !toggleIcon) return;
+
+    if (forceState !== null) {
+        recentChatsExpanded = forceState;
+    } else {
+        recentChatsExpanded = !recentChatsExpanded;
+    }
+
+    if (recentChatsExpanded) {
+        recentChatsList.classList.remove('collapsed');
+        toggleIcon.textContent = '▼';
+        // Load chats when expanding
+        loadRecentChats();
+    } else {
+        recentChatsList.classList.add('collapsed');
+        toggleIcon.textContent = '▶';
+    }
+}
+
+export function initializeRecentChatsListeners() {
+    const toggleBtn = document.getElementById('recent-chats-toggle');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleRecentChats();
+        });
+    }
+}
+
+/**
+ * Updates the current session's name in the recent chats list.
+ * Called when the user renames the plan via the header-event-name input.
+ * @param {string} newName - The new name for the current session/plan
+ */
+export function updateCurrentSessionName(newName) {
+    const currentSessionId = state.session.id;
+    if (!currentSessionId) {
+        log('Chat', 'updateCurrentSessionName: No current session ID.');
+        return;
+    }
+
+    // Update in state.session.recentChats array
+    const chatIndex = state.session.recentChats.findIndex(
+        chat => chat.id === currentSessionId && chat.type === 'session'
+    );
+
+    if (chatIndex !== -1) {
+        state.session.recentChats[chatIndex].name = newName || 'Session Chat';
+        log('Chat', `Updated session name in recentChats to: ${newName}`);
+
+        // Re-render the list if it's currently expanded
+        if (recentChatsExpanded) {
+            renderRecentChatsList(state.session.recentChats);
+        }
+    }
+}

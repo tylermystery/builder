@@ -302,30 +302,50 @@ export async function associateSessionWithUser(sessionId, userId) {
 
 
 export async function loadSessionFromAirtable(sessionId) {
+    console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable START ==========');
+    console.log('[DEBUG LOAD SESSION] sessionId parameter:', sessionId);
+    console.log('[DEBUG LOAD SESSION] Current state.session.id:', state.session.id);
+
     if (!sessionId) {
+         console.log('[DEBUG LOAD SESSION] ❌ No sessionId provided, returning early');
          log('API', 'loadSessionFromAirtable called with no sessionId.');
          return;
     }
     // Avoid reloading if already loaded
     if (state.session.id === sessionId) {
+        console.log('[DEBUG LOAD SESSION] ⚠️ Session already loaded (same ID), checking if we should fire sessionReady');
         log('API', `Session ${sessionId} is already loaded.`);
+        console.log('[DEBUG LOAD SESSION] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+        console.log('[DEBUG LOAD SESSION] state.eventDetails.combined.size:', state.eventDetails.combined.size);
         if (state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0) {
+             console.log('[DEBUG LOAD SESSION] Firing sessionReady event (has locked items or event details)');
              document.dispatchEvent(new CustomEvent('sessionReady'));
+        } else {
+             console.log('[DEBUG LOAD SESSION] ⚠️ NOT firing sessionReady event (no locked items or event details)');
         }
+        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (early return - already loaded) ==========');
         return;
     }
 
+    console.log('[DEBUG LOAD SESSION] Setting state.session.id to:', sessionId);
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    console.log('[DEBUG LOAD SESSION] Airtable fetch URL:', url);
     log('API', `Loading session from URL: ${url}`);
     try {
+        console.log('[DEBUG LOAD SESSION] Making Airtable API fetch request...');
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        console.log('[DEBUG LOAD SESSION] Airtable response status:', response.status, response.statusText);
         if (!response.ok) {
             const errorData = await response.json();
+            console.error('[DEBUG LOAD SESSION] ❌ Airtable error response:', errorData);
              console.error(`Airtable error fetching session ${sessionId}:`, errorData);
             throw new Error(`Could not fetch session data. Status: ${response.status}`);
         }
         const record = await response.json();
+        console.log('[DEBUG LOAD SESSION] ✅ Airtable fetch successful');
+        console.log('[DEBUG LOAD SESSION] Record ID:', record.id);
+        console.log('[DEBUG LOAD SESSION] Record fields.Name:', record.fields?.Name);
         console.log('[DEBUG] loadSessionFromAirtable - Fetched record from Airtable:', record.id);
         console.log('[DEBUG] loadSessionFromAirtable - Record Date field:', record.fields.Date);
         console.log('[DEBUG] loadSessionFromAirtable - Record Guest Count:', record.fields['Guest Count']);
@@ -476,15 +496,30 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', 'Added current authenticated user to session profiles.');
         }
 
+        console.log('[DEBUG LOAD SESSION] ========== ABOUT TO FIRE sessionReady EVENT ==========');
+        console.log('[DEBUG LOAD SESSION] Final state summary:');
+        console.log('[DEBUG LOAD SESSION]   - state.session.id:', state.session.id);
+        console.log('[DEBUG LOAD SESSION]   - state.cart.lockedItems.size:', state.cart.lockedItems.size);
+        console.log('[DEBUG LOAD SESSION]   - state.cart.items.size:', state.cart.items.size);
+        console.log('[DEBUG LOAD SESSION]   - state.eventDetails.combined:', Object.fromEntries(state.eventDetails.combined));
+        console.log('[DEBUG LOAD SESSION]   - state.session.storeId:', state.session.storeId);
+        console.log('[DEBUG LOAD SESSION]   - state.session.isOwned:', state.session.isOwned);
+        console.log('[DEBUG LOAD SESSION] Dispatching sessionReady CustomEvent...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
+        console.log('[DEBUG LOAD SESSION] ✅ sessionReady event dispatched');
         log('API', `Finished loading session ${sessionId}. Fired sessionReady event.`);
+        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (success) ==========');
 
     } catch (error) {
+        console.error('[DEBUG LOAD SESSION] ❌ CATCH BLOCK - Error loading session');
+        console.error('[DEBUG LOAD SESSION] Error message:', error.message);
+        console.error('[DEBUG LOAD SESSION] Full error:', error);
         console.error(`Failed to load session ${sessionId}:`, error);
         log('API', `Failed to load session: ${error.message}`);
         state.session.id = null;
         alert("Could not load the shared session. It might have been deleted or there was a network issue.");
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
+        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (error) ==========');
     }
 }
 
@@ -1297,6 +1332,106 @@ export async function updateUserFlagStatus(userId, isFlagged) {
         state.session.flaggedUsers.add(userId);
     } else {
         state.session.flaggedUsers.delete(userId);
+    }
+}
+
+
+export async function fetchRecentChats(userId, limit = 10) {
+    if (!userId) {
+        log('API', 'fetchRecentChats: No userId provided.');
+        return [];
+    }
+
+    // Fetch messages where the user participated (either as sender or in conversations they're part of)
+    const formula = `{SenderID} = '${userId}'`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=100`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to fetch recent chats: ${errorData?.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} messages for recent chats.`);
+
+        // Group messages by conversation (SessionID or Item Link)
+        const conversationsMap = new Map();
+
+        for (const record of data.records) {
+            const fields = record.fields;
+            const sessionIds = fields.SessionID || [];
+            const itemLinks = fields['Item Link'] || [];
+
+            let conversationId = null;
+            let conversationType = null;
+
+            if (sessionIds.length > 0) {
+                conversationId = sessionIds[0];
+                conversationType = 'session';
+            } else if (itemLinks.length > 0) {
+                conversationId = itemLinks[0];
+                conversationType = 'item';
+            }
+
+            if (conversationId && !conversationsMap.has(conversationId)) {
+                conversationsMap.set(conversationId, {
+                    id: conversationId,
+                    type: conversationType,
+                    lastMessage: fields.Content || '',
+                    lastMessageTime: fields.Timestamp || new Date().toISOString(),
+                    senderName: fields.SenderName || 'Unknown'
+                });
+            }
+        }
+
+        // Convert to array and limit results
+        const recentChats = Array.from(conversationsMap.values()).slice(0, limit);
+
+        // Fetch names for session/item conversations
+        for (const chat of recentChats) {
+            if (chat.type === 'session') {
+                // Try to get session name
+                try {
+                    const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${chat.id}`;
+                    const sessionResponse = await fetch(sessionUrl, {
+                        headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                    });
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        chat.name = sessionData.fields?.Name || 'Session Chat';
+                    } else {
+                        chat.name = 'Session Chat';
+                    }
+                } catch (e) {
+                    chat.name = 'Session Chat';
+                }
+            } else if (chat.type === 'item') {
+                // Try to get item name
+                try {
+                    const itemUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${chat.id}`;
+                    const itemResponse = await fetch(itemUrl, {
+                        headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                    });
+                    if (itemResponse.ok) {
+                        const itemData = await itemResponse.json();
+                        chat.name = itemData.fields?.Name || 'Item Chat';
+                    } else {
+                        chat.name = 'Item Chat';
+                    }
+                } catch (e) {
+                    chat.name = 'Item Chat';
+                }
+            }
+        }
+
+        return recentChats;
+    } catch (error) {
+        console.error('Error fetching recent chats:', error);
+        return [];
     }
 }
 
