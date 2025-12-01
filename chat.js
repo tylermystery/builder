@@ -1,6 +1,7 @@
 // REPLACE THE ENTIRE CONTENTS OF: chat.js
 
 import { state, setState } from './state.js';
+import { CONSTANTS } from './config.js';
 import * as api from './api.js';
 import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
@@ -22,6 +23,19 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
   isTabActive = false;
 });
+
+/**
+ * Updates the chat header title to display the current plan name.
+ * Falls back to 'Session Chat' if no plan name is available.
+ */
+function updateChatHeaderTitle() {
+    const chatTitleEl = document.getElementById('chat-session-title');
+    if (chatTitleEl) {
+        const planName = state.eventDetails?.combined?.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+        chatTitleEl.textContent = planName || 'Session Chat';
+        log('Chat', `Updated chat header title to: ${planName || 'Session Chat'}`);
+    }
+}
 
 function requestNotificationPermissionIfNeeded() {
     if ('Notification' in window) {
@@ -199,6 +213,9 @@ export async function initializeSessionChat() {
         pusher.disconnect();
         log('Chat', 'Disconnected from previous Pusher instance.');
     }
+
+    // Update the chat header to show the current plan name
+    updateChatHeaderTitle();
 
     currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
@@ -558,7 +575,7 @@ export function initializeRecentChatsListeners() {
 }
 
 /**
- * Updates the current session's name in the recent chats list.
+ * Updates the current session's name in the recent chats list and chat header.
  * Called when the user renames the plan via the header-event-name input.
  * @param {string} newName - The new name for the current session/plan
  */
@@ -567,6 +584,13 @@ export function updateCurrentSessionName(newName) {
     if (!currentSessionId) {
         log('Chat', 'updateCurrentSessionName: No current session ID.');
         return;
+    }
+
+    // Update the chat header title
+    const chatTitleEl = document.getElementById('chat-session-title');
+    if (chatTitleEl) {
+        chatTitleEl.textContent = newName || 'Session Chat';
+        log('Chat', `Updated chat header title to: ${newName || 'Session Chat'}`);
     }
 
     // Update in state.session.recentChats array
