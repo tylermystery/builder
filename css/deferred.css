@@ -690,6 +690,8 @@
     gap: 25px;
     /* Allow container to shrink below content size for grid children */
     min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 /* When catalog has grouping carousels, switch to flex column layout */
@@ -890,6 +892,7 @@
     scroll-snap-align: start;
     /* Prevent cards from shrinking */
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 /* Hide descriptions for cards in carousel view to reduce clutter */
@@ -955,17 +958,70 @@
 
 /* Mobile responsiveness for grouping carousels */
 @media (max-width: 768px) {
+    /* Force main content to respect viewport width on mobile */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
     .grouping-carousel-section {
-        padding: 15px;
+        padding: 10px;
         margin-bottom: 20px;
+        margin-left: 0;
+        margin-right: 0;
+        /* CRITICAL: Constrain section to available width on mobile */
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .grouping-carousel-wrapper {
+        /* CRITICAL: Prevent wrapper from exceeding parent width on mobile */
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    /* Reduce edge gradient width on mobile */
+    .grouping-carousel-wrapper::before,
+    .grouping-carousel-wrapper::after {
+        width: 15px;
+    }
+
+    .grouping-carousel-container {
+        /* CRITICAL: Container must fit within parent on mobile */
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 5px;
+        gap: 12px;
     }
 
     .grouping-carousel-container .event-card {
-        /* Mobile: Show exactly 1 card at full width minus padding */
-        flex: 0 0 calc(100vw - 70px);
-        width: calc(100vw - 70px);
-        min-width: 280px;
-        max-width: calc(100vw - 70px);
+        /* Mobile: Show card at width relative to container, not viewport */
+        /* Use percentage of parent container to ensure proper sizing */
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
     }
 
     .grouping-carousel-nav {
@@ -974,12 +1030,13 @@
         font-size: 14px;
     }
 
+    /* CRITICAL: Keep nav buttons inside the container on mobile */
     .grouping-carousel-nav.left {
-        left: -10px;
+        left: 5px;
     }
 
     .grouping-carousel-nav.right {
-        right: -10px;
+        right: 5px;
     }
 }
 

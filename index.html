@@ -440,6 +440,63 @@ body.modal-open {
     display: none;
 }
 
+/* CRITICAL: Mobile viewport constraints for carousel - prevent horizontal overflow */
+@media (max-width: 768px) {
+    /* Force main content to respect viewport width */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Each carousel section */
+    .grouping-carousel-section {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 10px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Wrapper clips the scrollable area */
+    .grouping-carousel-wrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Container that scrolls horizontally */
+    .grouping-carousel-container {
+        width: 100%;
+        max-width: 100%;
+        gap: 12px;
+        padding: 8px 5px;
+    }
+
+    /* Cards inside carousel - use percentage of parent, not viewport */
+    .grouping-carousel-container .event-card {
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
+    }
+}
+
 /* Toast Notification - visible immediately */
 #toast-notification {
     position: fixed;
