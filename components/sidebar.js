@@ -929,15 +929,14 @@ export function updateTotalCost() {
         mobileTotalCostEl.textContent = `$${totalDue.toFixed(2)}`;
     }
 
-    const isPlanEmpty = subtotal === 0;
+    // A plan is empty only if there are no locked items AND subtotal is 0
+    const isPlanEmpty = state.cart.lockedItems.size === 0 && subtotal === 0;
     // Only consider fully paid if amount has actually been received
     const isFullyPaid = totalDue <= 0.009 && amountReceived > 0;
 
-    if (isPlanEmpty || isFullyPaid) {
-        document.body.classList.remove('mobile-bar-active');
-    } else {
-        document.body.classList.add('mobile-bar-active');
-    }
+    // Always show the mobile plan button so users can access event details and
+    // other plan panel features regardless of plan state
+    document.body.classList.add('mobile-bar-active');
 
     if (checkoutBtn) {
         checkoutBtn.style.display = 'block';
