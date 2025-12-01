@@ -287,7 +287,12 @@ async function initialize() {
             titleElement.style.cursor = 'pointer';
             titleElement.addEventListener('click', (e) => {
                 if (e.target.id !== 'shop-switcher-trigger') {
-                    window.location.href = `${window.location.pathname}?shopId=${activeShop.id}`;
+                    // Navigate to top level catalog without reloading (avoids creating new session)
+                    const newUrl = `${window.location.pathname}?shopId=${activeShop.id}`;
+                    history.pushState({}, '', newUrl);
+                    syncUiWithUrl();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    log('Main', `Navigated to top level catalog for shop: ${activeShop.id}`);
                 }
             });
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
