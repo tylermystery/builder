@@ -547,9 +547,17 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     // --- END CONSOLIDATED BUTTON GENERATION --
 
     // --- START HEADER USER FILTER BUTTONS ---
+    const catalogHeaderBtn = document.getElementById('catalog-header-btn');
     const likedItemsHeaderBtn = document.getElementById('liked-items-header-btn');
     const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
-    const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
+
+    if (catalogHeaderBtn) {
+        catalogHeaderBtn.style.display = 'block';
+        catalogHeaderBtn.addEventListener('click', () => {
+            updateUrl({ category: null, subcategory: null, view: null });
+            applyFiltersAndSort(imageCache);
+        });
+    }
 
     if (likedItemsHeaderBtn) {
         likedItemsHeaderBtn.style.display = 'block';
@@ -567,18 +575,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 return;
             }
             updateUrl({ category: null, subcategory: null, view: 'my-sessions' });
-            applyFiltersAndSort(imageCache);
-        });
-    }
-
-    if (rsvpEventsHeaderBtn) {
-        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
-        rsvpEventsHeaderBtn.addEventListener('click', () => {
-            if (!state.session.user.isAuthenticated) {
-                showUserModal();
-                return;
-            }
-            updateUrl({ category: null, subcategory: null, view: 'rsvp-events' });
             applyFiltersAndSort(imageCache);
         });
     }

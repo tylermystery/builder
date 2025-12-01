@@ -655,13 +655,9 @@ export function updateUserProfileIcon() {
     }
 
     const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
-    const rsvpEventsHeaderBtn = document.getElementById('rsvp-events-header-btn');
-    
+
     if (mySessionsHeaderBtn) {
         mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
-    }
-    if (rsvpEventsHeaderBtn) {
-        rsvpEventsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
     }
 }
 

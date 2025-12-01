@@ -1017,15 +1017,23 @@ export function updateCatalogHeader() {
     const isRecommendedSort = sortBy === 'recommended';
     const goalsInput = document.getElementById('header-goals')?.value?.trim();
 
-    if (view === 'plan' || view === 'likes') {
+    if (view === 'plan' || view === 'likes' || view === 'my-sessions') {
         const filterControlsEl = document.getElementById('filter-controls');
         if (filterControlsEl) { filterControlsEl.dataset.activeFilters = 0; }
-        
+
         const pathContainer = document.createElement('div');
         pathContainer.id = 'breadcrumb-path-container';
-        pathContainer.innerHTML = `<a href=\"#\" class=\"breadcrumb-link\" data-filter=\"all\">All Categories</a> &gt; <span>${view === 'plan' ? 'My Plan' : 'My Likes'}</span>`;
+        let viewLabel;
+        if (view === 'plan') {
+            viewLabel = 'My Plan';
+        } else if (view === 'likes') {
+            viewLabel = 'My Likes';
+        } else {
+            viewLabel = 'My Sessions';
+        }
+        pathContainer.innerHTML = `<span>${viewLabel}</span>`;
         breadcrumbsEl.appendChild(pathContainer);
-        return; 
+        return;
     }
 
     if (isSearchActive) {
