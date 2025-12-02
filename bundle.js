@@ -120,6 +120,31 @@ async function bundle() {
             console.log(`   ✅ store-dashboard.bundle.js: ${(dashboardBundleSize / 1024).toFixed(2)} KB`);
         }
 
+        // Bundle invitee view (simplified guest view)
+        if (fs.existsSync('components/invitee.js')) {
+            console.log('\n📦 Bundling invitee view (components/invitee.js)...');
+            const inviteeResult = await esbuild.build({
+                entryPoints: ['components/invitee.js'],
+                bundle: true,
+                outfile: path.join(OUTPUT_DIR, 'invitee.bundle.js'),
+                format: 'esm',
+                target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+                minify: isProduction,
+                sourcemap: true,
+                treeShaking: true,
+                metafile: true,
+                define: {
+                    'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                },
+                external: [],
+                platform: 'browser',
+                splitting: false,
+                logLevel: 'info',
+            });
+            const inviteeBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'invitee.bundle.js')).size;
+            console.log(`   ✅ invitee.bundle.js: ${(inviteeBundleSize / 1024).toFixed(2)} KB`);
+        }
+
         // Generate bundle manifest for cache busting
         const manifest = {
             version: buildTimestamp,
@@ -127,6 +152,7 @@ async function bundle() {
                 main: `main.bundle.js?v=${buildTimestamp}`,
                 crm: `crm.bundle.js?v=${buildTimestamp}`,
                 storeDashboard: `store-dashboard.bundle.js?v=${buildTimestamp}`,
+                invitee: `invitee.bundle.js?v=${buildTimestamp}`,
             },
             generated: new Date().toISOString(),
         };
