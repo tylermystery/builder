@@ -18,7 +18,7 @@ import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimiz
 // Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
-export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader, verifyNoDuplicateItems } from './components/sidebar.js';
+export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader, verifyNoDuplicateItems, initializeShareMenu } from './components/sidebar.js';
 export * from './utils.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };

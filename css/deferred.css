@@ -3757,3 +3757,176 @@ hr.total-divider {
         font-size: 16px;
     }
 }
+
+/* --- SHARE MENU STYLES --- */
+.event-plan-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.event-plan-header-row .event-name-group {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+#share-menu-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+#share-menu-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#share-menu-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+#share-menu-btn:active {
+    transform: scale(0.95);
+}
+
+#share-menu-btn .share-icon {
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.share-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 5px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 220px;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.share-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: #333;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.share-dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.share-dropdown-item:active {
+    background-color: #e9ecef;
+}
+
+.share-item-icon {
+    margin-right: 10px;
+    font-size: 1.1em;
+}
+
+.share-dropdown-divider {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 0;
+}
+
+.share-dropdown-item.publish-option {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.share-dropdown-item.publish-option:hover {
+    background-color: #d4edda;
+}
+
+.share-dropdown-item.update-published-option {
+    color: #17a2b8;
+    font-weight: 500;
+}
+
+.share-dropdown-item.update-published-option:hover {
+    background-color: #d1ecf1;
+}
+
+/* RSVP Stats section in dropdown */
+.share-rsvp-stats {
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.share-rsvp-stats h5 {
+    margin: 0 0 8px 0;
+    font-size: 0.85em;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+.share-rsvp-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.share-rsvp-item {
+    text-align: center;
+    flex: 1;
+}
+
+.share-rsvp-count {
+    font-size: 1.2em;
+    font-weight: bold;
+    display: block;
+}
+
+.share-rsvp-count.going {
+    color: #28a745;
+}
+
+.share-rsvp-count.maybe {
+    color: #ffc107;
+}
+
+.share-rsvp-count.no {
+    color: #dc3545;
+}
+
+.share-rsvp-label {
+    font-size: 0.75em;
+    color: #6c757d;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .share-dropdown {
+        min-width: 200px;
+    }
+
+    .share-dropdown-item {
+        padding: 14px 15px;
+    }
+}

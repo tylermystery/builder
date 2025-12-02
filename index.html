@@ -681,8 +681,30 @@ body.modal-open {
     <div class="main-content">
 <div id="right-sidebar">
             <div id="event-plan-panel">
-                <div class="event-name-group">
-                    <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
+                <div class="event-plan-header-row">
+                    <div class="event-name-group">
+                        <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
+                    </div>
+                    <div id="share-menu-container">
+                        <button id="share-menu-btn" class="header-icon-btn" title="Share Options" style="display: none;">
+                            <span class="share-icon">&#8943;</span>
+                        </button>
+                        <div id="share-menu-dropdown" class="share-dropdown" style="display: none;">
+                            <button id="share-copy-link-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128279;</span> Copy Link
+                            </button>
+                            <button id="share-invite-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128236;</span> Invite Collaborator
+                            </button>
+                            <hr class="share-dropdown-divider">
+                            <button id="share-publish-btn" class="share-dropdown-item publish-option" style="display: none;">
+                                <span class="share-item-icon">&#127760;</span> Publish as Public Event
+                            </button>
+                            <button id="share-update-published-btn" class="share-dropdown-item update-published-option" style="display: none;">
+                                <span class="share-item-icon">&#128260;</span> Update Published Event
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>

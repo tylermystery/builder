@@ -262,153 +262,226 @@ function updateTotalPlanScoreDisplay(score) {
 // --- 2. THIS FUNCTION IS REPLACED ---
 let isUpdatingEventPlan = false;
 let pendingEventPlanUpdate = false;
+let shareMenuInitialized = false;
 
 /**
- * Updates the RSVP statistics and Publish Event button for published sessions
+ * Initializes the Share menu button event listeners (called once)
  */
-async function updateSessionPublishingControls() {
-    console.log('[PUBLISH DEBUG] updateSessionPublishingControls called');
-    
-    // --- PERMISSION CHECK ---
-    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
-    const currentUser = state.session.user;
+export function initializeShareMenu() {
+    if (shareMenuInitialized) return;
 
-    if (activeStore && currentUser) {
-        const allowedUsers = activeStore.fields.PublishPermission || [];
-        if (!allowedUsers.includes(currentUser.id)) {
-            log('Sidebar', 'User does not have permission to publish, hiding controls.');
-            return; // Exit if user is not in the allowed list
-        }
-    }
-    // --- END PERMISSION CHECK ---
+    const shareMenuBtn = document.getElementById('share-menu-btn');
+    const shareMenuDropdown = document.getElementById('share-menu-dropdown');
+    const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
+    const shareInviteBtn = document.getElementById('share-invite-btn');
+    const sharePublishBtn = document.getElementById('share-publish-btn');
+    const shareUpdatePublishedBtn = document.getElementById('share-update-published-btn');
 
-    console.log('[PUBLISH DEBUG] state.session.id:', state.session.id);
-
-    // Remove any existing publishing controls
-    const existingControls = document.getElementById('session-publishing-controls');
-    if (existingControls) {
-        console.log('[PUBLISH DEBUG] Removing existing controls');
-        existingControls.remove();
-    }
-
-    // Only show if we have an active session
-    if (!state.session.id) {
-        console.log('[PUBLISH DEBUG] No active session, skipping publishing controls');
-        log('Sidebar', 'No active session, skipping publishing controls');
+    if (!shareMenuBtn || !shareMenuDropdown) {
+        console.warn('[Share Menu] Share menu elements not found');
         return;
     }
 
-    console.log('[PUBLISH DEBUG] Active session found, proceeding to create controls');
+    // Toggle dropdown on button click
+    shareMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = shareMenuDropdown.style.display === 'block';
+        shareMenuDropdown.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!shareMenuBtn.contains(e.target) && !shareMenuDropdown.contains(e.target)) {
+            shareMenuDropdown.style.display = 'none';
+        }
+    });
+
+    // Copy Link handler
+    if (shareCopyLinkBtn) {
+        shareCopyLinkBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                const originalHTML = shareCopyLinkBtn.innerHTML;
+                shareCopyLinkBtn.innerHTML = '<span class="share-item-icon">&#10003;</span> Copied!';
+                setTimeout(() => {
+                    shareCopyLinkBtn.innerHTML = originalHTML;
+                }, 1500);
+            }).catch(err => {
+                console.error('Failed to copy link:', err);
+            });
+            shareMenuDropdown.style.display = 'none';
+        });
+    }
+
+    // Invite Collaborator handler - scrolls to the invite section
+    if (shareInviteBtn) {
+        shareInviteBtn.addEventListener('click', () => {
+            shareMenuDropdown.style.display = 'none';
+            const inviteSection = document.getElementById('invite-collaborator-section');
+            if (inviteSection) {
+                inviteSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Highlight the section briefly
+                inviteSection.style.transition = 'box-shadow 0.3s';
+                inviteSection.style.boxShadow = '0 0 10px rgba(0, 123, 255, 0.5)';
+                setTimeout(() => {
+                    inviteSection.style.boxShadow = '';
+                }, 2000);
+            }
+        });
+    }
+
+    // Publish as Public Event handler
+    if (sharePublishBtn) {
+        sharePublishBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handlePublishEvent();
+        });
+    }
+
+    // Update Published Event handler
+    if (shareUpdatePublishedBtn) {
+        shareUpdatePublishedBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handlePublishEvent();
+        });
+    }
+
+    shareMenuInitialized = true;
+    log('Sidebar', 'Share menu initialized');
+}
+
+/**
+ * Updates the Share menu button visibility and options based on session state
+ */
+async function updateShareMenuState() {
+    const shareMenuBtn = document.getElementById('share-menu-btn');
+    const shareMenuDropdown = document.getElementById('share-menu-dropdown');
+    const sharePublishBtn = document.getElementById('share-publish-btn');
+    const shareUpdatePublishedBtn = document.getElementById('share-update-published-btn');
+    const shareDivider = shareMenuDropdown?.querySelector('.share-dropdown-divider');
+
+    if (!shareMenuBtn) return;
+
+    // Show the share button only if we have an active session
+    if (!state.session.id) {
+        shareMenuBtn.style.display = 'none';
+        return;
+    }
+
+    // Show the share button
+    shareMenuBtn.style.display = 'flex';
+
+    // Initialize the menu if not already done
+    initializeShareMenu();
+
+    // Check publish permissions
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const currentUser = state.session.user;
+    let hasPublishPermission = false;
+
+    if (activeStore && currentUser) {
+        const allowedUsers = activeStore.fields.PublishPermission || [];
+        hasPublishPermission = allowedUsers.includes(currentUser.id);
+    }
+
+    // Update publish/update buttons visibility based on permissions
+    if (!hasPublishPermission) {
+        if (sharePublishBtn) sharePublishBtn.style.display = 'none';
+        if (shareUpdatePublishedBtn) shareUpdatePublishedBtn.style.display = 'none';
+        if (shareDivider) shareDivider.style.display = 'none';
+        return;
+    }
+
+    // Show the divider since we have publish permissions
+    if (shareDivider) shareDivider.style.display = 'block';
 
     try {
         const session = await api.fetchSessionById(state.session.id);
-        if (!session) {
-            log('Sidebar', 'Could not fetch session data');
-            return;
-        }
-
-        const controlsContainer = document.createElement('div');
-        controlsContainer.id = 'session-publishing-controls';
-        controlsContainer.style.cssText = 'margin: 15px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
-
-        let controlsHTML = '';
+        if (!session) return;
 
         // Check if this session is linked to a published event
         const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
 
         if (linkedItemId) {
-            // Session is published, show RSVP statistics
-            const linkedItem = state.records.all.find(r => r.id === linkedItemId);
-            if (linkedItem) {
-                const rsvpYes = linkedItem.fields.RSVPs ? linkedItem.fields.RSVPs.length : 0;
-                const rsvpMaybe = linkedItem.fields.RSVPMaybe ? linkedItem.fields.RSVPMaybe.length : 0;
-                const rsvpNo = linkedItem.fields.RSVPNo ? linkedItem.fields.RSVPNo.length : 0;
-                const totalRsvps = rsvpYes + rsvpMaybe + rsvpNo;
+            // Session is published - show update button, hide publish button
+            if (sharePublishBtn) sharePublishBtn.style.display = 'none';
+            if (shareUpdatePublishedBtn) {
+                shareUpdatePublishedBtn.style.display = 'flex';
 
-                controlsHTML += `
-                    <div class="rsvp-statistics" style="margin-bottom: 15px;">
-                        <h4 style="margin-top: 0; color: #495057; font-size: 1em;">📊 RSVP Statistics</h4>
-                        <div style="display: flex; justify-content: space-between; margin: 10px 0;">
-                            <div style="text-align: center; flex: 1;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: #28a745;">${rsvpYes}</div>
-                                <div style="font-size: 0.85em; color: #6c757d;">Going</div>
-                            </div>
-                            <div style="text-align: center; flex: 1;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: #ffc107;">${rsvpMaybe}</div>
-                                <div style="font-size: 0.85em; color: #6c757d;">Maybe</div>
-                            </div>
-                            <div style="text-align: center; flex: 1;">
-                                <div style="font-size: 1.5em; font-weight: bold; color: #dc3545;">${rsvpNo}</div>
-                                <div style="font-size: 0.85em; color: #6c757d;">Can't Go</div>
-                            </div>
-                        </div>
-                        <div style="text-align: center; padding-top: 10px; border-top: 1px solid #dee2e6;">
-                            <strong>Total Responses: ${totalRsvps}</strong>
-                        </div>
-                    </div>
-                `;
-
-                // Update button
-                controlsHTML += `
-                    <button id="update-published-event-btn" style="width: 100%; padding: 10px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px;">
-                        🔄 Update Published Event
-                    </button>
-                `;
+                // Update RSVP stats in dropdown if event is published
+                const linkedItem = state.records.all.find(r => r.id === linkedItemId);
+                if (linkedItem) {
+                    updateShareMenuRsvpStats(linkedItem);
+                }
             }
         } else {
-            // Session is not published, show publish button
-            controlsHTML += `
-                <div style="text-align: center; margin-bottom: 10px;">
-                    <p style="color: #6c757d; font-size: 0.9em; margin: 0 0 10px 0;">This plan is not yet published as a public event.</p>
-                </div>
-                <button id="publish-event-btn" style="width: 100%; padding: 10px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                    🌐 Publish as Public Event
-                </button>
-            `;
+            // Session is not published - show publish button, hide update button
+            if (sharePublishBtn) sharePublishBtn.style.display = 'flex';
+            if (shareUpdatePublishedBtn) shareUpdatePublishedBtn.style.display = 'none';
+
+            // Remove any RSVP stats section
+            const existingRsvpStats = shareMenuDropdown?.querySelector('.share-rsvp-stats');
+            if (existingRsvpStats) existingRsvpStats.remove();
         }
 
-        controlsContainer.innerHTML = controlsHTML;
-
-        // Insert at the top of the cart container
-        const cartContainer = document.getElementById('cart-items-container');
-        console.log('[PUBLISH DEBUG] cartContainer found:', !!cartContainer);
-        console.log('[PUBLISH DEBUG] cartContainer.parentElement found:', !!cartContainer?.parentElement);
-
-        if (cartContainer && cartContainer.parentElement) {
-            cartContainer.parentElement.insertBefore(controlsContainer, cartContainer);
-            console.log('[PUBLISH DEBUG] Controls inserted into DOM');
-            console.log('[PUBLISH DEBUG] Controls container HTML:', controlsContainer.innerHTML.substring(0, 200));
-        } else {
-            console.error('[PUBLISH DEBUG] ERROR: Could not find cart container or its parent!');
-        }
-
-        // Add event listeners for the buttons
-        const publishBtn = document.getElementById('publish-event-btn');
-        const updateBtn = document.getElementById('update-published-event-btn');
-
-        console.log('[PUBLISH DEBUG] publishBtn found:', !!publishBtn);
-        console.log('[PUBLISH DEBUG] updateBtn found:', !!updateBtn);
-
-        if (publishBtn) {
-            publishBtn.addEventListener('click', async () => {
-                await handlePublishEvent();
-            });
-            console.log('[PUBLISH DEBUG] Event listener added to publish button');
-        }
-
-        if (updateBtn) {
-            updateBtn.addEventListener('click', async () => {
-                await handlePublishEvent();
-            });
-            console.log('[PUBLISH DEBUG] Event listener added to update button');
-        }
-
-        console.log('[PUBLISH DEBUG] Session publishing controls updated successfully');
-        log('Sidebar', 'Session publishing controls updated');
+        log('Sidebar', 'Share menu state updated');
     } catch (error) {
-        console.error('[PUBLISH DEBUG] ERROR in updateSessionPublishingControls:', error);
-        console.error('Error updating session publishing controls:', error);
+        console.error('Error updating share menu state:', error);
     }
+}
+
+/**
+ * Updates the RSVP statistics display in the share dropdown
+ */
+function updateShareMenuRsvpStats(linkedItem) {
+    const shareMenuDropdown = document.getElementById('share-menu-dropdown');
+    if (!shareMenuDropdown || !linkedItem) return;
+
+    const rsvpYes = linkedItem.fields.RSVPs ? linkedItem.fields.RSVPs.length : 0;
+    const rsvpMaybe = linkedItem.fields.RSVPMaybe ? linkedItem.fields.RSVPMaybe.length : 0;
+    const rsvpNo = linkedItem.fields.RSVPNo ? linkedItem.fields.RSVPNo.length : 0;
+
+    // Remove existing RSVP stats if present
+    const existingRsvpStats = shareMenuDropdown.querySelector('.share-rsvp-stats');
+    if (existingRsvpStats) existingRsvpStats.remove();
+
+    // Create new RSVP stats section
+    const rsvpStatsHTML = `
+        <div class="share-rsvp-stats">
+            <h5>RSVP Statistics</h5>
+            <div class="share-rsvp-row">
+                <div class="share-rsvp-item">
+                    <span class="share-rsvp-count going">${rsvpYes}</span>
+                    <span class="share-rsvp-label">Going</span>
+                </div>
+                <div class="share-rsvp-item">
+                    <span class="share-rsvp-count maybe">${rsvpMaybe}</span>
+                    <span class="share-rsvp-label">Maybe</span>
+                </div>
+                <div class="share-rsvp-item">
+                    <span class="share-rsvp-count no">${rsvpNo}</span>
+                    <span class="share-rsvp-label">Can't Go</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Insert at the beginning of the dropdown
+    shareMenuDropdown.insertAdjacentHTML('afterbegin', rsvpStatsHTML);
+}
+
+/**
+ * Legacy function - now updates the share menu instead of creating inline controls
+ * Keeping the name for backwards compatibility with existing calls
+ */
+async function updateSessionPublishingControls() {
+    // Remove any legacy publishing controls if they exist
+    const existingControls = document.getElementById('session-publishing-controls');
+    if (existingControls) {
+        existingControls.remove();
+    }
+
+    // Update the share menu state instead
+    await updateShareMenuState();
 }
 
 /**
