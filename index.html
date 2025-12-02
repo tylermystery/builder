@@ -187,16 +187,28 @@ body.modal-open {
     .main-content {
         display: grid;
         grid-template-columns: 300px 1fr 380px;
+        grid-template-rows: auto 1fr;
         gap: 25px;
     }
-    #left-sidebar { order: 1; }
+    #search-bar-container {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+    #left-sidebar {
+        grid-column: 1;
+        grid-row: 2;
+    }
     #catalog-area {
-        order: 2;
+        grid-column: 2;
+        grid-row: 2;
         /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
         min-width: 0;
         overflow: hidden;
     }
-    #right-sidebar { order: 3; }
+    #right-sidebar {
+        grid-column: 3;
+        grid-row: 2;
+    }
 }
 
 #right-sidebar, #left-sidebar {
@@ -681,8 +693,45 @@ body.modal-open {
     <div class="main-content">
 <div id="right-sidebar">
             <div id="event-plan-panel">
-                <div class="event-name-group">
-                    <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
+                <div class="event-plan-header-row">
+                    <div class="event-name-group">
+                        <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
+                    </div>
+                    <div id="share-menu-container">
+                        <button id="share-menu-btn" class="header-icon-btn" title="Share Options" style="display: none;">
+                            <span class="share-icon">&#8943;</span>
+                        </button>
+                        <div id="share-menu-dropdown" class="share-dropdown" style="display: none;">
+                            <button id="share-copy-link-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128279;</span> Copy Link
+                            </button>
+                            <button id="share-invite-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128236;</span> Invite Collaborator
+                            </button>
+                            <hr class="share-dropdown-divider">
+                            <button id="share-publish-btn" class="share-dropdown-item publish-option" style="display: none;">
+                                <span class="share-item-icon">&#127760;</span> Publish as Public Event
+                            </button>
+                            <button id="share-update-published-btn" class="share-dropdown-item update-published-option" style="display: none;">
+                                <span class="share-item-icon">&#128260;</span> Update Published Event
+                            </button>
+                        </div>
+                        <!-- Invite Collaborator Popup -->
+                        <div id="invite-popup" class="invite-popup" style="display: none;">
+                            <div class="invite-popup-header">
+                                <span class="invite-popup-icon">💌</span>
+                                <span class="invite-popup-title">Invite Collaborator</span>
+                                <button id="invite-popup-close" class="invite-popup-close">&times;</button>
+                            </div>
+                            <p class="invite-popup-desc">Share this plan with a friend.</p>
+                            <div class="invite-popup-form">
+                                <input type="text" id="collab-name" placeholder="Friend's Name" class="invite-popup-input">
+                                <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
+                                <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
+                                <div id="invite-status" class="invite-popup-status"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
@@ -746,17 +795,23 @@ body.modal-open {
            </div>
         </div>
         
-        <button id="mobile-filter-trigger" aria-label="Toggle search and filter panel" aria-expanded="false">Search & Filter <span class="caret">▼</span></button>
-        
+        <!-- Always-visible search bar with integrated filter toggle -->
+        <div id="search-bar-container">
+            <div id="search-bar-wrapper">
+                <input type="text" id="name-filter" placeholder="Search activities, venues, experiences..." autocomplete="off">
+                <button id="clear-search-btn" title="Clear Search">×</button>
+                <button id="filter-toggle-btn" aria-label="Toggle filters" aria-expanded="false">
+                    <span class="filter-icon">☰</span>
+                    <span class="filter-label">Filters</span>
+                    <span id="filter-count-badge" class="filter-count-badge" style="display: none;">0</span>
+                    <span class="filter-caret">▼</span>
+                </button>
+            </div>
+        </div>
+
 <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
-                    <div class="filter-group">
-                    <div id="name-filter-wrapper" style="position: relative; display: flex; align-items: center;">
-                        <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-                        <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
-                    </div>
-                    </div>
                    <div class="filter-group">
                     <label for="category-filters">Categories</label>
                     <div id="category-filters" class="filter-btn-group"></div>

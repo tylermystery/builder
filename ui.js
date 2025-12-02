@@ -18,7 +18,7 @@ import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimiz
 // Re-export functions from component modules
 export * from './components/card.js';
 export * from './components/modal.js';
-export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader, verifyNoDuplicateItems } from './components/sidebar.js';
+export { updateEventPlanSection, updateIdeasCarousel, updateTotalCost, displayReservedStatus, updateHeader as updateSidebarHeader, verifyNoDuplicateItems, initializeShareMenu } from './components/sidebar.js';
 export * from './utils.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
@@ -1174,6 +1174,20 @@ export function updateCatalogHeader() {
     const filterControlsEl = document.getElementById('filter-controls');
     if (filterControlsEl) {
         filterControlsEl.dataset.activeFilters = filterCount;
+    }
+
+    // Update filter count badge in the new search bar
+    const filterCountBadge = document.getElementById('filter-count-badge');
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    if (filterCountBadge && filterToggleBtn) {
+        if (filterCount > 0) {
+            filterCountBadge.textContent = filterCount;
+            filterCountBadge.style.display = 'inline-block';
+            filterToggleBtn.classList.add('has-filters');
+        } else {
+            filterCountBadge.style.display = 'none';
+            filterToggleBtn.classList.remove('has-filters');
+        }
     }
 }
 /**
