@@ -1,5 +1,133 @@
 /* ---\nCORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES\n--- */
 
+/* ==========================================================
+   DEBUG STYLES - Layout Debugging
+   Remove these styles after debugging is complete
+   ========================================================== */
+
+/* Debug: Color-coded borders to identify grid layout elements */
+.main-content {
+    outline: 3px dashed red !important;
+    position: relative;
+}
+.main-content::before {
+    content: '.main-content (GRID)' !important;
+    position: absolute !important;
+    top: -25px !important;
+    left: 0 !important;
+    background: red !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+#search-bar-container {
+    outline: 3px dashed purple !important;
+    position: relative;
+}
+#search-bar-container::before {
+    content: '#search-bar-container (Grid Order: ' attr(style) ')' !important;
+    position: absolute !important;
+    top: -25px !important;
+    left: 0 !important;
+    background: purple !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+#left-sidebar {
+    outline: 3px dashed blue !important;
+    position: relative;
+}
+#left-sidebar::before {
+    content: '#left-sidebar (Filters)' !important;
+    position: absolute !important;
+    top: -25px !important;
+    left: 0 !important;
+    background: blue !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+#catalog-area {
+    outline: 3px dashed green !important;
+    position: relative;
+}
+#catalog-area::before {
+    content: '#catalog-area (Cards)' !important;
+    position: absolute !important;
+    top: -25px !important;
+    left: 0 !important;
+    background: green !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+#right-sidebar {
+    outline: 3px dashed orange !important;
+    position: relative;
+}
+#right-sidebar::before {
+    content: '#right-sidebar (Event Plan)' !important;
+    position: absolute !important;
+    top: -25px !important;
+    left: 0 !important;
+    background: orange !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+#filter-controls {
+    outline: 3px dashed cyan !important;
+    position: relative;
+}
+#filter-controls::before {
+    content: '#filter-controls (Inside left-sidebar)' !important;
+    position: absolute !important;
+    top: 5px !important;
+    left: 5px !important;
+    background: cyan !important;
+    color: black !important;
+    padding: 2px 8px !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    z-index: 9999 !important;
+}
+
+/* Debug: Log computed values */
+.main-content::after {
+    content: 'Grid: ' attr(class) !important;
+    position: fixed !important;
+    bottom: 10px !important;
+    left: 10px !important;
+    background: rgba(0,0,0,0.8) !important;
+    color: #0f0 !important;
+    padding: 10px !important;
+    font-size: 11px !important;
+    font-family: monospace !important;
+    z-index: 99999 !important;
+    border-radius: 4px !important;
+    max-width: 400px !important;
+}
+
+/* ==========================================================
+   END DEBUG STYLES
+   ========================================================== */
+
 /* --- Global Improvements --- */
 * {
     box-sizing: border-box;

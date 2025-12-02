@@ -421,6 +421,104 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
+    // DEBUG: Initial layout state on page load
+    console.group('[DEBUG] Initial Layout State - Page Load');
+    console.log('Window width:', window.innerWidth);
+    console.log('Window height:', window.innerHeight);
+
+    const mainContent = document.querySelector('.main-content');
+    const searchBarContainer = document.getElementById('search-bar-container');
+    const leftSidebar = document.getElementById('left-sidebar');
+    const rightSidebar = document.getElementById('right-sidebar');
+    const catalogArea = document.getElementById('catalog-area');
+    const filterControls = document.getElementById('filter-controls');
+
+    console.log('\n=== DOM Element Order (in .main-content) ===');
+    if (mainContent) {
+        Array.from(mainContent.children).forEach((child, index) => {
+            console.log(`  ${index}: #${child.id || 'no-id'} (tag: ${child.tagName})`);
+        });
+    }
+
+    console.log('\n=== CSS Grid Layout ===');
+    if (mainContent) {
+        const mainStyles = getComputedStyle(mainContent);
+        console.log('Main Content computed styles:', {
+            display: mainStyles.display,
+            gridTemplateColumns: mainStyles.gridTemplateColumns,
+            gridTemplateRows: mainStyles.gridTemplateRows,
+            gap: mainStyles.gap
+        });
+    }
+
+    console.log('\n=== Search Bar Container ===');
+    if (searchBarContainer) {
+        const searchStyles = getComputedStyle(searchBarContainer);
+        console.log('Search Bar Container:', {
+            display: searchStyles.display,
+            position: searchStyles.position,
+            gridColumn: searchStyles.gridColumn,
+            gridRow: searchStyles.gridRow,
+            order: searchStyles.order,
+            top: searchStyles.top,
+            zIndex: searchStyles.zIndex
+        });
+    } else {
+        console.warn('#search-bar-container NOT FOUND in DOM');
+    }
+
+    console.log('\n=== Left Sidebar (#left-sidebar) ===');
+    if (leftSidebar) {
+        const leftStyles = getComputedStyle(leftSidebar);
+        console.log('Left Sidebar:', {
+            display: leftStyles.display,
+            position: leftStyles.position,
+            gridColumn: leftStyles.gridColumn,
+            gridRow: leftStyles.gridRow,
+            order: leftStyles.order,
+            maxHeight: leftStyles.maxHeight,
+            opacity: leftStyles.opacity,
+            classes: leftSidebar.className
+        });
+    }
+
+    console.log('\n=== Right Sidebar (#right-sidebar) ===');
+    if (rightSidebar) {
+        const rightStyles = getComputedStyle(rightSidebar);
+        console.log('Right Sidebar:', {
+            display: rightStyles.display,
+            position: rightStyles.position,
+            gridColumn: rightStyles.gridColumn,
+            gridRow: rightStyles.gridRow,
+            order: rightStyles.order
+        });
+    }
+
+    console.log('\n=== Catalog Area (#catalog-area) ===');
+    if (catalogArea) {
+        const catalogStyles = getComputedStyle(catalogArea);
+        console.log('Catalog Area:', {
+            display: catalogStyles.display,
+            position: catalogStyles.position,
+            gridColumn: catalogStyles.gridColumn,
+            gridRow: catalogStyles.gridRow,
+            order: catalogStyles.order
+        });
+    }
+
+    console.log('\n=== Filter Controls (#filter-controls) ===');
+    if (filterControls) {
+        const filterStyles = getComputedStyle(filterControls);
+        console.log('Filter Controls:', {
+            display: filterStyles.display,
+            position: filterStyles.position,
+            width: filterStyles.width,
+            height: filterStyles.height,
+            parentElement: filterControls.parentElement?.id || 'no-parent-id'
+        });
+    }
+    console.groupEnd();
+
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
@@ -441,6 +539,78 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
             filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
             leftSidebar?.classList.toggle('collapsed');
+
+            // DEBUG: Log layout information when filter toggle is clicked
+            console.group('[DEBUG] Filter Toggle Layout Info');
+            console.log('Window width:', window.innerWidth);
+            console.log('Filter toggle aria-expanded:', !isExpanded);
+            console.log('Left sidebar collapsed:', leftSidebar?.classList.contains('collapsed'));
+
+            // Log computed styles for key elements
+            const mainContent = document.querySelector('.main-content');
+            const searchBarContainer = document.getElementById('search-bar-container');
+            const filterControls = document.getElementById('filter-controls');
+            const catalogArea = document.getElementById('catalog-area');
+
+            if (mainContent) {
+                const mainStyles = getComputedStyle(mainContent);
+                console.log('Main Content:', {
+                    display: mainStyles.display,
+                    gridTemplateColumns: mainStyles.gridTemplateColumns,
+                    gridTemplateRows: mainStyles.gridTemplateRows,
+                    gap: mainStyles.gap
+                });
+            }
+
+            if (searchBarContainer) {
+                const searchStyles = getComputedStyle(searchBarContainer);
+                console.log('Search Bar Container:', {
+                    position: searchStyles.position,
+                    top: searchStyles.top,
+                    gridColumn: searchStyles.gridColumn,
+                    order: searchStyles.order,
+                    display: searchStyles.display
+                });
+            }
+
+            if (leftSidebar) {
+                const leftStyles = getComputedStyle(leftSidebar);
+                console.log('Left Sidebar:', {
+                    display: leftStyles.display,
+                    maxHeight: leftStyles.maxHeight,
+                    opacity: leftStyles.opacity,
+                    order: leftStyles.order,
+                    gridColumn: leftStyles.gridColumn
+                });
+            }
+
+            if (filterControls) {
+                const filterStyles = getComputedStyle(filterControls);
+                console.log('Filter Controls:', {
+                    display: filterStyles.display,
+                    position: filterStyles.position,
+                    width: filterStyles.width,
+                    height: filterStyles.height
+                });
+            }
+
+            if (catalogArea) {
+                const catalogStyles = getComputedStyle(catalogArea);
+                console.log('Catalog Area:', {
+                    order: catalogStyles.order,
+                    gridColumn: catalogStyles.gridColumn,
+                    width: catalogStyles.width
+                });
+            }
+
+            // Log DOM order
+            console.log('DOM Order of children in .main-content:');
+            mainContent?.childNodes.forEach((child, index) => {
+                if (child.nodeType === 1) { // Element nodes only
+                    console.log(`  ${index}: #${child.id || 'no-id'} (${child.className})`);
+                }
+            });
+            console.groupEnd();
         });
     }
 
