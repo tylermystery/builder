@@ -3930,3 +3930,120 @@ hr.total-divider {
         padding: 14px 15px;
     }
 }
+
+/* Invite Collaborator Popup */
+.invite-popup {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 5px;
+    background-color: #fff;
+    border: 1px solid #cce5ff;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    min-width: 280px;
+    max-width: 320px;
+    z-index: 1001;
+    padding: 16px;
+}
+
+.invite-popup-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.invite-popup-icon {
+    font-size: 1.2em;
+    margin-right: 8px;
+}
+
+.invite-popup-title {
+    flex: 1;
+    font-weight: 600;
+    color: #0056b3;
+    font-size: 1em;
+}
+
+.invite-popup-close {
+    background: none;
+    border: none;
+    font-size: 1.4em;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.invite-popup-close:hover {
+    color: #333;
+}
+
+.invite-popup-desc {
+    font-size: 0.85em;
+    color: #666;
+    margin: 0 0 12px 0;
+}
+
+.invite-popup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.invite-popup-input {
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.9em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.invite-popup-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+}
+
+.invite-popup-btn {
+    padding: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    transition: background-color 0.2s, transform 0.1s;
+    margin-top: 4px;
+}
+
+.invite-popup-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.invite-popup-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.invite-popup-btn:disabled {
+    background-color: #6c9bd1;
+    cursor: not-allowed;
+}
+
+.invite-popup-status {
+    font-size: 0.85em;
+    text-align: center;
+    min-height: 1.2em;
+    margin-top: 2px;
+}
+
+/* Mobile adjustments for invite popup */
+@media (max-width: 768px) {
+    .invite-popup {
+        min-width: 250px;
+        max-width: calc(100vw - 40px);
+        right: -10px;
+    }
+}

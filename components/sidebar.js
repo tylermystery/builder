@@ -312,20 +312,11 @@ export function initializeShareMenu() {
         });
     }
 
-    // Invite Collaborator handler - scrolls to the invite section
+    // Invite Collaborator handler - opens the invite popup
     if (shareInviteBtn) {
         shareInviteBtn.addEventListener('click', () => {
             shareMenuDropdown.style.display = 'none';
-            const inviteSection = document.getElementById('invite-collaborator-section');
-            if (inviteSection) {
-                inviteSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Highlight the section briefly
-                inviteSection.style.transition = 'box-shadow 0.3s';
-                inviteSection.style.boxShadow = '0 0 10px rgba(0, 123, 255, 0.5)';
-                setTimeout(() => {
-                    inviteSection.style.boxShadow = '';
-                }, 2000);
-            }
+            openInvitePopup();
         });
     }
 
@@ -347,6 +338,94 @@ export function initializeShareMenu() {
 
     shareMenuInitialized = true;
     log('Sidebar', 'Share menu initialized');
+}
+
+let invitePopupInitialized = false;
+
+/**
+ * Opens the invite collaborator popup
+ */
+function openInvitePopup() {
+    const popup = document.getElementById('invite-popup');
+    if (!popup) return;
+
+    // Initialize popup event listeners if not done
+    initializeInvitePopup();
+
+    // Show the popup
+    popup.style.display = 'block';
+
+    // Clear any previous inputs and status
+    const nameInput = document.getElementById('collab-name');
+    const emailInput = document.getElementById('collab-email');
+    const statusEl = document.getElementById('invite-status');
+    const btn = document.getElementById('invite-btn');
+
+    if (nameInput) nameInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (statusEl) statusEl.textContent = '';
+    if (btn) {
+        btn.textContent = 'Send Invite';
+        btn.disabled = false;
+    }
+
+    // Focus on the name input
+    if (nameInput) nameInput.focus();
+}
+
+/**
+ * Closes the invite collaborator popup
+ */
+function closeInvitePopup() {
+    const popup = document.getElementById('invite-popup');
+    if (popup) {
+        popup.style.display = 'none';
+    }
+}
+
+/**
+ * Initializes the invite popup event listeners (called once)
+ */
+function initializeInvitePopup() {
+    if (invitePopupInitialized) return;
+
+    const popup = document.getElementById('invite-popup');
+    const closeBtn = document.getElementById('invite-popup-close');
+    const inviteBtn = document.getElementById('invite-btn');
+
+    if (!popup) return;
+
+    // Close button handler
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeInvitePopup);
+    }
+
+    // Close when clicking outside the popup (on the container)
+    document.addEventListener('click', (e) => {
+        if (popup.style.display === 'block' &&
+            !popup.contains(e.target) &&
+            !document.getElementById('share-invite-btn')?.contains(e.target)) {
+            closeInvitePopup();
+        }
+    });
+
+    // Invite button handler
+    if (inviteBtn) {
+        inviteBtn.addEventListener('click', async () => {
+            await handleInvite();
+        });
+    }
+
+    // Allow Enter key to submit
+    popup.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleInvite();
+        }
+    });
+
+    invitePopupInitialized = true;
+    log('Sidebar', 'Invite popup initialized');
 }
 
 /**
@@ -578,7 +657,7 @@ export async function updateEventPlanSection() {
         // Check if this session is published and display RSVP stats + Publish button
         console.log('[PUBLISH DEBUG] About to call updateSessionPublishingControls');
         await updateSessionPublishingControls();
-        await updateInviteControls(); // <-- Added Invite Controls
+        // Invite section removed - now accessible via Share menu popup
         console.log('[PUBLISH DEBUG] updateSessionPublishingControls completed');
 
         if (state.cart.lockedItems.size === 0) {
@@ -686,11 +765,13 @@ async function handleInvite() {
             statusEl.style.color = "#28a745"; // Bootstrap success green
             nameInput.value = '';
             emailInput.value = '';
+            // Close the popup after showing success message
             setTimeout(() => {
+                 closeInvitePopup();
                  statusEl.textContent = "";
                  btn.textContent = "Send Invite";
                  btn.disabled = false;
-            }, 3000);
+            }, 1500);
         } else {
             const err = await response.json();
             throw new Error(err.error || 'Failed to send');

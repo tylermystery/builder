@@ -704,6 +704,21 @@ body.modal-open {
                                 <span class="share-item-icon">&#128260;</span> Update Published Event
                             </button>
                         </div>
+                        <!-- Invite Collaborator Popup -->
+                        <div id="invite-popup" class="invite-popup" style="display: none;">
+                            <div class="invite-popup-header">
+                                <span class="invite-popup-icon">💌</span>
+                                <span class="invite-popup-title">Invite Collaborator</span>
+                                <button id="invite-popup-close" class="invite-popup-close">&times;</button>
+                            </div>
+                            <p class="invite-popup-desc">Share this plan with a friend.</p>
+                            <div class="invite-popup-form">
+                                <input type="text" id="collab-name" placeholder="Friend's Name" class="invite-popup-input">
+                                <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
+                                <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
+                                <div id="invite-status" class="invite-popup-status"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="toolbar-group">
