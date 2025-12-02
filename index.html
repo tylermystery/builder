@@ -783,17 +783,23 @@ body.modal-open {
            </div>
         </div>
         
-        <button id="mobile-filter-trigger" aria-label="Toggle search and filter panel" aria-expanded="false">Search & Filter <span class="caret">▼</span></button>
-        
+        <!-- Always-visible search bar with integrated filter toggle -->
+        <div id="search-bar-container">
+            <div id="search-bar-wrapper">
+                <input type="text" id="name-filter" placeholder="Search activities, venues, experiences..." autocomplete="off">
+                <button id="clear-search-btn" title="Clear Search">×</button>
+                <button id="filter-toggle-btn" aria-label="Toggle filters" aria-expanded="false">
+                    <span class="filter-icon">☰</span>
+                    <span class="filter-label">Filters</span>
+                    <span id="filter-count-badge" class="filter-count-badge" style="display: none;">0</span>
+                    <span class="filter-caret">▼</span>
+                </button>
+            </div>
+        </div>
+
 <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
-                    <div class="filter-group">
-                    <div id="name-filter-wrapper" style="position: relative; display: flex; align-items: center;">
-                        <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-                        <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
-                    </div>
-                    </div>
                    <div class="filter-group">
                     <label for="category-filters">Categories</label>
                     <div id="category-filters" class="filter-btn-group"></div>

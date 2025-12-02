@@ -1175,6 +1175,20 @@ export function updateCatalogHeader() {
     if (filterControlsEl) {
         filterControlsEl.dataset.activeFilters = filterCount;
     }
+
+    // Update filter count badge in the new search bar
+    const filterCountBadge = document.getElementById('filter-count-badge');
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    if (filterCountBadge && filterToggleBtn) {
+        if (filterCount > 0) {
+            filterCountBadge.textContent = filterCount;
+            filterCountBadge.style.display = 'inline-block';
+            filterToggleBtn.classList.add('has-filters');
+        } else {
+            filterCountBadge.style.display = 'none';
+            filterToggleBtn.classList.remove('has-filters');
+        }
+    }
 }
 /**
  * Handles the click event when a user clears a filter chip.

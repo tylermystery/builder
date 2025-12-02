@@ -434,6 +434,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         rightSidebar?.classList.add('collapsed');
     }
 
+    // New filter toggle button handler (replaces old mobile-filter-trigger)
+    const filterToggleBtn = document.getElementById('filter-toggle-btn');
+    if (filterToggleBtn) {
+        filterToggleBtn.addEventListener('click', () => {
+            const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
+            filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
+            leftSidebar?.classList.toggle('collapsed');
+        });
+    }
+
+    // Show/hide clear search button based on input value
+    const nameFilterInput = document.getElementById('name-filter');
+    const clearSearchBtn = document.getElementById('clear-search-btn');
+    if (nameFilterInput && clearSearchBtn) {
+        nameFilterInput.addEventListener('input', () => {
+            clearSearchBtn.style.display = nameFilterInput.value.trim() ? 'block' : 'none';
+        });
+        // Initialize visibility on page load
+        clearSearchBtn.style.display = nameFilterInput.value.trim() ? 'block' : 'none';
+    }
+
+    // Legacy mobile-filter-trigger (kept for backwards compatibility)
     safeAddEventListener('mobile-filter-trigger', 'click', () => {
         if (window.innerWidth < 1000) {
             leftSidebar?.classList.toggle('collapsed');
