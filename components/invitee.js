@@ -2,6 +2,14 @@
 // Simplified invitee view for event guests
 // Shows: Event Details, Components Carousel, and Chat
 
+// Immediate execution debug - this runs as soon as the bundle loads
+console.log('[Invitee DEBUG] ========================================');
+console.log('[Invitee DEBUG] invitee.bundle.js LOADED SUCCESSFULLY');
+console.log('[Invitee DEBUG] Timestamp:', new Date().toISOString());
+console.log('[Invitee DEBUG] Document readyState:', document.readyState);
+console.log('[Invitee DEBUG] Window location:', window.location.href);
+console.log('[Invitee DEBUG] ========================================');
+
 // API Configuration (self-contained for this standalone view)
 const PERSONAL_ACCESS_TOKEN = 'patI1bum8NZvXmYV5.9961c676b00f5e5a9f006c6c26d1ba93ecde2b489f419a68d2a1cb43ff781c57';
 const BASE_ID = 'app5yTznb3R5YNUFw';
@@ -55,22 +63,39 @@ function getSimpleUserIdentity() {
 // ==================
 
 function showLoading() {
-    document.getElementById('loading-state').style.display = 'flex';
-    document.getElementById('error-state').style.display = 'none';
-    document.getElementById('main-content').classList.remove('loaded');
+    console.log('[Invitee DEBUG] showLoading() called');
+    const loadingEl = document.getElementById('loading-state');
+    const errorEl = document.getElementById('error-state');
+    const mainEl = document.getElementById('main-content');
+    console.log('[Invitee DEBUG] Elements found - loading:', !!loadingEl, 'error:', !!errorEl, 'main:', !!mainEl);
+    loadingEl.style.display = 'flex';
+    errorEl.style.display = 'none';
+    mainEl.classList.remove('loaded');
 }
 
 function showError(message) {
-    document.getElementById('loading-state').style.display = 'none';
-    document.getElementById('error-state').style.display = 'flex';
-    document.getElementById('error-message').textContent = message;
-    document.getElementById('main-content').classList.remove('loaded');
+    console.log('[Invitee DEBUG] showError() called with message:', message);
+    const loadingEl = document.getElementById('loading-state');
+    const errorEl = document.getElementById('error-state');
+    const errorMsgEl = document.getElementById('error-message');
+    const mainEl = document.getElementById('main-content');
+    console.log('[Invitee DEBUG] Elements found - loading:', !!loadingEl, 'error:', !!errorEl, 'errorMsg:', !!errorMsgEl, 'main:', !!mainEl);
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'flex';
+    errorMsgEl.textContent = message;
+    mainEl.classList.remove('loaded');
 }
 
 function showContent() {
-    document.getElementById('loading-state').style.display = 'none';
-    document.getElementById('error-state').style.display = 'none';
-    document.getElementById('main-content').classList.add('loaded');
+    console.log('[Invitee DEBUG] showContent() called - transitioning from loading to content');
+    const loadingEl = document.getElementById('loading-state');
+    const errorEl = document.getElementById('error-state');
+    const mainEl = document.getElementById('main-content');
+    console.log('[Invitee DEBUG] Elements found - loading:', !!loadingEl, 'error:', !!errorEl, 'main:', !!mainEl);
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    mainEl.classList.add('loaded');
+    console.log('[Invitee DEBUG] Content should now be visible');
 }
 
 // ==================
@@ -657,8 +682,16 @@ async function initializeInviteeView() {
 }
 
 // Start the app when DOM is ready
+console.log('[Invitee DEBUG] Setting up initialization listener...');
+console.log('[Invitee DEBUG] Current document.readyState:', document.readyState);
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeInviteeView);
+    console.log('[Invitee DEBUG] Document still loading, adding DOMContentLoaded listener');
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[Invitee DEBUG] DOMContentLoaded event fired');
+        initializeInviteeView();
+    });
 } else {
+    console.log('[Invitee DEBUG] Document already loaded, calling initializeInviteeView immediately');
     initializeInviteeView();
 }

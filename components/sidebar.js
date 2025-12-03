@@ -320,6 +320,15 @@ export function initializeShareMenu() {
         });
     }
 
+    // Invite Guest handler - opens the guest invite popup
+    const shareInviteGuestBtn = document.getElementById('share-invite-guest-btn');
+    if (shareInviteGuestBtn) {
+        shareInviteGuestBtn.addEventListener('click', () => {
+            shareMenuDropdown.style.display = 'none';
+            openInviteGuestPopup();
+        });
+    }
+
     // Publish as Public Event handler
     if (sharePublishBtn) {
         sharePublishBtn.addEventListener('click', async () => {
@@ -426,6 +435,186 @@ function initializeInvitePopup() {
 
     invitePopupInitialized = true;
     log('Sidebar', 'Invite popup initialized');
+}
+
+let inviteGuestPopupInitialized = false;
+
+/**
+ * Opens the invite guest popup
+ */
+function openInviteGuestPopup() {
+    const popup = document.getElementById('invite-guest-popup');
+    if (!popup) return;
+
+    // Initialize popup event listeners if not done
+    initializeInviteGuestPopup();
+
+    // Show the popup
+    popup.style.display = 'block';
+
+    // Clear any previous inputs and status
+    const nameInput = document.getElementById('guest-name');
+    const emailInput = document.getElementById('guest-email');
+    const statusEl = document.getElementById('invite-guest-status');
+    const btn = document.getElementById('invite-guest-btn');
+
+    if (nameInput) nameInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (statusEl) statusEl.textContent = '';
+    if (btn) {
+        btn.textContent = 'Send Invitation';
+        btn.disabled = false;
+    }
+
+    // Focus on the name input
+    if (nameInput) nameInput.focus();
+}
+
+/**
+ * Closes the invite guest popup
+ */
+function closeInviteGuestPopup() {
+    const popup = document.getElementById('invite-guest-popup');
+    if (popup) {
+        popup.style.display = 'none';
+    }
+}
+
+/**
+ * Initializes the invite guest popup event listeners (called once)
+ */
+function initializeInviteGuestPopup() {
+    if (inviteGuestPopupInitialized) return;
+
+    const popup = document.getElementById('invite-guest-popup');
+    const closeBtn = document.getElementById('invite-guest-popup-close');
+    const inviteBtn = document.getElementById('invite-guest-btn');
+
+    if (!popup) return;
+
+    // Close button handler
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeInviteGuestPopup);
+    }
+
+    // Close when clicking outside the popup (on the container)
+    document.addEventListener('click', (e) => {
+        if (popup.style.display === 'block' &&
+            !popup.contains(e.target) &&
+            !document.getElementById('share-invite-guest-btn')?.contains(e.target)) {
+            closeInviteGuestPopup();
+        }
+    });
+
+    // Invite button handler
+    if (inviteBtn) {
+        inviteBtn.addEventListener('click', async () => {
+            await handleInviteGuest();
+        });
+    }
+
+    // Allow Enter key to submit
+    popup.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleInviteGuest();
+        }
+    });
+
+    inviteGuestPopupInitialized = true;
+    log('Sidebar', 'Invite guest popup initialized');
+}
+
+/**
+ * Handles sending a guest invitation (read-only view)
+ */
+async function handleInviteGuest() {
+    const nameInput = document.getElementById('guest-name');
+    const emailInput = document.getElementById('guest-email');
+    const statusEl = document.getElementById('invite-guest-status');
+    const btn = document.getElementById('invite-guest-btn');
+
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+
+    if (!name || !email) {
+        statusEl.textContent = "Please enter both name and email.";
+        statusEl.style.color = "#dc3545";
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    statusEl.textContent = "";
+
+    try {
+        // Generate summary HTML for the guest invitation
+        let summaryHtml = `
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                    <tr style="background-color: #f8f9fa; text-align: left;">
+                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Item</th>
+                        <th style="padding: 8px; border-bottom: 2px solid #dee2e6; text-align: center;">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        state.cart.lockedItems.forEach((info, id) => {
+            const record = state.records.all.find(r => r.id === id);
+            if (record) {
+                summaryHtml += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>${record.fields.Name}</strong></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${info.quantity || 1}</td>
+                    </tr>
+                `;
+            }
+        });
+        summaryHtml += '</tbody></table>';
+
+        // Get event details for the invitation
+        const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event';
+        const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+        const hostName = state.session.user?.name || "Your host";
+
+        const response = await fetch('/api/invite-guest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: state.session.id,
+                guestName: name,
+                guestEmail: email,
+                hostName: hostName,
+                eventName: eventName,
+                eventDate: eventDate,
+                planSummaryHtml: summaryHtml
+            })
+        });
+
+        if (response.ok) {
+            statusEl.textContent = "Invitation sent!";
+            statusEl.style.color = "#28a745";
+            nameInput.value = '';
+            emailInput.value = '';
+            // Close the popup after showing success message
+            setTimeout(() => {
+                closeInviteGuestPopup();
+                statusEl.textContent = "";
+                btn.textContent = "Send Invitation";
+                btn.disabled = false;
+            }, 1500);
+        } else {
+            const err = await response.json();
+            throw new Error(err.error || 'Failed to send');
+        }
+    } catch (e) {
+        console.error(e);
+        statusEl.textContent = "Error sending invitation.";
+        statusEl.style.color = "#dc3545";
+        btn.textContent = "Send Invitation";
+        btn.disabled = false;
+    }
 }
 
 /**

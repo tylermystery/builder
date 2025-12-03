@@ -1,0 +1,35 @@
+=== Bundle Analysis Report ===
+Generated: 2025-12-03T07:16:37.059Z
+
+--- Main Bundle (main.bundle.js) ---
+Input files:
+  api.js: 93.11 KB
+  auth.js: 36.14 KB
+  availability.js: 15.69 KB
+  chat.js: 25.08 KB
+  components/backgroundEngine.js: 13.01 KB
+  components/calendarView.js: 24.13 KB
+  components/card.js: 19.54 KB
+  components/effects/fluid.js: 4.58 KB
+  components/effects/fractal.js: 2.12 KB
+  components/footer.js: 5.22 KB
+  components/itinerary.js: 25.59 KB
+  components/modal.js: 90.76 KB
+  components/presentation.js: 10.65 KB
+  components/receipt.js: 13.42 KB
+  components/sidebar.js: 52.26 KB
+  config.js: 1.46 KB
+  events.js: 80.97 KB
+  filtering.js: 24.55 KB
+  main.js: 26.78 KB
+  state.js: 3.81 KB
+  ui.js: 54.43 KB
+  utils.js: 22.45 KB
+  utils/debug.js: 0.21 KB
+  utils/imageOptimizer.js: 3.28 KB
+  utils/shader.js: 2.73 KB
+  utils/tileSizingDebug.js: 15.67 KB
+
+--- CRM Bundle (crm.bundle.js) ---
+Input files:
+  crm.js: 60.74 KB

@@ -1,5 +1,2 @@
 # Local Netlify folder
 .netlify
-
-# Build output (generated during Netlify deploy)
-dist/

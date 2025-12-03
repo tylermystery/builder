@@ -704,6 +704,9 @@ body.modal-open {
                             <button id="share-invite-btn" class="share-dropdown-item">
                                 <span class="share-item-icon">&#128236;</span> Invite Collaborator
                             </button>
+                            <button id="share-invite-guest-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#127881;</span> Invite Guest
+                            </button>
                             <hr class="share-dropdown-divider">
                             <button id="share-publish-btn" class="share-dropdown-item publish-option" style="display: none;">
                                 <span class="share-item-icon">&#127760;</span> Publish as Public Event
@@ -725,6 +728,21 @@ body.modal-open {
                                 <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
                                 <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
                                 <div id="invite-status" class="invite-popup-status"></div>
+                            </div>
+                        </div>
+                        <!-- Invite Guest Popup -->
+                        <div id="invite-guest-popup" class="invite-popup" style="display: none;">
+                            <div class="invite-popup-header">
+                                <span class="invite-popup-icon">🎉</span>
+                                <span class="invite-popup-title">Invite Guest</span>
+                                <button id="invite-guest-popup-close" class="invite-popup-close">&times;</button>
+                            </div>
+                            <p class="invite-popup-desc">Send a read-only event preview to your guests.</p>
+                            <div class="invite-popup-form">
+                                <input type="text" id="guest-name" placeholder="Guest's Name" class="invite-popup-input">
+                                <input type="email" id="guest-email" placeholder="Guest's Email" class="invite-popup-input">
+                                <button id="invite-guest-btn" class="invite-popup-btn">Send Invitation</button>
+                                <div id="invite-guest-status" class="invite-popup-status"></div>
                             </div>
                         </div>
                     </div>

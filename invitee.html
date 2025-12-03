@@ -563,7 +563,7 @@
     <!-- Loading State -->
     <div id="loading-state" class="loading-container">
         <div class="loading-spinner"></div>
-        <p class="loading-text">Loading event details...</p>
+        <p class="loading-text" id="loading-text">Loading event details...</p>
     </div>
 
     <!-- Error State -->
@@ -652,6 +652,34 @@
         </footer>
     </div>
 
-    <script type="module" src="/dist/invitee.bundle.js"></script>
+    <script type="module" src="/dist/invitee.bundle.js" onerror="console.error('[Invitee DEBUG] CRITICAL: Failed to load invitee.bundle.js!', event); document.getElementById('loading-text') && (document.getElementById('loading-text').textContent = 'Error: Bundle failed to load. Check console for details.');"></script>
+    <script>
+    // Fallback debug: Check if bundle loaded after a delay
+    window.addEventListener('load', function() {
+        console.log('[Invitee DEBUG] Window load event fired');
+        console.log('[Invitee DEBUG] Checking if invitee bundle loaded...');
+
+        // Log all loaded scripts
+        var scripts = document.querySelectorAll('script[src]');
+        console.log('[Invitee DEBUG] Scripts on page:');
+        scripts.forEach(function(s) {
+            console.log('[Invitee DEBUG]   -', s.src);
+        });
+
+        // Check main-content state after a delay
+        setTimeout(function() {
+            var mainContent = document.getElementById('main-content');
+            var loadingState = document.getElementById('loading-state');
+            console.log('[Invitee DEBUG] After 2s delay:');
+            console.log('[Invitee DEBUG]   main-content has .loaded:', mainContent && mainContent.classList.contains('loaded'));
+            console.log('[Invitee DEBUG]   loading-state display:', loadingState && loadingState.style.display);
+
+            if (loadingState && loadingState.style.display !== 'none') {
+                console.error('[Invitee DEBUG] WARNING: Still showing loading state after 2 seconds!');
+                console.log('[Invitee DEBUG] This suggests the bundle may have failed to load or initialize.');
+            }
+        }, 2000);
+    });
+    </script>
 </body>
 </html>
