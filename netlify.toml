@@ -1,6 +1,6 @@
 
 [build]
-  command = "npm install && npm run build"
+  command = "npm install && npm run build:all"
   functions = "netlify/functions"
 
 # Enable Netlify Image CDN for external images (Cloudinary)
@@ -44,7 +44,7 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
     # Enable early hints for bundled JavaScript
-    Link = "</dist/main.bundle.js>; rel=modulepreload, </style.css>; rel=preload; as=style"
+    Link = "</dist/main.bundle.js>; rel=modulepreload"
 
 # Bundled JavaScript - long cache with immutable
 [[headers]]

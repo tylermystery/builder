@@ -525,8 +525,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         else console.warn(`Element with ID "${selector}" not found.`);
     };
 
-    const leftSidebar = document.getElementById('left-sidebar');
-    const rightSidebar = document.getElementById('right-sidebar');
     if (window.innerWidth < 1000) {
         leftSidebar?.classList.add('collapsed');
         rightSidebar?.classList.add('collapsed');
