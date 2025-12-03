@@ -2755,6 +2755,149 @@ hr.total-divider {
     grid-row: span 2;
 }
 
+/* --- NESTED COLLECTION TILE STYLES --- */
+.nested-collection-tile {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.nested-collection-tile:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.nested-collection-tile .collage-container.nested-collage {
+    position: relative;
+    height: 180px;
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+}
+
+.nested-collection-tile .collage-image {
+    transition: transform 0.3s ease;
+}
+
+.nested-collection-tile:hover .collage-image {
+    transform: scale(1.05);
+}
+
+.nested-collection-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
+    padding: 20px 12px 10px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+}
+
+.nested-collection-count {
+    background: rgba(255, 255, 255, 0.95);
+    color: #333;
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.nested-collection-tile .event-card-content {
+    padding: 12px 15px;
+}
+
+.nested-collection-tile .event-card-content h3 {
+    font-size: 1.1em;
+    margin: 0 0 6px 0;
+    color: #333;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.nested-collection-tile .event-card-content .description {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin: 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.nested-collection-tile .card-footer {
+    padding: 10px 15px 15px;
+    display: flex;
+    justify-content: center;
+}
+
+.see-collection-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    width: 100%;
+    text-transform: none;
+}
+
+.see-collection-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.45);
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+}
+
+.see-collection-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+}
+
+/* Carousel-specific styling for nested collection tiles */
+.grouping-carousel-container .nested-collection-tile {
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+/* Mobile responsive adjustments for nested tiles */
+@media (max-width: 768px) {
+    .grouping-carousel-container .nested-collection-tile {
+        flex: 0 0 calc(100vw - 70px);
+        width: calc(100vw - 70px);
+        min-width: calc(100vw - 70px);
+        max-width: calc(100vw - 70px);
+    }
+
+    .nested-collection-tile .collage-container.nested-collage {
+        height: 160px;
+    }
+
+    .see-collection-btn {
+        padding: 12px 24px;
+        font-size: 1em;
+    }
+}
+
+/* Tablet responsive adjustments */
+@media (min-width: 769px) and (max-width: 999px) {
+    .grouping-carousel-container .nested-collection-tile {
+        flex: 0 0 280px;
+        width: 280px;
+        min-width: 280px;
+        max-width: 280px;
+    }
+}
+
 
 .grouping-card .card-footer {
     justify-content: center;

@@ -181,6 +181,111 @@ function getChildItemsForGrouping(groupingRecord, allRecords) {
     return results;
 }
 
+// Helper function to find child groupings (nested collections) for a parent grouping
+function getChildGroupingsForGrouping(parentGroupingRecord, allRecords) {
+    const parentNameForFilter = parentGroupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
+
+    const results = allRecords.filter(r => {
+        if (r.fields['Item Type'] !== 'Grouping') return false;
+        if (r.id === parentGroupingRecord.id) return false; // Exclude self
+        const itemCategories = (r.fields.Categories || '')
+            .split(',')
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
+        return itemCategories.includes(parentNameForFilter);
+    });
+
+    return results;
+}
+
+// Helper function to create a nested collection tile (collage/grid with "See Collection" button)
+async function createNestedCollectionTile(nestedGrouping, allRecords, imageCache) {
+    const fields = nestedGrouping.fields;
+    const collectionName = fields.Name || 'Untitled Collection';
+    const description = fields.Description || '';
+
+    // Get child items for this nested grouping to create the collage
+    const childItems = getChildItemsForGrouping(nestedGrouping, allRecords);
+
+    // Create the tile element
+    const tile = document.createElement('div');
+    tile.className = 'event-card nested-collection-tile';
+    tile.dataset.recordId = nestedGrouping.id;
+    tile.dataset.categoryName = collectionName;
+
+    // Fetch images for the first 4 child items to create a collage
+    let collageImagesHTML = '';
+    if (childItems.length > 0) {
+        const imagePromises = childItems.slice(0, 4).map(item =>
+            api.fetchImagesForRecord(item, allRecords, imageCache)
+        );
+        const imageResults = await Promise.all(imagePromises);
+        const collageImages = imageResults.flatMap(res => res.imageUrls).slice(0, 4);
+
+        if (collageImages.length > 0) {
+            collageImagesHTML = collageImages.map(url => {
+                // Use a low-quality placeholder for lazy loading
+                const placeholder = url.includes('cloudinary')
+                    ? url.replace('/upload/', '/upload/c_fill,w_50,q_30,f_auto,e_blur:300/')
+                    : url;
+                const optimized = url.includes('cloudinary')
+                    ? url.replace('/upload/', '/upload/c_fill,w_300,q_auto,f_auto/')
+                    : url;
+                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${optimized}"></div>`;
+            }).join('');
+        }
+    }
+
+    // Fallback if no images
+    if (!collageImagesHTML) {
+        collageImagesHTML = `<div class="collage-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>`;
+    }
+
+    tile.innerHTML = `
+        <div class="event-card-image-container collage-container nested-collage">
+            ${collageImagesHTML}
+            <div class="nested-collection-overlay">
+                <span class="nested-collection-count">${childItems.length} items</span>
+            </div>
+        </div>
+        <div class="event-card-content">
+            <h3>${collectionName}</h3>
+            <p class="description">${description}</p>
+        </div>
+        <div class="card-footer">
+            <button class="card-action-btn see-collection-btn">See Collection</button>
+        </div>
+    `;
+
+    // Add click handler for the "See Collection" button
+    const seeCollectionBtn = tile.querySelector('.see-collection-btn');
+    if (seeCollectionBtn) {
+        seeCollectionBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const params = new URLSearchParams(window.location.search);
+            params.set('subcategory', collectionName.toLowerCase().replace(/\s+/g, ' '));
+            params.delete('view');
+            window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+            if (window.applyFiltersAndSort) {
+                window.applyFiltersAndSort(imageCache);
+            }
+        });
+    }
+
+    // Add click handler for the entire tile (except buttons)
+    tile.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const params = new URLSearchParams(window.location.search);
+        params.set('subcategory', collectionName.toLowerCase().replace(/\s+/g, ' '));
+        params.delete('view');
+        window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+        if (window.applyFiltersAndSort) {
+            window.applyFiltersAndSort(imageCache);
+        }
+    });
+
+    return tile;
+}
+
 // Helper function to create a grouping carousel section
 async function createGroupingCarouselSection(groupingRecord, childItems, allRecords, imageCache) {
     // === TILE SIZING DEBUG: Carousel creation start ===
@@ -236,8 +341,26 @@ async function createGroupingCarouselSection(groupingRecord, childItems, allReco
     const container = document.createElement('div');
     container.className = 'grouping-carousel-container';
 
-    // Create cards for child items (limit to first 10 for carousel)
-    const itemsToShow = childItems.slice(0, 10);
+    // Get nested groupings (child collections) for this parent grouping
+    const nestedGroupings = getChildGroupingsForGrouping(groupingRecord, allRecords);
+
+    // Create tiles for nested collections first (they appear at the start of the carousel)
+    if (nestedGroupings.length > 0) {
+        const nestedTilePromises = nestedGroupings.map(nestedGrouping =>
+            createNestedCollectionTile(nestedGrouping, allRecords, imageCache)
+        );
+        const nestedTiles = await Promise.all(nestedTilePromises);
+
+        nestedTiles.forEach((tile) => {
+            if (tile) {
+                container.appendChild(tile);
+            }
+        });
+    }
+
+    // Create cards for child items (limit to first 10 for carousel, minus nested collection tiles)
+    const maxItems = Math.max(0, 10 - nestedGroupings.length);
+    const itemsToShow = childItems.slice(0, maxItems);
 
     const cardPromises = itemsToShow.map(record => createInteractiveCard(record, allRecords, imageCache));
     const cards = await Promise.all(cardPromises);
