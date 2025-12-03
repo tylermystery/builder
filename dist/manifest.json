@@ -1,0 +1,10 @@
+{
+  "version": 1764746196958,
+  "bundles": {
+    "main": "main.bundle.js?v=1764746196958",
+    "crm": "crm.bundle.js?v=1764746196958",
+    "storeDashboard": "store-dashboard.bundle.js?v=1764746196958",
+    "invitee": "invitee.bundle.js?v=1764746196958"
+  },
+  "generated": "2025-12-03T07:16:37.059Z"
+}

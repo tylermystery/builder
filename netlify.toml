@@ -250,6 +250,11 @@
   to = "/.netlify/functions/invite-collaborator"
   status = 200
 
+[[redirects]]
+  from = "/api/invite-guest"
+  to = "/.netlify/functions/invite-guest"
+  status = 200
+
 # AI Strategic Project Manager
 [[redirects]]
   from = "/api/ai-project-manager"
