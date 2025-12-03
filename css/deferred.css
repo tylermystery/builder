@@ -2841,10 +2841,10 @@ hr.total-divider {
     flex: 1;
     border-bottom: 1px solid #eee;
 }
-.sso-divider:not(:empty-्_)::before {
+.sso-divider:not(:empty)::before {
     margin-right: .5em;
 }
-.sso-divider:not(:empty-्_)::after {
+.sso-divider:not(:empty)::after {
     margin-left: .5em;
 }
 
