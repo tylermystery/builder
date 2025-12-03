@@ -946,74 +946,113 @@ export async function fetchCalendarForRecord(record) {
 // In: api.js
 // REPLACE the fetchImagesByTags function (around line 520)
 
+// Client-side request deduplication to prevent parallel calls for same tags
+const pendingImageRequests = new Map();
+
+// Generate a cache key for image requests
+function getImageRequestKey(tags) {
+    if (Array.isArray(tags)) {
+        return `multi:${tags.map(t => String(t).trim()).filter(Boolean).sort().join(',')}`;
+    }
+    return `single:${String(tags).trim()}`;
+}
+
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
         log('API', 'fetchImagesByTags: No valid tags provided.');
         return [];
     }
 
+    // Generate a unique key for this request
+    const requestKey = getImageRequestKey(tags);
+
+    // Check for pending request with same key (deduplication)
+    if (pendingImageRequests.has(requestKey)) {
+        log('API', `Deduplicating image request for ${requestKey}`);
+        try {
+            return await pendingImageRequests.get(requestKey);
+        } catch (e) {
+            // If pending request fails, continue to make new request
+        }
+    }
+
+    // Create the request promise
+    const requestPromise = (async () => {
+        try {
+            let payload;
+            if (Array.isArray(tags)) {
+                const validTags = tags.map(t => String(t).trim()).filter(Boolean);
+                if (validTags.length === 0) return [];
+                payload = { expression: validTags.map(tag => `tags:\\\"${tag}\\\"`).join(' AND ') };
+                log('API', `Fetching images by expression: ${payload.expression}`);
+            } else {
+                const tagName = String(tags).trim();
+                if (!tagName) return [];
+                payload = { tag: tagName };
+                log('API', `Fetching images by single tag: ${tagName}`);
+            }
+
+            const response = await fetch('/.netlify/functions/cloudinary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.status === 429 && retries > 0) {
+                log('API', `Cloudinary rate limit hit, retrying in 1000ms... (${retries} retries left)`);
+                // Clean up deduplication before retry
+                pendingImageRequests.delete(requestKey);
+                await new Promise(res => setTimeout(res, 1000));
+                return fetchImagesByTags(tags, retries - 1);
+            }
+
+            if (!response.ok) {
+                console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
+                try { console.warn('Cloudinary error body:', await response.text()); } catch (e) {}
+                return [];
+            }
+
+            const data = await response.json();
+            if (!data.resources || data.resources.length === 0) {
+                 log('API', 'No Cloudinary resources found for the given tags/expression.');
+                return [];
+            }
+
+            const imageUrls = data.resources.map(image => {
+                 // --- THIS IS THE FIX ---
+                 // We force the format to JPG (f_jpg) instead of auto (f_auto).
+                 // This ensures HEIC and other formats are converted.
+                 // We also keep the GIF-specific rule.
+                 let transformations = 'c_fill,g_auto,w_600,h_520,f_jpg'; // Changed f_auto to f_jpg
+                 if (image.format === 'gif') {
+                     transformations = 'c_fit,w_600,h_520';
+                 }
+                 // --- END FIX ---
+
+                 const urlParts = image.secure_url.split('/upload/');
+                 if (urlParts.length === 2) {
+                    return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+                 }
+                 return image.secure_url;
+            });
+
+             log('API', `Found ${imageUrls.length} images from Cloudinary.`);
+            return imageUrls;
+
+        } catch (error) {
+            console.error('Failed to fetch from Cloudinary via proxy:', error);
+            return [];
+        }
+    })();
+
+    // Store the promise for deduplication
+    pendingImageRequests.set(requestKey, requestPromise);
+
     try {
-        let payload;
-        if (Array.isArray(tags)) {
-            const validTags = tags.map(t => String(t).trim()).filter(Boolean);
-            if (validTags.length === 0) return [];
-            payload = { expression: validTags.map(tag => `tags:\\\"${tag}\\\"`).join(' AND ') };
-            log('API', `Fetching images by expression: ${payload.expression}`);
-        } else {
-            const tagName = String(tags).trim();
-            if (!tagName) return [];
-            payload = { tag: tagName };
-            log('API', `Fetching images by single tag: ${tagName}`);
-        }
-
-        const response = await fetch('/.netlify/functions/cloudinary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.status === 429 && retries > 0) {
-            log('API', `Cloudinary rate limit hit, retrying in 500ms... (${retries} retries left)`);
-            await new Promise(res => setTimeout(res, 500));
-            return fetchImagesByTags(tags, retries - 1);
-        }
-
-        if (!response.ok) {
-            console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
-            try { console.warn('Cloudinary error body:', await response.text()); } catch (e) {}
-            return [];
-        }
-
-        const data = await response.json();
-        if (!data.resources || data.resources.length === 0) {
-             log('API', 'No Cloudinary resources found for the given tags/expression.');
-            return [];
-        }
-
-        const imageUrls = data.resources.map(image => {
-             // --- THIS IS THE FIX ---
-             // We force the format to JPG (f_jpg) instead of auto (f_auto).
-             // This ensures HEIC and other formats are converted.
-             // We also keep the GIF-specific rule.
-             let transformations = 'c_fill,g_auto,w_600,h_520,f_jpg'; // Changed f_auto to f_jpg
-             if (image.format === 'gif') {
-                 transformations = 'c_fit,w_600,h_520';
-             }
-             // --- END FIX ---
-
-             const urlParts = image.secure_url.split('/upload/');
-             if (urlParts.length === 2) {
-                return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
-             }
-             return image.secure_url;
-        });
-
-         log('API', `Found ${imageUrls.length} images from Cloudinary.`);
-        return imageUrls;
-
-    } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return [];
+        return await requestPromise;
+    } finally {
+        // Clean up the pending request after completion
+        pendingImageRequests.delete(requestKey);
     }
 }
 
