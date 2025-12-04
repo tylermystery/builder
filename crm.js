@@ -1259,6 +1259,7 @@ async function initializeDashboard() {
         setupPusher();
         setupDragAndDrop();
         setupModuleToggles();
+        setupReviewQueueListeners();
 
         const teammateListContainer = document.getElementById('teammates-list');
 
@@ -1436,5 +1437,327 @@ function setupPusher() {
         console.error('[DEBUG] Failed to initialize Pusher:', error);
     }
 }
+
+// =============================================================================
+// AI REVIEW QUEUE FUNCTIONALITY
+// =============================================================================
+
+const REVIEW_QUEUE_TABLE = 'ReviewQueue';
+let currentReviewItem = null;
+let allReviewQueueItems = [];
+
+/**
+ * Fetches all pending review items from the ReviewQueue table
+ */
+async function fetchPendingReviews() {
+    console.log('[DEBUG] Fetching pending reviews from ReviewQueue');
+    const loadingIndicator = document.getElementById('review-queue-loading');
+    const reviewQueueList = document.getElementById('review-queue-list');
+
+    loadingIndicator.style.display = 'block';
+    reviewQueueList.innerHTML = '';
+
+    try {
+        // Fetch records with 'Pending Review' status
+        const encodedFormula = encodeURIComponent(`{Status}='Pending Review'`);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${REVIEW_QUEUE_TABLE}?filterByFormula=${encodedFormula}&sort[0][field]=Created&sort[0][direction]=desc`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ReviewQueue: ${response.status}`);
+        }
+
+        const data = await response.json();
+        allReviewQueueItems = data.records || [];
+
+        console.log(`[DEBUG] Found ${allReviewQueueItems.length} pending reviews`);
+
+        loadingIndicator.style.display = 'none';
+        renderReviewQueueList();
+
+    } catch (error) {
+        console.error('[DEBUG] Error fetching pending reviews:', error);
+        loadingIndicator.style.display = 'none';
+        reviewQueueList.innerHTML = `<div class="review-queue-empty" style="color: #dc3545;">Error loading queue: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Renders the list of pending review items
+ */
+function renderReviewQueueList() {
+    const reviewQueueList = document.getElementById('review-queue-list');
+
+    if (allReviewQueueItems.length === 0) {
+        reviewQueueList.innerHTML = `
+            <div class="review-queue-empty">
+                <p>✅ No pending reviews!</p>
+                <p style="font-size: 0.85em;">All emails have been processed.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    allReviewQueueItems.forEach(item => {
+        const senderEmail = item.fields['Sender Email'] || 'Unknown Sender';
+        const createdTime = item.createdTime ? new Date(item.createdTime).toLocaleString() : 'Unknown Date';
+
+        // Try to parse AI data for preview
+        let aiPreview = '';
+        if (item.fields['AI Parsed Data (JSON)']) {
+            try {
+                const aiData = JSON.parse(item.fields['AI Parsed Data (JSON)']);
+                if (aiData.sessionName) {
+                    aiPreview = `<strong>Session:</strong> ${aiData.sessionName}`;
+                    if (aiData.status) {
+                        aiPreview += ` | <strong>Status:</strong> ${aiData.status}`;
+                    }
+                }
+            } catch (e) {
+                aiPreview = '<em>AI parsing pending...</em>';
+            }
+        } else {
+            aiPreview = '<em>AI parsing pending...</em>';
+        }
+
+        html += `
+            <div class="review-queue-item" data-record-id="${item.id}">
+                <div class="sender-email">📧 ${senderEmail}</div>
+                <div class="date-received">Received: ${createdTime}</div>
+                ${aiPreview ? `<div class="ai-preview">${aiPreview}</div>` : ''}
+            </div>
+        `;
+    });
+
+    reviewQueueList.innerHTML = html;
+
+    // Attach click handlers
+    const items = reviewQueueList.querySelectorAll('.review-queue-item');
+    items.forEach(item => {
+        item.addEventListener('click', () => {
+            const recordId = item.dataset.recordId;
+            openEmailReviewModal(recordId);
+        });
+    });
+}
+
+/**
+ * Opens the email review modal for a specific record
+ * @param {string} recordId - The Airtable record ID
+ */
+function openEmailReviewModal(recordId) {
+    console.log('[DEBUG] Opening email review modal for record:', recordId);
+
+    const record = allReviewQueueItems.find(r => r.id === recordId);
+    if (!record) {
+        console.error('[DEBUG] Record not found:', recordId);
+        return;
+    }
+
+    currentReviewItem = record;
+
+    // Populate modal fields
+    const senderEmail = record.fields['Sender Email'] || '';
+    const rawBody = record.fields['Raw Body'] || '';
+    const createdTime = record.createdTime ? new Date(record.createdTime).toLocaleString() : '';
+
+    document.getElementById('email-sender-display').textContent = senderEmail;
+    document.getElementById('email-date-display').textContent = createdTime;
+    document.getElementById('email-raw-body').textContent = rawBody;
+
+    // Parse and populate AI data
+    let aiData = {
+        sessionName: '',
+        clientEmail: senderEmail,
+        status: 'Lead',
+        value: null,
+        summary: '',
+        actionItems: []
+    };
+
+    if (record.fields['AI Parsed Data (JSON)']) {
+        try {
+            const parsed = JSON.parse(record.fields['AI Parsed Data (JSON)']);
+            aiData = { ...aiData, ...parsed };
+        } catch (e) {
+            console.warn('[DEBUG] Could not parse AI data:', e);
+        }
+    }
+
+    document.getElementById('edit-email-sessionName').value = aiData.sessionName || '';
+    document.getElementById('edit-email-clientEmail').value = aiData.clientEmail || senderEmail;
+    document.getElementById('edit-email-status').value = aiData.status || 'Lead';
+    document.getElementById('edit-email-value').value = aiData.value || '';
+    document.getElementById('edit-email-summary').value = aiData.summary || '';
+    document.getElementById('edit-email-actionItems').value =
+        Array.isArray(aiData.actionItems) ? aiData.actionItems.join('\n') : '';
+
+    // Clear status and show modal
+    document.getElementById('email-review-status').textContent = '';
+    document.getElementById('email-review-modal').classList.add('active');
+}
+
+/**
+ * Closes the email review modal
+ */
+function closeEmailReviewModal() {
+    document.getElementById('email-review-modal').classList.remove('active');
+    currentReviewItem = null;
+    document.getElementById('email-review-status').textContent = '';
+}
+
+/**
+ * Approves and commits the reviewed email data
+ */
+async function approveAndCommitEmail() {
+    console.log('[DEBUG] Approving and committing email review');
+
+    if (!currentReviewItem) {
+        console.error('[DEBUG] No current review item');
+        return;
+    }
+
+    const statusDiv = document.getElementById('email-review-status');
+    statusDiv.textContent = 'Committing data...';
+    statusDiv.style.color = '#3498db';
+
+    // Gather edited values from form
+    const editedData = {
+        queueId: currentReviewItem.id,
+        clientEmail: document.getElementById('edit-email-clientEmail').value.trim(),
+        sessionName: document.getElementById('edit-email-sessionName').value.trim(),
+        status: document.getElementById('edit-email-status').value,
+        value: document.getElementById('edit-email-value').value
+            ? parseFloat(document.getElementById('edit-email-value').value)
+            : null,
+        summary: document.getElementById('edit-email-summary').value.trim(),
+        actionItems: document.getElementById('edit-email-actionItems').value
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line),
+        rawEmailBody: currentReviewItem.fields['Raw Body'] || ''
+    };
+
+    console.log('[DEBUG] Edited data to commit:', editedData);
+
+    // Disable buttons while processing
+    const approveBtn = document.querySelector('#email-review-modal .btn-confirm');
+    const rejectBtn = document.querySelector('#email-review-modal .btn-cancel');
+    if (approveBtn) approveBtn.disabled = true;
+    if (rejectBtn) rejectBtn.disabled = true;
+
+    try {
+        // Call the commit-session-data endpoint
+        const response = await fetch('/api/commit-session-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+                // Note: X-Admin-Key header would be added here if ADMIN_COMMIT_KEY is set
+            },
+            body: JSON.stringify(editedData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Commit failed: ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('[DEBUG] Commit result:', result);
+
+        statusDiv.textContent = `✅ Session ${result.action} successfully!`;
+        statusDiv.style.color = '#28a745';
+
+        // Remove item from local list and refresh display
+        allReviewQueueItems = allReviewQueueItems.filter(r => r.id !== currentReviewItem.id);
+        renderReviewQueueList();
+
+        // Close modal after short delay
+        setTimeout(() => {
+            closeEmailReviewModal();
+        }, 1500);
+
+    } catch (error) {
+        console.error('[DEBUG] Commit error:', error);
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        statusDiv.style.color = '#dc3545';
+
+        if (approveBtn) approveBtn.disabled = false;
+        if (rejectBtn) rejectBtn.disabled = false;
+    }
+}
+
+/**
+ * Rejects/skips the current email review and marks it as Rejected
+ */
+async function rejectEmailReview() {
+    console.log('[DEBUG] Rejecting email review');
+
+    if (!currentReviewItem) {
+        closeEmailReviewModal();
+        return;
+    }
+
+    const statusDiv = document.getElementById('email-review-status');
+    statusDiv.textContent = 'Marking as rejected...';
+    statusDiv.style.color = '#6c757d';
+
+    try {
+        // Update the ReviewQueue record status to 'Rejected'
+        const patchUrl = `https://api.airtable.com/v0/${BASE_ID}/${REVIEW_QUEUE_TABLE}/${currentReviewItem.id}`;
+        const response = await fetch(patchUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${AIRTABLE_PAT}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Status': 'Rejected'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update status: ${response.status}`);
+        }
+
+        console.log('[DEBUG] Review marked as rejected');
+
+        // Remove item from local list and refresh display
+        allReviewQueueItems = allReviewQueueItems.filter(r => r.id !== currentReviewItem.id);
+        renderReviewQueueList();
+
+        closeEmailReviewModal();
+
+    } catch (error) {
+        console.error('[DEBUG] Reject error:', error);
+        statusDiv.textContent = `❌ Error: ${error.message}`;
+        statusDiv.style.color = '#dc3545';
+    }
+}
+
+/**
+ * Sets up event listeners for the AI Review Queue module
+ */
+function setupReviewQueueListeners() {
+    const refreshBtn = document.getElementById('refresh-review-queue-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', fetchPendingReviews);
+    }
+}
+
+// Make functions globally available
+window.closeEmailReviewModal = closeEmailReviewModal;
+window.approveAndCommitEmail = approveAndCommitEmail;
+window.rejectEmailReview = rejectEmailReview;
+
+// =============================================================================
+// END AI REVIEW QUEUE FUNCTIONALITY
+// =============================================================================
 
 initializeDashboard();

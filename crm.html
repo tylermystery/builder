@@ -355,7 +355,63 @@
             border-bottom: 1px solid #eee;
         }
         /* --- END NEW STYLES --- */
-        
+
+        /* Email Review Modal Styles */
+        #email-review-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1001;
+            justify-content: center;
+            align-items: center;
+        }
+        #email-review-modal.active {
+            display: flex;
+        }
+
+        /* Review Queue Item Styles */
+        .review-queue-item {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-left: 4px solid var(--highlight-yellow);
+        }
+        .review-queue-item:hover {
+            background: #f5f5f5;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .review-queue-item .sender-email {
+            font-weight: bold;
+            font-size: 1em;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+        .review-queue-item .date-received {
+            font-size: 0.85em;
+            color: var(--text-light);
+        }
+        .review-queue-item .ai-preview {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+        .review-queue-empty {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-light);
+            font-size: 0.95em;
+        }
+
     </style>
 </head>
 <body>
@@ -370,6 +426,7 @@
             <button class="module-toggle" data-module="chat">💬 Chat</button>
             <button class="module-toggle" data-module="archive">🗄️ Archive</button>
             <button class="module-toggle" data-module="tools">🔧 Tools</button>
+            <button class="module-toggle" data-module="reviewqueue">📧 AI Review Queue</button>
         </div>
 
         <!-- Dynamic Modules Grid -->
@@ -453,6 +510,23 @@
                 </div>
                 <div id="chat-placeholder" class="pane-placeholder">Select a session to view its chat.</div>
             </section>
+
+            <!-- AI Review Queue Module -->
+            <section id="module-reviewqueue" class="panel module-reviewqueue">
+                <h2>📧 AI Review Queue</h2>
+                <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">
+                    Review and approve AI-parsed email data before committing to the Sessions table.
+                </p>
+                <button id="refresh-review-queue-btn" style="margin-bottom: 15px; padding: 8px 15px; background-color: var(--highlight-blue); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    🔄 Refresh Queue
+                </button>
+                <div id="review-queue-loading" style="display: none; text-align: center; padding: 20px; color: var(--text-light);">
+                    Loading pending reviews...
+                </div>
+                <div id="review-queue-list">
+                    <p style="font-size: 0.9em; color: #7f8c8d; text-align: center;">Click "Refresh Queue" to load pending items.</p>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -483,6 +557,70 @@
                 <button class="btn-confirm" onclick="confirmNewItem()">Confirm & Add to Catalog</button>
             </div>
             <div id="comparison-status" style="margin-top: 15px; text-align: center; color: #666;"></div>
+        </div>
+    </div>
+
+    <!-- Email Review Modal -->
+    <div id="email-review-modal">
+        <div class="comparison-content" style="max-width: 1000px;">
+            <div class="comparison-header">
+                <h2>📧 Review Email</h2>
+                <span class="comparison-close" onclick="closeEmailReviewModal()">&times;</span>
+            </div>
+            <div id="email-review-sender" style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                <strong>From:</strong> <span id="email-sender-display"></span>
+                <br><small style="color: #666;">Received: <span id="email-date-display"></span></small>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Left: Raw Email Body -->
+                <div>
+                    <h4 style="margin-top: 0;">📝 Raw Email Body</h4>
+                    <div id="email-raw-body" style="background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 15px; max-height: 300px; overflow-y: auto; font-size: 0.9em; white-space: pre-wrap;"></div>
+                </div>
+
+                <!-- Right: Editable Parsed Fields -->
+                <div>
+                    <h4 style="margin-top: 0;">🤖 AI Parsed Data (Editable)</h4>
+                    <div style="background: #f9f9f9; padding: 15px; border-radius: 6px;">
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Session Name</label>
+                            <input type="text" id="edit-email-sessionName" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Client Email</label>
+                            <input type="email" id="edit-email-clientEmail" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Status</label>
+                            <select id="edit-email-status" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                                <option value="Lead">Lead</option>
+                                <option value="Planning">Planning</option>
+                                <option value="Reserved">Reserved</option>
+                                <option value="Lost">Lost</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Value ($)</label>
+                            <input type="number" id="edit-email-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;" step="0.01">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Summary</label>
+                            <textarea id="edit-email-summary" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; min-height: 60px;"></textarea>
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 0.85em; color: #666; margin-bottom: 4px;">Action Items (one per line)</label>
+                            <textarea id="edit-email-actionItems" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; min-height: 80px;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="comparison-actions" style="margin-top: 20px;">
+                <button class="btn-cancel" onclick="rejectEmailReview()" style="background-color: #6c757d;">Skip / Reject</button>
+                <button class="btn-confirm" onclick="approveAndCommitEmail()">✅ Approve & Commit</button>
+            </div>
+            <div id="email-review-status" style="margin-top: 15px; text-align: center; color: #666;"></div>
         </div>
     </div>
 
