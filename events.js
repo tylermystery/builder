@@ -724,39 +724,58 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }
     // --- END CONSOLIDATED BUTTON GENERATION --
 
-    // --- START HEADER USER FILTER BUTTONS ---
-    const catalogHeaderBtn = document.getElementById('catalog-header-btn');
-    const myPlanHeaderBtn = document.getElementById('my-plan-header-btn');
-    const likedItemsHeaderBtn = document.getElementById('liked-items-header-btn');
-    const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
+    // --- START HAMBURGER MENU NAVIGATION BUTTONS ---
+    const hamburgerMenuBtn = document.getElementById('hamburger-menu-btn');
+    const hamburgerMenuDropdown = document.getElementById('hamburger-menu-dropdown');
+    const menuCatalogBtn = document.getElementById('menu-catalog-btn');
+    const menuPlanBtn = document.getElementById('menu-plan-btn');
+    const menuLikesBtn = document.getElementById('menu-likes-btn');
+    const menuSessionsBtn = document.getElementById('menu-sessions-btn');
 
-    if (catalogHeaderBtn) {
-        catalogHeaderBtn.style.display = 'block';
-        catalogHeaderBtn.addEventListener('click', () => {
+    // Toggle hamburger dropdown on button click
+    if (hamburgerMenuBtn && hamburgerMenuDropdown) {
+        hamburgerMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = hamburgerMenuDropdown.style.display === 'block';
+            hamburgerMenuDropdown.style.display = isVisible ? 'none' : 'block';
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!hamburgerMenuBtn.contains(e.target) && !hamburgerMenuDropdown.contains(e.target)) {
+                hamburgerMenuDropdown.style.display = 'none';
+            }
+        });
+    }
+
+    if (menuCatalogBtn) {
+        menuCatalogBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
             updateUrl({ category: null, subcategory: null, view: null });
             applyFiltersAndSort(imageCache);
         });
     }
 
-    if (myPlanHeaderBtn) {
-        myPlanHeaderBtn.style.display = 'block';
-        myPlanHeaderBtn.addEventListener('click', () => {
+    if (menuPlanBtn) {
+        menuPlanBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
             updateUrl({ category: null, subcategory: null, view: 'plan' });
             applyFiltersAndSort(imageCache);
         });
     }
 
-    if (likedItemsHeaderBtn) {
-        likedItemsHeaderBtn.style.display = 'block';
-        likedItemsHeaderBtn.addEventListener('click', () => {
+    if (menuLikesBtn) {
+        menuLikesBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
             updateUrl({ category: null, subcategory: null, view: 'likes' });
             applyFiltersAndSort(imageCache);
         });
     }
 
-    if (mySessionsHeaderBtn) {
-        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
-        mySessionsHeaderBtn.addEventListener('click', () => {
+    if (menuSessionsBtn) {
+        menuSessionsBtn.style.display = state.session.user.isAuthenticated ? 'flex' : 'none';
+        menuSessionsBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
             if (!state.session.user.isAuthenticated) {
                 showUserModal();
                 return;
@@ -765,7 +784,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             applyFiltersAndSort(imageCache);
         });
     }
-    // --- END HEADER USER FILTER BUTTONS ---
+    // --- END HAMBURGER MENU NAVIGATION BUTTONS ---
 
     const toggleFilter = (elementId, settingName) => {
         const container = document.getElementById(elementId)?.parentElement;

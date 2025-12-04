@@ -48,7 +48,7 @@ function syncUiWithUrl() {
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
         } else if (view === 'likes') {
-            buttonToActivate = document.getElementById('liked-items-header-btn');
+            buttonToActivate = document.getElementById('menu-likes-btn');
         } else if (categoryFilter) {
             buttonToActivate = categoryFilters.querySelector(`.filter-btn[data-filter="${categoryFilter}"]`);
         } else if (hasStoreCategories) {
@@ -333,10 +333,15 @@ async function initialize() {
             const switcherTrigger = document.getElementById('shop-switcher-trigger');
             if (switcherTrigger) switcherTrigger.addEventListener('click', () => ui.showShopSwitcher());
 
-            const parentCollectiveTrigger = document.getElementById('parent-collective-trigger');
-            if (parentCollectiveTrigger) parentCollectiveTrigger.addEventListener('click', () => {
-                ui.showShopSwitcher();
-            });
+            // WTF button in hamburger menu
+            const menuWtfBtn = document.getElementById('menu-wtf-btn');
+            const hamburgerMenuDropdown = document.getElementById('hamburger-menu-dropdown');
+            if (menuWtfBtn) {
+                menuWtfBtn.addEventListener('click', () => {
+                    if (hamburgerMenuDropdown) hamburgerMenuDropdown.style.display = 'none';
+                    ui.showShopSwitcher();
+                });
+            }
         }
         
         const existingFavicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');

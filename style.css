@@ -243,6 +243,66 @@ body.modal-open {
     flex-shrink: 0; /* Don't shrink buttons */
 }
 
+/* Hamburger Menu Styles */
+#hamburger-menu-container {
+    position: relative;
+}
+
+#hamburger-menu-btn {
+    font-size: 1.4em;
+}
+
+.hamburger-icon {
+    line-height: 1;
+}
+
+.hamburger-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 240px;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.hamburger-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: #333;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.hamburger-dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.hamburger-dropdown-item:active {
+    background-color: #e9ecef;
+}
+
+.menu-item-icon {
+    margin-right: 12px;
+    font-size: 1.2em;
+}
+
+.hamburger-dropdown-divider {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 0;
+}
+
 #main-shop-title {
     margin: 0;
     line-height: 1.2;
