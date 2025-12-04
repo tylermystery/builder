@@ -162,6 +162,66 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Hamburger Menu Styles */
+#hamburger-menu-container {
+    position: relative;
+}
+
+#hamburger-menu-btn {
+    font-size: 1.4em;
+}
+
+.hamburger-icon {
+    line-height: 1;
+}
+
+.hamburger-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 240px;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.hamburger-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: #333;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.hamburger-dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.hamburger-dropdown-item:active {
+    background-color: #e9ecef;
+}
+
+.menu-item-icon {
+    margin-right: 12px;
+    font-size: 1.2em;
+}
+
+.hamburger-dropdown-divider {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 0;
+}
+
 #main-shop-title {
     margin: 0;
     line-height: 1.2;
@@ -658,15 +718,8 @@ body.modal-open {
         <div class="header-content">
             <!-- Left Section: Logo and Shop Name -->
             <div id="header-left">
-                <button id="parent-collective-trigger" title="What The Fun Collective">WTF</button>
                 <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
                 <h1 id="main-shop-title"></h1>
-                <div id="user-filter-buttons" style="display: flex; gap: 8px; margin-left: 12px;">
-                    <button id="catalog-header-btn" class="header-icon-btn" title="All Categories" aria-label="View all categories" style="display: none;">📂</button>
-                    <button id="my-plan-header-btn" class="header-icon-btn" title="My Plan" aria-label="View my plan" style="display: none;">⭐</button>
-                    <button id="liked-items-header-btn" class="header-icon-btn" title="My Likes" aria-label="View my liked items" style="display: none;">❤️</button>
-                    <button id="my-sessions-header-btn" class="header-icon-btn" title="My Sessions" aria-label="View my sessions" style="display: none;">📋</button>
-                </div>
             </div>
 
             <!-- Center Section: Marquee -->
@@ -676,9 +729,32 @@ body.modal-open {
                </div>
             </div>
 
-            <!-- Right Section: Calendar and Account -->
+            <!-- Right Section: Calendar, Hamburger Menu, and Account -->
             <div id="header-right">
                 <button id="calendar-view-btn" title="View Upcoming Events" aria-label="View upcoming events calendar">📅</button>
+                <div id="hamburger-menu-container">
+                    <button id="hamburger-menu-btn" class="header-icon-btn" title="Navigation Menu" aria-label="Open navigation menu">
+                        <span class="hamburger-icon">☰</span>
+                    </button>
+                    <div id="hamburger-menu-dropdown" class="hamburger-dropdown" style="display: none;">
+                        <button id="menu-wtf-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">🎉</span> What The Fun Collective
+                        </button>
+                        <hr class="hamburger-dropdown-divider">
+                        <button id="menu-catalog-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">📂</span> All Categories
+                        </button>
+                        <button id="menu-plan-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">⭐</span> My Plan
+                        </button>
+                        <button id="menu-likes-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">❤️</span> My Likes
+                        </button>
+                        <button id="menu-sessions-btn" class="hamburger-dropdown-item" style="display: none;">
+                            <span class="menu-item-icon">📋</span> My Sessions
+                        </button>
+                    </div>
+                </div>
                 <button id="user-profile-button" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
             </div>
         </div>

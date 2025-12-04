@@ -654,10 +654,10 @@ export function updateUserProfileIcon() {
         userProfileButton.title = 'Sign In / My Account';
     }
 
-    const mySessionsHeaderBtn = document.getElementById('my-sessions-header-btn');
+    const mySessionsHeaderBtn = document.getElementById('menu-sessions-btn');
 
     if (mySessionsHeaderBtn) {
-        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'block' : 'none';
+        mySessionsHeaderBtn.style.display = state.session.user.isAuthenticated ? 'flex' : 'none';
     }
 }
 
