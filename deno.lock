@@ -1,5 +1,5 @@
 {
-  "version": "3",
+  "version": "5",
   "remote": {
     "https://edge.netlify.com/": "fd941d61d88673d5f28aab283fb86fcc50f08a3bc80ee5470498fcfa88c65cfb",
     "https://edge.netlify.com/bootstrap/config.ts": "6a2ce0e544e15e8f8883a5c18da5948e37fd0f2619f68cb31f3af53c51817025",
@@ -11,8 +11,10 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@netlify/blobs@^10.4.2",
         "npm:@sendgrid/mail@^8.1.3",
         "npm:bcryptjs@^2.4.3",
+        "npm:esbuild@~0.24.2",
         "npm:jsonwebtoken@^9.0.2",
         "npm:node-fetch@^2.6.7",
         "npm:pusher@^5.2.0",

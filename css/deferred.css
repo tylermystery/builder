@@ -2647,30 +2647,36 @@ hr.total-divider {
         transform: rotate(-90deg);
     }
 
-    /* ADD THIS BLOCK FOR HEADER STACKING */
+    /* Header mobile styles - stack layout with search below branding */
     .header-content {
         flex-direction: column;
-        align-items: stretch; /* Make all sections full width */
-        gap: 10px; /* Space between the stacked elements */
-        padding-bottom: 10px;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 12px;
+        position: relative;
     }
 
-    /* This rule already exists, but ensure it has order: 1 */
     #header-left {
-        order: 1;
-    }
-    
-    /* NEW rule for mobile center */
-    #header-center {
-        width: 100%;
-        order: 2;
+        justify-content: center;
+        gap: 10px;
+        padding-right: 80px; /* Space for absolute positioned right section */
     }
 
-    /* This rule already exists, but ensure it has order: 3 */
-    #header-right {
-        width: 100%;
-        justify-content: flex-end;
+    #header-center {
         order: 3;
+        max-width: 100%;
+        padding: 0;
+    }
+
+    #header-search-wrapper {
+        max-width: 100%;
+    }
+
+    #header-right {
+        position: absolute;
+        right: 12px;
+        top: 10px;
+        gap: 8px;
     }
 }
 /* --- (End of @media (max-width: 999px)) --- */

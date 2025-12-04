@@ -46,6 +46,26 @@ body.modal-open {
     -webkit-backdrop-filter: blur(10px);
 }
 
+/* Header Row Layout */
+.header-row {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1.25rem;
+    gap: 20px;
+}
+
+.header-row-top {
+    padding-top: 0.75rem;
+}
+
+.header-row-bottom {
+    padding-bottom: 0.75rem;
+}
+
+/* Deprecated .header-content - kept for backward compatibility */
 .header-content {
     max-width: 1800px;
     margin: 0 auto;
@@ -133,27 +153,51 @@ body.modal-open {
         padding-bottom: 10px;
     }
 
-    #header-left {
-        width: 100%;
-        align-items: center; 
-        justify-content: flex-start; /* Keep logo/name to the left */
-        order: 1; /* First item */
+    /* Two-row header mobile styles */
+    .header-row {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 0.5rem 1rem;
     }
-    
+
+    .header-row-top {
+        padding-top: 0.5rem;
+    }
+
+    .header-row-bottom {
+        padding-bottom: 0.5rem;
+    }
+
+    #header-left {
+        width: auto;
+        flex: 1;
+        align-items: center;
+        justify-content: flex-start; /* Keep logo/name to the left */
+    }
+
+    #header-search-container {
+        flex: 1;
+        min-width: 150px;
+    }
+
+    #header-search-wrapper {
+        max-width: 100%;
+    }
+
     /* NEW: Center section styles */
     #header-center {
-        width: 100%;
-        order: 2; /* Second item */
+        width: auto;
+        flex-shrink: 1;
+        min-width: 0;
     }
 
     #marquee-banner-container {
-        width: 100%; 
+        width: 100%;
         /* order: 2; (no longer needed, parent #header-center has the order) */
     }
-    
+
     #header-right {
-        width: 100%;
-        display: flex; 
+        display: flex;
         justify-content: flex-end; /* Push to the right edge */
         align-items: center;
         order: 3; /* Third item */
@@ -241,6 +285,60 @@ body.modal-open {
     align-items: center;
     gap: 15px;
     flex-shrink: 0; /* Don't shrink buttons */
+}
+
+/* --- Header Search Container (in second row) --- */
+#header-search-container {
+    flex: 1;
+    min-width: 0;
+}
+
+#header-search-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 600px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 4px 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#header-search-wrapper:focus-within {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.15);
+}
+
+#header-search-container #name-filter {
+    flex: 1;
+    border: none;
+    padding: 10px 8px;
+    font-size: 1em;
+    background: transparent;
+    min-width: 0;
+}
+
+#header-search-container #name-filter:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+#header-search-container #clear-search-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 4px 8px;
+    display: none;
+    transition: color 0.2s;
+}
+
+#header-search-container #clear-search-btn:hover {
+    color: #333;
 }
 
 /* Hamburger Menu Styles */
@@ -333,23 +431,23 @@ body.modal-open {
     .main-content {
         display: grid;
         grid-template-columns: 300px 1fr 380px;
-        grid-template-rows: auto 1fr; /* First row for search bar, second for content */
+        grid-template-rows: 1fr; /* Single row since search bar is now in header */
         gap: 25px;
     }
     #left-sidebar {
         grid-column: 1;
-        grid-row: 2;
+        grid-row: 1;
     }
     #catalog-area {
         grid-column: 2;
-        grid-row: 2;
+        grid-row: 1;
         /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
         min-width: 0;
         overflow: hidden;
     }
     #right-sidebar {
         grid-column: 3;
-        grid-row: 2;
+        grid-row: 1;
     }
 }
 
@@ -561,16 +659,11 @@ body.modal-open {
     text-align: center;
 }
 
-/* Desktop: show search bar but hide filter toggle button since left sidebar is always visible */
+/* Desktop: hide filter toggle button since left sidebar is always visible */
 @media (min-width: 1000px) {
+    /* Hide old search bar container (no longer used, search is in header) */
     #search-bar-container {
-        display: block;
-        position: sticky;
-        top: 75px;
-        z-index: 998;
-        margin-bottom: 10px;
-        grid-column: 1 / -1; /* Span all columns in grid */
-        grid-row: 1; /* Explicitly place in first row */
+        display: none;
     }
 
     /* Hide filter toggle button on desktop - filters are always visible in sidebar */
@@ -578,7 +671,7 @@ body.modal-open {
         display: none;
     }
 
-    #search-bar-wrapper {
+    #header-search-wrapper {
         max-width: 600px;
     }
 
