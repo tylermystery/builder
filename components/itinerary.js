@@ -330,7 +330,7 @@ async function renderScene() {
                 const thumb = document.createElement('div');
                 thumb.className = 'background-thumb';
                 const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-                thumb.innerHTML = `<img src=\"${thumbUrl}\" alt=\"Venue option\"> <span>${venueRecord.fields.Name}</span>`;
+                thumb.innerHTML = `<img src=\"${thumbUrl}\" alt=\"Venue option\" loading=\"lazy\"> <span>${venueRecord.fields.Name}</span>`;
                 thumb.addEventListener('click', () => {
                     sceneCanvas.style.backgroundImage = `url('${url}')`;
                     updateSceneStatus("Background set!");
@@ -370,7 +370,7 @@ async function renderScene() {
             itemEl.className = `palette-item ${type}`; 
             itemEl.setAttribute('draggable', true);
             const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
-            itemEl.innerHTML = `<img src=\"${thumbUrl}\" alt=\"${record.fields.Name}\"> <span>${record.fields.Name}</span>`;
+            itemEl.innerHTML = `<img src=\"${thumbUrl}\" alt=\"${record.fields.Name}\" loading=\"lazy\"> <span>${record.fields.Name}</span>`;
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
                 e.dataTransfer.effectAllowed = 'copy';

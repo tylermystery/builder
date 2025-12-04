@@ -758,7 +758,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     <div class="plan-items-carousel" style="margin: 15px 0; position: relative; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                         <div class="carousel-container" style="position: relative;">
                             <div class="carousel-image-container" style="width: 100%; height: 300px; position: relative; background: #000;">
-                                <img id="plan-carousel-image" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Item image">
+                                <img id="plan-carousel-image" style="width: 100%; height: 100%; object-fit: cover;" src="" alt="Item image" loading="lazy">
                                 <div class="carousel-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); padding: 15px; color: white;">
                                     <div id="carousel-item-name" style="font-weight: bold; font-size: 1.1em; margin-bottom: 5px;"></div>
                                     <div id="carousel-item-details" style="font-size: 0.9em; opacity: 0.9;"></div>

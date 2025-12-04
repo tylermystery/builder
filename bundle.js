@@ -52,6 +52,8 @@ async function bundle() {
             define: {
                 'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
             },
+            // Drop console.log in production for smaller bundles and better performance
+            drop: isProduction ? ['console', 'debugger'] : [],
             // Handle external dependencies that should not be bundled
             external: [],
             // Preserve import.meta for module context
@@ -83,6 +85,8 @@ async function bundle() {
             define: {
                 'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
             },
+            // Drop console.log in production for smaller bundles and better performance
+            drop: isProduction ? ['console', 'debugger'] : [],
             external: [],
             platform: 'browser',
             splitting: false,
@@ -111,6 +115,8 @@ async function bundle() {
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
                 },
+                // Drop console.log in production for smaller bundles and better performance
+                drop: isProduction ? ['console', 'debugger'] : [],
                 external: [],
                 platform: 'browser',
                 splitting: false,
@@ -136,6 +142,8 @@ async function bundle() {
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
                 },
+                // Drop console.log in production for smaller bundles and better performance
+                drop: isProduction ? ['console', 'debugger'] : [],
                 external: [],
                 platform: 'browser',
                 splitting: false,

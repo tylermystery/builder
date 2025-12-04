@@ -282,6 +282,8 @@ async function runBundler() {
             define: {
                 'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
             },
+            // Drop console.log in production for smaller bundles and better performance
+            drop: isProduction ? ['console', 'debugger'] : [],
             platform: 'browser',
             splitting: false,
             logLevel: 'warning',
@@ -306,6 +308,8 @@ async function runBundler() {
             define: {
                 'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
             },
+            // Drop console.log in production for smaller bundles and better performance
+            drop: isProduction ? ['console', 'debugger'] : [],
             platform: 'browser',
             splitting: false,
             logLevel: 'warning',
@@ -329,6 +333,8 @@ async function runBundler() {
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
                 },
+                // Drop console.log in production for smaller bundles and better performance
+                drop: isProduction ? ['console', 'debugger'] : [],
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
@@ -352,6 +358,8 @@ async function runBundler() {
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
                 },
+                // Drop console.log in production for smaller bundles and better performance
+                drop: isProduction ? ['console', 'debugger'] : [],
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
@@ -375,6 +383,8 @@ async function runBundler() {
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
                 },
+                // Drop console.log in production for smaller bundles and better performance
+                drop: isProduction ? ['console', 'debugger'] : [],
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
