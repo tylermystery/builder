@@ -261,3 +261,14 @@
   to = "/.netlify/functions/ai-project-manager"
   status = 200
 
+# Human-in-the-Loop Email Review Queue
+[[redirects]]
+  from = "/api/parse-review-queue"
+  to = "/.netlify/functions/parse-review-queue"
+  status = 200
+
+[[redirects]]
+  from = "/api/commit-session-data"
+  to = "/.netlify/functions/commit-session-data"
+  status = 200
+
