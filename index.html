@@ -14,9 +14,13 @@
     <!-- DNS prefetch for domains used conditionally (lazy-loaded) -->
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://js.pusher.com">
+    <link rel="dns-prefetch" href="https://unpkg.com">
 
     <!-- Preload critical JavaScript bundle for faster execution -->
-    <link rel="modulepreload" href="/dist/main.bundle.js">
+    <link rel="modulepreload" href="/dist/main.bundle.js" fetchpriority="high">
+
+    <!-- Preload critical CSS -->
+    <link rel="preload" href="/css/critical.css" as="style" fetchpriority="high">
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
@@ -27,6 +31,24 @@
 /* Global Improvements */
 * {
     box-sizing: border-box;
+}
+
+/* Performance: Content visibility for off-screen elements */
+.event-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 350px 400px;
+}
+
+/* Performance: GPU acceleration for animated elements */
+.modal-overlay,
+#detail-modal-overlay,
+#event-plan-panel {
+    will-change: opacity, transform;
+}
+
+/* Performance: Contain layout for catalog */
+#catalog-container {
+    contain: layout style;
 }
 
 html {

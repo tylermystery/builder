@@ -6,7 +6,7 @@ function renderProfileHeader(teammate) {
     const header = document.getElementById('profile-header');
     const avgRating = teammate.averageRating ? `${teammate.averageRating.toFixed(1)} ★` : 'No Ratings Yet';
     header.innerHTML = `
-        <img src="${teammate.fields.ProfilePicture?.[0]?.url || 'https://via.placeholder.com/100'}" alt="${teammate.fields.Name}" class="profile-picture">
+        <img src="${teammate.fields.ProfilePicture?.[0]?.url || 'https://via.placeholder.com/100'}" alt="${teammate.fields.Name}" class="profile-picture" loading="lazy">
         <div class="profile-info">
             <h1>${teammate.fields.Name}</h1>
             <p>${teammate.fields.Role} | Overall Rating: <strong>${avgRating}</strong></p>

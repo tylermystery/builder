@@ -1,7 +1,7 @@
 // Optimized Service Worker for cache management
 // This ensures users always see the latest version of the site
 
-const CACHE_VERSION = 'v-1732423200001'; // Updated version for performance improvements
+const CACHE_VERSION = 'v-' + Date.now(); // Auto-updated during build
 const STATIC_CACHE = 'wtfun-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
@@ -11,16 +11,14 @@ const FONT_CACHE = 'wtfun-fonts-' + CACHE_VERSION;
 const STATIC_FILES = [
   '/',
   '/index.html',
-  '/main.js',
+  '/dist/main.bundle.js',
   '/css/critical.css'
 ];
 
 // Preload essential resources in the background during idle time
 const BACKGROUND_PRELOAD = [
-  '/state.js',
-  '/api.js',
-  '/config.js',
-  '/css/deferred.css'
+  '/css/deferred.css',
+  '/dist/crm.bundle.js'
 ];
 
 // Cache strategy per resource type

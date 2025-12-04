@@ -171,7 +171,7 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     itemElement.innerHTML = `
-        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}">
+        <img class="locked-item-thumbnail lazy-load" data-src="${imageUrl}" width="60" height="60" alt="${fields.Name}" loading="lazy">
         <div class="locked-item-details">
             <p class="locked-item-name">${fields.Name}</p>
             ${optionDisplay ? `<p class="locked-item-option">${optionDisplay}</p>` : ''}
