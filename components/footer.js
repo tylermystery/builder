@@ -89,15 +89,37 @@ function generateFooterHTML(storeDetails) {
         footerItems.push(`<a href="${termsUrl}" target="_blank" rel="noopener noreferrer" class="footer-policy">Terms of Service</a>`);
     }
 
-    // Website link if available
-    if (info.websiteUrl) {
-        footerItems.push(`<a href="${info.websiteUrl}" target="_blank" rel="noopener noreferrer" class="footer-website">Website</a>`);
-    }
-
     // Admin dashboard link (always present)
     footerItems.push('<a href="/crm-login.html" class="footer-admin">Admin</a>');
 
     return footerItems.join('<span class="footer-separator">|</span>');
+}
+
+/**
+ * Updates the hamburger menu website link based on store details
+ * @param {Object} storeDetails - Parsed store details object
+ */
+function updateHamburgerMenuWebsiteLink(storeDetails) {
+    const websiteLink = document.getElementById('menu-website-link');
+    const websiteDivider = document.getElementById('menu-website-divider');
+
+    if (!websiteLink || !websiteDivider) {
+        log('Footer', 'Hamburger menu website elements not found');
+        return;
+    }
+
+    const websiteUrl = storeDetails?.businessInfo?.websiteUrl;
+
+    if (websiteUrl) {
+        websiteLink.href = websiteUrl;
+        websiteLink.style.display = 'flex';
+        websiteDivider.style.display = 'block';
+        log('Footer', `Hamburger menu website link updated: ${websiteUrl}`);
+    } else {
+        websiteLink.style.display = 'none';
+        websiteDivider.style.display = 'none';
+        log('Footer', 'No website URL found, hiding hamburger menu link');
+    }
 }
 
 /**
@@ -123,6 +145,10 @@ export function updateFooter(activeShop = null) {
     const footerHTML = generateFooterHTML(storeDetails);
 
     footerElement.innerHTML = footerHTML;
+
+    // Update the hamburger menu website link dynamically
+    updateHamburgerMenuWebsiteLink(storeDetails);
+
     log('Footer', `Footer updated for store: ${shop.fields?.Name || 'Unknown'}`);
 }
 
