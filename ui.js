@@ -1126,6 +1126,8 @@ export function updateCatalogHeader() {
     let filterCount = 0;
 
     breadcrumbsEl.innerHTML = '';
+    // Remove any existing filter chip container from catalog-header
+    document.getElementById('filter-chip-container')?.remove();
     clearSearchBtn.style.display = 'none';
     const activeFiltersHtml = [];
     
@@ -1277,19 +1279,24 @@ export function updateCatalogHeader() {
     if (activeFiltersHtml.length > 0) {
         const chipContainer = document.createElement('div');
         chipContainer.id = 'filter-chip-container';
-        
+
         chipContainer.innerHTML = `
             <span class=\"chip-label\">Active Filters:</span>
             ${activeFiltersHtml.join('')}
             <button id=\"clear-all-chips-btn\" class=\"filter-chip-clear-all\">Clear Filters</button>
         `;
-        breadcrumbsEl.appendChild(chipContainer); 
 
-        breadcrumbsEl.querySelectorAll('.filter-chip button').forEach(button => {
+        // Append to catalog-header so filter chips appear below the breadcrumbs row
+        const catalogHeader = document.getElementById('catalog-header');
+        if (catalogHeader) {
+            catalogHeader.appendChild(chipContainer);
+        }
+
+        catalogHeader?.querySelectorAll('.filter-chip button').forEach(button => {
             button.addEventListener('click', handleFilterChipClear);
         });
-        
-        breadcrumbsEl.querySelector('#clear-all-chips-btn')?.addEventListener('click', () => {
+
+        catalogHeader?.querySelector('#clear-all-chips-btn')?.addEventListener('click', () => {
             document.getElementById('reset-filters-btn')?.click();
         });
     }

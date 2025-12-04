@@ -559,7 +559,7 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    margin-bottom: 20px;
+    flex-shrink: 0;
 }
 #catalog-toolbar select {
     border: 1px solid #ced4da;
@@ -3344,9 +3344,27 @@ hr.total-divider {
 /* Action: Add these new rules to the end of the file */
 
 /* Container for the breadcrumb path (e.g., All > Activities) */
+#catalog-header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+#catalog-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+#breadcrumbs {
+    flex: 1;
+    min-width: 0;
+}
+
 #breadcrumb-path-container {
     font-size: 0.9em;
-    margin-bottom: 10px;
     color: #6c757d;
 }
 
