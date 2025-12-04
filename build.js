@@ -66,34 +66,6 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
 // --- END: getAllFiles FUNCTION DEFINITION ---
 
 
-// --- Text Export Function ---
-function runTextExport(filePaths, timestamp) {
-    const outputParts = [];
-    outputParts.push(`Project Export - ${timestamp}\n`); // Corrected newline
-
-    filePaths.forEach(relativePath => {
-        try {
-            console.log(`\t[Text Export] Adding file: ${relativePath}`);
-
-            outputParts.push('============================================================');
-            outputParts.push(`// FILE: ${relativePath}`);
-            outputParts.push('============================================================');
-
-            const content = fs.readFileSync(path.join(STARTING_DIRECTORY, relativePath), 'utf8');
-            outputParts.push(content);
-            outputParts.push('\n'); // Corrected newline
-
-        } catch (error) {
-            console.error(`❌ Error reading file ${relativePath} for text export:`, error.message);
-            outputParts.push(`// ERROR: Could not read file: ${relativePath}`);
-        }
-    });
-
-    const outputContent = outputParts.join('\n'); // Corrected newline
-    const outputFileName = `project_source - ${timestamp}.txt`;
-    fs.writeFileSync(outputFileName, outputContent);
-    console.log(`\n✅ Text Build complete! Exported to: ${outputFileName} (in project root).`);
-}
 
 // --- JSON Export Function ---
 function runJsonExport(filePaths, timestamp) {
@@ -462,10 +434,9 @@ async function buildSourceFile() {
     // Step 3: Update service worker cache version
     generateServiceWorker();
 
-    // Step 4: Generate project exports (optional, for debugging)
+    // Step 4: Generate project JSON export (for debugging/reference)
     const filePaths = getAllFiles(STARTING_DIRECTORY);
-    console.log(`\n➡️ Found ${filePaths.length} project files to include in exports.`);
-    runTextExport(filePaths, timestamp);
+    console.log(`\n➡️ Found ${filePaths.length} project files to include in JSON export.`);
     runJsonExport(filePaths, timestamp);
 
     console.log('\n============================================================');
