@@ -1,2 +1,6 @@
 # Local Netlify folder
 .netlify
+
+# Timestamped project source exports (legacy)
+project_source - *.txt
+project_source.txt
