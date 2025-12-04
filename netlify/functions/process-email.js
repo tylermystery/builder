@@ -1,23 +1,43 @@
 // In netlify/functions/process-email.js
 
-// Version 1.1 - Forcing a redeploy
+// Version 2.0 - Full implementation with robust error handling
 const fetch = require('node-fetch');
-
-// --- MODIFIED: Uses GEMINI_API_KEY now ---
-const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
-
 
 exports.handler = async (event) => {
   console.log('--- Function Invoked ---');
+
+  // Variables to store raw data for enhanced error logging
+  let rawRequestBody = null;
+  let rawGeminiResponse = null;
+
+  // Step 1: Resolve Deployment and Initialization Blockers
+  // Verify Environment Variables
+  const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
+
+  const missingVars = [];
+  if (!AIRTABLE_PAT) missingVars.push('AIRTABLE_PAT');
+  if (!BASE_ID) missingVars.push('BASE_ID');
+  if (!GEMINI_API_KEY) missingVars.push('GEMINI_API_KEY');
+
+  if (missingVars.length > 0) {
+    console.error(`CRITICAL ERROR: Missing required environment variables: ${missingVars.join(', ')}`);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Server configuration error. Missing required environment variables.' })
+    };
+  }
 
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
   try {
+    // Store raw request body for error logging
+    rawRequestBody = event.body;
+
     console.log('Step 1: Parsing incoming request body from Zapier.');
     const emailData = JSON.parse(event.body);
-    console.log('Step 1 SUCCESS. Parsed email data:', emailData);
+    console.log('Step 1 SUCCESS. Parsed email data:', JSON.stringify(emailData, null, 2));
 
     const aiPrompt = `
       You are an expert sales assistant for Tyler's Mystery Tours. Your task is to read an email thread and extract key information about a potential or ongoing event booking. Analyze the entire text and respond ONLY with a valid JSON object. Do not include the markdown specifier \`\`\`json or any text before or after the JSON object.
@@ -36,7 +56,7 @@ exports.handler = async (event) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [ { text: aiPrompt }, { text: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` } ] }]
+        contents: [{ parts: [{ text: aiPrompt }, { text: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` }] }]
       })
     });
     console.log('Step 2 SUCCESS. Received response from Gemini.');
@@ -50,35 +70,237 @@ exports.handler = async (event) => {
 
     console.log('Step 3: Attempting to parse Gemini JSON response.');
     const geminiTextResponse = geminiResult.candidates[0].content.parts[0].text;
-    const extractedData = JSON.parse(geminiTextResponse);
-    console.log('Step 3 SUCCESS. Parsed Gemini data:', extractedData);
+
+    // Store raw Gemini response for error logging
+    rawGeminiResponse = geminiTextResponse;
+
+    // JSON Parsing Hardening: Strip markdown code blocks if present
+    let cleanedJsonString = geminiTextResponse.trim();
+
+    // Remove ```json at the start and ``` at the end
+    if (cleanedJsonString.startsWith('```json')) {
+      cleanedJsonString = cleanedJsonString.slice(7);
+    } else if (cleanedJsonString.startsWith('```')) {
+      cleanedJsonString = cleanedJsonString.slice(3);
+    }
+
+    if (cleanedJsonString.endsWith('```')) {
+      cleanedJsonString = cleanedJsonString.slice(0, -3);
+    }
+
+    cleanedJsonString = cleanedJsonString.trim();
+
+    const extractedData = JSON.parse(cleanedJsonString);
+    console.log('Step 3 SUCCESS. Parsed Gemini data:', JSON.stringify(extractedData, null, 2));
+
+    // Step 2: Implement Robust Client Lookup Logic
+    // Extract clientEmail from AI response
+    const clientEmail = extractedData.clientEmail;
+
+    if (!clientEmail) {
+      console.warn('Warning: No client email extracted from AI response. Using from_email from original payload.');
+    }
+
+    const lookupEmail = clientEmail || emailData.from_email;
 
     console.log('Step 4: Searching for existing session in Airtable.');
-    const findUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=({ClientEmail}='${extractedData.clientEmail}')`;
-    const findResponse = await fetch(findUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
-    const existingSessions = await findResponse.json();
-    console.log('Step 4 SUCCESS. Airtable search complete.');
+    // Properly encode the email for URL and formula
+    const encodedFormula = encodeURIComponent(`{Client Email}='${lookupEmail}'`);
+    const findUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions?filterByFormula=${encodedFormula}`;
 
-    let sessionId;
-    if (existingSessions.records && existingSessions.records.length > 0) {
-      sessionId = existingSessions.records[0].id;
-      console.log(`Step 5: Session found. Updating record ID: ${sessionId}`);
-      // Update logic here...
-    } else {
-      console.log('Step 5: No session found. Creating new record...');
-      // Create logic here...
+    const findResponse = await fetch(findUrl, {
+      headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
+    });
+
+    if (!findResponse.ok) {
+      const errorBody = await findResponse.text();
+      throw new Error(`Airtable lookup failed with status ${findResponse.status}: ${errorBody}`);
     }
-    // For simplicity in this test, we'll just log the outcome of Step 5. The full logic is still there.
 
-    console.log('Step 6: (Simulated) Posting email content to Messages table.');
+    const existingSessions = await findResponse.json();
+    console.log('Step 4 SUCCESS. Airtable search complete. Found records:', existingSessions.records?.length || 0);
+
+    // Step 3: Complete Create/Update Logic
+    let sessionId;
+    let airtableAction;
+
+    // Prepare Goals field content from summary and actionItems
+    const goalsContent = formatGoalsField(extractedData.summary, extractedData.actionItems);
+
+    if (existingSessions.records && existingSessions.records.length > 0) {
+      // Scenario A: Session Found (UPDATE/PATCH)
+      sessionId = existingSessions.records[0].id;
+      const existingRecord = existingSessions.records[0];
+      airtableAction = 'updated';
+
+      console.log(`Step 5: Session found. Updating record ID: ${sessionId}`);
+
+      // Append new goals to existing goals
+      const existingGoals = existingRecord.fields.Goals || '';
+      const updatedGoals = existingGoals
+        ? `${existingGoals}\n\n--- Update ---\n${goalsContent}`
+        : goalsContent;
+
+      const updateFields = {
+        fields: {}
+      };
+
+      // Only update fields that have values from AI
+      if (extractedData.status) {
+        updateFields.fields['Status'] = extractedData.status;
+      }
+      if (extractedData.value !== null && extractedData.value !== undefined) {
+        updateFields.fields['Value'] = extractedData.value;
+      }
+      updateFields.fields['Goals'] = updatedGoals;
+
+      const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions/${sessionId}`;
+      const updateResponse = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${AIRTABLE_PAT}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updateFields)
+      });
+
+      if (!updateResponse.ok) {
+        const errorBody = await updateResponse.text();
+        throw new Error(`Airtable update failed with status ${updateResponse.status}: ${errorBody}`);
+      }
+
+      const updateResult = await updateResponse.json();
+      console.log('Step 5 SUCCESS. Session updated:', updateResult.id);
+
+    } else {
+      // Scenario B: Session Not Found (CREATE/POST)
+      airtableAction = 'created';
+      console.log('Step 5: No session found. Creating new record...');
+
+      const createFields = {
+        fields: {
+          'Name': extractedData.sessionName || `Event from ${lookupEmail}`,
+          'Client Email': lookupEmail,
+          'Goals': goalsContent
+        }
+      };
+
+      // Only add fields that have values from AI
+      if (extractedData.status) {
+        createFields.fields['Status'] = extractedData.status;
+      }
+      if (extractedData.value !== null && extractedData.value !== undefined) {
+        createFields.fields['Value'] = extractedData.value;
+      }
+
+      const createUrl = `https://api.airtable.com/v0/${BASE_ID}/Sessions`;
+      const createResponse = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AIRTABLE_PAT}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(createFields)
+      });
+
+      if (!createResponse.ok) {
+        const errorBody = await createResponse.text();
+        throw new Error(`Airtable create failed with status ${createResponse.status}: ${errorBody}`);
+      }
+
+      const createResult = await createResponse.json();
+      sessionId = createResult.id;
+      console.log('Step 5 SUCCESS. New session created:', sessionId);
+    }
+
+    // Step 4: Finalize Logging - Post to Messages table for auditability
+    console.log('Step 6: Posting email content to Messages table for audit.');
+
+    const messageFields = {
+      fields: {
+        'Session Link': [sessionId], // Link to the session record
+        'Body': rawRequestBody // Full raw email content
+      }
+    };
+
+    const messagesUrl = `https://api.airtable.com/v0/${BASE_ID}/Messages`;
+    const messageResponse = await fetch(messagesUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AIRTABLE_PAT}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(messageFields)
+    });
+
+    if (!messageResponse.ok) {
+      // Log the error but don't fail the entire operation
+      const errorBody = await messageResponse.text();
+      console.error(`Warning: Failed to log message to Messages table: ${messageResponse.status}: ${errorBody}`);
+    } else {
+      const messageResult = await messageResponse.json();
+      console.log('Step 6 SUCCESS. Message logged:', messageResult.id);
+    }
 
     console.log('--- Function Success ---');
-    return { statusCode: 200, body: JSON.stringify({ message: 'Email processed successfully.' }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Email processed successfully.',
+        sessionId: sessionId,
+        action: airtableAction,
+        extractedData: {
+          sessionName: extractedData.sessionName,
+          clientEmail: lookupEmail,
+          status: extractedData.status,
+          value: extractedData.value
+        }
+      })
+    };
 
   } catch (error) {
-    // THIS IS THE MOST IMPORTANT LOG
+    // Enhanced Error Handling
     console.error('--- FUNCTION FAILED ---');
-    console.error('Error details:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to process email.' }) };
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+
+    // Log raw payloads for debugging
+    if (rawRequestBody) {
+      console.error('Raw request body (incoming email payload):', rawRequestBody);
+    }
+    if (rawGeminiResponse) {
+      console.error('Raw Gemini API response (before JSON parsing):', rawGeminiResponse);
+    }
+
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Failed to process email.' })
+    };
   }
 };
+
+/**
+ * Helper function to format the Goals field content from summary and actionItems
+ * @param {string|null} summary - The AI-generated summary
+ * @param {string[]|null} actionItems - Array of action items from AI
+ * @returns {string} Formatted goals content
+ */
+function formatGoalsField(summary, actionItems) {
+  const parts = [];
+  const timestamp = new Date().toISOString();
+
+  parts.push(`[${timestamp}]`);
+
+  if (summary) {
+    parts.push(`Summary: ${summary}`);
+  }
+
+  if (actionItems && Array.isArray(actionItems) && actionItems.length > 0) {
+    parts.push('Action Items:');
+    actionItems.forEach((item, index) => {
+      parts.push(`  ${index + 1}. ${item}`);
+    });
+  }
+
+  return parts.join('\n');
+}
