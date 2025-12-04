@@ -3043,8 +3043,8 @@ hr.total-divider {
     -webkit-overflow-scrolling: touch;
     /* Prevent scroll chaining to parent elements */
     overscroll-behavior-x: contain;
-    /* Allow horizontal touch scrolling */
-    touch-action: pan-x;
+    /* Allow both horizontal carousel scrolling AND vertical page scrolling on touch devices */
+    touch-action: pan-x pan-y;
     /* CRITICAL: Container must inherit parent width, NOT expand to fit content */
     width: 100%;
     max-width: 100%;
