@@ -8,7 +8,7 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity } from './utils.js';
-import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName } from './chat.js';
+import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
@@ -782,6 +782,19 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
             updateUrl({ category: null, subcategory: null, view: 'my-sessions' });
             applyFiltersAndSort(imageCache);
+        });
+    }
+
+    const menuRecentChatsBtn = document.getElementById('menu-recent-chats-btn');
+    if (menuRecentChatsBtn) {
+        menuRecentChatsBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
+            // Open the chat widget and expand the recent chats dropdown
+            openChatWidget(true);
+            // Use setTimeout to ensure the chat widget is visible before toggling
+            setTimeout(() => {
+                toggleRecentChats(true);
+            }, 100);
         });
     }
     // --- END HAMBURGER MENU NAVIGATION BUTTONS ---
