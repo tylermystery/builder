@@ -123,6 +123,30 @@ const PAYMENT_APPS = {
             return url;
         },
         getDisplayHandle: (handle) => handle.startsWith('$') ? handle : `$${handle}`
+    },
+    paypal: {
+        name: 'PayPal',
+        icon: 'P',
+        cssClass: 'paypal',
+        // PayPal.Me deep link format with optional amount
+        getUrl: (handle, amount, itemName) => {
+            // Handle can be PayPal.Me username or full URL
+            let url = handle.startsWith('http') ? handle : `https://paypal.me/${handle}`;
+            if (amount && amount > 0) {
+                // PayPal.Me format: paypal.me/username/amount
+                url += `/${amount.toFixed(2)}`;
+            }
+            return url;
+        },
+        getDisplayHandle: (handle) => {
+            // If it's a PayPal.Me URL, extract username
+            if (handle.includes('paypal.me/')) {
+                const username = handle.split('paypal.me/')[1]?.split('/')[0];
+                return username ? `@${username}` : handle;
+            }
+            // If it's just a username
+            return handle.includes('@') ? handle : `@${handle}`;
+        }
     }
 };
 
