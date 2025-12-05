@@ -126,6 +126,15 @@ const PAYMENT_APPS = {
     }
 };
 
+// Tip percentages for quick pay
+const TIP_OPTIONS = [
+    { label: 'No Tip', percent: 0 },
+    { label: '10%', percent: 10 },
+    { label: '15%', percent: 15 },
+    { label: '20%', percent: 20 },
+    { label: 'Custom', percent: -1 } // -1 indicates custom
+];
+
 /**
  * Shows the Quick Pay modal with payment options for the current store
  * @param {Object} paymentOptions - Parsed App_Pay_JSON object from store
@@ -141,6 +150,51 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
 
     optionsContainer.innerHTML = '';
 
+    // Track current tip amount
+    let currentTipAmount = 0;
+    const baseAmount = amount;
+
+    // Function to calculate tip from percentage
+    const calculateTip = (percent) => {
+        if (percent <= 0) return 0;
+        return baseAmount * (percent / 100);
+    };
+
+    // Function to update total display and payment links
+    const updateTotalAndPayments = (tipAmount) => {
+        currentTipAmount = tipAmount;
+        const totalWithTip = baseAmount + tipAmount;
+
+        // Update total display
+        const totalDisplay = optionsContainer.querySelector('.quick-pay-amount-total');
+        if (totalDisplay) {
+            const quantityText = quantity > 1 ? ` (${quantity} × $${(baseAmount / quantity).toFixed(2)})` : '';
+            if (tipAmount > 0) {
+                totalDisplay.innerHTML = `Total: $${totalWithTip.toFixed(2)}${quantityText}<br><span class="quick-pay-tip-included">(includes $${tipAmount.toFixed(2)} tip)</span>`;
+            } else {
+                totalDisplay.innerHTML = `Total: $${totalWithTip.toFixed(2)}${quantityText}`;
+            }
+        }
+
+        // Update payment option links/amounts
+        const paymentBtns = optionsContainer.querySelectorAll('.quick-pay-option-btn');
+        paymentBtns.forEach(btn => {
+            const appKey = btn.dataset.appKey;
+            const handle = btn.dataset.handle;
+            if (!appKey || !handle) return;
+
+            const appConfig = PAYMENT_APPS[appKey];
+            if (!appConfig) return;
+
+            const url = appConfig.getUrl(handle, totalWithTip, itemName);
+            if (url) {
+                btn.href = url;
+            }
+            // Update stored amount for copy functionality
+            btn.dataset.amount = totalWithTip.toFixed(2);
+        });
+    };
+
     // Add amount header if amount is provided
     if (amount && amount > 0) {
         const amountHeader = document.createElement('div');
@@ -151,6 +205,60 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
             ${itemName ? `<div class="quick-pay-item-name">${itemName}</div>` : ''}
         `;
         optionsContainer.appendChild(amountHeader);
+
+        // Add tip selector
+        const tipSelector = document.createElement('div');
+        tipSelector.className = 'quick-pay-tip-selector';
+        tipSelector.innerHTML = `
+            <div class="quick-pay-tip-label">Add a tip?</div>
+            <div class="quick-pay-tip-options">
+                ${TIP_OPTIONS.map((opt, index) => `
+                    <button class="quick-pay-tip-btn${index === 0 ? ' active' : ''}" data-percent="${opt.percent}">
+                        ${opt.label}
+                    </button>
+                `).join('')}
+            </div>
+            <div class="quick-pay-tip-custom-input" style="display: none;">
+                <span class="quick-pay-tip-currency">$</span>
+                <input type="number" class="quick-pay-tip-input" placeholder="0.00" min="0" step="0.01">
+            </div>
+        `;
+        optionsContainer.appendChild(tipSelector);
+
+        // Set up tip button handlers
+        const tipBtns = tipSelector.querySelectorAll('.quick-pay-tip-btn');
+        const customInput = tipSelector.querySelector('.quick-pay-tip-custom-input');
+        const tipInput = tipSelector.querySelector('.quick-pay-tip-input');
+
+        tipBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active from all buttons
+                tipBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const percent = parseInt(btn.dataset.percent, 10);
+                if (percent === -1) {
+                    // Show custom input
+                    customInput.style.display = 'flex';
+                    tipInput.focus();
+                    // Use current custom value or 0
+                    const customValue = parseFloat(tipInput.value) || 0;
+                    updateTotalAndPayments(customValue);
+                } else {
+                    // Hide custom input
+                    customInput.style.display = 'none';
+                    tipInput.value = '';
+                    const tipAmount = calculateTip(percent);
+                    updateTotalAndPayments(tipAmount);
+                }
+            });
+        });
+
+        // Handle custom tip input
+        tipInput.addEventListener('input', () => {
+            const customValue = parseFloat(tipInput.value) || 0;
+            updateTotalAndPayments(customValue);
+        });
     }
 
     if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
@@ -170,6 +278,10 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
 
             const optionElement = document.createElement(url ? 'a' : 'div');
             optionElement.className = 'quick-pay-option-btn';
+            // Store data attributes for tip updates
+            optionElement.dataset.appKey = key.toLowerCase();
+            optionElement.dataset.handle = handle;
+            optionElement.dataset.amount = amount.toFixed(2);
 
             if (url) {
                 optionElement.href = url;
@@ -186,12 +298,14 @@ export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', qua
                 <span class="quick-pay-arrow">${url ? '→' : ''}</span>
             `;
 
-            // For Zelle (no URL), add copy functionality with amount info
+            // For Zelle (no URL), add copy functionality with amount info (including tip)
             if (!url) {
                 optionElement.style.cursor = 'pointer';
                 optionElement.title = 'Click to copy payment details';
                 optionElement.addEventListener('click', () => {
-                    const copyText = appConfig.getCopyText ? appConfig.getCopyText(handle, amount, itemName) : handle;
+                    // Use stored amount which includes any tip
+                    const currentAmount = parseFloat(optionElement.dataset.amount) || amount;
+                    const copyText = appConfig.getCopyText ? appConfig.getCopyText(handle, currentAmount, itemName) : handle;
                     navigator.clipboard.writeText(copyText).then(() => {
                         const originalArrow = optionElement.querySelector('.quick-pay-arrow');
                         originalArrow.textContent = 'Copied!';

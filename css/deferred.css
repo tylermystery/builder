@@ -4452,3 +4452,97 @@ hr.total-divider {
 .quick-pay-no-options p {
     margin: 0;
 }
+
+/* Quick Pay Tip Selector */
+.quick-pay-tip-selector {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #e9ecef;
+}
+
+.quick-pay-tip-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    font-size: 0.95em;
+}
+
+.quick-pay-tip-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.quick-pay-tip-btn {
+    flex: 1 1 auto;
+    min-width: 60px;
+    padding: 10px 12px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quick-pay-tip-btn:hover {
+    border-color: #adb5bd;
+    background: #f8f9fa;
+}
+
+.quick-pay-tip-btn.active {
+    border-color: #6D1ED4;
+    background: linear-gradient(135deg, #6D1ED4, #3D95CE);
+    color: #fff;
+}
+
+.quick-pay-tip-custom-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #fff;
+    border: 2px solid #6D1ED4;
+    border-radius: 8px;
+}
+
+.quick-pay-tip-currency {
+    font-weight: 600;
+    color: #6D1ED4;
+    font-size: 1.1em;
+}
+
+.quick-pay-tip-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 1em;
+    font-weight: 500;
+    color: #333;
+    background: transparent;
+}
+
+.quick-pay-tip-input::placeholder {
+    color: #adb5bd;
+}
+
+.quick-pay-tip-input::-webkit-outer-spin-button,
+.quick-pay-tip-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.quick-pay-tip-input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.quick-pay-tip-included {
+    font-size: 0.75em;
+    color: #28a745;
+    font-weight: 500;
+}
