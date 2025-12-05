@@ -4382,6 +4382,10 @@ hr.total-divider {
     background: #00D632;
 }
 
+.quick-pay-icon.paypal {
+    background: linear-gradient(135deg, #003087, #009cde);
+}
+
 .quick-pay-option-info {
     display: flex;
     flex-direction: column;
