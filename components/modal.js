@@ -665,7 +665,7 @@ function resetModalState() {
     }
 
     // Remove dynamically created event-specific sections that persist between modal opens
-    const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section');
+    const dynamicSections = document.querySelectorAll('.event-info-section, .rsvp-list-section, .calendar-export-section, .session-components-section, .edit-plan-section');
     dynamicSections.forEach(section => section.remove());
 
     log('Modal', 'Reset modal state.');
@@ -814,7 +814,17 @@ async function initializePlanCarousel(componentRecords) {
     updateCarousel();
 }
 
+// Guard to prevent concurrent modal rendering
+let isModalRendering = false;
+
 export async function showDetailModal(record, startPhotoIndex = 0) {
+    // Prevent concurrent modal renders that could cause duplicate content
+    if (isModalRendering) {
+        log('Modal', 'Modal is already rendering, skipping duplicate call');
+        return;
+    }
+    isModalRendering = true;
+
     const detailSpecs = [
         { fieldName: 'Duration', label: 'Duration' },
         { fieldName: 'Capacity', label: 'Capacity' },
@@ -1010,6 +1020,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 day: 'numeric'
             });
 
+            // Remove any existing event info section before creating new one
+            const existingEventInfo = document.querySelector('.event-info-section');
+            if (existingEventInfo) existingEventInfo.remove();
+
             const eventInfoSection = document.createElement('div');
             eventInfoSection.className = 'event-info-section';
             eventInfoSection.innerHTML = `
@@ -1024,6 +1038,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         // RSVP list section - only shown for non-registered users
         if (rsvpYes.length > 0 || rsvpMaybe.length > 0 || rsvpNo.length > 0) {
+            // Remove any existing RSVP list section before creating new one
+            const existingRsvpList = document.querySelector('.rsvp-list-section');
+            if (existingRsvpList) existingRsvpList.remove();
+
             const rsvpListSection = document.createElement('div');
             rsvpListSection.className = 'rsvp-list-section';
 
@@ -1167,6 +1185,10 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     componentHistoryMap.set(ideaId, ideasHistory.find(item => item.id === ideaId));
                 }
             }
+
+            // Remove any existing session components section before creating new one
+            const existingSessionComponents = document.querySelector('.session-components-section');
+            if (existingSessionComponents) existingSessionComponents.remove();
 
             // Create the main session components section
             const sessionComponentsSection = document.createElement('div');
@@ -1341,8 +1363,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             // For contained items, show "Part of Plan" even without other components
             // Also show for collaborators, owners, or users with publish access
             if (itemIsContainedInSession || isCollaborator || isOwnerOfSessionStore || userHasPublishAccess) {
+                // Remove any existing edit plan section before creating new one
+                const existingEditPlanSection = document.querySelector('.edit-plan-section');
+                if (existingEditPlanSection) existingEditPlanSection.remove();
+
                 const planName = linkedSession.fields.Name || 'Plan';
                 const editPlanSection = document.createElement('div');
+                editPlanSection.className = 'edit-plan-section';
                 editPlanSection.style.cssText = 'margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;';
 
                 // Add header for contained items
@@ -2062,10 +2089,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         }
     }, 0);
+
+    // Reset the rendering guard after modal is fully displayed
+    isModalRendering = false;
 }
 
 export function hideDetailModal() {
     console.log('[hideDetailModal] Called.');
+    // Reset the rendering guard when modal is closed
+    isModalRendering = false;
+
     const closeBtn = document.getElementById('modal-close-btn');
     if (closeBtn) {
         closeBtn.onclick = null;
