@@ -164,13 +164,6 @@ function bindPresenceEvents() {
             messageInput.placeholder = 'Type a message...';
         }
         updatePresenceUI(members);
-        
-        // --- THIS IS THE FIX ---
-        // If there's more than one person in the channel, auto-open the chat.
-        if (members.count > 1) {
-            openChatWidget(true); // passing true keeps it open
-        }
-        // --- END FIX ---
     });
     sessionChatChannel.bind('pusher:member_added', (member) => {
         updatePresenceUI(sessionChatChannel.members);
