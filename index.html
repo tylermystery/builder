@@ -1277,7 +1277,18 @@ body.modal-open {
             </div>
         </div>
     </div>
-    
+
+    <div id="quick-pay-modal-overlay" class="modal-overlay">
+        <div class="quick-pay-modal-content">
+            <button id="quick-pay-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick pay modal">×</button>
+            <h3>Quick Pay Options</h3>
+            <p class="quick-pay-description">Choose your preferred payment method to pay the store directly:</p>
+            <div id="quick-pay-options-container">
+                <!-- Payment options will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
 <div id="itinerary-modal-overlay" class="modal-overlay">
     <div class="modal-content itinerary-content" style="max-width: 90vw; width: 1400px; height: 90vh;">
         <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>

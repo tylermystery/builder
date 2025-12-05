@@ -1483,8 +1483,9 @@
 .modal-overlay.active {
     display: flex;
     opacity: 1;
+    pointer-events: auto;
 }
-.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content {
+.modal-content, .checkout-modal-content, .itinerary-content, .presentation-content, .quick-pay-modal-content {
     pointer-events: auto;
 }
 .modal-content {
@@ -4273,4 +4274,181 @@ hr.total-divider {
         max-width: calc(100vw - 40px);
         right: -10px;
     }
+}
+
+/* =========================
+   Quick Pay Modal Styles
+   ========================= */
+.quick-pay-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 400px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.quick-pay-modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 1.4em;
+}
+
+.quick-pay-description {
+    color: #6c757d;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+}
+
+.quick-pay-amount-header {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+    border: 1px solid #dee2e6;
+}
+
+.quick-pay-amount-total {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 4px;
+}
+
+.quick-pay-item-name {
+    font-size: 0.95em;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+#quick-pay-options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.quick-pay-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+}
+
+.quick-pay-option-btn:hover {
+    border-color: #007bff;
+    background: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.quick-pay-option-btn:active {
+    transform: translateY(0);
+}
+
+.quick-pay-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.quick-pay-icon.zelle {
+    background: linear-gradient(135deg, #6D1ED4, #8E2DE2);
+}
+
+.quick-pay-icon.venmo {
+    background: #3D95CE;
+}
+
+.quick-pay-icon.cashapp {
+    background: #00D632;
+}
+
+.quick-pay-option-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-grow: 1;
+}
+
+.quick-pay-option-name {
+    font-weight: 600;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.quick-pay-option-handle {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.quick-pay-arrow {
+    color: #adb5bd;
+    font-size: 1.2em;
+}
+
+/* Quick Pay Button in Detail Modal */
+.quick-pay-btn {
+    width: 100%;
+    padding: 12px 15px;
+    margin-top: 10px;
+    font-size: 1em;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #6D1ED4, #3D95CE);
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.quick-pay-btn:hover {
+    background: linear-gradient(135deg, #5a19b3, #3385b8);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(109, 30, 212, 0.3);
+}
+
+.quick-pay-btn:active {
+    transform: translateY(0);
+}
+
+.quick-pay-btn:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* No payment options message */
+.quick-pay-no-options {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.quick-pay-no-options p {
+    margin: 0;
 }
