@@ -70,6 +70,231 @@ let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 let currentItemChatRecordId = null;
 
+// Quick Pay Modal Functions
+const quickPayModalOverlay = document.getElementById('quick-pay-modal-overlay');
+
+/**
+ * Payment app configuration with icons and URL generators
+ */
+const PAYMENT_APPS = {
+    zelle: {
+        name: 'Zelle',
+        icon: 'Z',
+        cssClass: 'zelle',
+        // Zelle doesn't have a universal deep link, show email/phone for manual entry
+        getUrl: (handle, amount, itemName) => null,
+        getDisplayHandle: (handle) => handle,
+        getCopyText: (handle, amount, itemName) => {
+            if (amount && amount > 0) {
+                return `${handle} - Amount: $${amount.toFixed(2)}${itemName ? ` for ${itemName}` : ''}`;
+            }
+            return handle;
+        }
+    },
+    venmo: {
+        name: 'Venmo',
+        icon: 'V',
+        cssClass: 'venmo',
+        // Venmo deep link format with optional amount and note
+        getUrl: (handle, amount, itemName) => {
+            const cleanHandle = handle.replace('@', '');
+            let url = `https://venmo.com/${cleanHandle}`;
+            if (amount && amount > 0) {
+                url += `?txn=pay&amount=${amount.toFixed(2)}`;
+                if (itemName) {
+                    url += `&note=${encodeURIComponent(itemName)}`;
+                }
+            }
+            return url;
+        },
+        getDisplayHandle: (handle) => handle.startsWith('@') ? handle : `@${handle}`
+    },
+    cashapp: {
+        name: 'Cash App',
+        icon: '$',
+        cssClass: 'cashapp',
+        // Cash App deep link format with optional amount
+        getUrl: (handle, amount, itemName) => {
+            const cleanHandle = handle.replace('$', '');
+            let url = `https://cash.app/$${cleanHandle}`;
+            if (amount && amount > 0) {
+                url += `/${amount.toFixed(2)}`;
+            }
+            return url;
+        },
+        getDisplayHandle: (handle) => handle.startsWith('$') ? handle : `$${handle}`
+    }
+};
+
+/**
+ * Shows the Quick Pay modal with payment options for the current store
+ * @param {Object} paymentOptions - Parsed App_Pay_JSON object from store
+ * @param {number} amount - Total amount (price * quantity) for the item
+ * @param {string} itemName - Name of the item being purchased
+ * @param {number} quantity - Number of items being purchased
+ */
+export function showQuickPayModal(paymentOptions, amount = 0, itemName = '', quantity = 1) {
+    if (!quickPayModalOverlay) return;
+
+    const optionsContainer = document.getElementById('quick-pay-options-container');
+    if (!optionsContainer) return;
+
+    optionsContainer.innerHTML = '';
+
+    // Add amount header if amount is provided
+    if (amount && amount > 0) {
+        const amountHeader = document.createElement('div');
+        amountHeader.className = 'quick-pay-amount-header';
+        const quantityText = quantity > 1 ? ` (${quantity} × $${(amount / quantity).toFixed(2)})` : '';
+        amountHeader.innerHTML = `
+            <div class="quick-pay-amount-total">Total: $${amount.toFixed(2)}${quantityText}</div>
+            ${itemName ? `<div class="quick-pay-item-name">${itemName}</div>` : ''}
+        `;
+        optionsContainer.appendChild(amountHeader);
+    }
+
+    if (!paymentOptions || Object.keys(paymentOptions).length === 0) {
+        optionsContainer.innerHTML += `
+            <div class="quick-pay-no-options">
+                <p>No quick pay options available for this store.</p>
+            </div>
+        `;
+    } else {
+        // Generate buttons for each payment option
+        for (const [key, handle] of Object.entries(paymentOptions)) {
+            const appConfig = PAYMENT_APPS[key.toLowerCase()];
+            if (!appConfig || !handle) continue;
+
+            const url = appConfig.getUrl(handle, amount, itemName);
+            const displayHandle = appConfig.getDisplayHandle(handle);
+
+            const optionElement = document.createElement(url ? 'a' : 'div');
+            optionElement.className = 'quick-pay-option-btn';
+
+            if (url) {
+                optionElement.href = url;
+                optionElement.target = '_blank';
+                optionElement.rel = 'noopener noreferrer';
+            }
+
+            optionElement.innerHTML = `
+                <div class="quick-pay-icon ${appConfig.cssClass}">${appConfig.icon}</div>
+                <div class="quick-pay-option-info">
+                    <span class="quick-pay-option-name">${appConfig.name}</span>
+                    <span class="quick-pay-option-handle">${displayHandle}</span>
+                </div>
+                <span class="quick-pay-arrow">${url ? '→' : ''}</span>
+            `;
+
+            // For Zelle (no URL), add copy functionality with amount info
+            if (!url) {
+                optionElement.style.cursor = 'pointer';
+                optionElement.title = 'Click to copy payment details';
+                optionElement.addEventListener('click', () => {
+                    const copyText = appConfig.getCopyText ? appConfig.getCopyText(handle, amount, itemName) : handle;
+                    navigator.clipboard.writeText(copyText).then(() => {
+                        const originalArrow = optionElement.querySelector('.quick-pay-arrow');
+                        originalArrow.textContent = 'Copied!';
+                        setTimeout(() => {
+                            originalArrow.textContent = '';
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                    });
+                });
+            }
+
+            optionsContainer.appendChild(optionElement);
+        }
+
+        // If no valid options were added
+        if (optionsContainer.querySelectorAll('.quick-pay-option-btn').length === 0) {
+            optionsContainer.innerHTML += `
+                <div class="quick-pay-no-options">
+                    <p>No quick pay options available for this store.</p>
+                </div>
+            `;
+        }
+    }
+
+    // Set up modal event handlers
+    const closeBtn = document.getElementById('quick-pay-close-btn');
+    if (closeBtn) {
+        closeBtn.onclick = hideQuickPayModal;
+    }
+
+    const handleQuickPayOverlayClick = (e) => {
+        if (e.target === quickPayModalOverlay) {
+            hideQuickPayModal();
+        }
+    };
+    quickPayModalOverlay.addEventListener('click', handleQuickPayOverlayClick);
+    quickPayModalOverlay._overlayClickHandler = handleQuickPayOverlayClick;
+
+    // Show the modal
+    quickPayModalOverlay.classList.add('active');
+    quickPayModalOverlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
+
+    log('Modal', `Quick Pay modal shown${amount > 0 ? ` for $${amount.toFixed(2)}` : ''}`);
+}
+
+/**
+ * Hides the Quick Pay modal
+ */
+export function hideQuickPayModal() {
+    if (!quickPayModalOverlay) return;
+
+    // Clean up event handlers
+    if (quickPayModalOverlay._overlayClickHandler) {
+        quickPayModalOverlay.removeEventListener('click', quickPayModalOverlay._overlayClickHandler);
+        delete quickPayModalOverlay._overlayClickHandler;
+    }
+
+    quickPayModalOverlay.classList.remove('active');
+    setTimeout(() => {
+        quickPayModalOverlay.style.display = 'none';
+    }, 300);
+
+    // Only remove modal-open if detail modal is also closed
+    if (!modalOverlay.classList.contains('active')) {
+        document.body.classList.remove('modal-open');
+    }
+
+    log('Modal', 'Quick Pay modal hidden');
+}
+
+/**
+ * Gets the payment options for the current active store
+ * @returns {Object|null} Parsed App_Pay_JSON or null
+ */
+function getStorePaymentOptions() {
+    const activeShopId = state.ui.activeShopId;
+    if (!activeShopId) return null;
+
+    const activeShop = state.stores.all.find(s => s.id === activeShopId);
+    if (!activeShop || !activeShop.fields) return null;
+
+    const appPayJson = activeShop.fields.App_Pay_JSON;
+    if (!appPayJson) return null;
+
+    try {
+        return JSON.parse(appPayJson);
+    } catch (e) {
+        console.error('Failed to parse App_Pay_JSON:', e);
+        return null;
+    }
+}
+
+/**
+ * Checks if the current store has any quick pay options
+ * @returns {boolean}
+ */
+export function hasQuickPayOptions() {
+    const options = getStorePaymentOptions();
+    return options && Object.keys(options).length > 0;
+}
+
 function closeDetailModal() {
     updateUrl({ openItem: null });
     hideDetailModal();
@@ -529,6 +754,76 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     if (addToPlanBtn) {
         addToPlanBtn.textContent = isLocked ? 'Update Plan' : 'Add to Plan';
         addToPlanBtn.dataset.tooltip = isLocked ? 'Update plan with changes' : 'Add to plan';
+    }
+
+    // Add Quick Pay button if store has payment options
+    const existingQuickPayBtn = document.getElementById('modal-quick-pay-btn');
+    if (existingQuickPayBtn) {
+        existingQuickPayBtn.remove();
+    }
+
+    const paymentOptions = getStorePaymentOptions();
+    if (paymentOptions && Object.keys(paymentOptions).length > 0) {
+        const quickPayBtn = document.createElement('button');
+        quickPayBtn.id = 'modal-quick-pay-btn';
+        quickPayBtn.className = 'quick-pay-btn';
+
+        // Calculate initial amount for button text
+        const initialPrice = getRecordPrice(record, itemState.selectedOptionIndex);
+        const initialQuantity = itemState.quantity || 1;
+        const initialAmount = initialPrice * initialQuantity;
+
+        // Update button text with amount
+        const updateQuickPayButtonText = () => {
+            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const currentQuantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+            // Get current selected option index from the modal's option selector
+            const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+            let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+            if (optionRadios.length > 0) {
+                const selectedValue = optionRadios[0].value;
+                selectedOptionIndex = parseInt(selectedValue, 10) || 0;
+            }
+            const currentPrice = getRecordPrice(record, selectedOptionIndex);
+            const currentAmount = currentPrice * currentQuantity;
+            if (currentAmount > 0) {
+                quickPayBtn.innerHTML = `<span>Quick Pay $${currentAmount.toFixed(2)}</span>`;
+            } else {
+                quickPayBtn.innerHTML = '<span>Quick Pay</span>';
+            }
+        };
+
+        // Set initial button text
+        if (initialAmount > 0) {
+            quickPayBtn.innerHTML = `<span>Quick Pay $${initialAmount.toFixed(2)}</span>`;
+        } else {
+            quickPayBtn.innerHTML = '<span>Quick Pay</span>';
+        }
+
+        quickPayBtn.addEventListener('click', () => {
+            // Get current quantity from the quantity input
+            const quantityInput = document.querySelector('#modal-quantity-selector .quantity-input');
+            const quantity = quantityInput ? parseInt(quantityInput.value, 10) || 1 : 1;
+            // Get current selected option index
+            const optionRadios = document.querySelectorAll('#modal-options-container input[type="radio"]:checked');
+            let selectedOptionIndex = itemState.selectedOptionIndex || 0;
+            if (optionRadios.length > 0) {
+                const selectedValue = optionRadios[0].value;
+                selectedOptionIndex = parseInt(selectedValue, 10) || 0;
+            }
+            const price = getRecordPrice(record, selectedOptionIndex);
+            const amount = price * quantity;
+            const itemName = record.fields.Name || 'Item';
+            showQuickPayModal(paymentOptions, amount, itemName, quantity);
+        });
+
+        // Store reference to update function for quantity/option change handlers
+        quickPayBtn._updateText = updateQuickPayButtonText;
+
+        // Insert after Add to Plan button
+        if (addToPlanBtn && addToPlanBtn.parentNode) {
+            addToPlanBtn.parentNode.insertBefore(quickPayBtn, addToPlanBtn.nextSibling);
+        }
     }
 
     let imageUrls = [];
@@ -1302,6 +1597,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
                         // Update UI reactively
                         updateOptionsUI();
+
+                        // Update Quick Pay button text when option changes
+                        const quickPayBtn = document.getElementById('modal-quick-pay-btn');
+                        if (quickPayBtn && quickPayBtn._updateText) {
+                            quickPayBtn._updateText();
+                        }
                     });
                 }
 
@@ -1453,6 +1754,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 input.value = currentValue + 1;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 updateProTipVisibility();
+                // Update Quick Pay button text
+                const quickPayBtn = document.getElementById('modal-quick-pay-btn');
+                if (quickPayBtn && quickPayBtn._updateText) {
+                    quickPayBtn._updateText();
+                }
             };
             const handleMinus = (e) => {
                 e.preventDefault();
@@ -1463,6 +1769,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                     input.value = currentValue - 1;
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                     updateProTipVisibility();
+                    // Update Quick Pay button text
+                    const quickPayBtn = document.getElementById('modal-quick-pay-btn');
+                    if (quickPayBtn && quickPayBtn._updateText) {
+                        quickPayBtn._updateText();
+                    }
                 }
             };
             const handleTouchEnd = (e) => {
