@@ -1078,14 +1078,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
     // Display session components if this is a published session/event
     // Skip for registered event users - they don't need to see plan components
+    // BUT always show for users with publish access so they can manage the plan
     const isEventType = record.fields['Item Type'] === 'Event';
     const eventRsvpYes = record.fields.RSVPs || [];
     const eventRsvpMaybe = record.fields.RSVPMaybe || [];
     const eventRsvpNo = record.fields.RSVPNo || [];
     const currentUserId = state.session.user.id;
     const isCurrentUserRegistered = eventRsvpYes.includes(currentUserId) || eventRsvpMaybe.includes(currentUserId) || eventRsvpNo.includes(currentUserId);
+    const userHasPublishAccessForComponents = api.userHasPublishPermission();
 
-    if (linkedSession && linkedSession.fields && !(isEventType && isCurrentUserRegistered)) {
+    if (linkedSession && linkedSession.fields && (userHasPublishAccessForComponents || !(isEventType && isCurrentUserRegistered))) {
         log('Modal', `Displaying session components for linked session ${linkedSessionId}`);
 
         // Parse session data to get locked items (components) and ideas
