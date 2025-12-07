@@ -70,13 +70,11 @@ Do NOT include markdown code blocks (e.g., \\\`\\\`\\\`json) or any text before 
         contents: [ { role: "user", parts: [ { text: prompt }, { inlineData: { mimeType: 'image/jpeg', data: base64ImageData } } ] } ],
     };
 
-    // --- THIS IS THE FIX ---
-    // Use the exact stable model ID 'gemini-1.5-flash' with the stable v1 endpoint.
-    const modelId = "gemini-1.5-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-    // --- END FIX ---
+    // Use the v1beta endpoint with gemini-2.0-flash model (gemini-1.5-flash was deprecated April 2025)
+    const modelId = "gemini-2.0-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
-    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1 endpoint...`); // Updated log message
+    console.log(`[Debug] analyzeImageWithGemini: Sending request to model '${modelId}' via v1beta endpoint...`); // Updated log message
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     console.log(`[Debug] analyzeImageWithGemini: Received status ${response.status} from Gemini.`);
 
