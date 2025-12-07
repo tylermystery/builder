@@ -16,13 +16,121 @@
 
             <h2>Store Settings</h2>
             <div id="store-settings-container">
-            <div id="admin-tools" style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9;">
-                <h4>Admin Tools</h4>
-                <button id="admin-bulk-profile-btn" style="background-color: #dc3545; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em;">
-                    Run AI Profiler on All Items
-                </button>
-                <p id="admin-status-message" style="font-size: 0.9em; color: #666; margin-top: 10px;">Status: Ready</p>
-            </div>
+                <!-- Settings Form -->
+                <form id="store-settings-form" class="store-settings-form">
+                    <!-- Store Profile Section -->
+                    <div class="settings-section">
+                        <h3>Store Profile</h3>
+
+                        <div class="form-group">
+                            <label for="settings-name">Store Name</label>
+                            <input type="text" id="settings-name" name="Name" placeholder="Your store name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-shop-title">Shop Title</label>
+                            <input type="text" id="settings-shop-title" name="Shop Title" placeholder="Public-facing shop title">
+                            <small>The title displayed to customers (falls back to Store Name if empty)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-description">Description</label>
+                            <textarea id="settings-description" name="Description" rows="3" placeholder="A brief description of your store"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-logo-tag">Logo Tag</label>
+                            <input type="text" id="settings-logo-tag" name="LogoTag" placeholder="Cloudinary image tag for logo">
+                            <small>The tag used to fetch your store logo from Cloudinary</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-marquee-text">Marquee Text</label>
+                            <textarea id="settings-marquee-text" name="Marquee Text" rows="2" placeholder="Scrolling banner text (optional)"></textarea>
+                            <small>Text that scrolls across the top of your store page</small>
+                        </div>
+                    </div>
+
+                    <!-- Shop Configuration Section -->
+                    <div class="settings-section">
+                        <h3>Shop Configuration</h3>
+
+                        <div class="form-group">
+                            <label for="settings-shop-type">Shop Type</label>
+                            <select id="settings-shop-type" name="ShopType">
+                                <option value="Events">Events</option>
+                                <option value="Products">Products</option>
+                                <option value="Services">Services</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-payment-options">Payment Options</label>
+                            <select id="settings-payment-options" name="PaymentOptions">
+                                <option value="DepositOnly">Deposit Only</option>
+                                <option value="FullPayment">Full Payment</option>
+                                <option value="Both">Both Options</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-default-status">Default Status Filter</label>
+                            <select id="settings-default-status" name="DefaultStatusFilter">
+                                <option value="Available">Available</option>
+                                <option value="All">All</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Enabled Filters</label>
+                            <div class="checkbox-group" id="settings-enabled-filters">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="EnabledFilters" value="Date & Time"> Date & Time
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="EnabledFilters" value="Headcount"> Headcount
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="EnabledFilters" value="Location"> Location
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="EnabledFilters" value="Subcategories"> Subcategories
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terms & Labels Section -->
+                    <div class="settings-section">
+                        <h3>Terms & Labels</h3>
+
+                        <div class="form-group">
+                            <label for="settings-terms">Terms and Conditions</label>
+                            <textarea id="settings-terms" name="TermsAndConditions" rows="4" placeholder="Terms displayed at checkout"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="settings-cart-labels">Cart Labels (JSON)</label>
+                            <textarea id="settings-cart-labels" name="CartLabels" rows="3" placeholder='{"sectionTitle": "Your Cart", ...}'></textarea>
+                            <small>Custom labels for cart sections in JSON format</small>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <button type="submit" id="save-settings-btn" class="btn-primary">Save Settings</button>
+                        <span id="settings-status-message" class="status-message"></span>
+                    </div>
+                </form>
+
+                <!-- Admin Tools Section -->
+                <div id="admin-tools" class="settings-section admin-tools-section">
+                    <h3>Admin Tools</h3>
+                    <button id="admin-bulk-profile-btn" class="btn-danger">
+                        Run AI Profiler on All Items
+                    </button>
+                    <p id="admin-status-message" class="status-message">Status: Ready</p>
+                </div>
             </div>
             <h2>Your Items</h2>
             <div id="item-list-container"></div>
