@@ -339,6 +339,188 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         return eventCard;
     }
 
+    // === PACKAGE CARD - Special tile for package bundles ===
+    if (fields['Item Type'] === 'Package') {
+        console.log('[TileSizing][Card] Creating PACKAGE card:', {
+            recordId: record.id,
+            name: fields.Name,
+            expectedClasses: 'event-card package-card'
+        });
+
+        const packageCard = eventCard;
+        packageCard.className = 'event-card package-card';
+
+        // Fetch package contents from linked session (stored in session's Items with Variations field)
+        let packageContents = { includedItems: [], addOnItems: [], tiers: [] };
+        let packageMetadata = { discount: 0, tiers: [], price: 0, pricingType: null };
+        const linkedSessionId = fields['LinkedSession'] ? fields['LinkedSession'][0] : null;
+
+        if (linkedSessionId) {
+            try {
+                const linkedSession = await api.fetchSessionById(linkedSessionId);
+                if (linkedSession && linkedSession.fields['Items with Variations']) {
+                    const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
+
+                    // Extract locked items as included items
+                    const includedItems = [];
+                    for (const [id, info] of Object.entries(sessionData.lockedInItems || {})) {
+                        includedItems.push({
+                            id,
+                            quantity: info.quantity || 1,
+                            options: info.selections || null,
+                            locked: true
+                        });
+                    }
+
+                    // Extract ideas as add-on items
+                    const addOnItems = [];
+                    for (const [id, info] of Object.entries(sessionData.ideasItems || {})) {
+                        addOnItems.push({
+                            id,
+                            quantity: info.quantity || 1,
+                            options: info.selections || null
+                        });
+                    }
+
+                    packageContents = {
+                        includedItems,
+                        addOnItems,
+                        tiers: sessionData.packageMetadata?.tiers || []
+                    };
+
+                    // Get package metadata if available
+                    if (sessionData.packageMetadata) {
+                        packageMetadata = sessionData.packageMetadata;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Package] Could not fetch linked session for package', record.id, e);
+            }
+        }
+
+        // Calculate total included items count
+        const includedCount = (packageContents.includedItems || []).length;
+        const addOnCount = (packageContents.addOnItems || []).length;
+
+        // Get images from included items for collage
+        const includedItemIds = (packageContents.includedItems || []).map(item => item.id || item);
+        const includedRecords = includedItemIds.slice(0, 4).map(id =>
+            allRecords.find(r => r.id === id)
+        ).filter(Boolean);
+
+        const imagePromises = includedRecords.map(item => api.fetchImagesForRecord(item, allRecords, new Map()));
+        const imageResults = await Promise.all(imagePromises);
+        const collageImages = imageResults.flatMap(res => res.imageUrls);
+
+        // Build image container with collage
+        let imageContainerHTML = `<div class="event-card-image-container collage-container package-collage">`;
+        if (collageImages.length > 0) {
+            const optimizedImages = collageImages.slice(0, 4).map(url => getOptimizedImageUrl(url, 300));
+            imageContainerHTML += optimizedImages.map(url => {
+                const placeholder = getLowQualityPlaceholder(url);
+                return `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${url}"></div>`;
+            }).join('');
+        } else {
+            const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
+            imageContainerHTML += `<div class="collage-image lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}"></div>`;
+        }
+        imageContainerHTML += `<div class="package-badge">📦 Package</div>`;
+        imageContainerHTML += `<div class="heart-icon" data-record-id="${record.id}"></div>`;
+        imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
+        imageContainerHTML += `</div>`;
+
+        // Calculate base package price and display savings
+        const basePrice = parseFloat(fields[CONSTANTS.FIELD_NAMES.PRICE] || packageMetadata.price || 0);
+        const discount = parseFloat(packageMetadata.discount || 0);
+        const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || packageMetadata.pricingType;
+        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
+
+        // Calculate original value (sum of individual items) for savings display
+        let originalValue = 0;
+        for (const itemRef of (packageContents.includedItems || [])) {
+            const itemId = itemRef.id || itemRef;
+            const itemRecord = allRecords.find(r => r.id === itemId);
+            if (itemRecord) {
+                const itemPrice = parseFloat(itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+                const qty = itemRef.quantity || 1;
+                originalValue += itemPrice * qty;
+            }
+        }
+
+        // Show savings if there's a discount
+        let savingsHTML = '';
+        if (discount > 0 || (originalValue > basePrice && basePrice > 0)) {
+            const savings = discount > 0 ? (originalValue * (discount / 100)) : (originalValue - basePrice);
+            if (savings > 0) {
+                savingsHTML = `<span class="package-savings">Save $${savings.toFixed(0)}</span>`;
+            }
+        }
+
+        // Build tier options HTML if tiers exist
+        let tiersHTML = '';
+        const tiers = packageContents.tiers || [];
+        if (tiers.length > 0) {
+            tiersHTML = `<div class="package-tiers">`;
+            tiers.forEach((tier, idx) => {
+                const tierPrice = tier.price || basePrice;
+                const tierLabel = tier.name || `Tier ${idx + 1}`;
+                tiersHTML += `<button class="tier-btn ${idx === 0 ? 'selected' : ''}" data-tier-index="${idx}" data-price="${tierPrice}">${tierLabel} - $${tierPrice.toFixed(0)}</button>`;
+            });
+            tiersHTML += `</div>`;
+        }
+
+        const priceHTML = basePrice === 0 ? 'Starts Free' : `From $${basePrice.toFixed(2)} ${pricingTypeHTML}`;
+
+        packageCard.innerHTML = `
+            ${imageContainerHTML}
+            <div class="event-card-content">
+                <h3>${fields.Name || 'Untitled Package'}</h3>
+                <p class="description">${fields.Description || ''}</p>
+                <div class="package-summary">
+                    <span class="package-item-count">${includedCount} items included</span>
+                    ${addOnCount > 0 ? `<span class="package-addon-count">+ ${addOnCount} add-ons available</span>` : ''}
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="price-wrapper">
+                    <div class="price">${priceHTML}</div>
+                    ${savingsHTML}
+                </div>
+                ${tiersHTML}
+                <button class="card-action-btn add-package-btn" data-record-id="${record.id}">Add Package to Plan</button>
+            </div>
+        `;
+
+        // Add tier selection functionality
+        const tierBtns = packageCard.querySelectorAll('.tier-btn');
+        tierBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                tierBtns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                // Update displayed price based on selected tier
+                const tierPrice = parseFloat(btn.dataset.price);
+                const priceEl = packageCard.querySelector('.price');
+                if (priceEl && tierPrice > 0) {
+                    priceEl.innerHTML = `$${tierPrice.toFixed(2)} ${pricingTypeHTML}`;
+                }
+            });
+        });
+
+        const cardCreationEnd = performance.now();
+        console.log('[TileSizing][Card] PACKAGE card created:', {
+            recordId: record.id,
+            name: fields.Name,
+            className: packageCard.className,
+            includedCount,
+            addOnCount,
+            basePrice,
+            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
+        });
+
+        return packageCard;
+    }
+
     // === TILE SIZING DEBUG: BookableItem card ===
     console.log('[TileSizing][Card] Creating BOOKABLE ITEM card:', {
         recordId: record.id,

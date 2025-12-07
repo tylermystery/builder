@@ -345,6 +345,24 @@ export function initializeShareMenu() {
         });
     }
 
+    // Publish as Package handler
+    const sharePublishPackageBtn = document.getElementById('share-publish-package-btn');
+    if (sharePublishPackageBtn) {
+        sharePublishPackageBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handlePublishPackage();
+        });
+    }
+
+    // Update Package handler
+    const shareUpdatePackageBtn = document.getElementById('share-update-package-btn');
+    if (shareUpdatePackageBtn) {
+        shareUpdatePackageBtn.addEventListener('click', async () => {
+            shareMenuDropdown.style.display = 'none';
+            await handlePublishPackage();
+        });
+    }
+
     shareMenuInitialized = true;
     log('Sidebar', 'Share menu initialized');
 }
@@ -625,6 +643,8 @@ async function updateShareMenuState() {
     const shareMenuDropdown = document.getElementById('share-menu-dropdown');
     const sharePublishBtn = document.getElementById('share-publish-btn');
     const shareUpdatePublishedBtn = document.getElementById('share-update-published-btn');
+    const sharePublishPackageBtn = document.getElementById('share-publish-package-btn');
+    const shareUpdatePackageBtn = document.getElementById('share-update-package-btn');
     const shareDivider = shareMenuDropdown?.querySelector('.share-dropdown-divider');
 
     if (!shareMenuBtn) return;
@@ -655,6 +675,8 @@ async function updateShareMenuState() {
     if (!hasPublishPermission) {
         if (sharePublishBtn) sharePublishBtn.style.display = 'none';
         if (shareUpdatePublishedBtn) shareUpdatePublishedBtn.style.display = 'none';
+        if (sharePublishPackageBtn) sharePublishPackageBtn.style.display = 'none';
+        if (shareUpdatePackageBtn) shareUpdatePackageBtn.style.display = 'none';
         if (shareDivider) shareDivider.style.display = 'none';
         return;
     }
@@ -668,9 +690,12 @@ async function updateShareMenuState() {
 
         // Check if this session is linked to a published event
         const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
+        // Check if this session is linked to a published package
+        const linkedPackageId = session.fields.LinkedPackage ? session.fields.LinkedPackage[0] : null;
 
+        // Handle event publish/update buttons
         if (linkedItemId) {
-            // Session is published - show update button, hide publish button
+            // Session is published as event - show update button, hide publish button
             if (sharePublishBtn) sharePublishBtn.style.display = 'none';
             if (shareUpdatePublishedBtn) {
                 shareUpdatePublishedBtn.style.display = 'flex';
@@ -682,13 +707,27 @@ async function updateShareMenuState() {
                 }
             }
         } else {
-            // Session is not published - show publish button, hide update button
+            // Session is not published as event - show publish button, hide update button
             if (sharePublishBtn) sharePublishBtn.style.display = 'flex';
             if (shareUpdatePublishedBtn) shareUpdatePublishedBtn.style.display = 'none';
 
             // Remove any RSVP stats section
             const existingRsvpStats = shareMenuDropdown?.querySelector('.share-rsvp-stats');
             if (existingRsvpStats) existingRsvpStats.remove();
+        }
+
+        // Handle package publish/update buttons
+        if (linkedPackageId) {
+            // Session is published as package - show update button, hide publish button
+            if (sharePublishPackageBtn) sharePublishPackageBtn.style.display = 'none';
+            if (shareUpdatePackageBtn) shareUpdatePackageBtn.style.display = 'flex';
+        } else {
+            // Session is not published as package - show publish button if has items, hide update button
+            if (sharePublishPackageBtn) {
+                // Only show if session has locked items
+                sharePublishPackageBtn.style.display = state.cart.lockedItems.size > 0 ? 'flex' : 'none';
+            }
+            if (shareUpdatePackageBtn) shareUpdatePackageBtn.style.display = 'none';
         }
 
         log('Sidebar', 'Share menu state updated');
@@ -812,6 +851,116 @@ async function handlePublishEvent() {
         if (updateBtn) {
             updateBtn.disabled = false;
             updateBtn.textContent = '🔄 Update Published Event';
+        }
+    }
+}
+
+/**
+ * Handles publishing or updating a session as a reusable Package (Decision 5 - Option B)
+ */
+async function handlePublishPackage() {
+    if (!state.session.id) {
+        alert('No active session to publish as package');
+        return;
+    }
+
+    // Check if session has items to package
+    if (state.cart.lockedItems.size === 0) {
+        alert('Add some items to your Event Plan before publishing as a package.');
+        return;
+    }
+
+    try {
+        // Prompt for package details
+        const packageName = prompt(
+            'Enter a name for this package:',
+            state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'My Package'
+        );
+
+        if (!packageName) {
+            return; // User cancelled
+        }
+
+        const packageDescription = prompt(
+            'Enter a description for this package:',
+            state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || ''
+        );
+
+        // Calculate suggested package price from locked items
+        let totalPrice = 0;
+        for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
+            const record = state.records.all.find(r => r.id === recordId);
+            if (record) {
+                const price = parseFloat(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+                const qty = itemInfo.quantity || 1;
+                totalPrice += price * qty;
+            }
+        }
+
+        const priceInput = prompt(
+            'Enter the package price (or leave empty to calculate from items):',
+            totalPrice.toFixed(2)
+        );
+
+        const packagePrice = priceInput ? parseFloat(priceInput) : totalPrice;
+
+        const discountInput = prompt('Enter a discount percentage (0-100, or leave empty for no discount):', '0');
+        const discount = discountInput ? Math.min(100, Math.max(0, parseFloat(discountInput))) : 0;
+
+        log('Sidebar', `Publishing session ${state.session.id} as package with name: ${packageName}`);
+
+        // Disable the button to prevent double-clicks
+        const publishPackageBtn = document.getElementById('share-publish-package-btn');
+        const updatePackageBtn = document.getElementById('share-update-package-btn');
+        if (publishPackageBtn) {
+            publishPackageBtn.disabled = true;
+            publishPackageBtn.textContent = 'Publishing...';
+        }
+        if (updatePackageBtn) {
+            updatePackageBtn.disabled = true;
+            updatePackageBtn.textContent = 'Updating...';
+        }
+
+        // Call the API to publish/update package
+        const packageData = {
+            Name: packageName,
+            Description: packageDescription || '',
+            Price: packagePrice,
+            Discount: discount > 0 ? discount : undefined
+        };
+
+        const result = await api.publishSessionAsPackage(state.session.id, packageData);
+
+        log('Sidebar', 'Package published/updated successfully:', result);
+        alert(`Package "${packageName}" published successfully! It will now appear in the catalog.`);
+
+        // Reload to show updated state
+        await updateSessionPublishingControls();
+
+        // Re-enable buttons with updated text
+        if (publishPackageBtn) {
+            publishPackageBtn.style.display = 'none';
+        }
+        if (updatePackageBtn) {
+            updatePackageBtn.disabled = false;
+            updatePackageBtn.textContent = '📦 Update Package';
+            updatePackageBtn.style.display = 'flex';
+        }
+
+    } catch (error) {
+        console.error('Error publishing package:', error);
+        alert(`Failed to publish package: ${error.message}`);
+
+        // Re-enable buttons
+        const publishPackageBtn = document.getElementById('share-publish-package-btn');
+        const updatePackageBtn = document.getElementById('share-update-package-btn');
+        if (publishPackageBtn) {
+            publishPackageBtn.disabled = false;
+            publishPackageBtn.textContent = '📦 Publish as Package';
+        }
+        if (updatePackageBtn) {
+            updatePackageBtn.disabled = false;
+            updatePackageBtn.textContent = '📦 Update Package';
         }
     }
 }
