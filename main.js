@@ -17,6 +17,7 @@ import * as backgroundEngine from './components/backgroundEngine.js';
 import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
+import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 
 
 const imageCache = new Map();
@@ -110,7 +111,25 @@ async function initialize() {
          if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
          if (typeof initializeSessionChat === 'function') {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
-            initializeSessionChat(); 
+            initializeSessionChat();
+         }
+
+         // Fetch project hierarchy for the logged-in user
+         if (state.session.user.isAuthenticated && state.session.user.id) {
+             log('Main', 'User logged in, fetching project hierarchy...');
+             showProjectsLoading();
+             api.fetchProjectHierarchy(state.session.user.id).then(projects => {
+                 updateProjectsData(projects);
+                 log('Main', `Project hierarchy loaded: ${projects.length} projects`);
+             }).catch(err => {
+                 console.error('Failed to fetch project hierarchy:', err);
+             });
+
+             // Show authenticated-only menu buttons
+             const menuSessionsBtn = document.getElementById('menu-sessions-btn');
+             const menuProjectsBtn = document.getElementById('menu-projects-btn');
+             if (menuSessionsBtn) menuSessionsBtn.style.display = 'flex';
+             if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
          }
      });
 
@@ -509,8 +528,26 @@ async function initialize() {
         updateSaveShareButton();
         initializeChatEventListeners();
         setupAuthEventListeners();
-        setupCalendarEventListeners(); 
+        setupCalendarEventListeners();
+        initializeProjectsDashboard(); // Initialize projects dashboard panel
         updateUserProfileIcon();
+
+        // If user is already authenticated, fetch their projects
+        if (state.session.user.isAuthenticated && state.session.user.id) {
+            log('Main', 'User already authenticated, fetching project hierarchy...');
+            api.fetchProjectHierarchy(state.session.user.id).then(projects => {
+                updateProjectsData(projects);
+                log('Main', `Project hierarchy loaded: ${projects.length} projects`);
+            }).catch(err => {
+                console.error('Failed to fetch project hierarchy:', err);
+            });
+
+            // Show authenticated-only menu buttons
+            const menuSessionsBtn = document.getElementById('menu-sessions-btn');
+            const menuProjectsBtn = document.getElementById('menu-projects-btn');
+            if (menuSessionsBtn) menuSessionsBtn.style.display = 'flex';
+            if (menuProjectsBtn) menuProjectsBtn.style.display = 'flex';
+        }
 
         syncUiWithUrl(); 
         window.addEventListener('popstate', syncUiWithUrl); 

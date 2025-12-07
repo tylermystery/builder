@@ -67,6 +67,76 @@ export async function fetchPlansForUser(userId, includeFullDetails = false) {
     }
 }
 
+/**
+ * Fetch project hierarchy for authenticated user
+ * Returns all sessions/projects the user has access to with hierarchical data
+ * @param {string} userId - The authenticated user's ID
+ * @returns {Promise<Array>} - Array of project records
+ */
+export async function fetchProjectHierarchy(userId) {
+    if (!userId) {
+        log('API', 'fetchProjectHierarchy called without userId');
+        return [];
+    }
+
+    log('API', `Fetching project hierarchy for user: ${userId}`);
+
+    // Check if user is a store owner
+    const isStoreOwner = state.session.user.isOwner;
+    const ownedStoreId = state.session.user.ownedStoreId;
+
+    let formula;
+    if (isStoreOwner && ownedStoreId) {
+        // Store owners see their collaborator plans + all plans for their store
+        formula = `OR(FIND('${userId}', ARRAYJOIN({Collaborators})), FIND('${ownedStoreId}', ARRAYJOIN({Stores})))`;
+        log('API', `Fetching projects for store owner: user plans + store plans (Store ID: ${ownedStoreId})`);
+    } else {
+        // Regular users only see plans they collaborate on
+        formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+        log('API', `Fetching projects for regular user: collaborator plans only`);
+    }
+
+    const encodedFormula = encodeURIComponent(formula);
+
+    // Request fields needed for project hierarchy display
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Guest Count',
+        'Goals',
+        'Stores',
+        'Collaborators',
+        'Parent_Session',
+        'Items with Variations',
+        'Cart Type'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching project hierarchy:', errorText);
+            throw new Error('Failed to fetch project hierarchy from Airtable.');
+        }
+
+        const data = await response.json();
+
+        // Sort by creation time, newest first
+        data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+
+        log('API', `Fetched ${data.records.length} projects for user ${userId}`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching project hierarchy:", error);
+        return [];
+    }
+}
+
 export async function fetchSessionsWithDatesForStore(storeId) {
     console.log('[FETCH SESSIONS] ========== fetchSessionsWithDatesForStore START ==========');
     console.log('[FETCH SESSIONS] Requested storeId:', storeId);

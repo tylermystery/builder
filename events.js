@@ -14,6 +14,7 @@ import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
+import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -782,6 +783,21 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
             updateUrl({ category: null, subcategory: null, view: 'my-sessions' });
             applyFiltersAndSort(imageCache);
+        });
+    }
+
+    // My Projects button handler
+    const menuProjectsBtn = document.getElementById('menu-projects-btn');
+    if (menuProjectsBtn) {
+        menuProjectsBtn.style.display = state.session.user.isAuthenticated ? 'flex' : 'none';
+        menuProjectsBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
+            if (!state.session.user.isAuthenticated) {
+                showUserModal();
+                return;
+            }
+            // Show the projects panel
+            showProjectsPanel();
         });
     }
 
