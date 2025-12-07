@@ -146,7 +146,9 @@ Generate the strategic roadmap now.
         }
     };
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    // Use the stable v1beta endpoint with gemini-2.0-flash model (gemini-1.5-flash was deprecated April 2025)
+    const modelId = "gemini-2.0-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
     const response = await fetch(apiUrl, {
         method: 'POST',
@@ -157,7 +159,12 @@ Generate the strategic roadmap now.
     if (!response.ok) {
         const errorBody = await response.text();
         console.error('[Debug] Gemini API Error:', errorBody);
-        throw new Error(`Gemini API call failed with status ${response.status}`);
+        let errorMessage = `Gemini API call failed with status ${response.status}`;
+        if (response.status === 400) errorMessage += ". Check payload/prompt structure.";
+        if (response.status === 403) errorMessage += ". Check API key permissions/billing.";
+        if (response.status === 404) errorMessage += `. Model '${modelId}' not found. Verify model ID, API path, and that your API key has access to this model.`;
+        if (response.status === 429) errorMessage += ". Rate limit exceeded.";
+        throw new Error(errorMessage);
     }
 
     const result = await response.json();
