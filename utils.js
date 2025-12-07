@@ -656,3 +656,224 @@ export function getEffectiveMinQuantity(record) {
     // 3. Return 1 if UMW is booked, otherwise return the specific item minimum
     return isUmwInPlan ? 1 : airtableMin;
 }
+
+/**
+ * Parses package contents from session data.
+ * Package contents are now stored in the linked session's 'Items with Variations' field,
+ * not in a separate 'Package Contents' field on the item record.
+ *
+ * @param {Object} sessionData - The parsed JSON from session's 'Items with Variations' field
+ * @returns {Object} Parsed package contents with structure:
+ *   {
+ *     includedItems: [{ id, quantity, options, locked }],
+ *     addOnItems: [{ id, quantity, options }],
+ *     tiers: [{ name, price, includedItems, addOnItems }],
+ *     metadata: { discount, price, pricingType }
+ *   }
+ */
+export function parsePackageContentsFromSession(sessionData) {
+    const defaultContents = {
+        includedItems: [],
+        addOnItems: [],
+        tiers: [],
+        metadata: { discount: 0, price: 0, pricingType: null }
+    };
+
+    if (!sessionData) {
+        return defaultContents;
+    }
+
+    // Extract locked items as included items
+    const includedItems = [];
+    for (const [id, info] of Object.entries(sessionData.lockedInItems || {})) {
+        includedItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null,
+            locked: true
+        });
+    }
+
+    // Extract ideas as add-on items
+    const addOnItems = [];
+    for (const [id, info] of Object.entries(sessionData.ideasItems || {})) {
+        addOnItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null
+        });
+    }
+
+    return {
+        includedItems,
+        addOnItems,
+        tiers: sessionData.packageMetadata?.tiers || [],
+        metadata: sessionData.packageMetadata || { discount: 0, price: 0, pricingType: null }
+    };
+}
+
+/**
+ * @deprecated Use parsePackageContentsFromSession instead.
+ * This function attempted to read from a 'Package Contents' field that no longer exists.
+ * Package data is now stored in the linked session's 'Items with Variations' field.
+ */
+export function parsePackageContents(record) {
+    console.warn('[Utils] parsePackageContents is deprecated. Use parsePackageContentsFromSession with session data instead.');
+    const defaultContents = {
+        includedItems: [],
+        addOnItems: [],
+        tiers: []
+    };
+
+    if (!record || record.fields['Item Type'] !== 'Package') {
+        return defaultContents;
+    }
+
+    // Return empty default - the data should be fetched from linked session
+    return defaultContents;
+}
+
+/**
+ * Calculates the total price for a package based on selected tier and customizations.
+ * Supports tiered pricing (Decision 2 - Option C).
+ *
+ * @param {Object} packageContents - Package contents from parsePackageContentsFromSession
+ * @param {Object} packageRecord - The Package record from Items table (for base price)
+ * @param {Object} options - Options for price calculation
+ *   @param {number} options.tierIndex - Selected tier index (0-based)
+ *   @param {Array} options.addedAddOns - Array of add-on IDs that have been selected
+ *   @param {Object} options.quantityOverrides - Map of item ID to quantity override
+ * @param {Array} allRecords - All catalog records for looking up item prices
+ * @returns {Object} Price breakdown:
+ *   {
+ *     basePrice: number,
+ *     addOnsPrice: number,
+ *     discount: number,
+ *     totalPrice: number,
+ *     savings: number
+ *   }
+ */
+export function calculatePackagePriceFromContents(packageContents, packageRecord, options = {}, allRecords = []) {
+    const { tierIndex = 0, addedAddOns = [], quantityOverrides = {} } = options;
+
+    const tiers = packageContents.tiers || [];
+    const metadata = packageContents.metadata || {};
+    const discount = parseFloat(metadata.discount || 0);
+
+    // Get base price from tier, metadata, or record
+    let basePrice = 0;
+    if (tiers.length > 0 && tiers[tierIndex]) {
+        basePrice = parseFloat(tiers[tierIndex].price || 0);
+    } else if (metadata.price) {
+        basePrice = parseFloat(metadata.price);
+    } else if (packageRecord) {
+        basePrice = parseFloat(packageRecord.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+    }
+
+    // Calculate original value of included items (for savings display)
+    let originalValue = 0;
+    for (const itemRef of (packageContents.includedItems || [])) {
+        const itemId = itemRef.id || itemRef;
+        const itemRecord = allRecords.find(r => r.id === itemId);
+        if (itemRecord) {
+            const itemPrice = parseFloat(itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+            const qty = quantityOverrides[itemId] || itemRef.quantity || 1;
+            originalValue += itemPrice * qty;
+        }
+    }
+
+    // Calculate add-ons price
+    let addOnsPrice = 0;
+    for (const addOnId of addedAddOns) {
+        const addOnRef = (packageContents.addOnItems || []).find(a => (a.id || a) === addOnId);
+        if (addOnRef) {
+            const addOnRecord = allRecords.find(r => r.id === addOnId);
+            if (addOnRecord) {
+                const addOnPrice = parseFloat(addOnRecord.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+                const qty = quantityOverrides[addOnId] || addOnRef.quantity || 1;
+                addOnsPrice += addOnPrice * qty;
+            }
+        }
+    }
+
+    // Calculate discount amount
+    const discountAmount = discount > 0 ? (basePrice * (discount / 100)) : 0;
+
+    // Calculate total
+    const totalPrice = basePrice - discountAmount + addOnsPrice;
+
+    // Calculate savings compared to buying items individually
+    const savings = (originalValue + addOnsPrice) - totalPrice;
+
+    return {
+        basePrice,
+        addOnsPrice,
+        discount: discountAmount,
+        totalPrice,
+        savings: Math.max(0, savings),
+        originalValue
+    };
+}
+
+/**
+ * @deprecated Use calculatePackagePriceFromContents instead.
+ * This function relied on parsePackageContents which no longer works.
+ */
+export function calculatePackagePrice(record, options = {}, allRecords = []) {
+    console.warn('[Utils] calculatePackagePrice is deprecated. Use calculatePackagePriceFromContents with session data instead.');
+
+    // Return zero values since we can't access the data
+    return {
+        basePrice: parseFloat(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || 0),
+        addOnsPrice: 0,
+        discount: 0,
+        totalPrice: parseFloat(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || 0),
+        savings: 0,
+        originalValue: 0
+    };
+}
+
+/**
+ * Builds a Package Contents JSON object from a Session's locked items and ideas.
+ * Used when publishing a Session as a Package (Decision 5 - Option B).
+ *
+ * @param {Map} lockedItems - Map of locked item IDs to item info
+ * @param {Map} ideasItems - Map of ideas/favorites item IDs to item info
+ * @param {Object} tierConfig - Optional tier configuration
+ * @returns {Object} Package contents structure for storing in Airtable
+ */
+export function buildPackageContentsFromSession(lockedItems, ideasItems, tierConfig = null) {
+    const includedItems = [];
+    const addOnItems = [];
+
+    // Locked items become included items (locked in)
+    for (const [id, info] of lockedItems.entries()) {
+        includedItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || info.selectedOptionIndex || null,
+            locked: true
+        });
+    }
+
+    // Ideas items become add-ons
+    for (const [id, info] of ideasItems.entries()) {
+        addOnItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || info.selectedOptionIndex || null
+        });
+    }
+
+    const contents = {
+        includedItems,
+        addOnItems
+    };
+
+    // Add tier configuration if provided
+    if (tierConfig && Array.isArray(tierConfig) && tierConfig.length > 0) {
+        contents.tiers = tierConfig;
+    }
+
+    return contents;
+}

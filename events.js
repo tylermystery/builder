@@ -1067,8 +1067,159 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const receiptLink = e.target.closest('.receipt-link, .receipt-btn');
         const openToEditBtn = e.target.closest('.open-to-edit-btn');
         const editEventBtn = e.target.closest('.edit-event-btn');
+        const addPackageBtn = e.target.closest('.add-package-btn');
 
         const healthSuggestionBtn = e.target.closest('.health-suggestion-btn');
+
+        // Handle "Add Package to Plan" button - Decision 6: populate locked items and ideas
+        if (addPackageBtn) {
+            e.stopPropagation();
+            const recordId = addPackageBtn.dataset.recordId || addPackageBtn.closest('[data-record-id]')?.dataset.recordId;
+            if (!recordId) return;
+
+            addEnergy();
+
+            const packageRecord = state.records.all.find(r => r.id === recordId);
+            if (!packageRecord || packageRecord.fields['Item Type'] !== 'Package') {
+                ui.showToast('Package not found');
+                return;
+            }
+
+            // Fetch package contents from linked session
+            let packageContents = { includedItems: [], addOnItems: [], tiers: [] };
+            const linkedSessionId = packageRecord.fields['LinkedSession'] ? packageRecord.fields['LinkedSession'][0] : null;
+
+            if (linkedSessionId) {
+                try {
+                    const linkedSession = await api.fetchSessionById(linkedSessionId);
+                    if (linkedSession && linkedSession.fields['Items with Variations']) {
+                        const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
+
+                        // Extract locked items as included items
+                        const includedItems = [];
+                        for (const [id, info] of Object.entries(sessionData.lockedInItems || {})) {
+                            includedItems.push({
+                                id,
+                                quantity: info.quantity || 1,
+                                options: info.selections || null,
+                                locked: true
+                            });
+                        }
+
+                        // Extract ideas as add-on items
+                        const addOnItems = [];
+                        for (const [id, info] of Object.entries(sessionData.ideasItems || {})) {
+                            addOnItems.push({
+                                id,
+                                quantity: info.quantity || 1,
+                                options: info.selections || null
+                            });
+                        }
+
+                        packageContents = {
+                            includedItems,
+                            addOnItems,
+                            tiers: sessionData.packageMetadata?.tiers || []
+                        };
+                    }
+                } catch (e) {
+                    console.warn('[Events] Could not fetch linked session for package', recordId, e);
+                }
+            }
+
+            const includedItems = packageContents.includedItems || [];
+            const addOnItems = packageContents.addOnItems || [];
+
+            // Get selected tier if any
+            const packageCard = addPackageBtn.closest('.package-card');
+            const selectedTierBtn = packageCard?.querySelector('.tier-btn.selected');
+            const selectedTierIndex = selectedTierBtn ? parseInt(selectedTierBtn.dataset.tierIndex, 10) : 0;
+
+            log('Events', `Adding package ${packageRecord.fields.Name} to plan`);
+            log('Events', `Package has ${includedItems.length} included items and ${addOnItems.length} add-ons`);
+
+            // Add all included items to lockedItems (Event Plan)
+            let addedCount = 0;
+            for (const itemRef of includedItems) {
+                const itemId = itemRef.id || itemRef;
+                const itemRecord = state.records.all.find(r => r.id === itemId);
+
+                if (itemRecord && !state.cart.lockedItems.has(itemId)) {
+                    const itemInfo = {
+                        quantity: itemRef.quantity || 1,
+                        selectedOptionIndex: itemRef.options?.group0 || 0,
+                        selections: itemRef.options || {},
+                        note: `From package: ${packageRecord.fields.Name}`,
+                        packageId: recordId,
+                        packageLocked: itemRef.locked !== false // Locked items from package
+                    };
+
+                    // Enforce effective minimum quantity
+                    const effectiveMin = getEffectiveMinQuantity(itemRecord);
+                    if (itemInfo.quantity < effectiveMin) {
+                        itemInfo.quantity = effectiveMin;
+                    }
+
+                    state.cart.lockedItems.set(itemId, itemInfo);
+                    state.cart.items.delete(itemId); // Remove from ideas if present
+                    addedCount++;
+                    log('Events', `Added included item ${itemRecord.fields.Name} to locked items`);
+                }
+            }
+
+            // Add all add-on items to ideas (Save for Later section)
+            let addOnCount = 0;
+            for (const itemRef of addOnItems) {
+                const itemId = itemRef.id || itemRef;
+                const itemRecord = state.records.all.find(r => r.id === itemId);
+
+                if (itemRecord && !state.cart.lockedItems.has(itemId) && !state.cart.items.has(itemId)) {
+                    const itemInfo = {
+                        quantity: itemRef.quantity || 1,
+                        selectedOptionIndex: itemRef.options?.group0 || 0,
+                        selections: itemRef.options || {},
+                        note: `Add-on from package: ${packageRecord.fields.Name}`,
+                        packageId: recordId,
+                        isPackageAddOn: true
+                    };
+
+                    state.cart.items.set(itemId, itemInfo);
+                    addOnCount++;
+                    log('Events', `Added add-on item ${itemRecord.fields.Name} to ideas`);
+                }
+            }
+
+            // Store package metadata in session for reference
+            if (!state.session.activePackages) {
+                state.session.activePackages = new Map();
+            }
+            state.session.activePackages.set(recordId, {
+                name: packageRecord.fields.Name,
+                tierIndex: selectedTierIndex,
+                addedAt: new Date().toISOString()
+            });
+
+            // Update progress
+            const progressDelta = 0.0005 * (addedCount + addOnCount);
+            updateProgress(progressDelta);
+
+            // Update all UI
+            ui.updateCardIcon(recordId);
+            await ui.updateIdeasCarousel();
+            await ui.updateEventPlanSection();
+            ui.updateTotalCost();
+            await updateAllCardAvailabilityIcons();
+            await ui.updateLockedItemStatusIcons();
+            updateMobileBarAvailability();
+
+            // Show success notification
+            const notification = `Added package "${packageRecord.fields.Name}": ${addedCount} items to plan` +
+                (addOnCount > 0 ? `, ${addOnCount} add-ons available in Ideas` : '');
+            ui.showEventPlanNotification(notification);
+
+            triggerSave();
+            return;
+        }
 
         // Handle "Edit Event" button for events that already have a linked session
         if (editEventBtn) {

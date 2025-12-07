@@ -1791,6 +1791,172 @@ export async function publishSessionAsEvent(sessionId, eventData) {
 }
 
 /**
+ * Publishes a Session as a reusable Package item (Decision 5 - Option B).
+ * Creates a new Package item in the catalog with the session's locked items as included items
+ * and the session's ideas as optional add-ons.
+ *
+ * @param {string} sessionId - The session record ID
+ * @param {Object} packageData - Package metadata
+ *   @param {string} packageData.Name - Package name
+ *   @param {string} packageData.Description - Package description
+ *   @param {number} packageData.Price - Base package price
+ *   @param {number} packageData.Discount - Optional discount percentage
+ *   @param {Array} packageData.Tiers - Optional tier configuration [{name, price}, ...]
+ * @returns {Promise<Object>} The created package item record
+ */
+export async function publishSessionAsPackage(sessionId, packageData = {}) {
+    if (!sessionId) {
+        throw new Error('Session ID is required to publish as package');
+    }
+
+    const session = await fetchSessionById(sessionId);
+    if (!session) {
+        throw new Error('Session not found');
+    }
+
+    log('API', `Publishing session ${sessionId} as Package`);
+
+    // Parse session data to get locked items and ideas
+    let sessionItems = { lockedInItems: {}, ideasItems: {} };
+    try {
+        const sessionDataString = session.fields['Items with Variations'];
+        if (sessionDataString) {
+            sessionItems = JSON.parse(sessionDataString);
+        }
+    } catch (e) {
+        console.warn('[API] Could not parse session data:', e);
+    }
+
+    // Build package contents from session
+    const includedItems = [];
+    for (const [id, info] of Object.entries(sessionItems.lockedInItems || {})) {
+        includedItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null,
+            locked: true
+        });
+    }
+
+    const addOnItems = [];
+    for (const [id, info] of Object.entries(sessionItems.ideasItems || {})) {
+        addOnItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null
+        });
+    }
+
+    const packageContents = {
+        includedItems,
+        addOnItems,
+        tiers: packageData.Tiers || []
+    };
+
+    // Store package metadata in the session's Items with Variations field
+    // This avoids needing new Airtable fields - we extend the existing session data
+    const updatedSessionData = {
+        ...sessionItems,
+        packageMetadata: {
+            discount: packageData.Discount || 0,
+            tiers: packageData.Tiers || [],
+            price: packageData.Price || 0,
+            pricingType: packageData.PricingType || null
+        }
+    };
+
+    // Update session with package metadata
+    const updateSessionDataUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    await fetch(updateSessionDataUrl, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fields: { 'Items with Variations': JSON.stringify(updatedSessionData) } })
+    });
+
+    // Build the package item fields - use only existing Airtable fields
+    // Package contents are retrieved from LinkedSession at render time
+    const itemFields = {
+        'Name': packageData.Name || session.fields.Name || 'Untitled Package',
+        'Description': packageData.Description || session.fields.Goals || '',
+        'Item Type': 'Package',
+        'Status': 'Available',
+        'LinkedSession': [sessionId]
+    };
+
+    // Add price if provided
+    if (packageData.Price !== undefined && packageData.Price !== null) {
+        itemFields['Price'] = packageData.Price;
+    }
+
+    // Add pricing type if provided
+    if (packageData.PricingType) {
+        itemFields['Pricing Type'] = packageData.PricingType;
+    }
+
+    // Check if this session already has a linked package
+    const existingPackageId = session.fields.LinkedPackage ? session.fields.LinkedPackage[0] : null;
+    let itemRecord;
+
+    if (existingPackageId) {
+        // Update existing package
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${existingPackageId}`;
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to update package:', errorText);
+            throw new Error(`Failed to update package: ${errorText}`);
+        }
+
+        itemRecord = await response.json();
+        log('API', `Updated package ${existingPackageId} from session ${sessionId}`);
+    } else {
+        // Create new package
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to create package:', errorText);
+            throw new Error(`Failed to create package: ${errorText}`);
+        }
+
+        itemRecord = await response.json();
+        log('API', `Created package ${itemRecord.id} from session ${sessionId}`);
+
+        // Update session with link to new package
+        const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        await fetch(updateSessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { 'LinkedPackage': [itemRecord.id] } })
+        });
+    }
+
+    return itemRecord;
+}
+
+/**
  * Fetches a single session by ID
  * @param {string} sessionId - The session record ID
  * @returns {Promise<Object>} The session record
