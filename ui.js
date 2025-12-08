@@ -25,6 +25,8 @@ export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, c
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
 export { initializeItemChat };
 export { updateFooter, initializeFooter } from './components/footer.js';
+// Phase 3a: Task Manager exports
+export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';
 
 
 // Optimized lazy loading with Netlify Image CDN, responsive images and modern format support

@@ -1123,6 +1123,7 @@ body.modal-open {
             <p class="projects-loading">Loading projects...</p>
         </div>
         <div class="projects-panel-footer">
+            <button id="view-tasks-btn" class="projects-tasks-btn" style="display: none;">View Tasks</button>
             <button id="create-new-project-btn" class="projects-create-btn">+ New Project</button>
         </div>
     </div>
@@ -1410,6 +1411,8 @@ body.modal-open {
                     </div>
                 </div>
             </div>
+            <!-- Phase 3a: Task Manager Container (hidden by default) -->
+            <div id="task-manager-container" style="display: none;"></div>
             <div id="catalog-container"></div>
         </div>
     </div>

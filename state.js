@@ -77,6 +77,11 @@ export let state = {
         activeShopId: null,
         currentProgress: 0.3, // NEW: Background color progress (0.0 to 1.0) - Start at cyan/blue range
     },
+    // Phase 3: Tasks for Project Management
+    tasks: {
+        all: new Map(),           // taskId -> task record
+        byProject: new Map(),     // projectId -> [task records]
+    },
 };
 
 export function setState(newState) {
