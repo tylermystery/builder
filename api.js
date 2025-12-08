@@ -2374,10 +2374,13 @@ export async function fetchTasks(projectId) {
         'ProjectId',
         'ParentTask',
         'Priority',
+        'Order',
+        'LinkedItem',
         'CreatedTime'
     ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
 
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=DueDate&sort%5B0%5D%5Bdirection%5D=asc`;
+    // Sort by Order field first, then by DueDate
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
 
     try {
         const response = await fetch(url, {
@@ -2442,6 +2445,12 @@ export async function createTask(projectId, taskData) {
     }
     if (taskData.Priority) {
         fields.Priority = taskData.Priority;
+    }
+    if (taskData.Order !== undefined) {
+        fields.Order = taskData.Order;
+    }
+    if (taskData.LinkedItem) {
+        fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
     }
 
     try {
@@ -2509,6 +2518,12 @@ export async function updateTask(taskId, taskData) {
     if (taskData.Priority !== undefined) {
         fields.Priority = taskData.Priority || null;
     }
+    if (taskData.Order !== undefined) {
+        fields.Order = taskData.Order;
+    }
+    if (taskData.LinkedItem !== undefined) {
+        fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+    }
 
     try {
         const response = await fetch(url, {
@@ -2568,6 +2583,61 @@ export async function deleteTask(taskId) {
         return true;
     } catch (error) {
         console.error("Error deleting task:", error);
+        return false;
+    }
+}
+
+/**
+ * Update task order for drag-and-drop reordering
+ * Uses batch update to efficiently update multiple task orders
+ * @param {Array} taskOrders - Array of { taskId, order } objects
+ * @returns {Promise<boolean>} - True if all updates succeeded, false otherwise
+ */
+export async function updateTaskOrder(taskOrders) {
+    if (!taskOrders || taskOrders.length === 0) {
+        log('API', 'updateTaskOrder called with empty array');
+        return true;
+    }
+
+    log('API', `Updating order for ${taskOrders.length} tasks`);
+
+    // Airtable batch update supports up to 10 records at a time
+    const batchSize = 10;
+    const batches = [];
+
+    for (let i = 0; i < taskOrders.length; i += batchSize) {
+        batches.push(taskOrders.slice(i, i + batchSize));
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}`;
+
+    try {
+        for (const batch of batches) {
+            const records = batch.map(({ taskId, order }) => ({
+                id: taskId,
+                fields: { Order: order }
+            }));
+
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ records })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Airtable Error updating task orders:', errorText);
+                throw new Error('Failed to update task orders in Airtable.');
+            }
+        }
+
+        log('API', `Successfully updated order for ${taskOrders.length} tasks`);
+        return true;
+    } catch (error) {
+        console.error("Error updating task orders:", error);
         return false;
     }
 }

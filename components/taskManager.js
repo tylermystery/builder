@@ -1,5 +1,5 @@
 // FILE: components/taskManager.js
-// Phase 3a: Basic Task Operations & UI
+// Phase 3b: Advanced Interactions - Drag-and-Drop Reordering & Item Linking
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
@@ -11,6 +11,7 @@ import { showToast } from '../ui.js';
 let currentProjectId = null;
 let currentTasks = [];
 let editingTaskId = null;
+let sortableInstances = []; // Track SortableJS instances for cleanup
 
 /**
  * Initialize the Task Manager for a specific project
@@ -117,6 +118,9 @@ function renderEmptyState(container, message) {
  * @param {Array} tasks - Array of task records
  */
 function renderTaskManager(container, tasks) {
+    // Cleanup existing Sortable instances before re-rendering
+    cleanupSortables();
+
     container.innerHTML = `
         <div class="task-manager">
             <div class="task-manager-header">
@@ -131,6 +135,9 @@ function renderTaskManager(container, tasks) {
 
     // Attach event listeners
     attachEventListeners(container);
+
+    // Initialize drag-and-drop after rendering
+    initializeSortable();
 }
 
 /**
@@ -147,35 +154,59 @@ function renderTaskList(tasks) {
         `;
     }
 
-    // Group tasks by status
-    const pendingTasks = tasks.filter(t =>
-        t.fields.Status === api.TASK_STATUS.PENDING ||
-        t.fields.Status === api.TASK_STATUS.IN_PROGRESS ||
-        t.fields.Status === api.TASK_STATUS.BLOCKED ||
-        !t.fields.Status
-    );
-    const completedTasks = tasks.filter(t => t.fields.Status === api.TASK_STATUS.COMPLETED);
+    // Sort tasks by Order field if available, otherwise by creation time
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const orderA = a.fields.Order ?? Infinity;
+        const orderB = b.fields.Order ?? Infinity;
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(a.createdTime) - new Date(b.createdTime);
+    });
+
+    // Group tasks by status for Kanban-style display
+    const statusGroups = {
+        [api.TASK_STATUS.PENDING]: [],
+        [api.TASK_STATUS.IN_PROGRESS]: [],
+        [api.TASK_STATUS.BLOCKED]: [],
+        [api.TASK_STATUS.COMPLETED]: []
+    };
+
+    sortedTasks.forEach(task => {
+        const status = task.fields.Status || api.TASK_STATUS.PENDING;
+        if (statusGroups[status]) {
+            statusGroups[status].push(task);
+        } else {
+            statusGroups[api.TASK_STATUS.PENDING].push(task);
+        }
+    });
+
+    // Combine active statuses (pending, in_progress, blocked) for drag-drop
+    const activeTasks = [
+        ...statusGroups[api.TASK_STATUS.PENDING],
+        ...statusGroups[api.TASK_STATUS.IN_PROGRESS],
+        ...statusGroups[api.TASK_STATUS.BLOCKED]
+    ];
+    const completedTasks = statusGroups[api.TASK_STATUS.COMPLETED];
 
     let html = '';
 
-    // Pending/Active Tasks Section
-    if (pendingTasks.length > 0) {
+    // Active Tasks Section (sortable)
+    if (activeTasks.length > 0 || completedTasks.length === 0) {
         html += `
-            <div class="task-group">
-                <h4 class="task-group-header">Active Tasks (${pendingTasks.length})</h4>
-                <div class="task-group-list">
-                    ${pendingTasks.map(task => renderTaskCard(task)).join('')}
+            <div class="task-group" data-status-group="active">
+                <h4 class="task-group-header">Active Tasks (${activeTasks.length})</h4>
+                <div class="task-group-list task-sortable" data-status="active">
+                    ${activeTasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
         `;
     }
 
-    // Completed Tasks Section
+    // Completed Tasks Section (sortable)
     if (completedTasks.length > 0) {
         html += `
-            <div class="task-group completed-group">
+            <div class="task-group completed-group" data-status-group="completed">
                 <h4 class="task-group-header">Completed (${completedTasks.length})</h4>
-                <div class="task-group-list">
+                <div class="task-group-list task-sortable" data-status="completed">
                     ${completedTasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
@@ -197,13 +228,20 @@ function renderTaskCard(task) {
     const dueDate = fields.DueDate ? formatDate(fields.DueDate) : '';
     const assignee = fields.Assignee || '';
     const isCompleted = status === api.TASK_STATUS.COMPLETED;
+    const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : null;
 
     // Status badge styling
     const statusBadgeClass = getStatusBadgeClass(status);
     const statusLabel = getStatusLabel(status);
 
+    // Get linked item info
+    const linkedItemHtml = linkedItemId ? renderLinkedItemSnippet(linkedItemId) : '';
+
     return `
-        <div class="task-card ${isCompleted ? 'task-completed' : ''}" data-task-id="${task.id}">
+        <div class="task-card ${isCompleted ? 'task-completed' : ''}" data-task-id="${task.id}" data-status="${status}">
+            <div class="task-card-drag-handle">
+                <span class="drag-icon">⋮⋮</span>
+            </div>
             <div class="task-card-main">
                 <div class="task-checkbox">
                     <input type="checkbox"
@@ -218,6 +256,7 @@ function renderTaskCard(task) {
                         ${dueDate ? `<span class="task-due-date">${dueDate}</span>` : ''}
                         ${assignee ? `<span class="task-assignee">${escapeHtml(assignee)}</span>` : ''}
                     </div>
+                    ${linkedItemHtml}
                 </div>
             </div>
             <div class="task-card-actions">
@@ -228,6 +267,38 @@ function renderTaskCard(task) {
                     <span>&times;</span>
                 </button>
             </div>
+        </div>
+    `;
+}
+
+/**
+ * Render linked item snippet for task card
+ * @param {string} itemId - The catalog item ID
+ * @returns {string} - HTML string for linked item display
+ */
+function renderLinkedItemSnippet(itemId) {
+    // Try to get item from state.records.all
+    const item = state.records.all.find(r => r.id === itemId);
+
+    if (!item) {
+        return `
+            <div class="task-linked-item task-linked-item-missing" data-item-id="${itemId}">
+                <span class="linked-item-icon">📦</span>
+                <span class="linked-item-name">Linked Item</span>
+            </div>
+        `;
+    }
+
+    const itemName = item.fields?.Name || 'Unnamed Item';
+    const thumbnail = item.fields?.Attachments?.[0]?.thumbnails?.small?.url || '';
+
+    return `
+        <div class="task-linked-item" data-item-id="${itemId}" title="Click to view item details">
+            ${thumbnail
+                ? `<img src="${thumbnail}" alt="${escapeHtml(itemName)}" class="linked-item-thumb" loading="lazy">`
+                : `<span class="linked-item-icon">📦</span>`
+            }
+            <span class="linked-item-name">${escapeHtml(itemName)}</span>
         </div>
     `;
 }
@@ -310,7 +381,7 @@ function attachEventListeners(container) {
         addBtn.addEventListener('click', () => showTaskModal());
     }
 
-    // Task card clicks (edit)
+    // Task card clicks (edit, linked item)
     container.addEventListener('click', handleTaskClick);
 
     // Checkbox changes (complete/uncomplete)
@@ -324,7 +395,26 @@ function attachEventListeners(container) {
 function handleTaskClick(e) {
     const editBtn = e.target.closest('.task-edit-btn');
     const deleteBtn = e.target.closest('.task-delete-btn');
+    const linkedItem = e.target.closest('.task-linked-item');
+    const dragHandle = e.target.closest('.task-card-drag-handle');
     const taskCard = e.target.closest('.task-card');
+
+    // Handle linked item click - open item detail
+    if (linkedItem) {
+        e.stopPropagation();
+        const itemId = linkedItem.dataset.itemId;
+        if (itemId && typeof window.showItemDetail === 'function') {
+            window.showItemDetail(itemId);
+        } else {
+            log('TaskManager', `Item detail view not available for item: ${itemId}`);
+        }
+        return;
+    }
+
+    // Ignore clicks on drag handle
+    if (dragHandle) {
+        return;
+    }
 
     if (editBtn) {
         e.stopPropagation();
@@ -385,6 +475,10 @@ function showTaskModal(task = null) {
     editingTaskId = task ? task.id : null;
     const isEditing = !!task;
     const fields = task?.fields || {};
+    const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : '';
+
+    // Build catalog items dropdown options
+    const catalogItemsOptions = buildCatalogItemsOptions(linkedItemId);
 
     // Create modal HTML
     const modalHtml = `
@@ -429,6 +523,19 @@ function showTaskModal(task = null) {
                                value="${escapeHtml(fields.Assignee || '')}"
                                placeholder="Assign to someone (optional)">
                     </div>
+                    <div class="task-form-group">
+                        <label for="task-linked-item">Link Catalog Item</label>
+                        <div class="task-linked-item-select-wrapper">
+                            <select id="task-linked-item" name="linkedItem">
+                                <option value="">-- No linked item --</option>
+                                ${catalogItemsOptions}
+                            </select>
+                            <input type="text" id="task-linked-item-search"
+                                   placeholder="Search items..."
+                                   class="task-linked-item-search">
+                        </div>
+                        <small class="task-form-hint">Associate a catalog item/product with this task</small>
+                    </div>
                     <div class="task-form-actions">
                         <button type="button" class="task-cancel-btn" id="task-cancel-btn">Cancel</button>
                         <button type="submit" class="task-save-btn">${isEditing ? 'Save Changes' : 'Create Task'}</button>
@@ -446,6 +553,11 @@ function showTaskModal(task = null) {
     const closeBtn = document.getElementById('task-modal-close');
     const cancelBtn = document.getElementById('task-cancel-btn');
     const form = document.getElementById('task-form');
+    const linkedItemSelect = document.getElementById('task-linked-item');
+    const linkedItemSearch = document.getElementById('task-linked-item-search');
+
+    // Setup linked item search/filter
+    setupLinkedItemSearch(linkedItemSelect, linkedItemSearch);
 
     // Close modal handlers
     const closeModal = () => {
@@ -476,18 +588,93 @@ function showTaskModal(task = null) {
 }
 
 /**
+ * Build catalog items dropdown options HTML
+ * @param {string} selectedItemId - Currently selected item ID
+ * @returns {string} - HTML string for dropdown options
+ */
+function buildCatalogItemsOptions(selectedItemId = '') {
+    const items = state.records.all || [];
+
+    if (items.length === 0) {
+        return '<option value="" disabled>No catalog items available</option>';
+    }
+
+    // Sort items alphabetically by name
+    const sortedItems = [...items].sort((a, b) => {
+        const nameA = (a.fields?.Name || '').toLowerCase();
+        const nameB = (b.fields?.Name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    return sortedItems.map(item => {
+        const itemId = item.id;
+        const itemName = item.fields?.Name || 'Unnamed Item';
+        const itemType = item.fields?.['Item Type'] || '';
+        const isSelected = itemId === selectedItemId ? 'selected' : '';
+        const displayName = itemType ? `${itemName} (${itemType})` : itemName;
+
+        return `<option value="${itemId}" ${isSelected}>${escapeHtml(displayName)}</option>`;
+    }).join('');
+}
+
+/**
+ * Setup linked item search filtering
+ * @param {HTMLSelectElement} selectEl - The select element
+ * @param {HTMLInputElement} searchEl - The search input element
+ */
+function setupLinkedItemSearch(selectEl, searchEl) {
+    if (!selectEl || !searchEl) return;
+
+    // Store original options
+    const originalOptions = Array.from(selectEl.options).map(opt => ({
+        value: opt.value,
+        text: opt.text,
+        selected: opt.selected
+    }));
+
+    searchEl.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+
+        // Clear and repopulate select
+        selectEl.innerHTML = '';
+
+        // Always add the "no linked item" option
+        const noItemOption = document.createElement('option');
+        noItemOption.value = '';
+        noItemOption.textContent = '-- No linked item --';
+        selectEl.appendChild(noItemOption);
+
+        // Filter and add matching options
+        originalOptions.forEach(opt => {
+            if (opt.value === '') return; // Skip the empty option we already added
+
+            if (!searchTerm || opt.text.toLowerCase().includes(searchTerm)) {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                option.selected = opt.selected;
+                selectEl.appendChild(option);
+            }
+        });
+    });
+}
+
+/**
  * Handle task form submission
  * @param {HTMLFormElement} form - The form element
  * @param {Function} closeModal - Function to close the modal
  */
 async function handleTaskSubmit(form, closeModal) {
     const formData = new FormData(form);
+    const linkedItemValue = formData.get('linkedItem');
+
     const taskData = {
         Name: formData.get('name')?.trim(),
         Description: formData.get('description')?.trim(),
         Status: formData.get('status'),
         DueDate: formData.get('dueDate') || null,
-        Assignee: formData.get('assignee')?.trim() || null
+        Assignee: formData.get('assignee')?.trim() || null,
+        LinkedItem: linkedItemValue || null
     };
 
     if (!taskData.Name) {
@@ -506,7 +693,12 @@ async function handleTaskSubmit(form, closeModal) {
             // Update existing task
             result = await api.updateTask(editingTaskId, taskData);
         } else {
-            // Create new task
+            // Create new task - assign order at end of list
+            const maxOrder = currentTasks.reduce((max, t) => {
+                const order = t.fields.Order ?? 0;
+                return Math.max(max, order);
+            }, 0);
+            taskData.Order = maxOrder + 1;
             result = await api.createTask(currentProjectId, taskData);
         }
 
@@ -567,6 +759,9 @@ async function handleDeleteTask(taskId) {
 async function refreshTaskList() {
     if (!currentProjectId) return;
 
+    // Cleanup existing Sortable instances before re-rendering
+    cleanupSortables();
+
     try {
         const tasks = await api.fetchTasks(currentProjectId);
         currentTasks = tasks;
@@ -576,6 +771,8 @@ async function refreshTaskList() {
         const listContainer = document.getElementById('task-list-container');
         if (listContainer) {
             listContainer.innerHTML = renderTaskList(tasks);
+            // Reinitialize drag-and-drop
+            initializeSortable();
         }
     } catch (error) {
         console.error('Error refreshing task list:', error);
@@ -607,6 +804,180 @@ export function getCurrentProjectId() {
 export function getCurrentTasks() {
     return currentTasks;
 }
+
+// =============================================================================
+// DRAG-AND-DROP FUNCTIONALITY (SortableJS)
+// =============================================================================
+
+/**
+ * Initialize SortableJS on task list groups
+ * Enables drag-and-drop reordering within and between groups
+ */
+function initializeSortable() {
+    // Check if Sortable is available (loaded globally via CDN)
+    if (typeof Sortable === 'undefined') {
+        log('TaskManager', 'SortableJS not available - drag-and-drop disabled');
+        return;
+    }
+
+    const sortableLists = document.querySelectorAll('.task-sortable');
+
+    sortableLists.forEach(list => {
+        const statusGroup = list.dataset.status; // 'active' or 'completed'
+
+        const instance = new Sortable(list, {
+            group: 'tasks', // Enable cross-group dragging
+            animation: 150,
+            ghostClass: 'task-sortable-ghost',
+            chosenClass: 'task-sortable-chosen',
+            dragClass: 'task-sortable-drag',
+            handle: '.task-card-drag-handle', // Only drag via handle
+            forceFallback: false,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+
+            // Called when dragging ends
+            onEnd: async (evt) => {
+                await handleDragEnd(evt, statusGroup);
+            }
+        });
+
+        sortableInstances.push(instance);
+    });
+
+    log('TaskManager', `Initialized ${sortableInstances.length} Sortable instances`);
+}
+
+/**
+ * Cleanup SortableJS instances
+ */
+function cleanupSortables() {
+    sortableInstances.forEach(instance => {
+        if (instance && typeof instance.destroy === 'function') {
+            instance.destroy();
+        }
+    });
+    sortableInstances = [];
+}
+
+/**
+ * Handle drag end event - update order and status in API
+ * @param {Object} evt - SortableJS event object
+ * @param {string} originalStatusGroup - The original status group ('active' or 'completed')
+ */
+async function handleDragEnd(evt, originalStatusGroup) {
+    const taskId = evt.item.dataset.taskId;
+    const newIndex = evt.newIndex;
+    const fromList = evt.from;
+    const toList = evt.to;
+    const targetStatusGroup = toList.dataset.status;
+
+    log('TaskManager', `Task ${taskId} moved to index ${newIndex} in ${targetStatusGroup} group`);
+
+    // Store the original DOM state for potential revert
+    const originalHTML = evt.from.innerHTML;
+    const toOriginalHTML = evt.to.innerHTML;
+
+    // Determine if status needs to change
+    const movedToCompleted = targetStatusGroup === 'completed' && originalStatusGroup !== 'completed';
+    const movedFromCompleted = targetStatusGroup === 'active' && originalStatusGroup === 'completed';
+
+    try {
+        // Prepare task orders for all tasks in the target list
+        const taskCards = toList.querySelectorAll('.task-card');
+        const taskOrders = [];
+
+        taskCards.forEach((card, index) => {
+            taskOrders.push({
+                taskId: card.dataset.taskId,
+                order: index + 1
+            });
+        });
+
+        // If task moved between groups, also update orders in the source list
+        if (fromList !== toList) {
+            const fromTaskCards = fromList.querySelectorAll('.task-card');
+            fromTaskCards.forEach((card, index) => {
+                // Only add if not already in taskOrders
+                if (!taskOrders.find(t => t.taskId === card.dataset.taskId)) {
+                    taskOrders.push({
+                        taskId: card.dataset.taskId,
+                        order: index + 1
+                    });
+                }
+            });
+        }
+
+        // Determine new status based on target group
+        let newStatus = null;
+        if (movedToCompleted) {
+            newStatus = api.TASK_STATUS.COMPLETED;
+        } else if (movedFromCompleted) {
+            newStatus = api.TASK_STATUS.PENDING;
+        }
+
+        // If status changed, update it first
+        if (newStatus) {
+            const updatedTask = await api.updateTask(taskId, { Status: newStatus });
+            if (updatedTask) {
+                state.tasks.all.set(taskId, updatedTask);
+                showToast(newStatus === api.TASK_STATUS.COMPLETED ? 'Task completed!' : 'Task reopened', 2000);
+            }
+        }
+
+        // Update orders in background (non-blocking for UI responsiveness)
+        api.updateTaskOrder(taskOrders).then(success => {
+            if (success) {
+                log('TaskManager', 'Task orders updated successfully');
+                // Update local state with new orders
+                taskOrders.forEach(({ taskId: tid, order }) => {
+                    const task = state.tasks.all.get(tid);
+                    if (task) {
+                        task.fields.Order = order;
+                    }
+                });
+            } else {
+                console.error('Failed to update task orders');
+                showToast('Failed to save task order', 3000);
+                // Revert DOM on failure
+                revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+            }
+        }).catch(error => {
+            console.error('Error updating task orders:', error);
+            showToast('Failed to save task order', 3000);
+            revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+        });
+
+    } catch (error) {
+        console.error('Error handling drag end:', error);
+        showToast('Failed to update task', 3000);
+        // Revert DOM on error
+        revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+    }
+}
+
+/**
+ * Revert DOM to original state after failed drag operation
+ * @param {HTMLElement} fromList - Original source list
+ * @param {HTMLElement} toList - Original target list
+ * @param {string} fromHTML - Original source list HTML
+ * @param {string} toHTML - Original target list HTML
+ */
+function revertDragDOM(fromList, toList, fromHTML, toHTML) {
+    if (fromList === toList) {
+        fromList.innerHTML = fromHTML;
+    } else {
+        fromList.innerHTML = fromHTML;
+        toList.innerHTML = toHTML;
+    }
+    // Reinitialize Sortable after revert
+    cleanupSortables();
+    initializeSortable();
+}
+
+// =============================================================================
+// END DRAG-AND-DROP FUNCTIONALITY
+// =============================================================================
 
 // Expose retry function globally for error state button
 window.taskManager = { retry };

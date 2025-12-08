@@ -5022,6 +5022,185 @@ hr.total-divider {
     }
 }
 
+/* ==========================================================================
+   TASK MANAGER PHASE 3B: DRAG-AND-DROP & LINKED ITEMS
+   ========================================================================== */
+
+/* Drag Handle */
+.task-card-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    min-width: 24px;
+    cursor: grab;
+    color: #adb5bd;
+    font-size: 1em;
+    padding: 0 4px;
+    user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.2s, color 0.2s;
+}
+
+.task-card:hover .task-card-drag-handle {
+    opacity: 1;
+}
+
+.task-card-drag-handle:hover {
+    color: #6c757d;
+}
+
+.task-card-drag-handle:active {
+    cursor: grabbing;
+}
+
+.drag-icon {
+    letter-spacing: -2px;
+    font-weight: bold;
+}
+
+/* Sortable Ghost (placeholder during drag) */
+.task-sortable-ghost {
+    background-color: #e8f4fd !important;
+    border: 2px dashed #3498db !important;
+    opacity: 0.6;
+}
+
+/* Sortable Chosen (element being dragged) */
+.task-sortable-chosen {
+    background-color: #fff !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+    transform: scale(1.02);
+}
+
+/* Sortable Drag (element in motion) */
+.task-sortable-drag {
+    opacity: 1 !important;
+}
+
+/* Task Card with drag handle - adjust layout */
+.task-card {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.task-card-main {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+/* Linked Item Snippet on Task Card */
+.task-linked-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 4px 8px;
+    background-color: #f0f4f8;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #4a5568;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    max-width: 100%;
+}
+
+.task-linked-item:hover {
+    background-color: #e2e8f0;
+    border-color: #cbd5e0;
+}
+
+.task-linked-item-missing {
+    color: #718096;
+    font-style: italic;
+}
+
+.linked-item-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    object-fit: cover;
+}
+
+.linked-item-icon {
+    font-size: 0.9em;
+}
+
+.linked-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+/* Link Item Select in Modal */
+.task-linked-item-select-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-linked-item-select-wrapper select {
+    width: 100%;
+}
+
+.task-linked-item-search {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.task-linked-item-search:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.task-form-hint {
+    display: block;
+    margin-top: 4px;
+    color: #6c757d;
+    font-size: 0.8em;
+}
+
+/* Task Group List (sortable container) */
+.task-sortable {
+    min-height: 40px; /* Allow dropping into empty groups */
+}
+
+.task-sortable:empty::after {
+    content: 'Drop tasks here';
+    display: block;
+    padding: 20px;
+    text-align: center;
+    color: #adb5bd;
+    font-style: italic;
+    border: 2px dashed #e9ecef;
+    border-radius: 6px;
+}
+
+/* Mobile adjustments for drag-and-drop */
+@media (max-width: 768px) {
+    .task-card-drag-handle {
+        padding: 0 8px;
+        margin-right: -4px;
+    }
+
+    .linked-item-name {
+        max-width: 120px;
+    }
+
+    .task-linked-item-select-wrapper {
+        gap: 6px;
+    }
+}
+
 /* Projects Panel Tasks Button */
 .projects-tasks-btn {
     flex: 1;
