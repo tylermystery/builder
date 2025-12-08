@@ -21,6 +21,41 @@ const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
 const TASKS_TABLE_NAME = 'Tasks';
 // --------------------------------
 
+// --- API Timeout Configuration ---
+const API_TIMEOUT_MS = 15000; // 15 second timeout for API calls
+
+/**
+ * Fetch with timeout wrapper to prevent indefinite hangs
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} timeoutMs - Timeout in milliseconds (default: API_TIMEOUT_MS)
+ * @returns {Promise<Response>} - Fetch response
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        console.warn(`[API DEBUG] Fetch timeout after ${timeoutMs}ms for URL: ${url.substring(0, 100)}...`);
+        controller.abort();
+    }, timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            console.error(`[API DEBUG] Request aborted due to timeout: ${url.substring(0, 100)}...`);
+            throw new Error(`Request timed out after ${timeoutMs}ms`);
+        }
+        throw error;
+    }
+}
+// --------------------------------
+
 export async function fetchPlansForUser(userId, includeFullDetails = false) {
     if (!userId) {
         return [];
@@ -2446,7 +2481,10 @@ export const TASK_STATUS = {
  * @returns {Promise<Array>} - Array of task records
  */
 export async function fetchTasks(projectId) {
+    console.log('[API DEBUG] fetchTasks called with projectId:', projectId);
+
     if (!projectId) {
+        console.warn('[API DEBUG] fetchTasks called without projectId, returning empty array');
         log('API', 'fetchTasks called without projectId');
         return [];
     }
@@ -2475,21 +2513,39 @@ export async function fetchTasks(projectId) {
     // Sort by Order field first, then by DueDate
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
 
+    console.log('[API DEBUG] fetchTasks URL:', url.substring(0, 150) + '...');
+    console.log('[API DEBUG] fetchTasks table name:', TASKS_TABLE_NAME);
+
     try {
-        const response = await fetch(url, {
+        console.log('[API DEBUG] fetchTasks starting fetch request...');
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
 
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchTasks fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchTasks response status:', response.status, response.statusText);
+
         if (!response.ok) {
             const errorText = await response.text();
+            console.error('[API DEBUG] fetchTasks Airtable error response:', errorText);
             console.error('Airtable Error fetching tasks:', errorText);
-            throw new Error('Failed to fetch tasks from Airtable.');
+            throw new Error(`Failed to fetch tasks from Airtable. Status: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('[API DEBUG] fetchTasks response data:', {
+            hasRecords: !!data.records,
+            recordCount: data.records?.length ?? 0,
+            offset: data.offset
+        });
         log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
         return data.records;
     } catch (error) {
+        console.error('[API DEBUG] fetchTasks caught error:', error);
+        console.error('[API DEBUG] fetchTasks error stack:', error?.stack);
         console.error("Error fetching tasks:", error);
         return [];
     }
@@ -2759,7 +2815,10 @@ export const PERMISSION_ROLES = {
  * @returns {Promise<Object>} - { role: string, permissionRecord: Object|null }
  */
 export async function fetchUserRole(projectId, userId) {
+    console.log('[API DEBUG] fetchUserRole called with:', { projectId, userId });
+
     if (!projectId || !userId) {
+        console.warn('[API DEBUG] fetchUserRole missing parameters:', { projectId, userId });
         log('API', 'fetchUserRole called without projectId or userId');
         return { role: null, permissionRecord: null };
     }
@@ -2772,27 +2831,48 @@ export async function fetchUserRole(projectId, userId) {
         const encodedFormula = encodeURIComponent(formula);
         const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&maxRecords=1`;
 
-        const response = await fetch(url, {
+        console.log('[API DEBUG] fetchUserRole fetching from Collaborator_Permissions...');
+        console.log('[API DEBUG] fetchUserRole table name:', COLLABORATOR_PERMISSIONS_TABLE_NAME);
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
 
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchUserRole fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchUserRole response status:', response.status, response.statusText);
+
         if (response.ok) {
             const data = await response.json();
+            console.log('[API DEBUG] fetchUserRole response data:', {
+                hasRecords: !!data.records,
+                recordCount: data.records?.length ?? 0
+            });
+
             if (data.records && data.records.length > 0) {
                 const permRecord = data.records[0];
                 const role = (permRecord.fields.Role || PERMISSION_ROLES.EDITOR).toLowerCase();
+                console.log('[API DEBUG] fetchUserRole found permission record:', { role, permRecordId: permRecord.id });
                 log('API', `Found permission record for user ${userId}: role = ${role}`);
                 return { role, permissionRecord: permRecord };
             }
+        } else {
+            const errorText = await response.text();
+            console.warn('[API DEBUG] fetchUserRole Collaborator_Permissions table error:', response.status, errorText);
         }
 
         // Fallback: Check legacy Collaborators field and ownership
+        console.log('[API DEBUG] fetchUserRole no permission record found, falling back to legacy check');
         log('API', `No permission record found, falling back to legacy check`);
         return await fetchLegacyUserRole(projectId, userId);
 
     } catch (error) {
+        console.error('[API DEBUG] fetchUserRole caught error:', error);
+        console.error('[API DEBUG] fetchUserRole error stack:', error?.stack);
         console.error("Error fetching user role:", error);
         // On error, fall back to legacy check
+        console.log('[API DEBUG] fetchUserRole falling back to legacy check after error');
         return await fetchLegacyUserRole(projectId, userId);
     }
 }
@@ -2804,43 +2884,67 @@ export async function fetchUserRole(projectId, userId) {
  * @returns {Promise<Object>} - { role: string, permissionRecord: null }
  */
 async function fetchLegacyUserRole(projectId, userId) {
+    console.log('[API DEBUG] fetchLegacyUserRole called with:', { projectId, userId });
+
     try {
         const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${projectId}`;
-        const response = await fetch(sessionUrl, {
+        console.log('[API DEBUG] fetchLegacyUserRole fetching session...');
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(sessionUrl, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
 
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchLegacyUserRole fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchLegacyUserRole response status:', response.status, response.statusText);
+
         if (!response.ok) {
+            console.warn('[API DEBUG] fetchLegacyUserRole could not fetch session:', response.status);
             log('API', `Could not fetch session ${projectId} for legacy role check`);
             return { role: null, permissionRecord: null };
         }
 
         const session = await response.json();
+        console.log('[API DEBUG] fetchLegacyUserRole session fields:', {
+            hasCollaborators: !!session.fields.Collaborators,
+            collaboratorsCount: session.fields.Collaborators?.length ?? 0,
+            hasStores: !!session.fields.Stores
+        });
+
         const collaborators = session.fields.Collaborators || [];
         const storeIds = session.fields.Stores || [];
 
         // Check if user is a collaborator
         const isCollaborator = collaborators.includes(userId);
+        console.log('[API DEBUG] fetchLegacyUserRole isCollaborator:', isCollaborator);
 
         // Check if user owns the store linked to this session
         const isStoreOwner = state.session.user.isOwner;
         const ownedStoreId = state.session.user.ownedStoreId;
         const isOwnerOfSessionStore = isStoreOwner && ownedStoreId && storeIds.includes(ownedStoreId);
+        console.log('[API DEBUG] fetchLegacyUserRole ownership check:', { isStoreOwner, ownedStoreId, isOwnerOfSessionStore });
 
         // Check if user was the first collaborator (original creator/owner)
         const isFirstCollaborator = collaborators.length > 0 && collaborators[0] === userId;
+        console.log('[API DEBUG] fetchLegacyUserRole isFirstCollaborator:', isFirstCollaborator);
 
         if (isOwnerOfSessionStore || isFirstCollaborator) {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: owner');
             log('API', `User ${userId} is owner of project ${projectId} (legacy)`);
             return { role: PERMISSION_ROLES.OWNER, permissionRecord: null };
         } else if (isCollaborator) {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: editor');
             log('API', `User ${userId} is editor of project ${projectId} (legacy)`);
             return { role: PERMISSION_ROLES.EDITOR, permissionRecord: null };
         } else {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: null (no access)');
             log('API', `User ${userId} has no access to project ${projectId}`);
             return { role: null, permissionRecord: null };
         }
     } catch (error) {
+        console.error('[API DEBUG] fetchLegacyUserRole caught error:', error);
+        console.error('[API DEBUG] fetchLegacyUserRole error stack:', error?.stack);
         console.error("Error in fetchLegacyUserRole:", error);
         return { role: null, permissionRecord: null };
     }
