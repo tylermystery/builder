@@ -17,6 +17,10 @@ const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery';
 const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
 // --------------------------------
 
+// --- PHASE 3: TASKS TABLE ---
+const TASKS_TABLE_NAME = 'Tasks';
+// --------------------------------
+
 export async function fetchPlansForUser(userId, includeFullDetails = false) {
     if (!userId) {
         return [];
@@ -2326,6 +2330,245 @@ export async function fetchSessionContainingItem(itemId, storeId = null) {
     } catch (error) {
         console.error("Error fetching sessions containing item:", error);
         return null;
+    }
+}
+
+// ============================================================================
+// PHASE 3: TASK MANAGEMENT API FUNCTIONS
+// ============================================================================
+
+/**
+ * Task status constants
+ */
+export const TASK_STATUS = {
+    PENDING: 'pending',
+    IN_PROGRESS: 'in_progress',
+    BLOCKED: 'blocked',
+    COMPLETED: 'completed'
+};
+
+/**
+ * Fetch all tasks for a specific project
+ * @param {string} projectId - The project/session ID to fetch tasks for
+ * @returns {Promise<Array>} - Array of task records
+ */
+export async function fetchTasks(projectId) {
+    if (!projectId) {
+        log('API', 'fetchTasks called without projectId');
+        return [];
+    }
+
+    log('API', `Fetching tasks for project: ${projectId}`);
+
+    // Filter tasks by the ProjectId field (linked to Sessions)
+    const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
+    const encodedFormula = encodeURIComponent(formula);
+
+    // Request fields needed for task display
+    const fieldsQuery = [
+        'Name',
+        'Description',
+        'Status',
+        'DueDate',
+        'Assignee',
+        'ProjectId',
+        'ParentTask',
+        'Priority',
+        'CreatedTime'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=DueDate&sort%5B0%5D%5Bdirection%5D=asc`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching tasks:', errorText);
+            throw new Error('Failed to fetch tasks from Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        return [];
+    }
+}
+
+/**
+ * Create a new task
+ * @param {string} projectId - The project/session ID to link the task to
+ * @param {Object} taskData - Task data: { Name, Description, Status, DueDate, Assignee, ParentTask, Priority }
+ * @returns {Promise<Object|null>} - The created task record or null if failed
+ */
+export async function createTask(projectId, taskData) {
+    if (!projectId) {
+        console.error('createTask called without projectId');
+        return null;
+    }
+
+    if (!taskData.Name) {
+        console.error('createTask called without Name');
+        return null;
+    }
+
+    log('API', `Creating task for project: ${projectId}`, taskData);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}`;
+
+    // Prepare the fields for creation
+    const fields = {
+        Name: taskData.Name,
+        Status: taskData.Status || TASK_STATUS.PENDING,
+        ProjectId: [projectId], // Link to the project (Sessions table)
+    };
+
+    // Add optional fields if provided
+    if (taskData.Description) {
+        fields.Description = taskData.Description;
+    }
+    if (taskData.DueDate) {
+        fields.DueDate = taskData.DueDate;
+    }
+    if (taskData.Assignee) {
+        fields.Assignee = taskData.Assignee;
+    }
+    if (taskData.ParentTask) {
+        fields.ParentTask = [taskData.ParentTask]; // Link to parent task
+    }
+    if (taskData.Priority) {
+        fields.Priority = taskData.Priority;
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error creating task:', errorText);
+            throw new Error('Failed to create task in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Created task: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error creating task:", error);
+        return null;
+    }
+}
+
+/**
+ * Update an existing task
+ * @param {string} taskId - The task record ID to update
+ * @param {Object} taskData - Task data to update: { Name, Description, Status, DueDate, Assignee, Priority }
+ * @returns {Promise<Object|null>} - The updated task record or null if failed
+ */
+export async function updateTask(taskId, taskData) {
+    if (!taskId) {
+        console.error('updateTask called without taskId');
+        return null;
+    }
+
+    log('API', `Updating task: ${taskId}`, taskData);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}/${taskId}`;
+
+    // Prepare the fields for update (only include fields that are provided)
+    const fields = {};
+
+    if (taskData.Name !== undefined) {
+        fields.Name = taskData.Name;
+    }
+    if (taskData.Description !== undefined) {
+        fields.Description = taskData.Description;
+    }
+    if (taskData.Status !== undefined) {
+        fields.Status = taskData.Status;
+    }
+    if (taskData.DueDate !== undefined) {
+        fields.DueDate = taskData.DueDate || null;
+    }
+    if (taskData.Assignee !== undefined) {
+        fields.Assignee = taskData.Assignee || null;
+    }
+    if (taskData.ParentTask !== undefined) {
+        fields.ParentTask = taskData.ParentTask ? [taskData.ParentTask] : null;
+    }
+    if (taskData.Priority !== undefined) {
+        fields.Priority = taskData.Priority || null;
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating task:', errorText);
+            throw new Error('Failed to update task in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Updated task: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error updating task:", error);
+        return null;
+    }
+}
+
+/**
+ * Delete a task
+ * @param {string} taskId - The task record ID to delete
+ * @returns {Promise<boolean>} - True if deleted successfully, false otherwise
+ */
+export async function deleteTask(taskId) {
+    if (!taskId) {
+        console.error('deleteTask called without taskId');
+        return false;
+    }
+
+    log('API', `Deleting task: ${taskId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}/${taskId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error deleting task:', errorText);
+            throw new Error('Failed to delete task in Airtable.');
+        }
+
+        log('API', `Deleted task: ${taskId}`);
+        return true;
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        return false;
     }
 }
 

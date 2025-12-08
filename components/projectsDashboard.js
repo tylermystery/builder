@@ -4,6 +4,7 @@
 
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
+import { initTaskManager } from './taskManager.js';
 
 // Project type constants for filtering
 export const PROJECT_TYPES = {
@@ -17,6 +18,8 @@ export const PROJECT_TYPES = {
 let projectsData = [];
 let currentFilter = PROJECT_TYPES.ALL;
 let expandedNodes = new Set();
+// Phase 3a: Track if tasks view is active
+let tasksViewActive = false;
 
 /**
  * Initialize the projects dashboard panel
@@ -30,6 +33,7 @@ export function initializeProjectsDashboard() {
     const overlay = document.getElementById('projects-panel-overlay');
     const filterBtns = document.querySelectorAll('.projects-filter-btn');
     const createBtn = document.getElementById('create-new-project-btn');
+    const tasksBtn = document.getElementById('view-tasks-btn');
 
     // Close button handler
     if (closeBtn) {
@@ -58,7 +62,32 @@ export function initializeProjectsDashboard() {
         createBtn.addEventListener('click', handleCreateNewProject);
     }
 
+    // Phase 3a: View tasks button
+    if (tasksBtn) {
+        tasksBtn.addEventListener('click', () => {
+            showTasksView();
+        });
+    }
+
+    // Update tasks button visibility based on session state
+    updateTasksButtonVisibility();
+
     log('ProjectsDashboard', 'Projects dashboard initialized.');
+}
+
+/**
+ * Update the visibility of the "View Tasks" button based on session state
+ */
+export function updateTasksButtonVisibility() {
+    const tasksBtn = document.getElementById('view-tasks-btn');
+    if (tasksBtn) {
+        // Show button only when there's an active session/project
+        if (state.session.id) {
+            tasksBtn.style.display = 'block';
+        } else {
+            tasksBtn.style.display = 'none';
+        }
+    }
 }
 
 /**
@@ -427,5 +456,114 @@ export function showProjectsError(message) {
                 <p style="font-size: 0.9em; margin-top: 10px;">${message}</p>
             </div>
         `;
+    }
+}
+
+// ============================================================================
+// PHASE 3a: TASK VIEW INTEGRATION
+// ============================================================================
+
+/**
+ * Show the task manager view for the current project
+ * Hides the catalog and shows the task manager
+ */
+export async function showTasksView() {
+    const projectId = state.session.id;
+    if (!projectId) {
+        log('ProjectsDashboard', 'Cannot show tasks: no project selected');
+        return;
+    }
+
+    log('ProjectsDashboard', `Showing tasks view for project: ${projectId}`);
+
+    // Get containers
+    const catalogContainer = document.getElementById('catalog-container');
+    const taskContainer = document.getElementById('task-manager-container');
+    const catalogHeader = document.getElementById('catalog-header');
+
+    if (!taskContainer) {
+        console.error('ProjectsDashboard: task-manager-container not found');
+        return;
+    }
+
+    // Hide catalog, show task manager
+    if (catalogContainer) {
+        catalogContainer.style.display = 'none';
+    }
+    if (catalogHeader) {
+        catalogHeader.style.display = 'none';
+    }
+    taskContainer.style.display = 'block';
+
+    // Initialize the task manager
+    await initTaskManager('task-manager-container', projectId);
+
+    tasksViewActive = true;
+
+    // Update URL to reflect tasks view
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('view', 'tasks');
+    window.history.pushState({}, '', currentUrl.toString());
+
+    // Close projects panel if open
+    hideProjectsPanel();
+}
+
+/**
+ * Hide the task manager view and show the catalog
+ */
+export function hideTasksView() {
+    log('ProjectsDashboard', 'Hiding tasks view');
+
+    const catalogContainer = document.getElementById('catalog-container');
+    const taskContainer = document.getElementById('task-manager-container');
+    const catalogHeader = document.getElementById('catalog-header');
+
+    // Show catalog, hide task manager
+    if (catalogContainer) {
+        catalogContainer.style.display = '';
+    }
+    if (catalogHeader) {
+        catalogHeader.style.display = '';
+    }
+    if (taskContainer) {
+        taskContainer.style.display = 'none';
+    }
+
+    tasksViewActive = false;
+
+    // Update URL to remove tasks view
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete('view');
+    window.history.pushState({}, '', currentUrl.toString());
+}
+
+/**
+ * Toggle between tasks view and catalog view
+ */
+export function toggleTasksView() {
+    if (tasksViewActive) {
+        hideTasksView();
+    } else {
+        showTasksView();
+    }
+}
+
+/**
+ * Check if tasks view is currently active
+ * @returns {boolean} - True if tasks view is active
+ */
+export function isTasksViewActive() {
+    return tasksViewActive;
+}
+
+/**
+ * Initialize tasks view from URL if ?view=tasks is present
+ * Call this during app initialization
+ */
+export function initTasksViewFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'tasks' && state.session.id) {
+        showTasksView();
     }
 }
