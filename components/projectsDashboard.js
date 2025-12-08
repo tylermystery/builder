@@ -480,8 +480,12 @@ export function showProjectsError(message) {
  * Phase 4: Fetches user permissions before rendering
  */
 export async function showTasksView() {
+    console.log('[ProjectsDashboard DEBUG] showTasksView called');
     const projectId = state.session.id;
+    console.log('[ProjectsDashboard DEBUG] projectId from state.session.id:', projectId);
+
     if (!projectId) {
+        console.error('[ProjectsDashboard DEBUG] No project selected, aborting showTasksView');
         log('ProjectsDashboard', 'Cannot show tasks: no project selected');
         return;
     }
@@ -493,7 +497,14 @@ export async function showTasksView() {
     const taskContainer = document.getElementById('task-manager-container');
     const catalogHeader = document.getElementById('catalog-header');
 
+    console.log('[ProjectsDashboard DEBUG] DOM elements:', {
+        catalogContainer: !!catalogContainer,
+        taskContainer: !!taskContainer,
+        catalogHeader: !!catalogHeader
+    });
+
     if (!taskContainer) {
+        console.error('[ProjectsDashboard DEBUG] task-manager-container not found in DOM');
         console.error('ProjectsDashboard: task-manager-container not found');
         return;
     }
@@ -501,14 +512,35 @@ export async function showTasksView() {
     // Hide catalog, show task manager
     if (catalogContainer) {
         catalogContainer.style.display = 'none';
+        console.log('[ProjectsDashboard DEBUG] Catalog container hidden');
     }
     if (catalogHeader) {
         catalogHeader.style.display = 'none';
+        console.log('[ProjectsDashboard DEBUG] Catalog header hidden');
     }
     taskContainer.style.display = 'block';
+    console.log('[ProjectsDashboard DEBUG] Task container displayed');
+
+    // Verify computed styles
+    console.log('[ProjectsDashboard DEBUG] Container computed styles:', {
+        taskContainerDisplay: window.getComputedStyle(taskContainer).display,
+        taskContainerVisibility: window.getComputedStyle(taskContainer).visibility,
+        taskContainerOpacity: window.getComputedStyle(taskContainer).opacity,
+        taskContainerHeight: window.getComputedStyle(taskContainer).height,
+        catalogContainerDisplay: catalogContainer ? window.getComputedStyle(catalogContainer).display : 'N/A'
+    });
+
+    // Update URL to reflect tasks view EARLY - before async operations
+    // This ensures applyFiltersAndSort() can detect tasks view and skip rendering
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('view', 'tasks');
+    window.history.pushState({}, '', currentUrl.toString());
+    tasksViewActive = true;
+    console.log('[ProjectsDashboard DEBUG] URL updated to tasks view');
 
     // Phase 4: Fetch user permissions before initializing task manager
     // Default to loading state (read-only) until permissions are fetched
+    console.log('[ProjectsDashboard DEBUG] Setting initial permissions state (loading)');
     setState({
         permissions: {
             ...state.permissions,
@@ -518,9 +550,19 @@ export async function showTasksView() {
     });
 
     // Fetch permissions if user is authenticated
-    if (state.session.user?.isAuthenticated && state.session.user?.id) {
+    const isAuthenticated = state.session.user?.isAuthenticated;
+    const userId = state.session.user?.id;
+    console.log('[ProjectsDashboard DEBUG] User authentication state:', { isAuthenticated, userId });
+
+    if (isAuthenticated && userId) {
         try {
-            const { role, permissionRecord } = await api.fetchUserRole(projectId, state.session.user.id);
+            console.log('[ProjectsDashboard DEBUG] Fetching user role...');
+            const fetchRoleStart = performance.now();
+            const { role, permissionRecord } = await api.fetchUserRole(projectId, userId);
+            const fetchRoleEnd = performance.now();
+            console.log(`[ProjectsDashboard DEBUG] fetchUserRole completed in ${(fetchRoleEnd - fetchRoleStart).toFixed(2)}ms`);
+            console.log('[ProjectsDashboard DEBUG] User role result:', { role, permissionRecord });
+
             setState({
                 permissions: {
                     currentRole: role,
@@ -530,6 +572,8 @@ export async function showTasksView() {
             });
             log('ProjectsDashboard', `User role for project ${projectId}: ${role}`);
         } catch (error) {
+            console.error('[ProjectsDashboard DEBUG] Error fetching user permissions:', error);
+            console.error('[ProjectsDashboard DEBUG] Error stack:', error?.stack);
             console.error('Error fetching user permissions:', error);
             // On error, keep read-only mode for safety
             setState({
@@ -542,6 +586,7 @@ export async function showTasksView() {
         }
     } else {
         // Not authenticated - default to viewer/guest mode
+        console.log('[ProjectsDashboard DEBUG] User not authenticated, setting viewer role');
         setState({
             permissions: {
                 currentRole: api.PERMISSION_ROLES.VIEWER,
@@ -551,15 +596,24 @@ export async function showTasksView() {
         });
     }
 
+    console.log('[ProjectsDashboard DEBUG] Permissions state after fetch:', state.permissions);
+
     // Initialize the task manager (will use updated permission state)
+    console.log('[ProjectsDashboard DEBUG] Calling initTaskManager...');
     await initTaskManager('task-manager-container', projectId);
+    console.log('[ProjectsDashboard DEBUG] initTaskManager completed');
 
-    tasksViewActive = true;
-
-    // Update URL to reflect tasks view
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('view', 'tasks');
-    window.history.pushState({}, '', currentUrl.toString());
+    // Final verification of task container state
+    const finalTaskContainer = document.getElementById('task-manager-container');
+    console.log('[ProjectsDashboard DEBUG] Final task container state:', {
+        exists: !!finalTaskContainer,
+        display: finalTaskContainer ? finalTaskContainer.style.display : 'N/A',
+        computedDisplay: finalTaskContainer ? window.getComputedStyle(finalTaskContainer).display : 'N/A',
+        innerHTML: finalTaskContainer ? finalTaskContainer.innerHTML.substring(0, 150) : 'N/A',
+        hasTaskManager: finalTaskContainer ? finalTaskContainer.innerHTML.includes('task-manager') : false,
+        hasLoadingSpinner: finalTaskContainer ? finalTaskContainer.innerHTML.includes('task-loading-spinner') : false,
+        childElementCount: finalTaskContainer ? finalTaskContainer.childElementCount : 0
+    });
 
     // Close projects panel if open
     hideProjectsPanel();

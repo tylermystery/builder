@@ -300,6 +300,13 @@ export async function applyFiltersAndSort(imageCache) {
     console.log('[FilterDebug] activeSubcategories from URL:', activeSubcategories);
     console.log('[FilterDebug] view from URL:', view);
 
+    // Skip filtering/rendering when tasks view is active - task manager handles its own rendering
+    if (view === 'tasks') {
+        console.log('[FilterDebug] Tasks view active, skipping catalog filter/render');
+        console.log('[TileSizing][Filter] === FILTER/SORT SKIPPED (tasks view) ===');
+        return;
+    }
+
     // Get other filter values from UI elements (unchanged)
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
     const statusFilter = document.getElementById('status-filter').value;

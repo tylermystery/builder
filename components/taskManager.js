@@ -32,15 +32,20 @@ let sortableInstances = []; // Track SortableJS instances for cleanup
  * @param {string} projectId - The project/session ID to manage tasks for
  */
 export async function initTaskManager(containerId, projectId) {
+    // DEBUG: Always log task manager initialization to console for debugging
+    console.log('[TaskManager DEBUG] initTaskManager called with:', { containerId, projectId });
     log('TaskManager', `Initializing task manager for project: ${projectId}`);
 
     const container = document.getElementById(containerId);
     if (!container) {
+        console.error(`[TaskManager DEBUG] Container with ID "${containerId}" not found`);
         console.error(`TaskManager: Container with ID "${containerId}" not found`);
         return;
     }
+    console.log('[TaskManager DEBUG] Container found:', container);
 
     if (!projectId) {
+        console.error('[TaskManager DEBUG] projectId is missing or falsy:', projectId);
         console.error('TaskManager: projectId is required');
         renderEmptyState(container, 'No project selected');
         return;
@@ -49,20 +54,82 @@ export async function initTaskManager(containerId, projectId) {
     currentProjectId = projectId;
 
     // Show loading state
+    console.log('[TaskManager DEBUG] Rendering loading state...');
     renderLoadingState(container);
 
     try {
         // Fetch tasks for this project
+        console.log('[TaskManager DEBUG] Starting api.fetchTasks() call...');
+        const fetchStartTime = performance.now();
         const tasks = await api.fetchTasks(projectId);
+        const fetchEndTime = performance.now();
+        console.log(`[TaskManager DEBUG] api.fetchTasks() completed in ${(fetchEndTime - fetchStartTime).toFixed(2)}ms`);
+        console.log('[TaskManager DEBUG] Tasks fetched:', { count: tasks?.length ?? 'null/undefined', tasks });
+
+        // Ensure tasks is an array (defensive programming)
+        const taskArray = Array.isArray(tasks) ? tasks : [];
+        console.log('[TaskManager DEBUG] Task array after validation:', { count: taskArray.length });
 
         // Update local and global state
-        currentTasks = tasks;
-        updateTasksState(projectId, tasks);
+        currentTasks = taskArray;
+        updateTasksState(projectId, taskArray);
+        console.log('[TaskManager DEBUG] State updated with tasks');
 
         // Render the task UI
-        renderTaskManager(container, tasks);
+        console.log('[TaskManager DEBUG] Calling renderTaskManager...');
+        console.log('[TaskManager DEBUG] Container BEFORE render:', {
+            innerHTML: container.innerHTML.substring(0, 200),
+            hasLoadingSpinner: container.innerHTML.includes('task-loading-spinner'),
+            childElementCount: container.childElementCount
+        });
+
+        renderTaskManager(container, taskArray);
+
+        console.log('[TaskManager DEBUG] renderTaskManager completed');
+        console.log('[TaskManager DEBUG] Container AFTER render:', {
+            innerHTML: container.innerHTML.substring(0, 200),
+            hasTaskManager: container.innerHTML.includes('task-manager'),
+            hasLoadingSpinner: container.innerHTML.includes('task-loading-spinner'),
+            hasTaskListEmpty: container.innerHTML.includes('task-list-empty'),
+            childElementCount: container.childElementCount
+        });
+
+        // Verify expected elements are in DOM
+        const taskManagerEl = container.querySelector('.task-manager');
+        const addBtn = container.querySelector('#task-add-btn');
+        const taskListContainer = container.querySelector('#task-list-container');
+        console.log('[TaskManager DEBUG] DOM verification:', {
+            taskManagerFound: !!taskManagerEl,
+            addButtonFound: !!addBtn,
+            taskListContainerFound: !!taskListContainer,
+            containerDisplay: window.getComputedStyle(container).display,
+            containerVisibility: window.getComputedStyle(container).visibility,
+            containerOpacity: window.getComputedStyle(container).opacity
+        });
+
+        // Add MutationObserver to track if anything changes the container
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                console.warn('[TaskManager DEBUG] MUTATION DETECTED after render!', {
+                    type: mutation.type,
+                    target: mutation.target.className || mutation.target.id,
+                    addedNodes: mutation.addedNodes.length,
+                    removedNodes: mutation.removedNodes.length
+                });
+                if (mutation.type === 'childList') {
+                    console.warn('[TaskManager DEBUG] Container innerHTML after mutation:', container.innerHTML.substring(0, 200));
+                }
+            });
+        });
+        observer.observe(container, { childList: true, subtree: true, characterData: true });
+        // Auto-disconnect after 5 seconds to avoid memory issues
+        setTimeout(() => {
+            observer.disconnect();
+            console.log('[TaskManager DEBUG] MutationObserver disconnected after 5s');
+        }, 5000);
 
         // Phase 5: Initialize real-time updates for this project
+        console.log('[TaskManager DEBUG] Initializing real-time updates...');
         initializeRealtimeUpdates(projectId, {
             onTaskUpdate: handleRealtimeTaskUpdate
         });
@@ -70,10 +137,13 @@ export async function initTaskManager(containerId, projectId) {
         // Register callback for real-time updates
         registerTaskManagerCallback(handleRealtimeTaskUpdate);
 
-        log('TaskManager', `Loaded ${tasks.length} tasks for project ${projectId}`);
+        console.log(`[TaskManager DEBUG] Task manager fully initialized with ${taskArray.length} tasks`);
+        log('TaskManager', `Loaded ${taskArray.length} tasks for project ${projectId}`);
     } catch (error) {
+        console.error('[TaskManager DEBUG] Error in initTaskManager:', error);
+        console.error('[TaskManager DEBUG] Error stack:', error?.stack);
         console.error('TaskManager: Error initializing:', error);
-        renderErrorState(container, 'Failed to load tasks');
+        renderErrorState(container, 'Failed to load tasks. Check console for details.');
     }
 }
 
@@ -138,6 +208,13 @@ function renderEmptyState(container, message) {
  * @param {Array} tasks - Array of task records
  */
 function renderTaskManager(container, tasks) {
+    console.log('[TaskManager DEBUG] renderTaskManager called with', { tasksCount: tasks?.length ?? 'null/undefined' });
+    console.log('[TaskManager DEBUG] renderTaskManager container reference:', {
+        id: container?.id,
+        tagName: container?.tagName,
+        exists: !!container
+    });
+
     // Cleanup existing Sortable instances before re-rendering
     cleanupSortables();
 
@@ -147,10 +224,16 @@ function renderTaskManager(container, tasks) {
     const canUserEdit = !isLoading && api.canEdit(currentRole);
     const isUserViewer = !isLoading && api.isViewer(currentRole);
 
+    console.log('[TaskManager DEBUG] Permission state:', { currentRole, isLoading, canUserEdit, isUserViewer });
+
     // Add a class to the container for permission-based styling
     const permissionClass = isLoading ? 'permissions-loading' : (canUserEdit ? 'can-edit' : 'read-only');
 
-    container.innerHTML = `
+    // Build the HTML string first for debugging
+    const taskListHtml = renderTaskList(tasks);
+    console.log('[TaskManager DEBUG] taskListHtml preview:', taskListHtml.substring(0, 150));
+
+    const fullHtml = `
         <div class="task-manager ${permissionClass}">
             <div class="task-manager-header">
                 <h3>Tasks</h3>
@@ -158,10 +241,18 @@ function renderTaskManager(container, tasks) {
                 ${isUserViewer ? '<span class="task-viewer-badge">View Only</span>' : ''}
             </div>
             <div id="task-list-container" class="task-list-container">
-                ${renderTaskList(tasks)}
+                ${taskListHtml}
             </div>
         </div>
     `;
+
+    console.log('[TaskManager DEBUG] About to set innerHTML, fullHtml preview:', fullHtml.substring(0, 200));
+    console.log('[TaskManager DEBUG] container.innerHTML BEFORE:', container.innerHTML.substring(0, 100));
+
+    container.innerHTML = fullHtml;
+
+    console.log('[TaskManager DEBUG] container.innerHTML AFTER:', container.innerHTML.substring(0, 200));
+    console.log('[TaskManager DEBUG] Container innerHTML set, attaching event listeners...');
 
     // Attach event listeners
     attachEventListeners(container);
@@ -170,6 +261,8 @@ function renderTaskManager(container, tasks) {
     if (canUserEdit) {
         initializeSortable();
     }
+
+    console.log('[TaskManager DEBUG] renderTaskManager completed successfully');
 }
 
 /**
@@ -872,9 +965,13 @@ async function refreshTaskList() {
  * Retry loading tasks (for error state)
  */
 export async function retry() {
+    console.log('[TaskManager DEBUG] retry() called');
     const container = document.querySelector('.task-manager')?.parentElement;
+    console.log('[TaskManager DEBUG] retry container:', container?.id, 'currentProjectId:', currentProjectId);
     if (container && currentProjectId) {
         await initTaskManager(container.id, currentProjectId);
+    } else {
+        console.error('[TaskManager DEBUG] retry failed - container or projectId missing');
     }
 }
 
