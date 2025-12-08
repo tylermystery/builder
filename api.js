@@ -827,6 +827,99 @@ export async function saveSessionToAirtable() {
     }
 }
 
+/**
+ * Phase 5: Add an item to a specific session/project
+ * Used for cross-project "Add to Project" functionality
+ * @param {string} sessionId - The target session/project ID
+ * @param {string} itemId - The item record ID to add
+ * @param {Object} itemInfo - Item info (quantity, selections, note)
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
+    if (!sessionId || !itemId) {
+        console.error('[API] addItemToSession: Missing sessionId or itemId');
+        return false;
+    }
+
+    log('API', `Adding item ${itemId} to session ${sessionId}`);
+
+    try {
+        // First, fetch the current session data
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch session: ${response.status}`);
+        }
+
+        const sessionRecord = await response.json();
+        let sessionData = {};
+
+        // Parse existing Items with Variations data
+        const existingData = sessionRecord.fields?.['Items with Variations'];
+        if (existingData) {
+            try {
+                sessionData = JSON.parse(existingData);
+            } catch (e) {
+                console.error('[API] Failed to parse existing session data:', e);
+                sessionData = { lockedInItems: {}, ideasItems: {} };
+            }
+        } else {
+            sessionData = { lockedInItems: {}, ideasItems: {} };
+        }
+
+        // Add the item to lockedInItems (the plan)
+        if (!sessionData.lockedInItems) {
+            sessionData.lockedInItems = {};
+        }
+
+        // Check if item already exists
+        if (sessionData.lockedInItems[itemId]) {
+            log('API', `Item ${itemId} already exists in session ${sessionId}`);
+            return true; // Already there, consider success
+        }
+
+        // Add the item with default info
+        sessionData.lockedInItems[itemId] = {
+            quantity: itemInfo.quantity || 1,
+            selectedOptionIndex: itemInfo.selectedOptionIndex || 0,
+            selections: itemInfo.selections || {},
+            note: itemInfo.note || ''
+        };
+
+        // Update the session in Airtable
+        const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const updateResponse = await fetch(updateUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionData)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to update session: ${updateResponse.status}`);
+        }
+
+        log('API', `Successfully added item ${itemId} to session ${sessionId}`);
+        return true;
+
+    } catch (error) {
+        console.error('[API] Error adding item to session:', error);
+        return false;
+    }
+}
+
 // REPLACE this function in api.js (around line 348)
 
 export async function fetchAllRecords() {

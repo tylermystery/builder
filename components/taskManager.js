@@ -1,12 +1,23 @@
 // FILE: components/taskManager.js
 // Phase 3b: Advanced Interactions - Drag-and-Drop Reordering & Item Linking
 // Phase 4: Permissions & Security - UI Guarding for read-only views
+// Phase 5: Real-time updates integration
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
+import { showDetailModal } from './modal.js';
+import {
+    initializeRealtimeUpdates,
+    cleanupRealtimeUpdates,
+    registerTaskManagerCallback,
+    broadcastTaskCreated,
+    broadcastTaskUpdated,
+    broadcastTaskDeleted,
+    broadcastTaskReordered
+} from '../utils/realtimeUpdates.js';
 
 // Local component state
 let currentProjectId = null;
@@ -50,6 +61,14 @@ export async function initTaskManager(containerId, projectId) {
 
         // Render the task UI
         renderTaskManager(container, tasks);
+
+        // Phase 5: Initialize real-time updates for this project
+        initializeRealtimeUpdates(projectId, {
+            onTaskUpdate: handleRealtimeTaskUpdate
+        });
+
+        // Register callback for real-time updates
+        registerTaskManagerCallback(handleRealtimeTaskUpdate);
 
         log('TaskManager', `Loaded ${tasks.length} tasks for project ${projectId}`);
     } catch (error) {
@@ -434,10 +453,16 @@ function handleTaskClick(e) {
     if (linkedItem) {
         e.stopPropagation();
         const itemId = linkedItem.dataset.itemId;
-        if (itemId && typeof window.showItemDetail === 'function') {
-            window.showItemDetail(itemId);
-        } else {
-            log('TaskManager', `Item detail view not available for item: ${itemId}`);
+        if (itemId) {
+            // Find the item record and open the detail modal
+            const record = state.records.all.find(r => r.id === itemId);
+            if (record) {
+                showDetailModal(record);
+                log('TaskManager', `Opening item detail for: ${record.fields?.Name}`);
+            } else {
+                log('TaskManager', `Item not found in records: ${itemId}`);
+                showToast('Item not found in catalog', 3000);
+            }
         }
         return;
     }
@@ -763,6 +788,13 @@ async function handleTaskSubmit(form, closeModal) {
             // Refresh the task list
             await refreshTaskList();
 
+            // Phase 5: Broadcast the change to other collaborators
+            if (editingTaskId) {
+                broadcastTaskUpdated(result, taskData);
+            } else {
+                broadcastTaskCreated(result);
+            }
+
             closeModal();
             showToast(editingTaskId ? 'Task updated!' : 'Task created!', 2000);
         } else {
@@ -793,6 +825,9 @@ async function handleDeleteTask(taskId) {
         if (success) {
             // Remove from local state
             state.tasks.all.delete(taskId);
+
+            // Phase 5: Broadcast the deletion to other collaborators
+            broadcastTaskDeleted(taskId, taskName);
 
             // Refresh the task list
             await refreshTaskList();
@@ -990,6 +1025,9 @@ async function handleDragEnd(evt, originalStatusGroup) {
                         task.fields.Order = order;
                     }
                 });
+
+                // Phase 5: Broadcast the reorder to other collaborators
+                broadcastTaskReordered(taskOrders);
             } else {
                 console.error('Failed to update task orders');
                 showToast('Failed to save task order', 3000);
@@ -1031,6 +1069,183 @@ function revertDragDOM(fromList, toList, fromHTML, toHTML) {
 
 // =============================================================================
 // END DRAG-AND-DROP FUNCTIONALITY
+// =============================================================================
+
+// =============================================================================
+// PHASE 5: REAL-TIME UPDATE HANDLERS
+// =============================================================================
+
+/**
+ * Handle real-time task updates from other collaborators
+ * @param {string} action - The action type (created, updated, deleted, reordered)
+ * @param {Object} data - The event data
+ */
+function handleRealtimeTaskUpdate(action, data) {
+    log('TaskManager', `Real-time update received: ${action}`, data);
+
+    // Check if we're currently viewing this project
+    if (!currentProjectId) return;
+
+    const listContainer = document.getElementById('task-list-container');
+    if (!listContainer) return;
+
+    switch (action) {
+        case 'created':
+            // A new task was created by another user
+            if (data && data.id) {
+                // Check if task already exists (avoid duplicates)
+                if (!currentTasks.find(t => t.id === data.id)) {
+                    currentTasks.push(data);
+                    // Smooth re-render without full page refresh
+                    rerenderTaskListSmooth(listContainer);
+                }
+            }
+            break;
+
+        case 'updated':
+            // A task was updated by another user
+            if (data && data.id) {
+                const taskIndex = currentTasks.findIndex(t => t.id === data.id);
+                if (taskIndex >= 0) {
+                    currentTasks[taskIndex] = data;
+                    // Update just the specific task card if possible
+                    updateTaskCardInPlace(data.id, data);
+                }
+            }
+            break;
+
+        case 'deleted':
+            // A task was deleted by another user
+            if (data && data.id) {
+                const taskIndex = currentTasks.findIndex(t => t.id === data.id);
+                if (taskIndex >= 0) {
+                    currentTasks.splice(taskIndex, 1);
+                    // Remove the task card with animation
+                    removeTaskCardWithAnimation(data.id);
+                }
+            }
+            break;
+
+        case 'reordered':
+            // Tasks were reordered by another user
+            if (data && Array.isArray(data)) {
+                // Update local orders
+                data.forEach(({ taskId, order }) => {
+                    const task = currentTasks.find(t => t.id === taskId);
+                    if (task) {
+                        task.fields.Order = order;
+                    }
+                });
+                // Re-render to reflect new order
+                rerenderTaskListSmooth(listContainer);
+            }
+            break;
+
+        default:
+            log('TaskManager', `Unknown real-time action: ${action}`);
+    }
+}
+
+/**
+ * Smoothly re-render the task list without jarring layout shifts
+ * @param {HTMLElement} container - The task list container
+ */
+function rerenderTaskListSmooth(container) {
+    // Cleanup existing Sortable instances
+    cleanupSortables();
+
+    // Add a transition class for smooth update
+    container.classList.add('updating');
+
+    // Re-render after a brief delay for animation
+    setTimeout(() => {
+        container.innerHTML = renderTaskList(currentTasks);
+        container.classList.remove('updating');
+
+        // Reinitialize drag-and-drop if user can edit
+        const currentRole = state.permissions?.currentRole;
+        const isLoading = state.permissions?.isLoading !== false;
+        const canUserEdit = !isLoading && api.canEdit(currentRole);
+        if (canUserEdit) {
+            initializeSortable();
+        }
+    }, 150);
+}
+
+/**
+ * Update a single task card in place without full re-render
+ * @param {string} taskId - The task ID to update
+ * @param {Object} task - The updated task data
+ */
+function updateTaskCardInPlace(taskId, task) {
+    const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+    if (!taskCard) {
+        // Card not found, do a full re-render
+        const listContainer = document.getElementById('task-list-container');
+        if (listContainer) {
+            rerenderTaskListSmooth(listContainer);
+        }
+        return;
+    }
+
+    // Update task name
+    const nameEl = taskCard.querySelector('.task-name');
+    if (nameEl) {
+        nameEl.textContent = task.fields?.Name || 'Untitled Task';
+        nameEl.classList.toggle('task-name-completed', task.fields?.Status === api.TASK_STATUS.COMPLETED);
+    }
+
+    // Update status badge
+    const statusBadge = taskCard.querySelector('.task-status-badge');
+    if (statusBadge) {
+        statusBadge.className = `task-status-badge ${getStatusBadgeClass(task.fields?.Status)}`;
+        statusBadge.textContent = getStatusLabel(task.fields?.Status);
+    }
+
+    // Update checkbox
+    const checkbox = taskCard.querySelector('.task-complete-checkbox');
+    if (checkbox) {
+        checkbox.checked = task.fields?.Status === api.TASK_STATUS.COMPLETED;
+    }
+
+    // Update completed state on card
+    taskCard.classList.toggle('task-completed', task.fields?.Status === api.TASK_STATUS.COMPLETED);
+
+    // Add a brief highlight animation
+    taskCard.classList.add('realtime-updated');
+    setTimeout(() => {
+        taskCard.classList.remove('realtime-updated');
+    }, 2000);
+}
+
+/**
+ * Remove a task card with a fade-out animation
+ * @param {string} taskId - The task ID to remove
+ */
+function removeTaskCardWithAnimation(taskId) {
+    const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+    if (taskCard) {
+        taskCard.classList.add('removing');
+        setTimeout(() => {
+            taskCard.remove();
+
+            // Check if the group is now empty
+            const groups = document.querySelectorAll('.task-group-list');
+            groups.forEach(group => {
+                if (group.children.length === 0) {
+                    // Re-render to show empty state if needed
+                    const listContainer = document.getElementById('task-list-container');
+                    if (listContainer && currentTasks.length === 0) {
+                        listContainer.innerHTML = renderTaskList([]);
+                    }
+                }
+            });
+        }, 300);
+    }
+}
+
+// =============================================================================
+// END REAL-TIME UPDATE HANDLERS
 // =============================================================================
 
 // Expose retry function globally for error state button
