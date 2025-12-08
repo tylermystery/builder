@@ -1042,11 +1042,13 @@ export async function updateEventPlanSection() {
 async function handleInvite() {
     const nameInput = document.getElementById('collab-name');
     const emailInput = document.getElementById('collab-email');
+    const roleSelect = document.getElementById('collab-role'); // Phase 4: Role selector
     const statusEl = document.getElementById('invite-status');
     const btn = document.getElementById('invite-btn');
 
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
+    const role = roleSelect ? roleSelect.value : 'editor'; // Default to editor
 
     if (!name || !email) {
         statusEl.textContent = "Please enter both name and email.";
@@ -1070,7 +1072,7 @@ async function handleInvite() {
                 </thead>
                 <tbody>
         `;
-        
+
         state.cart.lockedItems.forEach((info, id) => {
             const record = state.records.all.find(r => r.id === id);
             if (record) {
@@ -1086,6 +1088,7 @@ async function handleInvite() {
 
         const inviterName = state.session.user.name || "A friend";
 
+        // Phase 4: Include role in the invitation request
         const response = await fetch('/api/invite-collaborator', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1094,7 +1097,8 @@ async function handleInvite() {
                 collaboratorName: name,
                 collaboratorEmail: email,
                 inviterName: inviterName,
-                planSummaryHtml: summaryHtml
+                planSummaryHtml: summaryHtml,
+                role: role // Phase 4: Include selected role
             })
         });
 
@@ -1103,6 +1107,7 @@ async function handleInvite() {
             statusEl.style.color = "#28a745"; // Bootstrap success green
             nameInput.value = '';
             emailInput.value = '';
+            if (roleSelect) roleSelect.value = 'editor'; // Reset role to default
             // Close the popup after showing success message
             setTimeout(() => {
                  closeInvitePopup();

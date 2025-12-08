@@ -2642,3 +2642,362 @@ export async function updateTaskOrder(taskOrders) {
     }
 }
 
+// =============================================================================
+// PHASE 4: PERMISSIONS & SECURITY
+// =============================================================================
+
+const COLLABORATOR_PERMISSIONS_TABLE_NAME = 'Collaborator_Permissions';
+
+/**
+ * Permission role constants
+ */
+export const PERMISSION_ROLES = {
+    OWNER: 'owner',
+    EDITOR: 'editor',
+    VIEWER: 'viewer'
+};
+
+/**
+ * Fetch user's role/permission for a specific project
+ * Queries the Collaborator_Permissions table first, then falls back to legacy Collaborators field
+ *
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID to check permissions for
+ * @returns {Promise<Object>} - { role: string, permissionRecord: Object|null }
+ */
+export async function fetchUserRole(projectId, userId) {
+    if (!projectId || !userId) {
+        log('API', 'fetchUserRole called without projectId or userId');
+        return { role: null, permissionRecord: null };
+    }
+
+    log('API', `Fetching user role for project: ${projectId}, user: ${userId}`);
+
+    try {
+        // First, try to fetch from Collaborator_Permissions table
+        const formula = `AND(FIND('${projectId}', ARRAYJOIN({ProjectId})), FIND('${userId}', ARRAYJOIN({UserId})))`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&maxRecords=1`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.records && data.records.length > 0) {
+                const permRecord = data.records[0];
+                const role = (permRecord.fields.Role || PERMISSION_ROLES.EDITOR).toLowerCase();
+                log('API', `Found permission record for user ${userId}: role = ${role}`);
+                return { role, permissionRecord: permRecord };
+            }
+        }
+
+        // Fallback: Check legacy Collaborators field and ownership
+        log('API', `No permission record found, falling back to legacy check`);
+        return await fetchLegacyUserRole(projectId, userId);
+
+    } catch (error) {
+        console.error("Error fetching user role:", error);
+        // On error, fall back to legacy check
+        return await fetchLegacyUserRole(projectId, userId);
+    }
+}
+
+/**
+ * Legacy fallback to determine user role from Collaborators field and ownership
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID
+ * @returns {Promise<Object>} - { role: string, permissionRecord: null }
+ */
+async function fetchLegacyUserRole(projectId, userId) {
+    try {
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${projectId}`;
+        const response = await fetch(sessionUrl, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            log('API', `Could not fetch session ${projectId} for legacy role check`);
+            return { role: null, permissionRecord: null };
+        }
+
+        const session = await response.json();
+        const collaborators = session.fields.Collaborators || [];
+        const storeIds = session.fields.Stores || [];
+
+        // Check if user is a collaborator
+        const isCollaborator = collaborators.includes(userId);
+
+        // Check if user owns the store linked to this session
+        const isStoreOwner = state.session.user.isOwner;
+        const ownedStoreId = state.session.user.ownedStoreId;
+        const isOwnerOfSessionStore = isStoreOwner && ownedStoreId && storeIds.includes(ownedStoreId);
+
+        // Check if user was the first collaborator (original creator/owner)
+        const isFirstCollaborator = collaborators.length > 0 && collaborators[0] === userId;
+
+        if (isOwnerOfSessionStore || isFirstCollaborator) {
+            log('API', `User ${userId} is owner of project ${projectId} (legacy)`);
+            return { role: PERMISSION_ROLES.OWNER, permissionRecord: null };
+        } else if (isCollaborator) {
+            log('API', `User ${userId} is editor of project ${projectId} (legacy)`);
+            return { role: PERMISSION_ROLES.EDITOR, permissionRecord: null };
+        } else {
+            log('API', `User ${userId} has no access to project ${projectId}`);
+            return { role: null, permissionRecord: null };
+        }
+    } catch (error) {
+        console.error("Error in fetchLegacyUserRole:", error);
+        return { role: null, permissionRecord: null };
+    }
+}
+
+/**
+ * Create a permission record in Collaborator_Permissions table
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID to grant permission to
+ * @param {string} role - The role to assign (owner, editor, viewer)
+ * @returns {Promise<Object|null>} - The created permission record or null
+ */
+export async function createPermissionRecord(projectId, userId, role = PERMISSION_ROLES.EDITOR) {
+    if (!projectId || !userId) {
+        console.error('createPermissionRecord called without projectId or userId');
+        return null;
+    }
+
+    log('API', `Creating permission record: project=${projectId}, user=${userId}, role=${role}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}`;
+
+    const fields = {
+        ProjectId: [projectId],
+        UserId: [userId],
+        Role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() // Capitalize: "Editor"
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error creating permission record:', errorText);
+            throw new Error('Failed to create permission record in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Created permission record: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error creating permission record:", error);
+        return null;
+    }
+}
+
+/**
+ * Update a permission record's role
+ * @param {string} permissionId - The permission record ID
+ * @param {string} newRole - The new role to assign
+ * @returns {Promise<Object|null>} - The updated permission record or null
+ */
+export async function updatePermissionRole(permissionId, newRole) {
+    if (!permissionId || !newRole) {
+        console.error('updatePermissionRole called without permissionId or newRole');
+        return null;
+    }
+
+    log('API', `Updating permission ${permissionId} to role: ${newRole}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}/${permissionId}`;
+
+    const fields = {
+        Role: newRole.charAt(0).toUpperCase() + newRole.slice(1).toLowerCase()
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating permission record:', errorText);
+            throw new Error('Failed to update permission record in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Updated permission record: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error updating permission record:", error);
+        return null;
+    }
+}
+
+/**
+ * Delete a permission record
+ * @param {string} permissionId - The permission record ID to delete
+ * @returns {Promise<boolean>} - True if deleted successfully
+ */
+export async function deletePermissionRecord(permissionId) {
+    if (!permissionId) {
+        console.error('deletePermissionRecord called without permissionId');
+        return false;
+    }
+
+    log('API', `Deleting permission record: ${permissionId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}/${permissionId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error deleting permission record:', errorText);
+            throw new Error('Failed to delete permission record in Airtable.');
+        }
+
+        log('API', `Deleted permission record: ${permissionId}`);
+        return true;
+    } catch (error) {
+        console.error("Error deleting permission record:", error);
+        return false;
+    }
+}
+
+/**
+ * Fetch all permission records for a project (for managing collaborators)
+ * @param {string} projectId - The project/session ID
+ * @returns {Promise<Array>} - Array of permission records
+ */
+export async function fetchProjectPermissions(projectId) {
+    if (!projectId) {
+        log('API', 'fetchProjectPermissions called without projectId');
+        return [];
+    }
+
+    log('API', `Fetching all permissions for project: ${projectId}`);
+
+    try {
+        const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching project permissions:', errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} permission records for project ${projectId}`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching project permissions:", error);
+        return [];
+    }
+}
+
+/**
+ * Invite a user to a session with a specific role
+ * Creates a permission record and adds user to legacy Collaborators field for backwards compatibility
+ *
+ * @param {string} sessionId - The session/project ID
+ * @param {string} userId - The user ID to invite
+ * @param {string} role - The role to assign (owner, editor, viewer)
+ * @returns {Promise<Object|null>} - The created permission record or null
+ */
+export async function inviteUserToSession(sessionId, userId, role = PERMISSION_ROLES.EDITOR) {
+    if (!sessionId || !userId) {
+        console.error('inviteUserToSession called without sessionId or userId');
+        return null;
+    }
+
+    log('API', `Inviting user ${userId} to session ${sessionId} with role: ${role}`);
+
+    try {
+        // 1. Create permission record in Collaborator_Permissions table
+        const permRecord = await createPermissionRecord(sessionId, userId, role);
+
+        // 2. Also add to legacy Collaborators field for backwards compatibility
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const sessionResponse = await fetch(sessionUrl, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (sessionResponse.ok) {
+            const session = await sessionResponse.json();
+            const currentCollaborators = session.fields.Collaborators || [];
+
+            if (!currentCollaborators.includes(userId)) {
+                const updatedCollaborators = [...currentCollaborators, userId];
+                await fetch(sessionUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fields: { Collaborators: updatedCollaborators }
+                    })
+                });
+                log('API', `Added user ${userId} to session ${sessionId} collaborators`);
+            }
+        }
+
+        return permRecord;
+    } catch (error) {
+        console.error("Error inviting user to session:", error);
+        return null;
+    }
+}
+
+/**
+ * Helper function to check if user can edit (owner or editor)
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user can edit
+ */
+export function canEdit(role) {
+    return role === PERMISSION_ROLES.OWNER || role === PERMISSION_ROLES.EDITOR;
+}
+
+/**
+ * Helper function to check if user is owner
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user is owner
+ */
+export function isOwner(role) {
+    return role === PERMISSION_ROLES.OWNER;
+}
+
+/**
+ * Helper function to check if user is viewer (read-only)
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user is viewer
+ */
+export function isViewer(role) {
+    return role === PERMISSION_ROLES.VIEWER;
+}
+

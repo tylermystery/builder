@@ -1,5 +1,6 @@
 // FILE: components/taskManager.js
 // Phase 3b: Advanced Interactions - Drag-and-Drop Reordering & Item Linking
+// Phase 4: Permissions & Security - UI Guarding for read-only views
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
@@ -121,11 +122,21 @@ function renderTaskManager(container, tasks) {
     // Cleanup existing Sortable instances before re-rendering
     cleanupSortables();
 
+    // Phase 4: Check user permissions - default to read-only while loading
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const isUserViewer = !isLoading && api.isViewer(currentRole);
+
+    // Add a class to the container for permission-based styling
+    const permissionClass = isLoading ? 'permissions-loading' : (canUserEdit ? 'can-edit' : 'read-only');
+
     container.innerHTML = `
-        <div class="task-manager">
+        <div class="task-manager ${permissionClass}">
             <div class="task-manager-header">
                 <h3>Tasks</h3>
-                <button class="task-add-btn" id="task-add-btn">+ New Task</button>
+                ${canUserEdit ? '<button class="task-add-btn" id="task-add-btn">+ New Task</button>' : ''}
+                ${isUserViewer ? '<span class="task-viewer-badge">View Only</span>' : ''}
             </div>
             <div id="task-list-container" class="task-list-container">
                 ${renderTaskList(tasks)}
@@ -136,8 +147,10 @@ function renderTaskManager(container, tasks) {
     // Attach event listeners
     attachEventListeners(container);
 
-    // Initialize drag-and-drop after rendering
-    initializeSortable();
+    // Initialize drag-and-drop only if user can edit
+    if (canUserEdit) {
+        initializeSortable();
+    }
 }
 
 /**
@@ -230,6 +243,11 @@ function renderTaskCard(task) {
     const isCompleted = status === api.TASK_STATUS.COMPLETED;
     const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : null;
 
+    // Phase 4: Check user permissions for task actions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
     // Status badge styling
     const statusBadgeClass = getStatusBadgeClass(status);
     const statusLabel = getStatusLabel(status);
@@ -237,17 +255,32 @@ function renderTaskCard(task) {
     // Get linked item info
     const linkedItemHtml = linkedItemId ? renderLinkedItemSnippet(linkedItemId) : '';
 
-    return `
-        <div class="task-card ${isCompleted ? 'task-completed' : ''}" data-task-id="${task.id}" data-status="${status}">
+    // Only show drag handle and actions if user can edit
+    const dragHandleHtml = canUserEdit ? `
             <div class="task-card-drag-handle">
                 <span class="drag-icon">⋮⋮</span>
-            </div>
+            </div>` : '';
+
+    const actionsHtml = canUserEdit ? `
+            <div class="task-card-actions">
+                <button class="task-edit-btn" data-task-id="${task.id}" title="Edit task">
+                    <span>Edit</span>
+                </button>
+                <button class="task-delete-btn" data-task-id="${task.id}" title="Delete task">
+                    <span>&times;</span>
+                </button>
+            </div>` : '';
+
+    return `
+        <div class="task-card ${isCompleted ? 'task-completed' : ''} ${canUserEdit ? '' : 'task-card-readonly'}" data-task-id="${task.id}" data-status="${status}">
+            ${dragHandleHtml}
             <div class="task-card-main">
                 <div class="task-checkbox">
                     <input type="checkbox"
                            class="task-complete-checkbox"
                            data-task-id="${task.id}"
-                           ${isCompleted ? 'checked' : ''}>
+                           ${isCompleted ? 'checked' : ''}
+                           ${canUserEdit ? '' : 'disabled'}>
                 </div>
                 <div class="task-card-content">
                     <span class="task-name ${isCompleted ? 'task-name-completed' : ''}">${escapeHtml(name)}</span>
@@ -259,14 +292,7 @@ function renderTaskCard(task) {
                     ${linkedItemHtml}
                 </div>
             </div>
-            <div class="task-card-actions">
-                <button class="task-edit-btn" data-task-id="${task.id}" title="Edit task">
-                    <span>Edit</span>
-                </button>
-                <button class="task-delete-btn" data-task-id="${task.id}" title="Delete task">
-                    <span>&times;</span>
-                </button>
-            </div>
+            ${actionsHtml}
         </div>
     `;
 }
@@ -393,13 +419,18 @@ function attachEventListeners(container) {
  * @param {Event} e - Click event
  */
 function handleTaskClick(e) {
+    // Phase 4: Check user permissions before allowing edit actions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
     const editBtn = e.target.closest('.task-edit-btn');
     const deleteBtn = e.target.closest('.task-delete-btn');
     const linkedItem = e.target.closest('.task-linked-item');
     const dragHandle = e.target.closest('.task-card-drag-handle');
     const taskCard = e.target.closest('.task-card');
 
-    // Handle linked item click - open item detail
+    // Handle linked item click - open item detail (always allowed)
     if (linkedItem) {
         e.stopPropagation();
         const itemId = linkedItem.dataset.itemId;
@@ -416,6 +447,17 @@ function handleTaskClick(e) {
         return;
     }
 
+    // Block edit/delete actions for viewers
+    if (!canUserEdit) {
+        if (editBtn || deleteBtn) {
+            e.stopPropagation();
+            showToast('You have view-only access to this project', 3000);
+            return;
+        }
+        // Still allow clicking on task card to view details but not edit
+        return;
+    }
+
     if (editBtn) {
         e.stopPropagation();
         const taskId = editBtn.dataset.taskId;
@@ -428,7 +470,7 @@ function handleTaskClick(e) {
         const taskId = deleteBtn.dataset.taskId;
         handleDeleteTask(taskId);
     } else if (taskCard && !e.target.closest('.task-checkbox')) {
-        // Clicking on task card opens edit modal
+        // Clicking on task card opens edit modal (if user can edit)
         const taskId = taskCard.dataset.taskId;
         const task = state.tasks.all.get(taskId);
         if (task) {
@@ -443,6 +485,18 @@ function handleTaskClick(e) {
  */
 async function handleCheckboxChange(e) {
     if (!e.target.classList.contains('task-complete-checkbox')) return;
+
+    // Phase 4: Check user permissions before allowing status change
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
+    if (!canUserEdit) {
+        e.preventDefault();
+        e.target.checked = !e.target.checked; // Revert the checkbox
+        showToast('You have view-only access to this project', 3000);
+        return;
+    }
 
     const taskId = e.target.dataset.taskId;
     const isChecked = e.target.checked;

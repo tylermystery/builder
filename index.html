@@ -1248,6 +1248,15 @@ body.modal-open {
                             <div class="invite-popup-form">
                                 <input type="text" id="collab-name" placeholder="Friend's Name" class="invite-popup-input">
                                 <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
+                                <!-- Phase 4: Role selector for permissions -->
+                                <div class="invite-role-select-wrapper">
+                                    <label for="collab-role" class="invite-role-label">Permission Level</label>
+                                    <select id="collab-role" class="invite-popup-select">
+                                        <option value="editor" selected>Editor (can edit)</option>
+                                        <option value="viewer">Viewer (read-only)</option>
+                                        <option value="owner">Owner (full access)</option>
+                                    </select>
+                                </div>
                                 <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
                                 <div id="invite-status" class="invite-popup-status"></div>
                             </div>
