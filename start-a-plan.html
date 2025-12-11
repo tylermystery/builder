@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Start a new plan - WTFun">
+    <meta name="theme-color" content="#007bff">
+    <title>Start a Plan - WTFun</title>
+    <link rel="icon" href="data:;" />
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 48px;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 32px;
+            line-height: 1.2;
+        }
+
+        .input-wrapper {
+            margin-bottom: 24px;
+        }
+
+        #planIdea {
+            width: 100%;
+            min-height: 120px;
+            padding: 20px;
+            font-size: 1.125rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            resize: vertical;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+
+        #planIdea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+        }
+
+        #planIdea::placeholder {
+            color: #94a3b8;
+        }
+
+        #startPlanButton {
+            width: 100%;
+            padding: 18px 32px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        #startPlanButton:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+        }
+
+        #startPlanButton:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        #startPlanButton:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        #startPlanButton.loading {
+            position: relative;
+        }
+
+        #startPlanButton.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer-link {
+            margin-top: 32px;
+        }
+
+        .footer-link a {
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.2s ease;
+        }
+
+        .footer-link a:hover {
+            color: #667eea;
+            text-decoration: underline;
+        }
+
+        .error-message {
+            color: #dc2626;
+            font-size: 0.9rem;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 32px 24px;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            #planIdea {
+                min-height: 100px;
+                font-size: 1rem;
+            }
+
+            #startPlanButton {
+                font-size: 1.1rem;
+                padding: 16px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>How would you like to begin?</h1>
+
+        <div class="input-wrapper">
+            <textarea
+                id="planIdea"
+                placeholder="Add any idea, component, or detail to your plan."
+                autofocus
+            ></textarea>
+        </div>
+
+        <button id="startPlanButton" type="button">
+            Start Plan
+        </button>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div class="footer-link">
+            <a href="/?view=projects">Go to Active Plan List</a>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const planIdeaInput = document.getElementById('planIdea');
+            const startPlanButton = document.getElementById('startPlanButton');
+            const errorMessage = document.getElementById('errorMessage');
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.add('visible');
+            }
+
+            function hideError() {
+                errorMessage.classList.remove('visible');
+            }
+
+            function setLoading(isLoading) {
+                startPlanButton.disabled = isLoading;
+                if (isLoading) {
+                    startPlanButton.classList.add('loading');
+                    startPlanButton.textContent = '';
+                } else {
+                    startPlanButton.classList.remove('loading');
+                    startPlanButton.textContent = 'Start Plan';
+                }
+            }
+
+            async function handleSubmit() {
+                const idea = planIdeaInput.value.trim();
+
+                if (!idea) {
+                    showError('Please enter an idea to start your plan.');
+                    planIdeaInput.focus();
+                    return;
+                }
+
+                hideError();
+                setLoading(true);
+
+                try {
+                    const response = await fetch('/api/create-quick-plan', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ idea: idea })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to create plan');
+                    }
+
+                    if (data.newPlanId) {
+                        // Redirect to the new plan's detail page
+                        window.location.href = '/?session=' + data.newPlanId;
+                    } else {
+                        throw new Error('No plan ID returned');
+                    }
+                } catch (error) {
+                    console.error('Error creating plan:', error);
+                    showError(error.message || 'Something went wrong. Please try again.');
+                    setLoading(false);
+                }
+            }
+
+            // Handle button click
+            startPlanButton.addEventListener('click', handleSubmit);
+
+            // Handle Enter key (Ctrl/Cmd+Enter for textarea)
+            planIdeaInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    handleSubmit();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
