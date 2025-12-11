@@ -10,6 +10,43 @@ const { AIRTABLE_PAT, BASE_ID } = process.env;
 // Target the existing Projects table
 const PROJECTS_TABLE = 'Projects';
 
+/**
+ * Triggers background AI enrichment of the newly created plan
+ * This is fire-and-forget - we don't await the result
+ * @param {string} projectId - The Airtable record ID of the new project
+ * @param {string} ideaText - The original idea text for AI analysis
+ */
+function triggerBackgroundEnrichment(projectId, ideaText) {
+  // Get the base URL from the environment or construct it
+  // In Netlify Functions, we can call other functions via their path
+  const enrichmentUrl = process.env.URL
+    ? `${process.env.URL}/.netlify/functions/enrich-quick-plan`
+    : '/.netlify/functions/enrich-quick-plan';
+
+  console.log(`[create-quick-plan] Triggering background AI enrichment for project ${projectId}`);
+
+  // Fire and forget - don't await
+  fetch(enrichmentUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId: projectId,
+      ideaText: ideaText
+    })
+  })
+    .then(response => {
+      if (response.ok) {
+        console.log(`[create-quick-plan] Background enrichment triggered successfully`);
+      } else {
+        console.warn(`[create-quick-plan] Background enrichment returned status ${response.status}`);
+      }
+    })
+    .catch(error => {
+      // Log but don't fail - enrichment is optional
+      console.warn(`[create-quick-plan] Background enrichment failed: ${error.message}`);
+    });
+}
+
 exports.handler = async (event) => {
   console.log('[create-quick-plan] Function invoked');
 
@@ -92,6 +129,10 @@ exports.handler = async (event) => {
     const newRecordId = result.id;
 
     console.log('[create-quick-plan] Successfully created plan with ID:', newRecordId);
+
+    // Trigger background AI enrichment (fire-and-forget)
+    // This will suggest a Plan_Type and create initial Tasks without blocking the response
+    triggerBackgroundEnrichment(newRecordId, ideaText);
 
     // Return success response with the new record ID
     return {

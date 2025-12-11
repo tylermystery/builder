@@ -278,3 +278,9 @@
   to = "/.netlify/functions/create-quick-plan"
   status = 200
 
+# Quick Plan AI Enrichment (background processing)
+[[redirects]]
+  from = "/api/enrich-quick-plan"
+  to = "/.netlify/functions/enrich-quick-plan"
+  status = 200
+
