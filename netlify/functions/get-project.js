@@ -4,7 +4,7 @@
 const fetch = require('node-fetch');
 
 const { AIRTABLE_PAT, BASE_ID } = process.env;
-const PROJECTS_TABLE = 'Projects';
+const SESSIONS_TABLE = 'Sessions';  // Also referred to as "Projects" in the UI
 
 // Debug logging prefix for this module
 const DEBUG_PREFIX = '[get-project]';
@@ -71,7 +71,7 @@ exports.handler = async (event) => {
     debugLog('Fetching project', { projectId });
 
     // Fetch the project from Airtable
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(PROJECTS_TABLE)}/${projectId}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}/${projectId}`;
 
     const response = await fetch(url, {
       method: 'GET',

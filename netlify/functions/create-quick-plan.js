@@ -7,8 +7,8 @@ const fetch = require('node-fetch');
 // Environment variables for Airtable access
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 
-// Target the existing Projects table
-const PROJECTS_TABLE = 'Projects';
+// Target the existing Sessions table (also referred to as "Projects" in the UI)
+const SESSIONS_TABLE = 'Sessions';
 
 // Debug logging prefix for this module
 const DEBUG_PREFIX = '[create-quick-plan]';
@@ -125,7 +125,7 @@ exports.handler = async (event) => {
     });
 
     // Create the record in Airtable
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(PROJECTS_TABLE)}`;
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}`;
 
     const response = await fetch(url, {
       method: 'POST',

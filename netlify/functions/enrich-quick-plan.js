@@ -8,7 +8,7 @@ const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID, GEMINI_API_KEY } = process.env;
 
 // Table names
-const PROJECTS_TABLE = 'Projects';
+const SESSIONS_TABLE = 'Sessions';  // Also referred to as "Projects" in the UI
 const TASKS_TABLE = 'Tasks';
 
 // Debug logging prefix for this module
@@ -274,7 +274,7 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
 
   debugLog('Fields to update', updateFields);
 
-  const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(PROJECTS_TABLE)}/${projectId}`;
+  const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}/${projectId}`;
 
   const response = await fetch(url, {
     method: 'PATCH',
