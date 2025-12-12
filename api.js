@@ -1405,6 +1405,80 @@ export async function fetchChatMessages(sessionId) {
 }
 
 
+/**
+ * Event types for plan history tracking
+ */
+export const PLAN_EVENT_TYPES = {
+    PLAN_CREATED: 'plan_created',
+    AI_INTERPRETATION: 'ai_interpretation',
+    PLAN_UPDATED: 'plan_updated',
+    TASK_ADDED: 'task_added',
+    ITEM_ADDED: 'item_added',
+    COLLABORATOR_JOINED: 'collaborator_joined'
+};
+
+/**
+ * Posts a plan event to the Messages table for history tracking.
+ * Events are stored as system messages with EventType field to distinguish from chat messages.
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event (from PLAN_EVENT_TYPES)
+ * @param {object} eventData - Additional data about the event
+ * @returns {Promise<object|null>} The created record or null on failure
+ */
+export async function postPlanEvent(sessionId, eventType, eventData = {}) {
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.error(`[API] postPlanEvent Error: Invalid sessionId provided: "${sessionId}".`);
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+    // Format the event content as JSON string for storage
+    const eventContent = JSON.stringify({
+        type: eventType,
+        data: eventData,
+        timestamp: new Date().toISOString()
+    });
+
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: [sessionId],
+                SenderID: 'system',
+                SenderName: 'System',
+                Content: eventContent,
+                EventType: eventType
+            }
+        }]
+    };
+
+    try {
+        log('API', `Posting plan event: ${eventType} to session ${sessionId}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            // Don't throw - event logging is non-critical
+            console.error(`[API] Failed to post plan event: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Plan event saved: ${eventType} with record ID: ${result.records[0].id}`);
+        return result.records[0];
+    } catch (error) {
+        console.error('[API] Error posting plan event:', error);
+        return null;
+    }
+}
+
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
         console.error(`[API] postChatMessage Error: Invalid sessionId provided: \"${sessionId}\". Cannot save message.`);

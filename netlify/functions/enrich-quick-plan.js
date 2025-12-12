@@ -15,6 +15,35 @@ const TASKS_TABLE = 'Tasks';
 const DEBUG_PREFIX = '[enrich-quick-plan]';
 
 /**
+ * Posts a plan event to the Messages table for history tracking
+ * Fire-and-forget - we don't await the result
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event
+ * @param {object} eventData - Additional data about the event
+ */
+function postPlanEvent(sessionId, eventType, eventData) {
+  const eventUrl = process.env.URL
+    ? `${process.env.URL}/.netlify/functions/post-plan-event`
+    : '/.netlify/functions/post-plan-event';
+
+  fetch(eventUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, eventType, eventData })
+  })
+    .then(response => {
+      if (response.ok) {
+        debugLog('Plan event posted successfully', { sessionId, eventType });
+      } else {
+        debugLog('Plan event posting returned non-OK status', { sessionId, eventType, status: response.status });
+      }
+    })
+    .catch(error => {
+      debugLog('Plan event posting failed (non-critical)', { sessionId, eventType, error: error.message });
+    });
+}
+
+/**
  * Debug logger for plan parsing - only logs parsing-related information
  * @param {string} action - The action being performed
  * @param {any} data - Data to log (optional)
@@ -456,6 +485,19 @@ exports.handler = async (event) => {
         items_count: analysis.items_components?.length || 0
       },
       tasksCreated: createdTasks.length
+    });
+
+    // Post the AI interpretation event to show in chat history
+    postPlanEvent(projectId, 'ai_interpretation', {
+      planName: analysis.plan_name,
+      planType: analysis.plan_type,
+      eventDate: analysis.event_date,
+      goals: analysis.goals,
+      guestCount: analysis.guest_count,
+      location: analysis.location,
+      itemsExtracted: analysis.items_components?.map(item => item.name) || [],
+      tasksCreated: createdTasks.map(t => t.fields?.Name || 'Unnamed task'),
+      reasoning: analysis.reasoning
     });
 
     return {

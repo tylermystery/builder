@@ -28,6 +28,35 @@ function debugLog(action, data = null) {
 }
 
 /**
+ * Posts a plan event to the Messages table for history tracking
+ * Fire-and-forget - we don't await the result
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event
+ * @param {object} eventData - Additional data about the event
+ */
+function postPlanEvent(sessionId, eventType, eventData) {
+  const eventUrl = process.env.URL
+    ? `${process.env.URL}/.netlify/functions/post-plan-event`
+    : '/.netlify/functions/post-plan-event';
+
+  fetch(eventUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, eventType, eventData })
+  })
+    .then(response => {
+      if (response.ok) {
+        debugLog('Plan event posted successfully', { sessionId, eventType });
+      } else {
+        debugLog('Plan event posting returned non-OK status', { sessionId, eventType, status: response.status });
+      }
+    })
+    .catch(error => {
+      debugLog('Plan event posting failed (non-critical)', { sessionId, eventType, error: error.message });
+    });
+}
+
+/**
  * Triggers background AI enrichment of the newly created plan
  * This is fire-and-forget - we don't await the result
  * @param {string} projectId - The Airtable record ID of the new project
@@ -146,6 +175,12 @@ exports.handler = async (event) => {
     const newRecordId = result.id;
 
     debugLog('Plan created successfully', { planId: newRecordId });
+
+    // Post the plan_created event to show in chat history
+    postPlanEvent(newRecordId, 'plan_created', {
+      originalInput: ideaText,
+      initialName: planName
+    });
 
     // Trigger background AI enrichment (fire-and-forget)
     // This will extract structured data (date, goals, name, items) and create initial Tasks
