@@ -109,19 +109,19 @@ exports.handler = async (event) => {
 
     // Prepare the record fields
     // Name: First 50 characters of the idea text (will be updated by AI enrichment)
-    // Description: Full idea text (preserved for reference)
+    // Goals: Full idea text (preserved for reference, will be enriched by AI)
     const planName = ideaText.length > 50
       ? ideaText.substring(0, 50)
       : ideaText;
 
     const airtableFields = {
       'Name': planName,
-      'Description': ideaText
+      'Goals': ideaText
     };
 
     debugLog('Creating Airtable record', {
       name: planName,
-      descriptionLength: ideaText.length
+      goalsLength: ideaText.length
     });
 
     // Create the record in Airtable
