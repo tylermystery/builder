@@ -846,7 +846,15 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         quickPlanSubmitBtn.addEventListener('click', async () => {
             const idea = quickPlanIdeaInput.value.trim();
 
+            // Debug: Log quick plan submission start
+            if (window.debugLog) {
+                window.debugLog('[QUICK-PLAN] Starting quick plan submission', { ideaLength: idea.length, ideaPreview: idea.substring(0, 50) }, 'info');
+            }
+
             if (!idea) {
+                if (window.debugLog) {
+                    window.debugLog('[QUICK-PLAN] Validation failed: empty idea', null, 'error');
+                }
                 if (quickPlanError) {
                     quickPlanError.textContent = 'Please enter a plan idea.';
                     quickPlanError.style.display = 'block';
@@ -861,6 +869,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             quickPlanSubmitBtn.classList.add('loading');
             quickPlanSubmitBtn.disabled = true;
 
+            if (window.debugLog) {
+                window.debugLog('[QUICK-PLAN] Calling /api/create-quick-plan...', { idea: idea }, 'info');
+            }
+
             try {
                 const response = await fetch('/api/create-quick-plan', {
                     method: 'POST',
@@ -870,7 +882,19 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     body: JSON.stringify({ idea: idea })
                 });
 
+                if (window.debugLog) {
+                    window.debugLog('[QUICK-PLAN] API response received', { status: response.status, ok: response.ok }, 'info');
+                }
+
                 const result = await response.json();
+
+                if (window.debugLog) {
+                    window.debugLog('[QUICK-PLAN] API response parsed', {
+                        success: result.success,
+                        newPlanId: result.newPlanId,
+                        error: result.error || null
+                    }, result.success ? 'success' : 'error');
+                }
 
                 if (!response.ok || !result.success) {
                     throw new Error(result.error || 'Failed to create plan');
@@ -882,11 +906,24 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
                 // Navigate to the new plan using URL parameters
                 if (result.newPlanId) {
+                    if (window.debugLog) {
+                        window.debugLog('[QUICK-PLAN] Navigating to new plan', { planId: result.newPlanId }, 'success');
+                    }
                     updateUrl({ category: null, subcategory: null, view: 'plan', session: result.newPlanId });
                     applyFiltersAndSort(imageCache);
+
+                    // Debug: Start polling for enrichment results
+                    if (window.debugLog) {
+                        window.debugLog('[QUICK-PLAN] Plan created - background enrichment triggered. Watch for AI enrichment results...', null, 'info');
+                        // Poll for enrichment completion by watching for plan data updates
+                        startQuickPlanEnrichmentPolling(result.newPlanId);
+                    }
                 }
             } catch (error) {
                 console.error('Quick Plan error:', error);
+                if (window.debugLog) {
+                    window.debugLog('[QUICK-PLAN] Error creating plan', { error: error.message }, 'error');
+                }
                 if (quickPlanError) {
                     quickPlanError.textContent = error.message || 'Something went wrong. Please try again.';
                     quickPlanError.style.display = 'block';
@@ -905,6 +942,85 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
         });
     }
+
+    /**
+     * Poll for enrichment results after quick plan creation
+     * This helps debug whether the AI enrichment is completing successfully
+     * @param {string} planId - The new plan ID to poll for
+     */
+    window.startQuickPlanEnrichmentPolling = async function(planId) {
+        if (!window.debugLog) return;
+
+        window.debugLog('[QUICK-PLAN] Starting enrichment polling', { planId }, 'info');
+
+        let attempts = 0;
+        const maxAttempts = 15; // Poll for up to 30 seconds
+        const pollInterval = 2000; // Poll every 2 seconds
+
+        const poll = async () => {
+            attempts++;
+            window.debugLog(`[QUICK-PLAN] Enrichment poll attempt ${attempts}/${maxAttempts}`, { planId }, 'info');
+
+            try {
+                const response = await fetch(`/api/get-project?id=${planId}`);
+                if (response.ok) {
+                    const project = await response.json();
+
+                    // Check if enrichment fields are populated (AI sets Plan_Type, Date, Goals, etc.)
+                    const hasEnrichment = project.Plan_Type ||
+                                          project.Date ||
+                                          project['Guest Count'] ||
+                                          project.Location ||
+                                          (project.Goals && project.Goals !== project.Name);
+
+                    window.debugLog('[QUICK-PLAN] Project data fetched', {
+                        name: project.Name,
+                        planType: project.Plan_Type || '(not set)',
+                        date: project.Date || '(not set)',
+                        goals: project.Goals ? project.Goals.substring(0, 100) : '(not set)',
+                        guestCount: project['Guest Count'] || '(not set)',
+                        location: project.Location || '(not set)',
+                        hasEnrichment
+                    }, hasEnrichment ? 'success' : 'data');
+
+                    if (hasEnrichment) {
+                        window.debugLog('[QUICK-PLAN] AI Enrichment completed!', {
+                            extractedFields: {
+                                name: project.Name,
+                                type: project.Plan_Type,
+                                date: project.Date,
+                                goals: project.Goals,
+                                guestCount: project['Guest Count'],
+                                location: project.Location
+                            }
+                        }, 'success');
+                        return; // Stop polling
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        window.debugLog('[QUICK-PLAN] Max polling attempts reached - enrichment may still be in progress or failed', null, 'error');
+                        return; // Stop polling
+                    }
+
+                    // Continue polling
+                    setTimeout(poll, pollInterval);
+                } else {
+                    window.debugLog('[QUICK-PLAN] Project fetch failed', { status: response.status }, 'error');
+                    if (attempts < maxAttempts) {
+                        setTimeout(poll, pollInterval);
+                    }
+                }
+            } catch (error) {
+                window.debugLog('[QUICK-PLAN] Enrichment poll error', { error: error.message }, 'error');
+                if (attempts < maxAttempts) {
+                    setTimeout(poll, pollInterval);
+                }
+            }
+        };
+
+        // Start polling after a short delay to give the backend time to start enrichment
+        setTimeout(poll, 1500);
+    };
 
     const menuRecentChatsBtn = document.getElementById('menu-recent-chats-btn');
     if (menuRecentChatsBtn) {
