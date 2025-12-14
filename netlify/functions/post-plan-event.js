@@ -7,7 +7,7 @@ const fetch = require('node-fetch');
 const { AIRTABLE_PAT, BASE_ID } = process.env;
 
 const MESSAGES_TABLE = 'Messages';
-const DEBUG_PREFIX = '[post-plan-event]';
+const DEBUG_PREFIX = '[PLAN-EVENT]';
 
 /**
  * Event types for plan history tracking
@@ -21,17 +21,8 @@ const PLAN_EVENT_TYPES = {
     COLLABORATOR_JOINED: 'collaborator_joined'
 };
 
-function debugLog(action, data = null) {
-    const timestamp = new Date().toISOString();
-    if (data !== null) {
-        console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}:`, JSON.stringify(data, null, 2));
-    } else {
-        console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}`);
-    }
-}
-
 exports.handler = async (event) => {
-    debugLog('Function invoked', { method: event.httpMethod });
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION START ==========`);
 
     if (event.httpMethod !== 'POST') {
         return {
@@ -42,7 +33,7 @@ exports.handler = async (event) => {
     }
 
     if (!AIRTABLE_PAT || !BASE_ID) {
-        debugLog('ERROR: Missing required environment variables');
+        console.error(`${DEBUG_PREFIX} ERROR: Missing AIRTABLE_PAT or BASE_ID`);
         return {
             statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
@@ -54,6 +45,7 @@ exports.handler = async (event) => {
         const { sessionId, eventType, eventData } = JSON.parse(event.body || '{}');
 
         if (!sessionId || !sessionId.startsWith('rec')) {
+            console.error(`${DEBUG_PREFIX} Invalid sessionId: ${sessionId}`);
             return {
                 statusCode: 400,
                 headers: { 'Content-Type': 'application/json' },
@@ -62,6 +54,7 @@ exports.handler = async (event) => {
         }
 
         if (!eventType || !Object.values(PLAN_EVENT_TYPES).includes(eventType)) {
+            console.error(`${DEBUG_PREFIX} Invalid eventType: ${eventType}`);
             return {
                 statusCode: 400,
                 headers: { 'Content-Type': 'application/json' },
@@ -69,7 +62,7 @@ exports.handler = async (event) => {
             };
         }
 
-        debugLog('Posting plan event', { sessionId, eventType });
+        console.log(`${DEBUG_PREFIX} Posting ${eventType} event for session ${sessionId}`);
 
         const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(MESSAGES_TABLE)}`;
 
@@ -92,6 +85,8 @@ exports.handler = async (event) => {
             }]
         };
 
+        console.log(`${DEBUG_PREFIX} Creating message record with SessionID=[${sessionId}], EventType=${eventType}`);
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -103,7 +98,7 @@ exports.handler = async (event) => {
 
         if (!response.ok) {
             const errorBody = await response.text();
-            debugLog('Airtable error', { status: response.status, error: errorBody });
+            console.error(`${DEBUG_PREFIX} ❌ Airtable error: ${response.status}`, errorBody);
             // Return success anyway - event logging shouldn't fail the main operation
             return {
                 statusCode: 200,
@@ -117,7 +112,8 @@ exports.handler = async (event) => {
         }
 
         const result = await response.json();
-        debugLog('Event posted successfully', { recordId: result.records[0].id });
+        console.log(`${DEBUG_PREFIX} ✅ Event posted: ${result.records[0].id}`);
+        console.log(`${DEBUG_PREFIX} ========== FUNCTION END (success) ==========`);
 
         return {
             statusCode: 200,
@@ -129,7 +125,8 @@ exports.handler = async (event) => {
         };
 
     } catch (error) {
-        debugLog('Function failed', { error: error.message, stack: error.stack });
+        console.error(`${DEBUG_PREFIX} FUNCTION FAILED:`, error.message);
+        console.log(`${DEBUG_PREFIX} ========== FUNCTION END (error) ==========`);
 
         // Return success anyway - event logging is non-critical
         return {

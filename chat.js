@@ -220,13 +220,17 @@ function updatePresenceUI(members) {
 function addEventToUI(messagesList, record) {
     const { Content, Timestamp, EventType } = record.fields;
 
+    console.log(`[CHAT-EVENT] Adding event to UI: type=${EventType}, recordId=${record.id}`);
+
     // Parse the event content JSON
     let eventData = {};
     try {
         const parsed = JSON.parse(Content);
         eventData = parsed.data || parsed;
+        console.log(`[CHAT-EVENT] Event data parsed successfully:`, Object.keys(eventData));
     } catch (e) {
-        log('Chat', 'Failed to parse event content:', e);
+        console.error(`[CHAT-EVENT] ❌ Failed to parse event content:`, e.message);
+        console.error(`[CHAT-EVENT] Raw content was:`, Content);
         return;
     }
 
@@ -416,7 +420,8 @@ function displayDebugMessage(message) {
 // --- END NEW DEBUG FUNCTION ---
 
 export async function initializeSessionChat() {
-    log('Chat', 'initializeSessionChat called, waiting for Pusher library...');
+    console.log('[CHAT-INIT] ========== initializeSessionChat START ==========');
+    console.log('[CHAT-INIT] Session ID:', state.session.id);
 
     // Show loading state in the message input while waiting for Pusher
     const messageInput = document.getElementById('message-input');
@@ -431,9 +436,9 @@ export async function initializeSessionChat() {
     if (typeof window.waitForPusher === 'function') {
         try {
             await window.waitForPusher();
-            log('Chat', 'Pusher library is now available');
+            console.log('[CHAT-INIT] Pusher library loaded');
         } catch (err) {
-            console.error('[Chat] Failed to wait for Pusher:', err);
+            console.error('[CHAT-INIT] ❌ Failed to load Pusher:', err);
             if (messageInput) {
                 messageInput.placeholder = 'Chat unavailable - please refresh';
             }
@@ -441,7 +446,7 @@ export async function initializeSessionChat() {
             return;
         }
     } else if (typeof Pusher === 'undefined') {
-        console.error('[Chat] Pusher is not defined and waitForPusher is not available');
+        console.error('[CHAT-INIT] ❌ Pusher not defined and waitForPusher not available');
         if (messageInput) {
             messageInput.placeholder = 'Chat unavailable - please refresh';
         }
@@ -451,7 +456,7 @@ export async function initializeSessionChat() {
 
     if (pusher) {
         pusher.disconnect();
-        log('Chat', 'Disconnected from previous Pusher instance.');
+        console.log('[CHAT-INIT] Disconnected previous Pusher instance');
     }
 
     // Update the chat header to show the current plan name
@@ -462,6 +467,8 @@ export async function initializeSessionChat() {
         state.session.userProfiles.set(currentUser.id, currentUser.name);
     }
     const sessionId = state.session.id || 'default-session';
+    console.log('[CHAT-INIT] Using session ID:', sessionId);
+
     const chatUserNameInput = document.getElementById('chat-user-name');
     if (chatUserNameInput) {
         chatUserNameInput.value = currentUser.name;
@@ -471,55 +478,66 @@ export async function initializeSessionChat() {
                 currentUser.name = newName;
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
-            
+
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(sessionChatChannel.members);
                 triggerSave();
             } else {
                 e.target.value = currentUser.name;
             }
-   
+
         });
     }
 
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        //displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
+        console.log('[CHAT-INIT] Fetching chat messages for session:', sessionId);
+
         const records = await api.fetchChatMessages(sessionId);
+        console.log(`[CHAT-INIT] Fetched ${records.length} message records`);
 
         if (records.length > 0) {
-            //displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
+            let eventCount = 0;
+            let messageCount = 0;
+
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp, EventType } = record.fields;
 
                 // Check if this is a system event (plan history)
                 if (SenderID === 'system' && EventType) {
+                    console.log(`[CHAT-INIT] Found system event: type=${EventType}, id=${record.id}`);
                     addEventToUI(messagesList, record);
+                    eventCount++;
                 } else {
                     // Regular chat message
                     const isSent = SenderID === currentUser.id;
                     addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
+                    messageCount++;
                 }
             });
+
+            console.log(`[CHAT-INIT] ✅ Loaded ${eventCount} events and ${messageCount} messages`);
         } else {
-            //displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
+            console.log('[CHAT-INIT] No messages found for this session');
         }
     }
-  
+
+    console.log('[CHAT-INIT] Connecting to Pusher...');
+
     pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
         auth: {
-            params: { 
+            params: {
                 user_id: currentUser.id,
                 user_name: currentUser.name
-         
+
            }
         }
     });
     const channelName = `presence-session-${sessionId}`;
-    log('Chat', `Subscribing to Pusher channel: ${channelName}`);
+    console.log(`[CHAT-INIT] Subscribing to channel: ${channelName}`);
     sessionChatChannel = pusher.subscribe(channelName);
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
@@ -529,10 +547,12 @@ export async function initializeSessionChat() {
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
-    
+
             }
         }
     });
+
+    console.log('[CHAT-INIT] ========== initializeSessionChat END ==========');
 }
 
 export async function sendMessage(message, recordId = null) {
