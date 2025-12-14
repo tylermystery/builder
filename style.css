@@ -2606,6 +2606,178 @@ body.modal-open {
     text-align: right;
 }
 
+/* Session History Filter Controls */
+.history-filter-controls {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    justify-content: center;
+}
+
+.history-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background: #fff;
+    color: #6c757d;
+    font-size: 0.75em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.history-filter-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.history-filter-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    color: #fff;
+}
+
+.history-filter-btn .filter-icon {
+    font-size: 1em;
+}
+
+.history-filter-btn .filter-label {
+    font-weight: 500;
+}
+
+/* Debug History Entry Styles */
+.debug-history-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 8px 8px;
+}
+
+.debug-history-entry {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 8px;
+    border-left: 3px solid #00ff00;
+    padding: 10px 14px;
+    max-width: 95%;
+    width: 100%;
+    font-family: 'Courier New', Consolas, monospace;
+    font-size: 0.75em;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.debug-history-entry.debug-type-error {
+    border-left-color: #ff4444;
+}
+
+.debug-history-entry.debug-type-success {
+    border-left-color: #44ff44;
+}
+
+.debug-history-entry.debug-type-data {
+    border-left-color: #00ffff;
+}
+
+.debug-history-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.debug-history-header .debug-icon {
+    font-size: 1em;
+}
+
+.debug-history-header .debug-type-label {
+    color: #00ff00;
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.debug-type-error .debug-type-label {
+    color: #ff4444;
+}
+
+.debug-type-success .debug-type-label {
+    color: #44ff44;
+}
+
+.debug-history-action {
+    color: #ffff00;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.debug-history-data {
+    color: #00ffff;
+    white-space: pre-wrap;
+    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 8px;
+    border-radius: 4px;
+    margin-top: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.debug-history-timestamp {
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 6px;
+    text-align: right;
+}
+
+/* History Empty State */
+.history-empty-state {
+    text-align: center;
+    padding: 30px 20px;
+    color: #6c757d;
+}
+
+.history-empty-state p {
+    margin: 8px 0;
+}
+
+.history-empty-state .empty-hint {
+    font-size: 0.85em;
+    color: #adb5bd;
+}
+
+/* Mobile adjustments for history filters */
+@media (max-width: 640px) {
+    .history-filter-controls {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+
+    .history-filter-btn {
+        padding: 3px 8px;
+        font-size: 0.7em;
+    }
+
+    .history-filter-btn .filter-label {
+        display: none;
+    }
+
+    .history-filter-btn .filter-icon {
+        font-size: 1.1em;
+    }
+
+    .debug-history-entry {
+        font-size: 0.7em;
+        padding: 8px 10px;
+    }
+
+    .debug-history-data {
+        max-height: 100px;
+    }
+}
+
 .coming-soon-banner {
   position: absolute;
   top: 0;

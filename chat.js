@@ -6,6 +6,7 @@ import * as api from './api.js';
 import { log } from './utils/debug.js';
 import { triggerSave, openChatWidget } from './events.js';
 import { updateUrl } from './utils.js';
+import { getDebugLogs, isDebugPanelInitialized } from './utils/debug-panel.js';
 
 let currentUser = null;
 let pusher = null;
@@ -15,6 +16,16 @@ const FUN_ADJECTIVES = ['Happy', 'Clever', 'Sunny', 'Lucky', 'Creative', 'Brave'
 const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard', 'Dolphin', 'Robot', 'Pineapple', 'Comet'];
 let originalTitle = document.title;
 let isTabActive = true;
+
+// Session history filter state - track which message types are visible
+let historyFilters = {
+    chat: true,
+    planEvents: true,
+    debug: false // Debug off by default, user can toggle on
+};
+
+// Store all session history items for re-rendering when filters change
+let sessionHistoryItems = [];
 
 // Event type display labels and icons
 const EVENT_TYPE_DISPLAY = {
@@ -33,6 +44,224 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
   isTabActive = false;
 });
+
+/**
+ * Creates the history filter toggle buttons UI in the chat header.
+ * Allows users to show/hide chat messages, plan events, and debug logs.
+ */
+function createHistoryFilterToggles() {
+    const chatHeader = document.getElementById('chat-header');
+    if (!chatHeader) return;
+
+    // Remove existing filter controls if present
+    const existingFilters = chatHeader.querySelector('.history-filter-controls');
+    if (existingFilters) {
+        existingFilters.remove();
+    }
+
+    const filterControls = document.createElement('div');
+    filterControls.className = 'history-filter-controls';
+
+    const toggles = [
+        { key: 'chat', label: 'Chat', icon: '💬', title: 'Show/hide chat messages' },
+        { key: 'planEvents', label: 'Plan', icon: '📋', title: 'Show/hide plan history' },
+        { key: 'debug', label: 'Debug', icon: '🔧', title: 'Show/hide debug logs' }
+    ];
+
+    toggles.forEach(toggle => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `history-filter-btn ${historyFilters[toggle.key] ? 'active' : ''}`;
+        btn.dataset.filterKey = toggle.key;
+        btn.title = toggle.title;
+        btn.innerHTML = `<span class="filter-icon">${toggle.icon}</span><span class="filter-label">${toggle.label}</span>`;
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleHistoryFilter(toggle.key);
+        });
+
+        filterControls.appendChild(btn);
+    });
+
+    // Insert after the chat options or at the end of header
+    const chatOptions = chatHeader.querySelector('.chat-options');
+    if (chatOptions) {
+        chatOptions.insertAdjacentElement('afterend', filterControls);
+    } else {
+        chatHeader.appendChild(filterControls);
+    }
+}
+
+/**
+ * Toggles a history filter and re-renders the messages list
+ * @param {string} filterKey - The filter to toggle ('chat', 'planEvents', or 'debug')
+ */
+function toggleHistoryFilter(filterKey) {
+    historyFilters[filterKey] = !historyFilters[filterKey];
+
+    // Update button state
+    const btn = document.querySelector(`.history-filter-btn[data-filter-key="${filterKey}"]`);
+    if (btn) {
+        btn.classList.toggle('active', historyFilters[filterKey]);
+    }
+
+    // Re-render the messages list with current filters
+    renderFilteredHistory();
+}
+
+/**
+ * Renders the session history based on current filter settings.
+ * Items are sorted chronologically and only shown if their type filter is enabled.
+ */
+function renderFilteredHistory() {
+    const messagesList = document.getElementById('messages-list');
+    if (!messagesList) return;
+
+    // Clear the messages list
+    messagesList.innerHTML = '';
+
+    // Get debug logs if filter is enabled
+    let allItems = [...sessionHistoryItems];
+
+    if (historyFilters.debug) {
+        const debugLogs = getDebugLogsForHistory();
+        allItems = allItems.concat(debugLogs);
+    }
+
+    // Sort all items by timestamp
+    allItems.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Filter and render items based on current filters
+    let visibleCount = 0;
+    allItems.forEach(item => {
+        if (item.type === 'chat' && !historyFilters.chat) return;
+        if (item.type === 'planEvent' && !historyFilters.planEvents) return;
+        if (item.type === 'debug' && !historyFilters.debug) return;
+
+        renderHistoryItem(messagesList, item);
+        visibleCount++;
+    });
+
+    // Show empty state if no items visible
+    if (visibleCount === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'history-empty-state';
+        emptyState.innerHTML = `
+            <p>No history items to display.</p>
+            <p class="empty-hint">Toggle the filters above to show chat messages, plan events, or debug logs.</p>
+        `;
+        messagesList.appendChild(emptyState);
+    }
+
+    // Scroll to bottom
+    if (messagesList.lastElementChild) {
+        messagesList.lastElementChild.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+/**
+ * Gets debug logs formatted for the history view
+ * @returns {Array} Array of debug log items with type, timestamp, and data
+ */
+function getDebugLogsForHistory() {
+    try {
+        const debugLogs = getDebugLogs();
+        return debugLogs.map(entry => ({
+            type: 'debug',
+            timestamp: entry.timestamp,
+            data: entry
+        }));
+    } catch (e) {
+        console.warn('[Chat] Could not get debug logs:', e);
+        return [];
+    }
+}
+
+/**
+ * Renders a single history item to the messages list
+ * @param {HTMLElement} messagesList - The container element
+ * @param {Object} item - The history item to render
+ */
+function renderHistoryItem(messagesList, item) {
+    if (item.type === 'chat') {
+        const { sender, message, isSent, timestamp, senderId } = item.data;
+        addMessageToUI(messagesList, sender, message, isSent, timestamp, false, null, senderId);
+    } else if (item.type === 'planEvent') {
+        addEventToUI(messagesList, item.data);
+    } else if (item.type === 'debug') {
+        addDebugLogToUI(messagesList, item.data);
+    }
+}
+
+/**
+ * Adds a debug log entry to the chat history UI
+ * @param {HTMLElement} messagesList - The messages container element
+ * @param {Object} logEntry - The debug log entry with timestamp, action, data, type
+ */
+function addDebugLogToUI(messagesList, logEntry) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'debug-history-wrapper';
+
+    const debugElement = document.createElement('div');
+    debugElement.className = `debug-history-entry debug-type-${logEntry.type}`;
+
+    // Header with icon and type
+    const headerEl = document.createElement('div');
+    headerEl.className = 'debug-history-header';
+    const typeIcon = logEntry.type === 'error' ? '❌' : logEntry.type === 'success' ? '✅' : '🔧';
+    headerEl.innerHTML = `<span class="debug-icon">${typeIcon}</span><span class="debug-type-label">${logEntry.type.toUpperCase()}</span>`;
+    debugElement.appendChild(headerEl);
+
+    // Action content
+    const actionEl = document.createElement('div');
+    actionEl.className = 'debug-history-action';
+    actionEl.textContent = logEntry.action;
+    debugElement.appendChild(actionEl);
+
+    // Data (if present)
+    if (logEntry.data !== null && logEntry.data !== undefined) {
+        const dataEl = document.createElement('div');
+        dataEl.className = 'debug-history-data';
+        const dataStr = typeof logEntry.data === 'object' ? JSON.stringify(logEntry.data, null, 2) : String(logEntry.data);
+        dataEl.textContent = dataStr;
+        debugElement.appendChild(dataEl);
+    }
+
+    // Timestamp
+    const timestampEl = document.createElement('div');
+    timestampEl.className = 'debug-history-timestamp';
+    const date = new Date(logEntry.timestamp);
+    timestampEl.textContent = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    debugElement.appendChild(timestampEl);
+
+    wrapper.appendChild(debugElement);
+    messagesList.appendChild(wrapper);
+}
+
+/**
+ * Exports the history filter state getter for external use
+ */
+export function getHistoryFilters() {
+    return { ...historyFilters };
+}
+
+/**
+ * Exports the history filter state setter for external use
+ * @param {Object} newFilters - Object with filter keys to update
+ */
+export function setHistoryFilters(newFilters) {
+    Object.assign(historyFilters, newFilters);
+    // Update button states
+    Object.keys(newFilters).forEach(key => {
+        const btn = document.querySelector(`.history-filter-btn[data-filter-key="${key}"]`);
+        if (btn) {
+            btn.classList.toggle('active', historyFilters[key]);
+        }
+    });
+    renderFilteredHistory();
+}
 
 /**
  * Updates the chat header title to display the current plan name.
@@ -423,6 +652,9 @@ export async function initializeSessionChat() {
     console.log('[CHAT-INIT] ========== initializeSessionChat START ==========');
     console.log('[CHAT-INIT] Session ID:', state.session.id);
 
+    // Reset session history items for new session
+    sessionHistoryItems = [];
+
     // Show loading state in the message input while waiting for Pusher
     const messageInput = document.getElementById('message-input');
     const messageForm = document.getElementById('message-form');
@@ -461,6 +693,9 @@ export async function initializeSessionChat() {
 
     // Update the chat header to show the current plan name
     updateChatHeaderTitle();
+
+    // Create the history filter toggles
+    createHistoryFilterToggles();
 
     currentUser = getSimpleUserIdentity();
     if (!state.session.userProfiles.has(currentUser.id)) {
@@ -507,20 +742,38 @@ export async function initializeSessionChat() {
                 // Check if this is a system event (plan history)
                 if (SenderID === 'system' && EventType) {
                     console.log(`[CHAT-INIT] Found system event: type=${EventType}, id=${record.id}`);
-                    addEventToUI(messagesList, record);
+                    // Store in sessionHistoryItems for filtering
+                    sessionHistoryItems.push({
+                        type: 'planEvent',
+                        timestamp: Timestamp || new Date().toISOString(),
+                        data: record
+                    });
                     eventCount++;
                 } else {
-                    // Regular chat message
+                    // Regular chat message - store in sessionHistoryItems
                     const isSent = SenderID === currentUser.id;
-                    addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
+                    sessionHistoryItems.push({
+                        type: 'chat',
+                        timestamp: Timestamp || new Date().toISOString(),
+                        data: {
+                            sender: SenderName,
+                            message: Content,
+                            isSent,
+                            timestamp: Timestamp,
+                            senderId: SenderID
+                        }
+                    });
                     messageCount++;
                 }
             });
 
-            console.log(`[CHAT-INIT] ✅ Loaded ${eventCount} events and ${messageCount} messages`);
+            console.log(`[CHAT-INIT] ✅ Loaded ${eventCount} events and ${messageCount} messages into history`);
         } else {
             console.log('[CHAT-INIT] No messages found for this session');
         }
+
+        // Render the filtered history
+        renderFilteredHistory();
     }
 
     console.log('[CHAT-INIT] Connecting to Pusher...');
@@ -543,7 +796,24 @@ export async function initializeSessionChat() {
     sessionChatChannel.bind('client-new-message', (data) => {
         if (data.senderId !== currentUser.id) {
             requestNotificationPermissionIfNeeded();
-            addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
+            // Add to session history items
+            const timestamp = data.timestamp || new Date().toISOString();
+            sessionHistoryItems.push({
+                type: 'chat',
+                timestamp: timestamp,
+                data: {
+                    sender: data.senderName,
+                    message: data.content,
+                    isSent: false,
+                    timestamp: timestamp,
+                    senderId: data.senderId
+                }
+            });
+            // Re-render to include the new message (only if chat filter is on)
+            if (historyFilters.chat) {
+                const messagesList = document.getElementById('messages-list');
+                addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
+            }
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
@@ -571,12 +841,30 @@ export async function sendMessage(message, recordId = null) {
         });
     } else {
         if (!sessionChatChannel || !currentUser) return;
-        
+
         requestNotificationPermissionIfNeeded();
         const sessionId = state.session.id || 'default-session';
         const timestamp = new Date().toISOString();
-        const messagesList = document.getElementById('messages-list');
-        addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+
+        // Add to session history items
+        sessionHistoryItems.push({
+            type: 'chat',
+            timestamp: timestamp,
+            data: {
+                sender: currentUser.name,
+                message: message,
+                isSent: true,
+                timestamp: timestamp,
+                senderId: currentUser.id
+            }
+        });
+
+        // Only add to UI if chat filter is on
+        if (historyFilters.chat) {
+            const messagesList = document.getElementById('messages-list');
+            addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+        }
+
         await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
         sessionChatChannel.trigger('client-new-message', {
             content: message,
@@ -887,6 +1175,38 @@ export function updateCurrentSessionName(newName) {
         // Re-render the list if it's currently expanded
         if (recentChatsExpanded) {
             renderRecentChatsList(state.session.recentChats);
+        }
+    }
+}
+
+/**
+ * Refreshes the debug logs in the session history.
+ * Call this when you want to update the view with new debug logs.
+ */
+export function refreshDebugLogs() {
+    if (historyFilters.debug) {
+        renderFilteredHistory();
+    }
+}
+
+/**
+ * Adds a new plan event to the session history in real-time.
+ * Call this when a new plan event is posted to keep the history up to date.
+ * @param {Object} record - The plan event record from the API
+ */
+export function addPlanEventToHistory(record) {
+    const timestamp = record.fields?.Timestamp || new Date().toISOString();
+    sessionHistoryItems.push({
+        type: 'planEvent',
+        timestamp: timestamp,
+        data: record
+    });
+
+    // Re-render if plan events filter is on
+    if (historyFilters.planEvents) {
+        const messagesList = document.getElementById('messages-list');
+        if (messagesList) {
+            addEventToUI(messagesList, record);
         }
     }
 }
