@@ -1141,6 +1141,9 @@ body.modal-open {
                         <a href="/start-a-plan.html" class="hamburger-dropdown-item start-plan-link" style="text-decoration: none; background-color: #e7f3ff; font-weight: 600;">
                             <span class="menu-item-icon">✨</span> Start a Plan
                         </a>
+                        <button id="quick-plan-btn" class="hamburger-dropdown-item" style="background-color: #f0fff4; font-weight: 600;">
+                            <span class="menu-item-icon">⚡</span> Quick Plan
+                        </button>
                         <hr class="hamburger-dropdown-divider">
                         <button id="calendar-view-btn" class="hamburger-dropdown-item">
                             <span class="menu-item-icon">📅</span> Upcoming Events
@@ -1553,6 +1556,22 @@ body.modal-open {
             <div id="quick-pay-options-container">
                 <!-- Payment options will be dynamically inserted here -->
             </div>
+        </div>
+    </div>
+
+    <div id="quick-plan-modal-overlay" class="modal-overlay">
+        <div class="quick-plan-modal-content">
+            <button id="quick-plan-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick plan modal">×</button>
+            <h3>Quick Plan</h3>
+            <p class="quick-plan-description">Describe your plan idea and we'll help you get started.</p>
+            <div class="quick-plan-form">
+                <textarea id="quick-plan-idea-input" placeholder="e.g., Birthday party for 20 people next Saturday at a park..." rows="4"></textarea>
+                <button id="quick-plan-submit-btn" class="primary-action-btn">
+                    <span class="button-text">Create Plan</span>
+                    <span class="spinner" style="display: none;">Creating...</span>
+                </button>
+            </div>
+            <div id="quick-plan-error" class="quick-plan-error" style="display: none;"></div>
         </div>
     </div>
 

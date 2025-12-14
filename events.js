@@ -803,6 +803,109 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         });
     }
 
+    // Quick Plan button handler - opens the quick plan modal
+    const quickPlanBtn = document.getElementById('quick-plan-btn');
+    const quickPlanModalOverlay = document.getElementById('quick-plan-modal-overlay');
+    const quickPlanCloseBtn = document.getElementById('quick-plan-close-btn');
+    const quickPlanIdeaInput = document.getElementById('quick-plan-idea-input');
+    const quickPlanSubmitBtn = document.getElementById('quick-plan-submit-btn');
+    const quickPlanError = document.getElementById('quick-plan-error');
+
+    if (quickPlanBtn && quickPlanModalOverlay) {
+        quickPlanBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
+            quickPlanModalOverlay.classList.add('active');
+            if (quickPlanIdeaInput) {
+                quickPlanIdeaInput.value = '';
+                quickPlanIdeaInput.focus();
+            }
+            if (quickPlanError) {
+                quickPlanError.style.display = 'none';
+            }
+        });
+    }
+
+    // Close quick plan modal
+    if (quickPlanCloseBtn && quickPlanModalOverlay) {
+        quickPlanCloseBtn.addEventListener('click', () => {
+            quickPlanModalOverlay.classList.remove('active');
+        });
+    }
+
+    // Close quick plan modal when clicking outside
+    if (quickPlanModalOverlay) {
+        quickPlanModalOverlay.addEventListener('click', (e) => {
+            if (e.target === quickPlanModalOverlay) {
+                quickPlanModalOverlay.classList.remove('active');
+            }
+        });
+    }
+
+    // Quick Plan form submission
+    if (quickPlanSubmitBtn && quickPlanIdeaInput && quickPlanModalOverlay) {
+        quickPlanSubmitBtn.addEventListener('click', async () => {
+            const idea = quickPlanIdeaInput.value.trim();
+
+            if (!idea) {
+                if (quickPlanError) {
+                    quickPlanError.textContent = 'Please enter a plan idea.';
+                    quickPlanError.style.display = 'block';
+                }
+                return;
+            }
+
+            // Hide error and show loading state
+            if (quickPlanError) {
+                quickPlanError.style.display = 'none';
+            }
+            quickPlanSubmitBtn.classList.add('loading');
+            quickPlanSubmitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/create-quick-plan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ idea: idea })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Failed to create plan');
+                }
+
+                // Success - close modal and navigate to the new plan
+                quickPlanModalOverlay.classList.remove('active');
+                quickPlanIdeaInput.value = '';
+
+                // Navigate to the new plan using URL parameters
+                if (result.newPlanId) {
+                    updateUrl({ category: null, subcategory: null, view: 'plan', session: result.newPlanId });
+                    applyFiltersAndSort(imageCache);
+                }
+            } catch (error) {
+                console.error('Quick Plan error:', error);
+                if (quickPlanError) {
+                    quickPlanError.textContent = error.message || 'Something went wrong. Please try again.';
+                    quickPlanError.style.display = 'block';
+                }
+            } finally {
+                quickPlanSubmitBtn.classList.remove('loading');
+                quickPlanSubmitBtn.disabled = false;
+            }
+        });
+
+        // Allow Enter key to submit (Shift+Enter for new line)
+        quickPlanIdeaInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                quickPlanSubmitBtn.click();
+            }
+        });
+    }
+
     const menuRecentChatsBtn = document.getElementById('menu-recent-chats-btn');
     if (menuRecentChatsBtn) {
         menuRecentChatsBtn.addEventListener('click', () => {
