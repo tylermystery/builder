@@ -1246,17 +1246,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
-        console.log('[Events] ========== EVENT NAME CHANGE ==========');
-        console.log('[Events] isInitializing:', state.ui.isInitializing);
         if (state.ui.isInitializing) return;
         const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
         const newValue = e.target.value.trim();
-        console.log('[Events] hadValue:', hadValue, 'newValue:', newValue);
         if (newValue && !hadValue) {
-            console.log('[Events] Adding event name, calling updateProgress(0.0001)');
             updateProgress(0.0001); // Adding event name progresses
         } else if (!newValue && hadValue) {
-            console.log('[Events] Removing event name, calling updateProgress(-0.0001)');
             updateProgress(-0.0001); // Removing event name regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -1265,7 +1260,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         updateCurrentSessionName(e.target.value);
 
         triggerSave();
-        console.log('[Events] ========== EVENT NAME CHANGE COMPLETE ==========');
     });
     
     safeAddEventListener('header-goals', 'change', (e) => {
@@ -1907,84 +1901,40 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
             }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
-            console.log('[DEBUG CARD CLICK] ========== CARD CLICKED ==========');
-            console.log('[DEBUG CARD CLICK] Card element:', card);
-            console.log('[DEBUG CARD CLICK] Card dataset:', card.dataset);
             const recordId = card.dataset.recordId;
-            console.log('[DEBUG CARD CLICK] recordId from card.dataset:', recordId);
 
             // First try to find in state.records.all
             let record = state.records.all.find(r => r.id === recordId);
-            console.log('[DEBUG CARD CLICK] record found in state.records.all:', !!record);
 
             // If not found in all, check state.records.filtered (for session tiles, etc.)
             if (!record) {
-                console.log('[DEBUG CARD CLICK] ⚠️ Record not found in state.records.all, checking state.records.filtered...');
                 record = state.records.filtered.find(r => r.id === recordId);
-                console.log('[DEBUG CARD CLICK] record found in state.records.filtered:', !!record);
-                if (record) {
-                    console.log('[DEBUG CARD CLICK] ✅ Found record in state.records.filtered');
-                    console.log('[DEBUG CARD CLICK] record.isSession:', record.isSession);
-                    console.log('[DEBUG CARD CLICK] record.sessionData:', record.sessionData);
-                }
             }
 
-            console.log('[DEBUG CARD CLICK] Final record:', record);
             if (!record) {
-                console.log('[DEBUG CARD CLICK] ❌ Record not found in any state, returning early');
                 return;
             }
-            
+
             if (record.id.startsWith('ai-search-')) {
                 return;
             }
-            
+
             // Handle session tile clicks - load session into event plan panel and chat
-            console.log('[DEBUG SESSION CLICK] ========== SESSION TILE CLICKED ==========');
-            console.log('[DEBUG SESSION CLICK] record:', record);
-            console.log('[DEBUG SESSION CLICK] record.id:', record.id);
-            console.log('[DEBUG SESSION CLICK] record.isSession:', record.isSession);
-            console.log('[DEBUG SESSION CLICK] record.sessionData:', record.sessionData);
-            console.log('[DEBUG SESSION CLICK] record.fields:', record.fields);
-
             if (record.isSession && record.sessionData) {
-                console.log('[DEBUG SESSION CLICK] ✅ Condition passed: record.isSession && record.sessionData');
                 log('Events', `Loading session from My Sessions view: ${record.id}`);
-
-                console.log('[DEBUG SESSION CLICK] Step 1: Updating URL with session parameter...');
-                console.log('[DEBUG SESSION CLICK] URL before:', window.location.href);
 
                 // Update URL with session parameter and clear the my-sessions view
                 updateUrl({ session: record.id, view: null, category: null, subcategory: null });
 
-                console.log('[DEBUG SESSION CLICK] URL after:', window.location.href);
-
-                console.log('[DEBUG SESSION CLICK] Step 2: Calling api.loadSessionFromAirtable...');
-                console.log('[DEBUG SESSION CLICK] Session ID being loaded:', record.id);
-                console.log('[DEBUG SESSION CLICK] Current state.session.id BEFORE load:', state.session.id);
-
                 // Load the session data (this will fire sessionReady event when complete)
-                api.loadSessionFromAirtable(record.id).then(() => {
-                    console.log('[DEBUG SESSION CLICK] ✅ api.loadSessionFromAirtable completed (promise resolved)');
-                    console.log('[DEBUG SESSION CLICK] state.session.id AFTER load:', state.session.id);
-                    console.log('[DEBUG SESSION CLICK] state.cart.lockedItems.size:', state.cart.lockedItems.size);
-                    console.log('[DEBUG SESSION CLICK] state.eventDetails.combined:', Object.fromEntries(state.eventDetails.combined));
-                }).catch(err => {
-                    console.error('[DEBUG SESSION CLICK] ❌ api.loadSessionFromAirtable FAILED:', err);
+                api.loadSessionFromAirtable(record.id).catch(err => {
+                    log('Events', `Failed to load session: ${err.message}`);
                 });
-
-                console.log('[DEBUG SESSION CLICK] Step 3: Calling applyFiltersAndSort to refresh catalog view...');
 
                 // Refresh the catalog view to show items instead of sessions list
                 applyFiltersAndSort(imageCache);
 
-                console.log('[DEBUG SESSION CLICK] Step 4: Returning from handler');
-                console.log('[DEBUG SESSION CLICK] ========== SESSION TILE CLICK COMPLETE ==========');
                 return;
-            } else {
-                console.log('[DEBUG SESSION CLICK] ❌ Condition NOT passed');
-                console.log('[DEBUG SESSION CLICK] record.isSession:', record.isSession, '(expected: true)');
-                console.log('[DEBUG SESSION CLICK] record.sessionData:', record.sessionData, '(expected: truthy object)');
             }
 
             if (record.fields['Item Type'] === 'Grouping') {
@@ -2098,25 +2048,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
-                            console.log('[DEBUG] Date picker onChange triggered');
-                            console.log('[DEBUG] selectedDates:', selectedDates);
-                            console.log('[DEBUG] state.ui.isInitializing:', state.ui.isInitializing);
                             if (state.ui.isInitializing) return;
                             if (selectedDates.length > 0) {
                                 const isoDate = selectedDates[0].toISOString();
-                                console.log('[DEBUG] Setting date in state to:', isoDate);
                                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, isoDate);
-                                console.log('[DEBUG] Date now in state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
                                 updateProgress(0.00015);
                             } else {
-                                console.log('[DEBUG] No date selected, deleting from state');
                                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                                 updateProgress(-0.00015);
                             }
                             await ui.updateEventPlanDateDisplay();
                             await ui.updateLockedItemStatusIcons();
                             await updateMobileBarAvailability();
-                            console.log('[DEBUG] About to trigger save...');
                             triggerSave();
                         }
                     });
