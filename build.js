@@ -248,7 +248,7 @@ async function runBundler() {
             format: 'esm',
             target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
             minify: isProduction,
-            sourcemap: true,
+            sourcemap: isProduction ? 'linked' : true, // Use linked sourcemaps in production (smaller)
             treeShaking: true,
             metafile: true,
             define: {
@@ -259,6 +259,11 @@ async function runBundler() {
             platform: 'browser',
             splitting: false,
             logLevel: 'warning',
+            // Performance optimizations
+            legalComments: isProduction ? 'none' : 'inline', // Remove license comments in production
+            charset: 'utf8',
+            // Optimize for modern browsers
+            mangleProps: isProduction ? /^_/ : undefined, // Mangle private properties in production
         });
 
         const mainBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'main.bundle.js')).size;
@@ -274,7 +279,7 @@ async function runBundler() {
             format: 'esm',
             target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
             minify: isProduction,
-            sourcemap: true,
+            sourcemap: isProduction ? 'linked' : true,
             treeShaking: true,
             metafile: true,
             define: {
@@ -285,6 +290,8 @@ async function runBundler() {
             platform: 'browser',
             splitting: false,
             logLevel: 'warning',
+            legalComments: isProduction ? 'none' : 'inline',
+            charset: 'utf8',
         });
 
         const crmBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'crm.bundle.js')).size;
@@ -300,7 +307,7 @@ async function runBundler() {
                 format: 'esm',
                 target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
                 minify: isProduction,
-                sourcemap: true,
+                sourcemap: isProduction ? 'linked' : true,
                 treeShaking: true,
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
@@ -310,6 +317,8 @@ async function runBundler() {
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
+                legalComments: isProduction ? 'none' : 'inline',
+                charset: 'utf8',
             });
             const dashboardBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'store-dashboard.bundle.js')).size;
             console.log(`   ✅ store-dashboard.bundle.js: ${(dashboardBundleSize / 1024).toFixed(2)} KB`);
@@ -325,7 +334,7 @@ async function runBundler() {
                 format: 'esm',
                 target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
                 minify: isProduction,
-                sourcemap: true,
+                sourcemap: isProduction ? 'linked' : true,
                 treeShaking: true,
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
@@ -335,6 +344,8 @@ async function runBundler() {
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
+                legalComments: isProduction ? 'none' : 'inline',
+                charset: 'utf8',
             });
             const teammateBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'teammate.bundle.js')).size;
             console.log(`   ✅ teammate.bundle.js: ${(teammateBundleSize / 1024).toFixed(2)} KB`);
@@ -350,7 +361,7 @@ async function runBundler() {
                 format: 'esm',
                 target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
                 minify: isProduction,
-                sourcemap: true,
+                sourcemap: isProduction ? 'linked' : true,
                 treeShaking: true,
                 define: {
                     'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
@@ -360,9 +371,37 @@ async function runBundler() {
                 platform: 'browser',
                 splitting: false,
                 logLevel: 'warning',
+                legalComments: isProduction ? 'none' : 'inline',
+                charset: 'utf8',
             });
             const eventHubBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'eventHub.bundle.js')).size;
             console.log(`   ✅ eventHub.bundle.js: ${(eventHubBundleSize / 1024).toFixed(2)} KB`);
+        }
+
+        // Bundle invitee page if it exists
+        if (fs.existsSync('invitee.js')) {
+            console.log('   Bundling invitee.js...');
+            await esbuild.build({
+                entryPoints: ['invitee.js'],
+                bundle: true,
+                outfile: path.join(OUTPUT_DIR, 'invitee.bundle.js'),
+                format: 'esm',
+                target: ['es2020', 'chrome90', 'firefox90', 'safari14', 'edge90'],
+                minify: isProduction,
+                sourcemap: isProduction ? 'linked' : true,
+                treeShaking: true,
+                define: {
+                    'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+                },
+                drop: isProduction ? ['console', 'debugger'] : [],
+                platform: 'browser',
+                splitting: false,
+                logLevel: 'warning',
+                legalComments: isProduction ? 'none' : 'inline',
+                charset: 'utf8',
+            });
+            const inviteeBundleSize = fs.statSync(path.join(OUTPUT_DIR, 'invitee.bundle.js')).size;
+            console.log(`   ✅ invitee.bundle.js: ${(inviteeBundleSize / 1024).toFixed(2)} KB`);
         }
 
         // Generate manifest for cache busting

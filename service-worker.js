@@ -7,6 +7,12 @@ const DYNAMIC_CACHE = 'wtfun-dynamic-' + CACHE_VERSION;
 const IMAGE_CACHE = 'wtfun-images-' + CACHE_VERSION;
 const FONT_CACHE = 'wtfun-fonts-' + CACHE_VERSION;
 
+// Maximum cache sizes to prevent storage bloat
+const MAX_IMAGE_CACHE_SIZE = 100;
+const MAX_DYNAMIC_CACHE_SIZE = 50;
+const IMAGE_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+const FONT_CACHE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 // Only cache essential files immediately - lazy load the rest
 const STATIC_FILES = [
   '/',
@@ -245,6 +251,22 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+/**
+ * Limit cache size by removing oldest entries
+ * @param {string} cacheName - Name of the cache to limit
+ * @param {number} maxSize - Maximum number of entries allowed
+ */
+async function limitCacheSize(cacheName, maxSize) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxSize) {
+    // Remove oldest entries (first ones in the list)
+    const toDelete = keys.slice(0, keys.length - maxSize);
+    await Promise.all(toDelete.map(key => cache.delete(key)));
+    console.log(`[SW] Cleaned ${toDelete.length} entries from ${cacheName}`);
+  }
+}
+
 // Listen for messages from the client
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -294,8 +316,34 @@ self.addEventListener('message', (event) => {
               });
             })
           );
+        }).then(() => {
+          // Limit image cache size after prefetching
+          return limitCacheSize(IMAGE_CACHE, MAX_IMAGE_CACHE_SIZE);
         })
       );
     }
+  }
+
+  // Get cache statistics
+  if (event.data && event.data.type === 'GET_CACHE_STATS') {
+    event.waitUntil(
+      Promise.all([
+        caches.open(STATIC_CACHE).then(c => c.keys()).then(k => k.length),
+        caches.open(DYNAMIC_CACHE).then(c => c.keys()).then(k => k.length),
+        caches.open(IMAGE_CACHE).then(c => c.keys()).then(k => k.length),
+        caches.open(FONT_CACHE).then(c => c.keys()).then(k => k.length)
+      ]).then(([staticCount, dynamicCount, imageCount, fontCount]) => {
+        event.source.postMessage({
+          type: 'CACHE_STATS',
+          stats: {
+            static: staticCount,
+            dynamic: dynamicCount,
+            images: imageCount,
+            fonts: fontCount,
+            version: CACHE_VERSION
+          }
+        });
+      })
+    );
   }
 });

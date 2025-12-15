@@ -38,13 +38,15 @@
     Timing-Allow-Origin = "*"
     # Enable early hints for better performance
     Accept-CH = "DPR, Width, Viewport-Width"
+    # Content Security Policy for better security (adjust as needed)
+    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
 
 [[headers]]
   for = "*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
     # Enable early hints for bundled JavaScript
-    Link = "</dist/main.bundle.js>; rel=modulepreload"
+    Link = "</dist/main.bundle.js>; rel=modulepreload, </css/critical.css>; rel=preload; as=style, </css/deferred.css>; rel=preload; as=style"
 
 # Bundled JavaScript - long cache with immutable
 [[headers]]
@@ -52,6 +54,13 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "text/javascript; charset=utf-8"
+
+# Source maps - allow caching but not as long
+[[headers]]
+  for = "/dist/*.js.map"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+    Content-Type = "application/json"
 
 [[headers]]
   for = "/service-worker.js"
@@ -70,6 +79,20 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "text/css; charset=utf-8"
+
+# CSS directory - long cache
+[[headers]]
+  for = "/css/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "text/css; charset=utf-8"
+
+# Netlify Image CDN responses - cache transformed images
+[[headers]]
+  for = "/.netlify/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept"
 
 [[headers]]
   for = "*.jpg"
