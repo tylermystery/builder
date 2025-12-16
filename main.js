@@ -8,7 +8,7 @@ import * as ui from './ui.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log } from './utils/debug.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, getCombinedPlanStatus } from './availability.js';
-import { debounce, updateUrl } from './utils.js';
+import { debounce, updateUrl, extractRecordIdFromPath } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
@@ -29,7 +29,14 @@ window.showReceiptModal = showReceiptModal;
 
 function syncUiWithUrl() {
     const params = new URLSearchParams(window.location.search);
-    const openItemId = params.get('openItem');
+
+    // Support both query param (?openItem=recXYZ) and pretty URL (/item/slug-recXYZ)
+    let openItemId = params.get('openItem');
+    if (!openItemId) {
+        // Check for pretty URL format
+        openItemId = extractRecordIdFromPath(window.location.pathname);
+    }
+
     const view = params.get('view');
 
     // Close any open overlays first

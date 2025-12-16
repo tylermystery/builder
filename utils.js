@@ -394,14 +394,144 @@ export function debounce(func, delay = 300) {
 }
 
 /**
+ * Generates a URL-friendly slug from a name string.
+ * Must match the slug generation logic in build.js for consistency.
+ * @param {string} name - The item name to convert to a slug.
+ * @param {string} recordId - The Airtable record ID to append.
+ * @returns {string} The generated slug (e.g., "sunset-boat-party-rec123").
+ */
+export function generateSlug(name, recordId) {
+    if (!name || typeof name !== 'string') {
+        return recordId; // Fallback to just the record ID if no name
+    }
+    const slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with dashes
+        .replace(/^-+|-+$/g, '')     // Remove leading/trailing dashes
+        .substring(0, 60);           // Limit length for reasonable URLs
+
+    return `${slug}-${recordId}`;
+}
+
+/**
+ * Extracts the Airtable record ID from a pretty URL path.
+ * Pretty URLs are in format: /item/event-name-recXYZ
+ * The record ID is always the last part after the final dash, starting with "rec".
+ *
+ * @param {string} path - The URL path to parse (e.g., "/item/sunset-boat-party-rec123")
+ * @returns {string|null} The extracted record ID (e.g., "rec123") or null if not found
+ */
+export function extractRecordIdFromPath(path) {
+    if (!path || typeof path !== 'string') {
+        return null;
+    }
+
+    // Check if it's an item path
+    if (!path.startsWith('/item/')) {
+        return null;
+    }
+
+    // Extract the slug portion (everything after /item/)
+    const slug = path.replace('/item/', '').split('?')[0]; // Remove query string if present
+
+    // Record IDs in Airtable start with "rec" and are 17 chars total
+    // Find the last occurrence of "-rec" and extract the ID
+    const recMatch = slug.match(/rec[A-Za-z0-9]{14}$/);
+    if (recMatch) {
+        return recMatch[0];
+    }
+
+    return null;
+}
+
+/**
  * Updates the browser's URL with new query parameters without reloading the page.
+ * When setting openItem, generates a "pretty" URL like /item/event-name-recXYZ
+ * instead of using query parameters, for better SEO and user experience.
+ *
  * @param {Object} paramsToUpdate - An object of key-value pairs to set in the URL.
  * A value of null or undefined will remove the parameter.
+ * @param {Object} options - Optional configuration.
+ * @param {string} options.itemName - The item name to use for generating pretty URL slugs.
+ *   If not provided, will attempt to look up from state.records.all.
  */
-export function updateUrl(paramsToUpdate) {
+export function updateUrl(paramsToUpdate, options = {}) {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
 
+    // Check if we're setting openItem with a valid value
+    const openItemValue = paramsToUpdate.openItem;
+    const isSettingOpenItem = openItemValue !== null && openItemValue !== undefined && openItemValue !== '';
+
+    // Check if we're clearing openItem
+    const isClearingOpenItem = 'openItem' in paramsToUpdate && !isSettingOpenItem;
+
+    if (isSettingOpenItem) {
+        // Generate a pretty URL for the item
+        let itemName = options.itemName;
+
+        // Try to find the record name from state if not provided
+        if (!itemName && state.records && state.records.all) {
+            const record = state.records.all.find(r => r.id === openItemValue);
+            if (record && record.fields && record.fields.Name) {
+                itemName = record.fields.Name;
+            }
+        }
+
+        const slug = generateSlug(itemName, openItemValue);
+        const prettyPath = `/item/${slug}`;
+
+        // Build the query string for any other parameters (excluding openItem)
+        const otherParams = new URLSearchParams(searchParams);
+        otherParams.delete('openItem'); // Remove openItem if it exists
+
+        // Apply other parameter updates (excluding openItem)
+        for (const key in paramsToUpdate) {
+            if (key === 'openItem') continue; // Skip openItem, we handle it via path
+            const value = paramsToUpdate[key];
+            if (value === null || value === undefined || value === '') {
+                otherParams.delete(key);
+            } else {
+                otherParams.set(key, value);
+            }
+        }
+
+        // Build final URL
+        const queryString = otherParams.toString();
+        const newUrl = queryString ? `${prettyPath}?${queryString}` : prettyPath;
+
+        // Only push if URL actually changed
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (newUrl !== currentFullPath) {
+            history.pushState({ openItem: openItemValue }, '', newUrl);
+        }
+        return;
+    }
+
+    if (isClearingOpenItem) {
+        // When clearing openItem, go back to the base path with remaining params
+        // If we're on a /item/... path, redirect back to root
+        for (const key in paramsToUpdate) {
+            const value = paramsToUpdate[key];
+            if (value === null || value === undefined || value === '') {
+                searchParams.delete(key);
+            } else {
+                searchParams.set(key, value);
+            }
+        }
+
+        const queryString = searchParams.toString();
+        const basePath = window.location.pathname.startsWith('/item/') ? '/' : url.pathname;
+        const newUrl = queryString ? `${basePath}?${queryString}` : basePath;
+
+        const currentFullPath = window.location.pathname + window.location.search;
+        if (newUrl !== currentFullPath) {
+            history.pushState({}, '', newUrl);
+        }
+        return;
+    }
+
+    // Standard parameter update (no openItem involved)
     for (const key in paramsToUpdate) {
         const value = paramsToUpdate[key];
         if (value === null || value === undefined || value === '') {
@@ -413,7 +543,7 @@ export function updateUrl(paramsToUpdate) {
 
     const newUrl = url.pathname + '?' + searchParams.toString();
     const currentUrl = window.location.pathname + window.location.search;
-    
+
     if (newUrl !== currentUrl) {
         // --- THIS IS THE FIX ---
         // Always use pushState to update the URL without triggering a full navigation
