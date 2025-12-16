@@ -55,8 +55,8 @@ exports.handler = async (event) => {
     console.log('[Debug] ENV CHECK - GEMINI_API_KEY present:', !!GEMINI_API_KEY);
     console.log('[Debug] ENV CHECK - GEMINI_API_KEY length:', GEMINI_API_KEY ? GEMINI_API_KEY.length : 0);
 
-    // IMPORTANT: Use current Gemini model (gemini-pro was deprecated and returns 404)
-    const GEMINI_MODEL = 'gemini-1.5-flash';
+    // Use the stable Gemini model (gemini-1.5-flash was deprecated April 2025, use gemini-2.0-flash)
+    const GEMINI_MODEL = 'gemini-2.0-flash';
     const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
     console.log('[Debug] Using Gemini model:', GEMINI_MODEL);
     console.log('[Debug] API URL (without key):', `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`);

@@ -9,8 +9,8 @@ const PROFILE_FIELD = 'AI_Profile'; // Use the new safe field
 const NAME_FIELD = 'Name';
 const DESCRIPTION_FIELD = 'Description';
 
-// Use the current Gemini model name (gemini-pro was deprecated)
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// Use the stable Gemini model (gemini-1.5-flash was deprecated April 2025, use gemini-2.0-flash)
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 /**
  * Extracts a JSON object from a string, even if it's wrapped in markdown.
