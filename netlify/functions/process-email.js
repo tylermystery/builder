@@ -52,13 +52,30 @@ exports.handler = async (event) => {
     `;
 
     console.log('Step 2: Sending data to Gemini API.');
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+    console.log('[Debug] ENV CHECK - GEMINI_API_KEY present:', !!GEMINI_API_KEY);
+    console.log('[Debug] ENV CHECK - GEMINI_API_KEY length:', GEMINI_API_KEY ? GEMINI_API_KEY.length : 0);
+
+    // IMPORTANT: Use current Gemini model (gemini-pro was deprecated and returns 404)
+    const GEMINI_MODEL = 'gemini-1.5-flash';
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    console.log('[Debug] Using Gemini model:', GEMINI_MODEL);
+    console.log('[Debug] API URL (without key):', `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`);
+
+    const geminiPayload = {
+      contents: [{ parts: [{ text: aiPrompt }, { text: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` }] }]
+    };
+    console.log('[Debug] Payload size:', JSON.stringify(geminiPayload).length, 'bytes');
+
+    console.log('[Debug] Sending request to Gemini API...');
+    const startTime = Date.now();
+    const geminiResponse = await fetch(geminiApiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: aiPrompt }, { text: `From: ${emailData.from_email}\nSubject: ${emailData.subject}\n\n${emailData.body}` }] }]
-      })
+      body: JSON.stringify(geminiPayload)
     });
+    const elapsed = Date.now() - startTime;
+    console.log(`[Debug] Gemini response received in ${elapsed}ms`);
+    console.log('[Debug] Gemini response status:', geminiResponse.status, geminiResponse.statusText);
     console.log('Step 2 SUCCESS. Received response from Gemini.');
 
     if (!geminiResponse.ok) {

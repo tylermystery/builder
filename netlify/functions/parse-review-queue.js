@@ -168,6 +168,8 @@ exports.handler = async (event) => {
 
     // Step 4: Call Gemini AI to parse the email content
     console.log('Step 3: Sending email to Gemini AI for parsing');
+    console.log('[Debug] ENV CHECK - GEMINI_API_KEY present:', !!GEMINI_API_KEY);
+    console.log('[Debug] ENV CHECK - GEMINI_API_KEY length:', GEMINI_API_KEY ? GEMINI_API_KEY.length : 0);
 
     const aiPrompt = `
       You are an expert sales assistant for Tyler's Mystery Tours. Your task is to read an email thread and extract key information about a potential or ongoing event booking. Analyze the entire text and respond ONLY with a valid JSON object. Do not include the markdown specifier \`\`\`json or any text before or after the JSON object.
@@ -181,21 +183,32 @@ exports.handler = async (event) => {
       If any information is not present, use a value of null for that field.
     `;
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: aiPrompt },
-              { text: `From: ${senderEmail}\nSubject: ${subject}\n\n${rawBody}` }
-            ]
-          }]
-        })
-      }
-    );
+    // IMPORTANT: Use current Gemini model (gemini-pro was deprecated and returns 404)
+    const GEMINI_MODEL = 'gemini-1.5-flash';
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    console.log('[Debug] Using Gemini model:', GEMINI_MODEL);
+    console.log('[Debug] API URL (without key):', `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`);
+
+    const geminiPayload = {
+      contents: [{
+        parts: [
+          { text: aiPrompt },
+          { text: `From: ${senderEmail}\nSubject: ${subject}\n\n${rawBody}` }
+        ]
+      }]
+    };
+    console.log('[Debug] Payload size:', JSON.stringify(geminiPayload).length, 'bytes');
+
+    console.log('[Debug] Sending request to Gemini API...');
+    const startTime = Date.now();
+    const geminiResponse = await fetch(geminiApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(geminiPayload)
+    });
+    const elapsed = Date.now() - startTime;
+    console.log(`[Debug] Gemini response received in ${elapsed}ms`);
+    console.log('[Debug] Gemini response status:', geminiResponse.status, geminiResponse.statusText);
 
     if (!geminiResponse.ok) {
       const errorBody = await geminiResponse.text();
