@@ -126,7 +126,9 @@ exports.handler = async (event) => {
         console.log(`[Debug] Processing profile for record: ${recordId}`);
 
         // 1. Fetch the Item's Name and Description
-        const fetchUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${recordId}?fields[]=${NAME_FIELD}&fields[]=${DESCRIPTION_FIELD}`;
+        // Note: The fields[] parameter is NOT supported on single record GET requests (only on List Records)
+        // Single record endpoint returns all fields automatically - no filtering needed
+        const fetchUrl = `https://api.airtable.com/v0/${BASE_ID}/${ITEMS_TABLE}/${recordId}`;
         console.log(`[Debug] Fetching item details from: ${fetchUrl}`);
         const itemResponse = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
 
