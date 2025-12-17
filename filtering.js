@@ -3,8 +3,10 @@
 import { state } from './state.js';
 import { CONSTANTS, RECORDS_PER_LOAD } from './config.js';
 import * as ui from './ui.js';
-import { getGroupPriceRange, getRecordPrice, parseOptions } from './utils.js';
-import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js'; 
+import * as api from './api.js';
+import { getGroupPriceRange, getRecordPrice, parseOptions, getTempLikes } from './utils.js';
+import { calculateMissingCategories, buildGoalBucket, calculateRecommendationScore } from './availability.js';
+import * as tileSizingDebug from './utils/tileSizingDebug.js'; 
 
 
 // --- HELPER FUNCTIONS (Non-Scoring, kept local) ---
@@ -37,43 +39,66 @@ function parseCapacity(capacityStr) {
 }
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
+    console.log('[FilterDebug] === filterByCategoryAndSubcategory START ===');
+    console.log('[FilterDebug] selectedCategory:', selectedCategory);
+    console.log('[FilterDebug] activeSubcategories:', activeSubcategories);
+    console.log('[FilterDebug] Total records to filter:', records.length);
+    
     if (selectedCategory === 'all' || !selectedCategory) {
+        console.log('[FilterDebug] Category is "all" or empty, returning all records');
         return records;
     }
 
-    const selectedCategoryLower = selectedCategory.toLowerCase();
+    const selectedCategoryLower = selectedCategory.toLowerCase().replace(/\s+/g, ' ');
+    console.log('[FilterDebug] selectedCategoryLower:', selectedCategoryLower);
     let categoryFilteredRecords = [];
 
     categoryFilteredRecords = records.filter(record => {
         const fields = record.fields;
-        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+        const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
-            .map(cat => cat.trim().toLowerCase());
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
         const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
             .split(',')
-            .map(sc => sc.trim().toLowerCase());
+            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
 
-        return itemCategories.includes(selectedCategoryLower) || 
+        const matches = itemCategories.includes(selectedCategoryLower) || 
                parentNameLower === selectedCategoryLower ||       
-               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower); 
+               itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
+        
+        if (matches) {
+            console.log('[FilterDebug] MATCH found for:', fields.Name);
+            console.log('  - itemCategories:', itemCategories);
+            console.log('  - parentNameLower:', parentNameLower);
+            console.log('  - itemSubcategoriesForCategoryCheck:', itemSubcategoriesForCategoryCheck);
+        }
+        
+        return matches;
     });
+    
+    console.log('[FilterDebug] Category filtered records count:', categoryFilteredRecords.length);
 
     if (activeSubcategories.length > 0) {
+        console.log('[FilterDebug] Applying subcategory filter...');
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
             const fields = record.fields;
-            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase();
+            const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
             const itemSubcategories = (fields.Subcategories || '')
                 .split(',')
-                .map(sc => sc.trim().toLowerCase());
+                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
 
             return activeSubcategories.some(activeSubcat =>
                 itemSubcategories.includes(activeSubcat) || 
                 parentNameLower === activeSubcat            
             );
         });
+        console.log('[FilterDebug] Subcategory filtered records count:', subcategoryFilteredRecords.length);
+        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return subcategoryFilteredRecords; 
     } else {
+        console.log('[FilterDebug] No subcategory filter applied');
+        console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
         return categoryFilteredRecords;
     }
 }
@@ -245,15 +270,42 @@ function sortRecords(records, sortBy, goalBucket) {
 }
 
 
-export function applyFiltersAndSort(imageCache) {
+export async function applyFiltersAndSort(imageCache) {
+    console.log('[FilterDebug] ========================================');
+    console.log('[FilterDebug] applyFiltersAndSort called');
+    console.log('[FilterDebug] URL:', window.location.href);
+
+    // === TILE SIZING DEBUG: Filter/Sort start ===
+    console.log('[TileSizing][Filter] === FILTER/SORT START ===');
+    console.log('[TileSizing][Filter] Viewport:', tileSizingDebug.getViewportInfo());
+
     const catalogContainer = document.getElementById('catalog-container');
+
+    // === TILE SIZING DEBUG: Catalog container pre-filter state ===
+    if (catalogContainer) {
+        console.log('[TileSizing][Filter] Catalog container PRE-filter state:', {
+            childCount: catalogContainer.children.length,
+            hasCarouselSections: !!catalogContainer.querySelector('.grouping-carousel-section'),
+            sizing: tileSizingDebug.getElementSizing(catalogContainer)
+        });
+    }
     
-    // --- NEW: Read filters directly from URL ---
     const params = new URLSearchParams(window.location.search);
-    const selectedCategory = params.get('category') || 'all';
-    const activeSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    const rawCategory = params.get('category');
+    const selectedCategory = rawCategory ? rawCategory.toLowerCase().replace(/\s+/g, ' ') : 'all';
+    const rawSubcategories = params.get('subcategory')?.split(',').filter(Boolean) || [];
+    const activeSubcategories = rawSubcategories.map(sc => sc.toLowerCase().replace(/\s+/g, ' '));
     const view = params.get('view');
-    // --- END NEW ---
+    console.log('[FilterDebug] selectedCategory from URL:', selectedCategory);
+    console.log('[FilterDebug] activeSubcategories from URL:', activeSubcategories);
+    console.log('[FilterDebug] view from URL:', view);
+
+    // Skip filtering/rendering when tasks view is active - task manager handles its own rendering
+    if (view === 'tasks') {
+        console.log('[FilterDebug] Tasks view active, skipping catalog filter/render');
+        console.log('[TileSizing][Filter] === FILTER/SORT SKIPPED (tasks view) ===');
+        return;
+    }
 
     // Get other filter values from UI elements (unchanged)
     const searchTerm = document.getElementById('name-filter').value.toLowerCase();
@@ -272,7 +324,6 @@ export function applyFiltersAndSort(imageCache) {
 
     let recordsToDisplay;
 
-    // --- UPDATED: Check 'view' param from URL ---
     if (view === 'plan') {
         const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Your';
         const lockedItemIds = Array.from(state.cart.lockedItems.keys());
@@ -285,39 +336,213 @@ export function applyFiltersAndSort(imageCache) {
         if (state.session.user.isAuthenticated) {
             likedIds = state.session.user.likedItemIds;
         } else {
-            try {
-                likedIds = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
-            } catch (e) { console.error("Error reading tempLikes for filtering:", e); }
+            likedIds = getTempLikes();
         }
         recordsToDisplay = baseRecordsToFilter.filter(record => likedIds.has(record.id));
         
+    } else if (view === 'my-sessions') {
+        console.log('[DEBUG MY-SESSIONS VIEW] ========== MY SESSIONS VIEW ACTIVE ==========');
+        console.log('[DEBUG MY-SESSIONS VIEW] state.session.user.isAuthenticated:', state.session.user.isAuthenticated);
+        console.log('[DEBUG MY-SESSIONS VIEW] state.session.user.id:', state.session.user.id);
+        if (state.session.user.isAuthenticated && state.session.user.id) {
+            console.log('[DEBUG MY-SESSIONS VIEW] User is authenticated, fetching plans...');
+            const userSessions = await api.fetchPlansForUser(state.session.user.id, true);
+            console.log('[DEBUG MY-SESSIONS VIEW] api.fetchPlansForUser returned:', userSessions?.length, 'sessions');
+            console.log('[DEBUG MY-SESSIONS VIEW] Raw userSessions:', userSessions);
+
+            // Transform sessions into catalog tiles
+            recordsToDisplay = userSessions.map((session, index) => {
+                console.log(`[DEBUG MY-SESSIONS VIEW] Processing session ${index + 1}:`, session.id);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - session.fields:`, session.fields);
+                const sessionFields = session.fields || {};
+                const itemCount = (sessionFields.Items || []).length;
+                const totalCost = sessionFields.TotalCost || 0;
+                const dateStr = sessionFields.Date ? new Date(sessionFields.Date + 'T00:00:00').toLocaleDateString() : 'No date set';
+                const eventName = sessionFields.Name || 'Untitled Session';
+
+                const transformedRecord = {
+                    id: session.id,
+                    fields: {
+                        Name: eventName,
+                        Description: `${itemCount} items • ${dateStr} • $${totalCost.toFixed(2)}`,
+                        'Item Type': 'Session',
+                        Status: 'Available',
+                        Price: totalCost,
+                        ServiceType: 'Session',
+                        Categories: 'My Sessions'
+                    },
+                    isSession: true,
+                    sessionData: session
+                };
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - Transformed record:`, transformedRecord);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - isSession: ${transformedRecord.isSession}`);
+                console.log(`[DEBUG MY-SESSIONS VIEW]   - sessionData present: ${!!transformedRecord.sessionData}`);
+                return transformedRecord;
+            });
+
+            console.log('[DEBUG MY-SESSIONS VIEW] Total transformed records:', recordsToDisplay.length);
+            console.log('[DEBUG MY-SESSIONS VIEW] First record isSession:', recordsToDisplay[0]?.isSession);
+            console.log('[DEBUG MY-SESSIONS VIEW] First record sessionData:', recordsToDisplay[0]?.sessionData);
+
+            // Apply search filter if present
+            if (searchTerm) {
+                console.log('[DEBUG MY-SESSIONS VIEW] Applying search filter:', searchTerm);
+                recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+                console.log('[DEBUG MY-SESSIONS VIEW] After search filter:', recordsToDisplay.length, 'records');
+            }
+            console.log('[DEBUG MY-SESSIONS VIEW] ========== MY SESSIONS VIEW COMPLETE ==========');
+        } else {
+            console.log('[DEBUG MY-SESSIONS VIEW] ⚠️ User not authenticated, returning empty array');
+            recordsToDisplay = [];
+        }
+        
+    } else if (view === 'rsvp-events') {
+        if (!state.session.user.isAuthenticated || !state.session.user.id) {
+            console.warn('[Filtering] RSVP events view requires authentication, but user is not authenticated or has no ID');
+            recordsToDisplay = [];
+        } else {
+            const userId = state.session.user.id;
+            console.log(`[Filtering] Filtering RSVP events for user: ${userId}`);
+            recordsToDisplay = baseRecordsToFilter.filter(record => {
+                const isEvent = record.fields['Item Type'] === 'Event';
+                if (!isEvent) return false;
+                
+                const userRsvpedYes = (record.fields.RSVPs || []).includes(userId);
+                const userRsvpedMaybe = (record.fields.RSVPMaybe || []).includes(userId);
+                const userRsvpedNo = (record.fields.RSVPNo || []).includes(userId);
+                
+                const hasRsvp = userRsvpedYes || userRsvpedMaybe || userRsvpedNo;
+                
+                if (hasRsvp) {
+                    console.log(`[Filtering] User RSVP found for event: ${record.fields.Name} (Yes: ${userRsvpedYes}, Maybe: ${userRsvpedMaybe}, No: ${userRsvpedNo})`);
+                }
+                
+                return hasRsvp;
+            });
+            console.log(`[Filtering] Found ${recordsToDisplay.length} RSVP events for user`);
+        }
+        
+    } else if (view === 'categories') {
+        // Get categories from the active store's Items field
+        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+        let categoryRecords = [];
+        
+        if (activeShop && activeShop.fields && activeShop.fields.Items) {
+            // Items field contains Airtable record IDs that reference actual category records
+            const itemRecordIds = Array.isArray(activeShop.fields.Items) 
+                ? activeShop.fields.Items 
+                : activeShop.fields.Items.split(',').map(id => id.trim());
+            
+            // Look up the actual category records by their IDs
+            categoryRecords = itemRecordIds
+                .map(recordId => state.records.all.find(r => r.id === recordId))
+                .filter(Boolean);
+        } else {
+            // Fallback to extracting categories from items if store doesn't have Items field
+            const categoryNames = [...new Set(
+                baseRecordsToFilter
+                    .map(r => r.fields[CONSTANTS.FIELD_NAMES.CATEGORIES])
+                    .filter(Boolean)
+                    .flatMap(cat => cat.split(',').map(c => c.trim()))
+            )].sort();
+            
+            categoryRecords = categoryNames.map(categoryName => {
+                return {
+                    id: `category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`,
+                    fields: {
+                        Name: categoryName,
+                        Description: `View all items in ${categoryName}`,
+                        'Item Type': 'Grouping',
+                        Categories: categoryName
+                    }
+                };
+            });
+        }
+        
+        recordsToDisplay = categoryRecords;
+        
     } else {
-         // --- Standard Category/All View ---
+         console.log('[FilterDebug] Standard filtering path (not plan/likes/etc)');
+         console.log('[FilterDebug] baseRecordsToFilter count:', baseRecordsToFilter.length);
+         
+         // Sample first 3 records to see their category data
+         console.log('[FilterDebug] Sample records (first 3):');
+         baseRecordsToFilter.slice(0, 3).forEach((rec, i) => {
+             console.log(`  Record ${i}: ${rec.fields.Name}`);
+             console.log(`    - Categories: "${rec.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]}"`);
+             console.log(`    - Parent Item: "${rec.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]}"`);
+             console.log(`    - Subcategories: "${rec.fields.Subcategories}"`);
+         });
+         
          recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
+         console.log('[FilterDebug] After category filter, recordsToDisplay count:', recordsToDisplay.length);
          
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+         console.log('[FilterDebug] After status filter:', recordsToDisplay.length);
          recordsToDisplay = filterByHeadcount(recordsToDisplay, headcountFilter, customHeadcount);
+         console.log('[FilterDebug] After headcount filter:', recordsToDisplay.length);
          recordsToDisplay = filterByLocation(recordsToDisplay, locationFilter);
+         console.log('[FilterDebug] After location filter:', recordsToDisplay.length);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
+         console.log('[FilterDebug] After budget filter:', recordsToDisplay.length);
          
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
+             console.log('[FilterDebug] After search term filter:', recordsToDisplay.length);
          }
     }
-    // --- END UPDATED BLOCK ---
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
 
     state.records.filtered = recordsToDisplay;
     state.ui.recordsCurrentlyDisplayed = 0;
+    
+    console.log('[FilterDebug] FINAL recordsToDisplay count:', recordsToDisplay.length);
+    if (recordsToDisplay.length > 0) {
+        console.log('[FilterDebug] First result:', recordsToDisplay[0].fields.Name);
+    }
+    console.log('[FilterDebug] ========================================');
+
+    // === TILE SIZING DEBUG: Records to display breakdown ===
+    const typeBreakdown = {
+        groupings: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping').length,
+        events: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event').length,
+        bookableItems: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item').length,
+        sessions: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Session' || r.isSession).length,
+        other: recordsToDisplay.filter(r => !['Grouping', 'Event', 'Bookable Item', 'Session'].includes(r.fields['Item Type']) && !r.isSession).length
+    };
+
+    console.log('[TileSizing][Filter] Records to display breakdown:', typeBreakdown);
+    console.log('[TileSizing][Filter] View type:', view || 'catalog');
+    console.log('[TileSizing][Filter] Expected layout:', {
+        isFilteredView: !!view || !!params.get('subcategory') || !!searchTerm,
+        hasGroupings: typeBreakdown.groupings > 0,
+        willUseCarousels: !view && !params.get('subcategory') && !searchTerm && typeBreakdown.groupings > 0
+    });
 
     if (catalogContainer) catalogContainer.innerHTML = '';
 
     const initialRecords = state.records.filtered.slice(0, RECORDS_PER_LOAD);
+
+    // === TILE SIZING DEBUG: About to render ===
+    console.log('[TileSizing][Filter] About to call renderRecords with:', {
+        recordCount: initialRecords.length,
+        totalFiltered: state.records.filtered.length,
+        loadSize: RECORDS_PER_LOAD
+    });
+
     ui.renderRecords(initialRecords, imageCache, false).then(() => {
         state.ui.recordsCurrentlyDisplayed = initialRecords.length;
+
+        // === TILE SIZING DEBUG: Post-render state ===
+        console.log('[TileSizing][Filter] Post-render state:', {
+            recordsDisplayed: state.ui.recordsCurrentlyDisplayed,
+            catalogContainerChildren: catalogContainer ? catalogContainer.children.length : 0
+        });
     });
 
     ui.updateCatalogHeader(); // This function will now build breadcrumbs from the URL
+
+    console.log('[TileSizing][Filter] === FILTER/SORT COMPLETE ===');
 }
