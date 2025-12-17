@@ -5657,3 +5657,476 @@ hr.total-divider {
         padding: 10px 16px;
     }
 }
+
+/* ============================================= */
+/* Plan Component Cards - Clickable Media Carousel */
+/* ============================================= */
+
+/* Container for all plan component cards */
+.plan-components-carousel {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 12px 4px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.2) transparent;
+}
+
+.plan-components-carousel::-webkit-scrollbar {
+    height: 6px;
+}
+
+.plan-components-carousel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.plan-components-carousel::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.2);
+    border-radius: 3px;
+}
+
+/* Individual plan component card */
+.plan-component-card {
+    flex: 0 0 180px;
+    min-width: 180px;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+}
+
+.plan-component-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.plan-component-card.locked {
+    border-top: 3px solid #28a745;
+}
+
+.plan-component-card.idea {
+    border-top: 3px solid #ffc107;
+}
+
+/* Media container - holds collage or single image */
+.plan-component-media {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    position: relative;
+    overflow: hidden;
+    background: #f0f0f0;
+}
+
+/* Single image display */
+.plan-component-media .single-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.plan-component-card:hover .plan-component-media .single-image {
+    transform: scale(1.05);
+}
+
+/* Collage grid (2x2 for multiple images) */
+.plan-component-media .media-collage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px;
+    width: 100%;
+    height: 100%;
+}
+
+.plan-component-media .media-collage .collage-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* For 1 image, full size */
+.plan-component-media .media-collage.single .collage-img {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+}
+
+/* For 2 images, side by side */
+.plan-component-media .media-collage.two-images .collage-img {
+    grid-row: 1 / -1;
+}
+
+/* For 3 images, one large + two small */
+.plan-component-media .media-collage.three-images .collage-img:first-child {
+    grid-row: 1 / -1;
+}
+
+/* Image scroll indicator (if multiple images) */
+.plan-component-media .image-count {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.plan-component-media .image-count::before {
+    content: '📷';
+    font-size: 0.9em;
+}
+
+/* Status badge on component card */
+.plan-component-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    z-index: 2;
+}
+
+.plan-component-badge.locked {
+    background: #28a745;
+    color: white;
+}
+
+.plan-component-badge.idea {
+    background: #ffc107;
+    color: #333;
+}
+
+/* Component info section */
+.plan-component-info {
+    padding: 10px;
+}
+
+.plan-component-name {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.plan-component-details {
+    font-size: 0.75em;
+    color: #6c757d;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.plan-component-quantity {
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.plan-component-price {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.plan-component-note-indicator {
+    color: #007bff;
+    font-size: 1.1em;
+}
+
+/* Component Detail Modal (overlay on top of main detail modal) */
+.component-detail-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.component-detail-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.component-detail-modal {
+    background: white;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.3s;
+}
+
+.component-detail-overlay.active .component-detail-modal {
+    transform: scale(1) translateY(0);
+}
+
+.component-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.component-detail-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.component-detail-close {
+    background: none;
+    border: none;
+    font-size: 1.8em;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.component-detail-close:hover {
+    color: #333;
+}
+
+.component-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* Component detail image gallery */
+.component-detail-gallery {
+    margin-bottom: 20px;
+}
+
+.component-detail-main-image {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    background-size: cover;
+    background-position: center;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.component-detail-thumbnails {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 4px 0;
+}
+
+.component-detail-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.component-detail-thumb.active,
+.component-detail-thumb:hover {
+    border-color: #007bff;
+}
+
+/* Component info in detail modal */
+.component-detail-info {
+    margin-bottom: 20px;
+}
+
+.component-detail-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: #333;
+}
+
+.component-detail-description {
+    font-size: 0.9em;
+    color: #6c757d;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Quantity controls in detail modal */
+.component-detail-quantity {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.component-detail-quantity label {
+    font-weight: 500;
+    color: #333;
+}
+
+.component-detail-quantity .quantity-selector {
+    display: flex;
+    align-items: center;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.component-detail-quantity .quantity-btn {
+    width: 36px;
+    height: 36px;
+    background: #f0f0f0;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.component-detail-quantity .quantity-btn:hover {
+    background: #e0e0e0;
+}
+
+.component-detail-quantity .quantity-input {
+    width: 50px;
+    height: 36px;
+    text-align: center;
+    border: none;
+    border-left: 1px solid #ced4da;
+    border-right: 1px solid #ced4da;
+    font-size: 1em;
+    font-weight: 600;
+}
+
+.component-detail-quantity .quantity-input::-webkit-outer-spin-button,
+.component-detail-quantity .quantity-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.component-detail-quantity .quantity-price {
+    margin-left: auto;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #28a745;
+}
+
+/* Notes section in detail modal */
+.component-detail-notes {
+    margin-bottom: 20px;
+}
+
+.component-detail-notes label {
+    display: block;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.component-detail-notes textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9em;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.component-detail-notes textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+}
+
+/* Footer actions */
+.component-detail-footer {
+    display: flex;
+    gap: 10px;
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    background: #f8f9fa;
+}
+
+.component-detail-footer button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.component-save-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+}
+
+.component-save-btn:hover {
+    background: #0056b3;
+}
+
+.component-view-btn {
+    background: white;
+    color: #333;
+    border: 1px solid #ced4da;
+}
+
+.component-view-btn:hover {
+    background: #f0f0f0;
+}
+
+/* Responsive adjustments for component cards */
+@media (max-width: 768px) {
+    .plan-component-card {
+        flex: 0 0 150px;
+        min-width: 150px;
+    }
+
+    .plan-component-name {
+        font-size: 0.85em;
+    }
+
+    .plan-component-info {
+        padding: 8px;
+    }
+
+    .component-detail-modal {
+        width: 95%;
+        max-height: 90vh;
+    }
+}
