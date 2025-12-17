@@ -121,3 +121,19 @@
   to = "/.netlify/functions/airtable"
   status = 200
 
+# --- SEO & Google Merchant Center ---
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+
+[[redirects]]
+  from = "/api/merchant-feed"
+  to = "/.netlify/functions/merchant-feed"
+  status = 200
+
+[[redirects]]
+  from = "/merchant-feed.xml"
+  to = "/.netlify/functions/merchant-feed"
+  status = 200
+
