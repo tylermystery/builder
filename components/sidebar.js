@@ -896,21 +896,38 @@ async function handlePublishPackage() {
 
         // Calculate suggested package price from locked items
         let totalPrice = 0;
+        console.log('[SIDEBAR PACKAGE DEBUG] Calculating price from locked items...');
+        console.log('[SIDEBAR PACKAGE DEBUG] state.records.all count:', state.records.all?.length || 0);
         for (const [recordId, itemInfo] of state.cart.lockedItems.entries()) {
             const record = state.records.all.find(r => r.id === recordId);
             if (record) {
-                const price = parseFloat(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
+                const rawPrice = record.fields[CONSTANTS.FIELD_NAMES.PRICE];
+                const price = parseFloat(rawPrice || 0);
                 const qty = itemInfo.quantity || 1;
-                totalPrice += price * qty;
+                console.log('[SIDEBAR PACKAGE DEBUG] Item:', recordId, 'rawPrice:', rawPrice, 'parsedPrice:', price, 'qty:', qty);
+                if (!isNaN(price)) {
+                    totalPrice += price * qty;
+                }
+            } else {
+                console.log('[SIDEBAR PACKAGE DEBUG] Record NOT FOUND in state.records.all:', recordId);
             }
         }
+        console.log('[SIDEBAR PACKAGE DEBUG] Calculated totalPrice:', totalPrice);
 
         const priceInput = prompt(
             'Enter the package price (or leave empty to calculate from items):',
             totalPrice.toFixed(2)
         );
 
-        const packagePrice = priceInput ? parseFloat(priceInput) : totalPrice;
+        // Handle price input - ensure we get a valid number
+        let packagePrice = totalPrice;
+        if (priceInput !== null && priceInput.trim() !== '') {
+            const parsedPrice = parseFloat(priceInput);
+            if (!isNaN(parsedPrice)) {
+                packagePrice = parsedPrice;
+            }
+        }
+        console.log('[SIDEBAR PACKAGE DEBUG] Final packagePrice:', packagePrice);
 
         const discountInput = prompt('Enter a discount percentage (0-100, or leave empty for no discount):', '0');
         const discount = discountInput ? Math.min(100, Math.max(0, parseFloat(discountInput))) : 0;

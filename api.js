@@ -2036,12 +2036,13 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
 
     // Store package metadata in the session's Items with Variations field
     // This avoids needing new Airtable fields - we extend the existing session data
+    const metadataPrice = parseFloat(packageData.Price);
     const updatedSessionData = {
         ...sessionItems,
         packageMetadata: {
             discount: packageData.Discount || 0,
             tiers: packageData.Tiers || [],
-            price: packageData.Price || 0,
+            price: !isNaN(metadataPrice) ? metadataPrice : 0,
             pricingType: packageData.PricingType || null
         }
     };
@@ -2090,10 +2091,14 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
     console.log('[PACKAGE DEBUG] itemFields:', JSON.stringify(itemFields, null, 2));
     console.log('[PACKAGE DEBUG] Target table ID (Items):', TABLE_ID);
 
-    // Add price if provided
-    if (packageData.Price !== undefined && packageData.Price !== null) {
-        itemFields['Price'] = packageData.Price;
-        console.log('[PACKAGE DEBUG] Added Price to itemFields:', packageData.Price);
+    // Add price if provided - ensure it's a valid number
+    const priceValue = parseFloat(packageData.Price);
+    console.log('[PACKAGE DEBUG] packageData.Price raw:', packageData.Price, 'parsed:', priceValue);
+    if (!isNaN(priceValue)) {
+        itemFields['Price'] = priceValue;
+        console.log('[PACKAGE DEBUG] Added Price to itemFields:', priceValue);
+    } else {
+        console.log('[PACKAGE DEBUG] Price not added - invalid or missing value');
     }
 
     // Add pricing type if provided
