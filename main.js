@@ -172,7 +172,25 @@ async function initialize() {
 
     ui.toggleLoading(true);
     try {
+        console.log('[MAIN DEBUG] ========== FETCHING INITIAL DATA ==========');
         const [stores, records] = await Promise.all([api.fetchAllStores(), api.fetchAllRecords()]);
+        console.log('[MAIN DEBUG] Fetched stores:', stores.length);
+        console.log('[MAIN DEBUG] Fetched records:', records.length);
+
+        // Log packages specifically
+        const packages = records.filter(r => r.fields['Item Type'] === 'Package');
+        console.log('[MAIN DEBUG] Packages in fetched records:', packages.length);
+        if (packages.length > 0) {
+            console.log('[MAIN DEBUG] Package details:', packages.map(p => ({
+                id: p.id,
+                name: p.fields.Name,
+                itemType: p.fields['Item Type'],
+                status: p.fields.Status,
+                linkedSession: p.fields.LinkedSession
+            })));
+        } else {
+            console.log('[MAIN DEBUG] NO PACKAGES FOUND in fetched records');
+        }
 
         // Prioritize AI-generated Rankings over default profiles
         // Rankings field contains AI profiler determined rankings from Gemini
@@ -201,11 +219,16 @@ async function initialize() {
             }
         });
 
-        setState({ 
+        setState({
             stores: { all: stores },
             records: { all: records }
         });
         log('Main', `Fetched ${stores.length} stores and ${records.length} items. Applied AI-generated Rankings where available.`);
+
+        // Debug: Verify packages are in state
+        const packagesInState = state.records.all.filter(r => r.fields['Item Type'] === 'Package');
+        console.log('[MAIN DEBUG] Packages in state after setState:', packagesInState.length);
+        console.log('[MAIN DEBUG] ========== INITIAL DATA FETCH COMPLETE ==========');
 
     } catch (error) {
         console.error("Failed to load initial store/item data:", error);

@@ -322,6 +322,19 @@ export async function applyFiltersAndSort(imageCache) {
         record.fields.Stores && record.fields.Stores.includes(state.ui.activeShopId)
     );
 
+    // Debug: Check for packages in baseRecordsToFilter
+    const packagesInBase = baseRecordsToFilter.filter(r => r.fields['Item Type'] === 'Package');
+    console.log('[FilterDebug] Packages in baseRecordsToFilter:', packagesInBase.length);
+    if (packagesInBase.length > 0) {
+        console.log('[FilterDebug] Package details:', packagesInBase.map(p => ({
+            id: p.id,
+            name: p.fields.Name,
+            stores: p.fields.Stores,
+            status: p.fields.Status,
+            categories: p.fields.Categories
+        })));
+    }
+
     let recordsToDisplay;
 
     if (view === 'plan') {
@@ -460,7 +473,19 @@ export async function applyFiltersAndSort(imageCache) {
         }
         
         recordsToDisplay = categoryRecords;
-        
+
+    } else if (view === 'packages') {
+        // Show all Package type items for this store
+        console.log('[FilterDebug] ========== PACKAGES VIEW ==========');
+        recordsToDisplay = baseRecordsToFilter.filter(record => record.fields['Item Type'] === 'Package');
+        console.log('[FilterDebug] Packages found for store:', recordsToDisplay.length);
+        if (recordsToDisplay.length > 0) {
+            console.log('[FilterDebug] Package names:', recordsToDisplay.map(p => p.fields.Name));
+        }
+        // Apply status filter (only show Available packages by default)
+        recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
+        console.log('[FilterDebug] Packages after status filter:', recordsToDisplay.length);
+
     } else {
          console.log('[FilterDebug] Standard filtering path (not plan/likes/etc)');
          console.log('[FilterDebug] baseRecordsToFilter count:', baseRecordsToFilter.length);
@@ -509,8 +534,9 @@ export async function applyFiltersAndSort(imageCache) {
         groupings: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping').length,
         events: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event').length,
         bookableItems: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item').length,
+        packages: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Package').length,
         sessions: recordsToDisplay.filter(r => r.fields['Item Type'] === 'Session' || r.isSession).length,
-        other: recordsToDisplay.filter(r => !['Grouping', 'Event', 'Bookable Item', 'Session'].includes(r.fields['Item Type']) && !r.isSession).length
+        other: recordsToDisplay.filter(r => !['Grouping', 'Event', 'Bookable Item', 'Session', 'Package'].includes(r.fields['Item Type']) && !r.isSession).length
     };
 
     console.log('[TileSizing][Filter] Records to display breakdown:', typeBreakdown);

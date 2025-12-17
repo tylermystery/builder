@@ -859,13 +859,19 @@ async function handlePublishEvent() {
  * Handles publishing or updating a session as a reusable Package (Decision 5 - Option B)
  */
 async function handlePublishPackage() {
+    console.log('[SIDEBAR PACKAGE DEBUG] ========== handlePublishPackage CALLED ==========');
+    console.log('[SIDEBAR PACKAGE DEBUG] state.session.id:', state.session.id);
+    console.log('[SIDEBAR PACKAGE DEBUG] state.cart.lockedItems.size:', state.cart.lockedItems.size);
+
     if (!state.session.id) {
+        console.error('[SIDEBAR PACKAGE DEBUG] No active session to publish');
         alert('No active session to publish as package');
         return;
     }
 
     // Check if session has items to package
     if (state.cart.lockedItems.size === 0) {
+        console.error('[SIDEBAR PACKAGE DEBUG] No locked items in cart');
         alert('Add some items to your Event Plan before publishing as a package.');
         return;
     }
@@ -878,8 +884,10 @@ async function handlePublishPackage() {
         );
 
         if (!packageName) {
+            console.log('[SIDEBAR PACKAGE DEBUG] User cancelled - no package name');
             return; // User cancelled
         }
+        console.log('[SIDEBAR PACKAGE DEBUG] Package name:', packageName);
 
         const packageDescription = prompt(
             'Enter a description for this package:',
@@ -908,6 +916,8 @@ async function handlePublishPackage() {
         const discount = discountInput ? Math.min(100, Math.max(0, parseFloat(discountInput))) : 0;
 
         log('Sidebar', `Publishing session ${state.session.id} as package with name: ${packageName}`);
+        console.log('[SIDEBAR PACKAGE DEBUG] About to call api.publishSessionAsPackage');
+        console.log('[SIDEBAR PACKAGE DEBUG] Session ID:', state.session.id);
 
         // Disable the button to prevent double-clicks
         const publishPackageBtn = document.getElementById('share-publish-package-btn');
@@ -928,9 +938,14 @@ async function handlePublishPackage() {
             Price: packagePrice,
             Discount: discount > 0 ? discount : undefined
         };
+        console.log('[SIDEBAR PACKAGE DEBUG] packageData being sent:', JSON.stringify(packageData, null, 2));
 
         const result = await api.publishSessionAsPackage(state.session.id, packageData);
 
+        console.log('[SIDEBAR PACKAGE DEBUG] ========== API CALL COMPLETE ==========');
+        console.log('[SIDEBAR PACKAGE DEBUG] Result received:', result);
+        console.log('[SIDEBAR PACKAGE DEBUG] Result ID:', result?.id);
+        console.log('[SIDEBAR PACKAGE DEBUG] Result fields:', JSON.stringify(result?.fields, null, 2));
         log('Sidebar', 'Package published/updated successfully:', result);
         alert(`Package "${packageName}" published successfully! It will now appear in the catalog.`);
 
@@ -948,6 +963,10 @@ async function handlePublishPackage() {
         }
 
     } catch (error) {
+        console.error('[SIDEBAR PACKAGE DEBUG] ========== ERROR PUBLISHING PACKAGE ==========');
+        console.error('[SIDEBAR PACKAGE DEBUG] Error:', error);
+        console.error('[SIDEBAR PACKAGE DEBUG] Error message:', error.message);
+        console.error('[SIDEBAR PACKAGE DEBUG] Error stack:', error.stack);
         console.error('Error publishing package:', error);
         alert(`Failed to publish package: ${error.message}`);
 
