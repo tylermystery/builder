@@ -17,15 +17,74 @@ const IMAGE_GALLERY_TABLE_NAME = 'Image_Gallery';
 const HISTORICAL_PRODUCTS_TABLE_NAME = 'Historical_Products';
 // --------------------------------
 
-export async function fetchPlansForUser(userId) {
+// --- PHASE 3: TASKS TABLE ---
+const TASKS_TABLE_NAME = 'Tasks';
+// --------------------------------
+
+// --- API Timeout Configuration ---
+const API_TIMEOUT_MS = 15000; // 15 second timeout for API calls
+
+/**
+ * Fetch with timeout wrapper to prevent indefinite hangs
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} timeoutMs - Timeout in milliseconds (default: API_TIMEOUT_MS)
+ * @returns {Promise<Response>} - Fetch response
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        console.warn(`[API DEBUG] Fetch timeout after ${timeoutMs}ms for URL: ${url.substring(0, 100)}...`);
+        controller.abort();
+    }, timeoutMs);
+
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            console.error(`[API DEBUG] Request aborted due to timeout: ${url.substring(0, 100)}...`);
+            throw new Error(`Request timed out after ${timeoutMs}ms`);
+        }
+        throw error;
+    }
+}
+// --------------------------------
+
+export async function fetchPlansForUser(userId, includeFullDetails = false) {
     if (!userId) {
         return [];
     }
-    // Assuming 'Collaborators' field directly links to Users table
-    const formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+
+    // Check if user is a store owner
+    const isStoreOwner = state.session.user.isOwner;
+    const ownedStoreId = state.session.user.ownedStoreId;
+
+    let formula;
+    if (isStoreOwner && ownedStoreId) {
+        // If user is a store owner, fetch plans where:
+        // 1. User is a collaborator OR
+        // 2. Plan belongs to their store
+        formula = `OR(FIND('${userId}', ARRAYJOIN({Collaborators})), FIND('${ownedStoreId}', ARRAYJOIN({Stores})))`;
+        log('API', `Fetching plans for store owner: collaborator plans + store plans (Store ID: ${ownedStoreId})`);
+    } else {
+        // Regular user: only fetch plans where they are a collaborator
+        formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+        log('API', `Fetching plans for regular user: collaborator plans only`);
+    }
+
     const encodedFormula = encodeURIComponent(formula);
-    // Fetch sessions where the user is a collaborator
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&fields%5B%5D=Name`; // Only fetch Name for dropdown
+    let url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
+
+    if (!includeFullDetails) {
+        url += '&fields%5B%5D=Name'; // Only fetch Name for dropdown
+    }
+    // If includeFullDetails is true, fetch all fields for catalog display
 
     try {
         const response = await fetch(url, {
@@ -43,6 +102,221 @@ export async function fetchPlansForUser(userId) {
         return data.records;
     } catch (error) {
         console.error("Error fetching user plans:", error);
+        return [];
+    }
+}
+
+/**
+ * Fetch project hierarchy for authenticated user
+ * Returns all sessions/projects the user has access to with hierarchical data
+ * @param {string} userId - The authenticated user's ID
+ * @returns {Promise<Array>} - Array of project records
+ */
+export async function fetchProjectHierarchy(userId) {
+    if (!userId) {
+        log('API', 'fetchProjectHierarchy called without userId');
+        return [];
+    }
+
+    log('API', `Fetching project hierarchy for user: ${userId}`);
+
+    // Check if user is a store owner
+    const isStoreOwner = state.session.user.isOwner;
+    const ownedStoreId = state.session.user.ownedStoreId;
+
+    let formula;
+    if (isStoreOwner && ownedStoreId) {
+        // Store owners see their collaborator plans + all plans for their store
+        formula = `OR(FIND('${userId}', ARRAYJOIN({Collaborators})), FIND('${ownedStoreId}', ARRAYJOIN({Stores})))`;
+        log('API', `Fetching projects for store owner: user plans + store plans (Store ID: ${ownedStoreId})`);
+    } else {
+        // Regular users only see plans they collaborate on
+        formula = `FIND('${userId}', ARRAYJOIN({Collaborators}))`;
+        log('API', `Fetching projects for regular user: collaborator plans only`);
+    }
+
+    const encodedFormula = encodeURIComponent(formula);
+
+    // Request fields needed for project hierarchy display
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Guest Count',
+        'Goals',
+        'Stores',
+        'Collaborators',
+        'Parent_Session',
+        'Items with Variations',
+        'Cart Type'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching project hierarchy:', errorText);
+            throw new Error('Failed to fetch project hierarchy from Airtable.');
+        }
+
+        const data = await response.json();
+
+        // Sort by creation time, newest first
+        data.records.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
+
+        log('API', `Fetched ${data.records.length} projects for user ${userId}`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching project hierarchy:", error);
+        return [];
+    }
+}
+
+export async function fetchSessionsWithDatesForStore(storeId) {
+    console.log('[FETCH SESSIONS] ========== fetchSessionsWithDatesForStore START ==========');
+    console.log('[FETCH SESSIONS] Requested storeId:', storeId);
+
+    if (!storeId) {
+        console.log('[FETCH SESSIONS] ⚠️ No storeId provided, returning empty array');
+        return [];
+    }
+
+    console.log('[FETCH SESSIONS] Building Airtable query...');
+
+    // Create formula to filter sessions that:
+    // 1. Have the specified store ID in their Stores field
+    // 2. Have a non-empty Date field
+    // Using OR to try both approaches: FIND in ARRAYJOIN or direct field check
+    const formula = `AND(OR(FIND('${storeId}', ARRAYJOIN({Stores})), FIND('${storeId}', {Stores}&'')), {Date} != '')`;
+    const encodedFormula = encodeURIComponent(formula);
+    console.log('[FETCH SESSIONS] Airtable formula:', formula);
+    console.log('[FETCH SESSIONS] Encoded formula:', encodedFormula);
+
+    // Request specific fields needed for calendar display
+    const fieldsQuery = [
+        'Name',
+        'Date',
+        'Guest Count',
+        'Goals',
+        'Stores',
+        'Collaborators'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+    console.log('[FETCH SESSIONS] Full API URL:', url);
+
+    try {
+        console.log('[FETCH SESSIONS] Making fetch request...');
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        console.log('[FETCH SESSIONS] Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[FETCH SESSIONS] ⚠️ Airtable Error response:', errorText);
+            throw new Error('Failed to fetch sessions with dates from Airtable.');
+        }
+
+        const data = await response.json();
+        console.log('[FETCH SESSIONS] ========== QUERY RESULTS ==========');
+        console.log('[FETCH SESSIONS] Number of records returned:', data.records?.length || 0);
+
+        // Log details of each record
+        if (data.records && data.records.length > 0) {
+            console.log('[FETCH SESSIONS] ✅ Found', data.records.length, 'matching session(s)!');
+            data.records.forEach((record, index) => {
+                console.log(`[FETCH SESSIONS] --- Session ${index + 1} ---`);
+                console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
+                console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
+                console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
+                console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(record.fields.Stores)}`);
+                console.log(`[FETCH SESSIONS]   Stores type: ${typeof record.fields.Stores}`);
+                console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(record.fields.Stores)}`);
+            });
+            console.log('[FETCH SESSIONS] ==================================================');
+            console.log('[FETCH SESSIONS] Returning', data.records.length, 'session(s) to calendar');
+            return data.records;
+        } else {
+            console.log('[FETCH SESSIONS] ⚠️ No sessions matched the query');
+            console.log('[FETCH SESSIONS] This means either:');
+            console.log('[FETCH SESSIONS]   1. No sessions have dates set');
+            console.log('[FETCH SESSIONS]   2. No sessions have the Stores field set to:', storeId);
+            console.log('[FETCH SESSIONS]   3. Sessions exist but the formula didnt match');
+
+            // Fallback: Try to fetch ALL sessions with dates to debug
+            console.log('[FETCH SESSIONS] ========== FALLBACK QUERY ==========');
+            console.log('[FETCH SESSIONS] Attempting to fetch ALL sessions with dates...');
+            const fallbackFormula = `{Date} != ''`;
+            const fallbackEncodedFormula = encodeURIComponent(fallbackFormula);
+            const fallbackUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${fallbackEncodedFormula}&${fieldsQuery}`;
+
+            try {
+                const fallbackResponse = await fetch(fallbackUrl, {
+                    headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                });
+
+                if (fallbackResponse.ok) {
+                    const fallbackData = await fallbackResponse.json();
+                    console.log('[FETCH SESSIONS] Fallback query found', fallbackData.records?.length || 0, 'sessions with dates');
+                    if (fallbackData.records && fallbackData.records.length > 0) {
+                        console.log('[FETCH SESSIONS] --- All Sessions with Dates ---');
+                        fallbackData.records.forEach((record, index) => {
+                            const stores = record.fields.Stores;
+                            const matchesStore = stores ?
+                                (Array.isArray(stores) ? stores.includes(storeId) : stores === storeId)
+                                : false;
+                            console.log(`[FETCH SESSIONS] Session ${index + 1}:`);
+                            console.log(`[FETCH SESSIONS]   ID: ${record.id}`);
+                            console.log(`[FETCH SESSIONS]   Name: ${record.fields.Name}`);
+                            console.log(`[FETCH SESSIONS]   Date: ${record.fields.Date}`);
+                            console.log(`[FETCH SESSIONS]   Stores: ${JSON.stringify(stores)}`);
+                            console.log(`[FETCH SESSIONS]   Stores type: ${typeof stores}`);
+                            console.log(`[FETCH SESSIONS]   Stores is array? ${Array.isArray(stores)}`);
+                            console.log(`[FETCH SESSIONS]   Matches storeId '${storeId}'? ${matchesStore ? '✅ YES' : '❌ NO'}`);
+                            console.log('[FETCH SESSIONS]   ---');
+                        });
+
+                        // Filter manually to sessions that match the storeId
+                        const matchingSessions = fallbackData.records.filter(record => {
+                            const stores = record.fields.Stores;
+                            if (!stores) {
+                                console.log(`[FETCH SESSIONS] Excluding ${record.id}: No Stores field`);
+                                return false;
+                            }
+                            if (Array.isArray(stores)) {
+                                const matches = stores.includes(storeId);
+                                console.log(`[FETCH SESSIONS] ${record.id}: Stores array ${matches ? 'includes' : 'does NOT include'} storeId`);
+                                return matches;
+                            }
+                            const matches = stores === storeId;
+                            console.log(`[FETCH SESSIONS] ${record.id}: Stores string ${matches ? 'matches' : 'does NOT match'} storeId`);
+                            return matches;
+                        });
+                        console.log('[FETCH SESSIONS] ==================================================');
+                        console.log('[FETCH SESSIONS] Manual filtering found', matchingSessions.length, 'matching session(s)');
+                        console.log('[FETCH SESSIONS] Returning manually filtered results');
+                        return matchingSessions;
+                    } else {
+                        console.log('[FETCH SESSIONS] ⚠️ Fallback query found NO sessions with dates at all!');
+                        console.log('[FETCH SESSIONS] This means no sessions in Airtable have the Date field set.');
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('[FETCH SESSIONS] Fallback query also failed:', fallbackError);
+            }
+        }
+
+        console.log('[FETCH SESSIONS] ==================================================');
+        console.log('[FETCH SESSIONS] Returning empty array');
+        return [];
+    } catch (error) {
+        console.error("[Calendar API Debug] Error fetching sessions with dates:", error);
         return [];
     }
 }
@@ -110,16 +384,23 @@ export async function associateSessionWithUser(sessionId, userId) {
 
 
 export async function loadSessionFromAirtable(sessionId) {
+    console.log('[SESSION-LOAD] ========== START ==========');
+    console.log(`[SESSION-LOAD] Loading session: ${sessionId}`);
+
     if (!sessionId) {
+         console.log('[SESSION-LOAD] ❌ No sessionId provided');
          log('API', 'loadSessionFromAirtable called with no sessionId.');
          return;
     }
     // Avoid reloading if already loaded
     if (state.session.id === sessionId) {
+        console.log(`[SESSION-LOAD] Session ${sessionId} already loaded`);
         log('API', `Session ${sessionId} is already loaded.`);
         if (state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0) {
+             console.log('[SESSION-LOAD] Firing sessionReady event');
              document.dispatchEvent(new CustomEvent('sessionReady'));
         }
+        console.log('[SESSION-LOAD] ========== END (already loaded) ==========');
         return;
     }
 
@@ -128,12 +409,15 @@ export async function loadSessionFromAirtable(sessionId) {
     log('API', `Loading session from URL: ${url}`);
     try {
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
+        console.log(`[SESSION-LOAD] Airtable response: ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
-             console.error(`Airtable error fetching session ${sessionId}:`, errorData);
+            console.error('[SESSION-LOAD] ❌ Airtable error:', errorData);
             throw new Error(`Could not fetch session data. Status: ${response.status}`);
         }
         const record = await response.json();
+        console.log(`[SESSION-LOAD] ✅ Session loaded: "${record.fields?.Name}" (${record.id})`);
+        console.log(`[SESSION-LOAD] Plan details - Date: ${record.fields.Date}, Goals: ${record.fields.Goals?.substring(0, 50)}...`);
         log('API', `Session loaded: ${record.fields.Name || 'Unnamed Session'} (ID: ${sessionId})`);
 
         // Reset parts of state before loading new session data
@@ -157,8 +441,20 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', 'Session not linked to a specific store (Shop Link field is empty).');
         }
 
-        state.session.isOwned = (record.fields.Collaborators || []).includes(state.session.user.id);
-        log('API', `Session ownership for current user (${state.session.user.id}): ${state.session.isOwned}`);
+        // If user is authenticated, check if they are a collaborator or owner.
+        // If not authenticated, they are a guest with no ownership.
+        if (state.session.user.isAuthenticated && state.session.user.id) {
+            const isCollaborator = (record.fields.Collaborators || []).includes(state.session.user.id);
+            const isStoreOwner = state.session.user.isOwner;
+            const ownedStoreId = state.session.user.ownedStoreId;
+            const planStoreId = state.session.storeId;
+            const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
+            state.session.isOwned = isCollaborator || isOwnerOfPlanStore;
+            log('API', `Authenticated user. Access level (isOwned): ${state.session.isOwned}`);
+        } else {
+            state.session.isOwned = false;
+            log('API', `Unauthenticated user. Access level (isOwned): false`);
+        }
 
         state.session.user.amountReceived = record.fields['Amount Received'] || 0;
         try {
@@ -173,6 +469,8 @@ export async function loadSessionFromAirtable(sessionId) {
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
+                console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
+
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
@@ -183,9 +481,51 @@ export async function loadSessionFromAirtable(sessionId) {
                 }
 
                 state.session.userProfiles = new Map(Object.entries(savedState.userProfiles || {}));
-                state.eventDetails.combined = new Map(Object.entries(savedState.eventDetails || savedState.favoritedDetails || {}));
+
+                // Normalize eventDetails keys to handle legacy format
+                // Legacy keys: 'Event Name', 'Goals', 'Date' -> New keys: 'eventName', 'goals', 'date'
+                const rawEventDetails = savedState.eventDetails || savedState.favoritedDetails || {};
+                const normalizedEventDetails = {};
+
+                // Key normalization mapping (legacy -> current)
+                const keyMapping = {
+                    'Event Name': CONSTANTS.DETAIL_TYPES.EVENT_NAME,  // 'eventName'
+                    'Goals': CONSTANTS.DETAIL_TYPES.GOALS,            // 'goals'
+                    'Date': CONSTANTS.DETAIL_TYPES.DATE,              // 'date'
+                    // Also handle already-correct camelCase keys
+                    'eventName': CONSTANTS.DETAIL_TYPES.EVENT_NAME,
+                    'goals': CONSTANTS.DETAIL_TYPES.GOALS,
+                    'date': CONSTANTS.DETAIL_TYPES.DATE,
+                    'guestCount': CONSTANTS.DETAIL_TYPES.GUEST_COUNT,
+                    'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS
+                };
+
+                for (const [key, value] of Object.entries(rawEventDetails)) {
+                    const normalizedKey = keyMapping[key] || key; // Use mapping if exists, otherwise keep original
+                    normalizedEventDetails[normalizedKey] = value;
+                }
+
+                state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
+
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
+
+                // Fetch ghost items (archived/deleted items in the plan)
+                const allItemIds = [
+                    ...Array.from(state.cart.lockedItems.keys()),
+                    ...Array.from(state.cart.items.keys())
+                ];
+                const missingItemIds = allItemIds.filter(id =>
+                    !state.records.all.some(r => r.id === id) &&
+                    id.startsWith('rec') // Only fetch real Airtable IDs, not custom items
+                );
+
+                if (missingItemIds.length > 0) {
+                    log('API', `Found ${missingItemIds.length} ghost items in session, fetching...`);
+                    const ghostItems = await fetchGhostItems(missingItemIds);
+                    setState({ records: { ...state.records, archive: ghostItems } });
+                    log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
+                }
 
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
@@ -206,15 +546,19 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', 'Added current authenticated user to session profiles.');
         }
 
+        console.log(`[SESSION-LOAD] ✅ Session ready - items: ${state.cart.items.size}, locked: ${state.cart.lockedItems.size}, details: ${state.eventDetails.combined.size}`);
+        console.log('[SESSION-LOAD] Dispatching sessionReady event...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
         log('API', `Finished loading session ${sessionId}. Fired sessionReady event.`);
+        console.log('[SESSION-LOAD] ========== END (success) ==========');
 
     } catch (error) {
-        console.error(`Failed to load session ${sessionId}:`, error);
+        console.error('[SESSION-LOAD] ❌ Error loading session:', error.message);
         log('API', `Failed to load session: ${error.message}`);
         state.session.id = null;
         alert("Could not load the shared session. It might have been deleted or there was a network issue.");
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
+        console.log('[SESSION-LOAD] ========== END (error) ==========');
     }
 }
 
@@ -308,15 +652,15 @@ export async function saveSessionToAirtable() {
           validCollaboratorIds.push(state.session.user.id);
      }
 
+    const storesValue = state.ui.activeShopId ? [state.ui.activeShopId] : null;
+
     const fields = {
         "Name": sessionName,
         "Items with Variations": JSON.stringify(sessionData, null, 2),
         "Collaborators": validCollaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
-        // --- THIS IS THE FIX for "Shop Link" ---
-        // Change "Shop Link" to the exact name from your Airtable Sessions table
-        "Stores": state.ui.activeShopId ? [state.ui.activeShopId] : null 
+        "Stores": storesValue
     };
     if (formattedDate) {
         fields["Date"] = formattedDate;
@@ -343,6 +687,7 @@ export async function saveSessionToAirtable() {
 
         if (!isUpdate && result.records && result.records.length > 0) {
             const newSessionId = result.records[0].id;
+
             state.session.id = newSessionId;
             state.session.isOwned = true;
             window.history.replaceState({}, document.title, `?session=${newSessionId}${window.location.search.includes('shopId') ? `&shopId=${state.ui.activeShopId}` : ''}`);
@@ -361,11 +706,103 @@ export async function saveSessionToAirtable() {
         return true;
 
     } catch (error) {
-        console.error("Failed to save session:", error);
         log('API', `Failed to save session: ${error.message}`);
-        state.ui.saveState = 'SAVED';
+        state.ui.saveState = 'ERROR';
         if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
-         alert(`Error saving your plan: ${error.message}. Please try again.`);
+        alert(`Error saving your plan: ${error.message}. Please try refreshing the page and trying again.`);
+        return false;
+    }
+}
+
+/**
+ * Phase 5: Add an item to a specific session/project
+ * Used for cross-project "Add to Project" functionality
+ * @param {string} sessionId - The target session/project ID
+ * @param {string} itemId - The item record ID to add
+ * @param {Object} itemInfo - Item info (quantity, selections, note)
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
+    if (!sessionId || !itemId) {
+        console.error('[API] addItemToSession: Missing sessionId or itemId');
+        return false;
+    }
+
+    log('API', `Adding item ${itemId} to session ${sessionId}`);
+
+    try {
+        // First, fetch the current session data
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch session: ${response.status}`);
+        }
+
+        const sessionRecord = await response.json();
+        let sessionData = {};
+
+        // Parse existing Items with Variations data
+        const existingData = sessionRecord.fields?.['Items with Variations'];
+        if (existingData) {
+            try {
+                sessionData = JSON.parse(existingData);
+            } catch (e) {
+                console.error('[API] Failed to parse existing session data:', e);
+                sessionData = { lockedInItems: {}, ideasItems: {} };
+            }
+        } else {
+            sessionData = { lockedInItems: {}, ideasItems: {} };
+        }
+
+        // Add the item to lockedInItems (the plan)
+        if (!sessionData.lockedInItems) {
+            sessionData.lockedInItems = {};
+        }
+
+        // Check if item already exists
+        if (sessionData.lockedInItems[itemId]) {
+            log('API', `Item ${itemId} already exists in session ${sessionId}`);
+            return true; // Already there, consider success
+        }
+
+        // Add the item with default info
+        sessionData.lockedInItems[itemId] = {
+            quantity: itemInfo.quantity || 1,
+            selectedOptionIndex: itemInfo.selectedOptionIndex || 0,
+            selections: itemInfo.selections || {},
+            note: itemInfo.note || ''
+        };
+
+        // Update the session in Airtable
+        const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const updateResponse = await fetch(updateUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${AIRTABLE_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fields: {
+                    'Items with Variations': JSON.stringify(sessionData)
+                }
+            })
+        });
+
+        if (!updateResponse.ok) {
+            throw new Error(`Failed to update session: ${updateResponse.status}`);
+        }
+
+        log('API', `Successfully added item ${itemId} to session ${sessionId}`);
+        return true;
+
+    } catch (error) {
+        console.error('[API] Error adding item to session:', error);
         return false;
     }
 }
@@ -395,18 +832,18 @@ export async function fetchAllRecords() {
         'Item Type',
         'Stores',
         'RSVPs',
+        'RSVPMaybe',
+        'RSVPNo',
         'Date',
+        'Time',
         'Chat Enabled',
-        // New Modal Fields (VERIFY THESE NAMES)
         'Duration',
         'Capacity',
         'Location Details',
         'Additional Information',
         'Rankings',
-        'AI_Profile' // NEW FIELD FOR V2.1 PROFILING
-        // Add ALL other ranking field names from Airtable if you used individual fields before
-        // e.g., 'Ranking - Fun', 'Ranking - Competitive', etc.
-        // Add ALL other fields used anywhere else
+        'AI_Profile',
+        'LinkedSession'
     ];
     // --- END OF FIELD LIST ---
 
@@ -563,74 +1000,113 @@ export async function fetchCalendarForRecord(record) {
 // In: api.js
 // REPLACE the fetchImagesByTags function (around line 520)
 
+// Client-side request deduplication to prevent parallel calls for same tags
+const pendingImageRequests = new Map();
+
+// Generate a cache key for image requests
+function getImageRequestKey(tags) {
+    if (Array.isArray(tags)) {
+        return `multi:${tags.map(t => String(t).trim()).filter(Boolean).sort().join(',')}`;
+    }
+    return `single:${String(tags).trim()}`;
+}
+
 export async function fetchImagesByTags(tags, retries = 2) {
     if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
         log('API', 'fetchImagesByTags: No valid tags provided.');
         return [];
     }
 
+    // Generate a unique key for this request
+    const requestKey = getImageRequestKey(tags);
+
+    // Check for pending request with same key (deduplication)
+    if (pendingImageRequests.has(requestKey)) {
+        log('API', `Deduplicating image request for ${requestKey}`);
+        try {
+            return await pendingImageRequests.get(requestKey);
+        } catch (e) {
+            // If pending request fails, continue to make new request
+        }
+    }
+
+    // Create the request promise
+    const requestPromise = (async () => {
+        try {
+            let payload;
+            if (Array.isArray(tags)) {
+                const validTags = tags.map(t => String(t).trim()).filter(Boolean);
+                if (validTags.length === 0) return [];
+                payload = { expression: validTags.map(tag => `tags:\\\"${tag}\\\"`).join(' AND ') };
+                log('API', `Fetching images by expression: ${payload.expression}`);
+            } else {
+                const tagName = String(tags).trim();
+                if (!tagName) return [];
+                payload = { tag: tagName };
+                log('API', `Fetching images by single tag: ${tagName}`);
+            }
+
+            const response = await fetch('/.netlify/functions/cloudinary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.status === 429 && retries > 0) {
+                log('API', `Cloudinary rate limit hit, retrying in 1000ms... (${retries} retries left)`);
+                // Clean up deduplication before retry
+                pendingImageRequests.delete(requestKey);
+                await new Promise(res => setTimeout(res, 1000));
+                return fetchImagesByTags(tags, retries - 1);
+            }
+
+            if (!response.ok) {
+                console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
+                try { console.warn('Cloudinary error body:', await response.text()); } catch (e) {}
+                return [];
+            }
+
+            const data = await response.json();
+            if (!data.resources || data.resources.length === 0) {
+                 log('API', 'No Cloudinary resources found for the given tags/expression.');
+                return [];
+            }
+
+            const imageUrls = data.resources.map(image => {
+                 // --- THIS IS THE FIX ---
+                 // We force the format to JPG (f_jpg) instead of auto (f_auto).
+                 // This ensures HEIC and other formats are converted.
+                 // We also keep the GIF-specific rule.
+                 let transformations = 'c_fill,g_auto,w_600,h_520,f_jpg'; // Changed f_auto to f_jpg
+                 if (image.format === 'gif') {
+                     transformations = 'c_fit,w_600,h_520';
+                 }
+                 // --- END FIX ---
+
+                 const urlParts = image.secure_url.split('/upload/');
+                 if (urlParts.length === 2) {
+                    return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
+                 }
+                 return image.secure_url;
+            });
+
+             log('API', `Found ${imageUrls.length} images from Cloudinary.`);
+            return imageUrls;
+
+        } catch (error) {
+            console.error('Failed to fetch from Cloudinary via proxy:', error);
+            return [];
+        }
+    })();
+
+    // Store the promise for deduplication
+    pendingImageRequests.set(requestKey, requestPromise);
+
     try {
-        let payload;
-        if (Array.isArray(tags)) {
-            const validTags = tags.map(t => String(t).trim()).filter(Boolean);
-            if (validTags.length === 0) return [];
-            payload = { expression: validTags.map(tag => `tags:\\\\\\\"${tag}\\\\\\\"`).join(' AND ') };
-            log('API', `Fetching images by expression: ${payload.expression}`);
-        } else {
-            const tagName = String(tags).trim();
-            if (!tagName) return [];
-            payload = { tag: tagName };
-            log('API', `Fetching images by single tag: ${tagName}`);
-        }
-
-        const response = await fetch('/.netlify/functions/cloudinary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (response.status === 429 && retries > 0) {
-            log('API', `Cloudinary rate limit hit, retrying in 500ms... (${retries} retries left)`);
-            await new Promise(res => setTimeout(res, 500));
-            return fetchImagesByTags(tags, retries - 1);
-        }
-
-        if (!response.ok) {
-            console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
-            try { console.warn('Cloudinary error body:', await response.text()); } catch (e) {}
-            return [];
-        }
-
-        const data = await response.json();
-        if (!data.resources || data.resources.length === 0) {
-             log('API', 'No Cloudinary resources found for the given tags/expression.');
-            return [];
-        }
-
-        const imageUrls = data.resources.map(image => {
-             // --- THIS IS THE FIX ---
-             // We force the format to JPG (f_jpg) instead of auto (f_auto).
-             // This ensures HEIC and other formats are converted.
-             // We also keep the GIF-specific rule.
-             let transformations = 'c_fill,g_auto,w_600,h_520,f_jpg'; // Changed f_auto to f_jpg
-             if (image.format === 'gif') {
-                 transformations = 'c_fit,w_600,h_520';
-             }
-             // --- END FIX ---
-
-             const urlParts = image.secure_url.split('/upload/');
-             if (urlParts.length === 2) {
-                return `${urlParts[0]}/upload/${transformations}/${urlParts[1]}`;
-             }
-             return image.secure_url;
-        });
-
-         log('API', `Found ${imageUrls.length} images from Cloudinary.`);
-        return imageUrls;
-
-    } catch (error) {
-        console.error('Failed to fetch from Cloudinary via proxy:', error);
-        return [];
+        return await requestPromise;
+    } finally {
+        // Clean up the pending request after completion
+        pendingImageRequests.delete(requestKey);
     }
 }
 
@@ -708,8 +1184,8 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
     const getDynamicFallbackUrl = (record) => {
         const mediaTag = record.fields[CONSTANTS.FIELD_NAMES.MEDIA_TAGS] || "NO_TAG_DEFINED";
         
-        // URL-encode the text to be overlaid. \\n becomes a new line.
-        const encodedTag = encodeURIComponent(`Failed Media Tag:\\n${mediaTag}`);
+        // URL-encode the text to be overlaid. \n becomes a new line.
+        const encodedTag = encodeURIComponent(`Failed Media Tag:\n${mediaTag}`);
         
         // A generic grey placeholder public ID
         const placeholderPublicID = 'ww71meppejsewxsxr4x7'; // Replaced 'v1/samples/solid_color'
@@ -756,9 +1232,7 @@ export async function fetchChatMessages(sessionId) {
          return [];
     }
     // Fetch messages linked specifically to this Session record
-// --- REPAIR: Use the correct linked-record ID search formula ---
-    const formula = `FIND('${sessionId}', {SessionID_Rollup})`; // The correct formula is simply matching the ID against the linked field string/array representation.
-    // --- END REPAIR ---
+    const formula = `FIND('${sessionId}', {SessionID_Rollup})`;
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
@@ -767,23 +1241,99 @@ export async function fetchChatMessages(sessionId) {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(`Failed to fetch chat messages for session ${sessionId}: ${errorData?.error?.message || response.statusText}`);
         }
         const data = await response.json();
+
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
         return data.records;
     } catch (error) {
-        console.error(`Error fetching chat history for session ${sessionId}:`, error);
+        log('API', `Error fetching chat messages: ${error.message}`);
         return [];
     }
 }
 
 
+/**
+ * Event types for plan history tracking
+ */
+export const PLAN_EVENT_TYPES = {
+    PLAN_CREATED: 'plan_created',
+    AI_INTERPRETATION: 'ai_interpretation',
+    PLAN_UPDATED: 'plan_updated',
+    TASK_ADDED: 'task_added',
+    ITEM_ADDED: 'item_added',
+    COLLABORATOR_JOINED: 'collaborator_joined'
+};
+
+/**
+ * Posts a plan event to the Messages table for history tracking.
+ * Events are stored as system messages with EventType field to distinguish from chat messages.
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event (from PLAN_EVENT_TYPES)
+ * @param {object} eventData - Additional data about the event
+ * @returns {Promise<object|null>} The created record or null on failure
+ */
+export async function postPlanEvent(sessionId, eventType, eventData = {}) {
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        log('API', `postPlanEvent: Invalid sessionId provided: "${sessionId}"`);
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+    // Format the event content as JSON string for storage
+    const eventContent = JSON.stringify({
+        type: eventType,
+        data: eventData,
+        timestamp: new Date().toISOString()
+    });
+
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: [sessionId],
+                SenderID: 'system',
+                SenderName: 'System',
+                Content: eventContent,
+                EventType: eventType
+            }
+        }]
+    };
+
+    try {
+        log('API', `Posting plan event: ${eventType} to session ${sessionId}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            // Don't throw - event logging is non-critical
+            log('API', `Failed to post plan event: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Plan event saved: ${eventType} with record ID: ${result.records[0].id}`);
+        return result.records[0];
+    } catch (error) {
+        log('API', `Error posting plan event: ${error.message}`);
+        return null;
+    }
+}
+
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
-        console.error(`[API] postChatMessage Error: Invalid sessionId provided: \\\"${sessionId}\\\". Cannot save message.`);
+        log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
         return;
     }
      if (!content || !content.trim()) {
@@ -804,7 +1354,7 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
     };
 
     try {
-        log('API', `Posting chat message to session ${sessionId} from ${senderName}`);
+         log('API', `Posting chat message to session ${sessionId} from ${senderName}`);
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -820,26 +1370,26 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
 
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
-        log('API', `Chat message saved with record ID: ${newMessageRecordId}`);
+         log('API', `Chat message saved with record ID: ${newMessageRecordId}`);
 
         if (newMessageRecordId) {
             const notificationPromises = [
                 fetch('/api/send-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recordId: newMessageRecordId })
+                     body: JSON.stringify({ recordId: newMessageRecordId })
                 }).catch(err => console.error("SMS notification trigger failed:", err)),
 
                 fetch('/api/send-email-notification', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recordId: newMessageRecordId })
+                     body: JSON.stringify({ recordId: newMessageRecordId })
                 }).catch(err => console.error("Email notification trigger failed:", err)),
 
                 fetch('/api/send-chat-to-admin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recordId: newMessageRecordId })
+                     body: JSON.stringify({ recordId: newMessageRecordId })
                 }).catch(err => console.error("Admin chat notification trigger failed:", err))
             ];
             await Promise.allSettled(notificationPromises);
@@ -847,20 +1397,20 @@ export async function postChatMessage(sessionId, senderId, senderName, content) 
         }
     } catch (error) {
         console.error("CRITICAL: Failed to save chat message to database.", error);
-        if (typeof ui !== 'undefined' && ui.showToast) {
-            ui.showToast(`Error: Could not send message. ${error.message}`);
-        } else {
-            alert(`Could not save message: ${error.message}`);
-        }
+         if (typeof ui !== 'undefined' && ui.showToast) {
+             ui.showToast(`Error: Could not send message. ${error.message}`);
+         } else {
+             alert(`Could not save message: ${error.message}`);
+         }
     }
 }
 
 
 export async function fetchItemChatMessages(itemId) {
-    if (!itemId || !itemId.startsWith('rec')) {
-        log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
-        return [];
-    }
+     if (!itemId || !itemId.startsWith('rec')) {
+          log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
+          return [];
+     }
     const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
@@ -870,7 +1420,7 @@ export async function fetchItemChatMessages(itemId) {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         if (!response.ok) {
-            const errorData = await response.json();
+             const errorData = await response.json();
             throw new Error(`Failed to fetch item chat messages for ${itemId}: ${errorData?.error?.message || response.statusText}`);
         }
         const data = await response.json();
@@ -884,8 +1434,8 @@ export async function fetchItemChatMessages(itemId) {
 
 
 export async function postItemChatMessage(itemId, senderId, senderName, content) {
-    if (!itemId || !itemId.startsWith('rec')) {
-        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: "${itemId}".`);
+     if (!itemId || !itemId.startsWith('rec')) {
+        console.error(`[API] postItemChatMessage Error: Invalid itemId provided: \"${itemId}\".`);
         return;
     }
     if (!content || !content.trim()) {
@@ -905,7 +1455,7 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
         }]
     };
     try {
-        log('API', `Posting item chat message to item ${itemId} from ${senderName}`);
+         log('API', `Posting item chat message to item ${itemId} from ${senderName}`);
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -915,13 +1465,22 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
             body: JSON.stringify(payload)
         });
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
+             const errorData = await response.json();
+             throw new Error(`Failed to post item chat message to Airtable: ${errorData?.error?.message || response.statusText}`);
         }
-        log('API', `Successfully posted item chat message for ${itemId}.`);
+        const result = await response.json();
+        const newMessageRecordId = result.records[0].id;
+        log('API', `Successfully posted item chat message for ${itemId}. Message ID: ${newMessageRecordId}`);
+        
+        fetch('/api/notify-rsvp-users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recordId: newMessageRecordId })
+        }).catch(err => console.error("RSVP user notification trigger failed:", err));
+        
     } catch (error) {
         console.error(`Error posting item chat message for ${itemId}:`, error);
-        if (typeof ui !== 'undefined' && ui.showToast) {
+         if (typeof ui !== 'undefined' && ui.showToast) {
             ui.showToast(`Error: Could not send message. ${error.message}`);
         }
     }
@@ -944,99 +1503,1624 @@ export async function updateUserFlagStatus(userId, isFlagged) {
 }
 
 
+export async function fetchRecentChats(userId, limit = 10) {
+    if (!userId) {
+        log('API', 'fetchRecentChats: No userId provided.');
+        return [];
+    }
+
+    // Fetch messages where the user participated (either as sender or in conversations they're part of)
+    const formula = `{SenderID} = '${userId}'`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=100`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to fetch recent chats: ${errorData?.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} messages for recent chats.`);
+
+        // Group messages by conversation (SessionID or Item Link)
+        const conversationsMap = new Map();
+
+        for (const record of data.records) {
+            const fields = record.fields;
+            const sessionIds = fields.SessionID || [];
+            const itemLinks = fields['Item Link'] || [];
+
+            let conversationId = null;
+            let conversationType = null;
+
+            if (sessionIds.length > 0) {
+                conversationId = sessionIds[0];
+                conversationType = 'session';
+            } else if (itemLinks.length > 0) {
+                conversationId = itemLinks[0];
+                conversationType = 'item';
+            }
+
+            if (conversationId && !conversationsMap.has(conversationId)) {
+                conversationsMap.set(conversationId, {
+                    id: conversationId,
+                    type: conversationType,
+                    lastMessage: fields.Content || '',
+                    lastMessageTime: fields.Timestamp || new Date().toISOString(),
+                    senderName: fields.SenderName || 'Unknown'
+                });
+            }
+        }
+
+        // Convert to array and limit results
+        const recentChats = Array.from(conversationsMap.values()).slice(0, limit);
+
+        // Fetch names for session/item conversations
+        for (const chat of recentChats) {
+            if (chat.type === 'session') {
+                // Try to get session name
+                try {
+                    const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${chat.id}`;
+                    const sessionResponse = await fetch(sessionUrl, {
+                        headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                    });
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        chat.name = sessionData.fields?.Name || 'Session Chat';
+                    } else {
+                        chat.name = 'Session Chat';
+                    }
+                } catch (e) {
+                    chat.name = 'Session Chat';
+                }
+            } else if (chat.type === 'item') {
+                // Try to get item name
+                try {
+                    const itemUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${chat.id}`;
+                    const itemResponse = await fetch(itemUrl, {
+                        headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+                    });
+                    if (itemResponse.ok) {
+                        const itemData = await itemResponse.json();
+                        chat.name = itemData.fields?.Name || 'Item Chat';
+                    } else {
+                        chat.name = 'Item Chat';
+                    }
+                } catch (e) {
+                    chat.name = 'Item Chat';
+                }
+            }
+        }
+
+        return recentChats;
+    } catch (error) {
+        console.error('Error fetching recent chats:', error);
+        return [];
+    }
+}
+
+
+export async function updateRsvpForEvent(eventId, userId, rsvpType) {
+    if (!eventId || !userId) {
+         log('API', 'updateRsvpForEvent: Missing eventId or userId.');
+         return null;
+    }
+    log('API', `Updating RSVP for user ${userId} to event ${eventId} with type: ${rsvpType}`);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    try {
+        const getResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+        if (!getResponse.ok) {
+             if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
+             throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+        }
+
+        const existingRecord = await getResponse.json();
+        const rsvpYes = new Set(existingRecord.fields.RSVPs || []);
+        const rsvpMaybe = new Set(existingRecord.fields.RSVPMaybe || []);
+        const rsvpNo = new Set(existingRecord.fields.RSVPNo || []);
+
+        rsvpYes.delete(userId);
+        rsvpMaybe.delete(userId);
+        rsvpNo.delete(userId);
+
+        if (rsvpType === 'yes') {
+            rsvpYes.add(userId);
+        } else if (rsvpType === 'maybe') {
+            rsvpMaybe.add(userId);
+        } else if (rsvpType === 'no') {
+            rsvpNo.add(userId);
+        }
+
+        const rsvpPayload = {
+            fields: { 
+                'RSVPs': Array.from(rsvpYes),
+                'RSVPMaybe': Array.from(rsvpMaybe),
+                'RSVPNo': Array.from(rsvpNo)
+            }
+        };
+        const patchResponse = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(rsvpPayload)
+        });
+        if (!patchResponse.ok) {
+            const errorData = await patchResponse.json();
+            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+        }
+
+        log('API', `Successfully updated RSVP for user ${userId} to event ${eventId}`);
+        return await patchResponse.json();
+
+    } catch (error) {
+        console.error(`Failed to update RSVP for event ${eventId}:`, error);
+        log('API', `Failed to update RSVP: ${error.message}`);
+         if (typeof ui !== 'undefined' && ui.showToast) {
+             ui.showToast(`RSVP Error: ${error.message}`);
+         }
+        return null;
+    }
+}
+
 export async function addRsvpToEvent(eventId, userId) {
-    if (!eventId || !userId) {
-        log('API', 'addRsvpToEvent: Missing eventId or userId.');
-        return null;
+    return updateRsvpForEvent(eventId, userId, 'yes');
+}
+
+
+// --- FUNCTION TO TOGGLE USER LIKE (Using combined endpoint) ---
+export async function toggleUserLike(itemId) {
+    if (!state.session.user.isAuthenticated || !state.session.user.id) {
+        log('API', 'User not authenticated. Cannot toggle like.');
+        throw new Error('You must be logged in to like items.');
     }
-    log('API', `Adding RSVP for user ${userId} to event ${eventId}`);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+        log('API', 'JWT token not found. Cannot toggle like.');
+        throw new Error('Authentication token missing.');
+    }
+
+    log('API', `Toggling like for item ${itemId} via update-user-prefs`);
 
     try {
-        const getResponse = await fetch(url, {
+        // Call the KNOWN-WORKING endpoint
+        const response = await fetch('/api/update-user-prefs', { 
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            // Send the 'action' and 'itemId'
+            body: JSON.stringify({ 
+                action: 'toggle-like',
+                itemId: itemId 
+            }) 
+        });
+
+        if (!response.ok) {
+            // Try to parse error JSON, but handle empty/non-JSON responses
+            let errorText = response.statusText;
+            try {
+                const errorData = await response.json(); // This is line 981
+                errorText = errorData.error || errorText;
+            } catch (e) {
+                // This catch block handles the "Unexpected end of JSON input"
+                log('API', 'Could not parse error response as JSON.');
+            }
+            throw new Error(errorText || `Failed to toggle like (Status: ${response.status})`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully toggled like for item ${itemId}. New status: ${result.liked ? 'Liked' : 'Unliked'}`);
+        return result; // Should return { success: true, liked: boolean }
+
+    } catch (error) {
+        console.error("Error toggling like:", error);
+        log('API', `Failed to toggle like: ${error.message}`);
+        throw error; // Re-throw the error to be caught by the caller
+    }
+}
+
+/**
+ * Fetches ghost items (archived/deleted items) that are referenced in a session's history
+ * @param {Array<string>} recordIds - Array of record IDs to fetch
+ * @returns {Promise<Array>} Array of item records
+ */
+export async function fetchGhostItems(recordIds) {
+    if (!recordIds || recordIds.length === 0) {
+        return [];
+    }
+
+    // Filter out IDs that don't look like Airtable record IDs
+    const validIds = recordIds.filter(id => id && id.startsWith('rec'));
+    if (validIds.length === 0) {
+        return [];
+    }
+
+    // Build OR formula for multiple records
+    const formula = `OR(${validIds.map(id => `RECORD_ID()='${id}'`).join(',')})`;
+    const encodedFormula = encodeURIComponent(formula);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}?filterByFormula=${encodedFormula}`;
+
+    try {
+        const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
-        if (!getResponse.ok) {
-            if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
-            throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching ghost items:', errorText);
+            return []; // Return empty array instead of throwing
         }
 
-        const existingRecord = await getResponse.json();
-        const rsvps = new Set(existingRecord.fields.RSVPs || []);
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} ghost items`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching ghost items:", error);
+        return []; // Return empty array on error
+    }
+}
 
-        if (rsvps.has(userId)) {
-            log('API', `User ${userId} already RSVP'd to event ${eventId}.`);
-            return existingRecord;
+/**
+ * Publishes or updates a Session as a public Event item
+ * @param {string} sessionId - The session record ID
+ * @param {Object} eventData - Event data (Name, Date, Goals, etc.)
+ * @returns {Promise<Object>} The created or updated item record
+ */
+export async function publishSessionAsEvent(sessionId, eventData) {
+    if (!sessionId) {
+        throw new Error('Session ID is required to publish as event');
+    }
+
+    const session = await fetchSessionById(sessionId);
+    if (!session) {
+        throw new Error('Session not found');
+    }
+
+    // Check if this session is already linked to an event
+    const linkedItemId = session.fields.LinkedItem ? session.fields.LinkedItem[0] : null;
+
+    // Format the date properly for Airtable
+    // Items table Date field may be a DateTime type requiring full ISO 8601 format
+    // Sessions table Date field accepts YYYY-MM-DD format
+    let formattedDateOnly = null;  // YYYY-MM-DD format for simple date fields
+    let formattedDateTime = null;  // Full ISO 8601 for datetime fields
+    const dateValue = eventData.Date || session.fields.Date;
+
+    if (dateValue) {
+        const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+
+        // Check if it's already in YYYY-MM-DD format (no time component)
+        if (typeof dateToFormat === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateToFormat)) {
+            formattedDateOnly = dateToFormat;
+            // Also create a full ISO datetime string for datetime fields
+            // Use noon UTC to avoid timezone issues
+            formattedDateTime = `${dateToFormat}T12:00:00.000Z`;
+        } else if (typeof dateToFormat === 'string' && dateToFormat.includes('T')) {
+            // It's already a full ISO datetime string
+            formattedDateTime = dateToFormat;
+            formattedDateOnly = dateToFormat.split('T')[0];
+        } else {
+            // Parse and format the date
+            const dateObj = new Date(dateToFormat);
+
+            if (!isNaN(dateObj.getTime())) {
+                // Create both formats
+                formattedDateTime = dateObj.toISOString();  // Full ISO 8601 with time
+                formattedDateOnly = formattedDateTime.split('T')[0]; // Date only YYYY-MM-DD
+            }
         }
-        rsvps.add(userId);
+    }
 
-        const patchResponse = await fetch(url, {
+    const itemFields = {
+        'Name': eventData.Name || session.fields.Name || 'Untitled Event',
+        'Description': eventData.Description || session.fields.Goals || '',
+        'Item Type': 'Event',
+        'Status': 'Available',
+        'LinkedSession': [sessionId], // Link back to the session
+        // Note: Goals and Guest Count exist in Sessions table, not Items table
+        // They are stored in the linked Session record
+    };
+
+    // Airtable Date fields (not DateTime fields) require YYYY-MM-DD format only
+    if (formattedDateOnly) {
+        itemFields['Date'] = formattedDateOnly;
+    }
+
+    let itemRecord;
+
+    if (linkedItemId) {
+        // Update existing event
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${linkedItemId}`;
+        const response = await fetch(url, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ fields: { RSVPs: Array.from(rsvps) } })
+            body: JSON.stringify({ fields: itemFields })
         });
-        if (!patchResponse.ok) {
-            const errorData = await patchResponse.json();
-            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to update event:', errorText);
+            throw new Error(`Failed to update event: ${errorText}`);
         }
 
-        log('API', `Successfully added RSVP for user ${userId} to event ${eventId}.`);
-        return await patchResponse.json();
-
-    } catch (error) {
-        console.error(`Error adding RSVP for event ${eventId}:`, error);
-        return null;
-    }
-}
-
-
-export async function removeRsvpFromEvent(eventId, userId) {
-    if (!eventId || !userId) {
-        log('API', 'removeRsvpFromEvent: Missing eventId or userId.');
-        return null;
-    }
-    log('API', `Removing RSVP for user ${userId} from event ${eventId}`);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
-
-    try {
-        const getResponse = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        itemRecord = await response.json();
+        log('API', `Updated event ${linkedItemId} from session ${sessionId}`);
+    } else {
+        // Create new event
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
         });
-        if (!getResponse.ok) {
-            if (getResponse.status === 404) throw new Error(`Event ${eventId} not found.`);
-            throw new Error(`Could not fetch the event to update RSVPs. Status: ${getResponse.status}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+
+            // Check if the error is specifically about the Date field
+            if (response.status === 422 && errorText.toLowerCase().includes('date')) {
+                // Remove the Date field and try again
+                const itemFieldsWithoutDate = { ...itemFields };
+                delete itemFieldsWithoutDate['Date'];
+
+                const retryResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fields: itemFieldsWithoutDate })
+                });
+
+                if (!retryResponse.ok) {
+                    const retryErrorText = await retryResponse.text();
+                    throw new Error(`Failed to create event even without Date field: ${retryErrorText}`);
+                }
+
+                itemRecord = await retryResponse.json();
+                log('API', `Created event ${itemRecord.id} from session ${sessionId} (without date)`);
+            } else {
+                throw new Error(`Failed to create event: ${errorText}`);
+            }
+        } else {
+            itemRecord = await response.json();
+            log('API', `Created event ${itemRecord.id} from session ${sessionId}`);
         }
-
-        const existingRecord = await getResponse.json();
-        const rsvps = new Set(existingRecord.fields.RSVPs || []);
-
-        if (!rsvps.has(userId)) {
-            log('API', `User ${userId} was not RSVP'd to event ${eventId}.`);
-            return existingRecord;
-        }
-        rsvps.delete(userId);
-
-        const patchResponse = await fetch(url, {
+        // Update session with link to new event
+        const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        await fetch(updateSessionUrl, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ fields: { RSVPs: Array.from(rsvps) } })
+            body: JSON.stringify({ fields: { 'LinkedItem': [itemRecord.id] } })
         });
-        if (!patchResponse.ok) {
-            const errorData = await patchResponse.json();
-            throw new Error(`Airtable API Error updating RSVPs: ${errorData?.error?.message || patchResponse.statusText}`);
+    }
+
+    return itemRecord;
+}
+
+/**
+ * Publishes a Session as a reusable Package item (Decision 5 - Option B).
+ * Creates a new Package item in the catalog with the session's locked items as included items
+ * and the session's ideas as optional add-ons.
+ *
+ * @param {string} sessionId - The session record ID
+ * @param {Object} packageData - Package metadata
+ *   @param {string} packageData.Name - Package name
+ *   @param {string} packageData.Description - Package description
+ *   @param {number} packageData.Price - Base package price
+ *   @param {number} packageData.Discount - Optional discount percentage
+ *   @param {Array} packageData.Tiers - Optional tier configuration [{name, price}, ...]
+ * @returns {Promise<Object>} The created package item record
+ */
+export async function publishSessionAsPackage(sessionId, packageData = {}) {
+    if (!sessionId) {
+        throw new Error('Session ID is required to publish as package');
+    }
+
+    const session = await fetchSessionById(sessionId);
+    if (!session) {
+        throw new Error('Session not found');
+    }
+
+    log('API', `Publishing session ${sessionId} as Package`);
+
+    // Parse session data to get locked items and ideas
+    let sessionItems = { lockedInItems: {}, ideasItems: {} };
+    try {
+        const sessionDataString = session.fields['Items with Variations'];
+        if (sessionDataString) {
+            sessionItems = JSON.parse(sessionDataString);
+        }
+    } catch (e) {
+        console.warn('[API] Could not parse session data:', e);
+    }
+
+    // Build package contents from session
+    const includedItems = [];
+    for (const [id, info] of Object.entries(sessionItems.lockedInItems || {})) {
+        includedItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null,
+            locked: true
+        });
+    }
+
+    const addOnItems = [];
+    for (const [id, info] of Object.entries(sessionItems.ideasItems || {})) {
+        addOnItems.push({
+            id,
+            quantity: info.quantity || 1,
+            options: info.selections || null
+        });
+    }
+
+    const packageContents = {
+        includedItems,
+        addOnItems,
+        tiers: packageData.Tiers || []
+    };
+
+    // Store package metadata in the session's Items with Variations field
+    // This avoids needing new Airtable fields - we extend the existing session data
+    const updatedSessionData = {
+        ...sessionItems,
+        packageMetadata: {
+            discount: packageData.Discount || 0,
+            tiers: packageData.Tiers || [],
+            price: packageData.Price || 0,
+            pricingType: packageData.PricingType || null
+        }
+    };
+
+    // Update session with package metadata
+    const updateSessionDataUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+    await fetch(updateSessionDataUrl, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fields: { 'Items with Variations': JSON.stringify(updatedSessionData) } })
+    });
+
+    // Build the package item fields - use only existing Airtable fields
+    // Package contents are retrieved from LinkedSession at render time
+    const itemFields = {
+        'Name': packageData.Name || session.fields.Name || 'Untitled Package',
+        'Description': packageData.Description || session.fields.Goals || '',
+        'Item Type': 'Package',
+        'Status': 'Available',
+        'LinkedSession': [sessionId]
+    };
+
+    // Add price if provided
+    if (packageData.Price !== undefined && packageData.Price !== null) {
+        itemFields['Price'] = packageData.Price;
+    }
+
+    // Add pricing type if provided
+    if (packageData.PricingType) {
+        itemFields['Pricing Type'] = packageData.PricingType;
+    }
+
+    // Check if this session already has a linked package
+    const existingPackageId = session.fields.LinkedPackage ? session.fields.LinkedPackage[0] : null;
+    let itemRecord;
+
+    if (existingPackageId) {
+        // Update existing package
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${existingPackageId}`;
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to update package:', errorText);
+            throw new Error(`Failed to update package: ${errorText}`);
         }
 
-        log('API', `Successfully removed RSVP for user ${userId} from event ${eventId}.`);
-        return await patchResponse.json();
+        itemRecord = await response.json();
+        log('API', `Updated package ${existingPackageId} from session ${sessionId}`);
+    } else {
+        // Create new package
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: itemFields })
+        });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to create package:', errorText);
+            throw new Error(`Failed to create package: ${errorText}`);
+        }
+
+        itemRecord = await response.json();
+        log('API', `Created package ${itemRecord.id} from session ${sessionId}`);
+
+        // Update session with link to new package
+        const updateSessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        await fetch(updateSessionUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { 'LinkedPackage': [itemRecord.id] } })
+        });
+    }
+
+    return itemRecord;
+}
+
+/**
+ * Fetches a single session by ID
+ * @param {string} sessionId - The session record ID
+ * @returns {Promise<Object>} The session record
+ */
+export async function fetchSessionById(sessionId) {
+    if (!sessionId) {
+        return null;
+    }
+
+    // Fetch all fields from the session record
+    // Note: Not using fields[] parameter to avoid 422 errors from fields that may not exist
+    // and to ensure we get all fields including LinkedItem if it exists
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching session:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        return data;
     } catch (error) {
-        console.error(`Error removing RSVP for event ${eventId}:`, error);
+        console.error("Error fetching session:", error);
         return null;
     }
 }
+
+/**
+ * Creates a new session from an existing event item that doesn't have a linked session.
+ * This allows users with publish access to "adopt" unaffiliated events and manage them.
+ * @param {string} eventId - The event/item record ID
+ * @param {Object} eventRecord - The event record object
+ * @param {string} storeId - The store ID to associate with the session
+ * @param {string} userId - The user ID creating the session
+ * @returns {Promise<Object>} The created session record
+ */
+export async function createSessionFromEvent(eventId, eventRecord, storeId, userId) {
+    console.log('[DEBUG createSessionFromEvent] ========== START ==========');
+    console.log('[DEBUG createSessionFromEvent] eventId:', eventId);
+    console.log('[DEBUG createSessionFromEvent] eventRecord:', eventRecord);
+    console.log('[DEBUG createSessionFromEvent] eventRecord.fields:', eventRecord?.fields);
+    console.log('[DEBUG createSessionFromEvent] storeId:', storeId);
+    console.log('[DEBUG createSessionFromEvent] userId:', userId);
+
+    if (!eventId || !eventRecord) {
+        throw new Error('Event ID and record are required');
+    }
+
+    const fields = eventRecord.fields || {};
+    console.log('[DEBUG createSessionFromEvent] Event fields.Name:', fields.Name);
+    console.log('[DEBUG createSessionFromEvent] Event fields.Description:', fields.Description);
+    console.log('[DEBUG createSessionFromEvent] Event fields.Date:', fields.Date);
+
+    // Format the date if available - needed for both eventDetails and the session Date field
+    let formattedDate = null;
+    let isoDate = null;
+    if (fields.Date) {
+        const dateValue = Array.isArray(fields.Date) ? fields.Date[0] : fields.Date;
+        console.log('[DEBUG createSessionFromEvent] Raw date value:', dateValue);
+        const dateObj = new Date(dateValue);
+        console.log('[DEBUG createSessionFromEvent] Parsed dateObj:', dateObj);
+        console.log('[DEBUG createSessionFromEvent] Is valid date?', !isNaN(dateObj.getTime()));
+        if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString().split('T')[0];
+            isoDate = dateObj.toISOString();
+            console.log('[DEBUG createSessionFromEvent] formattedDate for Airtable Date field:', formattedDate);
+            console.log('[DEBUG createSessionFromEvent] isoDate for eventDetails:', isoDate);
+        }
+    } else {
+        console.log('[DEBUG createSessionFromEvent] No Date field in event record');
+    }
+
+    // Build session data from event fields
+    // CRITICAL: Use the correct keys that match CONSTANTS.DETAIL_TYPES
+    // eventName (not 'Event Name'), goals (not 'Goals'), date (not 'Date')
+    const sessionData = {
+        ideasItems: {},
+        lockedInItems: {},
+        itemReactions: {},
+        userProfiles: userId ? { [userId]: 'Event Manager' } : {},
+        eventDetails: {
+            'eventName': fields.Name || 'Untitled Event',
+            'goals': fields.Description || '',
+        },
+        itemPositions: {}
+    };
+
+    // Add date to eventDetails if available (using ISO format for consistency)
+    if (isoDate) {
+        sessionData.eventDetails['date'] = isoDate;
+        console.log('[DEBUG createSessionFromEvent] Added date to eventDetails:', isoDate);
+    }
+
+    console.log('[DEBUG createSessionFromEvent] sessionData.eventDetails:', sessionData.eventDetails);
+    console.log('[DEBUG createSessionFromEvent] Full sessionData:', JSON.stringify(sessionData, null, 2));
+
+    const sessionFields = {
+        "Name": fields.Name || 'Untitled Event',
+        "Items with Variations": JSON.stringify(sessionData, null, 2),
+        "Collaborators": userId ? [userId] : [],
+        "Goals": fields.Description || null,
+        "Stores": storeId ? [storeId] : null,
+        "LinkedItem": [eventId] // Link this session to the event
+    };
+
+    if (formattedDate) {
+        sessionFields["Date"] = formattedDate;
+    }
+
+    console.log('[DEBUG createSessionFromEvent] sessionFields being sent to Airtable:', JSON.stringify(sessionFields, null, 2));
+    console.log('[DEBUG createSessionFromEvent] Items with Variations JSON contains eventDetails:', sessionFields["Items with Variations"]);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}`;
+
+    try {
+        console.log('[DEBUG createSessionFromEvent] Sending POST request to create session...');
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ records: [{ fields: sessionFields }] })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[DEBUG createSessionFromEvent] Failed to create session:', errorText);
+            throw new Error(`Failed to create session: ${errorText}`);
+        }
+
+        const result = await response.json();
+        const newSession = result.records[0];
+        console.log('[DEBUG createSessionFromEvent] Session created successfully!');
+        console.log('[DEBUG createSessionFromEvent] New session ID:', newSession.id);
+        console.log('[DEBUG createSessionFromEvent] New session fields:', newSession.fields);
+
+        log('API', `Created session ${newSession.id} from event ${eventId}`);
+
+        // Update the event to link back to the new session
+        const updateEventUrl = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${eventId}`;
+        console.log('[DEBUG createSessionFromEvent] Updating event with LinkedSession reference...');
+        await fetch(updateEventUrl, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: { 'LinkedSession': [newSession.id] } })
+        });
+
+        log('API', `Updated event ${eventId} with LinkedSession ${newSession.id}`);
+        console.log('[DEBUG createSessionFromEvent] ========== END (SUCCESS) ==========');
+
+        return newSession;
+    } catch (error) {
+        console.error('[DEBUG createSessionFromEvent] Error creating session from event:', error);
+        console.log('[DEBUG createSessionFromEvent] ========== END (ERROR) ==========');
+        throw error;
+    }
+}
+
+/**
+ * Checks if the current user has publish permission for the active store
+ * @returns {boolean} True if user has publish permission
+ */
+export function userHasPublishPermission() {
+    const activeStore = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    const currentUser = state.session.user;
+
+    if (!activeStore || !currentUser || !currentUser.id) {
+        return false;
+    }
+
+    const allowedUsers = activeStore.fields.PublishPermission || [];
+    return allowedUsers.includes(currentUser.id);
+}
+
+/**
+ * Finds a session by searching for which session has this event in its LinkedItem field
+ * This is a fallback for when an Event record doesn't have a LinkedSession field
+ * @param {string} eventId - The event/item record ID to search for
+ * @returns {Promise<Object|null>} The session record if found, null otherwise
+ */
+export async function fetchSessionByLinkedItem(eventId) {
+    if (!eventId) {
+        return null;
+    }
+
+    // Build a formula to find sessions where LinkedItem contains this event ID
+    const formula = `FIND('${eventId}', ARRAYJOIN({LinkedItem}))`;
+    const encodedFormula = encodeURIComponent(formula);
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error searching sessions by LinkedItem:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+
+        if (data.records && data.records.length > 0) {
+            return data.records[0]; // Take the first match
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching session by LinkedItem:", error);
+        return null;
+    }
+}
+
+/**
+ * Finds sessions that contain a specific item in their lockedInItems or ideasItems
+ * This is used to show plan membership for event items that have been added to plans
+ * @param {string} itemId - The item record ID to search for
+ * @param {string} storeId - Optional store ID to filter sessions
+ * @returns {Promise<Object|null>} The first matching session record if found, null otherwise
+ */
+export async function fetchSessionContainingItem(itemId, storeId = null) {
+    if (!itemId) {
+        return null;
+    }
+
+    log('API', `Searching for sessions containing item ${itemId}...`);
+
+    // Build formula to fetch sessions - optionally filtered by store
+    let formula;
+    if (storeId) {
+        formula = `FIND('${storeId}', ARRAYJOIN({Stores}))`;
+    } else {
+        formula = `TRUE()`; // Fetch all sessions if no store filter
+    }
+    const encodedFormula = encodeURIComponent(formula);
+
+    // We need to fetch the "Items with Variations" field to search within the JSON
+    const fieldsQuery = [
+        'Name',
+        'Items with Variations',
+        'Stores',
+        'Collaborators',
+        'LinkedItem'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}`;
+
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error searching sessions for item:', errorText);
+            return null;
+        }
+
+        const data = await response.json();
+
+        if (data.records && data.records.length > 0) {
+            // Search through each session's Items with Variations for the item ID
+            for (const session of data.records) {
+                const itemsWithVariations = session.fields['Items with Variations'];
+                if (itemsWithVariations) {
+                    try {
+                        const sessionData = JSON.parse(itemsWithVariations);
+                        const lockedInItems = sessionData.lockedInItems || {};
+                        const ideasItems = sessionData.ideasItems || {};
+
+                        // Check if itemId is in lockedInItems or ideasItems
+                        if (lockedInItems[itemId] || ideasItems[itemId]) {
+                            log('API', `Found item ${itemId} in session ${session.id} (${session.fields.Name})`);
+                            return session;
+                        }
+                    } catch (e) {
+                        console.warn('Could not parse Items with Variations for session:', session.id, e);
+                    }
+                }
+            }
+            log('API', `Item ${itemId} not found in any session's plan items`);
+            return null;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching sessions containing item:", error);
+        return null;
+    }
+}
+
+// ============================================================================
+// PHASE 3: TASK MANAGEMENT API FUNCTIONS
+// ============================================================================
+
+/**
+ * Task status constants
+ */
+export const TASK_STATUS = {
+    PENDING: 'pending',
+    IN_PROGRESS: 'in_progress',
+    BLOCKED: 'blocked',
+    COMPLETED: 'completed'
+};
+
+/**
+ * Fetch all tasks for a specific project
+ * @param {string} projectId - The project/session ID to fetch tasks for
+ * @returns {Promise<Array>} - Array of task records
+ */
+export async function fetchTasks(projectId) {
+    console.log('[API DEBUG] fetchTasks called with projectId:', projectId);
+
+    if (!projectId) {
+        console.warn('[API DEBUG] fetchTasks called without projectId, returning empty array');
+        log('API', 'fetchTasks called without projectId');
+        return [];
+    }
+
+    log('API', `Fetching tasks for project: ${projectId}`);
+
+    // Filter tasks by the ProjectId field (linked to Sessions)
+    const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
+    const encodedFormula = encodeURIComponent(formula);
+
+    // Request fields needed for task display
+    const fieldsQuery = [
+        'Name',
+        'Description',
+        'Status',
+        'DueDate',
+        'Assignee',
+        'ProjectId',
+        'ParentTask',
+        'Priority',
+        'Order',
+        'LinkedItem',
+        'CreatedTime'
+    ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    // Sort by Order field first, then by DueDate
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
+
+    console.log('[API DEBUG] fetchTasks URL:', url.substring(0, 150) + '...');
+    console.log('[API DEBUG] fetchTasks table name:', TASKS_TABLE_NAME);
+
+    try {
+        console.log('[API DEBUG] fetchTasks starting fetch request...');
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchTasks fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchTasks response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[API DEBUG] fetchTasks Airtable error response:', errorText);
+            console.error('Airtable Error fetching tasks:', errorText);
+            throw new Error(`Failed to fetch tasks from Airtable. Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('[API DEBUG] fetchTasks response data:', {
+            hasRecords: !!data.records,
+            recordCount: data.records?.length ?? 0,
+            offset: data.offset
+        });
+        log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
+        return data.records;
+    } catch (error) {
+        console.error('[API DEBUG] fetchTasks caught error:', error);
+        console.error('[API DEBUG] fetchTasks error stack:', error?.stack);
+        console.error("Error fetching tasks:", error);
+        return [];
+    }
+}
+
+/**
+ * Create a new task
+ * @param {string} projectId - The project/session ID to link the task to
+ * @param {Object} taskData - Task data: { Name, Description, Status, DueDate, Assignee, ParentTask, Priority }
+ * @returns {Promise<Object|null>} - The created task record or null if failed
+ */
+export async function createTask(projectId, taskData) {
+    if (!projectId) {
+        console.error('createTask called without projectId');
+        return null;
+    }
+
+    if (!taskData.Name) {
+        console.error('createTask called without Name');
+        return null;
+    }
+
+    log('API', `Creating task for project: ${projectId}`, taskData);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}`;
+
+    // Prepare the fields for creation
+    const fields = {
+        Name: taskData.Name,
+        Status: taskData.Status || TASK_STATUS.PENDING,
+        ProjectId: [projectId], // Link to the project (Sessions table)
+    };
+
+    // Add optional fields if provided
+    if (taskData.Description) {
+        fields.Description = taskData.Description;
+    }
+    if (taskData.DueDate) {
+        fields.DueDate = taskData.DueDate;
+    }
+    if (taskData.Assignee) {
+        fields.Assignee = taskData.Assignee;
+    }
+    if (taskData.ParentTask) {
+        fields.ParentTask = [taskData.ParentTask]; // Link to parent task
+    }
+    if (taskData.Priority) {
+        fields.Priority = taskData.Priority;
+    }
+    if (taskData.Order !== undefined) {
+        fields.Order = taskData.Order;
+    }
+    if (taskData.LinkedItem) {
+        fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error creating task:', errorText);
+            throw new Error('Failed to create task in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Created task: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error creating task:", error);
+        return null;
+    }
+}
+
+/**
+ * Update an existing task
+ * @param {string} taskId - The task record ID to update
+ * @param {Object} taskData - Task data to update: { Name, Description, Status, DueDate, Assignee, Priority }
+ * @returns {Promise<Object|null>} - The updated task record or null if failed
+ */
+export async function updateTask(taskId, taskData) {
+    if (!taskId) {
+        console.error('updateTask called without taskId');
+        return null;
+    }
+
+    log('API', `Updating task: ${taskId}`, taskData);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}/${taskId}`;
+
+    // Prepare the fields for update (only include fields that are provided)
+    const fields = {};
+
+    if (taskData.Name !== undefined) {
+        fields.Name = taskData.Name;
+    }
+    if (taskData.Description !== undefined) {
+        fields.Description = taskData.Description;
+    }
+    if (taskData.Status !== undefined) {
+        fields.Status = taskData.Status;
+    }
+    if (taskData.DueDate !== undefined) {
+        fields.DueDate = taskData.DueDate || null;
+    }
+    if (taskData.Assignee !== undefined) {
+        fields.Assignee = taskData.Assignee || null;
+    }
+    if (taskData.ParentTask !== undefined) {
+        fields.ParentTask = taskData.ParentTask ? [taskData.ParentTask] : null;
+    }
+    if (taskData.Priority !== undefined) {
+        fields.Priority = taskData.Priority || null;
+    }
+    if (taskData.Order !== undefined) {
+        fields.Order = taskData.Order;
+    }
+    if (taskData.LinkedItem !== undefined) {
+        fields.LinkedItem = taskData.LinkedItem ? [taskData.LinkedItem] : null;
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating task:', errorText);
+            throw new Error('Failed to update task in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Updated task: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error updating task:", error);
+        return null;
+    }
+}
+
+/**
+ * Delete a task
+ * @param {string} taskId - The task record ID to delete
+ * @returns {Promise<boolean>} - True if deleted successfully, false otherwise
+ */
+export async function deleteTask(taskId) {
+    if (!taskId) {
+        console.error('deleteTask called without taskId');
+        return false;
+    }
+
+    log('API', `Deleting task: ${taskId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}/${taskId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error deleting task:', errorText);
+            throw new Error('Failed to delete task in Airtable.');
+        }
+
+        log('API', `Deleted task: ${taskId}`);
+        return true;
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        return false;
+    }
+}
+
+/**
+ * Update task order for drag-and-drop reordering
+ * Uses batch update to efficiently update multiple task orders
+ * @param {Array} taskOrders - Array of { taskId, order } objects
+ * @returns {Promise<boolean>} - True if all updates succeeded, false otherwise
+ */
+export async function updateTaskOrder(taskOrders) {
+    if (!taskOrders || taskOrders.length === 0) {
+        log('API', 'updateTaskOrder called with empty array');
+        return true;
+    }
+
+    log('API', `Updating order for ${taskOrders.length} tasks`);
+
+    // Airtable batch update supports up to 10 records at a time
+    const batchSize = 10;
+    const batches = [];
+
+    for (let i = 0; i < taskOrders.length; i += batchSize) {
+        batches.push(taskOrders.slice(i, i + batchSize));
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}`;
+
+    try {
+        for (const batch of batches) {
+            const records = batch.map(({ taskId, order }) => ({
+                id: taskId,
+                fields: { Order: order }
+            }));
+
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ records })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Airtable Error updating task orders:', errorText);
+                throw new Error('Failed to update task orders in Airtable.');
+            }
+        }
+
+        log('API', `Successfully updated order for ${taskOrders.length} tasks`);
+        return true;
+    } catch (error) {
+        console.error("Error updating task orders:", error);
+        return false;
+    }
+}
+
+// =============================================================================
+// PHASE 4: PERMISSIONS & SECURITY
+// =============================================================================
+
+const COLLABORATOR_PERMISSIONS_TABLE_NAME = 'Collaborator_Permissions';
+
+/**
+ * Permission role constants
+ */
+export const PERMISSION_ROLES = {
+    OWNER: 'owner',
+    EDITOR: 'editor',
+    VIEWER: 'viewer'
+};
+
+/**
+ * Fetch user's role/permission for a specific project
+ * Queries the Collaborator_Permissions table first, then falls back to legacy Collaborators field
+ *
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID to check permissions for
+ * @returns {Promise<Object>} - { role: string, permissionRecord: Object|null }
+ */
+export async function fetchUserRole(projectId, userId) {
+    console.log('[API DEBUG] fetchUserRole called with:', { projectId, userId });
+
+    if (!projectId || !userId) {
+        console.warn('[API DEBUG] fetchUserRole missing parameters:', { projectId, userId });
+        log('API', 'fetchUserRole called without projectId or userId');
+        return { role: null, permissionRecord: null };
+    }
+
+    log('API', `Fetching user role for project: ${projectId}, user: ${userId}`);
+
+    try {
+        // First, try to fetch from Collaborator_Permissions table
+        const formula = `AND(FIND('${projectId}', ARRAYJOIN({ProjectId})), FIND('${userId}', ARRAYJOIN({UserId})))`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}&maxRecords=1`;
+
+        console.log('[API DEBUG] fetchUserRole fetching from Collaborator_Permissions...');
+        console.log('[API DEBUG] fetchUserRole table name:', COLLABORATOR_PERMISSIONS_TABLE_NAME);
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchUserRole fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchUserRole response status:', response.status, response.statusText);
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log('[API DEBUG] fetchUserRole response data:', {
+                hasRecords: !!data.records,
+                recordCount: data.records?.length ?? 0
+            });
+
+            if (data.records && data.records.length > 0) {
+                const permRecord = data.records[0];
+                const role = (permRecord.fields.Role || PERMISSION_ROLES.EDITOR).toLowerCase();
+                console.log('[API DEBUG] fetchUserRole found permission record:', { role, permRecordId: permRecord.id });
+                log('API', `Found permission record for user ${userId}: role = ${role}`);
+                return { role, permissionRecord: permRecord };
+            }
+        } else {
+            const errorText = await response.text();
+            console.warn('[API DEBUG] fetchUserRole Collaborator_Permissions table error:', response.status, errorText);
+        }
+
+        // Fallback: Check legacy Collaborators field and ownership
+        console.log('[API DEBUG] fetchUserRole no permission record found, falling back to legacy check');
+        log('API', `No permission record found, falling back to legacy check`);
+        return await fetchLegacyUserRole(projectId, userId);
+
+    } catch (error) {
+        console.error('[API DEBUG] fetchUserRole caught error:', error);
+        console.error('[API DEBUG] fetchUserRole error stack:', error?.stack);
+        console.error("Error fetching user role:", error);
+        // On error, fall back to legacy check
+        console.log('[API DEBUG] fetchUserRole falling back to legacy check after error');
+        return await fetchLegacyUserRole(projectId, userId);
+    }
+}
+
+/**
+ * Legacy fallback to determine user role from Collaborators field and ownership
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID
+ * @returns {Promise<Object>} - { role: string, permissionRecord: null }
+ */
+async function fetchLegacyUserRole(projectId, userId) {
+    console.log('[API DEBUG] fetchLegacyUserRole called with:', { projectId, userId });
+
+    try {
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${projectId}`;
+        console.log('[API DEBUG] fetchLegacyUserRole fetching session...');
+        const fetchStart = performance.now();
+
+        const response = await fetchWithTimeout(sessionUrl, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        const fetchEnd = performance.now();
+        console.log(`[API DEBUG] fetchLegacyUserRole fetch completed in ${(fetchEnd - fetchStart).toFixed(2)}ms`);
+        console.log('[API DEBUG] fetchLegacyUserRole response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            console.warn('[API DEBUG] fetchLegacyUserRole could not fetch session:', response.status);
+            log('API', `Could not fetch session ${projectId} for legacy role check`);
+            return { role: null, permissionRecord: null };
+        }
+
+        const session = await response.json();
+        console.log('[API DEBUG] fetchLegacyUserRole session fields:', {
+            hasCollaborators: !!session.fields.Collaborators,
+            collaboratorsCount: session.fields.Collaborators?.length ?? 0,
+            hasStores: !!session.fields.Stores
+        });
+
+        const collaborators = session.fields.Collaborators || [];
+        const storeIds = session.fields.Stores || [];
+
+        // Check if user is a collaborator
+        const isCollaborator = collaborators.includes(userId);
+        console.log('[API DEBUG] fetchLegacyUserRole isCollaborator:', isCollaborator);
+
+        // Check if user owns the store linked to this session
+        const isStoreOwner = state.session.user.isOwner;
+        const ownedStoreId = state.session.user.ownedStoreId;
+        const isOwnerOfSessionStore = isStoreOwner && ownedStoreId && storeIds.includes(ownedStoreId);
+        console.log('[API DEBUG] fetchLegacyUserRole ownership check:', { isStoreOwner, ownedStoreId, isOwnerOfSessionStore });
+
+        // Check if user was the first collaborator (original creator/owner)
+        const isFirstCollaborator = collaborators.length > 0 && collaborators[0] === userId;
+        console.log('[API DEBUG] fetchLegacyUserRole isFirstCollaborator:', isFirstCollaborator);
+
+        if (isOwnerOfSessionStore || isFirstCollaborator) {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: owner');
+            log('API', `User ${userId} is owner of project ${projectId} (legacy)`);
+            return { role: PERMISSION_ROLES.OWNER, permissionRecord: null };
+        } else if (isCollaborator) {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: editor');
+            log('API', `User ${userId} is editor of project ${projectId} (legacy)`);
+            return { role: PERMISSION_ROLES.EDITOR, permissionRecord: null };
+        } else {
+            console.log('[API DEBUG] fetchLegacyUserRole determined role: null (no access)');
+            log('API', `User ${userId} has no access to project ${projectId}`);
+            return { role: null, permissionRecord: null };
+        }
+    } catch (error) {
+        console.error('[API DEBUG] fetchLegacyUserRole caught error:', error);
+        console.error('[API DEBUG] fetchLegacyUserRole error stack:', error?.stack);
+        console.error("Error in fetchLegacyUserRole:", error);
+        return { role: null, permissionRecord: null };
+    }
+}
+
+/**
+ * Create a permission record in Collaborator_Permissions table
+ * @param {string} projectId - The project/session ID
+ * @param {string} userId - The user ID to grant permission to
+ * @param {string} role - The role to assign (owner, editor, viewer)
+ * @returns {Promise<Object|null>} - The created permission record or null
+ */
+export async function createPermissionRecord(projectId, userId, role = PERMISSION_ROLES.EDITOR) {
+    if (!projectId || !userId) {
+        console.error('createPermissionRecord called without projectId or userId');
+        return null;
+    }
+
+    log('API', `Creating permission record: project=${projectId}, user=${userId}, role=${role}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}`;
+
+    const fields = {
+        ProjectId: [projectId],
+        UserId: [userId],
+        Role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() // Capitalize: "Editor"
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error creating permission record:', errorText);
+            throw new Error('Failed to create permission record in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Created permission record: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error creating permission record:", error);
+        return null;
+    }
+}
+
+/**
+ * Update a permission record's role
+ * @param {string} permissionId - The permission record ID
+ * @param {string} newRole - The new role to assign
+ * @returns {Promise<Object|null>} - The updated permission record or null
+ */
+export async function updatePermissionRole(permissionId, newRole) {
+    if (!permissionId || !newRole) {
+        console.error('updatePermissionRole called without permissionId or newRole');
+        return null;
+    }
+
+    log('API', `Updating permission ${permissionId} to role: ${newRole}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}/${permissionId}`;
+
+    const fields = {
+        Role: newRole.charAt(0).toUpperCase() + newRole.slice(1).toLowerCase()
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating permission record:', errorText);
+            throw new Error('Failed to update permission record in Airtable.');
+        }
+
+        const data = await response.json();
+        log('API', `Updated permission record: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error("Error updating permission record:", error);
+        return null;
+    }
+}
+
+/**
+ * Delete a permission record
+ * @param {string} permissionId - The permission record ID to delete
+ * @returns {Promise<boolean>} - True if deleted successfully
+ */
+export async function deletePermissionRecord(permissionId) {
+    if (!permissionId) {
+        console.error('deletePermissionRecord called without permissionId');
+        return false;
+    }
+
+    log('API', `Deleting permission record: ${permissionId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}/${permissionId}`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error deleting permission record:', errorText);
+            throw new Error('Failed to delete permission record in Airtable.');
+        }
+
+        log('API', `Deleted permission record: ${permissionId}`);
+        return true;
+    } catch (error) {
+        console.error("Error deleting permission record:", error);
+        return false;
+    }
+}
+
+/**
+ * Fetch all permission records for a project (for managing collaborators)
+ * @param {string} projectId - The project/session ID
+ * @returns {Promise<Array>} - Array of permission records
+ */
+export async function fetchProjectPermissions(projectId) {
+    if (!projectId) {
+        log('API', 'fetchProjectPermissions called without projectId');
+        return [];
+    }
+
+    log('API', `Fetching all permissions for project: ${projectId}`);
+
+    try {
+        const formula = `FIND('${projectId}', ARRAYJOIN({ProjectId}))`;
+        const encodedFormula = encodeURIComponent(formula);
+        const url = `https://api.airtable.com/v0/${BASE_ID}/${COLLABORATOR_PERMISSIONS_TABLE_NAME}?filterByFormula=${encodedFormula}`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error fetching project permissions:', errorText);
+            return [];
+        }
+
+        const data = await response.json();
+        log('API', `Fetched ${data.records.length} permission records for project ${projectId}`);
+        return data.records;
+    } catch (error) {
+        console.error("Error fetching project permissions:", error);
+        return [];
+    }
+}
+
+/**
+ * Invite a user to a session with a specific role
+ * Creates a permission record and adds user to legacy Collaborators field for backwards compatibility
+ *
+ * @param {string} sessionId - The session/project ID
+ * @param {string} userId - The user ID to invite
+ * @param {string} role - The role to assign (owner, editor, viewer)
+ * @returns {Promise<Object|null>} - The created permission record or null
+ */
+export async function inviteUserToSession(sessionId, userId, role = PERMISSION_ROLES.EDITOR) {
+    if (!sessionId || !userId) {
+        console.error('inviteUserToSession called without sessionId or userId');
+        return null;
+    }
+
+    log('API', `Inviting user ${userId} to session ${sessionId} with role: ${role}`);
+
+    try {
+        // 1. Create permission record in Collaborator_Permissions table
+        const permRecord = await createPermissionRecord(sessionId, userId, role);
+
+        // 2. Also add to legacy Collaborators field for backwards compatibility
+        const sessionUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
+        const sessionResponse = await fetch(sessionUrl, {
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
+        });
+
+        if (sessionResponse.ok) {
+            const session = await sessionResponse.json();
+            const currentCollaborators = session.fields.Collaborators || [];
+
+            if (!currentCollaborators.includes(userId)) {
+                const updatedCollaborators = [...currentCollaborators, userId];
+                await fetch(sessionUrl, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        fields: { Collaborators: updatedCollaborators }
+                    })
+                });
+                log('API', `Added user ${userId} to session ${sessionId} collaborators`);
+            }
+        }
+
+        return permRecord;
+    } catch (error) {
+        console.error("Error inviting user to session:", error);
+        return null;
+    }
+}
+
+/**
+ * Helper function to check if user can edit (owner or editor)
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user can edit
+ */
+export function canEdit(role) {
+    return role === PERMISSION_ROLES.OWNER || role === PERMISSION_ROLES.EDITOR;
+}
+
+/**
+ * Helper function to check if user is owner
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user is owner
+ */
+export function isOwner(role) {
+    return role === PERMISSION_ROLES.OWNER;
+}
+
+/**
+ * Helper function to check if user is viewer (read-only)
+ * @param {string} role - The user's role
+ * @returns {boolean} - True if user is viewer
+ */
+export function isViewer(role) {
+    return role === PERMISSION_ROLES.VIEWER;
+}
+

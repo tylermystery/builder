@@ -27,6 +27,7 @@ export let state = {
     records: {
         all: [],
         filtered: [],
+        archive: [], // Ghost items (archived/deleted items referenced in session history)
     },
     cart: {
         items: new Map(),       // \"Ideas\" (formerly Favorites), populated by \"Save for Later\"
@@ -50,16 +51,20 @@ export let state = {
             rsvps: new Set(),
             isOwner: false,
             ownerDashboardId: null,
+            ownedStoreId: null,
             likedItemIds: new Set(), // ADDED: Stores persistent liked item IDs
         },
         userProfiles: new Map(),
         reactions: new Map(),
         flaggedUsers: new Set(),
         bannedUsers: new Set(),
-        
+
         // --- THIS IS THE NEW LINE ---
         itemPositions: new Map(), // Stores { x: 120, y: 50, z: 1 } for each recordId
         // --- END NEW LINE ---
+
+        // Recent chats list for expandable chat history
+        recentChats: [], // Array of { id, type: 'session'|'item', name, lastMessage, lastMessageTime, unreadCount }
     },
     calendar: {
         busyTimes: new Map(),
@@ -70,7 +75,18 @@ export let state = {
         saveState: 'SAVED',
         isInitializing: true,
         activeShopId: null,
-        currentProgress: 0.0, // NEW: Background color progress (0.0 to 1.0)
+        currentProgress: 0.3, // NEW: Background color progress (0.0 to 1.0) - Start at cyan/blue range
+    },
+    // Phase 3: Tasks for Project Management
+    tasks: {
+        all: new Map(),           // taskId -> task record
+        byProject: new Map(),     // projectId -> [task records]
+    },
+    // Phase 4: Permissions & Security
+    permissions: {
+        currentRole: null,        // 'owner' | 'editor' | 'viewer' | null (loading/unknown)
+        isLoading: true,          // True while permissions are being fetched
+        permissionRecord: null,   // The Collaborator_Permissions record if exists
     },
 };
 
@@ -83,6 +99,9 @@ export function setState(newState) {
             ...state.ui, 
             ...newState.ui 
         };
+        if (newState.ui.currentProgress === undefined && state.ui.currentProgress !== undefined) {
+            updatedState.ui.currentProgress = state.ui.currentProgress;
+        }
     }
     
     // --- ADD THIS BLOCK TO FIX THE BUG ---
@@ -92,7 +111,6 @@ export function setState(newState) {
             ...newState.records
         };
     }
-    // --- END FIX ---
     
     // Also ensuring deep merge for session.user is always safe
     if (newState.session && newState.session.user) {
@@ -114,5 +132,4 @@ export function setState(newState) {
 
 
     state = updatedState;
-    // document.dispatchEvent(new CustomEvent('stateChanged'));
 }

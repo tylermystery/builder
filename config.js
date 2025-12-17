@@ -27,9 +27,19 @@ export const CONSTANTS = {
         COLLABORATOR_IDS_FIELD: 'CollaboratorIDs',
         SESSION_ID_FIELD: 'SessionID',
         TIMESTAMP_FIELD: 'Timestamp',
+        // Package-specific fields
+        PACKAGE_CONTENTS: 'Package Contents', // JSON field storing included items and add-ons
+        PACKAGE_DISCOUNT: 'Package Discount', // Percentage discount for package
+        PACKAGE_TIERS: 'Package Tiers', // Tiered pricing configuration
     },
     PRICING_TYPES: {
         PER_GUEST: 'per guest',
+    },
+    ITEM_TYPES: {
+        BOOKABLE_ITEM: 'Bookable Item',
+        EVENT: 'Event',
+        GROUPING: 'Grouping',
+        PACKAGE: 'Package',
     },
     // This part is crucial for session loading
     DETAIL_TYPES: {

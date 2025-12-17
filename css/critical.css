@@ -1,0 +1,567 @@
+/* CRITICAL CSS - Above-the-fold styles loaded inline */
+
+/* Global Improvements */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
+}
+
+/* Core Body & Kaleidoscope Canvas */
+body {
+    padding-bottom: 150px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: transparent;
+    margin: 0;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+#kaleidoscope-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    display: block;
+}
+
+/* Frosted Glass: Header */
+#main-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* Header Row Layout */
+.header-row {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1.25rem;
+    gap: 20px;
+}
+
+.header-row-top {
+    padding-top: 0.75rem;
+}
+
+.header-row-bottom {
+    padding-bottom: 0.75rem;
+}
+
+.header-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    gap: 20px;
+}
+
+#header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.header-icon-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+.header-icon-btn:active {
+    transform: scale(0.95);
+}
+
+#parent-collective-trigger {
+    background-color: #343a40;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.1em;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+#parent-collective-trigger:hover {
+    background-color: #007bff;
+}
+
+#shop-logo-container {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    height: 44px;
+}
+
+#shop-logo-container img {
+    height: 100%;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+#header-center {
+    flex-grow: 1;
+    min-width: 200px;
+    overflow: hidden;
+}
+
+#header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+/* Header Search Container (in second header row) */
+#header-search-container {
+    flex: 1;
+    min-width: 0;
+}
+
+#header-search-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 600px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 4px 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+#main-shop-title {
+    margin: 0;
+    line-height: 1.2;
+    color: #2c3e50;
+    cursor: pointer;
+}
+
+/* Core Layout */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 20px;
+    /* CRITICAL: Prevent horizontal overflow on mobile */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Mobile: Constrain catalog area to prevent horizontal overflow */
+#catalog-area {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1000px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 380px;
+        grid-template-rows: 1fr;
+        gap: 25px;
+        max-width: 1800px;
+    }
+    /* Hide old search bar container - search is now in header */
+    #search-bar-container {
+        display: none;
+    }
+    #left-sidebar {
+        grid-column: 1;
+        grid-row: 1;
+    }
+    #catalog-area {
+        grid-column: 2;
+        grid-row: 1;
+        /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
+        min-width: 0;
+        overflow: hidden;
+    }
+    #right-sidebar {
+        grid-column: 3;
+        grid-row: 1;
+    }
+}
+
+#right-sidebar, #left-sidebar {
+    position: relative;
+}
+
+#right-sidebar h3, #left-sidebar h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 10px;
+    color: #333;
+}
+
+/* Frosted Glass: Sidebar Panels */
+#filter-controls {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#event-plan-panel {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 85px;
+    min-height: 200px; /* Reserve space to prevent layout shift when items are added */
+}
+
+/* Filter Controls */
+#filter-controls::after {
+    content: attr(data-active-filters);
+    display: inline-block;
+    background: #007bff;
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin-left: 10px;
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.filter-group label {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #333;
+}
+
+.filter-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-btn {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.85em;
+}
+
+.filter-btn.active {
+    background-color: #e7f3ff;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+#name-filter:not(:placeholder-shown) {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+/* Catalog Grid */
+#catalog-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+    min-height: 420px; /* Reserve space for at least one row of cards - prevents layout shift */
+    /* CRITICAL: Prevent catalog container from expanding beyond parent */
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* When catalog contains carousel sections, switch to column layout */
+#catalog-container:has(.grouping-carousel-section) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* CRITICAL: Force container to shrink to parent width */
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Skeleton Loading - Critical for perceived performance */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    overflow: hidden;
+    height: 420px; /* Explicit height matching actual card height - prevents layout shift */
+    min-height: 420px; /* Fallback for flex layouts */
+}
+
+.skeleton-image {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-content {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.skeleton-title {
+    height: 24px;
+    width: 70%;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 16px;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skeleton-price {
+    height: 20px;
+    width: 80px;
+    border-radius: 4px;
+}
+
+.skeleton-button {
+    height: 36px;
+    width: 120px;
+    border-radius: 5px;
+}
+
+/* Loading Message */
+#loading-message {
+    text-align: center;
+    padding: 40px;
+    color: #333;
+}
+
+/* Toast Notification - visible immediately */
+#toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 350px;
+    background-color: rgba(34, 139, 34, 0.95);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 0.9em;
+    font-weight: 500;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+}
+
+#toast-notification.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* Mobile: Move toast below header to prevent overlap */
+@media (max-width: 999px) {
+    #toast-notification {
+        top: 90px;
+        right: 15px;
+        left: 15px;
+        max-width: none;
+        font-size: 0.85em;
+        padding: 10px 15px;
+    }
+}
+
+/* CRITICAL: Grouping carousel layout constraints - needed before deferred CSS loads */
+.grouping-carousel-section {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-wrapper {
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container .event-card {
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+    flex-shrink: 0;
+}
+
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
+}
+
+/* CRITICAL: Mobile carousel width constraints - prevent horizontal overflow */
+@media (max-width: 768px) {
+    /* Force main content to respect viewport width on mobile */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .grouping-carousel-section {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 10px;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    /* Wrapper clips the scrollable area */
+    .grouping-carousel-wrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Container that scrolls horizontally */
+    .grouping-carousel-container {
+        width: 100%;
+        max-width: 100%;
+        gap: 12px;
+        padding: 8px 5px;
+    }
+
+    /* Cards inside carousel - use percentage of parent, not viewport */
+    .grouping-carousel-container .event-card {
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
+    }
+}

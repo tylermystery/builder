@@ -3,50 +3,1211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Catalog</title>
+    <meta name="description" content="WTFun - Event Planning and Activity Discovery">
+    <meta name="theme-color" content="#007bff">
+    <title>WTFun</title>
     <link rel="icon" href="data:;" />
-    <!-- FIX: Removed Markdown []() wrapper from links -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://unpkg.com/tippy.js@6"></script>
-    <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
-    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
-    <link rel="stylesheet" href="style.css">
+    <!-- Preconnect to critical third-party origins for faster resource loading -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+    <link rel="preconnect" href="https://api.airtable.com" crossorigin>
+
+    <!-- DNS prefetch for domains used conditionally (lazy-loaded) -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://js.pusher.com">
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://js.stripe.com">
+
+    <!-- Preload critical JavaScript module for faster execution -->
+    <link rel="modulepreload" href="/main.js" fetchpriority="high">
+
+    <!-- Note: Critical CSS is inlined in <style> tags below for fastest render -->
+
+    <!-- Preload deferred CSS with lower priority -->
+    <link rel="preload" href="/css/deferred.css" as="style" fetchpriority="low">
+
+    <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
+    
+    <!-- Inline Critical CSS -->
+    <style>
+/* CRITICAL CSS - Above-the-fold styles loaded inline */
+
+/* Global Improvements */
+* {
+    box-sizing: border-box;
+}
+
+/* Performance: Content visibility for off-screen elements */
+.event-card {
+    content-visibility: auto;
+    contain-intrinsic-size: 350px 400px;
+}
+
+/* Performance: GPU acceleration for animated elements */
+.modal-overlay,
+#detail-modal-overlay,
+#event-plan-panel {
+    will-change: opacity, transform;
+}
+
+/* Performance: Contain layout for catalog */
+#catalog-container {
+    contain: layout style;
+}
+
+html {
+    scroll-behavior: smooth;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
+}
+
+/* Core Body & Kaleidoscope Canvas */
+body {
+    padding-bottom: 150px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    background-color: transparent;
+    margin: 0;
+    /* Optimize text rendering */
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent horizontal scrolling on the page */
+    overflow-x: hidden;
+}
+
+body.modal-open {
+    overflow: hidden;
+}
+
+#kaleidoscope-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    display: block;
+}
+
+/* Frosted Glass: Header */
+#main-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.header-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    gap: 20px;
+}
+
+#header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.header-icon-btn {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 1.2em;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-icon-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.05);
+}
+
+.header-icon-btn:active {
+    transform: scale(0.95);
+}
+
+#parent-collective-trigger {
+    background-color: #343a40;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.1em;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+#parent-collective-trigger:hover {
+    background-color: #007bff;
+}
+
+#shop-logo-container {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    height: 44px;
+}
+
+#shop-logo-container img {
+    height: 100%;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+#header-center {
+    flex: 1;
+    min-width: 0;
+    max-width: 600px;
+    padding: 0 20px;
+}
+
+#header-search-wrapper {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border: 2px solid #dee2e6;
+    border-radius: 24px;
+    padding: 0 4px 0 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+}
+
+#header-search-wrapper:focus-within {
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+}
+
+#header-search-wrapper #name-filter {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 1rem;
+    padding: 10px 0;
+    background: transparent;
+    min-width: 0;
+}
+
+#header-search-wrapper #clear-search-btn {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 8px;
+    display: none;
+}
+
+#header-search-wrapper #name-filter:not(:placeholder-shown) + #clear-search-btn {
+    display: block;
+}
+
+#header-search-wrapper #filter-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #f8f9fa;
+    border: none;
+    border-left: 1px solid #dee2e6;
+    border-radius: 0 20px 20px 0;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    color: #495057;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#header-search-wrapper #filter-toggle-btn:hover {
+    background-color: #e9ecef;
+}
+
+#header-search-wrapper .filter-icon {
+    font-size: 1rem;
+}
+
+#header-search-wrapper .filter-label {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    #header-search-wrapper .filter-label {
+        display: inline;
+    }
+}
+
+#header-search-wrapper .filter-caret {
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+}
+
+#header-search-wrapper #filter-toggle-btn[aria-expanded="true"] .filter-caret {
+    transform: rotate(180deg);
+}
+
+.filter-count-badge {
+    background-color: #007bff;
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+#header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Hamburger Menu Styles */
+#hamburger-menu-container {
+    position: relative;
+}
+
+#hamburger-menu-btn {
+    font-size: 1.4em;
+}
+
+.hamburger-icon {
+    line-height: 1;
+}
+
+.hamburger-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    min-width: 240px;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.hamburger-dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    color: #333;
+    text-align: left;
+    transition: background-color 0.15s;
+}
+
+.hamburger-dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+.hamburger-dropdown-item:active {
+    background-color: #e9ecef;
+}
+
+.menu-item-icon {
+    margin-right: 12px;
+    font-size: 1.2em;
+}
+
+.hamburger-dropdown-divider {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 0;
+}
+
+#main-shop-title {
+    margin: 0;
+    line-height: 1.2;
+    color: #2c3e50;
+    cursor: pointer;
+}
+
+/* Core Layout */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+@media (min-width: 1000px) {
+    .main-content {
+        display: grid;
+        grid-template-columns: 300px 1fr 380px;
+        grid-template-rows: auto 1fr;
+        gap: 25px;
+    }
+    #search-bar-container {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+    #left-sidebar {
+        grid-column: 1;
+        grid-row: 2;
+    }
+    #catalog-area {
+        grid-column: 2;
+        grid-row: 2;
+        /* CRITICAL: Allow catalog area to shrink below content size for overflow scrolling */
+        min-width: 0;
+        overflow: hidden;
+    }
+    #right-sidebar {
+        grid-column: 3;
+        grid-row: 2;
+    }
+}
+
+#right-sidebar, #left-sidebar {
+    position: relative;
+}
+
+#right-sidebar h3, #left-sidebar h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 10px;
+    color: #333;
+}
+
+/* Frosted Glass: Sidebar Panels */
+#filter-controls {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#event-plan-panel {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: sticky;
+    top: 85px;
+}
+
+/* Filter Controls */
+#filter-controls::after {
+    content: attr(data-active-filters);
+    display: inline-block;
+    background: #007bff;
+    color: #fff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin-left: 10px;
+    position: absolute;
+    top: 15px;
+    right: 15px;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.filter-group label {
+    font-size: 0.9em;
+    font-weight: 500;
+    color: #333;
+}
+
+.filter-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-btn {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.85em;
+}
+
+.filter-btn.active {
+    background-color: #e7f3ff;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+#name-filter:not(:placeholder-shown) {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.3);
+}
+
+/* Catalog Grid */
+#catalog-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 25px;
+    /* CRITICAL: Prevent catalog container from expanding beyond parent */
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* When catalog contains carousel sections, switch to column layout */
+#catalog-container:has(.grouping-carousel-section) {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    /* CRITICAL: Force container to shrink to parent width */
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Skeleton Loading - Critical for perceived performance */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    overflow: hidden;
+    height: 420px;
+}
+
+.skeleton-image {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-content {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.skeleton-title {
+    height: 24px;
+    width: 70%;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 16px;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skeleton-price {
+    height: 20px;
+    width: 80px;
+    border-radius: 4px;
+}
+
+.skeleton-button {
+    height: 36px;
+    width: 120px;
+    border-radius: 5px;
+}
+
+/* Loading Message */
+#loading-message {
+    text-align: center;
+    padding: 40px;
+    color: #333;
+}
+
+/* CRITICAL: Grouping carousel layout constraints - needed before deferred CSS loads */
+.grouping-carousel-section {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-wrapper {
+    overflow: hidden;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+}
+
+.grouping-carousel-container .event-card {
+    flex: 0 0 320px;
+    width: 320px;
+    min-width: 320px;
+    max-width: 320px;
+    flex-shrink: 0;
+}
+
+/* Hide descriptions for cards in carousel view to reduce clutter */
+.grouping-carousel-container .event-card .event-card-content .description {
+    display: none;
+}
+
+/* CRITICAL: Mobile viewport constraints for carousel - prevent horizontal overflow */
+@media (max-width: 768px) {
+    /* Header mobile layout - stack vertically */
+    .header-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 12px;
+        position: relative;
+    }
+
+    #header-left {
+        justify-content: center;
+        gap: 10px;
+    }
+
+    #header-left #shop-logo-container {
+        height: 36px;
+    }
+
+    #header-left #main-shop-title {
+        font-size: 1.1rem;
+    }
+
+    /* Position hamburger menu on top-left on mobile */
+    #header-left #hamburger-menu-container {
+        position: absolute;
+        left: 12px;
+        top: 10px;
+    }
+
+    #header-center {
+        order: 3;
+        max-width: 100%;
+        padding: 0;
+    }
+
+    #header-search-wrapper {
+        border-radius: 20px;
+    }
+
+    #header-search-wrapper #name-filter {
+        font-size: 0.95rem;
+        padding: 8px 0;
+    }
+
+    #header-right {
+        position: absolute;
+        right: 12px;
+        top: 10px;
+        gap: 8px;
+    }
+
+    .header-icon-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
+    }
+
+    /* Force main content to respect viewport width */
+    .main-content {
+        width: 100%;
+        max-width: 100vw;
+        padding: 10px;
+        overflow-x: hidden;
+    }
+
+    /* Catalog area must not exceed screen */
+    #catalog-area {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Catalog container with carousels */
+    #catalog-container {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    /* Each carousel section */
+    .grouping-carousel-section {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 10px;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Wrapper clips the scrollable area */
+    .grouping-carousel-wrapper {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Container that scrolls horizontally */
+    .grouping-carousel-container {
+        width: 100%;
+        max-width: 100%;
+        gap: 12px;
+        padding: 8px 5px;
+    }
+
+    /* Cards inside carousel - use percentage of parent, not viewport */
+    .grouping-carousel-container .event-card {
+        flex: 0 0 calc(100% - 20px);
+        width: calc(100% - 20px);
+        min-width: 260px;
+        max-width: calc(100% - 20px);
+        box-sizing: border-box;
+    }
+}
+
+/* Toast Notification - visible immediately */
+#toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    max-width: 350px;
+}
+
+/* Projects Panel Styles */
+.projects-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 320px;
+    height: 100vh;
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+.projects-panel.open {
+    transform: translateX(0);
+}
+
+.projects-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.projects-panel-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.projects-panel-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.projects-panel-close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.projects-panel-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.projects-filter-btn {
+    padding: 6px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #495057;
+    transition: all 0.2s;
+}
+
+.projects-filter-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.projects-filter-btn.active {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.projects-tree-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px 20px;
+}
+
+.projects-loading {
+    text-align: center;
+    color: #6c757d;
+    padding: 40px 20px;
+}
+
+.projects-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 40px 20px;
+}
+
+.project-tree-item {
+    margin-bottom: 8px;
+}
+
+.project-tree-node {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    gap: 10px;
+}
+
+.project-tree-node:hover {
+    background-color: #f8f9fa;
+}
+
+.project-tree-node.active {
+    background-color: #e7f3ff;
+    border: 1px solid #007bff;
+}
+
+.project-tree-expand {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8em;
+    color: #6c757d;
+    transition: transform 0.2s;
+}
+
+.project-tree-expand.expanded {
+    transform: rotate(90deg);
+}
+
+.project-tree-expand.no-children {
+    visibility: hidden;
+}
+
+.project-tree-icon {
+    font-size: 1.1em;
+}
+
+.project-tree-name {
+    flex: 1;
+    font-size: 0.95em;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.project-tree-meta {
+    font-size: 0.75em;
+    color: #6c757d;
+}
+
+.project-tree-children {
+    margin-left: 30px;
+    display: none;
+}
+
+.project-tree-children.expanded {
+    display: block;
+}
+
+.projects-panel-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #dee2e6;
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.projects-create-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.projects-create-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Projects panel overlay for mobile */
+.projects-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1999;
+    display: none;
+}
+
+.projects-panel-overlay.visible {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .projects-panel {
+        width: 100%;
+        max-width: 320px;
+    }
+}
+    </style>
+    
+    <!-- Load Deferred CSS Asynchronously -->
+    <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
+
+    <!-- Third-party libraries - load on demand after page interactive -->
+    <!-- Tippy.js/Popper for tooltips - loaded late as non-critical -->
+    <script>
+    // Lazy-load third-party tooltip libraries only when first tooltip is needed
+    window.loadTooltipLibraries = function() {
+      if (window._tooltipLoading) return window._tooltipLoading;
+      window._tooltipLoading = new Promise((resolve) => {
+        const popper = document.createElement('script');
+        popper.src = 'https://unpkg.com/@popperjs/core@2';
+        popper.onload = () => {
+          const tippy = document.createElement('script');
+          tippy.src = 'https://unpkg.com/tippy.js@6';
+          tippy.onload = resolve;
+          document.head.appendChild(tippy);
+        };
+        document.head.appendChild(popper);
+      });
+      return window._tooltipLoading;
+    };
+    </script>
+
+    <!-- Pusher loaded after DOMContentLoaded for real-time features -->
+    <script>
+    // Create a promise that resolves when Pusher is loaded
+    window.pusherLoadPromise = new Promise(function(resolve) {
+      window._resolvePusherLoad = resolve;
+    });
+
+    // Function to wait for Pusher to be available
+    window.waitForPusher = function() {
+      if (typeof Pusher !== 'undefined') {
+        return Promise.resolve();
+      }
+      return window.pusherLoadPromise;
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Delay Pusher load by 2 seconds to prioritize main content
+      setTimeout(function() {
+        var pusherScript = document.createElement('script');
+        pusherScript.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
+        pusherScript.onload = function() {
+          console.log('[Pusher] Library loaded successfully');
+          if (window._resolvePusherLoad) {
+            window._resolvePusherLoad();
+          }
+        };
+        pusherScript.onerror = function() {
+          console.error('[Pusher] Failed to load Pusher library');
+        };
+        document.head.appendChild(pusherScript);
+      }, 2000);
+    });
+    </script>
+
+    <!-- Netlify Identity loaded on demand when auth is needed -->
+    <script>
+    window.loadNetlifyIdentity = function() {
+      if (window._identityLoading) return window._identityLoading;
+      window._identityLoading = new Promise((resolve) => {
+        var script = document.createElement('script');
+        script.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
+        script.onload = resolve;
+        document.head.appendChild(script);
+      });
+      return window._identityLoading;
+    };
+    </script>
 
     </head>
 <body>
     <!-- The canvas is now our one and only background element -->
-    <canvas id="kaleidoscope-bg"></canvas>
+    <canvas id="kaleidoscope-bg" style="background-color: #000;"></canvas>
+    
+    <!-- Background Settings Panel (Hidden by default) -->
+    <div id="bg-settings-panel" style="display: none; position: fixed; top: 80px; right: 20px; width: 320px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 2000; padding: 20px; max-height: 80vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
+            <h3 style="margin: 0; color: #333;">🎨 Background Engine</h3>
+            <button id="bg-settings-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
+        </div>
+        
+        <div id="bg-debug-info" style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; font-family: monospace;">
+            <div><strong>Status:</strong> <span id="bg-status-indicator" style="color: #28a745;">●</span> <span id="bg-status-text">Loading...</span></div>
+            <div style="margin-top: 8px;"><strong>Progress:</strong> <span id="bg-progress-value">0.30</span></div>
+            <div><strong>Energy:</strong> <span id="bg-energy-value">0.00</span></div>
+            <div><strong>Time:</strong> <span id="bg-time-value">0.0s</span></div>
+            <div><strong>Draw Calls:</strong> <span id="bg-draw-calls">0</span></div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Color Progress (0-1)</label>
+            <input type="range" id="bg-progress-slider" min="0" max="1" step="0.01" value="0.3" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #666; margin-top: 4px;">
+                <span>🟣 Purple</span>
+                <span>🔵 Blue</span>
+                <span>🟢 Green</span>
+                <span>🟡 Yellow</span>
+                <span>🔴 Red</span>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Energy Boost</label>
+            <input type="range" id="bg-energy-slider" min="0" max="1" step="0.05" value="0" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="font-size: 0.8em; color: #666; margin-top: 4px;">Higher = more movement & swirls</div>
+        </div>
+        
+        <div style="margin-bottom: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+            <h4 style="margin: 0 0 12px 0; color: #555; font-size: 0.95em;">🎛️ Fine Tuning</h4>
+            
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Progress Sensitivity: <span id="bg-progress-multiplier-value">1.0</span>x</label>
+            <input type="range" id="bg-progress-multiplier" min="0" max="2" step="0.1" value="1.0" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="font-size: 0.8em; color: #666; margin-top: 4px; margin-bottom: 15px;">How fast colors change as you interact</div>
+            
+            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #555;">Energy Decay Rate: <span id="bg-energy-decay-value">0.985</span></label>
+            <input type="range" id="bg-energy-decay" min="0.85" max="0.99" step="0.01" value="0.985" style="width: 100%; height: 8px; border-radius: 5px; outline: none;">
+            <div style="font-size: 0.8em; color: #666; margin-top: 4px;">How quickly animation calms down (higher = slower decay)</div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button id="bg-test-energy" style="flex: 1; padding: 10px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">⚡ Test Energy</button>
+            <button id="bg-test-progress" style="flex: 1; padding: 10px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">+0.1 Progress</button>
+        </div>
+        
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 0.85em; color: #856404;">
+            <strong>💡 Tip:</strong> In the full system, background colors will automatically evolve as you add items, lock in details, and build your plan!
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; font-size: 0.75em; color: #999;">
+            Background Engine v1.0 | Debug Mode
+        </div>
+    </div>
     
     <div id="toast-notification"></div>
 
+    <!-- Projects Panel (Slide-out) -->
+    <div id="projects-panel" class="projects-panel" style="display: none;">
+        <div class="projects-panel-header">
+            <h3>📁 My Projects</h3>
+            <button id="projects-panel-close" class="projects-panel-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="projects-panel-filters">
+            <button class="projects-filter-btn active" data-filter="all">All</button>
+            <button class="projects-filter-btn" data-filter="event-plans">Event Plans</button>
+            <button class="projects-filter-btn" data-filter="shopping-carts">Shopping Carts</button>
+            <button class="projects-filter-btn" data-filter="general">General</button>
+        </div>
+        <div id="projects-tree-container" class="projects-tree-container">
+            <p class="projects-loading">Loading projects...</p>
+        </div>
+        <div class="projects-panel-footer">
+            <button id="view-tasks-btn" class="projects-tasks-btn" style="display: none;">View Tasks</button>
+            <button id="create-new-project-btn" class="projects-create-btn">+ New Project</button>
+        </div>
+    </div>
+    <div id="projects-panel-overlay" class="projects-panel-overlay"></div>
+
     <header id="main-header">
         <div class="header-content">
-            <!-- Left Section: Logo and Shop Name -->
+            <!-- Left: Hamburger Menu, Logo and Title -->
             <div id="header-left">
-                <button id="parent-collective-trigger" title="What The Fun Collective">WTF</button>
-                <div id="shop-logo-container"></div> <!-- ADDED PLACEHOLDER FOR LOGO -->
+                <div id="hamburger-menu-container">
+                    <button id="hamburger-menu-btn" class="header-icon-btn" title="Navigation Menu" aria-label="Open navigation menu">
+                        <span class="hamburger-icon">☰</span>
+                    </button>
+                    <div id="hamburger-menu-dropdown" class="hamburger-dropdown" style="display: none;">
+                        <a href="/start-a-plan.html" class="hamburger-dropdown-item start-plan-link" style="text-decoration: none; background-color: #e7f3ff; font-weight: 600;">
+                            <span class="menu-item-icon">✨</span> Start a Plan
+                        </a>
+                        <button id="quick-plan-btn" class="hamburger-dropdown-item" style="background-color: #f0fff4; font-weight: 600;">
+                            <span class="menu-item-icon">⚡</span> Quick Plan
+                        </button>
+                        <hr class="hamburger-dropdown-divider">
+                        <button id="calendar-view-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">📅</span> Upcoming Events
+                        </button>
+                        <hr class="hamburger-dropdown-divider">
+                        <button id="menu-wtf-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">🎉</span> What The Fun Collective
+                        </button>
+                        <hr class="hamburger-dropdown-divider">
+                        <button id="menu-catalog-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">📂</span> All Categories
+                        </button>
+                        <button id="menu-plan-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">⭐</span> My Plan
+                        </button>
+                        <button id="menu-likes-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">❤️</span> My Likes
+                        </button>
+                        <button id="menu-sessions-btn" class="hamburger-dropdown-item" style="display: none;">
+                            <span class="menu-item-icon">📋</span> My Sessions
+                        </button>
+                        <button id="menu-projects-btn" class="hamburger-dropdown-item" style="display: none;">
+                            <span class="menu-item-icon">📁</span> My Projects
+                        </button>
+                        <hr class="hamburger-dropdown-divider">
+                        <button id="menu-recent-chats-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">💬</span> Recent Chats
+                        </button>
+                        <hr id="menu-website-divider" class="hamburger-dropdown-divider" style="display: none;">
+                        <a id="menu-website-link" class="hamburger-dropdown-item" href="#" target="_blank" rel="noopener noreferrer" style="display: none; text-decoration: none;">
+                            <span class="menu-item-icon">🌐</span> Store Website
+                        </a>
+                    </div>
+                </div>
+                <div id="shop-logo-container"></div>
                 <h1 id="main-shop-title"></h1>
             </div>
 
-            <!-- Center Section: Marquee -->
+            <!-- Center: Search Bar -->
             <div id="header-center">
-               <div id="marquee-banner-container" style="display: none;">
-                   <div id="marquee-text"></div>
-               </div>
+                <div id="header-search-wrapper">
+                    <input type="text" id="name-filter" placeholder="Search activities, venues, experiences..." autocomplete="off">
+                    <button id="clear-search-btn" title="Clear Search">×</button>
+                    <button id="filter-toggle-btn" aria-label="Toggle filters" aria-expanded="false">
+                        <span class="filter-icon">☰</span>
+                        <span class="filter-label">Filters</span>
+                        <span id="filter-count-badge" class="filter-count-badge" style="display: none;">0</span>
+                        <span class="filter-caret">▼</span>
+                    </button>
+                </div>
             </div>
 
-            <!-- Right Section: Calendar, Plans, and Account -->
+            <!-- Right: Profile -->
             <div id="header-right">
-                <button id="calendar-view-btn" title="View Upcoming Events">📅</button>
-                <div id="my-plans-container" style="display: none;">
-                    <select id="my-plans-dropdown"></select>
-                </div>
-                <button id="user-profile-button" title="Sign In / My Account">&#128100;</button>
+                <button id="user-profile-button" class="header-icon-btn" title="Sign In / My Account" aria-label="Sign in or view my account">&#128100;</button>
             </div>
+        </div>
+        <!-- Marquee banner below header content (optional announcements) -->
+        <div id="marquee-banner-container" style="display: none;">
+            <div id="marquee-text"></div>
         </div>
     </header>
     
@@ -55,16 +1216,86 @@
     <div class="main-content">
 <div id="right-sidebar">
             <div id="event-plan-panel">
-                <div class="event-name-group">
-                    <input type="text" id="header-event-name" value="Enter Event Name" autocomplete="off">
+                <div class="event-plan-header-row">
+                    <div class="event-name-group">
+                        <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
+                    </div>
+                    <div id="share-menu-container">
+                        <button id="share-menu-btn" class="header-icon-btn" title="Share Options" style="display: none;">
+                            <span class="share-icon">&#8943;</span>
+                        </button>
+                        <div id="share-menu-dropdown" class="share-dropdown" style="display: none;">
+                            <button id="share-copy-link-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128279;</span> Copy Link
+                            </button>
+                            <button id="share-invite-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#128236;</span> Invite Collaborator
+                            </button>
+                            <button id="share-invite-guest-btn" class="share-dropdown-item">
+                                <span class="share-item-icon">&#127881;</span> Invite Guest
+                            </button>
+                            <hr class="share-dropdown-divider">
+                            <button id="share-publish-btn" class="share-dropdown-item publish-option" style="display: none;">
+                                <span class="share-item-icon">&#127760;</span> Publish as Public Event
+                            </button>
+                            <button id="share-update-published-btn" class="share-dropdown-item update-published-option" style="display: none;">
+                                <span class="share-item-icon">&#128260;</span> Update Published Event
+                            </button>
+                            <button id="share-publish-package-btn" class="share-dropdown-item publish-package-option" style="display: none;">
+                                <span class="share-item-icon">&#128230;</span> Publish as Package
+                            </button>
+                            <button id="share-update-package-btn" class="share-dropdown-item update-package-option" style="display: none;">
+                                <span class="share-item-icon">&#128230;</span> Update Package
+                            </button>
+                        </div>
+                        <!-- Invite Collaborator Popup -->
+                        <div id="invite-popup" class="invite-popup" style="display: none;">
+                            <div class="invite-popup-header">
+                                <span class="invite-popup-icon">💌</span>
+                                <span class="invite-popup-title">Invite Collaborator</span>
+                                <button id="invite-popup-close" class="invite-popup-close">&times;</button>
+                            </div>
+                            <p class="invite-popup-desc">Share this plan with a friend.</p>
+                            <div class="invite-popup-form">
+                                <input type="text" id="collab-name" placeholder="Friend's Name" class="invite-popup-input">
+                                <input type="email" id="collab-email" placeholder="Friend's Email" class="invite-popup-input">
+                                <!-- Phase 4: Role selector for permissions -->
+                                <div class="invite-role-select-wrapper">
+                                    <label for="collab-role" class="invite-role-label">Permission Level</label>
+                                    <select id="collab-role" class="invite-popup-select">
+                                        <option value="editor" selected>Editor (can edit)</option>
+                                        <option value="viewer">Viewer (read-only)</option>
+                                        <option value="owner">Owner (full access)</option>
+                                    </select>
+                                </div>
+                                <button id="invite-btn" class="invite-popup-btn">Send Invite</button>
+                                <div id="invite-status" class="invite-popup-status"></div>
+                            </div>
+                        </div>
+                        <!-- Invite Guest Popup -->
+                        <div id="invite-guest-popup" class="invite-popup" style="display: none;">
+                            <div class="invite-popup-header">
+                                <span class="invite-popup-icon">🎉</span>
+                                <span class="invite-popup-title">Invite Guest</span>
+                                <button id="invite-guest-popup-close" class="invite-popup-close">&times;</button>
+                            </div>
+                            <p class="invite-popup-desc">Send a read-only event preview to your guests.</p>
+                            <div class="invite-popup-form">
+                                <input type="text" id="guest-name" placeholder="Guest's Name" class="invite-popup-input">
+                                <input type="email" id="guest-email" placeholder="Guest's Email" class="invite-popup-input">
+                                <button id="invite-guest-btn" class="invite-popup-btn">Send Invitation</button>
+                                <div id="invite-guest-status" class="invite-popup-status"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="toolbar-group">
                     <label for="header-goals">Goals / Notes</label>
-                    <input type="text" id="header-goals" placeholder="What are the goals for your event?" autocomplete="off">
+                    <input type="text" id="header-goals" placeholder="Enter goals or notes" autocomplete="off">
                 </div>
                 <div class="toolbar-group">
                     <label for="event-date-picker">Event Date</label>
-                    <input type="text" id="event-date-picker" placeholder="Select date">
+                    <input type="text" id="event-date-picker" placeholder="Select your event date">
                 </div>
      
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
@@ -84,12 +1315,14 @@
                     <button id="itinerary-btn">Event Plan</button>
                     <button class="present-btn" data-list-type="locked" title="Present Event Plan">▶️</button>
                 </div>
-    
+
+                <div id="event-plan-notification" style="display: none;"></div>
+
                 <div id="cart-items-container">
-                     <p style="font-size: 0.9em; color: #6c757d;">No items locked in yet.</p>
+                     <p style="font-size: 0.9em; color: #6c757d; text-align: center; padding: 20px 10px;">Your event plan is empty. Browse the catalog and add items to get started!</p>
                 </div>
                 <div id="event-health-score" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
-                    <p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Event Health.</p>
+                    <p style="font-size: 0.9em; color: #6c757d; text-align: center;">Add an item to see your Plan Health.</p>
                 </div>
                 <div id="cart-footer">
                     <div id="payment-status-message"></div>
@@ -117,24 +1350,17 @@
                 </div>
            </div>
         </div>
-        
-        <button id="mobile-filter-trigger">Search & Filter <span class="caret">▼</span></button>
-        
+
 <div id="left-sidebar">
             <div id="filter-controls" data-active-filters="0">
                 <h3>Filters</h3>
-                    <div class="filter-group">
-                    <div id="name-filter-wrapper" style="position: relative; display: flex; align-items: center;">
-                        <input type="text" id="name-filter" placeholder="e.g., escape room, premium..." autocomplete="off">
-                        <button id="clear-search-btn" style="position: absolute; right: 8px; background: none; border: none; color: #999; font-weight: bold; cursor: pointer; padding: 0; display: none; z-index: 10;" title="Clear Search">×</button>
-                    </div>
-                    </div>
-                   <div class="filter-group">                   
+                   <div class="filter-group">
+                    <label for="category-filters">Categories</label>
                     <div id="category-filters" class="filter-btn-group"></div>
                 </div>
                     <div id="date-filter-group" class="filter-group">
-                    <label for="date-filter">Date & Time</label>
-                    <input type="text" id="date-filter" placeholder="Select date and time range">
+                    <label for="date-filter">Date</label>
+                    <input type="text" id="date-filter" placeholder="Select date range">
                     <div class="filter-btn-group" style="grid-template-columns: 1fr 1fr 1fr;">
                         <button class="filter-btn" data-date-quick="tomorrow">Tomorrow</button>
                         <button class="filter-btn" data-date-quick="this-week">This Week</button>
@@ -193,23 +1419,27 @@
         
         <div id="catalog-area">
             <div id="catalog-header">
-                <div id="breadcrumbs"></div>
+                <div id="catalog-header-row">
+                    <div id="breadcrumbs"></div>
+                    <div id="catalog-toolbar">
+                        <select id="sort-by">
+                            <option value="recommended">Sort by: Recommended</option>
+                            <option value="price-asc">Price (Low to High)</option>
+                            <option value="price-desc">Price (High to Low)</option>
+                            <option value="name-asc">Name (A-Z)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            <div id="catalog-toolbar">
-                <select id="sort-by">
-                    <option value="recommended">Sort by: Recommended</option>
-                    <option value="price-asc">Price (Low to High)</option>
-                    <option value="price-desc">Price (High to Low)</option>
-                    <option value="name-asc">Name (A-Z)</option>
-                </select> 
-            </div>
+            <!-- Phase 3a: Task Manager Container (hidden by default) -->
+            <div id="task-manager-container" style="display: none;"></div>
             <div id="catalog-container"></div>
         </div>
     </div>
 
     <div id="detail-modal-overlay" class="modal-overlay">
         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="modal-close-btn" class="modal-close-btn" title="Close" aria-label="Close item details modal">×</button>
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
@@ -233,7 +1463,7 @@
                 <div id="modal-quantity-selector"></div>
 
                 <div id="modal-calendar-container" style="margin-bottom: 20px;"></div> <div id="modal-notes-container">
-                    <textarea id="modal-item-note" placeholder="Add a note..." autocomplete="off"></textarea>
+                    <textarea id="modal-item-note" placeholder="Add notes about customization, timing, or special requests..." autocomplete="off"></textarea>
                 </div>
 
                 <div id="modal-actions-container">
@@ -258,7 +1488,7 @@
     
     <div id="checkout-modal-overlay" class="modal-overlay">
         <div class="checkout-modal-content">
-            <button id="checkout-close-btn" class="modal-close-btn" title="Close">×</button>
+            <button id="checkout-close-btn" class="modal-close-btn" title="Close" aria-label="Close checkout modal">×</button>
             <h3>Checkout Summary</h3>
             <div id="checkout-summary-details">
                 <p>This is a summary of the items in your plan.</p>
@@ -314,13 +1544,41 @@
                     <span class="spinner" style="display: none;">Processing...</span>
                 </button>
         </form>
-            <div id="payment-success-message" style="display: none; text-align: center; padding: 20px;">
-                <h3 style="color: #28a745;">✅ Payment Successful!</h3>
-                <p>Your items are reserved. This window will close shortly.</p>
+            <div id="payment-success-message" style="display: none; text-align: center; padding: 30px;">
+                <div style="font-size: 64px; margin-bottom: 20px; animation: checkmark-bounce 0.6s ease-out;">✅</div>
+                <h3 style="color: #28a745; margin-bottom: 15px;">Payment Successful!</h3>
+                <p style="color: #6c757d;">Your items are reserved. This window will close shortly.</p>
             </div>
         </div>
     </div>
-    
+
+    <div id="quick-pay-modal-overlay" class="modal-overlay">
+        <div class="quick-pay-modal-content">
+            <button id="quick-pay-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick pay modal">×</button>
+            <h3>Quick Pay Options</h3>
+            <p class="quick-pay-description">Choose your preferred payment method to pay the store directly:</p>
+            <div id="quick-pay-options-container">
+                <!-- Payment options will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="quick-plan-modal-overlay" class="modal-overlay">
+        <div class="quick-plan-modal-content">
+            <button id="quick-plan-close-btn" class="modal-close-btn" title="Close" aria-label="Close quick plan modal">×</button>
+            <h3>Quick Plan</h3>
+            <p class="quick-plan-description">Describe your plan idea and we'll help you get started.</p>
+            <div class="quick-plan-form">
+                <textarea id="quick-plan-idea-input" placeholder="e.g., Birthday party for 20 people next Saturday at a park..." rows="4"></textarea>
+                <button id="quick-plan-submit-btn" class="primary-action-btn">
+                    <span class="button-text">Create Plan</span>
+                    <span class="spinner" style="display: none;">Creating...</span>
+                </button>
+            </div>
+            <div id="quick-plan-error" class="quick-plan-error" style="display: none;"></div>
+        </div>
+    </div>
+
 <div id="itinerary-modal-overlay" class="modal-overlay">
     <div class="modal-content itinerary-content" style="max-width: 90vw; width: 1400px; height: 90vh;">
         <button id="itinerary-close-btn" class="modal-close-btn" title="Close">×</button>
@@ -381,7 +1639,7 @@
         </button>
         <div id="chat-window">
             <div id="chat-header">
-               <p>Session Chat (<span id="whos-here-count">0</span>)</p>
+               <p><span id="chat-session-title">Session Chat</span> (<span id="whos-here-count">0</span>)</p>
                 <div class="user-identity">
                    <label for="chat-user-name">Your Name:</label>
                     <input type="text" id="chat-user-name" autocomplete="off">
@@ -389,6 +1647,15 @@
                 <div class="chat-options">
                     <input type="checkbox" id="chat-remain-open-checkbox">
                     <label for="chat-remain-open-checkbox">Keep open</label>
+                </div>
+            </div>
+            <div id="recent-chats-section">
+                <button id="recent-chats-toggle" type="button">
+                    <span class="toggle-icon">▶</span>
+                    <span>Recent Chats</span>
+                </button>
+                <div id="recent-chats-list" class="collapsed">
+                    <div id="recent-chats-loading">Loading recent chats...</div>
                 </div>
             </div>
             <div id="whos-here-list"></div>
@@ -452,23 +1719,67 @@
         
             <div id="signin-view">
                 <h3>Sign In or Create Account</h3>
-                <p>Enter your email to sign in. Once logged in, your plans are saved to your account automatically!</p>
-                <form id="signin-form">
-                   <div class="form-row">
-                        <label for="signin-email">Email Address</label>
-                        <input type="email" id="signin-email" required autocomplete="email">
-                    </div>
-                    <button class="primary-action-btn" type="submit">Send Magic Link</button>
-                </form>
-                <p id="signin-message"></p>
-            
+                <p>Choose your preferred sign-in method. Once logged in, your plans are saved to your account automatically!</p>
+
+                <!-- Email Magic Link Authentication (Recommended) -->
+                <div id="email-auth-section" style="margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 10px; color: #007bff;">Sign In with Email</h4>
+                    <form id="signin-form">
+                        <div class="form-row">
+                            <label for="signin-email">Email Address</label>
+                            <input type="email" id="signin-email" autocomplete="email" required>
+                        </div>
+                        <button class="primary-action-btn" type="submit" style="background-color: #007bff;">Send Magic Link</button>
+                    </form>
+                    <p id="signin-message" style="margin-top: 10px;"></p>
+                </div>
+
                 <div class="sso-divider">
                     <span>OR</span>
                 </div>
-                <button id="google-sso-btn" class="sso-btn">
+
+                <!-- SMS Authentication (Awaiting Approval) -->
+                <details style="margin-bottom: 15px;">
+                    <summary style="cursor: pointer; padding: 10px; background: #f5f5f5; border-radius: 4px;">Sign In with Phone (Currently Limited)</summary>
+                    <div style="padding: 15px 0;">
+                        <p style="margin-bottom: 10px; color: #ff9800; font-size: 0.9em;">Note: SMS authentication is currently pending carrier approval. Email authentication is more reliable.</p>
+                        <form id="sms-signin-form">
+                            <div class="form-row">
+                                <label for="signin-phone">Phone Number (with country code)</label>
+                                <input type="tel" id="signin-phone" placeholder="+1234567890" autocomplete="tel">
+                            </div>
+                            <div class="form-row" style="margin-top: 15px;">
+                                <label style="display: flex; align-items: flex-start; cursor: pointer; font-size: 0.9em;">
+                                    <input type="checkbox" id="sms-consent-checkbox" style="margin-right: 8px; margin-top: 3px; cursor: pointer;">
+                                    <span style="line-height: 1.4;">I agree to receive text messages for authentication purposes. Message and data rates may apply. Reply STOP to opt out. <a href="/privacy-policy.html" target="_blank" style="color: #007bff; text-decoration: underline;">Privacy Policy</a></span>
+                                </label>
+                            </div>
+                            <button class="primary-action-btn" type="submit" style="background-color: #4CAF50;">Send SMS Code</button>
+                        </form>
+
+                        <!-- OTP Verification Form (hidden initially) -->
+                        <div id="sms-verify-section" style="display: none; margin-top: 15px;">
+                            <div class="form-row">
+                                <label for="signin-otp">Enter 6-digit code</label>
+                                <input type="text" id="signin-otp" maxlength="6" pattern="[0-9]{6}" placeholder="123456" autocomplete="one-time-code">
+                            </div>
+                            <button class="primary-action-btn" id="verify-otp-btn" style="background-color: #4CAF50;">Verify Code</button>
+                            <button class="secondary-action-btn" id="resend-sms-btn" style="margin-top: 10px;">Resend Code</button>
+                        </div>
+                        <p id="sms-message" style="margin-top: 10px;"></p>
+                    </div>
+                </details>
+
+                <div class="sso-divider">
+                    <span>OR</span>
+                </div>
+
+                <!-- Google SSO (Currently Unavailable) -->
+                <button id="google-sso-btn" class="sso-btn" disabled style="opacity: 0.5; cursor: not-allowed;">
                     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;"><path d="M16.51 8.1H9.18V11.16H13.25C13.04 12.56 12.08 13.81 10.63 14.73V16.88H13.01C15.13 15.01 16.51 11.9 16.51 8.1Z" fill="#4285F4"></path><path d="M9.18 17.5C11.59 17.5 13.6 16.7 15.01 15.38L12.63 13.73C11.85 14.28 10.63 14.69 9.18 14.69C6.93 14.69 5.02 13.25 4.3 11.25H1.83V13.38C3.25 15.88 6.09 17.5 9.18 17.5Z" fill="#34A853"></path><path d="M4.3 11.25C4.12 10.75 4.03 10.21 4.03 9.63C4.03 9.05 4.12 8.51 4.3 8.01V5.88H1.83C1.09 7.22 0.63 8.63 0.63 10.13C0.63 11.63 1.09 13.04 1.83 14.38L4.3 11.25Z" fill="#FBBC05"></path><path d="M9.18 4.5C10.51 4.5 11.68 4.97 12.68 5.88L15.08 3.48C13.6 2.09 11.59 1.5 9.18 1.5C6.09 1.5 3.25 3.12 1.83 5.62L4.3 7.75C5.02 5.75 6.93 4.5 9.18 4.5Z" fill="#EA4335"></path></svg>
-                    Sign In with Google
+                    Sign In with Google (Temporarily Unavailable)
                 </button>
+                <p style="font-size: 0.85em; color: #999; margin-top: 5px;">Google SSO is currently being configured. Please use SMS authentication.</p>
             </div>
 
             <div id="profile-view" style="display: none;">
@@ -488,7 +1799,15 @@
                                 <option value="None">Off</option>
                             </select>
                         </div>
-                        
+
+                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+
+                        <div class="form-row">
+                            <label style="font-weight: 600; margin-bottom: 10px; display: block;">Background Animation</label>
+                            <button id="bg-settings-trigger" class="primary-action-btn" type="button" style="background-color: #6c757d; width: 100%;">🎨 Background Settings</button>
+                            <p style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">Customize the animated background effects</p>
+                        </div>
+
                         <button class="primary-action-btn" type="submit" style="margin-top: 15px;">Save Preferences</button>
                         <p id="prefs-message" style="margin-top: 10px; min-height: 1em;"></p>
                         <a href="#" id="owner-dashboard-link" class="primary-action-btn" style="display: none; margin-top: 15px; text-align: center; text-decoration: none; background-color: #555;">Store Dashboard</a>
@@ -524,23 +1843,161 @@
     </div>
 
 <div id="calendar-modal-overlay" class="modal-overlay">
-        <div class="modal-content" style="max-width: 900px; height: 90vh;">
+        <div class="modal-content calendar-modal-content">
             <button id="calendar-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="beta-banner">The Events Calendar is a Beta feature. We'd love your feedback!</div>
-            <h3 style="margin-top: 10px;">Upcoming Events Calendar</h3>
-            <div id="calendar-body">
-                <div id="event-calendar"></div>
-                <div id="event-details-panel">
-                    <h4>Events on Selected Day:</h4>
-                    <ul id="daily-event-list"></ul>
-                </div>
+            <div class="beta-banner calendar-header">The Events Calendar is a Beta feature. We'd love your feedback!</div>
+            <div id="calendar-view-controls">
+                <button id="calendar-view-month" class="calendar-view-btn active" data-view="month">📅 Month</button>
+                <button id="calendar-view-week" class="calendar-view-btn" data-view="week">📆 Week</button>
+                <button id="calendar-view-list" class="calendar-view-btn" data-view="list">📋 List</button>
             </div>
+            <div id="calendar-content"></div>
         </div>
     </div>
     
-    <script type="module" src="main.js"></script>
-    <!-- FIX: Removed Markdown []() wrapper from link -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <div id="receipt-modal-overlay" class="modal-overlay">
+        <div class="receipt-modal-content">
+            <button id="receipt-close-btn" class="modal-close-btn" title="Close">×</button>
+            <div class="receipt-body"></div>
+        </div>
+    </div>
+
+
+    <script type="module" src="/main.js"></script>
+    <!-- SortableJS and calendarExport will be loaded on-demand when needed -->
+
+    <!-- Web Vitals Performance Monitoring -->
+    <script type="module">
+    // Lightweight Web Vitals tracking
+    function sendToAnalytics(metric) {
+      // Send metrics to console for monitoring
+      console.log(`[Performance] ${metric.name}:`, Math.round(metric.value), metric.rating);
+
+      // Could send to analytics service here in production
+      // Example: navigator.sendBeacon('/analytics', JSON.stringify(metric));
+    }
+
+    // Track Core Web Vitals
+    if ('PerformanceObserver' in window) {
+      // Largest Contentful Paint (LCP)
+      try {
+        const lcpObserver = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          const lastEntry = entries[entries.length - 1];
+          const lcp = lastEntry.renderTime || lastEntry.loadTime;
+          const rating = lcp < 2500 ? 'good' : lcp < 4000 ? 'needs-improvement' : 'poor';
+          sendToAnalytics({ name: 'LCP', value: lcp, rating });
+        });
+        lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
+      } catch (e) { console.warn('LCP tracking failed:', e); }
+
+      // First Input Delay (FID) / Interaction to Next Paint (INP)
+      try {
+        const fidObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            const fid = entry.processingStart - entry.startTime;
+            const rating = fid < 100 ? 'good' : fid < 300 ? 'needs-improvement' : 'poor';
+            sendToAnalytics({ name: 'FID', value: fid, rating });
+          }
+        });
+        fidObserver.observe({ type: 'first-input', buffered: true });
+      } catch (e) { console.warn('FID tracking failed:', e); }
+
+      // Cumulative Layout Shift (CLS)
+      try {
+        let clsValue = 0;
+        const clsObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              clsValue += entry.value;
+            }
+          }
+        });
+        clsObserver.observe({ type: 'layout-shift', buffered: true });
+
+        // Report CLS on page unload
+        addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') {
+            const rating = clsValue < 0.1 ? 'good' : clsValue < 0.25 ? 'needs-improvement' : 'poor';
+            sendToAnalytics({ name: 'CLS', value: clsValue, rating });
+          }
+        });
+      } catch (e) { console.warn('CLS tracking failed:', e); }
+    }
+
+    // Track basic load metrics
+    window.addEventListener('load', () => {
+      const perfData = performance.getEntriesByType('navigation')[0];
+      if (perfData) {
+        sendToAnalytics({ name: 'TTFB', value: perfData.responseStart, rating: perfData.responseStart < 800 ? 'good' : 'needs-improvement' });
+        sendToAnalytics({ name: 'DOMContentLoaded', value: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart, rating: 'info' });
+        sendToAnalytics({ name: 'LoadComplete', value: perfData.loadEventEnd - perfData.fetchStart, rating: 'info' });
+      }
+    });
+    </script>
+
+    <!-- Service Worker Registration for Cache Management -->
+    <script>
+    // Mark the start of page load for performance monitoring
+    if ('performance' in window && 'mark' in performance) {
+      performance.mark('page-load-start');
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('[App] Service Worker registered:', registration.scope);
+            
+            // Check for updates every time the page loads
+            registration.update();
+            
+            // Listen for updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New service worker available, reload to get fresh content
+                  console.log('[App] New version available! Reloading...');
+                  
+                  // Tell the new service worker to skip waiting
+                  newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  
+                  // Reload the page to get the new version
+                  window.location.reload();
+                }
+              });
+            });
+            
+            // Check for updates periodically (every 30 minutes)
+            setInterval(() => {
+              registration.update();
+            }, 30 * 60 * 1000);
+          })
+          .catch((error) => {
+            console.warn('[App] Service Worker registration failed:', error);
+          });
+        
+        // Listen for controller change (new SW activated)
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          console.log('[App] New service worker activated, reloading...');
+          window.location.reload();
+        });
+      });
+    }
+    </script>
+
+    <!-- Debug Panel for mobile-friendly debugging -->
+    <script type="module">
+    import { initDebugPanel, debugLog } from '/utils/debug-panel.js';
+
+    // Initialize the debug panel
+    initDebugPanel('WTFun Debug Log');
+
+    // Make debugLog available globally for use in other scripts
+    window.debugLog = debugLog;
+    </script>
 
 </body>
 </html>
