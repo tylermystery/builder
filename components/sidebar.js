@@ -915,16 +915,33 @@ async function handlePublishPackage() {
         console.log('[SIDEBAR PACKAGE DEBUG] Calculated totalPrice:', totalPrice);
 
         const priceInput = prompt(
-            'Enter the package price (or leave empty to calculate from items):',
-            totalPrice.toFixed(2)
+            'Enter the package price (or leave empty for free/no price):',
+            totalPrice > 0 ? totalPrice.toFixed(2) : ''
         );
 
-        // Handle price input - ensure we get a valid number
-        let packagePrice = totalPrice;
-        if (priceInput !== null && priceInput.trim() !== '') {
+        // Handle price input - when user cancels (null) or explicitly leaves empty, don't set a price
+        // This allows packages to be created as "free" if the user wants
+        let packagePrice = undefined;
+        console.log('[SIDEBAR PACKAGE DEBUG] priceInput:', priceInput, 'type:', typeof priceInput);
+
+        if (priceInput === null) {
+            // User cancelled the prompt - use calculated price as fallback
+            packagePrice = totalPrice > 0 ? totalPrice : undefined;
+            console.log('[SIDEBAR PACKAGE DEBUG] User cancelled, using fallback:', packagePrice);
+        } else if (priceInput.trim() === '') {
+            // User explicitly left the field empty - no price (free)
+            packagePrice = undefined;
+            console.log('[SIDEBAR PACKAGE DEBUG] User left blank - no price set (free)');
+        } else {
+            // User entered a value - parse it
             const parsedPrice = parseFloat(priceInput);
-            if (!isNaN(parsedPrice)) {
+            if (!isNaN(parsedPrice) && isFinite(parsedPrice) && parsedPrice >= 0) {
                 packagePrice = parsedPrice;
+                console.log('[SIDEBAR PACKAGE DEBUG] User entered valid price:', packagePrice);
+            } else {
+                // Invalid input - fall back to calculated price
+                packagePrice = totalPrice > 0 ? totalPrice : undefined;
+                console.log('[SIDEBAR PACKAGE DEBUG] Invalid input, using fallback:', packagePrice);
             }
         }
         console.log('[SIDEBAR PACKAGE DEBUG] Final packagePrice:', packagePrice);

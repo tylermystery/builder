@@ -2036,13 +2036,20 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
 
     // Store package metadata in the session's Items with Variations field
     // This avoids needing new Airtable fields - we extend the existing session data
-    const metadataPrice = parseFloat(packageData.Price);
+    // Handle case where Price might be undefined (user left it blank for free package)
+    let metadataPrice = 0;
+    if (packageData.Price !== undefined && packageData.Price !== null && packageData.Price !== '') {
+        const parsedMetadataPrice = typeof packageData.Price === 'number' ? packageData.Price : parseFloat(packageData.Price);
+        if (!isNaN(parsedMetadataPrice) && isFinite(parsedMetadataPrice)) {
+            metadataPrice = parsedMetadataPrice;
+        }
+    }
     const updatedSessionData = {
         ...sessionItems,
         packageMetadata: {
             discount: packageData.Discount || 0,
             tiers: packageData.Tiers || [],
-            price: !isNaN(metadataPrice) ? metadataPrice : 0,
+            price: metadataPrice,
             pricingType: packageData.PricingType || null
         }
     };
@@ -2091,14 +2098,25 @@ export async function publishSessionAsPackage(sessionId, packageData = {}) {
     console.log('[PACKAGE DEBUG] itemFields:', JSON.stringify(itemFields, null, 2));
     console.log('[PACKAGE DEBUG] Target table ID (Items):', TABLE_ID);
 
-    // Add price if provided - ensure it's a valid number
-    const priceValue = parseFloat(packageData.Price);
-    console.log('[PACKAGE DEBUG] packageData.Price raw:', packageData.Price, 'parsed:', priceValue);
-    if (!isNaN(priceValue)) {
-        itemFields['Price'] = priceValue;
-        console.log('[PACKAGE DEBUG] Added Price to itemFields:', priceValue);
+    // Add price if provided - ensure it's a valid number and positive
+    // Airtable Currency fields may reject invalid values, so we validate carefully
+    const rawPrice = packageData.Price;
+    console.log('[PACKAGE DEBUG] packageData.Price raw value:', rawPrice, 'type:', typeof rawPrice);
+
+    // Only add Price field if we have a valid positive number
+    // Skip if: undefined, null, NaN, negative, or non-numeric
+    if (rawPrice !== undefined && rawPrice !== null && rawPrice !== '') {
+        const priceValue = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice);
+        console.log('[PACKAGE DEBUG] packageData.Price parsed:', priceValue, 'isNaN:', isNaN(priceValue));
+
+        if (!isNaN(priceValue) && isFinite(priceValue) && priceValue >= 0) {
+            itemFields['Price'] = priceValue;
+            console.log('[PACKAGE DEBUG] Added Price to itemFields:', priceValue);
+        } else {
+            console.log('[PACKAGE DEBUG] Price not added - invalid value (NaN, infinite, or negative)');
+        }
     } else {
-        console.log('[PACKAGE DEBUG] Price not added - invalid or missing value');
+        console.log('[PACKAGE DEBUG] Price not added - undefined, null, or empty');
     }
 
     // Add pricing type if provided
