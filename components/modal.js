@@ -11,6 +11,124 @@ import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
 
 /**
+ * Updates the page's title and meta description for SEO purposes.
+ * @param {string} title - The new page title.
+ * @param {string} description - The new meta description.
+ */
+function updatePageMetadata(title, description) {
+    document.title = title;
+
+    let metaDescription = document.querySelector('meta[name="description"]');
+    if (!metaDescription) {
+        metaDescription = document.createElement('meta');
+        metaDescription.setAttribute('name', 'description');
+        document.head.appendChild(metaDescription);
+    }
+    metaDescription.setAttribute('content', description);
+}
+
+/**
+ * Updates the JSON-LD Schema markup for SEO purposes.
+ * Generates schema.org/Event or schema.org/Product based on the item type.
+ * @param {Object} record - The item record to generate schema for.
+ */
+function updateSchema(record) {
+    const itemType = record.fields['Item Type'];
+    const name = record.fields.Name || 'Untitled';
+    const description = record.fields.Description || '';
+    const price = record.fields.Price || 0;
+
+    // Get image URL from first attachment if available
+    let imageUrl = '';
+    if (record.fields.Images && record.fields.Images.length > 0) {
+        imageUrl = record.fields.Images[0].url || '';
+    }
+
+    let schemaData;
+
+    if (itemType === 'Event') {
+        // Generate schema.org/Event
+        schemaData = {
+            '@context': 'https://schema.org',
+            '@type': 'Event',
+            'name': name,
+            'startDate': record.fields['Start Date'] || record.fields['Event Date'] || '',
+            'location': {
+                '@type': 'Place',
+                'name': record.fields.Location || 'Unknown Location'
+            },
+            'offers': {
+                '@type': 'Offer',
+                'price': price,
+                'priceCurrency': 'USD'
+            }
+        };
+
+        // Add image if available
+        if (imageUrl) {
+            schemaData.image = imageUrl;
+        }
+
+        // Add description if available
+        if (description) {
+            schemaData.description = description;
+        }
+    } else {
+        // Generate schema.org/Product for all other item types
+        schemaData = {
+            '@context': 'https://schema.org',
+            '@type': 'Product',
+            'name': name,
+            'description': description,
+            'offers': {
+                '@type': 'Offer',
+                'price': price,
+                'priceCurrency': 'USD',
+                'availability': 'https://schema.org/InStock'
+            }
+        };
+
+        // Add image if available
+        if (imageUrl) {
+            schemaData.image = imageUrl;
+        }
+    }
+
+    // Find or create the JSON-LD script tag
+    let scriptTag = document.getElementById('dynamic-schema');
+    if (!scriptTag) {
+        scriptTag = document.createElement('script');
+        scriptTag.type = 'application/ld+json';
+        scriptTag.id = 'dynamic-schema';
+        document.head.appendChild(scriptTag);
+    }
+
+    // Set the schema content
+    scriptTag.textContent = JSON.stringify(schemaData);
+}
+
+/**
+ * Resets the JSON-LD Schema to a default Organization schema.
+ * Called when modal is closed to prevent stale data.
+ */
+function resetSchema() {
+    let scriptTag = document.getElementById('dynamic-schema');
+
+    // Default Organization schema
+    const defaultSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        'name': 'WTFun',
+        'url': window.location.origin,
+        'description': 'Plan your perfect event with WTFun.'
+    };
+
+    if (scriptTag) {
+        scriptTag.textContent = JSON.stringify(defaultSchema);
+    }
+}
+
+/**
  * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
  * @param {object} record - The item record being displayed.
  * @returns {string | null} The HTML string for the blurb, or null.
@@ -998,6 +1116,41 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     
     modalItemName.textContent = record.fields.Name || 'Untitled';
     modalItemDescription.textContent = record.fields.Description || '';
+
+    // --- SEO: Update page title, meta description, and schema markup ---
+    const itemName = record.fields.Name || 'Untitled';
+    const seoTitle = `${itemName} | WTFun`;
+    let seoDescription = record.fields.Description || '';
+
+    if (!seoDescription) {
+        // Try to generate description from AI_Profile
+        const aiProfileString = record.fields.AI_Profile;
+        if (aiProfileString) {
+            try {
+                const aiProfile = JSON.parse(aiProfileString);
+                const tags = aiProfile.SearchTerms || aiProfile.Tags || [];
+                if (tags.length > 0) {
+                    seoDescription = `Book ${itemName}. Features: ${tags.join(', ')}.`;
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+        }
+    }
+
+    // Fallback description if still empty
+    if (!seoDescription) {
+        seoDescription = `Check out ${itemName} on WTFun.`;
+    }
+
+    // Truncate to 160 characters for SEO best practices
+    if (seoDescription.length > 160) {
+        seoDescription = seoDescription.substring(0, 157) + '...';
+    }
+
+    updatePageMetadata(seoTitle, seoDescription);
+    updateSchema(record);
+    // --- END SEO ---
 
     // Parse options and record names early for event logic
     const parsedOptionGroups = parseOptions(record.fields[CONSTANTS.FIELD_NAMES.OPTIONS]);
@@ -2124,6 +2277,11 @@ export function hideDetailModal() {
         log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
         currentItemChatRecordId = null;
     }
+
+    // --- SEO: Reset page title, meta description, and schema markup ---
+    updatePageMetadata('WTFun | Plan Your Perfect Event', 'Plan your perfect event with WTFun.');
+    resetSchema();
+    // --- END SEO ---
 
     if (modalOverlay) {
         modalOverlay.classList.remove('active');
