@@ -998,6 +998,114 @@ export function calculatePackagePrice(record, options = {}, allRecords = []) {
 }
 
 /**
+ * Dynamically calculates package price based on current component item prices.
+ * This is the preferred method for displaying package prices as it always uses
+ * the latest prices from the catalog items, applying any package discount.
+ *
+ * @param {Object} packageContents - Package contents from parsePackageContentsFromSession
+ * @param {Object} packageMetadata - Package metadata containing discount info
+ * @param {Array} allRecords - All catalog records for looking up current item prices
+ * @param {number} headcount - The headcount/quantity to use for per-guest items (default: 1)
+ * @returns {Object} Price breakdown:
+ *   {
+ *     subtotal: number,           // Sum of all item prices before discount
+ *     discountPercent: number,    // Discount percentage (0-100)
+ *     discountAmount: number,     // Dollar amount of discount
+ *     totalPrice: number,         // Final price after discount
+ *     itemBreakdown: Array,       // Breakdown by item with individual prices
+ *     hasPerGuestItems: boolean   // Whether package contains per-guest items
+ *   }
+ */
+export function calculateDynamicPackagePrice(packageContents, packageMetadata, allRecords, headcount = 1) {
+    const includedItems = packageContents.includedItems || [];
+    const discountPercent = parseFloat(packageMetadata?.discount || 0);
+
+    let subtotal = 0;
+    let hasPerGuestItems = false;
+    const itemBreakdown = [];
+
+    for (const itemRef of includedItems) {
+        const itemId = itemRef.id || itemRef;
+        const itemRecord = allRecords.find(r => r.id === itemId);
+
+        if (!itemRecord) {
+            console.warn(`[Utils] Package item ${itemId} not found in records`);
+            continue;
+        }
+
+        // Get base price with selected options
+        const selections = itemRef.options || itemRef.selections || {};
+        const basePrice = getRecordPrice(itemRecord, selections);
+
+        // Check if this is a per-guest item
+        const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+        const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
+
+        // For per-guest items, multiply by headcount; otherwise use item quantity
+        const itemQuantity = itemRef.quantity || 1;
+        let effectiveQuantity = itemQuantity;
+
+        if (isPerGuest) {
+            hasPerGuestItems = true;
+            effectiveQuantity = headcount;
+        }
+
+        const itemTotal = basePrice * effectiveQuantity;
+        subtotal += itemTotal;
+
+        itemBreakdown.push({
+            id: itemId,
+            name: itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item',
+            basePrice,
+            quantity: effectiveQuantity,
+            isPerGuest,
+            pricingType,
+            total: itemTotal
+        });
+    }
+
+    // Apply discount
+    const discountAmount = discountPercent > 0 ? (subtotal * (discountPercent / 100)) : 0;
+    const totalPrice = subtotal - discountAmount;
+
+    return {
+        subtotal,
+        discountPercent,
+        discountAmount,
+        totalPrice,
+        itemBreakdown,
+        hasPerGuestItems
+    };
+}
+
+/**
+ * Gets the default headcount for a package based on its items.
+ * Returns the maximum minimum headcount required across all included items.
+ *
+ * @param {Object} packageContents - Package contents from parsePackageContentsFromSession
+ * @param {Array} allRecords - All catalog records
+ * @returns {number} The recommended default headcount
+ */
+export function getPackageDefaultHeadcount(packageContents, allRecords) {
+    const includedItems = packageContents.includedItems || [];
+    let maxMinHeadcount = 1;
+
+    for (const itemRef of includedItems) {
+        const itemId = itemRef.id || itemRef;
+        const itemRecord = allRecords.find(r => r.id === itemId);
+
+        if (itemRecord) {
+            const minHeadcount = itemRecord.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
+            if (minHeadcount > maxMinHeadcount) {
+                maxMinHeadcount = minHeadcount;
+            }
+        }
+    }
+
+    return maxMinHeadcount;
+}
+
+/**
  * Builds a Package Contents JSON object from a Session's locked items and ideas.
  * Used when publishing a Session as a Package (Decision 5 - Option B).
  *

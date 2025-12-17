@@ -7,7 +7,7 @@ import * as api from '../api.js';
 import { buildGoalBucket, calculateRecommendationScore } from '../availability.js';
 // ^^^ END FINAL IMPORT FIX ^^^
 import { CONSTANTS } from '../config.js';
-import { getRecordPrice, getTempLikes, getEffectiveMinQuantity } from '../utils.js';
+import { getRecordPrice, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
 import * as tileSizingDebug from '../utils/tileSizingDebug.js';
 
@@ -429,31 +429,32 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         imageContainerHTML += `<button class="availability-btn" title="Select a date range to check availability">📅</button>`;
         imageContainerHTML += `</div>`;
 
-        // Calculate base package price and display savings
-        const basePrice = parseFloat(fields[CONSTANTS.FIELD_NAMES.PRICE] || packageMetadata.price || 0);
+        // DYNAMIC PRICING: Calculate package price from current component item prices
+        const defaultHeadcount = getPackageDefaultHeadcount(packageContents, allRecords);
+        const dynamicPricing = calculateDynamicPackagePrice(packageContents, packageMetadata, allRecords, defaultHeadcount);
+
         const discount = parseFloat(packageMetadata.discount || 0);
         const pricingType = fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || packageMetadata.pricingType;
-        const pricingTypeHTML = pricingType ? `<span class="pricing-type">/ ${pricingType.toLowerCase()}</span>` : '';
 
-        // Calculate original value (sum of individual items) for savings display
-        let originalValue = 0;
-        for (const itemRef of (packageContents.includedItems || [])) {
-            const itemId = itemRef.id || itemRef;
-            const itemRecord = allRecords.find(r => r.id === itemId);
-            if (itemRecord) {
-                const itemPrice = parseFloat(itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICE] || 0);
-                const qty = itemRef.quantity || 1;
-                originalValue += itemPrice * qty;
-            }
+        // Build headcount selector if package has per-guest items
+        let headcountSelectorHTML = '';
+        if (dynamicPricing.hasPerGuestItems) {
+            headcountSelectorHTML = `
+                <div class="package-headcount-selector">
+                    <label>Guests:</label>
+                    <div class="quantity-selector package-quantity">
+                        <button type="button" class="quantity-btn minus">-</button>
+                        <input type="number" class="quantity-input package-headcount-input" value="${defaultHeadcount}" min="${defaultHeadcount}" step="1">
+                        <button type="button" class="quantity-btn plus">+</button>
+                    </div>
+                </div>
+            `;
         }
 
         // Show savings if there's a discount
         let savingsHTML = '';
-        if (discount > 0 || (originalValue > basePrice && basePrice > 0)) {
-            const savings = discount > 0 ? (originalValue * (discount / 100)) : (originalValue - basePrice);
-            if (savings > 0) {
-                savingsHTML = `<span class="package-savings">Save $${savings.toFixed(0)}</span>`;
-            }
+        if (discount > 0 && dynamicPricing.discountAmount > 0) {
+            savingsHTML = `<span class="package-savings">Save $${dynamicPricing.discountAmount.toFixed(0)} (${discount}% off)</span>`;
         }
 
         // Build tier options HTML if tiers exist
@@ -462,14 +463,22 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         if (tiers.length > 0) {
             tiersHTML = `<div class="package-tiers">`;
             tiers.forEach((tier, idx) => {
-                const tierPrice = tier.price || basePrice;
+                const tierPrice = tier.price || dynamicPricing.totalPrice;
                 const tierLabel = tier.name || `Tier ${idx + 1}`;
                 tiersHTML += `<button class="tier-btn ${idx === 0 ? 'selected' : ''}" data-tier-index="${idx}" data-price="${tierPrice}">${tierLabel} - $${tierPrice.toFixed(0)}</button>`;
             });
             tiersHTML += `</div>`;
         }
 
-        const priceHTML = basePrice === 0 ? 'Starts Free' : `From $${basePrice.toFixed(2)} ${pricingTypeHTML}`;
+        // Format the price display
+        const displayPrice = dynamicPricing.totalPrice;
+        const perGuestLabel = dynamicPricing.hasPerGuestItems ? '<span class="pricing-type">/ per guest pricing</span>' : '';
+        const priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${perGuestLabel}`;
+
+        // Store package data on the card for dynamic updates
+        packageCard.dataset.packageContents = JSON.stringify(packageContents);
+        packageCard.dataset.packageMetadata = JSON.stringify(packageMetadata);
+        packageCard.dataset.defaultHeadcount = defaultHeadcount;
 
         packageCard.innerHTML = `
             ${imageContainerHTML}
@@ -482,14 +491,67 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 </div>
             </div>
             <div class="card-footer">
+                ${headcountSelectorHTML}
                 <div class="price-wrapper">
-                    <div class="price">${priceHTML}</div>
-                    ${savingsHTML}
+                    <div class="price package-dynamic-price">${priceHTML}</div>
+                    <div class="package-savings-wrapper">${savingsHTML}</div>
                 </div>
                 ${tiersHTML}
                 <button class="card-action-btn add-package-btn" data-record-id="${record.id}">Add Package to Plan</button>
             </div>
         `;
+
+        // Add headcount change handler for dynamic price updates
+        if (dynamicPricing.hasPerGuestItems) {
+            const headcountInput = packageCard.querySelector('.package-headcount-input');
+            const plusBtn = packageCard.querySelector('.package-quantity .plus');
+            const minusBtn = packageCard.querySelector('.package-quantity .minus');
+            const priceEl = packageCard.querySelector('.package-dynamic-price');
+            const savingsEl = packageCard.querySelector('.package-savings-wrapper');
+
+            const updatePackagePrice = () => {
+                const currentHeadcount = parseInt(headcountInput.value, 10) || defaultHeadcount;
+                const updatedPricing = calculateDynamicPackagePrice(packageContents, packageMetadata, allRecords, currentHeadcount);
+
+                // Update price display
+                const newPriceHTML = updatedPricing.totalPrice === 0 ? 'Free' : `$${updatedPricing.totalPrice.toFixed(2)} ${perGuestLabel}`;
+                priceEl.innerHTML = newPriceHTML;
+
+                // Update savings display
+                if (discount > 0 && updatedPricing.discountAmount > 0) {
+                    savingsEl.innerHTML = `<span class="package-savings">Save $${updatedPricing.discountAmount.toFixed(0)} (${discount}% off)</span>`;
+                } else {
+                    savingsEl.innerHTML = '';
+                }
+
+                // Store current headcount for when adding to plan
+                packageCard.dataset.currentHeadcount = currentHeadcount;
+            };
+
+            if (headcountInput) {
+                headcountInput.addEventListener('change', updatePackagePrice);
+                headcountInput.addEventListener('input', updatePackagePrice);
+            }
+
+            if (plusBtn && minusBtn) {
+                plusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const currentValue = parseInt(headcountInput.value, 10) || defaultHeadcount;
+                    headcountInput.value = currentValue + 1;
+                    updatePackagePrice();
+                });
+
+                minusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const currentValue = parseInt(headcountInput.value, 10) || defaultHeadcount;
+                    const minValue = parseInt(headcountInput.min, 10) || 1;
+                    if (currentValue > minValue) {
+                        headcountInput.value = currentValue - 1;
+                        updatePackagePrice();
+                    }
+                });
+            }
+        }
 
         // Add tier selection functionality
         const tierBtns = packageCard.querySelectorAll('.tier-btn');
@@ -500,9 +562,9 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 btn.classList.add('selected');
                 // Update displayed price based on selected tier
                 const tierPrice = parseFloat(btn.dataset.price);
-                const priceEl = packageCard.querySelector('.price');
+                const priceEl = packageCard.querySelector('.package-dynamic-price');
                 if (priceEl && tierPrice > 0) {
-                    priceEl.innerHTML = `$${tierPrice.toFixed(2)} ${pricingTypeHTML}`;
+                    priceEl.innerHTML = `$${tierPrice.toFixed(2)} ${perGuestLabel}`;
                 }
             });
         });
@@ -514,7 +576,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             className: packageCard.className,
             includedCount,
             addOnCount,
-            basePrice,
+            dynamicPrice: dynamicPricing.totalPrice,
+            hasPerGuestItems: dynamicPricing.hasPerGuestItems,
             creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
         });
 

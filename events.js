@@ -7,7 +7,7 @@ import * as api from './api.js';
 import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
-import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity } from './utils.js';
+import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice } from './utils.js';
 import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
@@ -1142,8 +1142,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 return;
             }
 
+            // Get the package card to read stored data and selected headcount
+            const packageCard = addPackageBtn.closest('.package-card');
+
             // Fetch package contents from linked session
             let packageContents = { includedItems: [], addOnItems: [], tiers: [] };
+            let packageMetadata = { discount: 0, tiers: [], price: 0, pricingType: null };
             const linkedSessionId = packageRecord.fields['LinkedSession'] ? packageRecord.fields['LinkedSession'][0] : null;
 
             if (linkedSessionId) {
@@ -1178,6 +1182,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                             addOnItems,
                             tiers: sessionData.packageMetadata?.tiers || []
                         };
+
+                        // Get package metadata if available
+                        if (sessionData.packageMetadata) {
+                            packageMetadata = sessionData.packageMetadata;
+                        }
                     }
                 } catch (e) {
                     console.warn('[Events] Could not fetch linked session for package', recordId, e);
@@ -1188,12 +1197,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const addOnItems = packageContents.addOnItems || [];
 
             // Get selected tier if any
-            const packageCard = addPackageBtn.closest('.package-card');
             const selectedTierBtn = packageCard?.querySelector('.tier-btn.selected');
             const selectedTierIndex = selectedTierBtn ? parseInt(selectedTierBtn.dataset.tierIndex, 10) : 0;
 
+            // Get user-selected headcount from the package card (for per-guest items)
+            const headcountInput = packageCard?.querySelector('.package-headcount-input');
+            const selectedHeadcount = headcountInput ? parseInt(headcountInput.value, 10) : null;
+            const defaultHeadcount = packageCard?.dataset.defaultHeadcount ? parseInt(packageCard.dataset.defaultHeadcount, 10) : 1;
+            const packageHeadcount = selectedHeadcount || defaultHeadcount;
+
             log('Events', `Adding package ${packageRecord.fields.Name} to plan`);
             log('Events', `Package has ${includedItems.length} included items and ${addOnItems.length} add-ons`);
+            log('Events', `Package headcount: ${packageHeadcount}`);
 
             // Add all included items to lockedItems (Event Plan)
             let addedCount = 0;
@@ -1202,13 +1217,24 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 const itemRecord = state.records.all.find(r => r.id === itemId);
 
                 if (itemRecord && !state.cart.lockedItems.has(itemId)) {
+                    // Check if this is a per-guest item - if so, use package headcount
+                    const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+                    const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
+
+                    // Use package headcount for per-guest items, otherwise use item's original quantity
+                    let itemQuantity = itemRef.quantity || 1;
+                    if (isPerGuest && packageHeadcount > itemQuantity) {
+                        itemQuantity = packageHeadcount;
+                    }
+
                     const itemInfo = {
-                        quantity: itemRef.quantity || 1,
+                        quantity: itemQuantity,
                         selectedOptionIndex: itemRef.options?.group0 || 0,
                         selections: itemRef.options || {},
                         note: `From package: ${packageRecord.fields.Name}`,
                         packageId: recordId,
-                        packageLocked: itemRef.locked !== false // Locked items from package
+                        packageLocked: itemRef.locked !== false, // Locked items from package
+                        packageHeadcount: isPerGuest ? packageHeadcount : null // Store headcount for per-guest items
                     };
 
                     // Enforce effective minimum quantity
@@ -1220,7 +1246,7 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     state.cart.lockedItems.set(itemId, itemInfo);
                     state.cart.items.delete(itemId); // Remove from ideas if present
                     addedCount++;
-                    log('Events', `Added included item ${itemRecord.fields.Name} to locked items`);
+                    log('Events', `Added included item ${itemRecord.fields.Name} to locked items (qty: ${itemInfo.quantity}, perGuest: ${isPerGuest})`);
                 }
             }
 
@@ -1231,18 +1257,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 const itemRecord = state.records.all.find(r => r.id === itemId);
 
                 if (itemRecord && !state.cart.lockedItems.has(itemId) && !state.cart.items.has(itemId)) {
+                    // Check if this is a per-guest item
+                    const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+                    const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
+
+                    let itemQuantity = itemRef.quantity || 1;
+                    if (isPerGuest && packageHeadcount > itemQuantity) {
+                        itemQuantity = packageHeadcount;
+                    }
+
                     const itemInfo = {
-                        quantity: itemRef.quantity || 1,
+                        quantity: itemQuantity,
                         selectedOptionIndex: itemRef.options?.group0 || 0,
                         selections: itemRef.options || {},
                         note: `Add-on from package: ${packageRecord.fields.Name}`,
                         packageId: recordId,
-                        isPackageAddOn: true
+                        isPackageAddOn: true,
+                        packageHeadcount: isPerGuest ? packageHeadcount : null
                     };
 
                     state.cart.items.set(itemId, itemInfo);
                     addOnCount++;
-                    log('Events', `Added add-on item ${itemRecord.fields.Name} to ideas`);
+                    log('Events', `Added add-on item ${itemRecord.fields.Name} to ideas (qty: ${itemInfo.quantity}, perGuest: ${isPerGuest})`);
                 }
             }
 
@@ -1253,6 +1289,8 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             state.session.activePackages.set(recordId, {
                 name: packageRecord.fields.Name,
                 tierIndex: selectedTierIndex,
+                headcount: packageHeadcount,
+                discount: packageMetadata.discount || 0,
                 addedAt: new Date().toISOString()
             });
 
