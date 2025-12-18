@@ -2760,8 +2760,22 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
 
         // Update Add to Plan button for packages
         if (addToPlanBtn) {
-            addToPlanBtn.textContent = 'Add Package to Plan';
-            addToPlanBtn.dataset.tooltip = 'Add all package items to your plan';
+            // Check if this package is already in the plan
+            const isPackageInPlan = state.session.activePackages && state.session.activePackages.has(record.id);
+
+            // Also check if any locked items have this package as their source
+            let hasPackageItemsInPlan = false;
+            for (const [itemId, itemInfo] of state.cart.lockedItems.entries()) {
+                if (itemInfo.packageId === record.id) {
+                    hasPackageItemsInPlan = true;
+                    break;
+                }
+            }
+
+            const packageAlreadyAdded = isPackageInPlan || hasPackageItemsInPlan;
+
+            addToPlanBtn.textContent = packageAlreadyAdded ? 'Update Plan' : 'Add Package to Plan';
+            addToPlanBtn.dataset.tooltip = packageAlreadyAdded ? 'Update plan with any changes' : 'Add all package items to your plan';
             addToPlanBtn.classList.add('add-package-btn');
             addToPlanBtn.dataset.recordId = record.id;
         }

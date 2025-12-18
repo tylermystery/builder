@@ -132,6 +132,20 @@ async function createLockedInItemElement(record, itemInfo) {
         : itemInfo.selectedOptionIndex;
 
     let price = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+    const originalPrice = price; // Store original price for discount display
+
+    // Apply package discount if this item came from a package
+    let packageDiscount = 0;
+    let packageName = null;
+    if (itemInfo.packageId && state.session.activePackages) {
+        const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+        if (packageInfo && packageInfo.discount > 0) {
+            packageDiscount = packageInfo.discount;
+            packageName = packageInfo.name;
+            price = price * (1 - packageDiscount / 100);
+        }
+    }
+
     const total = (price || 0) * (itemInfo.quantity || 1);
     let priceDisplay = `$${(price || 0).toFixed(2)}`;
 
@@ -140,8 +154,11 @@ async function createLockedInItemElement(record, itemInfo) {
     }
 
     if (itemInfo.overridePrice != null) {
-        let originalPrice = getRecordPrice(record, priceParam);
-        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${originalPrice.toFixed(2)})</em>`;
+        let prevOriginalPrice = getRecordPrice(record, priceParam);
+        priceDisplay = `$${price.toFixed(2)} <em class="price-original">(was $${prevOriginalPrice.toFixed(2)})</em>`;
+    } else if (packageDiscount > 0) {
+        // Show package discount savings
+        priceDisplay = `$${price.toFixed(2)} <span class="package-discount-indicator" data-tippy-content="${packageDiscount}% package discount from ${packageName}">(${packageDiscount}% off)</span>`;
     }
 
     // Calculate effective minimum and add warning if applicable
@@ -199,6 +216,17 @@ async function createLockedInItemElement(record, itemInfo) {
     if (benefitSpan && window.tippy) {
         tippy(benefitSpan, {
             content: benefitSpan.dataset.tippyContent,
+            allowHTML: true,
+            placement: 'top',
+            arrow: true
+        });
+    }
+
+    // Initialize Tippy tooltip for the package discount indicator if present
+    const packageDiscountSpan = itemElement.querySelector('.package-discount-indicator');
+    if (packageDiscountSpan && window.tippy) {
+        tippy(packageDiscountSpan, {
+            content: packageDiscountSpan.dataset.tippyContent,
             allowHTML: true,
             placement: 'top',
             arrow: true
@@ -1420,14 +1448,22 @@ export function updateTotalCost() {
             ? itemInfo.selections
             : itemInfo.selectedOptionIndex;
 
-        const unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
         if (isNaN(unitPrice)) return;
+
+        // Apply package discount if this item came from a package
+        if (itemInfo.packageId && state.session.activePackages) {
+            const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+            if (packageInfo && packageInfo.discount > 0) {
+                unitPrice = unitPrice * (1 - packageInfo.discount / 100);
+            }
+        }
 
         // Custom items don't have a min headcount, so default to 1
         const minHeadcount = record.fields[CONSTANTS.FIELD_NAMES.HEADCOUNT_MIN] || 1;
         // Use itemInfo.quantity for all items
         const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
-        
+
         subtotal += unitPrice * effectiveQuantity;
     });
     
