@@ -172,6 +172,9 @@ function createSkeletonCard() {
 function getChildItemsForGrouping(groupingRecord, allRecords) {
     const groupingNameForFilter = groupingRecord.fields.Name.toLowerCase().replace(/\s+/g, ' ');
 
+    console.log('[FullWidthDebug][getChildItems] Looking for children of grouping:', groupingRecord.fields.Name);
+    console.log('[FullWidthDebug][getChildItems] Normalized name for filter:', groupingNameForFilter);
+
     const results = allRecords.filter(r => {
         if (r.fields['Item Type'] !== 'Bookable Item' && r.fields['Item Type'] !== 'Event') return false;
         const itemCategories = (r.fields.Categories || '')
@@ -179,6 +182,11 @@ function getChildItemsForGrouping(groupingRecord, allRecords) {
             .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
         return itemCategories.includes(groupingNameForFilter);
     });
+
+    console.log('[FullWidthDebug][getChildItems] Found', results.length, 'children for', groupingRecord.fields.Name);
+    if (results.length > 0) {
+        console.log('[FullWidthDebug][getChildItems] Children:', results.map(r => r.fields.Name));
+    }
 
     return results;
 }
@@ -555,11 +563,27 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         groupingNames: groupings.map(g => g.fields.Name)
     });
 
+    // === FULL WIDTH DEBUG: Card sizing check ===
+    console.log('[FullWidthDebug][RenderRecords] === CARD SIZING DEBUG ===');
+    console.log('[FullWidthDebug][RenderRecords] Viewport width:', window.innerWidth);
+    console.log('[FullWidthDebug][RenderRecords] Total records:', recordsToRender.length);
+    console.log('[FullWidthDebug][RenderRecords] Groupings count:', groupings.length);
+    console.log('[FullWidthDebug][RenderRecords] Non-Grouping count:', nonGroupingRecords.length);
+
     // Check if we're viewing a specific subcategory (filtered view) - don't show carousels in filtered views
     const params = new URLSearchParams(window.location.search);
     const hasSubcategoryFilter = params.get('subcategory');
     const hasViewFilter = params.get('view');
+    const hasCategoryFilter = params.get('category');
     const isFilteredView = hasSubcategoryFilter || hasViewFilter || state.ui.nameFilter;
+
+    console.log('[FullWidthDebug][RenderRecords] URL params:', {
+        subcategory: hasSubcategoryFilter,
+        view: hasViewFilter,
+        category: hasCategoryFilter,
+        nameFilter: state.ui.nameFilter
+    });
+    console.log('[FullWidthDebug][RenderRecords] isFilteredView:', isFilteredView);
 
     // Check if carousel layout is already established in the container
     const existingCarouselSections = catalogContainer.querySelector('.grouping-carousel-section');
@@ -577,6 +601,13 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
     } else {
         layoutMode = 'carousel-sections';
     }
+
+    console.log('[FullWidthDebug][RenderRecords] LAYOUT MODE SELECTED:', layoutMode);
+    console.log('[FullWidthDebug][RenderRecords] Decision factors:', {
+        isFilteredView,
+        groupingsLength: groupings.length,
+        willUseCarousels: layoutMode === 'carousel-sections'
+    });
 
     console.log('[TileSizing][RenderRecords] Layout mode:', layoutMode, {
         hasSubcategoryFilter,
@@ -639,7 +670,17 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
             }
         }
     } else if (isFilteredView || groupings.length === 0) {
-        // If in filtered view or no groupings, render normally
+        // If in filtered view or no groupings, render normally (GRID MODE - potential full-width)
+        console.log('[FullWidthDebug][RenderRecords] === ENTERING GRID MODE ===');
+        console.log('[FullWidthDebug][RenderRecords] Grid mode triggered because:');
+        console.log('  - isFilteredView:', isFilteredView);
+        console.log('  - groupings.length:', groupings.length);
+        console.log('[FullWidthDebug][RenderRecords] catalog-container classes:', catalogContainer.className);
+        console.log('[FullWidthDebug][RenderRecords] catalog-container computed style:', {
+            display: getComputedStyle(catalogContainer).display,
+            gridTemplateColumns: getComputedStyle(catalogContainer).gridTemplateColumns
+        });
+
         const fragment = document.createDocumentFragment();
         const CHUNK_SIZE = 4;
 
@@ -654,6 +695,29 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
 
             catalogContainer.appendChild(fragment);
             fragment.textContent = '';
+
+            // === FULL WIDTH DEBUG: Check card sizes after first chunk ===
+            if (i === 0) {
+                setTimeout(() => {
+                    const renderedCards = catalogContainer.querySelectorAll('.event-card');
+                    console.log('[FullWidthDebug][RenderRecords] First chunk cards rendered:', renderedCards.length);
+                    if (renderedCards.length > 0) {
+                        const firstCard = renderedCards[0];
+                        const rect = firstCard.getBoundingClientRect();
+                        const containerRect = catalogContainer.getBoundingClientRect();
+                        console.log('[FullWidthDebug][RenderRecords] First card dimensions:', {
+                            width: rect.width,
+                            height: rect.height,
+                            containerWidth: containerRect.width,
+                            isFullWidth: rect.width >= containerRect.width * 0.9
+                        });
+                        console.log('[FullWidthDebug][RenderRecords] First card classes:', firstCard.className);
+                        console.log('[FullWidthDebug][RenderRecords] First card inline style:', firstCard.style.cssText);
+                        console.log('[FullWidthDebug][RenderRecords] First card computed maxWidth:', getComputedStyle(firstCard).maxWidth);
+                        console.log('[FullWidthDebug][RenderRecords] First card computed width:', getComputedStyle(firstCard).width);
+                    }
+                }, 100);
+            }
 
             addEnergy();
             updateProgress(0.00005 * chunk.length);
@@ -670,8 +734,12 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         }
     } else {
         // Render groupings as horizontal carousel sections
+        console.log('[FullWidthDebug][RenderRecords] === ENTERING CAROUSEL MODE ===');
+        console.log('[FullWidthDebug][RenderRecords] Will render', groupings.length, 'grouping carousels');
+
         for (const grouping of groupings) {
             const childItems = getChildItemsForGrouping(grouping, state.records.all);
+            console.log('[FullWidthDebug][RenderRecords] Grouping:', grouping.fields.Name, '- Child items:', childItems.length);
             if (childItems.length > 0) {
                 const carouselSection = await createGroupingCarouselSection(grouping, childItems, state.records.all, imageCache);
                 catalogContainer.appendChild(carouselSection);
@@ -686,6 +754,8 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
                         setTimeout(resolve, 0);
                     }
                 });
+            } else {
+                console.log('[FullWidthDebug][RenderRecords] Skipping grouping (no children):', grouping.fields.Name);
             }
         }
 
@@ -698,6 +768,8 @@ export async function renderRecords(recordsToRender, imageCache, append = false)
         });
 
         const ungroupedItems = nonGroupingRecords.filter(r => !allGroupedItemIds.has(r.id));
+        console.log('[FullWidthDebug][RenderRecords] Ungrouped items (not in any grouping):', ungroupedItems.length);
+        console.log('[FullWidthDebug][RenderRecords] Ungrouped item names:', ungroupedItems.map(r => r.fields.Name));
 
         if (ungroupedItems.length > 0) {
             // Create a section for ungrouped items

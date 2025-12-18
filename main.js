@@ -50,8 +50,6 @@ function syncUiWithUrl() {
         categoryFilters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
         let buttonToActivate;
         let categoryFilter = params.get('category');
-        const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
-        const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
         if (view === 'plan') {
             buttonToActivate = document.getElementById('plan-filter-btn');
@@ -59,17 +57,10 @@ function syncUiWithUrl() {
             buttonToActivate = document.getElementById('menu-likes-btn');
         } else if (categoryFilter) {
             buttonToActivate = categoryFilters.querySelector(`.filter-btn[data-filter="${categoryFilter}"]`);
-        } else if (hasStoreCategories) {
-            buttonToActivate = categoryFilters.querySelector('.filter-btn.category-filter-btn');
-            if (buttonToActivate) {
-                const newCategory = buttonToActivate.dataset.filter;
-                updateUrl({ category: newCategory, subcategory: null, view: null });
-                params.set('category', newCategory); // Update params for the current execution
-            }
-        } else {
-            buttonToActivate = categoryFilters.querySelector('.filter-btn[data-filter="all"]');
         }
-        
+        // No else - on landing page with no category set, no button should be active
+        // This allows carousels to show all store categories
+
         if (buttonToActivate) {
             buttonToActivate.classList.add('active');
         }
