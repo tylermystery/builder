@@ -1221,31 +1221,56 @@ body.modal-open {
                         <input type="text" id="header-event-name" value="Enter Plan Name" autocomplete="off">
                     </div>
                     <div id="share-menu-container">
-                        <button id="share-menu-btn" class="header-icon-btn" title="Share Options" style="display: none;">
-                            <span class="share-icon">&#8943;</span>
+                        <button id="share-menu-btn" class="header-icon-btn" title="Plan Options" style="display: none;">
+                            <span class="hamburger-icon">&#9776;</span>
                         </button>
-                        <div id="share-menu-dropdown" class="share-dropdown" style="display: none;">
-                            <button id="share-copy-link-btn" class="share-dropdown-item">
-                                <span class="share-item-icon">&#128279;</span> Copy Link
+                        <div id="share-menu-dropdown" class="hamburger-dropdown plan-menu-dropdown" style="display: none;">
+                            <!-- Session Management Section -->
+                            <div class="plan-menu-section-label">Session</div>
+                            <button id="plan-save-new-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#10133;</span> Save & New
                             </button>
-                            <button id="share-invite-btn" class="share-dropdown-item">
-                                <span class="share-item-icon">&#128236;</span> Invite Collaborator
+                            <button id="plan-delete-new-btn" class="hamburger-dropdown-item plan-menu-danger">
+                                <span class="menu-item-icon">&#128465;</span> Delete & New
                             </button>
-                            <button id="share-invite-guest-btn" class="share-dropdown-item">
-                                <span class="share-item-icon">&#127881;</span> Invite Guest
+                            <button id="plan-see-sessions-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#128203;</span> See Sessions
                             </button>
-                            <hr class="share-dropdown-divider">
-                            <button id="share-publish-btn" class="share-dropdown-item publish-option" style="display: none;">
-                                <span class="share-item-icon">&#127760;</span> Publish as Public Event
+                            <hr class="hamburger-dropdown-divider">
+                            <!-- Share & Collaborate Section -->
+                            <div class="plan-menu-section-label">Share</div>
+                            <button id="share-copy-link-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#128279;</span> Copy Link
                             </button>
-                            <button id="share-update-published-btn" class="share-dropdown-item update-published-option" style="display: none;">
-                                <span class="share-item-icon">&#128260;</span> Update Published Event
+                            <button id="share-invite-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#128236;</span> Invite Collaborator
                             </button>
-                            <button id="share-publish-package-btn" class="share-dropdown-item publish-package-option" style="display: none;">
-                                <span class="share-item-icon">&#128230;</span> Publish as Package
+                            <button id="share-invite-guest-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#127881;</span> Invite Guest
                             </button>
-                            <button id="share-update-package-btn" class="share-dropdown-item update-package-option" style="display: none;">
-                                <span class="share-item-icon">&#128230;</span> Update Package
+                            <hr class="hamburger-dropdown-divider publish-divider" style="display: none;">
+                            <!-- Publish Section (conditionally visible) -->
+                            <div class="plan-menu-section-label publish-section-label" style="display: none;">Publish</div>
+                            <button id="share-publish-btn" class="hamburger-dropdown-item publish-option" style="display: none;">
+                                <span class="menu-item-icon">&#127760;</span> Publish as Public Event
+                            </button>
+                            <button id="share-update-published-btn" class="hamburger-dropdown-item update-published-option" style="display: none;">
+                                <span class="menu-item-icon">&#128260;</span> Update Published Event
+                            </button>
+                            <button id="share-publish-package-btn" class="hamburger-dropdown-item publish-package-option" style="display: none;">
+                                <span class="menu-item-icon">&#128230;</span> Publish as Package
+                            </button>
+                            <button id="share-update-package-btn" class="hamburger-dropdown-item update-package-option" style="display: none;">
+                                <span class="menu-item-icon">&#128230;</span> Update Package
+                            </button>
+                            <hr class="hamburger-dropdown-divider archive-divider">
+                            <!-- Archive Section -->
+                            <div class="plan-menu-section-label">Manage</div>
+                            <button id="plan-archive-btn" class="hamburger-dropdown-item">
+                                <span class="menu-item-icon">&#128451;</span> Archive Plan
+                            </button>
+                            <button id="plan-delete-btn" class="hamburger-dropdown-item plan-menu-danger">
+                                <span class="menu-item-icon">&#128465;</span> Delete Plan
                             </button>
                         </div>
                         <!-- Invite Collaborator Popup -->
