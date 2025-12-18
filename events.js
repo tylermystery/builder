@@ -502,28 +502,41 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
         const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
 
+        // NO "All" button - user wants category-organized carousels on landing
+        // If store has categories, they will be shown as carousels in renderRecords
+        // Clicking a category filters to just that category's items
+
         if (hasStoreCategories) {
             const itemRecordIds = Array.isArray(activeShop.fields.Items)
                 ? activeShop.fields.Items
                 : activeShop.fields.Items.split(',').map(id => id.trim());
-            
-            let firstCategoryButton = true;
+
+            // First category button should be active by default for landing page
+            let isFirst = true;
             itemRecordIds.forEach(recordId => {
                 if (!recordId.startsWith('rec')) return;
-                
+
                 const categoryRecord = state.records.all.find(r => r.id === recordId);
                 if (categoryRecord && categoryRecord.fields && categoryRecord.fields.Name) {
                     const categoryName = categoryRecord.fields.Name;
                     const categoryBtn = document.createElement('button');
-                    categoryBtn.className = 'filter-btn category-filter-btn';
+                    // First button is active by default only if no URL category is set
+                    const params = new URLSearchParams(window.location.search);
+                    const urlCategory = params.get('category');
                     const normalizedCategoryName = categoryName.toLowerCase().replace(/\s+/g, ' ');
+
+                    if (isFirst && !urlCategory) {
+                        // Don't pre-select first category - let carousels show on landing
+                        categoryBtn.className = 'filter-btn category-filter-btn';
+                    } else if (urlCategory === normalizedCategoryName) {
+                        categoryBtn.className = 'filter-btn category-filter-btn active';
+                    } else {
+                        categoryBtn.className = 'filter-btn category-filter-btn';
+                    }
+                    isFirst = false;
+
                     categoryBtn.dataset.filter = normalizedCategoryName;
                     categoryBtn.textContent = categoryName;
-
-                    if (firstCategoryButton) {
-                        categoryBtn.classList.add('active');
-                        firstCategoryButton = false;
-                    }
 
                     categoryBtn.addEventListener('click', () => {
                         document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -534,18 +547,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     categoryFiltersRoot.appendChild(categoryBtn);
                 }
             });
-        } else {
-            const allButton = document.createElement('button');
-            allButton.className = 'filter-btn category-filter-btn active';
-            allButton.dataset.filter = 'all';
-            allButton.textContent = 'All';
-            allButton.addEventListener('click', () => {
-                document.querySelectorAll('#category-filters .filter-btn').forEach(btn => btn.classList.remove('active'));
-                allButton.classList.add('active');
-                updateUrl({ category: null, subcategory: null, view: null });
-                applyFiltersAndSort(imageCache);
-            });
-            categoryFiltersRoot.appendChild(allButton);
         }
 
     }  else {

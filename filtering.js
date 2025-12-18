@@ -489,19 +489,65 @@ export async function applyFiltersAndSort(imageCache) {
     } else {
          console.log('[FilterDebug] Standard filtering path (not plan/likes/etc)');
          console.log('[FilterDebug] baseRecordsToFilter count:', baseRecordsToFilter.length);
-         
+         console.log('[FilterDebug] selectedCategory:', selectedCategory);
+
+         // === FULL WIDTH DEBUG: Check if store has category items ===
+         const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+         const hasStoreCategories = activeShop && activeShop.fields && activeShop.fields.Items && activeShop.fields.Items.length > 0;
+         console.log('[FullWidthDebug] Store has categories (Items field):', hasStoreCategories);
+
+         if (hasStoreCategories) {
+             const storeItemIds = Array.isArray(activeShop.fields.Items)
+                 ? activeShop.fields.Items
+                 : activeShop.fields.Items.split(',').map(id => id.trim());
+             console.log('[FullWidthDebug] Store category IDs:', storeItemIds);
+
+             // Get the actual category (Grouping) records
+             const storeCategoryRecords = storeItemIds
+                 .filter(id => id.startsWith('rec'))
+                 .map(id => state.records.all.find(r => r.id === id))
+                 .filter(r => r && r.fields['Item Type'] === 'Grouping');
+             console.log('[FullWidthDebug] Store category (Grouping) records found:', storeCategoryRecords.length);
+             console.log('[FullWidthDebug] Category names:', storeCategoryRecords.map(r => r.fields.Name));
+         }
+
          // Sample first 3 records to see their category data
          console.log('[FilterDebug] Sample records (first 3):');
          baseRecordsToFilter.slice(0, 3).forEach((rec, i) => {
              console.log(`  Record ${i}: ${rec.fields.Name}`);
+             console.log(`    - Item Type: "${rec.fields['Item Type']}"`);
              console.log(`    - Categories: "${rec.fields[CONSTANTS.FIELD_NAMES.CATEGORIES]}"`);
              console.log(`    - Parent Item: "${rec.fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM]}"`);
              console.log(`    - Subcategories: "${rec.fields.Subcategories}"`);
          });
-         
-         recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
-         console.log('[FilterDebug] After category filter, recordsToDisplay count:', recordsToDisplay.length);
-         
+
+         // If on landing page (no category selected) AND store has categories, include the Grouping records
+         if (selectedCategory === 'all' && hasStoreCategories) {
+             console.log('[FullWidthDebug] Landing page with store categories - including Groupings for carousels');
+
+             const storeItemIds = Array.isArray(activeShop.fields.Items)
+                 ? activeShop.fields.Items
+                 : activeShop.fields.Items.split(',').map(id => id.trim());
+
+             // Get the actual category (Grouping) records that the store defines
+             const storeCategoryRecords = storeItemIds
+                 .filter(id => id.startsWith('rec'))
+                 .map(id => state.records.all.find(r => r.id === id))
+                 .filter(r => r && r.fields['Item Type'] === 'Grouping');
+
+             // Get all items that belong to this store (excluding Groupings from base filter)
+             const storeItems = baseRecordsToFilter.filter(r => r.fields['Item Type'] !== 'Grouping');
+
+             // Combine: Groupings first, then other items
+             recordsToDisplay = [...storeCategoryRecords, ...storeItems];
+             console.log('[FullWidthDebug] Combined records: Groupings + store items =', recordsToDisplay.length);
+             console.log('[FullWidthDebug] Groupings count:', storeCategoryRecords.length);
+             console.log('[FullWidthDebug] Other items count:', storeItems.length);
+         } else {
+             recordsToDisplay = filterByCategoryAndSubcategory(baseRecordsToFilter, selectedCategory, activeSubcategories);
+             console.log('[FilterDebug] After category filter, recordsToDisplay count:', recordsToDisplay.length);
+         }
+
          // Standard filters apply to ALL views except 'My Plan'/'My Likes'
          recordsToDisplay = filterByStatus(recordsToDisplay, statusFilter);
          console.log('[FilterDebug] After status filter:', recordsToDisplay.length);
@@ -511,11 +557,21 @@ export async function applyFiltersAndSort(imageCache) {
          console.log('[FilterDebug] After location filter:', recordsToDisplay.length);
          recordsToDisplay = filterByBudget(recordsToDisplay, budgetFilter);
          console.log('[FilterDebug] After budget filter:', recordsToDisplay.length);
-         
+
          if (searchTerm) {
              recordsToDisplay = filterBySearchTerm(recordsToDisplay, searchTerm);
              console.log('[FilterDebug] After search term filter:', recordsToDisplay.length);
          }
+
+         // === FULL WIDTH DEBUG: Final records breakdown ===
+         const finalGroupings = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Grouping');
+         const finalBookableItems = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Bookable Item');
+         const finalEvents = recordsToDisplay.filter(r => r.fields['Item Type'] === 'Event');
+         console.log('[FullWidthDebug] FINAL recordsToDisplay breakdown:');
+         console.log('  - Groupings:', finalGroupings.length, finalGroupings.map(r => r.fields.Name));
+         console.log('  - Bookable Items:', finalBookableItems.length);
+         console.log('  - Events:', finalEvents.length);
+         console.log('  - Total:', recordsToDisplay.length);
     }
 
     recordsToDisplay = sortRecords(recordsToDisplay, sortBy, goalBucket);
