@@ -5810,7 +5810,9 @@ hr.total-divider {
 .plan-menu-dropdown {
     position: absolute;
     top: 100%;
-    right: 0;
+    right: auto;
+    left: 0;
+    transform: translateX(-75%);
     margin-top: 8px;
     max-height: 80vh;
     overflow-y: auto;
@@ -5838,6 +5840,15 @@ hr.total-divider {
 
 .plan-menu-danger .menu-item-icon {
     color: #dc3545;
+}
+
+/* Mobile: Ensure plan menu dropdown fits within viewport */
+@media (max-width: 480px) {
+    .plan-menu-dropdown {
+        transform: translateX(-65%);
+        min-width: 200px;
+        max-width: calc(100vw - 40px);
+    }
 }
 
 /* Sessions List Modal */
