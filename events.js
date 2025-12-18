@@ -1145,6 +1145,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Get the package card to read stored data and selected headcount
             const packageCard = addPackageBtn.closest('.package-card');
 
+            // Also check if this is from the detail modal
+            const modalOverlay = addPackageBtn.closest('#detail-modal-overlay');
+            const isFromModal = !!modalOverlay;
+
             // Fetch package contents from linked session
             let packageContents = { includedItems: [], addOnItems: [], tiers: [] };
             let packageMetadata = { discount: 0, tiers: [], price: 0, pricingType: null };
@@ -1200,10 +1204,26 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const selectedTierBtn = packageCard?.querySelector('.tier-btn.selected');
             const selectedTierIndex = selectedTierBtn ? parseInt(selectedTierBtn.dataset.tierIndex, 10) : 0;
 
-            // Get user-selected headcount from the package card (for per-guest items)
-            const headcountInput = packageCard?.querySelector('.package-headcount-input');
-            const selectedHeadcount = headcountInput ? parseInt(headcountInput.value, 10) : null;
-            const defaultHeadcount = packageCard?.dataset.defaultHeadcount ? parseInt(packageCard.dataset.defaultHeadcount, 10) : 1;
+            // Get user-selected headcount from the package card or modal (for per-guest items)
+            let selectedHeadcount = null;
+            let defaultHeadcount = 1;
+
+            if (isFromModal && modalOverlay) {
+                // Get headcount from modal
+                const modalHeadcountInput = modalOverlay.querySelector('.package-headcount-input');
+                selectedHeadcount = modalHeadcountInput ? parseInt(modalHeadcountInput.value, 10) : null;
+                // Also check the stored headcount in modal overlay's dataset
+                if (!selectedHeadcount && modalOverlay.dataset.packageHeadcount) {
+                    selectedHeadcount = parseInt(modalOverlay.dataset.packageHeadcount, 10);
+                }
+                defaultHeadcount = 1; // Modal sets proper defaults
+            } else if (packageCard) {
+                // Get headcount from catalog card
+                const headcountInput = packageCard.querySelector('.package-headcount-input');
+                selectedHeadcount = headcountInput ? parseInt(headcountInput.value, 10) : null;
+                defaultHeadcount = packageCard.dataset.defaultHeadcount ? parseInt(packageCard.dataset.defaultHeadcount, 10) : 1;
+            }
+
             const packageHeadcount = selectedHeadcount || defaultHeadcount;
 
             log('Events', `Adding package ${packageRecord.fields.Name} to plan`);
@@ -1306,6 +1326,11 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             await updateAllCardAvailabilityIcons();
             await ui.updateLockedItemStatusIcons();
             updateMobileBarAvailability();
+
+            // Close the modal if package was added from there
+            if (isFromModal) {
+                ui.hideDetailModal();
+            }
 
             // Show success notification
             const notification = `Added package "${packageRecord.fields.Name}": ${addedCount} items to plan` +

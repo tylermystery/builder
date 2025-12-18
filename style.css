@@ -3559,6 +3559,84 @@ hr.total-divider {
     color: white;
 }
 
+/* === PACKAGE MODAL STYLES === */
+.package-modal-contents {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.package-contents-header {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #667eea;
+}
+
+.package-addons-header {
+    border-bottom-color: #28a745;
+    margin-top: 15px;
+}
+
+.package-included-list,
+.package-addon-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.package-included-list .package-item,
+.package-addon-list .package-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e0e4f0;
+    font-size: 0.9em;
+}
+
+.package-addon-item {
+    background: rgba(40, 167, 69, 0.05) !important;
+    border: 1px dashed #28a745 !important;
+}
+
+.package-item-name {
+    color: #333;
+}
+
+.package-item-qty {
+    font-weight: 500;
+    color: #667eea;
+    font-size: 0.85em;
+}
+
+.package-discount-badge {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.package-modal-savings {
+    color: #28a745;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.modal-package-headcount {
+    margin-top: 10px;
+}
+
 /* === END PACKAGE CARD STYLES === */
 
 /* --- GROUPING CAROUSEL SECTION STYLES --- */

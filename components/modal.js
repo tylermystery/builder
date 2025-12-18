@@ -4,7 +4,7 @@ import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
-import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug } from '../utils.js';
+import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { initializeItemChat } from '../chat.js';
@@ -2104,14 +2104,90 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalAdditionalDetails.appendChild(fragment);
     }
 
-    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping'; 
+    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping';
+    const isPackage = record.fields['Item Type'] === 'Package';
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
     const pricingTypeHTML = pricingType ? `<span class="pricing-type"> / ${pricingType.toLowerCase()}</span>` : '';
 
+    // Store package data for use throughout modal (will be populated if isPackage)
+    let packageContents = null;
+    let packageMetadata = null;
+    let packageHeadcount = 1;
+    let packagePricing = null;
+
     if (isGrouping) {
         const range = getGroupPriceRange(record);
         modalItemPrice.innerHTML = (range && typeof range.min === 'number') ? (range.min === range.max ? (range.min === 0 ? 'Free' : `$${range.min.toFixed(2)}`) : `$${range.min.toFixed(2)} - $${range.max.toFixed(2)}`) : 'Price Varies';
+    } else if (isPackage) {
+        // Handle package pricing - fetch contents and calculate dynamic price
+        const linkedSessionId = record.fields['LinkedSession'] ? record.fields['LinkedSession'][0] : null;
+
+        if (linkedSessionId) {
+            try {
+                const linkedSession = await api.fetchSessionById(linkedSessionId);
+                if (linkedSession && linkedSession.fields['Items with Variations']) {
+                    const sessionData = JSON.parse(linkedSession.fields['Items with Variations']);
+
+                    // Extract locked items as included items
+                    const includedItems = [];
+                    for (const [id, info] of Object.entries(sessionData.lockedInItems || {})) {
+                        includedItems.push({
+                            id,
+                            quantity: info.quantity || 1,
+                            options: info.selections || null,
+                            locked: true
+                        });
+                    }
+
+                    // Extract ideas as add-on items
+                    const addOnItems = [];
+                    for (const [id, info] of Object.entries(sessionData.ideasItems || {})) {
+                        addOnItems.push({
+                            id,
+                            quantity: info.quantity || 1,
+                            options: info.selections || null
+                        });
+                    }
+
+                    packageContents = {
+                        includedItems,
+                        addOnItems,
+                        tiers: sessionData.packageMetadata?.tiers || []
+                    };
+
+                    if (sessionData.packageMetadata) {
+                        packageMetadata = sessionData.packageMetadata;
+                    } else {
+                        packageMetadata = { discount: 0, tiers: [], price: 0, pricingType: null };
+                    }
+                }
+            } catch (e) {
+                log('Modal', `Could not fetch linked session for package ${record.id}: ${e.message}`);
+            }
+        }
+
+        // Calculate default headcount and dynamic pricing
+        if (packageContents) {
+            packageHeadcount = getPackageDefaultHeadcount(packageContents, state.records.all);
+            packagePricing = calculateDynamicPackagePrice(packageContents, packageMetadata, state.records.all, packageHeadcount);
+
+            const discount = parseFloat(packageMetadata?.discount || 0);
+            const perGuestLabel = packagePricing.hasPerGuestItems ? '<span class="pricing-type"> / per guest pricing</span>' : '';
+            let priceText = packagePricing.totalPrice === 0 ? 'Free' : `$${packagePricing.totalPrice.toFixed(2)}`;
+
+            // Show savings if there's a discount
+            if (discount > 0 && packagePricing.discountAmount > 0) {
+                priceText += ` <span class="package-modal-savings">(Save $${packagePricing.discountAmount.toFixed(0)})</span>`;
+            }
+
+            modalItemPrice.innerHTML = priceText + perGuestLabel;
+        } else {
+            // Fallback to base price if package contents couldn't be loaded
+            const price = getRecordPrice(record, itemState.selectedOptionIndex);
+            let priceText = (typeof price === 'number' ? (price === 0 ? 'Free' : `$${price.toFixed(2)}`) : 'N/A');
+            modalItemPrice.innerHTML = priceText + pricingTypeHTML;
+        }
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
         let priceText = (typeof price === 'number' ? (price === 0 ? 'Free' : `$${price.toFixed(2)}`) : 'N/A');
@@ -2403,7 +2479,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     // The listeners are now MOVED INSIDE this `if` block
     // Also hide notes for published events - they use the description field for goals/notes instead
     const isEvent = record.fields['Item Type'] === 'Event';
-    if (!isGrouping) {
+    if (!isGrouping && !isPackage) {
         modalActionsContainer.style.display = 'block';
         // Hide notes container for events - not needed for published event viewing
         modalNotesContainer.style.display = isEvent ? 'none' : 'block';
@@ -2565,6 +2641,129 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             plusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
             minusBtn.addEventListener('click', handleMinus);
             minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
+        }
+    } else if (isPackage && packageContents) {
+        // Package-specific UI: show headcount selector and package contents
+        modalActionsContainer.style.display = 'block';
+        modalNotesContainer.style.display = 'none'; // No notes for packages
+
+        // Build package contents display
+        const includedItems = packageContents.includedItems || [];
+        const addOnItems = packageContents.addOnItems || [];
+        const discount = parseFloat(packageMetadata?.discount || 0);
+
+        // Create package contents section in the options container
+        let packageContentsHTML = '<div class="package-modal-contents">';
+        packageContentsHTML += `<h4 class="package-contents-header">What's Included (${includedItems.length} items)</h4>`;
+        packageContentsHTML += '<ul class="package-included-list">';
+
+        for (const itemRef of includedItems) {
+            const itemId = itemRef.id || itemRef;
+            const itemRecord = state.records.all.find(r => r.id === itemId);
+            if (itemRecord) {
+                const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
+                const itemQty = itemRef.quantity || 1;
+                const pricingType = itemRecord.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
+                const isPerGuest = pricingType && pricingType.toLowerCase().includes('per guest');
+                const qtyLabel = isPerGuest ? '(per guest)' : `x${itemQty}`;
+                packageContentsHTML += `<li class="package-item"><span class="package-item-name">${itemName}</span> <span class="package-item-qty">${qtyLabel}</span></li>`;
+            }
+        }
+        packageContentsHTML += '</ul>';
+
+        if (addOnItems.length > 0) {
+            packageContentsHTML += `<h4 class="package-contents-header package-addons-header">Available Add-ons (${addOnItems.length})</h4>`;
+            packageContentsHTML += '<ul class="package-addon-list">';
+            for (const itemRef of addOnItems) {
+                const itemId = itemRef.id || itemRef;
+                const itemRecord = state.records.all.find(r => r.id === itemId);
+                if (itemRecord) {
+                    const itemName = itemRecord.fields[CONSTANTS.FIELD_NAMES.NAME] || 'Unknown Item';
+                    packageContentsHTML += `<li class="package-item package-addon-item">${itemName}</li>`;
+                }
+            }
+            packageContentsHTML += '</ul>';
+        }
+
+        if (discount > 0) {
+            packageContentsHTML += `<div class="package-discount-badge">${discount}% package discount applied</div>`;
+        }
+
+        packageContentsHTML += '</div>';
+        modalOptionsContainer.innerHTML = packageContentsHTML;
+
+        // Build headcount selector if package has per-guest items
+        if (packagePricing && packagePricing.hasPerGuestItems) {
+            modalQuantitySelector.innerHTML = `
+                <div class="package-headcount-selector modal-package-headcount">
+                    <label>Number of Guests:</label>
+                    <div class="quantity-selector package-quantity" data-record-id="${record.id}">
+                        <button type="button" class="quantity-btn minus" aria-label="Decrease guests">-</button>
+                        <input type="number" class="quantity-input package-headcount-input" value="${packageHeadcount}" min="${packageHeadcount}" step="1">
+                        <button type="button" class="quantity-btn plus" aria-label="Increase guests">+</button>
+                    </div>
+                </div>
+            `;
+
+            // Add headcount change handler for dynamic price updates
+            const headcountInput = modalQuantitySelector.querySelector('.package-headcount-input');
+            const plusBtn = modalQuantitySelector.querySelector('.plus');
+            const minusBtn = modalQuantitySelector.querySelector('.minus');
+
+            const updatePackageModalPrice = () => {
+                const currentHeadcount = parseInt(headcountInput.value, 10) || packageHeadcount;
+                const updatedPricing = calculateDynamicPackagePrice(packageContents, packageMetadata, state.records.all, currentHeadcount);
+
+                const perGuestLabel = updatedPricing.hasPerGuestItems ? '<span class="pricing-type"> / per guest pricing</span>' : '';
+                let priceText = updatedPricing.totalPrice === 0 ? 'Free' : `$${updatedPricing.totalPrice.toFixed(2)}`;
+
+                if (discount > 0 && updatedPricing.discountAmount > 0) {
+                    priceText += ` <span class="package-modal-savings">(Save $${updatedPricing.discountAmount.toFixed(0)})</span>`;
+                }
+
+                modalItemPrice.innerHTML = priceText + perGuestLabel;
+
+                // Store current headcount on modal for use when adding to plan
+                modalOverlay.dataset.packageHeadcount = currentHeadcount;
+            };
+
+            // Initialize stored headcount
+            modalOverlay.dataset.packageHeadcount = packageHeadcount;
+
+            if (headcountInput) {
+                headcountInput.addEventListener('change', updatePackageModalPrice);
+                headcountInput.addEventListener('input', updatePackageModalPrice);
+            }
+
+            if (plusBtn && minusBtn) {
+                plusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const currentValue = parseInt(headcountInput.value, 10) || packageHeadcount;
+                    headcountInput.value = currentValue + 1;
+                    updatePackageModalPrice();
+                });
+
+                minusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const currentValue = parseInt(headcountInput.value, 10) || packageHeadcount;
+                    const minValue = parseInt(headcountInput.min, 10) || 1;
+                    if (currentValue > minValue) {
+                        headcountInput.value = currentValue - 1;
+                        updatePackageModalPrice();
+                    }
+                });
+            }
+        } else {
+            modalQuantitySelector.innerHTML = '';
+            modalOverlay.dataset.packageHeadcount = 1;
+        }
+
+        // Update Add to Plan button for packages
+        if (addToPlanBtn) {
+            addToPlanBtn.textContent = 'Add Package to Plan';
+            addToPlanBtn.dataset.tooltip = 'Add all package items to your plan';
+            addToPlanBtn.classList.add('add-package-btn');
+            addToPlanBtn.dataset.recordId = record.id;
         }
     } else {
         modalActionsContainer.style.display = 'none';
