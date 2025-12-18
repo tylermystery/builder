@@ -293,6 +293,42 @@ let pendingEventPlanUpdate = false;
 let shareMenuInitialized = false;
 
 /**
+ * Positions a dropdown menu to ensure it stays within the viewport
+ * @param {HTMLElement} dropdown - The dropdown element to position
+ * @param {HTMLElement} button - The button that triggered the dropdown
+ */
+function positionDropdownWithinViewport(dropdown, button) {
+    // Reset any inline positioning first
+    dropdown.style.left = '';
+    dropdown.style.right = '';
+    dropdown.style.transform = '';
+
+    // Get button and dropdown dimensions
+    const buttonRect = button.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+
+    // Calculate if dropdown overflows to the right
+    const dropdownRightEdge = buttonRect.right;
+    const dropdownLeftEdge = dropdownRightEdge - dropdownRect.width;
+
+    // If dropdown would overflow left side of viewport, constrain it
+    if (dropdownLeftEdge < 10) {
+        // Position from left edge with some padding
+        dropdown.style.left = '10px';
+        dropdown.style.right = 'auto';
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (buttonRect.bottom + 8) + 'px';
+    } else {
+        // Default: align dropdown's right edge with button's right edge
+        dropdown.style.right = '0';
+        dropdown.style.left = 'auto';
+        dropdown.style.position = 'absolute';
+        dropdown.style.top = '';
+    }
+}
+
+/**
  * Initializes the Share menu button event listeners (called once)
  */
 export function initializeShareMenu() {
@@ -314,13 +350,24 @@ export function initializeShareMenu() {
     shareMenuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const isVisible = shareMenuDropdown.style.display === 'block';
-        shareMenuDropdown.style.display = isVisible ? 'none' : 'block';
+        if (isVisible) {
+            shareMenuDropdown.style.display = 'none';
+        } else {
+            shareMenuDropdown.style.display = 'block';
+            // Ensure dropdown doesn't overflow the viewport
+            positionDropdownWithinViewport(shareMenuDropdown, shareMenuBtn);
+        }
     });
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!shareMenuBtn.contains(e.target) && !shareMenuDropdown.contains(e.target)) {
             shareMenuDropdown.style.display = 'none';
+            // Reset inline positioning styles when closed
+            shareMenuDropdown.style.position = '';
+            shareMenuDropdown.style.top = '';
+            shareMenuDropdown.style.left = '';
+            shareMenuDropdown.style.right = '';
         }
     });
 
