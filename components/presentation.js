@@ -1,5 +1,3 @@
-// REPLACE THE ENTIRE CONTENTS OF: components/presentation.js
-
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
@@ -8,49 +6,65 @@ import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
 
-const modal = document.getElementById('presentation-modal-overlay');
-const closeBtn = document.getElementById('presentation-close-btn');
-const titleEl = document.getElementById('presentation-title');
-const counterEl = document.getElementById('presentation-counter');
-const mainImageEl = document.getElementById('presentation-main-image');
-const thumbStripEl = document.getElementById('presentation-thumbnail-strip');
-const itemNameEl = document.getElementById('presentation-item-name');
-const itemPriceEl = document.getElementById('presentation-item-price');
-const itemDescEl = document.getElementById('presentation-item-description');
-const itemNoteContainerEl = document.getElementById('presentation-item-note-container');
-const itemNoteEl = document.getElementById('presentation-item-note');
-const prevItemBtn = document.getElementById('presentation-prev-item-btn');
-const nextItemBtn = document.getElementById('presentation-next-item-btn');
-const reactionButtonsEl = document.getElementById('reaction-buttons');
-const reactionSummaryEl = document.getElementById('reaction-summary');
-const summaryEventNameEl = document.getElementById('summary-event-name');
-const summaryEventNotesEl = document.getElementById('summary-event-notes');
-const summaryEventDateEl = document.getElementById('summary-event-date');
-const summaryIdeasLink = document.getElementById('summary-ideas-link');
-const summaryLockedLink = document.getElementById('summary-locked-link');
-const shareBtn = document.getElementById('presentation-share-btn');
+// DOM element references - lazily initialized to ensure DOM is ready
+let modal = null;
+let closeBtn = null;
+let mainImageEl = null;
+let thumbStripEl = null;
+let itemNameEl = null;
+let itemPriceEl = null;
+let itemDescEl = null;
+let itemNoteContainerEl = null;
+let itemNoteEl = null;
+let prevItemBtn = null;
+let nextItemBtn = null;
+let reactionButtonsEl = null;
+let reactionSummaryEl = null;
+let summaryEventNameEl = null;
+let summaryEventNotesEl = null;
+let summaryEventDateEl = null;
+let shareBtn = null;
+
+function ensureDOMElements() {
+    if (modal) return true; // Already initialized
+
+    modal = document.getElementById('presentation-modal-overlay');
+    closeBtn = document.getElementById('presentation-close-btn');
+    mainImageEl = document.getElementById('presentation-main-image');
+    thumbStripEl = document.getElementById('presentation-thumbnail-strip');
+    itemNameEl = document.getElementById('presentation-item-name');
+    itemPriceEl = document.getElementById('presentation-item-price');
+    itemDescEl = document.getElementById('presentation-item-description');
+    itemNoteContainerEl = document.getElementById('presentation-item-note-container');
+    itemNoteEl = document.getElementById('presentation-item-note');
+    prevItemBtn = document.getElementById('presentation-prev-item-btn');
+    nextItemBtn = document.getElementById('presentation-next-item-btn');
+    reactionButtonsEl = document.getElementById('reaction-buttons');
+    reactionSummaryEl = document.getElementById('reaction-summary');
+    summaryEventNameEl = document.getElementById('summary-event-name');
+    summaryEventNotesEl = document.getElementById('summary-event-notes');
+    summaryEventDateEl = document.getElementById('summary-event-date');
+    shareBtn = document.getElementById('presentation-share-btn');
+
+    if (!modal) {
+        console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
+        return false;
+    }
+
+    // Debug: Log that DOM elements were successfully found
+    log('Presentation', `DOM elements initialized. Modal classes: ${modal.className}`);
+    return true;
+}
 
 let combinedList = [];
 let globalCurrentIndex = 0;
 let currentImages = [];
 let currentImageIndex = 0;
 
-function updateHeader(currentItem) {
-    const listType = currentItem.type;
-    titleEl.textContent = listType === 'favorites' ?
-        'Presenting Ideas' : 'Presenting Event Plan';
-    counterEl.textContent = `Item ${globalCurrentIndex + 1} of ${combinedList.length}`;
-    
-    summaryIdeasLink.classList.toggle('active', listType === 'favorites');
-    summaryLockedLink.classList.toggle('active', listType === 'locked');
-    summaryIdeasLink.disabled = listType === 'favorites';
-    summaryLockedLink.disabled = listType === 'locked';
-}
-
 function renderSummaryHeader() {
     summaryEventNameEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'N/A';
     summaryEventNotesEl.textContent = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || 'N/A';
-    
+
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     if (dateValue) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
@@ -58,9 +72,6 @@ function renderSummaryHeader() {
     } else {
         summaryEventDateEl.textContent = 'N/A';
     }
-
-    summaryIdeasLink.textContent = `${state.cart.items.size} Ideas`;
-    summaryLockedLink.textContent = `${state.cart.lockedItems.size} Locked In`;
 }
 
 function renderReactions(recordId) {
@@ -101,8 +112,7 @@ async function renderCurrentSlide() {
         log('Presentation', `Record not found for ID: ${recordId}`);
         return;
     }
-    
-    updateHeader(currentItem);
+
     renderReactions(recordId);
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
@@ -167,8 +177,7 @@ function handleKeyDown(e) {
         case 'ArrowUp': navigateToSlide(-1); break;
         case 'ArrowRight': cycleImage(1); break;
         case 'ArrowLeft': cycleImage(-1); break;
-        case 'Escape': 
-            // --- THIS IS THE FIX ---
+        case 'Escape':
             updateUrl({ view: null });
             hidePresentationView();
             break;
@@ -201,6 +210,17 @@ function handleReactionClick(e) {
 
 export function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing presentation for: ${listType}`);
+
+    // Ensure DOM elements are available
+    if (!ensureDOMElements()) {
+        console.error('[Presentation] Cannot show presentation view - DOM elements not available');
+        return;
+    }
+
+    // Debug: Log modal element state before showing
+    const computedStyle = window.getComputedStyle(modal);
+    log('Presentation', `Modal initial state - display: ${computedStyle.display}, position: ${computedStyle.position}, top: ${computedStyle.top}, left: ${computedStyle.left}, zIndex: ${computedStyle.zIndex}`);
+
     // This function no longer calls updateUrl. The event listener in events.js does.
     const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
     const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
@@ -218,51 +238,46 @@ export function showPresentationView(listType, startRecordId = null) {
     }
 
     renderSummaryHeader();
-    
+
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
     document.addEventListener('keydown', handleKeyDown);
-    
+
+    // Debug: Log modal element state after showing
+    const afterStyle = window.getComputedStyle(modal);
+    log('Presentation', `Modal after activation - display: ${afterStyle.display}, position: ${afterStyle.position}, top: ${afterStyle.top}, left: ${afterStyle.left}, zIndex: ${afterStyle.zIndex}`);
+
+    // Debug: Check if presentation-fullpage CSS class is properly applied
+    if (afterStyle.position !== 'fixed') {
+        console.warn('[Presentation] WARNING: Modal position is not "fixed". Expected "fixed" but got "' + afterStyle.position + '". CSS class .presentation-fullpage may not be loaded properly.');
+    }
+
     renderCurrentSlide();
 }
 
 export function hidePresentationView() {
-    // This function now ONLY handles the UI.
+    if (!modal) return; // Guard against null modal
     modal.classList.remove('active');
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 300);
+    modal.style.display = 'none';
     document.body.classList.remove('modal-open');
     document.removeEventListener('keydown', handleKeyDown);
 }
 
 export function setupPresentationEventListeners() {
-    // --- THIS IS THE FIX ---
+    // Ensure DOM elements are available before setting up listeners
+    if (!ensureDOMElements()) {
+        console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
+        return;
+    }
+
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
         hidePresentationView();
     });
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            updateUrl({ view: null });
-            hidePresentationView();
-        }
-    });
-    // --- END FIX ---
     prevItemBtn.addEventListener('click', () => navigateToSlide(-1));
     nextItemBtn.addEventListener('click', () => navigateToSlide(1));
     reactionButtonsEl.addEventListener('click', handleReactionClick);
-    summaryIdeasLink.addEventListener('click', () => {
-        if (state.cart.items.size > 0) {
-             showPresentationView('favorites');
-        }
-    });
-    summaryLockedLink.addEventListener('click', () => {
-        if (state.cart.lockedItems.size > 0) {
-            showPresentationView('locked');
-        }
-    });
     shareBtn.addEventListener('click', (e) => {
         const baseURL = window.location.origin + window.location.pathname;
         const sessionID = state.session.id;
