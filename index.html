@@ -1696,38 +1696,48 @@ body.modal-open {
     </div>
     
     <div id="presentation-modal-overlay" class="presentation-fullpage">
-        <div class="presentation-content">
+        <div class="presentation-content presentation-itinerary">
             <button id="presentation-close-btn" class="modal-close-btn" title="Close">×</button>
-            <div class="presentation-summary-header">
-                <div class="summary-item"><strong>Event:</strong> <span id="summary-event-name"></span></div>
-                <div class="summary-item"><strong>Notes:</strong> <span id="summary-event-notes"></span></div>
-                <div class="summary-item"><strong>Date:</strong> <span id="summary-event-date"></span></div>
-                <div class="summary-links">
-                    <button id="presentation-share-btn" class="summary-link-btn" title="Copy link to this presentation view">🔗 Share</button>
-                </div>
-            </div>
-            <div class="presentation-body">
-                <div id="presentation-gallery-column">
-                    <div id="presentation-main-image"></div>
-                    <div id="presentation-thumbnail-strip"></div>
-                </div>
-                <div id="presentation-details-column">
-                    <h3 id="presentation-item-name"></h3>
-                    <p id="presentation-item-price"></p>
-                    <p id="presentation-item-description"></p>
-                    <div id="presentation-item-options"></div>
-                    <div id="presentation-reactions">
-                        <div id="reaction-buttons" class="reaction-bar-buttons"></div>
-                        <div id="reaction-summary" class="reaction-summary-display"></div>
+
+            <!-- Scrollable Itinerary Container -->
+            <div class="presentation-itinerary-scroll">
+
+                <!-- Event Header Section -->
+                <section class="itinerary-section itinerary-header">
+                    <h1 id="summary-event-name" class="itinerary-event-title"></h1>
+                    <div class="itinerary-event-meta">
+                        <span id="summary-event-date" class="itinerary-date"></span>
                     </div>
-                    <div id="presentation-item-note-container">
-                        <h4>Note:</h4>
-                        <p id="presentation-item-note"></p>
+                    <p id="summary-event-notes" class="itinerary-notes"></p>
+
+                    <!-- Hosts & Collaborators -->
+                    <div id="itinerary-collaborators" class="itinerary-collaborators">
+                        <h3>Hosts & Collaborators</h3>
+                        <div id="itinerary-collaborators-list" class="collaborators-list"></div>
                     </div>
-                </div>
+
+                    <div class="itinerary-actions">
+                        <button id="presentation-share-btn" class="itinerary-share-btn" title="Copy link to share this itinerary">Share Itinerary</button>
+                    </div>
+                </section>
+
+                <!-- Items Section - Rendered dynamically -->
+                <section class="itinerary-section itinerary-items">
+                    <h2 class="itinerary-section-title">Itinerary</h2>
+                    <div id="itinerary-items-list" class="itinerary-items-list">
+                        <!-- Items will be rendered here by JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Event Chat Section -->
+                <section class="itinerary-section itinerary-chat">
+                    <h2 class="itinerary-section-title">Event Discussion</h2>
+                    <div id="itinerary-chat-messages" class="itinerary-chat-messages">
+                        <!-- Chat messages will be rendered here -->
+                    </div>
+                </section>
+
             </div>
-            <button class="presentation-nav-arrow up" id="presentation-prev-item-btn" title="Previous Item (Up Arrow)">▲</button>
-            <button class="presentation-nav-arrow down" id="presentation-next-item-btn" title="Next Item (Down Arrow)">▼</button>
         </div>
     </div>
 
