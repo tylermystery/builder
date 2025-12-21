@@ -396,7 +396,24 @@ function generateFunName() {
 }
 
 function getSimpleUserIdentity() {
-    if (currentUser) return currentUser;
+    // Always check authentication status first - user may have logged in since last call
+    const authenticatedUser = state.session.user;
+    if (authenticatedUser && authenticatedUser.isAuthenticated) {
+        // User is authenticated - always use their real ID and name
+        // Update cached user if it doesn't match (e.g., user logged in after initial load)
+        if (!currentUser || currentUser.id !== authenticatedUser.id) {
+            currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
+            log('Chat', `Updated currentUser to authenticated user: ${authenticatedUser.id}`);
+        }
+        return currentUser;
+    }
+
+    // User is not authenticated - use localStorage-based identity
+    if (currentUser && !currentUser.id.startsWith('rec')) {
+        // Already have an anonymous user cached
+        return currentUser;
+    }
+
     let userId = localStorage.getItem('chatUserId');
     if (!userId) {
         userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -407,12 +424,7 @@ function getSimpleUserIdentity() {
         userName = generateFunName();
         localStorage.setItem('chatUserName', userName);
     }
-    const authenticatedUser = state.session.user;
-    if (authenticatedUser && authenticatedUser.isAuthenticated) {
-        currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
-    } else {
-        currentUser = { id: userId, name: userName };
-    }
+    currentUser = { id: userId, name: userName };
     return currentUser;
 }
 
@@ -616,7 +628,8 @@ function bindPresenceEvents() {
     });
 }
 export function getCurrentUser() {
-    return currentUser || getSimpleUserIdentity();
+    // Always call getSimpleUserIdentity to ensure authentication status is checked
+    return getSimpleUserIdentity();
 }
 function showNewMessageNotification(sender, message) {
   if (Notification.permission === 'granted' && !document.hasFocus()) {

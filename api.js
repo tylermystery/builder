@@ -1511,13 +1511,7 @@ export async function postItemChatMessage(itemId, senderId, senderName, content)
         const result = await response.json();
         const newMessageRecordId = result.records[0].id;
         log('API', `Successfully posted item chat message for ${itemId}. Message ID: ${newMessageRecordId}`);
-        
-        fetch('/api/notify-rsvp-users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ recordId: newMessageRecordId })
-        }).catch(err => console.error("RSVP user notification trigger failed:", err));
-        
+
     } catch (error) {
         console.error(`Error posting item chat message for ${itemId}:`, error);
          if (typeof ui !== 'undefined' && ui.showToast) {
