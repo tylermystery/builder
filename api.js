@@ -1464,7 +1464,7 @@ export async function fetchItemChatMessages(itemId) {
     try {
         console.log('[ItemChat API DEBUG] Making fetch request to Airtable...');
         const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN ? 'TOKEN_EXISTS' : 'NO_TOKEN'}` }
+            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
         console.log('[ItemChat API DEBUG] Response status:', response.status);
         console.log('[ItemChat API DEBUG] Response ok:', response.ok);
