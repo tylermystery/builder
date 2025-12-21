@@ -1455,7 +1455,9 @@ export async function fetchItemChatMessages(itemId) {
           log('API', 'fetchItemChatMessages: Invalid or missing itemId.');
           return [];
      }
-    const formula = `FIND('${itemId}', ARRAYJOIN({Item Link}))`; // Corrected field name 'Item Link'
+    // Use {Item Link} & "" to convert linked record field to string containing record IDs
+    // ARRAYJOIN returns display names, but concatenating to empty string returns record IDs
+    const formula = `FIND('${itemId}', {Item Link} & "")`;
     const encodedFormula = encodeURIComponent(formula);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
     console.log('[ItemChat API DEBUG] Airtable filter formula:', formula);
