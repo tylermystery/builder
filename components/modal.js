@@ -2897,6 +2897,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isEvent = record.fields['Item Type'] === 'Event';
         const userRsvped = isEvent && (record.fields.RSVPs || []).includes(state.session.user.id);
 
+        console.log('[ItemChat Modal DEBUG] ========== Modal Chat Init ==========');
+        console.log('[ItemChat Modal DEBUG] record.id:', record.id);
+        console.log('[ItemChat Modal DEBUG] isAuthenticated:', state.session.user.isAuthenticated);
+        console.log('[ItemChat Modal DEBUG] isChatEnabledOnItem:', isChatEnabledOnItem);
+        console.log('[ItemChat Modal DEBUG] isEvent:', isEvent);
+        console.log('[ItemChat Modal DEBUG] userRsvped:', userRsvped);
+        console.log('[ItemChat Modal DEBUG] chatContainerExists:', !!chatContainer);
+        console.log('[ItemChat Modal DEBUG] Full user object:', JSON.stringify(state.session.user));
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
             isChatEnabledOnItem: isChatEnabledOnItem,
@@ -2909,10 +2917,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         // Chat is visible when: user is logged in AND chat container exists
         // (Previously required Chat Enabled on item or user RSVP)
         if (state.session.user.isAuthenticated && chatContainer) {
+            console.log('[ItemChat Modal DEBUG] Condition MET - initializing item chat');
             log('Modal', 'User authenticated. Initializing item chat.');
             chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
         } else {
+            console.log('[ItemChat Modal DEBUG] Condition NOT MET - hiding chat');
+            console.log('[ItemChat Modal DEBUG] Reason: isAuthenticated=' + state.session.user.isAuthenticated + ', chatContainerExists=' + !!chatContainer);
             log('Modal', 'Hiding chat. Reason:', {
                 isAuthenticated: state.session.user.isAuthenticated,
                 chatContainerExists: !!chatContainer
