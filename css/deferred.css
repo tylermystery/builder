@@ -2380,6 +2380,16 @@
     justify-content: center;
     align-items: stretch;
 }
+
+/* Ensure detail modal appears above presentation view */
+.presentation-fullpage.active ~ #detail-modal-overlay.active {
+    z-index: 1100;
+}
+
+/* Also handle when modal is not a sibling (may be nested differently) */
+#detail-modal-overlay.active {
+    z-index: 1100;
+}
 .presentation-fullpage.active {
     display: flex;
 }
@@ -2565,6 +2575,10 @@
 .itinerary-item:hover {
     box-shadow: 0 4px 16px rgba(0,0,0,0.1);
     transform: translateY(-2px);
+}
+
+.itinerary-item-clickable {
+    cursor: pointer;
 }
 
 .itinerary-item-number {

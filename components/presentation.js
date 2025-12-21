@@ -5,6 +5,7 @@ import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser } from '../chat.js';
 import { triggerSave } from '../events.js';
+import { showDetailModal } from './modal.js';
 
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
@@ -146,7 +147,6 @@ async function renderItineraryItem(item, index) {
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const name = record.fields.Name || 'Untitled Item';
-    const description = record.fields.Description || '';
     const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
@@ -164,7 +164,7 @@ async function renderItineraryItem(item, index) {
     const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
 
     return `
-        <article class="itinerary-item" data-record-id="${recordId}" data-index="${index}">
+        <article class="itinerary-item itinerary-item-clickable" data-record-id="${recordId}" data-index="${index}">
             <div class="itinerary-item-number">${index + 1}</div>
             <div class="itinerary-item-content">
                 ${mediaCarouselHTML}
@@ -177,7 +177,6 @@ async function renderItineraryItem(item, index) {
                         <span class="itinerary-item-price">$${price.toFixed(2)}</span>
                         ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                     </div>
-                    ${description ? `<p class="itinerary-item-description">${description}</p>` : ''}
                     ${note ? `
                         <div class="itinerary-item-note">
                             <strong>Note:</strong> ${note}
@@ -302,6 +301,30 @@ function handleReactionClick(e) {
     triggerSave();
 }
 
+function handleItemClick(e) {
+    // Don't trigger if clicking on reactions, thumbnails, or other interactive elements
+    if (e.target.closest('.reaction-btn') ||
+        e.target.closest('.itinerary-thumbnail') ||
+        e.target.closest('.itinerary-item-reactions')) {
+        return;
+    }
+
+    const itemElement = e.target.closest('.itinerary-item-clickable');
+    if (!itemElement) return;
+
+    const recordId = itemElement.dataset.recordId;
+    if (!recordId) return;
+
+    const record = state.records.all.find(r => r.id === recordId);
+    if (!record) {
+        log('Presentation', `Record not found for ID: ${recordId}`);
+        return;
+    }
+
+    log('Presentation', `Opening detail modal for: ${record.fields.Name}`);
+    showDetailModal(record);
+}
+
 function handleKeyDown(e) {
     if (e.key === 'Escape') {
         updateUrl({ view: null });
@@ -376,6 +399,9 @@ export function setupPresentationEventListeners() {
 
     // Handle reaction clicks
     itineraryItemsListEl.addEventListener('click', handleReactionClick);
+
+    // Handle item clicks to open detail modal
+    itineraryItemsListEl.addEventListener('click', handleItemClick);
 
     // Share button
     shareBtn.addEventListener('click', (e) => {
