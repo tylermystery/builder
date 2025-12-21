@@ -1541,9 +1541,12 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const currentPrice = getRecordPrice(record, itemState.selectedOptionIndex);
     const isFreeEvent = currentPrice === 0;
 
+    // Check if this is a package - packages have their own button handling later
+    const isPackageItem = record.fields['Item Type'] === 'Package';
+
     if (addToPlanBtn) {
-        if (isFreeEvent) {
-            // Hide Add to Plan button for free events
+        if (isFreeEvent && !isPackageItem) {
+            // Hide Add to Plan button for free events (but not packages, which use dynamic pricing)
             addToPlanBtn.style.display = 'none';
         } else {
             addToPlanBtn.style.display = '';
@@ -1552,14 +1555,14 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
-    // Add Quick Pay button if store has payment options
+    // Add Quick Pay button if store has payment options (but not for packages, which use dynamic pricing)
     const existingQuickPayBtn = document.getElementById('modal-quick-pay-btn');
     if (existingQuickPayBtn) {
         existingQuickPayBtn.remove();
     }
 
     const paymentOptions = getStorePaymentOptions();
-    if (paymentOptions && Object.keys(paymentOptions).length > 0) {
+    if (paymentOptions && Object.keys(paymentOptions).length > 0 && !isPackageItem) {
         const quickPayBtn = document.createElement('button');
         quickPayBtn.id = 'modal-quick-pay-btn';
         quickPayBtn.className = 'quick-pay-btn';
