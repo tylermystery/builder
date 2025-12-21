@@ -2896,7 +2896,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
         const isEvent = record.fields['Item Type'] === 'Event';
         const userRsvped = isEvent && (record.fields.RSVPs || []).includes(state.session.user.id);
-        
+
         log('Modal Chat Init', {
             isAuthenticated: state.session.user.isAuthenticated,
             isChatEnabledOnItem: isChatEnabledOnItem,
@@ -2905,14 +2905,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             chatContainerExists: !!chatContainer,
             user: state.session.user
         });
-        if (state.session.user.isAuthenticated && chatContainer && (isChatEnabledOnItem || userRsvped)) {
-            log('Modal', 'All conditions met. Initializing item chat.');
+        // Show item chat to all authenticated users for persistent item-level discussions
+        // Chat is visible when: user is logged in AND chat container exists
+        // (Previously required Chat Enabled on item or user RSVP)
+        if (state.session.user.isAuthenticated && chatContainer) {
+            log('Modal', 'User authenticated. Initializing item chat.');
             chatContainer.style.display = 'flex';
             initializeItemChat(record.id);
         } else {
             log('Modal', 'Hiding chat. Reason:', {
                 isAuthenticated: state.session.user.isAuthenticated,
-                chatEnabled: isChatEnabledOnItem || userRsvped,
                 chatContainerExists: !!chatContainer
             });
             if (chatContainer) {

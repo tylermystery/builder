@@ -2151,6 +2151,17 @@
   flex-grow: 1;
 }
 
+.item-chat-empty-state {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 20px 10px;
+}
+
+.item-chat-empty-state p {
+  margin: 0;
+}
+
 #message-form-item {
   display: flex;
   gap: 10px;

@@ -808,6 +808,11 @@ export async function sendMessage(message, recordId = null) {
         if (!channel || !currentUser) return;
         const timestamp = new Date().toISOString();
         const messagesList = document.getElementById('messages-list-item');
+        // Remove empty state placeholder if present
+        const emptyState = messagesList.querySelector('.item-chat-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
         addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
         await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
         channel.trigger('client-new-message-item', {
@@ -891,11 +896,19 @@ export async function initializeItemChat(recordId) {
     itemChatChannels.forEach((channel) => channel.unsubscribe());
     itemChatChannels.clear();
     const records = await api.fetchItemChatMessages(recordId);
-    records.forEach(record => {
-      const { SenderID, SenderName, Content, Timestamp } = record.fields;
-      const isSent = SenderID === currentUser.id;
-      addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
-    });
+    if (records.length === 0) {
+        // Show empty state placeholder
+        const emptyState = document.createElement('div');
+        emptyState.className = 'item-chat-empty-state';
+        emptyState.innerHTML = '<p>No messages yet. Start the conversation!</p>';
+        messagesList.appendChild(emptyState);
+    } else {
+        records.forEach(record => {
+            const { SenderID, SenderName, Content, Timestamp } = record.fields;
+            const isSent = SenderID === currentUser.id;
+            addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
+        });
+    }
     const pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
@@ -912,6 +925,11 @@ export async function initializeItemChat(recordId) {
     itemChatChannels.set(recordId, channel);
     channel.bind('client-new-message-item', (data) => {
         if (data.senderId !== currentUser.id) {
+            // Remove empty state placeholder if present
+            const emptyState = messagesList.querySelector('.item-chat-empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
             addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
         }
     });
