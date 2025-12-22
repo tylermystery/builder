@@ -18,6 +18,7 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
+import { initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 
 
 const imageCache = new Map();
@@ -520,6 +521,7 @@ async function initialize() {
         setupAuthEventListeners();
         setupCalendarEventListeners();
         initializeProjectsDashboard(); // Initialize projects dashboard panel
+        initializeWtfPlansPanel(); // Initialize WTF Plans panel
         updateUserProfileIcon();
 
         // If user is already authenticated, fetch their projects

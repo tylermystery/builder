@@ -970,6 +970,209 @@ body.modal-open {
         max-width: 320px;
     }
 }
+
+/* WTF Plans Panel Styles - Similar to projects panel but chat-list inspired */
+.wtf-plans-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 380px;
+    height: 100vh;
+    background-color: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+.wtf-plans-panel.open {
+    transform: translateX(0);
+}
+
+.wtf-plans-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: rgba(255, 255, 255, 0.95);
+}
+
+.wtf-plans-panel-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+    color: #333;
+}
+
+.wtf-plans-panel-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.wtf-plans-panel-close-btn:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.wtf-plans-panel-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #dee2e6;
+    background-color: rgba(249, 249, 249, 0.9);
+}
+
+.wtf-plans-filter-btn {
+    padding: 5px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background-color: #fff;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: #495057;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.wtf-plans-filter-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.wtf-plans-filter-btn.active {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.wtf-plans-count {
+    font-size: 0.85em;
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+}
+
+.wtf-plans-filter-btn.active .wtf-plans-count {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+#wtf-plans-list-container {
+    flex: 1;
+    overflow-y: auto;
+    background-color: #fff;
+}
+
+.wtf-plans-loading,
+.wtf-plans-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 40px 20px;
+    font-size: 0.95em;
+}
+
+/* Chat-list style items */
+.wtf-plans-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.15s;
+}
+
+.wtf-plans-item:hover {
+    background-color: #f8f9fa;
+}
+
+.wtf-plans-item:last-child {
+    border-bottom: none;
+}
+
+.wtf-plans-item-icon {
+    font-size: 1.3em;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f0f0f0;
+    border-radius: 50%;
+}
+
+.wtf-plans-item-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.wtf-plans-item-name {
+    font-weight: 500;
+    font-size: 0.95em;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.wtf-plans-item-preview {
+    font-size: 0.8em;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wtf-plans-item-time {
+    font-size: 0.75em;
+    color: #999;
+    flex-shrink: 0;
+}
+
+/* WTF Plans panel overlay */
+.wtf-plans-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1999;
+    display: none;
+}
+
+.wtf-plans-panel-overlay.visible {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .wtf-plans-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+}
     </style>
     
     <!-- Load Deferred CSS Asynchronously -->
@@ -1133,6 +1336,25 @@ body.modal-open {
     </div>
     <div id="projects-panel-overlay" class="projects-panel-overlay"></div>
 
+    <!-- WTF Plans Panel (Slide-out) - Master view for all user's plans -->
+    <div id="wtf-plans-panel" class="wtf-plans-panel" style="display: none;">
+        <div class="wtf-plans-panel-header">
+            <h3>🎯 WTF Plans</h3>
+            <button id="wtf-plans-panel-close" class="wtf-plans-panel-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="wtf-plans-panel-filters">
+            <button class="wtf-plans-filter-btn active" data-filter="all">All</button>
+            <button class="wtf-plans-filter-btn" data-filter="plans">Plans</button>
+            <button class="wtf-plans-filter-btn" data-filter="rsvps">RSVPs</button>
+            <button class="wtf-plans-filter-btn" data-filter="favorites">Favorites</button>
+            <button class="wtf-plans-filter-btn" data-filter="projects">Projects</button>
+        </div>
+        <div id="wtf-plans-list-container">
+            <div class="wtf-plans-loading">Loading your plans...</div>
+        </div>
+    </div>
+    <div id="wtf-plans-panel-overlay" class="wtf-plans-panel-overlay"></div>
+
     <header id="main-header">
         <div class="header-content">
             <!-- Left: Hamburger Menu, Logo and Title -->
@@ -1154,6 +1376,9 @@ body.modal-open {
                         END DORMANT FEATURE -->
                         <button id="calendar-view-btn" class="hamburger-dropdown-item">
                             <span class="menu-item-icon">📅</span> Upcoming Events
+                        </button>
+                        <button id="menu-wtf-plans-btn" class="hamburger-dropdown-item" style="background-color: #f0f7ff; font-weight: 500;">
+                            <span class="menu-item-icon">🎯</span> WTF Plans
                         </button>
                         <hr class="hamburger-dropdown-divider">
                         <button id="menu-wtf-btn" class="hamburger-dropdown-item">

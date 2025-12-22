@@ -17,6 +17,7 @@ import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
 import { initializeProjectSelector, wasLongPress, resetLongPress } from './components/projectSelector.js';
 import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
+import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -627,6 +628,16 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }
             // Show the projects panel
             showProjectsPanel();
+        });
+    }
+
+    // WTF Plans button handler - opens the WTF Plans panel
+    const menuWtfPlansBtn = document.getElementById('menu-wtf-plans-btn');
+    if (menuWtfPlansBtn) {
+        menuWtfPlansBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
+            // Show the WTF Plans panel (works for both authenticated and non-authenticated users)
+            showWtfPlansPanel();
         });
     }
 
