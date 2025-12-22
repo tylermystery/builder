@@ -16,6 +16,16 @@ const FUN_NOUNS = ['Panda', 'Wombat', 'Explorer', 'Starship', 'Juggler', 'Wizard
 let originalTitle = document.title;
 let isTabActive = true;
 
+// Event type display labels and icons
+const EVENT_TYPE_DISPLAY = {
+    'plan_created': { icon: '🎯', label: 'Plan Created', color: '#667eea' },
+    'ai_interpretation': { icon: '🤖', label: 'AI Analysis', color: '#764ba2' },
+    'plan_updated': { icon: '✏️', label: 'Plan Updated', color: '#28a745' },
+    'task_added': { icon: '✅', label: 'Task Added', color: '#17a2b8' },
+    'item_added': { icon: '📦', label: 'Item Added', color: '#ffc107' },
+    'collaborator_joined': { icon: '👋', label: 'Collaborator Joined', color: '#6f42c1' }
+};
+
 window.addEventListener('focus', () => {
   isTabActive = true;
   document.title = originalTitle;
@@ -201,6 +211,113 @@ function updatePresenceUI(members) {
         });
     }
 }
+
+/**
+ * Adds a plan event entry to the chat UI (system events like plan creation, AI interpretation, etc.)
+ * @param {HTMLElement} messagesList - The messages container element
+ * @param {object} record - The message record from Airtable
+ */
+function addEventToUI(messagesList, record) {
+    const { Content, Timestamp, EventType } = record.fields;
+
+    console.log(`[CHAT-EVENT] Adding event to UI: type=${EventType}, recordId=${record.id}`);
+
+    // Parse the event content JSON
+    let eventData = {};
+    try {
+        const parsed = JSON.parse(Content);
+        eventData = parsed.data || parsed;
+        console.log(`[CHAT-EVENT] Event data parsed successfully:`, Object.keys(eventData));
+    } catch (e) {
+        console.error(`[CHAT-EVENT] ❌ Failed to parse event content:`, e.message);
+        console.error(`[CHAT-EVENT] Raw content was:`, Content);
+        return;
+    }
+
+    const eventDisplay = EVENT_TYPE_DISPLAY[EventType] || { icon: '📋', label: 'Event', color: '#6c757d' };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'event-history-wrapper';
+
+    const eventElement = document.createElement('div');
+    eventElement.className = 'event-history-entry';
+    eventElement.style.borderLeftColor = eventDisplay.color;
+
+    // Header with icon and label
+    const headerEl = document.createElement('div');
+    headerEl.className = 'event-history-header';
+    headerEl.innerHTML = `<span class="event-icon">${eventDisplay.icon}</span><span class="event-label">${eventDisplay.label}</span>`;
+    eventElement.appendChild(headerEl);
+
+    // Event content based on type
+    const contentEl = document.createElement('div');
+    contentEl.className = 'event-history-content';
+
+    if (EventType === 'plan_created') {
+        contentEl.innerHTML = `
+            <div class="event-field"><strong>Your input:</strong> "${escapeHtml(eventData.originalInput || 'N/A')}"</div>
+        `;
+    } else if (EventType === 'ai_interpretation') {
+        let contentHtml = '';
+
+        if (eventData.planName) {
+            contentHtml += `<div class="event-field"><strong>Plan name:</strong> ${escapeHtml(eventData.planName)}</div>`;
+        }
+        if (eventData.planType) {
+            contentHtml += `<div class="event-field"><strong>Type:</strong> ${escapeHtml(eventData.planType)}</div>`;
+        }
+        if (eventData.eventDate) {
+            contentHtml += `<div class="event-field"><strong>Date:</strong> ${escapeHtml(eventData.eventDate)}</div>`;
+        }
+        if (eventData.goals) {
+            contentHtml += `<div class="event-field"><strong>Goals:</strong> ${escapeHtml(eventData.goals)}</div>`;
+        }
+        if (eventData.guestCount) {
+            contentHtml += `<div class="event-field"><strong>Guest count:</strong> ${eventData.guestCount}</div>`;
+        }
+        if (eventData.location) {
+            contentHtml += `<div class="event-field"><strong>Location:</strong> ${escapeHtml(eventData.location)}</div>`;
+        }
+        if (eventData.itemsExtracted && eventData.itemsExtracted.length > 0) {
+            contentHtml += `<div class="event-field"><strong>Items identified:</strong> ${eventData.itemsExtracted.map(i => escapeHtml(i)).join(', ')}</div>`;
+        }
+        if (eventData.tasksCreated && eventData.tasksCreated.length > 0) {
+            contentHtml += `<div class="event-field"><strong>Tasks created:</strong> ${eventData.tasksCreated.map(t => escapeHtml(t)).join(', ')}</div>`;
+        }
+        if (eventData.reasoning) {
+            contentHtml += `<div class="event-field event-reasoning"><em>${escapeHtml(eventData.reasoning)}</em></div>`;
+        }
+
+        contentEl.innerHTML = contentHtml || '<div class="event-field">AI analyzed your plan input</div>';
+    } else if (EventType === 'plan_updated') {
+        let contentHtml = '<div class="event-field">Plan details were updated:</div>';
+        if (eventData.changedFields) {
+            contentHtml += `<div class="event-field">${eventData.changedFields.map(f => escapeHtml(f)).join(', ')}</div>`;
+        }
+        contentEl.innerHTML = contentHtml;
+    } else if (EventType === 'task_added') {
+        contentEl.innerHTML = `<div class="event-field">Task added: ${escapeHtml(eventData.taskName || 'New task')}</div>`;
+    } else if (EventType === 'item_added') {
+        contentEl.innerHTML = `<div class="event-field">Item added: ${escapeHtml(eventData.itemName || 'New item')}</div>`;
+    } else if (EventType === 'collaborator_joined') {
+        contentEl.innerHTML = `<div class="event-field">${escapeHtml(eventData.userName || 'Someone')} joined the plan</div>`;
+    } else {
+        contentEl.innerHTML = `<div class="event-field">Plan activity recorded</div>`;
+    }
+
+    eventElement.appendChild(contentEl);
+
+    // Timestamp
+    const timestampEl = document.createElement('div');
+    timestampEl.className = 'event-history-timestamp';
+    const date = Timestamp ? new Date(Timestamp) : new Date();
+    timestampEl.textContent = date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    eventElement.appendChild(timestampEl);
+
+    wrapper.appendChild(eventElement);
+    messagesList.appendChild(wrapper);
+}
+
 function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId) {
     const wrapper = document.createElement('div');
     wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
@@ -303,7 +420,8 @@ function displayDebugMessage(message) {
 // --- END NEW DEBUG FUNCTION ---
 
 export async function initializeSessionChat() {
-    log('Chat', 'initializeSessionChat called, waiting for Pusher library...');
+    console.log('[CHAT-INIT] ========== initializeSessionChat START ==========');
+    console.log('[CHAT-INIT] Session ID:', state.session.id);
 
     // Show loading state in the message input while waiting for Pusher
     const messageInput = document.getElementById('message-input');
@@ -318,9 +436,9 @@ export async function initializeSessionChat() {
     if (typeof window.waitForPusher === 'function') {
         try {
             await window.waitForPusher();
-            log('Chat', 'Pusher library is now available');
+            console.log('[CHAT-INIT] Pusher library loaded');
         } catch (err) {
-            console.error('[Chat] Failed to wait for Pusher:', err);
+            console.error('[CHAT-INIT] ❌ Failed to load Pusher:', err);
             if (messageInput) {
                 messageInput.placeholder = 'Chat unavailable - please refresh';
             }
@@ -328,7 +446,7 @@ export async function initializeSessionChat() {
             return;
         }
     } else if (typeof Pusher === 'undefined') {
-        console.error('[Chat] Pusher is not defined and waitForPusher is not available');
+        console.error('[CHAT-INIT] ❌ Pusher not defined and waitForPusher not available');
         if (messageInput) {
             messageInput.placeholder = 'Chat unavailable - please refresh';
         }
@@ -338,7 +456,7 @@ export async function initializeSessionChat() {
 
     if (pusher) {
         pusher.disconnect();
-        log('Chat', 'Disconnected from previous Pusher instance.');
+        console.log('[CHAT-INIT] Disconnected previous Pusher instance');
     }
 
     // Update the chat header to show the current plan name
@@ -349,6 +467,8 @@ export async function initializeSessionChat() {
         state.session.userProfiles.set(currentUser.id, currentUser.name);
     }
     const sessionId = state.session.id || 'default-session';
+    console.log('[CHAT-INIT] Using session ID:', sessionId);
+
     const chatUserNameInput = document.getElementById('chat-user-name');
     if (chatUserNameInput) {
         chatUserNameInput.value = currentUser.name;
@@ -358,48 +478,66 @@ export async function initializeSessionChat() {
                 currentUser.name = newName;
                 localStorage.setItem('chatUserName', newName);
                 state.session.userProfiles.set(currentUser.id, newName);
-            
+
                 log('Chat', `User name changed to: ${newName}`);
                 updatePresenceUI(sessionChatChannel.members);
                 triggerSave();
             } else {
                 e.target.value = currentUser.name;
             }
-   
+
         });
     }
 
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        //displayDebugMessage(`Loading history for Session ID: ${sessionId}`); // <-- ADD THIS
+        console.log('[CHAT-INIT] Fetching chat messages for session:', sessionId);
+
         const records = await api.fetchChatMessages(sessionId);
-        
+        console.log(`[CHAT-INIT] Fetched ${records.length} message records`);
+
         if (records.length > 0) {
-            //displayDebugMessage(`Found ${records.length} past messages.`); // <-- ADD THIS
+            let eventCount = 0;
+            let messageCount = 0;
+
             records.forEach(record => {
-                const { SenderID, SenderName, Content, Timestamp } = record.fields;
-                const isSent = SenderID === currentUser.id;
-                addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
+                const { SenderID, SenderName, Content, Timestamp, EventType } = record.fields;
+
+                // Check if this is a system event (plan history)
+                if (SenderID === 'system' && EventType) {
+                    console.log(`[CHAT-INIT] Found system event: type=${EventType}, id=${record.id}`);
+                    addEventToUI(messagesList, record);
+                    eventCount++;
+                } else {
+                    // Regular chat message
+                    const isSent = SenderID === currentUser.id;
+                    addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
+                    messageCount++;
+                }
             });
+
+            console.log(`[CHAT-INIT] ✅ Loaded ${eventCount} events and ${messageCount} messages`);
         } else {
-            //displayDebugMessage("No historical messages found for this session."); // <-- ADD THIS
+            console.log('[CHAT-INIT] No messages found for this session');
         }
     }
-  
+
+    console.log('[CHAT-INIT] Connecting to Pusher...');
+
     pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
         authEndpoint: '/api/pusher-auth',
         auth: {
-            params: { 
+            params: {
                 user_id: currentUser.id,
                 user_name: currentUser.name
-         
+
            }
         }
     });
     const channelName = `presence-session-${sessionId}`;
-    log('Chat', `Subscribing to Pusher channel: ${channelName}`);
+    console.log(`[CHAT-INIT] Subscribing to channel: ${channelName}`);
     sessionChatChannel = pusher.subscribe(channelName);
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
@@ -409,10 +547,12 @@ export async function initializeSessionChat() {
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
-    
+
             }
         }
     });
+
+    console.log('[CHAT-INIT] ========== initializeSessionChat END ==========');
 }
 
 export async function sendMessage(message, recordId = null) {

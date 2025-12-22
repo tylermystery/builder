@@ -11,7 +11,7 @@ const { AIRTABLE_PAT, BASE_ID } = process.env;
 const SESSIONS_TABLE = 'Sessions';
 
 // Debug logging prefix for this module
-const DEBUG_PREFIX = '[create-quick-plan]';
+const DEBUG_PREFIX = '[QUICK-PLAN-CREATE]';
 
 /**
  * Debug logger for plan creation - focused logging for this feature
@@ -20,11 +20,37 @@ const DEBUG_PREFIX = '[create-quick-plan]';
  */
 function debugLog(action, data = null) {
   const timestamp = new Date().toISOString();
-  if (data !== null) {
-    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}:`, JSON.stringify(data, null, 2));
-  } else {
-    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}`);
-  }
+  const logData = data !== null ? `: ${JSON.stringify(data)}` : '';
+  console.log(`${DEBUG_PREFIX} ${action}${logData}`);
+}
+
+/**
+ * Posts a plan event to the Messages table for history tracking
+ * Fire-and-forget - we don't await the result
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event
+ * @param {object} eventData - Additional data about the event
+ */
+function postPlanEvent(sessionId, eventType, eventData) {
+  const eventUrl = process.env.URL
+    ? `${process.env.URL}/.netlify/functions/post-plan-event`
+    : '/.netlify/functions/post-plan-event';
+
+  fetch(eventUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, eventType, eventData })
+  })
+    .then(response => {
+      if (response.ok) {
+        debugLog('Plan event posted successfully', { sessionId, eventType });
+      } else {
+        debugLog('Plan event posting returned non-OK status', { sessionId, eventType, status: response.status });
+      }
+    })
+    .catch(error => {
+      debugLog('Plan event posting failed (non-critical)', { sessionId, eventType, error: error.message });
+    });
 }
 
 /**
@@ -65,7 +91,7 @@ function triggerBackgroundEnrichment(projectId, ideaText) {
 }
 
 exports.handler = async (event) => {
-  debugLog('Function invoked', { method: event.httpMethod });
+  console.log(`${DEBUG_PREFIX} ========== FUNCTION START ==========`);
 
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
@@ -78,7 +104,7 @@ exports.handler = async (event) => {
 
   // Validate environment variables
   if (!AIRTABLE_PAT || !BASE_ID) {
-    debugLog('ERROR: Missing required environment variables');
+    console.error(`${DEBUG_PREFIX} ERROR: Missing AIRTABLE_PAT or BASE_ID`);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +119,7 @@ exports.handler = async (event) => {
 
     // Validate the idea text
     if (!idea || typeof idea !== 'string' || idea.trim().length === 0) {
-      debugLog('Validation failed: Missing or empty idea');
+      console.error(`${DEBUG_PREFIX} Validation failed: Missing or empty idea`);
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -102,27 +128,17 @@ exports.handler = async (event) => {
     }
 
     const ideaText = idea.trim();
-    debugLog('Creating plan', {
-      ideaLength: ideaText.length,
-      ideaPreview: ideaText.substring(0, 100) + (ideaText.length > 100 ? '...' : '')
-    });
+    console.log(`${DEBUG_PREFIX} Idea received: "${ideaText.substring(0, 50)}..." (${ideaText.length} chars)`);
 
     // Prepare the record fields
-    // Name: First 50 characters of the idea text (will be updated by AI enrichment)
-    // Description: Full idea text (preserved for reference)
-    const planName = ideaText.length > 50
-      ? ideaText.substring(0, 50)
-      : ideaText;
+    const planName = ideaText.length > 50 ? ideaText.substring(0, 50) : ideaText;
 
     const airtableFields = {
       'Name': planName,
-      'Description': ideaText
+      'Goals': ideaText
     };
 
-    debugLog('Creating Airtable record', {
-      name: planName,
-      descriptionLength: ideaText.length
-    });
+    console.log(`${DEBUG_PREFIX} Creating Airtable record with Name="${planName}"`);
 
     // Create the record in Airtable
     const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}`;
@@ -138,18 +154,27 @@ exports.handler = async (event) => {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      debugLog('Airtable error', { status: response.status, error: errorBody });
+      console.error(`${DEBUG_PREFIX} Airtable error: ${response.status}`, errorBody);
       throw new Error(`Airtable API request failed: ${response.status}`);
     }
 
     const result = await response.json();
     const newRecordId = result.id;
 
-    debugLog('Plan created successfully', { planId: newRecordId });
+    console.log(`${DEBUG_PREFIX} ✅ Plan created: ${newRecordId}`);
+
+    // Post the plan_created event to show in chat history
+    console.log(`${DEBUG_PREFIX} Posting plan_created event for ${newRecordId}...`);
+    postPlanEvent(newRecordId, 'plan_created', {
+      originalInput: ideaText,
+      initialName: planName
+    });
 
     // Trigger background AI enrichment (fire-and-forget)
-    // This will extract structured data (date, goals, name, items) and create initial Tasks
+    console.log(`${DEBUG_PREFIX} Triggering background AI enrichment for ${newRecordId}...`);
     triggerBackgroundEnrichment(newRecordId, ideaText);
+
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION END (success) ==========`);
 
     // Return success response with the new record ID
     return {
@@ -162,7 +187,8 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    debugLog('Function failed', { error: error.message, stack: error.stack });
+    console.error(`${DEBUG_PREFIX} FUNCTION FAILED:`, error.message);
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION END (error) ==========`);
 
     return {
       statusCode: 500,

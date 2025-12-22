@@ -95,10 +95,6 @@ function syncUiWithUrl() {
 
 async function initialize() {
     log('Main', '1. Initialization started.');
-    console.log('[Main] ========== INITIAL STATE CHECK ==========');
-    console.log('[Main] Initial state.ui.currentProgress:', state.ui.currentProgress);
-    console.log('[Main] Initial state.ui:', state.ui);
-    console.log('[Main] ========== END INITIAL STATE CHECK ==========');
     ui.initStateHelpers({ getItemState: ui.getItemState });
 
      document.addEventListener('userLoggedIn', () => {
@@ -137,63 +133,34 @@ async function initialize() {
         log('Main', 'New plan created.');
     });
     document.addEventListener('sessionReady', () => {
-        console.log('[DEBUG sessionReady HANDLER] ========== sessionReady EVENT FIRED ==========');
-        console.log('[DEBUG sessionReady HANDLER] Event received at:', new Date().toISOString());
-        console.log('[DEBUG] sessionReady event fired');
-        console.log('[DEBUG] state.eventDetails.combined at sessionReady:', Object.fromEntries(state.eventDetails.combined));
-        console.log('[DEBUG] Date value in state at sessionReady:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
-        console.log('[DEBUG sessionReady HANDLER] state.session.id:', state.session.id);
-        console.log('[DEBUG sessionReady HANDLER] state.cart.lockedItems.size:', state.cart.lockedItems.size);
-        console.log('[DEBUG sessionReady HANDLER] state.cart.items.size:', state.cart.items.size);
+        console.log('[SESSION-READY] ========== EVENT HANDLER START ==========');
+        console.log(`[SESSION-READY] Session: ${state.session.id}, Items: ${state.cart.items.size}, Locked: ${state.cart.lockedItems.size}`);
         log('Main', '"sessionReady" event received, re-initializing session chat.');
 
-        console.log('[DEBUG sessionReady HANDLER] Step 1: Checking initializeSessionChat...');
         if (typeof initializeSessionChat === 'function') {
-             console.log('[DEBUG sessionReady HANDLER] ✅ initializeSessionChat is a function, calling it...');
+             console.log('[SESSION-READY] Initializing session chat...');
              initializeSessionChat();
-             console.log('[DEBUG sessionReady HANDLER] ✅ initializeSessionChat completed');
         } else {
-             console.error('[DEBUG sessionReady HANDLER] ❌ initializeSessionChat is not defined');
+             console.error('[SESSION-READY] ❌ initializeSessionChat is not defined');
              console.error("initializeSessionChat is not defined or imported correctly.");
         }
 
-        console.log('[DEBUG sessionReady HANDLER] Step 2: Calling UI update functions...');
-        console.log('[DEBUG sessionReady HANDLER] Calling ui.updateHeader...');
+        console.log('[SESSION-READY] Updating UI components...');
         ui.updateHeader();
-        console.log('[DEBUG sessionReady HANDLER] ✅ ui.updateHeader completed');
-
-        console.log('[DEBUG sessionReady HANDLER] Calling ui.updateEventPlanSection...');
         ui.updateEventPlanSection();
-        console.log('[DEBUG sessionReady HANDLER] ✅ ui.updateEventPlanSection completed');
-
-        console.log('[DEBUG sessionReady HANDLER] Calling ui.updateIdeasCarousel...');
         ui.updateIdeasCarousel();
-        console.log('[DEBUG sessionReady HANDLER] ✅ ui.updateIdeasCarousel completed');
-
-        console.log('[DEBUG sessionReady HANDLER] Calling ui.updateTotalCost...');
         ui.updateTotalCost();
-        console.log('[DEBUG sessionReady HANDLER] ✅ ui.updateTotalCost completed');
-
-        console.log('[DEBUG] About to call updateEventPlanDateDisplay from sessionReady');
-        console.log('[DEBUG sessionReady HANDLER] Calling ui.updateEventPlanDateDisplay...');
         ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
-        console.log('[DEBUG sessionReady HANDLER] ✅ ui.updateEventPlanDateDisplay completed');
 
-        console.log('[DEBUG sessionReady HANDLER] Step 3: Updating card icons...');
         const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
-        console.log('[DEBUG sessionReady HANDLER] Found', recordIds.length, 'event cards to update');
         if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
-        console.log('[DEBUG sessionReady HANDLER] ✅ Card icons updated');
 
         // Verify no duplicate items after a short delay to ensure DOM updates complete
-        console.log('[DEBUG sessionReady HANDLER] Step 4: Setting timeout for duplicate verification...');
         setTimeout(() => {
-            console.log('[DEBUG sessionReady HANDLER] Verifying no duplicate items...');
             ui.verifyNoDuplicateItems();
-            console.log('[DEBUG sessionReady HANDLER] ✅ Duplicate verification completed');
         }, 100);
 
-        console.log('[DEBUG sessionReady HANDLER] ========== sessionReady HANDLER COMPLETE ==========');
+        console.log('[SESSION-READY] ========== EVENT HANDLER END ==========');
     });
 
     ui.toggleLoading(true);
@@ -303,21 +270,14 @@ async function initialize() {
     }
 
     if (activeShop) {
-        console.log('[Main] ========== BEFORE setState FOR ACTIVE SHOP ==========');
-        console.log('[Main] state.ui.currentProgress BEFORE setState:', state.ui.currentProgress);
-        console.log('[Main] Full state.ui BEFORE setState:', state.ui);
         // CRITICAL FIX: Explicitly preserve currentProgress when setting activeShopId
-        const uiUpdate = { 
-            ...state.ui, 
+        const uiUpdate = {
+            ...state.ui,
             activeShopId: activeShop.id,
             // Ensure currentProgress maintains its default value of 0.3
             currentProgress: state.ui.currentProgress !== undefined ? state.ui.currentProgress : 0.3
         };
-        console.log('[Main] UI object being passed to setState:', uiUpdate);
-        console.log('[Main] currentProgress in UI update:', uiUpdate.currentProgress);
         setState({ ui: uiUpdate });
-        console.log('[Main] state.ui.currentProgress AFTER setState:', state.ui.currentProgress);
-        console.log('[Main] ========== AFTER setState FOR ACTIVE SHOP ==========');
         localStorage.setItem('lastVisitedShopId', activeShop.id);
         log('Main', `Active Shop set to: ${activeShop.fields.Name} (ID: ${activeShop.id})`);
 

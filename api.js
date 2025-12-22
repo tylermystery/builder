@@ -411,54 +411,40 @@ export async function associateSessionWithUser(sessionId, userId) {
 
 
 export async function loadSessionFromAirtable(sessionId) {
-    console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable START ==========');
-    console.log('[DEBUG LOAD SESSION] sessionId parameter:', sessionId);
-    console.log('[DEBUG LOAD SESSION] Current state.session.id:', state.session.id);
+    console.log('[SESSION-LOAD] ========== START ==========');
+    console.log(`[SESSION-LOAD] Loading session: ${sessionId}`);
 
     if (!sessionId) {
-         console.log('[DEBUG LOAD SESSION] ❌ No sessionId provided, returning early');
+         console.log('[SESSION-LOAD] ❌ No sessionId provided');
          log('API', 'loadSessionFromAirtable called with no sessionId.');
          return;
     }
     // Avoid reloading if already loaded
     if (state.session.id === sessionId) {
-        console.log('[DEBUG LOAD SESSION] ⚠️ Session already loaded (same ID), checking if we should fire sessionReady');
+        console.log(`[SESSION-LOAD] Session ${sessionId} already loaded`);
         log('API', `Session ${sessionId} is already loaded.`);
-        console.log('[DEBUG LOAD SESSION] state.cart.lockedItems.size:', state.cart.lockedItems.size);
-        console.log('[DEBUG LOAD SESSION] state.eventDetails.combined.size:', state.eventDetails.combined.size);
         if (state.cart.lockedItems.size > 0 || state.eventDetails.combined.size > 0) {
-             console.log('[DEBUG LOAD SESSION] Firing sessionReady event (has locked items or event details)');
+             console.log('[SESSION-LOAD] Firing sessionReady event');
              document.dispatchEvent(new CustomEvent('sessionReady'));
-        } else {
-             console.log('[DEBUG LOAD SESSION] ⚠️ NOT firing sessionReady event (no locked items or event details)');
         }
-        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (early return - already loaded) ==========');
+        console.log('[SESSION-LOAD] ========== END (already loaded) ==========');
         return;
     }
 
-    console.log('[DEBUG LOAD SESSION] Setting state.session.id to:', sessionId);
     state.session.id = sessionId;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-    console.log('[DEBUG LOAD SESSION] Airtable fetch URL:', url);
     log('API', `Loading session from URL: ${url}`);
     try {
-        console.log('[DEBUG LOAD SESSION] Making Airtable API fetch request...');
         const response = await fetch(url, { headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` } });
-        console.log('[DEBUG LOAD SESSION] Airtable response status:', response.status, response.statusText);
+        console.log(`[SESSION-LOAD] Airtable response: ${response.status}`);
         if (!response.ok) {
             const errorData = await response.json();
-            console.error('[DEBUG LOAD SESSION] ❌ Airtable error response:', errorData);
-             console.error(`Airtable error fetching session ${sessionId}:`, errorData);
+            console.error('[SESSION-LOAD] ❌ Airtable error:', errorData);
             throw new Error(`Could not fetch session data. Status: ${response.status}`);
         }
         const record = await response.json();
-        console.log('[DEBUG LOAD SESSION] ✅ Airtable fetch successful');
-        console.log('[DEBUG LOAD SESSION] Record ID:', record.id);
-        console.log('[DEBUG LOAD SESSION] Record fields.Name:', record.fields?.Name);
-        console.log('[DEBUG] loadSessionFromAirtable - Fetched record from Airtable:', record.id);
-        console.log('[DEBUG] loadSessionFromAirtable - Record Date field:', record.fields.Date);
-        console.log('[DEBUG] loadSessionFromAirtable - Record Guest Count:', record.fields['Guest Count']);
-        console.log('[DEBUG] loadSessionFromAirtable - Record Goals:', record.fields.Goals);
+        console.log(`[SESSION-LOAD] ✅ Session loaded: "${record.fields?.Name}" (${record.id})`);
+        console.log(`[SESSION-LOAD] Plan details - Date: ${record.fields.Date}, Goals: ${record.fields.Goals?.substring(0, 50)}...`);
         log('API', `Session loaded: ${record.fields.Name || 'Unnamed Session'} (ID: ${sessionId})`);
 
         // Reset parts of state before loading new session data
@@ -507,15 +493,11 @@ export async function loadSessionFromAirtable(sessionId) {
         log('API', `Loaded Amount Received: ${state.session.user.amountReceived}`);
 
         const sessionDataString = record.fields['Items with Variations'];
-        console.log('[DEBUG] loadSessionFromAirtable - Items with Variations field exists:', !!sessionDataString);
         if (sessionDataString && sessionDataString.trim() !== '') {
             try {
                 const savedState = JSON.parse(sessionDataString);
-                console.log('[DEBUG] loadSessionFromAirtable - ========== EVENT DETAILS MAPPING DEBUG ==========');
-                console.log('[DEBUG] loadSessionFromAirtable - Raw savedState.eventDetails (BEFORE normalization):', savedState.eventDetails);
-                console.log('[DEBUG] loadSessionFromAirtable - Expected normalized keys: eventName, goals, date');
-                console.log('[DEBUG] loadSessionFromAirtable - Actual keys received (may need normalization):', Object.keys(savedState.eventDetails || {}));
-                console.log('[DEBUG] loadSessionFromAirtable - ===============================================');
+                console.log(`[SESSION-LOAD] Parsed session data - eventDetails keys: ${Object.keys(savedState.eventDetails || {}).join(', ')}`);
+
                 state.cart.items = new Map(Object.entries(savedState.ideasItems || savedState.favoritedItems || {}));
                 state.cart.lockedItems = new Map(Object.entries(savedState.lockedInItems || {}));
 
@@ -545,27 +527,14 @@ export async function loadSessionFromAirtable(sessionId) {
                     'specialRequests': CONSTANTS.DETAIL_TYPES.SPECIAL_REQUESTS
                 };
 
-                console.log('[DEBUG] loadSessionFromAirtable - Normalizing eventDetails keys...');
-                console.log('[DEBUG] loadSessionFromAirtable - Raw keys before normalization:', Object.keys(rawEventDetails));
-
                 for (const [key, value] of Object.entries(rawEventDetails)) {
                     const normalizedKey = keyMapping[key] || key; // Use mapping if exists, otherwise keep original
                     normalizedEventDetails[normalizedKey] = value;
-                    if (key !== normalizedKey) {
-                        console.log(`[DEBUG] loadSessionFromAirtable - Normalized key '${key}' -> '${normalizedKey}'`);
-                    }
                 }
 
-                console.log('[DEBUG] loadSessionFromAirtable - Normalized keys:', Object.keys(normalizedEventDetails));
-
                 state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
-                console.log('[DEBUG] loadSessionFromAirtable - state.eventDetails.combined after normalization:', Object.fromEntries(state.eventDetails.combined));
-                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.EVENT_NAME:', CONSTANTS.DETAIL_TYPES.EVENT_NAME);
-                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.GOALS:', CONSTANTS.DETAIL_TYPES.GOALS);
-                console.log('[DEBUG] loadSessionFromAirtable - CONSTANTS.DETAIL_TYPES.DATE:', CONSTANTS.DETAIL_TYPES.DATE);
-                console.log('[DEBUG] loadSessionFromAirtable - Event Name from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME));
-                console.log('[DEBUG] loadSessionFromAirtable - Goals from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS));
-                console.log('[DEBUG] loadSessionFromAirtable - Date from state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
+                console.log(`[SESSION-LOAD] Event details loaded - Name: "${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME)}", Date: "${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)}"`);
+
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
@@ -605,30 +574,19 @@ export async function loadSessionFromAirtable(sessionId) {
              log('API', 'Added current authenticated user to session profiles.');
         }
 
-        console.log('[DEBUG LOAD SESSION] ========== ABOUT TO FIRE sessionReady EVENT ==========');
-        console.log('[DEBUG LOAD SESSION] Final state summary:');
-        console.log('[DEBUG LOAD SESSION]   - state.session.id:', state.session.id);
-        console.log('[DEBUG LOAD SESSION]   - state.cart.lockedItems.size:', state.cart.lockedItems.size);
-        console.log('[DEBUG LOAD SESSION]   - state.cart.items.size:', state.cart.items.size);
-        console.log('[DEBUG LOAD SESSION]   - state.eventDetails.combined:', Object.fromEntries(state.eventDetails.combined));
-        console.log('[DEBUG LOAD SESSION]   - state.session.storeId:', state.session.storeId);
-        console.log('[DEBUG LOAD SESSION]   - state.session.isOwned:', state.session.isOwned);
-        console.log('[DEBUG LOAD SESSION] Dispatching sessionReady CustomEvent...');
+        console.log(`[SESSION-LOAD] ✅ Session ready - items: ${state.cart.items.size}, locked: ${state.cart.lockedItems.size}, details: ${state.eventDetails.combined.size}`);
+        console.log('[SESSION-LOAD] Dispatching sessionReady event...');
         document.dispatchEvent(new CustomEvent('sessionReady'));
-        console.log('[DEBUG LOAD SESSION] ✅ sessionReady event dispatched');
         log('API', `Finished loading session ${sessionId}. Fired sessionReady event.`);
-        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (success) ==========');
+        console.log('[SESSION-LOAD] ========== END (success) ==========');
 
     } catch (error) {
-        console.error('[DEBUG LOAD SESSION] ❌ CATCH BLOCK - Error loading session');
-        console.error('[DEBUG LOAD SESSION] Error message:', error.message);
-        console.error('[DEBUG LOAD SESSION] Full error:', error);
-        console.error(`Failed to load session ${sessionId}:`, error);
+        console.error('[SESSION-LOAD] ❌ Error loading session:', error.message);
         log('API', `Failed to load session: ${error.message}`);
         state.session.id = null;
         alert("Could not load the shared session. It might have been deleted or there was a network issue.");
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/&?session=[^&]+/, ''));
-        console.log('[DEBUG LOAD SESSION] ========== loadSessionFromAirtable END (error) ==========');
+        console.log('[SESSION-LOAD] ========== END (error) ==========');
     }
 }
 
@@ -1375,35 +1333,130 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
+    console.log(`[CHAT-FETCH] ========== START ==========`);
+    console.log(`[CHAT-FETCH] Fetching messages for session: ${sessionId}`);
+
     if (!sessionId || !sessionId.startsWith('rec')) {
+         console.error(`[CHAT-FETCH] ❌ Invalid sessionId: ${sessionId}`);
          log('API', 'fetchChatMessages: Invalid or missing sessionId.');
          return [];
     }
     // Fetch messages linked specifically to this Session record
-// --- REPAIR: Use the correct linked-record ID search formula ---
+    // --- REPAIR: Use the correct linked-record ID search formula ---
     const formula = `FIND('${sessionId}', {SessionID_Rollup})`; // The correct formula is simply matching the ID against the linked field string/array representation.
     // --- END REPAIR ---
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
 
+    console.log(`[CHAT-FETCH] Query formula: ${formula}`);
+
     try {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
+        console.log(`[CHAT-FETCH] Airtable response: ${response.status}`);
+
         if (!response.ok) {
             const errorData = await response.json();
+            console.error(`[CHAT-FETCH] ❌ Airtable error:`, errorData);
             throw new Error(`Failed to fetch chat messages for session ${sessionId}: ${errorData?.error?.message || response.statusText}`);
         }
         const data = await response.json();
+
+        // Count events vs regular messages
+        const events = data.records.filter(r => r.fields.SenderID === 'system' && r.fields.EventType);
+        const messages = data.records.filter(r => r.fields.SenderID !== 'system' || !r.fields.EventType);
+        console.log(`[CHAT-FETCH] ✅ Found ${data.records.length} records: ${events.length} events, ${messages.length} messages`);
+
+        if (events.length > 0) {
+            console.log(`[CHAT-FETCH] Event types found: ${events.map(e => e.fields.EventType).join(', ')}`);
+        }
+
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
+        console.log(`[CHAT-FETCH] ========== END ==========`);
         return data.records;
     } catch (error) {
-        console.error(`Error fetching chat history for session ${sessionId}:`, error);
+        console.error(`[CHAT-FETCH] ❌ Error: ${error.message}`);
+        console.log(`[CHAT-FETCH] ========== END (error) ==========`);
         return [];
     }
 }
 
+
+/**
+ * Event types for plan history tracking
+ */
+export const PLAN_EVENT_TYPES = {
+    PLAN_CREATED: 'plan_created',
+    AI_INTERPRETATION: 'ai_interpretation',
+    PLAN_UPDATED: 'plan_updated',
+    TASK_ADDED: 'task_added',
+    ITEM_ADDED: 'item_added',
+    COLLABORATOR_JOINED: 'collaborator_joined'
+};
+
+/**
+ * Posts a plan event to the Messages table for history tracking.
+ * Events are stored as system messages with EventType field to distinguish from chat messages.
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event (from PLAN_EVENT_TYPES)
+ * @param {object} eventData - Additional data about the event
+ * @returns {Promise<object|null>} The created record or null on failure
+ */
+export async function postPlanEvent(sessionId, eventType, eventData = {}) {
+    if (!sessionId || !sessionId.startsWith('rec')) {
+        console.error(`[API] postPlanEvent Error: Invalid sessionId provided: "${sessionId}".`);
+        return null;
+    }
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}`;
+
+    // Format the event content as JSON string for storage
+    const eventContent = JSON.stringify({
+        type: eventType,
+        data: eventData,
+        timestamp: new Date().toISOString()
+    });
+
+    const payload = {
+        records: [{
+            fields: {
+                SessionID: [sessionId],
+                SenderID: 'system',
+                SenderName: 'System',
+                Content: eventContent,
+                EventType: eventType
+            }
+        }]
+    };
+
+    try {
+        log('API', `Posting plan event: ${eventType} to session ${sessionId}`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            // Don't throw - event logging is non-critical
+            console.error(`[API] Failed to post plan event: ${errorData?.error?.message || response.statusText}`);
+            return null;
+        }
+
+        const result = await response.json();
+        log('API', `Plan event saved: ${eventType} with record ID: ${result.records[0].id}`);
+        return result.records[0];
+    } catch (error) {
+        console.error('[API] Error posting plan event:', error);
+        return null;
+    }
+}
 
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {

@@ -12,7 +12,38 @@ const SESSIONS_TABLE = 'Sessions';  // Also referred to as "Projects" in the UI
 const TASKS_TABLE = 'Tasks';
 
 // Debug logging prefix for this module
-const DEBUG_PREFIX = '[enrich-quick-plan]';
+const DEBUG_PREFIX = '[QUICK-PLAN-ENRICH]';
+
+/**
+ * Posts a plan event to the Messages table for history tracking
+ * Fire-and-forget - we don't await the result
+ * @param {string} sessionId - The session/plan ID
+ * @param {string} eventType - The type of event
+ * @param {object} eventData - Additional data about the event
+ */
+function postPlanEvent(sessionId, eventType, eventData) {
+  const eventUrl = process.env.URL
+    ? `${process.env.URL}/.netlify/functions/post-plan-event`
+    : '/.netlify/functions/post-plan-event';
+
+  console.log(`${DEBUG_PREFIX} Posting ${eventType} event for ${sessionId}...`);
+
+  fetch(eventUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, eventType, eventData })
+  })
+    .then(response => {
+      if (response.ok) {
+        console.log(`${DEBUG_PREFIX} ✅ ${eventType} event posted successfully`);
+      } else {
+        console.error(`${DEBUG_PREFIX} ⚠️ ${eventType} event posting returned ${response.status}`);
+      }
+    })
+    .catch(error => {
+      console.error(`${DEBUG_PREFIX} ⚠️ ${eventType} event posting failed: ${error.message}`);
+    });
+}
 
 /**
  * Debug logger for plan parsing - only logs parsing-related information
@@ -20,12 +51,8 @@ const DEBUG_PREFIX = '[enrich-quick-plan]';
  * @param {any} data - Data to log (optional)
  */
 function debugLog(action, data = null) {
-  const timestamp = new Date().toISOString();
-  if (data !== null) {
-    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}:`, JSON.stringify(data, null, 2));
-  } else {
-    console.log(`${DEBUG_PREFIX} [${timestamp}] ${action}`);
-  }
+  const logData = data !== null ? `: ${JSON.stringify(data)}` : '';
+  console.log(`${DEBUG_PREFIX} ${action}${logData}`);
 }
 
 /**
@@ -64,7 +91,7 @@ function cleanAndParseGeminiJson(text) {
  * @returns {Promise<object>} AI analysis with extracted fields and next_steps
  */
 async function analyzeWithGemini(ideaText) {
-  debugLog('Starting AI analysis', { inputLength: ideaText.length });
+  console.log(`${DEBUG_PREFIX} Starting AI analysis (${ideaText.length} chars)`);
 
   if (!GEMINI_API_KEY) {
     throw new Error('Missing GEMINI_API_KEY environment variable');
@@ -159,8 +186,6 @@ Generate your analysis now.
   const modelId = 'gemini-2.0-flash';
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
-  debugLog('Sending request to Gemini API');
-
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -169,27 +194,18 @@ Generate your analysis now.
 
   if (!response.ok) {
     const errorBody = await response.text();
-    debugLog('Gemini API Error', { status: response.status, error: errorBody });
+    console.error(`${DEBUG_PREFIX} Gemini API error: ${response.status}`);
     throw new Error(`Gemini API call failed with status ${response.status}`);
   }
 
   const result = await response.json();
   const jsonText = result.candidates[0].content.parts[0].text;
 
-  debugLog('Raw AI response received', { responseLength: jsonText.length });
+  console.log(`${DEBUG_PREFIX} AI response received (${jsonText.length} chars)`);
 
   const parsed = cleanAndParseGeminiJson(jsonText);
 
-  debugLog('Parsed AI analysis', {
-    plan_name: parsed.plan_name,
-    plan_type: parsed.plan_type,
-    event_date: parsed.event_date,
-    has_goals: !!parsed.goals,
-    guest_count: parsed.guest_count,
-    location: parsed.location,
-    items_count: parsed.items_components?.length || 0,
-    next_steps_count: parsed.next_steps?.length || 0
-  });
+  console.log(`${DEBUG_PREFIX} ✅ AI analysis complete: name="${parsed.plan_name}", type="${parsed.plan_type}", items=${parsed.items_components?.length || 0}, steps=${parsed.next_steps?.length || 0}`);
 
   return parsed;
 }
@@ -230,7 +246,7 @@ function parseAndFormatDate(dateStr) {
  * @returns {Promise<object>} Updated record
  */
 async function updateProjectWithExtractedFields(projectId, analysis) {
-  debugLog('Updating project with extracted fields', { projectId });
+  console.log(`${DEBUG_PREFIX} Updating project ${projectId} with extracted fields...`);
 
   // Build the fields object with all extracted data
   const updateFields = {};
@@ -268,11 +284,11 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
 
   // If no fields to update, skip the API call
   if (Object.keys(updateFields).length === 0) {
-    debugLog('No fields to update, skipping API call');
+    console.log(`${DEBUG_PREFIX} No fields to update, skipping`);
     return null;
   }
 
-  debugLog('Fields to update', updateFields);
+  console.log(`${DEBUG_PREFIX} Fields to update: ${Object.keys(updateFields).join(', ')}`);
 
   const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(SESSIONS_TABLE)}/${projectId}`;
 
@@ -287,13 +303,13 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    debugLog('Failed to update project fields', { error: errorText });
+    console.error(`${DEBUG_PREFIX} Failed to update project fields: ${response.status}`);
     // Don't throw - this is a non-critical update
     return null;
   }
 
   const record = await response.json();
-  debugLog('Project fields updated successfully', { updatedFields: Object.keys(updateFields) });
+  console.log(`${DEBUG_PREFIX} ✅ Project fields updated: ${Object.keys(updateFields).join(', ')}`);
   return record;
 }
 
@@ -305,11 +321,10 @@ async function updateProjectWithExtractedFields(projectId, analysis) {
  */
 async function createLinkedTasks(projectId, nextSteps) {
   if (!nextSteps || nextSteps.length === 0) {
-    debugLog('No next steps to create');
     return [];
   }
 
-  debugLog('Creating linked tasks', { projectId, taskCount: nextSteps.length });
+  console.log(`${DEBUG_PREFIX} Creating ${nextSteps.length} linked tasks for ${projectId}...`);
 
   const url = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TASKS_TABLE)}`;
 
@@ -336,13 +351,13 @@ async function createLinkedTasks(projectId, nextSteps) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    debugLog('Failed to create tasks', { error: errorText });
+    console.error(`${DEBUG_PREFIX} Failed to create tasks: ${response.status}`);
     // Don't throw - task creation is optional enhancement
     return [];
   }
 
   const result = await response.json();
-  debugLog('Tasks created successfully', { count: result.records?.length || 0 });
+  console.log(`${DEBUG_PREFIX} ✅ Created ${result.records?.length || 0} tasks`);
   return result.records || [];
 }
 
@@ -357,14 +372,7 @@ function logExtractedItems(projectId, items) {
     return;
   }
 
-  debugLog('Extracted items/components (for future integration)', {
-    projectId,
-    items: items.map(item => ({
-      name: item.name,
-      category: item.category,
-      notes: item.notes
-    }))
-  });
+  console.log(`${DEBUG_PREFIX} Extracted ${items.length} items/components: ${items.map(i => i.name).join(', ')}`);
 
   // Future: Create linked item records in a PlanItems table
   // For now, these can be used by the frontend to suggest catalog items
@@ -374,7 +382,7 @@ function logExtractedItems(projectId, items) {
  * Main handler for the AI enrichment function
  */
 exports.handler = async (event) => {
-  debugLog('Function invoked', { method: event.httpMethod });
+  console.log(`${DEBUG_PREFIX} ========== FUNCTION START ==========`);
 
   // Only allow POST requests
   if (event.httpMethod !== 'POST') {
@@ -387,7 +395,7 @@ exports.handler = async (event) => {
 
   // Validate environment variables
   if (!AIRTABLE_PAT || !BASE_ID) {
-    debugLog('ERROR: Missing required Airtable environment variables');
+    console.error(`${DEBUG_PREFIX} ERROR: Missing AIRTABLE_PAT or BASE_ID`);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -397,7 +405,8 @@ exports.handler = async (event) => {
 
   // GEMINI_API_KEY is optional - if missing, we skip AI enrichment
   if (!GEMINI_API_KEY) {
-    debugLog('GEMINI_API_KEY not configured - skipping AI enrichment');
+    console.log(`${DEBUG_PREFIX} GEMINI_API_KEY not configured - skipping AI enrichment`);
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION END (no API key) ==========`);
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -414,6 +423,7 @@ exports.handler = async (event) => {
     const { projectId, ideaText } = JSON.parse(event.body || '{}');
 
     if (!projectId || !ideaText) {
+      console.error(`${DEBUG_PREFIX} Missing projectId or ideaText`);
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -421,11 +431,7 @@ exports.handler = async (event) => {
       };
     }
 
-    debugLog('Starting enrichment process', {
-      projectId,
-      ideaTextLength: ideaText.length,
-      ideaTextPreview: ideaText.substring(0, 100) + (ideaText.length > 100 ? '...' : '')
-    });
+    console.log(`${DEBUG_PREFIX} Enriching project ${projectId}: "${ideaText.substring(0, 50)}..."`);
 
     // Step 1: Call AI to analyze the idea and extract structured data
     const analysis = await analyzeWithGemini(ideaText);
@@ -444,19 +450,22 @@ exports.handler = async (event) => {
       logExtractedItems(projectId, analysis.items_components);
     }
 
-    debugLog('Enrichment complete', {
-      projectId,
-      fieldsExtracted: {
-        plan_name: !!analysis.plan_name,
-        plan_type: analysis.plan_type,
-        event_date: !!analysis.event_date,
-        goals: !!analysis.goals,
-        guest_count: analysis.guest_count,
-        location: !!analysis.location,
-        items_count: analysis.items_components?.length || 0
-      },
-      tasksCreated: createdTasks.length
+    console.log(`${DEBUG_PREFIX} ✅ Enrichment complete: name="${analysis.plan_name}", type="${analysis.plan_type}", tasks=${createdTasks.length}`);
+
+    // Post the AI interpretation event to show in chat history
+    postPlanEvent(projectId, 'ai_interpretation', {
+      planName: analysis.plan_name,
+      planType: analysis.plan_type,
+      eventDate: analysis.event_date,
+      goals: analysis.goals,
+      guestCount: analysis.guest_count,
+      location: analysis.location,
+      itemsExtracted: analysis.items_components?.map(item => item.name) || [],
+      tasksCreated: createdTasks.map(t => t.fields?.Name || 'Unnamed task'),
+      reasoning: analysis.reasoning
     });
+
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION END (success) ==========`);
 
     return {
       statusCode: 200,
@@ -477,7 +486,8 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    debugLog('Function failed', { error: error.message, stack: error.stack });
+    console.error(`${DEBUG_PREFIX} FUNCTION FAILED:`, error.message);
+    console.log(`${DEBUG_PREFIX} ========== FUNCTION END (error) ==========`);
 
     // Return success even on error - enrichment is optional
     // The plan was already created successfully
