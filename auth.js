@@ -730,71 +730,182 @@ export function setupAuthEventListeners() {
     console.log('[SMS-DEBUG] ========== SMS event listeners setup complete ==========');
 
     // --- NETLIFY IDENTITY SSO SETUP ---
-    // Wait for Netlify Identity to be ready before setting up SSO
-    if (typeof netlifyIdentity !== 'undefined') {
-        initializeNetlifyIdentity();
-    } else {
-        // Wait for the script to load
-        window.addEventListener('load', () => {
-            if (typeof netlifyIdentity !== 'undefined') {
-                initializeNetlifyIdentity();
-            } else {
-                console.error('Netlify Identity widget failed to load');
+    console.log('[Auth] ========== NETLIFY IDENTITY SETUP START ==========');
+    console.log('[Auth] Checking if netlifyIdentity is already defined:', typeof netlifyIdentity !== 'undefined');
+
+    // Get the debug status element
+    const debugStatusEl = document.getElementById('google-sso-debug-status');
+    const updateDebugStatus = (message, color = '#666') => {
+        if (debugStatusEl) {
+            debugStatusEl.textContent = message;
+            debugStatusEl.style.color = color;
+        }
+        console.log('[Auth] Debug status:', message);
+    };
+
+    // Function to load Netlify Identity script
+    const loadNetlifyIdentityScript = () => {
+        return new Promise((resolve, reject) => {
+            console.log('[Auth] Loading Netlify Identity widget script...');
+            updateDebugStatus('Loading Google SSO...', '#666');
+
+            if (typeof window.netlifyIdentity !== 'undefined') {
+                console.log('[Auth] Netlify Identity already loaded');
+                resolve();
+                return;
             }
+
+            // Check if the script is already being loaded
+            const existingScript = document.querySelector('script[src*="netlify-identity-widget"]');
+            if (existingScript) {
+                console.log('[Auth] Netlify Identity script already exists, waiting for load...');
+                existingScript.onload = () => {
+                    console.log('[Auth] Existing script loaded');
+                    resolve();
+                };
+                existingScript.onerror = () => {
+                    console.error('[Auth] Existing script failed to load');
+                    reject(new Error('Failed to load Netlify Identity widget'));
+                };
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
+            script.async = true;
+            script.onload = () => {
+                console.log('[Auth] Netlify Identity widget script loaded successfully');
+                resolve();
+            };
+            script.onerror = (err) => {
+                console.error('[Auth] Failed to load Netlify Identity widget script:', err);
+                reject(new Error('Failed to load Netlify Identity widget'));
+            };
+            document.head.appendChild(script);
         });
-    }
+    };
+
+    // Load and initialize Netlify Identity
+    loadNetlifyIdentityScript()
+        .then(() => {
+            console.log('[Auth] Script loaded, waiting for netlifyIdentity to be available...');
+            // Small delay to ensure the script has initialized
+            setTimeout(() => {
+                if (typeof window.netlifyIdentity !== 'undefined') {
+                    initializeNetlifyIdentity(updateDebugStatus);
+                } else {
+                    console.error('[Auth] netlifyIdentity not available after script load');
+                    updateDebugStatus('Google SSO unavailable - widget failed to initialize', '#dc3545');
+                }
+            }, 100);
+        })
+        .catch((error) => {
+            console.error('[Auth] Error loading Netlify Identity:', error);
+            updateDebugStatus('Google SSO unavailable - script load failed', '#dc3545');
+        });
+
+    console.log('[Auth] ========== NETLIFY IDENTITY SETUP END ==========');
 }
 
-function initializeNetlifyIdentity() {
+function initializeNetlifyIdentity(updateDebugStatus = () => {}) {
     console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
     console.log('[Auth] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
+
+    if (typeof netlifyIdentity === 'undefined') {
+        console.error('[Auth] netlifyIdentity is undefined!');
+        updateDebugStatus('Google SSO Error: Widget not loaded', '#dc3545');
+        return;
+    }
+
     console.log('[Auth] Initializing Netlify Identity');
-    
+
     // Initialize the widget
     console.log('[Auth] Calling netlifyIdentity.init()');
-    netlifyIdentity.init({
-        locale: 'en'
-    });
-    console.log('[Auth] netlifyIdentity.init() completed');
+    try {
+        netlifyIdentity.init({
+            locale: 'en'
+        });
+        console.log('[Auth] netlifyIdentity.init() completed');
+        updateDebugStatus('Google SSO Ready', '#28a745');
+    } catch (error) {
+        console.error('[Auth] Error during netlifyIdentity.init():', error);
+        updateDebugStatus('Google SSO Error: Init failed', '#dc3545');
+        return;
+    }
+
+    // Check if Google provider is configured
+    console.log('[Auth] Checking Netlify Identity configuration...');
+    console.log('[Auth] Site URL:', window.location.origin);
 
     // Set up Google SSO button
     const googleSsoBtn = document.getElementById('google-sso-btn');
     console.log('[Auth] Google SSO button element found:', !!googleSsoBtn);
+
     if (googleSsoBtn) {
         googleSsoBtn.addEventListener('click', () => {
             console.log('[Auth] ========== GOOGLE SSO BUTTON CLICKED ==========');
             console.log('[Auth] Timestamp:', new Date().toISOString());
+            updateDebugStatus('Opening Google sign-in...', '#007bff');
+
             try {
                 // Trigger Google login directly
                 console.log('[Auth] Opening Netlify Identity modal...');
                 netlifyIdentity.open('login');
                 console.log('[Auth] Netlify Identity modal opened');
-                netlifyIdentity.on('open', () => {
-                    // Automatically select Google provider
+
+                // Try to auto-click Google after a short delay
+                setTimeout(() => {
                     const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
+                    console.log('[Auth] Looking for Google provider button:', !!googleBtn);
                     if (googleBtn) {
+                        console.log('[Auth] Found Google provider button, clicking...');
                         googleBtn.click();
+                    } else {
+                        console.log('[Auth] Google provider button not found in modal');
+                        console.log('[Auth] Available provider buttons:', document.querySelectorAll('.btnProvider').length);
+                        document.querySelectorAll('.btnProvider').forEach((btn, i) => {
+                            console.log(`[Auth]   Provider ${i}:`, btn.getAttribute('data-provider'));
+                        });
+                        updateDebugStatus('Google provider not configured in Netlify Identity', '#ff9800');
                     }
-                });
+                }, 500);
             } catch (error) {
                 console.error('[Auth] Error opening Google SSO:', error);
+                updateDebugStatus('Error opening Google sign-in: ' + error.message, '#dc3545');
                 signinMessage.textContent = "Error opening Google sign-in. Please try again.";
                 signinMessage.style.color = '#dc3545';
             }
         });
+        console.log('[Auth] Google SSO button click listener attached');
+    } else {
+        console.warn('[Auth] Google SSO button not found in DOM');
+        updateDebugStatus('Google SSO button not found', '#dc3545');
     }
 
     // Handle successful login
     netlifyIdentity.on('login', async (user) => {
         console.log('[Auth] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
         console.log('[Auth] Timestamp:', new Date().toISOString());
-        console.log('[Auth] User object:', user);
+        console.log('[Auth] User object received:', !!user);
         console.log('[Auth] User email:', user?.email);
-        console.log('[Auth] User token:', user?.token?.access_token ? 'Present' : 'Missing');
+        console.log('[Auth] User id:', user?.id);
+        console.log('[Auth] User token exists:', !!user?.token);
+        console.log('[Auth] User token.access_token exists:', !!user?.token?.access_token);
+        console.log('[Auth] User app_metadata:', JSON.stringify(user?.app_metadata));
+        console.log('[Auth] User user_metadata:', JSON.stringify(user?.user_metadata));
+
+        updateDebugStatus('Completing sign-in...', '#007bff');
+
         try {
+            if (!user?.token?.access_token) {
+                throw new Error('No access token received from Netlify Identity');
+            }
+
             const netlifyJwt = user.token.access_token;
+            console.log('[Auth] Netlify JWT received');
+            console.log('[Auth] JWT length:', netlifyJwt.length);
             console.log('[Auth] Calling /api/auth-social with Netlify JWT...');
-            console.log('[Auth] JWT (first 20 chars):', netlifyJwt.substring(0, 20) + '...');
+
             // Call serverless function to get app-specific JWT
             const response = await fetch('/api/auth-social', {
                 method: 'POST',
@@ -803,19 +914,37 @@ function initializeNetlifyIdentity() {
                     'Authorization': `Bearer ${netlifyJwt}`
                 }
             });
+
             console.log('[Auth] /api/auth-social response status:', response.status);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to sync social login.");
+            console.log('[Auth] /api/auth-social response ok:', response.ok);
+
+            const responseText = await response.text();
+            console.log('[Auth] Response body length:', responseText.length);
+
+            let responseData;
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                console.error('[Auth] Failed to parse response as JSON:', responseText.substring(0, 200));
+                throw new Error('Invalid response from auth-social endpoint');
             }
 
-            const appPayload = await response.json();
-            console.log('[Auth] Received app payload from /api/auth-social:', appPayload);
-            console.log('[Auth] App token present:', !!appPayload.token);
-            console.log('[Auth] User data present:', !!appPayload.user);
-            console.log('[Auth] Liked items count:', appPayload.user?.likedItemIds?.length || 0);
+            if (!response.ok) {
+                console.error('[Auth] auth-social error response:', responseData);
+                throw new Error(responseData.error || "Failed to sync social login.");
+            }
+
+            console.log('[Auth] Received app payload from /api/auth-social');
+            console.log('[Auth] App token present:', !!responseData.token);
+            console.log('[Auth] User data present:', !!responseData.user);
+            console.log('[Auth] User ID:', responseData.user?.id);
+            console.log('[Auth] Liked items count:', responseData.user?.likedItemIds?.length || 0);
+
             console.log('[Auth] Calling _handleSuccessfulLogin...');
-            await _handleSuccessfulLogin(appPayload);
+            updateDebugStatus('Signed in successfully!', '#28a745');
+
+            await _handleSuccessfulLogin(responseData);
+
             console.log('[Auth] _handleSuccessfulLogin completed');
             console.log('[Auth] Closing Netlify Identity modal...');
             netlifyIdentity.close();
@@ -827,21 +956,36 @@ function initializeNetlifyIdentity() {
             console.error("[Auth] Error details:", error);
             console.error("[Auth] Error message:", error.message);
             console.error("[Auth] Error stack:", error.stack);
-            signinMessage.textContent = "Error logging in with Google. Please try again.";
+
+            updateDebugStatus('Sign-in failed: ' + error.message, '#dc3545');
+            signinMessage.textContent = "Error logging in with Google: " + error.message;
             signinMessage.style.color = '#dc3545';
             console.error('[Auth] ========== SSO LOGIN ERROR END ==========');
         }
+    });
+
+    // Handle modal close
+    netlifyIdentity.on('close', () => {
+        console.log('[Auth] Netlify Identity modal closed');
     });
 
     // Handle errors
     netlifyIdentity.on('error', (error) => {
         console.error('[Auth] ========== NETLIFY IDENTITY ERROR ==========');
         console.error('[Auth] Error:', error);
+        console.error('[Auth] Error type:', typeof error);
+        console.error('[Auth] Error message:', error?.message || error);
+        updateDebugStatus('Authentication error: ' + (error?.message || error), '#dc3545');
         signinMessage.textContent = "Authentication error. Please try again.";
         signinMessage.style.color = '#dc3545';
         console.error('[Auth] ========== NETLIFY IDENTITY ERROR END ==========');
     });
-    
+
+    // Handle logout
+    netlifyIdentity.on('logout', () => {
+        console.log('[Auth] Netlify Identity logout event');
+    });
+
     console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
 }
 
