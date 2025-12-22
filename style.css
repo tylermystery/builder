@@ -3634,6 +3634,7 @@ body.modal-open {
 }
 
 .itinerary-accordion-icon {
+    display: inline-block;
     width: 24px;
     height: 24px;
     position: relative;
