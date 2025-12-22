@@ -74,8 +74,12 @@ export function initializeWtfPlansPanel() {
 /**
  * Show the WTF Plans panel with slide-in animation
  * Fetches data if authenticated
+ * @param {Object} options - Options for showing the panel
+ * @param {boolean} options.skipPushState - If true, don't push to browser history (used by popstate handler)
+ * @param {string} options.filter - Optional filter to set (used when restoring from URL)
  */
-export async function showWtfPlansPanel() {
+export async function showWtfPlansPanel(options = {}) {
+    const { skipPushState = false, filter = null } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
 
@@ -90,6 +94,27 @@ export async function showWtfPlansPanel() {
         overlay.classList.add('visible');
     }
 
+    // Add wtfPlans=open to URL for browser history support (unless restoring from popstate)
+    if (!skipPushState) {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('wtfPlans', 'open');
+        if (filter) {
+            currentUrl.searchParams.set('wtfFilter', filter);
+        }
+        window.history.pushState({ wtfPlans: 'open' }, '', currentUrl.toString());
+        log('WtfPlansPanel', 'Pushed wtfPlans=open to history');
+    }
+
+    // Set filter if specified (from URL restore)
+    if (filter && Object.values(WTF_PLAN_TYPES).includes(filter)) {
+        currentFilter = filter;
+        // Update active state on filter buttons
+        const filterBtns = document.querySelectorAll('.wtf-plans-filter-btn');
+        filterBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+    }
+
     // Fetch data
     await loadWtfPlansData();
 
@@ -98,8 +123,11 @@ export async function showWtfPlansPanel() {
 
 /**
  * Hide the WTF Plans panel with slide-out animation
+ * @param {Object} options - Options for hiding the panel
+ * @param {boolean} options.skipPushState - If true, don't push to browser history (used when navigating to a plan)
  */
-export function hideWtfPlansPanel() {
+export function hideWtfPlansPanel(options = {}) {
+    const { skipPushState = false } = options;
     const panel = document.getElementById('wtf-plans-panel');
     const overlay = document.getElementById('wtf-plans-panel-overlay');
 
@@ -115,6 +143,17 @@ export function hideWtfPlansPanel() {
 
     if (overlay) {
         overlay.classList.remove('visible');
+    }
+
+    // Remove wtfPlans param from URL (unless we're navigating to a plan which will push its own state)
+    if (!skipPushState) {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.has('wtfPlans')) {
+            currentUrl.searchParams.delete('wtfPlans');
+            currentUrl.searchParams.delete('wtfFilter');
+            window.history.pushState({}, '', currentUrl.toString());
+            log('WtfPlansPanel', 'Removed wtfPlans from URL');
+        }
     }
 
     log('WtfPlansPanel', 'WTF Plans panel closed.');
@@ -427,22 +466,34 @@ function createWtfPlanItem(item) {
 
 /**
  * Handle click on a WTF Plan item
+ * Uses pushState to ensure browser back/forward navigation works correctly
  * @param {Object} item - The clicked item
  */
 function handleWtfPlanItemClick(item) {
     log('WtfPlansPanel', `Clicked ${item.type}: ${item.name} (${item.id})`);
 
-    // Close the panel
-    hideWtfPlansPanel();
+    // Close the panel (skipPushState since we'll handle navigation ourselves)
+    hideWtfPlansPanel({ skipPushState: true });
 
     switch (item.type) {
         case 'plan':
         case 'project':
-            // Navigate to session
+            // Navigate to session using pushState for proper browser history
+            // First, ensure the wtfPlans state is in history so back button returns to it
+            const wtfPlansUrl = new URL(window.location.href);
+            wtfPlansUrl.searchParams.set('wtfPlans', 'open');
+            wtfPlansUrl.searchParams.set('wtfFilter', currentFilter);
+            // Replace current URL with wtfPlans state (this is the state we want to return to on back)
+            window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfPlansUrl.toString());
+
+            // Now push the new session URL
             const sessionUrl = new URL(window.location.href);
+            sessionUrl.searchParams.delete('wtfPlans');
+            sessionUrl.searchParams.delete('wtfFilter');
             sessionUrl.searchParams.set('session', item.id);
             sessionUrl.searchParams.delete('view');
             sessionUrl.searchParams.delete('category');
+            // Use location.href for session navigation as it requires full reload to load session data
             window.location.href = sessionUrl.toString();
             break;
 
@@ -451,10 +502,24 @@ function handleWtfPlanItemClick(item) {
             // Open item detail modal
             const record = item.data;
             if (record) {
+                // First, ensure the wtfPlans state is in history so back button returns to it
+                const wtfPanelUrl = new URL(window.location.href);
+                wtfPanelUrl.searchParams.set('wtfPlans', 'open');
+                wtfPanelUrl.searchParams.set('wtfFilter', currentFilter);
+                window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfPanelUrl.toString());
+
+                // Then show the modal (which will push its own URL state)
                 showDetailModal(record);
             } else {
                 // Fallback: navigate with openItem param
+                const wtfUrl = new URL(window.location.href);
+                wtfUrl.searchParams.set('wtfPlans', 'open');
+                wtfUrl.searchParams.set('wtfFilter', currentFilter);
+                window.history.replaceState({ wtfPlans: 'open', filter: currentFilter }, '', wtfUrl.toString());
+
                 const itemUrl = new URL(window.location.href);
+                itemUrl.searchParams.delete('wtfPlans');
+                itemUrl.searchParams.delete('wtfFilter');
                 itemUrl.searchParams.set('openItem', item.id);
                 window.location.href = itemUrl.toString();
             }
@@ -538,4 +603,43 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Check if the WTF Plans panel is currently open
+ * @returns {boolean} - True if the panel is open
+ */
+export function isWtfPlansPanelOpen() {
+    const panel = document.getElementById('wtf-plans-panel');
+    return panel && panel.classList.contains('open');
+}
+
+/**
+ * Sync the WTF Plans panel state with the URL
+ * Called by syncUiWithUrl in main.js to handle browser back/forward navigation
+ * @param {URLSearchParams} params - The current URL search params
+ */
+export function syncWtfPlansPanelWithUrl(params) {
+    const shouldBeOpen = params.get('wtfPlans') === 'open';
+    const filter = params.get('wtfFilter') || WTF_PLAN_TYPES.ALL;
+    const isOpen = isWtfPlansPanelOpen();
+
+    if (shouldBeOpen && !isOpen) {
+        // URL says panel should be open, but it's closed - open it
+        log('WtfPlansPanel', 'syncWtfPlansPanelWithUrl: Opening panel from URL state');
+        showWtfPlansPanel({ skipPushState: true, filter });
+    } else if (!shouldBeOpen && isOpen) {
+        // URL says panel should be closed, but it's open - close it
+        log('WtfPlansPanel', 'syncWtfPlansPanelWithUrl: Closing panel from URL state');
+        hideWtfPlansPanel({ skipPushState: true });
+    } else if (shouldBeOpen && isOpen && filter !== currentFilter) {
+        // Panel is open but filter needs updating
+        log('WtfPlansPanel', `syncWtfPlansPanelWithUrl: Updating filter to ${filter}`);
+        currentFilter = filter;
+        const filterBtns = document.querySelectorAll('.wtf-plans-filter-btn');
+        filterBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        renderWtfPlansList();
+    }
 }

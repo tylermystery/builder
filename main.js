@@ -18,7 +18,7 @@ import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
-import { initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
+import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/wtfPlansPanel.js';
 
 
 const imageCache = new Map();
@@ -44,6 +44,9 @@ function syncUiWithUrl() {
     ui.hideDetailModal();
     ui.hideItineraryModal();
     ui.hidePresentationView();
+
+    // Sync WTF Plans panel state with URL (for browser back/forward navigation)
+    syncWtfPlansPanelWithUrl(params);
 
     // --- Sync 'My Plan'/'My Likes' Button Active State ---
     const categoryFilters = document.getElementById('category-filters');
