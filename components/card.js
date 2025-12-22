@@ -470,9 +470,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             tiersHTML += `</div>`;
         }
 
-        // Format the price display
-        const displayPrice = dynamicPricing.totalPrice;
-        const perGuestLabel = dynamicPricing.hasPerGuestItems ? '<span class="pricing-type">/ per guest pricing</span>' : '';
+        // Format the price display - show per-guest cost when applicable
+        const displayPrice = dynamicPricing.hasPerGuestItems
+            ? dynamicPricing.totalPrice / defaultHeadcount
+            : dynamicPricing.totalPrice;
+        const perGuestLabel = dynamicPricing.hasPerGuestItems ? '<span class="pricing-type">/ per guest</span>' : '';
         const priceHTML = displayPrice === 0 ? 'Free' : `$${displayPrice.toFixed(2)} ${perGuestLabel}`;
 
         // Store package data on the card for dynamic updates
@@ -513,8 +515,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 const currentHeadcount = parseInt(headcountInput.value, 10) || defaultHeadcount;
                 const updatedPricing = calculateDynamicPackagePrice(packageContents, packageMetadata, allRecords, currentHeadcount);
 
-                // Update price display
-                const newPriceHTML = updatedPricing.totalPrice === 0 ? 'Free' : `$${updatedPricing.totalPrice.toFixed(2)} ${perGuestLabel}`;
+                // Update price display - show per-guest cost when applicable
+                const updatedDisplayPrice = updatedPricing.hasPerGuestItems
+                    ? updatedPricing.totalPrice / currentHeadcount
+                    : updatedPricing.totalPrice;
+                const newPriceHTML = updatedDisplayPrice === 0 ? 'Free' : `$${updatedDisplayPrice.toFixed(2)} ${perGuestLabel}`;
                 priceEl.innerHTML = newPriceHTML;
 
                 // Update savings display
