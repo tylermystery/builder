@@ -137,6 +137,10 @@ export function initDebugPanel(title = 'Debug Log') {
         document.head.appendChild(link);
     }
 
+    // DORMANT FEATURE: Debug Toggle Button - hidden until debug functionality is fully utilized
+    // TODO: Re-enable the floating debug toggle button when debug features are needed
+    // The debug panel infrastructure is preserved for internal debugging but the UI toggle is hidden
+    /*
     // Create debug toggle button
     debugToggle = document.createElement('button');
     debugToggle.id = 'debugToggle';
@@ -144,8 +148,9 @@ export function initDebugPanel(title = 'Debug Log') {
     debugToggle.title = 'Toggle Debug Panel';
     debugToggle.textContent = '🔧';
     document.body.appendChild(debugToggle);
+    */
 
-    // Create debug panel
+    // Create debug panel (hidden, can be accessed programmatically if needed)
     debugPanel = document.createElement('div');
     debugPanel.id = 'debugPanel';
     debugPanel.className = 'debug-panel';
@@ -164,8 +169,11 @@ export function initDebugPanel(title = 'Debug Log') {
     // Get content container
     debugLogContent = document.getElementById('debugLogContent');
 
-    // Set up event listeners
-    debugToggle.addEventListener('click', toggleDebugPanel);
+    // Set up event listeners (panel can still be controlled programmatically)
+    // DORMANT: debugToggle event listener removed since button is hidden
+    // if (debugToggle) {
+    //     debugToggle.addEventListener('click', toggleDebugPanel);
+    // }
     document.getElementById('closeDebugPanel').addEventListener('click', () => {
         debugPanel.classList.remove('visible');
     });
@@ -176,8 +184,8 @@ export function initDebugPanel(title = 'Debug Log') {
     // Render any persisted logs from previous pages
     if (debugLogs.length > 0) {
         renderPersistedLogs();
-        // Show indicator that there are logs from before
-        debugToggle.classList.add('has-logs');
+        // DORMANT: Toggle button indicator removed since button is hidden
+        // debugToggle.classList.add('has-logs');
     }
 
     // Log initialization with page context
@@ -210,10 +218,11 @@ export function debugLog(action, data = null, type = 'info') {
         return;
     }
 
+    // DORMANT: Visual indicator for toggle button is disabled since button is hidden
     // Add visual indicator if panel is closed
-    if (!debugPanel.classList.contains('visible')) {
-        debugToggle.classList.add('has-logs');
-    }
+    // if (debugToggle && !debugPanel.classList.contains('visible')) {
+    //     debugToggle.classList.add('has-logs');
+    // }
 
     // Render the entry to the panel
     renderLogEntry(entry, false);
@@ -229,9 +238,10 @@ export function toggleDebugPanel() {
     if (!debugPanel) return;
 
     debugPanel.classList.toggle('visible');
-    if (debugPanel.classList.contains('visible')) {
-        debugToggle.classList.remove('has-logs');
-    }
+    // DORMANT: Toggle button class update disabled since button is hidden
+    // if (debugToggle && debugPanel.classList.contains('visible')) {
+    //     debugToggle.classList.remove('has-logs');
+    // }
 }
 
 /**
