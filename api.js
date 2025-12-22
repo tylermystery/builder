@@ -32,6 +32,11 @@ const API_TIMEOUT_MS = 15000; // 15 second timeout for API calls
  * @returns {Promise<Response>} - Fetch response
  */
 async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+    // Defensive: validate inputs
+    if (!url || typeof url !== 'string') {
+        throw new Error('fetchWithTimeout: Invalid URL provided');
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
         console.warn(`[API DEBUG] Fetch timeout after ${timeoutMs}ms for URL: ${url.substring(0, 100)}...`);

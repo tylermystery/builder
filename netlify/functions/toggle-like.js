@@ -9,6 +9,15 @@ const ITEMS_TABLE = 'tblUA4uuS8IYlhKpD'; // Your Items table ID/Name
 const LIKED_BY_FIELD = 'Liked By Users'; // Exact field name from Airtable
 
 exports.handler = async (event) => {
+    // Validate environment variables
+    if (!JWT_SECRET || !AIRTABLE_PAT || !BASE_ID) {
+        console.error('[toggle-like] Missing required environment variables');
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Server configuration error' })
+        };
+    }
+
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
     }
@@ -31,9 +40,26 @@ exports.handler = async (event) => {
     // --- End Authentication ---
 
     try {
-        const { itemId } = JSON.parse(event.body);
-        if (!itemId) {
-            return { statusCode: 400, body: JSON.stringify({ error: 'Missing itemId in request body.' }) };
+        // Defensive: validate request body
+        if (!event.body) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Missing request body.' }) };
+        }
+
+        let parsedBody;
+        try {
+            parsedBody = JSON.parse(event.body);
+        } catch (parseError) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body.' }) };
+        }
+
+        const { itemId } = parsedBody;
+        if (!itemId || typeof itemId !== 'string') {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Missing or invalid itemId in request body.' }) };
+        }
+
+        // Validate itemId format (Airtable record IDs start with 'rec')
+        if (!itemId.startsWith('rec')) {
+            return { statusCode: 400, body: JSON.stringify({ error: 'Invalid itemId format.' }) };
         }
 
         console.log(`[toggle-like] User ${userId} toggling like for item ${itemId}`);
@@ -52,19 +78,22 @@ exports.handler = async (event) => {
 
         const itemRecord = await itemRes.json();
         const likedUserIds = itemRecord.fields?.[LIKED_BY_FIELD] || []; // Default to empty array if field is missing or null
-        const userIndex = likedUserIds.indexOf(userId);
+
+        // Defensive: ensure likedUserIds is an array
+        const safeUserIds = Array.isArray(likedUserIds) ? likedUserIds : [];
+        const userIndex = safeUserIds.indexOf(userId);
         let updatedUserIds;
         let liked = false;
 
         // 2. Determine new state and update list
         if (userIndex > -1) {
             // User already liked it, remove them (unlike)
-            updatedUserIds = likedUserIds.filter(id => id !== userId);
+            updatedUserIds = safeUserIds.filter(id => id !== userId);
             liked = false;
             console.log(`[toggle-like] User ${userId} unliking item ${itemId}.`);
         } else {
             // User hasn't liked it, add them (like)
-            updatedUserIds = [...likedUserIds, userId];
+            updatedUserIds = [...safeUserIds, userId];
             liked = true;
             console.log(`[toggle-like] User ${userId} liking item ${itemId}.`);
         }

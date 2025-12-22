@@ -39,63 +39,80 @@ function parseCapacity(capacityStr) {
 }
 
 function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcategories) {
+    // Defensive: ensure inputs are valid
+    if (!Array.isArray(records)) {
+        console.warn('[FilterDebug] filterByCategoryAndSubcategory received non-array records');
+        return [];
+    }
+    if (!Array.isArray(activeSubcategories)) {
+        activeSubcategories = [];
+    }
+
     console.log('[FilterDebug] === filterByCategoryAndSubcategory START ===');
     console.log('[FilterDebug] selectedCategory:', selectedCategory);
     console.log('[FilterDebug] activeSubcategories:', activeSubcategories);
     console.log('[FilterDebug] Total records to filter:', records.length);
-    
+
     if (selectedCategory === 'all' || !selectedCategory) {
         console.log('[FilterDebug] Category is "all" or empty, returning all records');
         return records;
     }
 
-    const selectedCategoryLower = selectedCategory.toLowerCase().replace(/\s+/g, ' ');
+    const selectedCategoryLower = String(selectedCategory).toLowerCase().replace(/\s+/g, ' ');
     console.log('[FilterDebug] selectedCategoryLower:', selectedCategoryLower);
     let categoryFilteredRecords = [];
 
     categoryFilteredRecords = records.filter(record => {
+        // Defensive: ensure record has fields
+        if (!record || !record.fields) return false;
+
         const fields = record.fields;
         const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const itemCategories = (fields[CONSTANTS.FIELD_NAMES.CATEGORIES] || '')
             .split(',')
-            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '));
+            .map(cat => cat.trim().toLowerCase().replace(/\s+/g, ' '))
+            .filter(Boolean);
         const itemSubcategoriesForCategoryCheck = (fields.Subcategories || '')
             .split(',')
-            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
+            .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
+            .filter(Boolean);
 
-        const matches = itemCategories.includes(selectedCategoryLower) || 
-               parentNameLower === selectedCategoryLower ||       
+        const matches = itemCategories.includes(selectedCategoryLower) ||
+               parentNameLower === selectedCategoryLower ||
                itemSubcategoriesForCategoryCheck.includes(selectedCategoryLower);
-        
+
         if (matches) {
             console.log('[FilterDebug] MATCH found for:', fields.Name);
             console.log('  - itemCategories:', itemCategories);
             console.log('  - parentNameLower:', parentNameLower);
             console.log('  - itemSubcategoriesForCategoryCheck:', itemSubcategoriesForCategoryCheck);
         }
-        
+
         return matches;
     });
-    
+
     console.log('[FilterDebug] Category filtered records count:', categoryFilteredRecords.length);
 
     if (activeSubcategories.length > 0) {
         console.log('[FilterDebug] Applying subcategory filter...');
         const subcategoryFilteredRecords = categoryFilteredRecords.filter(record => {
+            if (!record || !record.fields) return false;
+
             const fields = record.fields;
             const parentNameLower = (fields[CONSTANTS.FIELD_NAMES.PARENT_ITEM] || '').trim().toLowerCase().replace(/\s+/g, ' ');
             const itemSubcategories = (fields.Subcategories || '')
                 .split(',')
-                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '));
+                .map(sc => sc.trim().toLowerCase().replace(/\s+/g, ' '))
+                .filter(Boolean);
 
             return activeSubcategories.some(activeSubcat =>
-                itemSubcategories.includes(activeSubcat) || 
-                parentNameLower === activeSubcat            
+                itemSubcategories.includes(activeSubcat) ||
+                parentNameLower === activeSubcat
             );
         });
         console.log('[FilterDebug] Subcategory filtered records count:', subcategoryFilteredRecords.length);
         console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
-        return subcategoryFilteredRecords; 
+        return subcategoryFilteredRecords;
     } else {
         console.log('[FilterDebug] No subcategory filter applied');
         console.log('[FilterDebug] === filterByCategoryAndSubcategory END ===');
@@ -105,22 +122,30 @@ function filterByCategoryAndSubcategory(records, selectedCategory, activeSubcate
 
 
 function filterByStatus(records, statusFilter) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+
     if (statusFilter === 'all') {
         return records;
     } else if (statusFilter === 'Available') {
         return records.filter(record => {
-            const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS]; 
+            if (!record || !record.fields) return false;
+            const status = record.fields[CONSTANTS.FIELD_NAMES.STATUS];
             return status && (status === 'Available' || status === 'Featured');
         });
     } else {
-        return records.filter(record =>
-            record.fields[CONSTANTS.FIELD_NAMES.STATUS] &&
-            record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter
-        );
+        return records.filter(record => {
+            if (!record || !record.fields) return false;
+            return record.fields[CONSTANTS.FIELD_NAMES.STATUS] &&
+                record.fields[CONSTANTS.FIELD_NAMES.STATUS] === statusFilter;
+        });
     }
 }
 
 function filterByHeadcount(records, headcountFilter, customHeadcount) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+
     if (headcountFilter === 'any' && !customHeadcount) {
         return records;
     }
@@ -128,20 +153,24 @@ function filterByHeadcount(records, headcountFilter, customHeadcount) {
     let filterMin = 0, filterMax = Infinity;
     if (headcountFilter === 'custom') {
         filterMin = parseInt(customHeadcount, 10) || 0;
-        filterMax = filterMin; 
-    } else {
+        filterMax = filterMin;
+    } else if (headcountFilter && headcountFilter.includes('-')) {
         const [minStr, maxStr] = headcountFilter.split('-');
-        filterMin = parseInt(minStr, 10);
-        filterMax = maxStr === 'plus' ? Infinity : parseInt(maxStr, 10);
+        filterMin = parseInt(minStr, 10) || 0;
+        filterMax = maxStr === 'plus' ? Infinity : (parseInt(maxStr, 10) || Infinity);
     }
 
     return records.filter(record => {
+        if (!record || !record.fields) return false;
         const capacity = parseCapacity(record.fields['Capacity']);
         return filterMin <= capacity.max && filterMax >= capacity.min;
     });
 }
 
 function filterByLocation(records, locationFilter) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+
     if (locationFilter === 'any') {
         return records;
     }
@@ -161,17 +190,23 @@ function filterByLocation(records, locationFilter) {
     }
 
     return records.filter(record => {
+        if (!record || !record.fields) return false;
         const recordRegions = record.fields['Region'] || [];
-        
-        const isTargeted = recordRegions.includes(targetRegion);
-        const isAvailableEverywhere = recordRegions.includes('All'); 
-        const isRegionBlank = recordRegions.length === 0;
+        // Defensive: ensure recordRegions is an array
+        const safeRegions = Array.isArray(recordRegions) ? recordRegions : [];
+
+        const isTargeted = safeRegions.includes(targetRegion);
+        const isAvailableEverywhere = safeRegions.includes('All');
+        const isRegionBlank = safeRegions.length === 0;
 
         return isTargeted || isAvailableEverywhere || isRegionBlank;
     });
 }
 
 function filterByBudget(records, budgetFilter) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+
     if (budgetFilter === 'any') {
         return records;
     }
@@ -183,20 +218,33 @@ function filterByBudget(records, budgetFilter) {
     };
     const range = BUDGET_RANGES[budgetFilter];
 
+    // Defensive: if budget filter is invalid, return all records
+    if (!range) {
+        console.warn('[FilterDebug] Invalid budget filter:', budgetFilter);
+        return records;
+    }
+
     return records.filter(record => {
+        if (!record || !record.fields) return false;
         const price = getGroupPriceRange(record)?.min ?? parseFloat(String(record.fields[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
-        return price >= range.min && price <= range.max;
+        return !isNaN(price) && price >= range.min && price <= range.max;
     });
 }
 
 function filterBySearchTerm(records, searchTerm) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+
     if (!searchTerm) {
         return records;
     }
-    const lowerSearchTerm = searchTerm.toLowerCase();
+    const lowerSearchTerm = String(searchTerm).toLowerCase();
 
     const scoredRecords = [];
     records.forEach(record => {
+        // Defensive: skip invalid records
+        if (!record || !record.fields) return;
+
         let score = 0;
         const fields = record.fields;
 
@@ -230,6 +278,11 @@ function filterBySearchTerm(records, searchTerm) {
 }
 
 function sortRecords(records, sortBy, goalBucket) {
+    // Defensive: ensure records is an array
+    if (!Array.isArray(records)) return [];
+    // Defensive: ensure goalBucket is an array
+    if (!Array.isArray(goalBucket)) goalBucket = [];
+
     if (sortBy === 'recommended') {
         const log = (typeof ui !== 'undefined' && ui.log) ? ui.log : console.log;
         log('Filtering', `Sorting by v3.0 "Recommended". Goals Included. Bucket: [${goalBucket.join(', ')}]`);

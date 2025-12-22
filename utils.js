@@ -21,9 +21,12 @@ export function getTempLikes() {
     if (tempLikesCache && (now - tempLikesCacheTime) < TEMP_LIKES_CACHE_TTL) {
         return tempLikesCache;
     }
-    
+
     try {
-        const tempLikes = new Set(JSON.parse(localStorage.getItem('tempLikes') || '[]'));
+        const stored = localStorage.getItem('tempLikes');
+        const parsed = stored ? JSON.parse(stored) : [];
+        // Defensive: ensure parsed is an array before creating Set
+        const tempLikes = new Set(Array.isArray(parsed) ? parsed : []);
         tempLikesCache = tempLikes;
         tempLikesCacheTime = now;
         return tempLikes;
@@ -39,8 +42,10 @@ export function getTempLikes() {
  */
 export function setTempLikes(likes) {
     try {
-        localStorage.setItem('tempLikes', JSON.stringify(Array.from(likes)));
-        tempLikesCache = likes;
+        // Defensive: ensure likes is a Set or can be converted to array
+        const likesArray = likes instanceof Set ? Array.from(likes) : (Array.isArray(likes) ? likes : []);
+        localStorage.setItem('tempLikes', JSON.stringify(likesArray));
+        tempLikesCache = likes instanceof Set ? likes : new Set(likesArray);
         tempLikesCacheTime = Date.now();
     } catch (e) {
         console.error('[Utils] Error setting tempLikes:', e);
@@ -384,11 +389,19 @@ export function flattenOptionGroups(groups) {
     }, []);
 }
 export function debounce(func, delay = 300) {
+    if (typeof func !== 'function') {
+        console.warn('[Utils] debounce called with non-function:', func);
+        return () => {};
+    }
     let timeout;
     return (...args) => {
         clearTimeout(timeout);
         timeout = setTimeout(() => {
-            func.apply(this, args);
+            try {
+                func.apply(this, args);
+            } catch (e) {
+                console.error('[Utils] Error in debounced function:', e);
+            }
         }, delay);
     };
 }
@@ -638,7 +651,14 @@ export function getGroupPriceRange(record) {
  * @returns {number} The calculated final price
  */
 export function getRecordPrice(record, selectionsOrIndex = null) {
-    let price = parseFloat(String(record?.fields?.[CONSTANTS.FIELD_NAMES.PRICE] || '0').replace(/[^0-9.-]+/g, ""));
+    // Defensive: ensure record exists and has fields
+    if (!record || !record.fields) {
+        console.warn('[Utils] getRecordPrice called with invalid record:', record);
+        return 0;
+    }
+
+    const priceField = record.fields[CONSTANTS.FIELD_NAMES.PRICE];
+    let price = parseFloat(String(priceField || '0').replace(/[^0-9.-]+/g, ""));
 
     if (selectionsOrIndex === null) {
         return isNaN(price) ? 0 : price;
@@ -651,14 +671,18 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
         const flatOptions = flattenOptionGroups(groups);
         const variation = flatOptions[selectionsOrIndex];
         if (variation) {
-            if (variation.priceOverride !== null) return variation.priceOverride;
-            if (variation.priceModifier !== null) price += variation.priceModifier;
+            if (variation.priceOverride !== null && !isNaN(variation.priceOverride)) {
+                return variation.priceOverride;
+            }
+            if (variation.priceModifier !== null && !isNaN(variation.priceModifier)) {
+                price += variation.priceModifier;
+            }
         }
         return isNaN(price) ? 0 : price;
     }
 
     // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
-    if (typeof selectionsOrIndex === 'object') {
+    if (typeof selectionsOrIndex === 'object' && selectionsOrIndex !== null) {
         // Iterate through each group selection
         for (const [groupKey, optionIndex] of Object.entries(selectionsOrIndex)) {
             // Extract group index from key like "group0", "group1", etc.
@@ -673,9 +697,9 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
             if (!option) continue;
 
             // Apply price modifications - override takes precedence
-            if (option.priceOverride !== null) {
+            if (option.priceOverride !== null && !isNaN(option.priceOverride)) {
                 price = option.priceOverride;
-            } else if (option.priceModifier !== null) {
+            } else if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
                 price += option.priceModifier;
             }
         }

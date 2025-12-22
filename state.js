@@ -91,28 +91,74 @@ export let state = {
 };
 
 export function setState(newState) {
+    // Defensive check: ensure newState is a valid object
+    if (!newState || typeof newState !== 'object') {
+        console.warn('[State] setState called with invalid newState:', newState);
+        return;
+    }
+
     let updatedState = { ...state, ...newState };
 
     // FIX: Deep merge for UI properties to ensure continuity
     if (newState.ui) {
-        updatedState.ui = { 
-            ...state.ui, 
-            ...newState.ui 
+        updatedState.ui = {
+            ...state.ui,
+            ...newState.ui
         };
         if (newState.ui.currentProgress === undefined && state.ui.currentProgress !== undefined) {
             updatedState.ui.currentProgress = state.ui.currentProgress;
         }
     }
-    
-    // --- ADD THIS BLOCK TO FIX THE BUG ---
+
+    // Deep merge for records to preserve all properties
     if (newState.records) {
         updatedState.records = {
             ...state.records,
             ...newState.records
         };
     }
-    
-    // Also ensuring deep merge for session.user is always safe
+
+    // Deep merge for stores to preserve all properties
+    if (newState.stores) {
+        updatedState.stores = {
+            ...state.stores,
+            ...newState.stores
+        };
+    }
+
+    // Deep merge for cart to preserve Maps
+    if (newState.cart) {
+        updatedState.cart = {
+            ...state.cart,
+            ...newState.cart
+        };
+    }
+
+    // Deep merge for eventDetails to preserve Maps
+    if (newState.eventDetails) {
+        updatedState.eventDetails = {
+            ...state.eventDetails,
+            ...newState.eventDetails
+        };
+    }
+
+    // Deep merge for tasks to preserve Maps
+    if (newState.tasks) {
+        updatedState.tasks = {
+            ...state.tasks,
+            ...newState.tasks
+        };
+    }
+
+    // Deep merge for permissions
+    if (newState.permissions) {
+        updatedState.permissions = {
+            ...state.permissions,
+            ...newState.permissions
+        };
+    }
+
+    // Deep merge for session.user is always safe
     if (newState.session && newState.session.user) {
         updatedState.session = {
             ...state.session,
@@ -129,7 +175,6 @@ export function setState(newState) {
             ...newState.session,
         };
     }
-
 
     state = updatedState;
 }
