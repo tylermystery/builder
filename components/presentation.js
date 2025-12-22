@@ -46,6 +46,7 @@ let presentationPusher = null;
 let presentationChatChannel = null;
 
 function ensureDOMElements() {
+    console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
@@ -70,6 +71,14 @@ function ensureDOMElements() {
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
     chatSummaryEl = document.getElementById('chat-summary');
+
+    console.log('[Accordion DEBUG] DOM elements after init:', {
+        modal: !!modal,
+        closeBtn: !!closeBtn,
+        headerSummaryEl: !!headerSummaryEl,
+        itemsSummaryEl: !!itemsSummaryEl,
+        chatSummaryEl: !!chatSummaryEl
+    });
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -614,28 +623,48 @@ function generateChatSummary() {
 
 // Toggle accordion section
 function toggleAccordion(section) {
+    console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
+    console.log('[Accordion DEBUG] modal element:', modal);
+
     const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
-    if (!sectionEl) return;
+    console.log('[Accordion DEBUG] Found section element:', sectionEl);
+
+    if (!sectionEl) {
+        console.warn('[Accordion DEBUG] Section element not found for:', section);
+        return;
+    }
 
     accordionState[section] = !accordionState[section];
+    console.log('[Accordion DEBUG] New state for', section, ':', accordionState[section]);
 
     if (accordionState[section]) {
         sectionEl.classList.add('expanded');
+        console.log('[Accordion DEBUG] Added expanded class to', section);
     } else {
         sectionEl.classList.remove('expanded');
+        console.log('[Accordion DEBUG] Removed expanded class from', section);
     }
+
+    console.log('[Accordion DEBUG] Section classList after toggle:', sectionEl.classList.toString());
 
     log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
 }
 
 // Initialize accordion states and update UI
 function initializeAccordions() {
+    console.log('[Accordion DEBUG] initializeAccordions called');
+    console.log('[Accordion DEBUG] modal element:', modal);
+
     // Set all sections to expanded state initially
     Object.keys(accordionState).forEach(section => {
         accordionState[section] = true;
         const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
         if (sectionEl) {
             sectionEl.classList.add('expanded');
+            console.log(`[Accordion DEBUG] Section "${section}" classList after init:`, sectionEl.classList.toString());
+        } else {
+            console.warn(`[Accordion DEBUG] Section element not found for "${section}" during init`);
         }
     });
 
@@ -643,6 +672,8 @@ function initializeAccordions() {
     generateHeaderSummary();
     generateItemsSummary();
     generateChatSummary();
+
+    console.log('[Accordion DEBUG] initializeAccordions completed');
 }
 
 function handleThumbnailClick(e) {
@@ -734,11 +765,14 @@ function handleKeyDown(e) {
 
 export async function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing itinerary presentation`);
+    console.log('[Accordion DEBUG] showPresentationView called');
 
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot show presentation view - DOM elements not available');
+        console.error('[Accordion DEBUG] ensureDOMElements failed');
         return;
     }
+    console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
     // Check if there are any items
     const hasItems = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
@@ -797,10 +831,13 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
+    console.log('[Accordion DEBUG] setupPresentationEventListeners called');
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
+        console.error('[Accordion DEBUG] ensureDOMElements failed in setupPresentationEventListeners');
         return;
     }
+    console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
@@ -809,19 +846,49 @@ export function setupPresentationEventListeners() {
 
     // Handle accordion header clicks
     const scrollContainer = modal.querySelector('.presentation-itinerary-scroll');
+    console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
+
     if (scrollContainer) {
+        // Debug: Log all accordion headers found
+        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header');
+        console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
+        accordionHeaders.forEach((header, index) => {
+            console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
+        });
+
         scrollContainer.addEventListener('click', (e) => {
+            console.log('[Accordion DEBUG] Click event on scrollContainer');
+            console.log('[Accordion DEBUG] Click target:', e.target);
+            console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
+            console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
+
             const accordionHeader = e.target.closest('.itinerary-accordion-header');
-            if (!accordionHeader) return;
+            console.log('[Accordion DEBUG] Closest .itinerary-accordion-header:', accordionHeader);
+
+            if (!accordionHeader) {
+                console.log('[Accordion DEBUG] No accordion header found - ignoring click');
+                return;
+            }
 
             // Don't trigger accordion on interactive elements inside
-            if (e.target.closest('button') || e.target.closest('a')) return;
+            if (e.target.closest('button') || e.target.closest('a')) {
+                console.log('[Accordion DEBUG] Clicked on button/link inside header - ignoring');
+                return;
+            }
 
             const section = accordionHeader.dataset.section;
+            console.log('[Accordion DEBUG] Section from data-section attribute:', section);
+
             if (section) {
+                console.log('[Accordion DEBUG] Calling toggleAccordion for section:', section);
                 toggleAccordion(section);
+            } else {
+                console.warn('[Accordion DEBUG] No section data attribute found on header');
             }
         });
+        console.log('[Accordion DEBUG] Click listener added to scrollContainer');
+    } else {
+        console.error('[Accordion DEBUG] scrollContainer not found!');
     }
 
     // Handle thumbnail clicks for image carousel
