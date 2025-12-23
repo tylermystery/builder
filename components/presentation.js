@@ -6,6 +6,7 @@ import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
+import { Shader } from '../utils/shader.js';
 
 // Flag to track if catalog needs rendering when exiting presentation view
 let catalogNeedsRender = false;
@@ -54,6 +55,145 @@ const accordionState = {
 // Pusher instance for presentation chat
 let presentationPusher = null;
 let presentationChatChannel = null;
+
+// --- Presentation Background Engine ---
+// WebGL Shader code for the fluid effect (same as catalog background)
+const vsSource = `
+    attribute vec4 a_position;
+    void main() {
+        gl_Position = a_position;
+    }
+`;
+
+const fsSource = `
+    precision mediump float;
+    uniform vec2 u_resolution;
+    uniform float u_time;
+    uniform float u_energy;
+    uniform float u_progress;
+
+    float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+    }
+
+    float noise(vec2 st) {
+        vec2 i = floor(st);
+        vec2 f = fract(st);
+        float a = random(i);
+        float b = random(i + vec2(1.0, 0.0));
+        float c = random(i + vec2(0.0, 1.0));
+        float d = random(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.y * u.x;
+    }
+
+    void main() {
+        vec2 st = gl_FragCoord.xy / u_resolution.xy;
+        st.x *= u_resolution.x / u_resolution.y;
+        vec2 centered_st = st - vec2(0.5, 0.5);
+        float angle = atan(centered_st.y, centered_st.x);
+        float radius = length(centered_st);
+        float vortex_speed = u_time * (0.2 + u_energy * 2.0);
+        float vortex_twist = u_energy * 5.0;
+        float n = noise(vec2(angle * (3.0 + vortex_twist) + vortex_speed, radius * 2.0));
+        float base_wave = n * 1.5 + u_progress * 10.0;
+        const float PI_2_OVER_3 = 2.0943951;
+        float r = pow(sin(base_wave + 0.0) * 0.5 + 0.5, 1.1) + 0.1;
+        float g = pow(sin(base_wave + PI_2_OVER_3) * 0.5 + 0.5, 1.1) + 0.1;
+        float b = pow(sin(base_wave + PI_2_OVER_3 * 2.0) * 0.5 + 0.5, 1.1) + 0.1;
+        float vignette = 1.0 - (radius * 0.2);
+        gl_FragColor = vec4(r * vignette, g * vignette, b * vignette, 1.0);
+    }
+`;
+
+let presentationBgCanvas = null;
+let presentationGl = null;
+let presentationShader = null;
+let presentationAnimationFrameId = null;
+let presentationBgStartTime = 0;
+let presentationBgEnergy = 0.0;
+const presentationEnergyDecayRate = 0.985;
+
+function initPresentationBackground() {
+    presentationBgCanvas = document.getElementById('presentation-bg-canvas');
+    if (!presentationBgCanvas) {
+        log('Presentation', 'Background canvas not found');
+        return false;
+    }
+
+    // Size canvas to fill the presentation view
+    presentationBgCanvas.width = window.innerWidth;
+    presentationBgCanvas.height = window.innerHeight;
+
+    presentationGl = presentationBgCanvas.getContext('webgl') || presentationBgCanvas.getContext('experimental-webgl');
+    if (!presentationGl) {
+        log('Presentation', 'WebGL not available for presentation background');
+        return false;
+    }
+
+    // Initialize shader
+    presentationShader = new Shader(presentationGl, vsSource, fsSource);
+    presentationBgStartTime = performance.now();
+
+    log('Presentation', 'Background engine initialized');
+    return true;
+}
+
+function startPresentationBackgroundAnimation() {
+    if (!presentationGl || !presentationShader) {
+        if (!initPresentationBackground()) {
+            return;
+        }
+    }
+
+    // Reset timing
+    presentationBgStartTime = performance.now();
+    presentationBgEnergy = 0.3; // Start with some energy for visual effect
+
+    function animate(timestamp) {
+        if (!modal || !modal.classList.contains('active')) {
+            presentationAnimationFrameId = null;
+            return;
+        }
+
+        const elapsedTime = (timestamp - presentationBgStartTime) / 1000.0;
+        presentationBgEnergy *= presentationEnergyDecayRate;
+        if (presentationBgEnergy < 0.01) presentationBgEnergy = 0.0;
+
+        const currentProgress = state.ui.currentProgress || 0.5;
+
+        presentationShader.use();
+        presentationGl.uniform2f(presentationShader.getUniformLocation("u_resolution"), presentationBgCanvas.width, presentationBgCanvas.height);
+        presentationGl.uniform1f(presentationShader.getUniformLocation("u_time"), elapsedTime);
+        presentationGl.uniform1f(presentationShader.getUniformLocation("u_energy"), presentationBgEnergy);
+        presentationGl.uniform1f(presentationShader.getUniformLocation("u_progress"), currentProgress);
+        presentationGl.drawArrays(presentationGl.TRIANGLES, 0, 6);
+
+        presentationAnimationFrameId = requestAnimationFrame(animate);
+    }
+
+    if (presentationAnimationFrameId) {
+        cancelAnimationFrame(presentationAnimationFrameId);
+    }
+    presentationAnimationFrameId = requestAnimationFrame(animate);
+    log('Presentation', 'Background animation started');
+}
+
+function stopPresentationBackgroundAnimation() {
+    if (presentationAnimationFrameId) {
+        cancelAnimationFrame(presentationAnimationFrameId);
+        presentationAnimationFrameId = null;
+        log('Presentation', 'Background animation stopped');
+    }
+}
+
+function resizePresentationBackground() {
+    if (presentationBgCanvas && presentationGl) {
+        presentationBgCanvas.width = window.innerWidth;
+        presentationBgCanvas.height = window.innerHeight;
+        presentationGl.viewport(0, 0, presentationBgCanvas.width, presentationBgCanvas.height);
+    }
+}
 
 function ensureDOMElements() {
     console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
@@ -846,6 +986,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     document.body.classList.add('modal-open');
     document.addEventListener('keydown', handleKeyDown);
 
+    // Start the background animation
+    startPresentationBackgroundAnimation();
+
     // Initialize the embedded chat (loads messages and sets up real-time connection)
     await initializePresentationChat();
 
@@ -867,6 +1010,9 @@ export async function showPresentationView(listType, startRecordId = null) {
 
 export function hidePresentationView() {
     if (!modal) return;
+
+    // Stop the background animation
+    stopPresentationBackgroundAnimation();
 
     // Clean up the presentation chat connection
     cleanupPresentationChat();
@@ -896,6 +1042,13 @@ export function setupPresentationEventListeners() {
         return;
     }
     console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
+
+    // Handle window resize for background canvas
+    window.addEventListener('resize', () => {
+        if (modal && modal.classList.contains('active')) {
+            resizePresentationBackground();
+        }
+    });
 
     closeBtn.addEventListener('click', () => {
         updateUrl({ view: null });
