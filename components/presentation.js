@@ -18,6 +18,13 @@ let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
 let chatMessagesEl = null;
 
+// Presentation header elements
+let presentationBackBtn = null;
+let presentationLogoContainer = null;
+let presentationShopTitle = null;
+let presentationEventLabel = null;
+let presentationHeaderShareBtn = null;
+
 // Embedded chat DOM elements
 let presentationChatContainer = null;
 let presentationMessageForm = null;
@@ -58,6 +65,13 @@ function ensureDOMElements() {
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
     chatMessagesEl = document.getElementById('itinerary-chat-messages');
+
+    // Presentation header elements
+    presentationBackBtn = document.getElementById('presentation-back-btn');
+    presentationLogoContainer = document.getElementById('presentation-logo-container');
+    presentationShopTitle = document.getElementById('presentation-shop-title');
+    presentationEventLabel = document.getElementById('presentation-event-label');
+    presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
 
     // Embedded chat elements
     presentationChatContainer = document.getElementById('presentation-chat-container');
@@ -107,6 +121,29 @@ function renderEventHeader() {
         });
     } else {
         summaryEventDateEl.textContent = '';
+    }
+}
+
+function renderPresentationHeader() {
+    // Copy the shop logo from the main header
+    const mainLogoContainer = document.getElementById('shop-logo-container');
+    if (mainLogoContainer && presentationLogoContainer) {
+        const mainLogo = mainLogoContainer.querySelector('img');
+        if (mainLogo) {
+            presentationLogoContainer.innerHTML = `<img src="${mainLogo.src}" alt="${mainLogo.alt || 'Logo'}">`;
+        }
+    }
+
+    // Copy the shop title from the main header
+    const mainShopTitle = document.getElementById('main-shop-title');
+    if (mainShopTitle && presentationShopTitle) {
+        presentationShopTitle.textContent = mainShopTitle.textContent;
+    }
+
+    // Set the event label in the center of the header
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Plan';
+    if (presentationEventLabel) {
+        presentationEventLabel.textContent = eventName;
     }
 }
 
@@ -784,6 +821,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Clear image cache for fresh load
     itemImagesCache.clear();
 
+    // Render presentation header (copies logo and title from main header)
+    renderPresentationHeader();
+
     // Render all sections
     renderEventHeader();
     renderCollaborators();
@@ -843,6 +883,33 @@ export function setupPresentationEventListeners() {
         updateUrl({ view: null });
         hidePresentationView();
     });
+
+    // Presentation header back button
+    if (presentationBackBtn) {
+        presentationBackBtn.addEventListener('click', () => {
+            updateUrl({ view: null });
+            hidePresentationView();
+        });
+    }
+
+    // Presentation header share button
+    if (presentationHeaderShareBtn) {
+        presentationHeaderShareBtn.addEventListener('click', () => {
+            const baseURL = window.location.origin + window.location.pathname;
+            const sessionID = state.session.id;
+            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+            navigator.clipboard.writeText(shareURL).then(() => {
+                const originalHTML = presentationHeaderShareBtn.innerHTML;
+                presentationHeaderShareBtn.innerHTML = '<span class="share-icon">✓</span>';
+                presentationHeaderShareBtn.title = 'Link Copied!';
+                setTimeout(() => {
+                    presentationHeaderShareBtn.innerHTML = originalHTML;
+                    presentationHeaderShareBtn.title = 'Share this plan';
+                }, 1500);
+            });
+        });
+    }
 
     // Handle accordion header clicks
     const scrollContainer = modal.querySelector('.presentation-itinerary-scroll');
