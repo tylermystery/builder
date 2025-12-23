@@ -3,10 +3,22 @@ import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
 import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
-import { getCurrentUser, sendMessage as sendChatMessage } from '../chat.js';
+import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 import { Shader } from '../utils/shader.js';
+
+// Quick emoji reactions available for messages
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// Track message being replied to in presentation view
+let presentationReplyingToMessage = null;
+
+// Track message being edited in presentation view
+let presentationEditingMessage = null;
+
+// Track scroll position before scrolling to chat
+let savedScrollPosition = null;
 
 // Flag to track if catalog needs rendering when exiting presentation view
 let catalogNeedsRender = false;
@@ -41,6 +53,9 @@ let presentationWhosHereList = null;
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
 let chatSummaryEl = null;
+
+// Floating chat button
+let floatingChatBtn = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -223,6 +238,9 @@ function ensureDOMElements() {
     presentationUserNameInput = document.getElementById('presentation-chat-user-name');
     presentationWhosHereCount = document.getElementById('presentation-whos-here-count');
     presentationWhosHereList = document.getElementById('presentation-whos-here-list');
+
+    // Floating chat button
+    floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
 
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
@@ -447,11 +465,30 @@ async function renderAllItems() {
     });
 }
 
-function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId) {
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId, options = {}) {
     if (!chatMessagesEl) return;
 
+    const { messageId = null, reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false } = options;
+    const currentUser = getCurrentUser();
+
+    // Skip deleted messages
+    if (isDeleted) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'} deleted-message`;
+        wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+        chatMessagesEl.appendChild(wrapper);
+        return wrapper;
+    }
+
     const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
+    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}`;
+    if (messageId) wrapper.dataset.messageId = messageId;
 
     const messageElement = document.createElement('div');
     const isFlagged = state.session.flaggedUsers.has(senderId);
@@ -462,16 +499,148 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     if (isBanned) messageElement.classList.add('banned');
     if (isFlagged) messageElement.classList.add('flagged');
 
+    // Sender name
     const senderElement = document.createElement('div');
     senderElement.className = 'message-author';
     senderElement.innerText = isSent ? 'You' : sender;
     messageElement.appendChild(senderElement);
 
+    // Message content container
     const contentElement = document.createElement('div');
     contentElement.className = 'message-content';
     contentElement.textContent = displayMessage;
+
+    // Edited indicator
+    if (isEdited) {
+        const editedIndicator = document.createElement('span');
+        editedIndicator.className = 'edited-indicator';
+        editedIndicator.textContent = ' (edited)';
+        contentElement.appendChild(editedIndicator);
+    }
+
     messageElement.appendChild(contentElement);
 
+    // --- Message Actions (hover menu) ---
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions';
+
+    // Reaction button
+    const reactionBtn = document.createElement('button');
+    reactionBtn.className = 'msg-action-btn reaction-btn';
+    reactionBtn.innerHTML = '😀';
+    reactionBtn.title = 'Add reaction';
+    reactionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showPresentationReactionPicker(wrapper, messageId, senderId);
+    });
+    actionsContainer.appendChild(reactionBtn);
+
+    // Reply button
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'msg-action-btn reply-btn';
+    replyBtn.innerHTML = '↩';
+    replyBtn.title = 'Reply';
+    replyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startPresentationReply(messageId, sender, message);
+    });
+    actionsContainer.appendChild(replyBtn);
+
+    // Edit button (only for own messages)
+    if (isSent && messageId) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'msg-action-btn edit-btn';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Edit message';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startPresentationEdit(messageId, message, wrapper);
+        });
+        actionsContainer.appendChild(editBtn);
+    }
+
+    // Delete button (only for own messages)
+    if (isSent && messageId) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'msg-action-btn delete-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Delete message';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            confirmPresentationDelete(messageId, wrapper);
+        });
+        actionsContainer.appendChild(deleteBtn);
+    }
+
+    // Moderation actions for owner (on others' messages)
+    if (state.session.user.isOwner && !isSent) {
+        const flagBtn = document.createElement('button');
+        flagBtn.className = 'msg-action-btn flag-btn';
+        flagBtn.innerHTML = isFlagged ? '✅' : '⚠️';
+        flagBtn.title = isFlagged ? 'Un-flag user' : 'Flag user';
+        flagBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (isFlagged) {
+                state.session.flaggedUsers.delete(senderId);
+            } else {
+                state.session.flaggedUsers.add(senderId);
+            }
+            await api.updateUserFlagStatus(senderId, !isFlagged);
+            // Refresh chat to reflect changes
+            await initializePresentationChat();
+        });
+        actionsContainer.appendChild(flagBtn);
+
+        const banBtn = document.createElement('button');
+        banBtn.className = 'msg-action-btn ban-btn';
+        banBtn.innerHTML = '⛔';
+        banBtn.title = 'Ban user';
+        banBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await api.banUser(senderId);
+        });
+        actionsContainer.appendChild(banBtn);
+    }
+
+    messageElement.appendChild(actionsContainer);
+
+    // --- Reactions Display ---
+    if (reactions && Object.keys(reactions).length > 0) {
+        const reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+
+        for (const [emoji, users] of Object.entries(reactions)) {
+            if (users.length > 0) {
+                const reactionBadge = document.createElement('button');
+                reactionBadge.className = 'reaction-badge';
+                const hasUserReacted = users.includes(currentUser?.id);
+                if (hasUserReacted) reactionBadge.classList.add('user-reacted');
+                reactionBadge.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                reactionBadge.title = users.length === 1 ? '1 reaction' : `${users.length} reactions`;
+                reactionBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    togglePresentationReaction(messageId, emoji, !hasUserReacted, wrapper);
+                });
+                reactionsContainer.appendChild(reactionBadge);
+            }
+        }
+
+        messageElement.appendChild(reactionsContainer);
+    }
+
+    // --- Thread indicator ---
+    if (replyCount > 0) {
+        const threadIndicator = document.createElement('button');
+        threadIndicator.className = 'thread-indicator';
+        threadIndicator.innerHTML = `↳ ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
+        threadIndicator.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePresentationThreadView(messageId, wrapper);
+        });
+        messageElement.appendChild(threadIndicator);
+    }
+
+    // Timestamp
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
     const date = timestamp ? new Date(timestamp) : new Date();
@@ -481,6 +650,283 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     wrapper.appendChild(timestampElement);
     chatMessagesEl.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
+
+    return wrapper;
+}
+
+/**
+ * Shows the emoji reaction picker near a message in presentation view
+ */
+function showPresentationReactionPicker(wrapper, messageId, senderId) {
+    // Remove any existing picker
+    document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+
+    QUICK_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'reaction-picker-btn';
+        btn.textContent = emoji;
+        btn.addEventListener('click', async () => {
+            picker.remove();
+            await togglePresentationReaction(messageId, emoji, true, wrapper);
+        });
+        picker.appendChild(btn);
+    });
+
+    wrapper.appendChild(picker);
+
+    // Close picker when clicking elsewhere
+    const closePicker = (e) => {
+        if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePicker), 0);
+}
+
+/**
+ * Toggles a reaction on a message in presentation view
+ */
+async function togglePresentationReaction(messageId, emoji, add, wrapper) {
+    const currentUser = getCurrentUser();
+    if (!messageId || !currentUser) return;
+
+    const result = await api.toggleMessageReaction(messageId, currentUser.id, emoji, add);
+    if (result !== null) {
+        // Update the reactions display
+        updatePresentationReactionsDisplay(wrapper, result);
+
+        // Broadcast via Pusher if available
+        if (presentationChatChannel) {
+            presentationChatChannel.trigger('client-reaction-update', {
+                messageId,
+                reactions: result,
+                userId: currentUser.id
+            });
+        }
+    }
+}
+
+/**
+ * Updates the reactions display on a message wrapper in presentation view
+ */
+function updatePresentationReactionsDisplay(wrapper, reactions) {
+    const messageElement = wrapper.querySelector('.chat-message');
+    if (!messageElement) return;
+
+    const currentUser = getCurrentUser();
+
+    // Remove existing reactions container
+    const existingReactions = messageElement.querySelector('.message-reactions');
+    if (existingReactions) existingReactions.remove();
+
+    // Add new reactions if any exist
+    if (reactions && Object.keys(reactions).length > 0) {
+        const reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+
+        for (const [emoji, users] of Object.entries(reactions)) {
+            if (users.length > 0) {
+                const reactionBadge = document.createElement('button');
+                reactionBadge.className = 'reaction-badge';
+                const hasUserReacted = users.includes(currentUser?.id);
+                if (hasUserReacted) reactionBadge.classList.add('user-reacted');
+                reactionBadge.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                const messageId = wrapper.dataset.messageId;
+                reactionBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    togglePresentationReaction(messageId, emoji, !hasUserReacted, wrapper);
+                });
+                reactionsContainer.appendChild(reactionBadge);
+            }
+        }
+
+        // Insert before thread indicator or at end
+        const threadIndicator = messageElement.querySelector('.thread-indicator');
+        if (threadIndicator) {
+            messageElement.insertBefore(reactionsContainer, threadIndicator);
+        } else {
+            messageElement.appendChild(reactionsContainer);
+        }
+    }
+}
+
+/**
+ * Starts replying to a message in presentation view
+ */
+function startPresentationReply(messageId, senderName, messagePreview) {
+    presentationReplyingToMessage = { id: messageId, sender: senderName, preview: messagePreview };
+
+    // Show reply indicator in the input area
+    const formContainer = presentationMessageForm;
+    if (!formContainer || !formContainer.parentElement) return;
+
+    // Remove existing reply indicator
+    const existingIndicator = formContainer.parentElement.querySelector('.reply-indicator');
+    if (existingIndicator) existingIndicator.remove();
+
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'reply-indicator';
+    replyIndicator.innerHTML = `
+        <span class="reply-indicator-text">Replying to <strong>${escapeHtml(senderName)}</strong>: ${escapeHtml(messagePreview.substring(0, 50))}${messagePreview.length > 50 ? '...' : ''}</span>
+        <button class="cancel-reply-btn" type="button">✕</button>
+    `;
+
+    replyIndicator.querySelector('.cancel-reply-btn').addEventListener('click', cancelPresentationReply);
+    formContainer.parentElement.insertBefore(replyIndicator, formContainer);
+
+    // Focus the input
+    if (presentationMessageInput) presentationMessageInput.focus();
+}
+
+/**
+ * Cancels the current reply in presentation view
+ */
+function cancelPresentationReply() {
+    presentationReplyingToMessage = null;
+    const formContainer = presentationMessageForm;
+    if (formContainer && formContainer.parentElement) {
+        const indicator = formContainer.parentElement.querySelector('.reply-indicator');
+        if (indicator) indicator.remove();
+    }
+}
+
+/**
+ * Starts editing a message in presentation view
+ */
+function startPresentationEdit(messageId, currentContent, wrapper) {
+    presentationEditingMessage = { id: messageId, originalContent: currentContent };
+
+    const contentElement = wrapper.querySelector('.message-content');
+    if (!contentElement) return;
+
+    // Replace content with input
+    const originalText = currentContent;
+    contentElement.innerHTML = `
+        <input type="text" class="edit-message-input" value="${escapeHtml(originalText)}">
+        <div class="edit-actions">
+            <button class="save-edit-btn" type="button">Save</button>
+            <button class="cancel-edit-btn" type="button">Cancel</button>
+        </div>
+    `;
+
+    const input = contentElement.querySelector('.edit-message-input');
+    const saveBtn = contentElement.querySelector('.save-edit-btn');
+    const cancelBtn = contentElement.querySelector('.cancel-edit-btn');
+    const currentUser = getCurrentUser();
+
+    input.focus();
+    input.select();
+
+    const saveEdit = async () => {
+        const newContent = input.value.trim();
+        if (newContent && newContent !== originalText) {
+            const result = await api.updateChatMessage(messageId, newContent, currentUser.id);
+            if (result) {
+                contentElement.innerHTML = '';
+                contentElement.textContent = newContent;
+                const editedIndicator = document.createElement('span');
+                editedIndicator.className = 'edited-indicator';
+                editedIndicator.textContent = ' (edited)';
+                contentElement.appendChild(editedIndicator);
+
+                // Broadcast edit via Pusher
+                if (presentationChatChannel) {
+                    presentationChatChannel.trigger('client-message-edited', {
+                        messageId,
+                        newContent,
+                        userId: currentUser.id
+                    });
+                }
+            }
+        } else {
+            cancelEditMode();
+        }
+        presentationEditingMessage = null;
+    };
+
+    const cancelEditMode = () => {
+        contentElement.innerHTML = '';
+        contentElement.textContent = originalText;
+        presentationEditingMessage = null;
+    };
+
+    saveBtn.addEventListener('click', saveEdit);
+    cancelBtn.addEventListener('click', cancelEditMode);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveEdit();
+        if (e.key === 'Escape') cancelEditMode();
+    });
+}
+
+/**
+ * Confirms and deletes a message in presentation view
+ */
+async function confirmPresentationDelete(messageId, wrapper) {
+    if (!confirm('Delete this message? This cannot be undone.')) return;
+
+    const currentUser = getCurrentUser();
+    const result = await api.deleteChatMessage(messageId, currentUser.id);
+    if (result) {
+        wrapper.classList.add('deleted-message');
+        wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+
+        // Broadcast delete via Pusher
+        if (presentationChatChannel) {
+            presentationChatChannel.trigger('client-message-deleted', {
+                messageId,
+                userId: currentUser.id
+            });
+        }
+    }
+}
+
+/**
+ * Toggles the thread view for a message in presentation view
+ */
+async function togglePresentationThreadView(messageId, wrapper) {
+    const existingThread = wrapper.querySelector('.thread-replies');
+    if (existingThread) {
+        existingThread.remove();
+        return;
+    }
+
+    const currentUser = getCurrentUser();
+    const replies = await api.fetchMessageReplies(messageId);
+    if (replies.length === 0) return;
+
+    const threadContainer = document.createElement('div');
+    threadContainer.className = 'thread-replies';
+
+    replies.forEach(reply => {
+        const { SenderID, SenderName, Content, Timestamp, IsEdited, IsDeleted, Reactions } = reply.fields;
+        const isSent = SenderID === currentUser?.id;
+        let parsedReactions = {};
+        if (Reactions) {
+            try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
+        }
+
+        const replyWrapper = document.createElement('div');
+        replyWrapper.className = `reply-message ${isSent ? 'sent' : 'received'}`;
+        replyWrapper.dataset.messageId = reply.id;
+
+        if (IsDeleted) {
+            replyWrapper.innerHTML = `<em class="deleted-reply">This reply was deleted</em>`;
+        } else {
+            replyWrapper.innerHTML = `
+                <span class="reply-sender">${isSent ? 'You' : escapeHtml(SenderName)}</span>
+                <span class="reply-content">${escapeHtml(Content)}${IsEdited ? ' <em class="edited-indicator">(edited)</em>' : ''}</span>
+                <span class="reply-time">${new Date(Timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            `;
+        }
+
+        threadContainer.appendChild(replyWrapper);
+    });
+
+    wrapper.appendChild(threadContainer);
 }
 
 function updatePresentationPresenceUI(members) {
@@ -532,18 +978,41 @@ async function initializePresentationChat() {
         });
     }
 
-    // Load existing chat messages
+    // Load existing chat messages with enhanced data
     chatMessagesEl.innerHTML = '';
     try {
         const records = await api.fetchChatMessages(sessionId);
+
+        // Count replies per message for thread indicators
+        const replyCountMap = {};
+        records.forEach(record => {
+            const parentId = record.fields.ParentMessageID;
+            if (parentId) {
+                replyCountMap[parentId] = (replyCountMap[parentId] || 0) + 1;
+            }
+        });
+
         if (records.length > 0) {
             records.forEach(record => {
-                const { SenderID, SenderName, Content, Timestamp, EventType } = record.fields;
-                // Only render chat messages, not system events
-                if (SenderID !== 'system' && !EventType) {
-                    const isSent = SenderID === currentUser.id;
-                    addPresentationMessageToUI(SenderName, Content, isSent, Timestamp, SenderID);
+                const { SenderID, SenderName, Content, Timestamp, EventType, Reactions, IsEdited, IsDeleted, ParentMessageID } = record.fields;
+
+                // Skip reply messages (they're shown in threads) and system events
+                if (ParentMessageID) return;
+                if (SenderID === 'system' && EventType) return;
+
+                const isSent = SenderID === currentUser.id;
+                let parsedReactions = {};
+                if (Reactions) {
+                    try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
                 }
+
+                addPresentationMessageToUI(SenderName, Content, isSent, Timestamp, SenderID, {
+                    messageId: record.id,
+                    reactions: parsedReactions,
+                    isEdited: IsEdited || false,
+                    isDeleted: IsDeleted || false,
+                    replyCount: replyCountMap[record.id] || 0
+                });
             });
         } else {
             chatMessagesEl.innerHTML = '<p class="chat-empty">No messages yet. Start the conversation!</p>';
@@ -616,7 +1085,72 @@ async function initializePresentationChat() {
             const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
             if (emptyMsg) emptyMsg.remove();
 
-            addPresentationMessageToUI(data.senderName, data.content, false, data.timestamp, data.senderId);
+            addPresentationMessageToUI(data.senderName, data.content, false, data.timestamp, data.senderId, {
+                messageId: data.messageId
+            });
+        }
+    });
+
+    // Handle real-time reaction updates from other users
+    presentationChatChannel.bind('client-reaction-update', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = chatMessagesEl.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                updatePresentationReactionsDisplay(wrapper, data.reactions);
+            }
+        }
+    });
+
+    // Handle real-time message edits from other users
+    presentationChatChannel.bind('client-message-edited', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = chatMessagesEl.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                const contentElement = wrapper.querySelector('.message-content');
+                if (contentElement) {
+                    contentElement.textContent = data.newContent;
+                    if (!contentElement.querySelector('.edited-indicator')) {
+                        const editedIndicator = document.createElement('span');
+                        editedIndicator.className = 'edited-indicator';
+                        editedIndicator.textContent = ' (edited)';
+                        contentElement.appendChild(editedIndicator);
+                    }
+                }
+            }
+        }
+    });
+
+    // Handle real-time message deletes from other users
+    presentationChatChannel.bind('client-message-deleted', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = chatMessagesEl.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                wrapper.classList.add('deleted-message');
+                wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+            }
+        }
+    });
+
+    // Handle real-time replies from other users
+    presentationChatChannel.bind('client-new-reply', (data) => {
+        if (data.senderId !== currentUser.id) {
+            const parentWrapper = chatMessagesEl.querySelector(`[data-message-id="${data.parentMessageId}"]`);
+            if (parentWrapper) {
+                const existingIndicator = parentWrapper.querySelector('.thread-indicator');
+                if (existingIndicator) {
+                    const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
+                    existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                } else {
+                    const threadIndicator = document.createElement('button');
+                    threadIndicator.className = 'thread-indicator';
+                    threadIndicator.innerHTML = `↳ 1 reply`;
+                    threadIndicator.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        togglePresentationThreadView(data.parentMessageId, parentWrapper);
+                    });
+                    parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
+                }
+            }
         }
     });
 
@@ -640,28 +1174,61 @@ async function initializePresentationChat() {
 
             const timestamp = new Date().toISOString();
 
-            // Add message to UI immediately
-            addPresentationMessageToUI(currentUser.name, message, true, timestamp, currentUser.id);
+            // Check if this is a reply
+            if (presentationReplyingToMessage) {
+                const result = await api.postReplyMessage(presentationReplyingToMessage.id, sessionId, null, currentUser.id, currentUser.name, message);
+                if (result) {
+                    // Update the parent message's reply count in UI
+                    const parentWrapper = chatMessagesEl.querySelector(`[data-message-id="${presentationReplyingToMessage.id}"]`);
+                    if (parentWrapper) {
+                        const existingIndicator = parentWrapper.querySelector('.thread-indicator');
+                        if (existingIndicator) {
+                            const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
+                            existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                        } else {
+                            const threadIndicator = document.createElement('button');
+                            threadIndicator.className = 'thread-indicator';
+                            threadIndicator.innerHTML = `↳ 1 reply`;
+                            threadIndicator.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                togglePresentationThreadView(presentationReplyingToMessage.id, parentWrapper);
+                            });
+                            parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
+                        }
+                    }
+                    presentationChatChannel.trigger('client-new-reply', {
+                        parentMessageId: presentationReplyingToMessage.id,
+                        content: message,
+                        senderId: currentUser.id,
+                        senderName: currentUser.name,
+                        timestamp: timestamp
+                    });
+                }
+                cancelPresentationReply();
+            } else {
+                // Regular message (not a reply)
+                addPresentationMessageToUI(currentUser.name, message, true, timestamp, currentUser.id);
+
+                // Send via API and broadcast
+                try {
+                    await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+                    presentationChatChannel.trigger('client-new-message', {
+                        content: message,
+                        senderId: currentUser.id,
+                        senderName: currentUser.name,
+                        timestamp: timestamp
+                    });
+                } catch (err) {
+                    log('Presentation', `Failed to send message: ${err.message}`);
+                }
+            }
 
             // Clear input
             presentationMessageInput.value = '';
-
-            // Send via API and broadcast
-            try {
-                await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
-                presentationChatChannel.trigger('client-new-message', {
-                    content: message,
-                    senderId: currentUser.id,
-                    senderName: currentUser.name,
-                    timestamp: timestamp
-                });
-            } catch (err) {
-                log('Presentation', `Failed to send message: ${err.message}`);
-            }
         });
     }
 
-    log('Presentation', 'Embedded chat initialized successfully');
+    log('Presentation', 'Embedded chat initialized with enhanced features');
 }
 
 function cleanupPresentationChat() {
@@ -674,6 +1241,117 @@ function cleanupPresentationChat() {
         presentationPusher = null;
         presentationChatChannel = null;
     }
+    // Clear reply state
+    presentationReplyingToMessage = null;
+    presentationEditingMessage = null;
+}
+
+// Scroll handler reference for cleanup
+let floatingChatScrollHandler = null;
+
+/**
+ * Initializes the floating chat button for the presentation view
+ * Shows/hides based on scroll position and handles jump to chat functionality
+ */
+function initializeFloatingChatButton() {
+    if (!floatingChatBtn || !modal) return;
+
+    const presentationContent = modal.querySelector('.presentation-content');
+    const chatSection = modal.querySelector('.itinerary-chat');
+
+    if (!presentationContent || !chatSection) return;
+
+    // Function to check if chat section is visible in viewport
+    const isChatInView = () => {
+        const chatRect = chatSection.getBoundingClientRect();
+        const modalRect = modal.getBoundingClientRect();
+        // Chat is "in view" if its top is visible within the modal
+        return chatRect.top < modalRect.bottom - 100 && chatRect.bottom > modalRect.top;
+    };
+
+    // Scroll handler
+    floatingChatScrollHandler = () => {
+        const chatVisible = isChatInView();
+
+        // Toggle scrolled-to-chat class for icon rotation
+        if (chatVisible) {
+            floatingChatBtn.classList.add('scrolled-to-chat');
+            floatingChatBtn.title = 'Back to top';
+        } else {
+            floatingChatBtn.classList.remove('scrolled-to-chat');
+            floatingChatBtn.title = 'Jump to Chat';
+        }
+    };
+
+    // Add scroll listener to modal (presentation content scrolls within it)
+    presentationContent.addEventListener('scroll', floatingChatScrollHandler);
+
+    // Click handler for the floating button
+    const clickHandler = () => {
+        const chatVisible = isChatInView();
+
+        if (chatVisible) {
+            // If viewing chat, scroll back to top or saved position
+            if (savedScrollPosition !== null) {
+                presentationContent.scrollTo({ top: savedScrollPosition, behavior: 'smooth' });
+                savedScrollPosition = null;
+            } else {
+                presentationContent.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        } else {
+            // Save current position and scroll to chat
+            savedScrollPosition = presentationContent.scrollTop;
+            chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Also expand the chat accordion if it's collapsed
+            if (!accordionState.chat) {
+                const chatHeader = chatSection.querySelector('.itinerary-accordion-header');
+                if (chatHeader) chatHeader.click();
+            }
+
+            // Focus the input after scrolling
+            setTimeout(() => {
+                if (presentationMessageInput) presentationMessageInput.focus();
+            }, 500);
+        }
+    };
+
+    // Store handler for cleanup
+    floatingChatBtn._clickHandler = clickHandler;
+    floatingChatBtn.addEventListener('click', clickHandler);
+
+    // Show the button
+    floatingChatBtn.classList.add('visible');
+
+    // Initial check
+    floatingChatScrollHandler();
+
+    log('Presentation', 'Floating chat button initialized');
+}
+
+/**
+ * Cleans up the floating chat button event listeners
+ */
+function cleanupFloatingChatButton() {
+    if (floatingChatBtn) {
+        floatingChatBtn.classList.remove('visible', 'scrolled-to-chat');
+
+        if (floatingChatBtn._clickHandler) {
+            floatingChatBtn.removeEventListener('click', floatingChatBtn._clickHandler);
+            floatingChatBtn._clickHandler = null;
+        }
+    }
+
+    if (floatingChatScrollHandler && modal) {
+        const presentationContent = modal.querySelector('.presentation-content');
+        if (presentationContent) {
+            presentationContent.removeEventListener('scroll', floatingChatScrollHandler);
+        }
+        floatingChatScrollHandler = null;
+    }
+
+    savedScrollPosition = null;
+    log('Presentation', 'Floating chat button cleaned up');
 }
 
 function renderChatMessages() {
@@ -995,6 +1673,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Update chat summary after messages are loaded
     generateChatSummary();
 
+    // Initialize the floating chat button
+    initializeFloatingChatButton();
+
     // Scroll to specific item if provided
     if (startRecordId) {
         const targetItem = document.querySelector(`.itinerary-item[data-record-id="${startRecordId}"]`);
@@ -1016,6 +1697,9 @@ export function hidePresentationView() {
 
     // Clean up the presentation chat connection
     cleanupPresentationChat();
+
+    // Clean up the floating chat button
+    cleanupFloatingChatButton();
 
     modal.classList.remove('active');
     modal.style.display = 'none';
