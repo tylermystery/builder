@@ -2784,6 +2784,322 @@ body.modal-open {
     background-color: #e9ecef;
 }
 
+/* ===========================================
+   ENHANCED CHAT FEATURES STYLES
+   =========================================== */
+
+/* Message Content Container */
+.message-content {
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+/* Edited Message Indicator */
+.edited-indicator {
+    font-size: 0.75em;
+    color: #6c757d;
+    font-style: italic;
+    margin-left: 4px;
+}
+
+/* Deleted Message Styling */
+.message-wrapper.deleted-message .chat-message {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.chat-message.deleted {
+    background-color: #f8f9fa !important;
+    color: #6c757d !important;
+    font-style: italic;
+}
+
+/* --- Message Actions (Hover Menu) --- */
+.message-actions {
+    display: none;
+    position: absolute;
+    top: -28px;
+    right: 0;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    padding: 4px 6px;
+    gap: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    z-index: 10;
+}
+
+.message-wrapper {
+    position: relative;
+}
+
+.message-wrapper:hover .message-actions {
+    display: flex;
+}
+
+.msg-action-btn {
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 12px;
+    transition: background-color 0.15s ease;
+    line-height: 1;
+}
+
+.msg-action-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.msg-action-btn.flag-btn:hover {
+    background-color: #fff3cd;
+}
+
+.msg-action-btn.ban-btn:hover {
+    background-color: #f8d7da;
+}
+
+.msg-action-btn.delete-btn:hover {
+    background-color: #f8d7da;
+}
+
+/* --- Emoji Reactions --- */
+.message-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #f0f2f5;
+    border: 1px solid #e4e6eb;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.reaction-badge:hover {
+    background: #e4e6eb;
+    border-color: #d0d2d6;
+}
+
+.reaction-badge.user-reacted {
+    background: #e7f3ff;
+    border-color: #1877f2;
+}
+
+.reaction-count {
+    font-size: 11px;
+    color: #65676b;
+    font-weight: 500;
+}
+
+.reaction-badge.user-reacted .reaction-count {
+    color: #1877f2;
+}
+
+/* Reaction Picker */
+.reaction-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 24px;
+    padding: 6px 10px;
+    display: flex;
+    gap: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    margin-bottom: 8px;
+}
+
+.reaction-picker-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    padding: 4px 6px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.reaction-picker-btn:hover {
+    background: #f0f2f5;
+    transform: scale(1.2);
+}
+
+/* --- Threaded Replies --- */
+.thread-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: #1877f2;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.thread-indicator:hover {
+    text-decoration: underline;
+}
+
+.thread-replies {
+    margin-top: 8px;
+    padding-left: 16px;
+    border-left: 2px solid #e4e6eb;
+}
+
+.reply-message {
+    padding: 8px 12px;
+    margin: 4px 0;
+    background: #f8f9fa;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.reply-message.sent {
+    background: #e7f3ff;
+}
+
+.reply-sender {
+    font-weight: 600;
+    font-size: 0.85em;
+    color: #333;
+    margin-right: 6px;
+}
+
+.reply-content {
+    color: #1c1e21;
+}
+
+.reply-time {
+    font-size: 0.75em;
+    color: #65676b;
+    margin-left: 8px;
+}
+
+.deleted-reply {
+    color: #65676b;
+    font-style: italic;
+}
+
+.message-wrapper.is-reply {
+    margin-left: 20px;
+    opacity: 0.9;
+}
+
+/* --- Reply Indicator (above input) --- */
+.reply-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f0f2f5;
+    border-left: 3px solid #1877f2;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.85em;
+}
+
+.reply-indicator-text {
+    color: #65676b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reply-indicator-text strong {
+    color: #1c1e21;
+}
+
+.cancel-reply-btn {
+    background: none;
+    border: none;
+    color: #65676b;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    line-height: 1;
+}
+
+.cancel-reply-btn:hover {
+    background: #e4e6eb;
+    color: #1c1e21;
+}
+
+/* --- Edit Message Input --- */
+.edit-message-input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #1877f2;
+    border-radius: 8px;
+    font-size: inherit;
+    font-family: inherit;
+    margin-bottom: 6px;
+}
+
+.edit-message-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.2);
+}
+
+.edit-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.save-edit-btn,
+.cancel-edit-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    border: none;
+}
+
+.save-edit-btn {
+    background: #1877f2;
+    color: #fff;
+}
+
+.save-edit-btn:hover {
+    background: #166fe5;
+}
+
+.cancel-edit-btn {
+    background: #e4e6eb;
+    color: #1c1e21;
+}
+
+.cancel-edit-btn:hover {
+    background: #d8dadf;
+}
+
+/* Hide old moderation actions, replaced by new action buttons */
+.message-wrapper .moderation-actions {
+    display: none !important;
+}
+
+/* ===========================================
+   END ENHANCED CHAT FEATURES STYLES
+   =========================================== */
+
 /* Event History Styles - Plan activity timeline in chat */
 .event-history-wrapper {
     display: flex;

@@ -194,8 +194,14 @@ function getDebugLogsForHistory() {
  */
 function renderHistoryItem(messagesList, item) {
     if (item.type === 'chat') {
-        const { sender, message, isSent, timestamp, senderId } = item.data;
-        addMessageToUI(messagesList, sender, message, isSent, timestamp, false, null, senderId);
+        const { sender, message, isSent, timestamp, senderId, messageId, reactions, isEdited, isDeleted, replyCount, parentMessageId } = item.data;
+        addMessageToUI(messagesList, sender, message, isSent, timestamp, false, messageId, senderId, {
+            reactions: reactions || {},
+            isEdited: isEdited || false,
+            isDeleted: isDeleted || false,
+            replyCount: replyCount || 0,
+            parentMessageId: parentMessageId || null
+        });
     } else if (item.type === 'planEvent') {
         addEventToUI(messagesList, item.data);
     } else if (item.type === 'debug') {
@@ -568,9 +574,34 @@ function addEventToUI(messagesList, record) {
     messagesList.appendChild(wrapper);
 }
 
-function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId) {
+// Quick emoji reactions available for messages
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// Track message being replied to
+let replyingToMessage = null;
+
+// Track message being edited
+let editingMessage = null;
+
+/**
+ * Enhanced addMessageToUI with reactions, edit/delete, and thread support
+ */
+function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId, options = {}) {
+    const { reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false } = options;
+
+    // Skip deleted messages
+    if (isDeleted) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'} deleted-message`;
+        wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+        messagesList.appendChild(wrapper);
+        return wrapper;
+    }
+
     const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
+    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}`;
+    if (messageId) wrapper.dataset.messageId = messageId;
+
     const messageElement = document.createElement('div');
     const isFlagged = state.session.flaggedUsers.has(senderId);
     const isBanned = state.session.bannedUsers.has(senderId);
@@ -578,48 +609,443 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     messageElement.className = 'chat-message';
     if (isBanned) messageElement.classList.add('banned');
     if (isFlagged) messageElement.classList.add('flagged');
+
+    // Sender name
     const senderElement = document.createElement('div');
     senderElement.className = 'sender';
     senderElement.innerText = isSent ? 'You' : sender;
-    if (state.session.user.isOwner && !isSent) {
-      const moderationActions = document.createElement('div');
-      moderationActions.className = 'moderation-actions';
-      const flagBtn = document.createElement('button');
-      flagBtn.textContent = isFlagged ? '✅ Un-Flag' : '⚠️ Flag';
-      flagBtn.className = 'flag-btn';
-      flagBtn.addEventListener('click', async () => {
-        if (isFlagged) {
-          state.session.flaggedUsers.delete(senderId);
-        } else {
-          state.session.flaggedUsers.add(senderId);
-        }
-        await api.updateUserFlagStatus(senderId, !isFlagged);
-        const currentModalRecordId = document.getElementById('detail-modal-overlay')?.dataset.recordId;
-        if (currentModalRecordId) {
-            initializeItemChat(currentModalRecordId);
-     
-        }
-      });
-      const banBtn = document.createElement('button');
-      banBtn.textContent = '⛔ Ban';
-      banBtn.className = 'ban-btn';
-      banBtn.addEventListener('click', async () => {
-        await api.banUser(senderId);
-      });
-      moderationActions.appendChild(flagBtn);
-      moderationActions.appendChild(banBtn);
-      messageElement.appendChild(moderationActions);
+
+    // Message content container
+    const contentElement = document.createElement('div');
+    contentElement.className = 'message-content';
+    contentElement.textContent = displayMessage;
+
+    // Edited indicator
+    if (isEdited) {
+        const editedIndicator = document.createElement('span');
+        editedIndicator.className = 'edited-indicator';
+        editedIndicator.textContent = ' (edited)';
+        contentElement.appendChild(editedIndicator);
     }
+
+    // Build message element
     messageElement.appendChild(senderElement);
-    messageElement.append(document.createTextNode(displayMessage));
+    messageElement.appendChild(contentElement);
+
+    // --- Message Actions (hover menu) ---
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions';
+
+    // Reaction button
+    const reactionBtn = document.createElement('button');
+    reactionBtn.className = 'msg-action-btn reaction-btn';
+    reactionBtn.innerHTML = '😀';
+    reactionBtn.title = 'Add reaction';
+    reactionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showReactionPicker(wrapper, messageId, senderId);
+    });
+    actionsContainer.appendChild(reactionBtn);
+
+    // Reply button
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'msg-action-btn reply-btn';
+    replyBtn.innerHTML = '↩';
+    replyBtn.title = 'Reply';
+    replyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startReply(messageId, sender, message);
+    });
+    actionsContainer.appendChild(replyBtn);
+
+    // Edit button (only for own messages)
+    if (isSent && messageId) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'msg-action-btn edit-btn';
+        editBtn.innerHTML = '✏️';
+        editBtn.title = 'Edit message';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startEdit(messageId, message, wrapper);
+        });
+        actionsContainer.appendChild(editBtn);
+    }
+
+    // Delete button (only for own messages)
+    if (isSent && messageId) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'msg-action-btn delete-btn';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = 'Delete message';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            confirmDelete(messageId, wrapper);
+        });
+        actionsContainer.appendChild(deleteBtn);
+    }
+
+    // Moderation actions for owner (on others' messages)
+    if (state.session.user.isOwner && !isSent) {
+        const flagBtn = document.createElement('button');
+        flagBtn.className = 'msg-action-btn flag-btn';
+        flagBtn.innerHTML = isFlagged ? '✅' : '⚠️';
+        flagBtn.title = isFlagged ? 'Un-flag user' : 'Flag user';
+        flagBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (isFlagged) {
+                state.session.flaggedUsers.delete(senderId);
+            } else {
+                state.session.flaggedUsers.add(senderId);
+            }
+            await api.updateUserFlagStatus(senderId, !isFlagged);
+            const currentModalRecordId = document.getElementById('detail-modal-overlay')?.dataset.recordId;
+            if (currentModalRecordId) {
+                initializeItemChat(currentModalRecordId);
+            }
+        });
+        actionsContainer.appendChild(flagBtn);
+
+        const banBtn = document.createElement('button');
+        banBtn.className = 'msg-action-btn ban-btn';
+        banBtn.innerHTML = '⛔';
+        banBtn.title = 'Ban user';
+        banBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await api.banUser(senderId);
+        });
+        actionsContainer.appendChild(banBtn);
+    }
+
+    messageElement.appendChild(actionsContainer);
+
+    // --- Reactions Display ---
+    if (reactions && Object.keys(reactions).length > 0) {
+        const reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+
+        for (const [emoji, users] of Object.entries(reactions)) {
+            if (users.length > 0) {
+                const reactionBadge = document.createElement('button');
+                reactionBadge.className = 'reaction-badge';
+                const hasUserReacted = users.includes(currentUser?.id);
+                if (hasUserReacted) reactionBadge.classList.add('user-reacted');
+                reactionBadge.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                reactionBadge.title = users.length === 1 ? '1 reaction' : `${users.length} reactions`;
+                reactionBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleReaction(messageId, emoji, !hasUserReacted, wrapper);
+                });
+                reactionsContainer.appendChild(reactionBadge);
+            }
+        }
+
+        messageElement.appendChild(reactionsContainer);
+    }
+
+    // --- Thread indicator ---
+    if (replyCount > 0) {
+        const threadIndicator = document.createElement('button');
+        threadIndicator.className = 'thread-indicator';
+        threadIndicator.innerHTML = `↳ ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`;
+        threadIndicator.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleThreadView(messageId, wrapper);
+        });
+        messageElement.appendChild(threadIndicator);
+    }
+
+    // Timestamp
     const timestampElement = document.createElement('div');
     timestampElement.className = 'timestamp';
     const date = timestamp ? new Date(timestamp) : new Date();
     timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
     wrapper.appendChild(messageElement);
     wrapper.appendChild(timestampElement);
     messagesList.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
+
+    return wrapper;
+}
+
+/**
+ * Shows the emoji reaction picker near a message
+ */
+function showReactionPicker(wrapper, messageId, senderId) {
+    // Remove any existing picker
+    document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+
+    const picker = document.createElement('div');
+    picker.className = 'reaction-picker';
+
+    QUICK_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'reaction-picker-btn';
+        btn.textContent = emoji;
+        btn.addEventListener('click', async () => {
+            picker.remove();
+            await toggleReaction(messageId, emoji, true, wrapper);
+        });
+        picker.appendChild(btn);
+    });
+
+    wrapper.appendChild(picker);
+
+    // Close picker when clicking elsewhere
+    const closePicker = (e) => {
+        if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePicker), 0);
+}
+
+/**
+ * Toggles a reaction on a message
+ */
+async function toggleReaction(messageId, emoji, add, wrapper) {
+    if (!messageId || !currentUser) return;
+
+    const result = await api.toggleMessageReaction(messageId, currentUser.id, emoji, add);
+    if (result !== null) {
+        // Update the reactions display
+        updateReactionsDisplay(wrapper, result);
+
+        // Broadcast via Pusher if available
+        if (sessionChatChannel) {
+            sessionChatChannel.trigger('client-reaction-update', {
+                messageId,
+                reactions: result,
+                userId: currentUser.id
+            });
+        }
+    }
+}
+
+/**
+ * Updates the reactions display on a message wrapper
+ */
+function updateReactionsDisplay(wrapper, reactions) {
+    const messageElement = wrapper.querySelector('.chat-message');
+    if (!messageElement) return;
+
+    // Remove existing reactions container
+    const existingReactions = messageElement.querySelector('.message-reactions');
+    if (existingReactions) existingReactions.remove();
+
+    // Add new reactions if any exist
+    if (reactions && Object.keys(reactions).length > 0) {
+        const reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+
+        for (const [emoji, users] of Object.entries(reactions)) {
+            if (users.length > 0) {
+                const reactionBadge = document.createElement('button');
+                reactionBadge.className = 'reaction-badge';
+                const hasUserReacted = users.includes(currentUser?.id);
+                if (hasUserReacted) reactionBadge.classList.add('user-reacted');
+                reactionBadge.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                const messageId = wrapper.dataset.messageId;
+                reactionBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleReaction(messageId, emoji, !hasUserReacted, wrapper);
+                });
+                reactionsContainer.appendChild(reactionBadge);
+            }
+        }
+
+        // Insert before thread indicator or at end
+        const threadIndicator = messageElement.querySelector('.thread-indicator');
+        if (threadIndicator) {
+            messageElement.insertBefore(reactionsContainer, threadIndicator);
+        } else {
+            messageElement.appendChild(reactionsContainer);
+        }
+    }
+}
+
+/**
+ * Starts replying to a message
+ */
+function startReply(messageId, senderName, messagePreview) {
+    replyingToMessage = { id: messageId, sender: senderName, preview: messagePreview };
+
+    // Show reply indicator in the input area
+    const formContainer = document.getElementById('message-form') || document.getElementById('message-form-item');
+    if (!formContainer) return;
+
+    // Remove existing reply indicator
+    const existingIndicator = formContainer.parentElement.querySelector('.reply-indicator');
+    if (existingIndicator) existingIndicator.remove();
+
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'reply-indicator';
+    replyIndicator.innerHTML = `
+        <span class="reply-indicator-text">Replying to <strong>${escapeHtml(senderName)}</strong>: ${escapeHtml(messagePreview.substring(0, 50))}${messagePreview.length > 50 ? '...' : ''}</span>
+        <button class="cancel-reply-btn" type="button">✕</button>
+    `;
+
+    replyIndicator.querySelector('.cancel-reply-btn').addEventListener('click', cancelReply);
+    formContainer.parentElement.insertBefore(replyIndicator, formContainer);
+
+    // Focus the input
+    const input = formContainer.querySelector('input[type="text"]');
+    if (input) input.focus();
+}
+
+/**
+ * Cancels the current reply
+ */
+function cancelReply() {
+    replyingToMessage = null;
+    document.querySelectorAll('.reply-indicator').forEach(el => el.remove());
+}
+
+/**
+ * Starts editing a message
+ */
+function startEdit(messageId, currentContent, wrapper) {
+    editingMessage = { id: messageId, originalContent: currentContent };
+
+    const contentElement = wrapper.querySelector('.message-content');
+    if (!contentElement) return;
+
+    // Replace content with input
+    const originalText = currentContent;
+    contentElement.innerHTML = `
+        <input type="text" class="edit-message-input" value="${escapeHtml(originalText)}">
+        <div class="edit-actions">
+            <button class="save-edit-btn" type="button">Save</button>
+            <button class="cancel-edit-btn" type="button">Cancel</button>
+        </div>
+    `;
+
+    const input = contentElement.querySelector('.edit-message-input');
+    const saveBtn = contentElement.querySelector('.save-edit-btn');
+    const cancelBtn = contentElement.querySelector('.cancel-edit-btn');
+
+    input.focus();
+    input.select();
+
+    const saveEdit = async () => {
+        const newContent = input.value.trim();
+        if (newContent && newContent !== originalText) {
+            const result = await api.updateChatMessage(messageId, newContent, currentUser.id);
+            if (result) {
+                contentElement.innerHTML = '';
+                contentElement.textContent = newContent;
+                const editedIndicator = document.createElement('span');
+                editedIndicator.className = 'edited-indicator';
+                editedIndicator.textContent = ' (edited)';
+                contentElement.appendChild(editedIndicator);
+
+                // Broadcast edit via Pusher
+                if (sessionChatChannel) {
+                    sessionChatChannel.trigger('client-message-edited', {
+                        messageId,
+                        newContent,
+                        userId: currentUser.id
+                    });
+                }
+            }
+        } else {
+            cancelEditMode();
+        }
+        editingMessage = null;
+    };
+
+    const cancelEditMode = () => {
+        contentElement.innerHTML = '';
+        contentElement.textContent = originalText;
+        editingMessage = null;
+    };
+
+    saveBtn.addEventListener('click', saveEdit);
+    cancelBtn.addEventListener('click', cancelEditMode);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveEdit();
+        if (e.key === 'Escape') cancelEditMode();
+    });
+}
+
+/**
+ * Confirms and deletes a message
+ */
+async function confirmDelete(messageId, wrapper) {
+    if (!confirm('Delete this message? This cannot be undone.')) return;
+
+    const result = await api.deleteChatMessage(messageId, currentUser.id);
+    if (result) {
+        wrapper.classList.add('deleted-message');
+        wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+
+        // Broadcast delete via Pusher
+        if (sessionChatChannel) {
+            sessionChatChannel.trigger('client-message-deleted', {
+                messageId,
+                userId: currentUser.id
+            });
+        }
+    }
+}
+
+/**
+ * Toggles the thread view for a message
+ */
+async function toggleThreadView(messageId, wrapper) {
+    const existingThread = wrapper.querySelector('.thread-replies');
+    if (existingThread) {
+        existingThread.remove();
+        return;
+    }
+
+    const replies = await api.fetchMessageReplies(messageId);
+    if (replies.length === 0) return;
+
+    const threadContainer = document.createElement('div');
+    threadContainer.className = 'thread-replies';
+
+    replies.forEach(reply => {
+        const { SenderID, SenderName, Content, Timestamp, IsEdited, IsDeleted, Reactions } = reply.fields;
+        const isSent = SenderID === currentUser?.id;
+        let parsedReactions = {};
+        if (Reactions) {
+            try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
+        }
+
+        const replyWrapper = document.createElement('div');
+        replyWrapper.className = `reply-message ${isSent ? 'sent' : 'received'}`;
+        replyWrapper.dataset.messageId = reply.id;
+
+        if (IsDeleted) {
+            replyWrapper.innerHTML = `<em class="deleted-reply">This reply was deleted</em>`;
+        } else {
+            replyWrapper.innerHTML = `
+                <span class="reply-sender">${isSent ? 'You' : escapeHtml(SenderName)}</span>
+                <span class="reply-content">${escapeHtml(Content)}${IsEdited ? ' <em class="edited-indicator">(edited)</em>' : ''}</span>
+                <span class="reply-time">${new Date(Timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            `;
+        }
+
+        threadContainer.appendChild(replyWrapper);
+    });
+
+    wrapper.appendChild(threadContainer);
+}
+
+/**
+ * Gets the current reply target (if replying)
+ */
+export function getReplyingToMessage() {
+    return replyingToMessage;
+}
+
+/**
+ * Clears reply state after sending
+ */
+export function clearReplyState() {
+    cancelReply();
 }
 
 function bindPresenceEvents() {
@@ -743,12 +1169,24 @@ export async function initializeSessionChat() {
 
         const records = await api.fetchChatMessages(sessionId);
 
+        // Count replies per message for thread indicators
+        const replyCountMap = {};
+        records.forEach(record => {
+            const parentId = record.fields.ParentMessageID;
+            if (parentId) {
+                replyCountMap[parentId] = (replyCountMap[parentId] || 0) + 1;
+            }
+        });
+
         if (records.length > 0) {
             let eventCount = 0;
             let messageCount = 0;
 
             records.forEach(record => {
-                const { SenderID, SenderName, Content, Timestamp, EventType } = record.fields;
+                const { SenderID, SenderName, Content, Timestamp, EventType, Reactions, IsEdited, IsDeleted, ParentMessageID } = record.fields;
+
+                // Skip reply messages (they're shown in threads)
+                if (ParentMessageID) return;
 
                 // Check if this is a system event (plan history)
                 if (SenderID === 'system' && EventType) {
@@ -760,8 +1198,12 @@ export async function initializeSessionChat() {
                     });
                     eventCount++;
                 } else {
-                    // Regular chat message - store in sessionHistoryItems
+                    // Regular chat message - store in sessionHistoryItems with enhanced data
                     const isSent = SenderID === currentUser.id;
+                    let parsedReactions = {};
+                    if (Reactions) {
+                        try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
+                    }
                     sessionHistoryItems.push({
                         type: 'chat',
                         timestamp: Timestamp || new Date().toISOString(),
@@ -770,7 +1212,13 @@ export async function initializeSessionChat() {
                             message: Content,
                             isSent,
                             timestamp: Timestamp,
-                            senderId: SenderID
+                            senderId: SenderID,
+                            messageId: record.id,
+                            reactions: parsedReactions,
+                            isEdited: IsEdited || false,
+                            isDeleted: IsDeleted || false,
+                            replyCount: replyCountMap[record.id] || 0,
+                            parentMessageId: null
                         }
                     });
                     messageCount++;
@@ -811,18 +1259,86 @@ export async function initializeSessionChat() {
                     message: data.content,
                     isSent: false,
                     timestamp: timestamp,
-                    senderId: data.senderId
+                    senderId: data.senderId,
+                    messageId: data.messageId,
+                    reactions: {},
+                    isEdited: false,
+                    isDeleted: false,
+                    replyCount: 0
                 }
             });
             // Re-render to include the new message (only if chat filter is on)
             if (historyFilters.chat) {
                 const messagesList = document.getElementById('messages-list');
-                addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, null, data.senderId);
+                addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, data.messageId, data.senderId);
             }
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
 
+            }
+        }
+    });
+
+    // Handle real-time reaction updates from other users
+    sessionChatChannel.bind('client-reaction-update', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = document.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                updateReactionsDisplay(wrapper, data.reactions);
+            }
+        }
+    });
+
+    // Handle real-time message edits from other users
+    sessionChatChannel.bind('client-message-edited', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = document.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                const contentElement = wrapper.querySelector('.message-content');
+                if (contentElement) {
+                    contentElement.textContent = data.newContent;
+                    if (!contentElement.querySelector('.edited-indicator')) {
+                        const editedIndicator = document.createElement('span');
+                        editedIndicator.className = 'edited-indicator';
+                        editedIndicator.textContent = ' (edited)';
+                        contentElement.appendChild(editedIndicator);
+                    }
+                }
+            }
+        }
+    });
+
+    // Handle real-time message deletes from other users
+    sessionChatChannel.bind('client-message-deleted', (data) => {
+        if (data.userId !== currentUser.id) {
+            const wrapper = document.querySelector(`[data-message-id="${data.messageId}"]`);
+            if (wrapper) {
+                wrapper.classList.add('deleted-message');
+                wrapper.innerHTML = `<div class="chat-message deleted"><em>This message was deleted</em></div>`;
+            }
+        }
+    });
+
+    // Handle real-time replies from other users
+    sessionChatChannel.bind('client-new-reply', (data) => {
+        if (data.senderId !== currentUser.id) {
+            const parentWrapper = document.querySelector(`[data-message-id="${data.parentMessageId}"]`);
+            if (parentWrapper) {
+                const existingIndicator = parentWrapper.querySelector('.thread-indicator');
+                if (existingIndicator) {
+                    const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
+                    existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                } else {
+                    const threadIndicator = document.createElement('button');
+                    threadIndicator.className = 'thread-indicator';
+                    threadIndicator.innerHTML = `↳ 1 reply`;
+                    threadIndicator.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleThreadView(data.parentMessageId, parentWrapper);
+                    });
+                    parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
+                }
             }
         }
     });
@@ -846,20 +1362,32 @@ export async function sendMessage(message, recordId = null) {
         if (emptyState) {
             emptyState.remove();
         }
-        addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
-        console.log('[ItemChat DEBUG] About to call api.postItemChatMessage with:', {
-            recordId,
-            userId: currentUser.id,
-            userName: currentUser.name,
-            messagePreview: message.substring(0, 50)
-        });
-        await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
+
+        // Check if this is a reply
+        if (replyingToMessage) {
+            await api.postReplyMessage(replyingToMessage.id, null, recordId, currentUser.id, currentUser.name, message);
+            // Add reply indicator to the parent message
+            const parentWrapper = messagesList.querySelector(`[data-message-id="${replyingToMessage.id}"]`);
+            if (parentWrapper) {
+                const existingIndicator = parentWrapper.querySelector('.thread-indicator');
+                if (existingIndicator) {
+                    const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
+                    existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                }
+            }
+            cancelReply();
+        } else {
+            addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+            await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
+        }
+
         console.log('[ItemChat DEBUG] api.postItemChatMessage completed');
         channel.trigger('client-new-message-item', {
             content: message,
             senderId: currentUser.id,
             senderName: currentUser.name,
-            timestamp: timestamp
+            timestamp: timestamp,
+            isReply: !!replyingToMessage
         });
     } else {
         if (!sessionChatChannel || !currentUser) return;
@@ -868,32 +1396,72 @@ export async function sendMessage(message, recordId = null) {
         const sessionId = state.session.id || 'default-session';
         const timestamp = new Date().toISOString();
 
-        // Add to session history items
-        sessionHistoryItems.push({
-            type: 'chat',
-            timestamp: timestamp,
-            data: {
-                sender: currentUser.name,
-                message: message,
-                isSent: true,
-                timestamp: timestamp,
-                senderId: currentUser.id
+        // Check if this is a reply
+        if (replyingToMessage) {
+            const result = await api.postReplyMessage(replyingToMessage.id, sessionId, null, currentUser.id, currentUser.name, message);
+            if (result) {
+                // Update the parent message's reply count in UI
+                const parentWrapper = document.querySelector(`[data-message-id="${replyingToMessage.id}"]`);
+                if (parentWrapper) {
+                    const existingIndicator = parentWrapper.querySelector('.thread-indicator');
+                    if (existingIndicator) {
+                        const currentCount = parseInt(existingIndicator.textContent.match(/\d+/)?.[0] || '0');
+                        existingIndicator.innerHTML = `↳ ${currentCount + 1} ${currentCount + 1 === 1 ? 'reply' : 'replies'}`;
+                    } else {
+                        // Add thread indicator
+                        const threadIndicator = document.createElement('button');
+                        threadIndicator.className = 'thread-indicator';
+                        threadIndicator.innerHTML = `↳ 1 reply`;
+                        threadIndicator.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleThreadView(replyingToMessage.id, parentWrapper);
+                        });
+                        parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
+                    }
+                }
+                sessionChatChannel.trigger('client-new-reply', {
+                    parentMessageId: replyingToMessage.id,
+                    content: message,
+                    senderId: currentUser.id,
+                    senderName: currentUser.name,
+                    timestamp: timestamp
+                });
             }
-        });
+            cancelReply();
+        } else {
+            // Regular message (not a reply)
+            // Add to session history items
+            sessionHistoryItems.push({
+                type: 'chat',
+                timestamp: timestamp,
+                data: {
+                    sender: currentUser.name,
+                    message: message,
+                    isSent: true,
+                    timestamp: timestamp,
+                    senderId: currentUser.id,
+                    messageId: null, // Will be updated when we get the response
+                    reactions: {},
+                    isEdited: false,
+                    isDeleted: false,
+                    replyCount: 0
+                }
+            });
 
-        // Only add to UI if chat filter is on
-        if (historyFilters.chat) {
-            const messagesList = document.getElementById('messages-list');
-            addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+            // Only add to UI if chat filter is on
+            if (historyFilters.chat) {
+                const messagesList = document.getElementById('messages-list');
+                addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+            }
+
+            await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
+            sessionChatChannel.trigger('client-new-message', {
+                content: message,
+                senderId: currentUser.id,
+                senderName: currentUser.name,
+                timestamp: timestamp
+            });
         }
-
-        await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);
-        sessionChatChannel.trigger('client-new-message', {
-            content: message,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            timestamp: timestamp
-        });
     }
 }
 
