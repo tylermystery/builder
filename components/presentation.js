@@ -7,6 +7,9 @@ import { getCurrentUser, sendMessage as sendChatMessage } from '../chat.js';
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 
+// Flag to track if catalog needs rendering when exiting presentation view
+let catalogNeedsRender = false;
+
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
 let closeBtn = null;
@@ -818,6 +821,10 @@ export async function showPresentationView(listType, startRecordId = null) {
         return;
     }
 
+    // Mark that catalog will need rendering when exiting presentation view
+    // (since we skip catalog rendering while in presentation view)
+    catalogNeedsRender = true;
+
     // Clear image cache for fresh load
     itemImagesCache.clear();
 
@@ -868,6 +875,17 @@ export function hidePresentationView() {
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
     document.removeEventListener('keydown', handleKeyDown);
+
+    // If catalog rendering was skipped when entering presentation view,
+    // trigger it now via the global applyFiltersAndSort function
+    if (catalogNeedsRender && typeof window.applyFiltersAndSort === 'function') {
+        log('Presentation', 'Triggering catalog render after exiting presentation view');
+        // Small delay to ensure URL is updated first
+        setTimeout(() => {
+            window.applyFiltersAndSort(window.imageCache);
+        }, 50);
+        catalogNeedsRender = false;
+    }
 }
 
 export function setupPresentationEventListeners() {

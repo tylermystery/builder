@@ -143,6 +143,11 @@ async function initialize() {
         console.log(`[SESSION-READY] Session: ${state.session.id}, Items: ${state.cart.items.size}, Locked: ${state.cart.lockedItems.size}`);
         log('Main', '"sessionReady" event received, re-initializing session chat.');
 
+        // Check if we're in presentation view - skip catalog-related updates if so
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentView = urlParams.get('view');
+        const isInPresentationView = currentView === 'present';
+
         if (typeof initializeSessionChat === 'function') {
              console.log('[SESSION-READY] Initializing session chat...');
              initializeSessionChat();
@@ -151,20 +156,25 @@ async function initialize() {
              console.error("initializeSessionChat is not defined or imported correctly.");
         }
 
-        console.log('[SESSION-READY] Updating UI components...');
-        ui.updateHeader();
-        ui.updateEventPlanSection();
-        ui.updateIdeasCarousel();
-        ui.updateTotalCost();
-        ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
+        // Only update catalog-related UI components when NOT in presentation view
+        if (!isInPresentationView) {
+            console.log('[SESSION-READY] Updating UI components...');
+            ui.updateHeader();
+            ui.updateEventPlanSection();
+            ui.updateIdeasCarousel();
+            ui.updateTotalCost();
+            ui.updateEventPlanDateDisplay(); // Ensure date display is updated after session loads
 
-        const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
-        if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
+            const recordIds = Array.from(document.querySelectorAll('.event-card[data-record-id]')).map(card => card.dataset.recordId);
+            if (recordIds.length > 0) ui.batchUpdateCardIcons(recordIds);
 
-        // Verify no duplicate items after a short delay to ensure DOM updates complete
-        setTimeout(() => {
-            ui.verifyNoDuplicateItems();
-        }, 100);
+            // Verify no duplicate items after a short delay to ensure DOM updates complete
+            setTimeout(() => {
+                ui.verifyNoDuplicateItems();
+            }, 100);
+        } else {
+            console.log('[SESSION-READY] In presentation view - skipping catalog UI updates');
+        }
 
         console.log('[SESSION-READY] ========== EVENT HANDLER END ==========');
     });
@@ -503,15 +513,22 @@ async function initialize() {
              if (typeof initializeSessionChat === 'function') {
                  initializeSessionChat();
              }
-             ui.updateHeader();
-             ui.updateEventPlanSection();
-             ui.updateIdeasCarousel();
-             ui.updateTotalCost();
 
-             // Verify no duplicate items after a short delay
-             setTimeout(() => {
-                 ui.verifyNoDuplicateItems();
-             }, 100);
+             // Only update catalog-related UI if NOT in presentation view
+             const viewParam = urlParams.get('view');
+             if (viewParam !== 'present') {
+                 ui.updateHeader();
+                 ui.updateEventPlanSection();
+                 ui.updateIdeasCarousel();
+                 ui.updateTotalCost();
+
+                 // Verify no duplicate items after a short delay
+                 setTimeout(() => {
+                     ui.verifyNoDuplicateItems();
+                 }, 100);
+             } else {
+                 log('Main', 'In presentation view - skipping catalog UI updates during init');
+             }
         } else {
              log('Main', 'No active session ID found (this should not happen after the guest-session fix).');
         }

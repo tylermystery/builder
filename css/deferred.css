@@ -2386,11 +2386,14 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: transparent;
+    /* Solid background to completely hide the catalog view behind */
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     z-index: 1000;
     justify-content: center;
     align-items: stretch;
     flex-direction: column;
+    /* Prevent scroll events from bubbling to catalog */
+    overscroll-behavior: contain;
 }
 
 /* Presentation Header - Frosted Glass Style */
