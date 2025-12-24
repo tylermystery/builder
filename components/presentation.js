@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
 import { updateUrl, getRecordPrice } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -56,6 +56,9 @@ let chatSummaryEl = null;
 
 // Floating chat button
 let floatingChatBtn = null;
+
+// Reactions summary DOM element
+let reactionsSummaryEl = null;
 
 // Track loaded images for each item
 const itemImagesCache = new Map();
@@ -331,6 +334,171 @@ function renderCollaborators() {
     collaboratorsListEl.innerHTML = html;
 }
 
+// Calculate score for a single reaction
+function getReactionScore(emoji) {
+    return REACTION_SCORES[emoji] || 0;
+}
+
+// Calculate total reaction score for an item
+function getItemReactionScore(recordId) {
+    const reactions = state.session.reactions.get(recordId);
+    if (!reactions || !(reactions instanceof Map)) return 0;
+
+    let score = 0;
+    reactions.forEach((emoji) => {
+        score += getReactionScore(emoji);
+    });
+    return score;
+}
+
+// Get reaction count for an item
+function getItemReactionCount(recordId) {
+    const reactions = state.session.reactions.get(recordId);
+    if (!reactions || !(reactions instanceof Map)) return 0;
+    return reactions.size;
+}
+
+// Generate the expanded emoji picker HTML
+function createEmojiPickerHTML(recordId) {
+    let categoriesHTML = '';
+    Object.entries(EMOJI_CATEGORIES).forEach(([categoryKey, category]) => {
+        const emojisHTML = category.emojis.map(emoji => {
+            const score = getReactionScore(emoji);
+            const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral';
+            return `<button class="emoji-picker-emoji ${scoreClass}" data-emoji="${emoji}" data-record-id="${recordId}" title="Score: ${score > 0 ? '+' : ''}${score}">${emoji}</button>`;
+        }).join('');
+
+        categoriesHTML += `
+            <div class="emoji-picker-category" data-category="${categoryKey}">
+                <div class="emoji-picker-category-label">${category.label}</div>
+                <div class="emoji-picker-category-emojis">${emojisHTML}</div>
+            </div>
+        `;
+    });
+
+    return `
+        <div class="emoji-picker-modal" data-record-id="${recordId}">
+            <div class="emoji-picker-header">
+                <span class="emoji-picker-title">Choose a Reaction</span>
+                <button class="emoji-picker-close" title="Close">&times;</button>
+            </div>
+            <div class="emoji-picker-categories">${categoriesHTML}</div>
+            <div class="emoji-picker-footer">
+                <span class="emoji-score-legend">
+                    <span class="legend-item positive">● Positive</span>
+                    <span class="legend-item neutral">● Neutral</span>
+                    <span class="legend-item negative">● Negative</span>
+                </span>
+            </div>
+        </div>
+    `;
+}
+
+// Show the expanded emoji picker
+function showExpandedEmojiPicker(recordId, anchorElement) {
+    // Close any existing picker
+    closeExpandedEmojiPicker();
+
+    const pickerHTML = createEmojiPickerHTML(recordId);
+    const pickerContainer = document.createElement('div');
+    pickerContainer.className = 'emoji-picker-overlay';
+    pickerContainer.innerHTML = pickerHTML;
+
+    // Add to DOM
+    document.body.appendChild(pickerContainer);
+
+    // Position near the anchor
+    const picker = pickerContainer.querySelector('.emoji-picker-modal');
+    const rect = anchorElement.getBoundingClientRect();
+    const scrollTop = window.scrollY || document.documentElement.scrollTop;
+
+    // Center the picker on screen for mobile, near anchor for desktop
+    if (window.innerWidth <= 768) {
+        picker.style.position = 'fixed';
+        picker.style.top = '50%';
+        picker.style.left = '50%';
+        picker.style.transform = 'translate(-50%, -50%)';
+    } else {
+        picker.style.position = 'absolute';
+        picker.style.top = `${rect.bottom + scrollTop + 10}px`;
+        picker.style.left = `${Math.max(10, rect.left - 100)}px`;
+    }
+
+    // Add event listeners
+    pickerContainer.addEventListener('click', handleEmojiPickerClick);
+
+    // Close on outside click
+    pickerContainer.addEventListener('click', (e) => {
+        if (e.target === pickerContainer) {
+            closeExpandedEmojiPicker();
+        }
+    });
+
+    // Close on Escape
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeExpandedEmojiPicker();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+// Close the expanded emoji picker
+function closeExpandedEmojiPicker() {
+    const existingPicker = document.querySelector('.emoji-picker-overlay');
+    if (existingPicker) {
+        existingPicker.remove();
+    }
+}
+
+// Handle clicks within the emoji picker
+function handleEmojiPickerClick(e) {
+    // Close button
+    if (e.target.classList.contains('emoji-picker-close')) {
+        closeExpandedEmojiPicker();
+        return;
+    }
+
+    // Emoji selection
+    const emojiBtn = e.target.closest('.emoji-picker-emoji');
+    if (emojiBtn) {
+        const emoji = emojiBtn.dataset.emoji;
+        const recordId = emojiBtn.dataset.recordId;
+        selectEmoji(recordId, emoji);
+        closeExpandedEmojiPicker();
+    }
+}
+
+// Select an emoji reaction for an item
+function selectEmoji(recordId, emoji) {
+    const currentUser = getCurrentUser();
+
+    if (!state.session.reactions.has(recordId)) {
+        state.session.reactions.set(recordId, new Map());
+    }
+
+    const itemReactions = state.session.reactions.get(recordId);
+
+    // Toggle if same emoji, otherwise set new
+    if (itemReactions.get(currentUser.id) === emoji) {
+        itemReactions.delete(currentUser.id);
+    } else {
+        itemReactions.set(currentUser.id, emoji);
+    }
+
+    // Re-render reactions for this item
+    const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+    if (reactionContainer) {
+        renderReactions(recordId, reactionContainer);
+    }
+
+    // Update the reactions summary
+    renderReactionsSummary();
+
+    triggerSave();
+}
+
 function renderReactions(recordId, reactionContainer) {
     const currentUser = getCurrentUser();
     let allReactions = state.session.reactions.get(recordId);
@@ -339,21 +507,36 @@ function renderReactions(recordId, reactionContainer) {
     }
     const currentUserReaction = allReactions.get(currentUser.id);
 
+    // Calculate score for this item
+    const itemScore = getItemReactionScore(recordId);
+    const scoreClass = itemScore > 0 ? 'positive' : itemScore < 0 ? 'negative' : 'neutral';
+
+    // Quick reaction buttons (8 most common)
     const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
         `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
     ).join('');
 
+    // More button to open full picker
+    const moreButtonHTML = `<button class="reaction-btn reaction-more-btn" data-record-id="${recordId}" title="More reactions">+</button>`;
+
+    // Summary showing who reacted
     let summaryHTML = '';
     if (allReactions.size > 0) {
         summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
             const name = state.session.userProfiles.get(userId) || 'A User';
-            return `<span>${name}: ${reaction}</span>`;
-        }).join(' | ');
+            return `<span class="reaction-user">${name}: ${reaction}</span>`;
+        }).join('');
     }
 
+    // Score display
+    const scoreHTML = `<span class="item-reaction-score ${scoreClass}" title="Reaction score">${itemScore > 0 ? '+' : ''}${itemScore}</span>`;
+
     reactionContainer.innerHTML = `
-        <div class="reaction-bar-buttons">${buttonsHTML}</div>
-        <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
+        <div class="reaction-bar-buttons">${buttonsHTML}${moreButtonHTML}</div>
+        <div class="reaction-info-row">
+            <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
+            ${allReactions.size > 0 ? scoreHTML : ''}
+        </div>
     `;
 }
 
@@ -462,6 +645,205 @@ async function renderAllItems() {
         if (reactionContainer) {
             renderReactions(item.recordId, reactionContainer);
         }
+    });
+
+    // Render the reactions summary after items
+    renderReactionsSummary();
+}
+
+// Render the reactions summary section showing component rankings
+function renderReactionsSummary() {
+    if (!reactionsSummaryEl) {
+        reactionsSummaryEl = document.getElementById('reactions-summary-container');
+    }
+    if (!reactionsSummaryEl) return;
+
+    const favorites = Array.from(state.cart.items.keys()).map(id => ({ recordId: id, type: 'favorites' }));
+    const locked = Array.from(state.cart.lockedItems.keys()).map(id => ({ recordId: id, type: 'locked' }));
+    const combinedList = [...locked, ...favorites];
+
+    // Calculate scores for all items
+    const itemsWithScores = combinedList.map(item => {
+        const record = state.records.all.find(r => r.id === item.recordId);
+        const name = record?.fields.Name || 'Unknown Item';
+        const reactions = state.session.reactions.get(item.recordId);
+        const reactionCount = reactions instanceof Map ? reactions.size : 0;
+        const score = getItemReactionScore(item.recordId);
+
+        // Get emoji breakdown
+        const emojiBreakdown = {};
+        if (reactions instanceof Map) {
+            reactions.forEach((emoji) => {
+                emojiBreakdown[emoji] = (emojiBreakdown[emoji] || 0) + 1;
+            });
+        }
+
+        return {
+            recordId: item.recordId,
+            type: item.type,
+            name,
+            score,
+            reactionCount,
+            emojiBreakdown
+        };
+    });
+
+    // Calculate totals
+    const totalScore = itemsWithScores.reduce((sum, item) => sum + item.score, 0);
+    const totalReactions = itemsWithScores.reduce((sum, item) => sum + item.reactionCount, 0);
+    const itemsWithReactions = itemsWithScores.filter(item => item.reactionCount > 0).length;
+
+    // Sort by score (descending), then by reaction count
+    const rankedItems = [...itemsWithScores].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return b.reactionCount - a.reactionCount;
+    });
+
+    // Generate ranking HTML
+    let rankingHTML = '';
+    if (totalReactions > 0) {
+        rankingHTML = rankedItems.map((item, index) => {
+            if (item.reactionCount === 0) return ''; // Skip items with no reactions
+
+            const rank = index + 1;
+            const scoreClass = item.score > 0 ? 'positive' : item.score < 0 ? 'negative' : 'neutral';
+            const typeClass = item.type === 'favorites' ? 'idea' : 'confirmed';
+
+            // Create emoji pills showing the breakdown
+            const emojiPills = Object.entries(item.emojiBreakdown)
+                .map(([emoji, count]) => `<span class="emoji-pill">${emoji}${count > 1 ? `<sup>${count}</sup>` : ''}</span>`)
+                .join('');
+
+            // Medal for top 3
+            let medalHTML = '';
+            if (rank === 1) medalHTML = '<span class="rank-medal gold">🥇</span>';
+            else if (rank === 2) medalHTML = '<span class="rank-medal silver">🥈</span>';
+            else if (rank === 3) medalHTML = '<span class="rank-medal bronze">🥉</span>';
+
+            return `
+                <div class="ranking-item ${scoreClass}" data-record-id="${item.recordId}">
+                    <div class="ranking-position">
+                        ${medalHTML}
+                        <span class="ranking-number">#${rank}</span>
+                    </div>
+                    <div class="ranking-details">
+                        <div class="ranking-name">${item.name}</div>
+                        <div class="ranking-type ${typeClass}">${item.type === 'favorites' ? 'Idea' : 'Confirmed'}</div>
+                    </div>
+                    <div class="ranking-reactions">${emojiPills}</div>
+                    <div class="ranking-score ${scoreClass}">
+                        <span class="score-value">${item.score > 0 ? '+' : ''}${item.score}</span>
+                        <span class="score-label">pts</span>
+                    </div>
+                </div>
+            `;
+        }).filter(html => html !== '').join('');
+    }
+
+    // Calculate sentiment analysis
+    let sentimentHTML = '';
+    if (totalReactions > 0) {
+        const positiveItems = itemsWithScores.filter(item => item.score > 0).length;
+        const negativeItems = itemsWithScores.filter(item => item.score < 0).length;
+        const neutralItems = itemsWithScores.filter(item => item.score === 0 && item.reactionCount > 0).length;
+
+        // Overall sentiment indicator
+        let overallSentiment = 'neutral';
+        let sentimentEmoji = '😐';
+        let sentimentText = 'Mixed reactions';
+        if (totalScore > 8) {
+            overallSentiment = 'very-positive';
+            sentimentEmoji = '🎉';
+            sentimentText = 'Very enthusiastic!';
+        } else if (totalScore > 3) {
+            overallSentiment = 'positive';
+            sentimentEmoji = '😊';
+            sentimentText = 'Generally positive!';
+        } else if (totalScore < -8) {
+            overallSentiment = 'very-negative';
+            sentimentEmoji = '😟';
+            sentimentText = 'Needs attention';
+        } else if (totalScore < -3) {
+            overallSentiment = 'negative';
+            sentimentEmoji = '😕';
+            sentimentText = 'Some concerns';
+        }
+
+        sentimentHTML = `
+            <div class="sentiment-analysis">
+                <div class="sentiment-overall ${overallSentiment}">
+                    <span class="sentiment-emoji">${sentimentEmoji}</span>
+                    <span class="sentiment-text">${sentimentText}</span>
+                </div>
+                <div class="sentiment-breakdown">
+                    <div class="sentiment-stat positive">
+                        <span class="stat-icon">👍</span>
+                        <span class="stat-value">${positiveItems}</span>
+                        <span class="stat-label">positive</span>
+                    </div>
+                    <div class="sentiment-stat neutral">
+                        <span class="stat-icon">🤷</span>
+                        <span class="stat-value">${neutralItems}</span>
+                        <span class="stat-label">neutral</span>
+                    </div>
+                    <div class="sentiment-stat negative">
+                        <span class="stat-icon">👎</span>
+                        <span class="stat-value">${negativeItems}</span>
+                        <span class="stat-label">negative</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // No reactions state
+    if (totalReactions === 0) {
+        reactionsSummaryEl.innerHTML = `
+            <div class="reactions-summary-empty">
+                <span class="empty-icon">✨</span>
+                <p>No reactions yet! React to items above to see how they rank.</p>
+                <p class="empty-hint">Use emojis to express your preferences - positive reactions boost scores, negative ones lower them.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Full summary HTML
+    reactionsSummaryEl.innerHTML = `
+        <div class="reactions-summary-header">
+            <h3 class="reactions-summary-title">Reaction Rankings</h3>
+            <div class="reactions-summary-stats">
+                <span class="stat"><strong>${totalReactions}</strong> reactions</span>
+                <span class="stat"><strong>${itemsWithReactions}</strong> items rated</span>
+                <span class="stat total-score ${totalScore > 0 ? 'positive' : totalScore < 0 ? 'negative' : 'neutral'}">
+                    <strong>${totalScore > 0 ? '+' : ''}${totalScore}</strong> total score
+                </span>
+            </div>
+        </div>
+        ${sentimentHTML}
+        <div class="reactions-ranking-list">
+            ${rankingHTML}
+        </div>
+        <div class="reactions-summary-footer">
+            <p class="scoring-note">
+                <span class="note-icon">ℹ️</span>
+                Scores range from -4 to +4 per reaction. Click any ranking to scroll to that item.
+            </p>
+        </div>
+    `;
+
+    // Add click handlers to scroll to items
+    reactionsSummaryEl.querySelectorAll('.ranking-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const recordId = item.dataset.recordId;
+            const targetItem = document.querySelector(`.itinerary-item[data-record-id="${recordId}"]`);
+            if (targetItem) {
+                targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Brief highlight
+                targetItem.classList.add('highlight');
+                setTimeout(() => targetItem.classList.remove('highlight'), 2000);
+            }
+        });
     });
 }
 
@@ -1565,8 +1947,15 @@ function handleReactionClick(e) {
     const button = e.target.closest('.reaction-btn');
     if (!button) return;
 
-    const emoji = button.dataset.emoji;
     const recordId = button.dataset.recordId;
+
+    // Check if this is the "more" button to open expanded picker
+    if (button.classList.contains('reaction-more-btn')) {
+        showExpandedEmojiPicker(recordId, button);
+        return;
+    }
+
+    const emoji = button.dataset.emoji;
     const currentUser = getCurrentUser();
 
     if (!state.session.reactions.has(recordId)) {
@@ -1586,6 +1975,9 @@ function handleReactionClick(e) {
     if (reactionContainer) {
         renderReactions(recordId, reactionContainer);
     }
+
+    // Update the reactions summary
+    renderReactionsSummary();
 
     triggerSave();
 }
