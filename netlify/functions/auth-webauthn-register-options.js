@@ -77,7 +77,10 @@ exports.handler = async (event) => {
         // Store the challenge temporarily (expires in 5 minutes)
         const challengeExpiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
         const createChallengeUrl = `https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges`;
-        await fetch(createChallengeUrl, {
+
+        console.log(`[webauthn-register-options] Storing challenge for user ${userRecord.id}...`);
+
+        const challengeStoreRes = await fetch(createChallengeUrl, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -93,6 +96,15 @@ exports.handler = async (event) => {
                 }]
             })
         });
+
+        if (!challengeStoreRes.ok) {
+            const errorData = await challengeStoreRes.json();
+            console.error('[webauthn-register-options] Failed to store challenge:', errorData);
+            throw new Error('Failed to store registration challenge: ' + (errorData.error?.message || JSON.stringify(errorData)));
+        }
+
+        const challengeStoreData = await challengeStoreRes.json();
+        console.log(`[webauthn-register-options] Challenge stored successfully. Record ID: ${challengeStoreData.records?.[0]?.id}`);
 
         // Generate WebAuthn registration options
         // Using base64url encoding which is required by WebAuthn

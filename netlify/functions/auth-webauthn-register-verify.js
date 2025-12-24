@@ -32,11 +32,26 @@ exports.handler = async (event) => {
         const expectedRpId = new URL(origin).hostname;
 
         // Find the pending challenge
-        const findChallengeUrl = `https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges?filterByFormula=AND({UserId}='${userId}',{Type}='registration')&sort[0][field]=ExpiresAt&sort[0][direction]=desc`;
+        // Note: Using URL encoding for the filter formula
+        const filterFormula = `AND({UserId}='${userId}',{Type}='registration')`;
+        const encodedFilter = encodeURIComponent(filterFormula);
+        const findChallengeUrl = `https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges?filterByFormula=${encodedFilter}&sort[0][field]=ExpiresAt&sort[0][direction]=desc`;
+
+        console.log(`[webauthn-register-verify] Looking for challenge with filter: ${filterFormula}`);
+
         const challengeRes = await fetch(findChallengeUrl, { headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` } });
+
+        if (!challengeRes.ok) {
+            const errorText = await challengeRes.text();
+            console.error(`[webauthn-register-verify] Challenge lookup failed: ${challengeRes.status} - ${errorText}`);
+            return { statusCode: 400, body: JSON.stringify({ error: 'Failed to look up challenge' }) };
+        }
+
         const challengeData = await challengeRes.json();
+        console.log(`[webauthn-register-verify] Challenge lookup returned ${challengeData.records?.length || 0} records`);
 
         if (!challengeData.records || challengeData.records.length === 0) {
+            console.error(`[webauthn-register-verify] No challenge found for userId=${userId}, type=registration`);
             return { statusCode: 400, body: JSON.stringify({ error: 'No pending registration challenge found' }) };
         }
 

@@ -64,7 +64,10 @@ exports.handler = async (event) => {
 
         // Store the challenge (expires in 5 minutes)
         const challengeExpiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-        await fetch(`https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges`, {
+
+        console.log(`[webauthn-auth-options] Storing authentication challenge...`);
+
+        const challengeStoreRes = await fetch(`https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -80,6 +83,15 @@ exports.handler = async (event) => {
                 }]
             })
         });
+
+        if (!challengeStoreRes.ok) {
+            const errorData = await challengeStoreRes.json();
+            console.error('[webauthn-auth-options] Failed to store challenge:', errorData);
+            throw new Error('Failed to store authentication challenge: ' + (errorData.error?.message || JSON.stringify(errorData)));
+        }
+
+        const challengeStoreData = await challengeStoreRes.json();
+        console.log(`[webauthn-auth-options] Challenge stored successfully. Record ID: ${challengeStoreData.records?.[0]?.id}`);
 
         // Generate WebAuthn authentication options
         const publicKeyCredentialRequestOptions = {
