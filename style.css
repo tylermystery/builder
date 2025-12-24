@@ -8454,3 +8454,29 @@ hr.total-divider {
 .confirm-dialog .btn-confirm.btn-primary:hover {
     background-color: #0056b3;
 }
+
+/* --- Netlify Identity Widget z-index override --- */
+/* Ensure the Netlify Identity popup appears above our user modal (z-index: 1000) */
+.netlify-identity-widget,
+#netlify-identity-widget,
+.netlify-identity-page,
+[class*="netlify-identity"] {
+    z-index: 100000 !important;
+}
+
+/* The Netlify Identity modal wrapper - React Modal classes used by Netlify Identity */
+.ReactModal__Overlay,
+.ReactModalPortal,
+.ReactModal__Content {
+    z-index: 100000 !important;
+}
+
+/* Backdrop for Netlify Identity modal */
+.ReactModal__Overlay--after-open {
+    z-index: 99999 !important;
+}
+
+/* Ensure the actual modal content is above backdrop */
+.ReactModal__Content--after-open {
+    z-index: 100001 !important;
+}

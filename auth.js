@@ -859,8 +859,22 @@ function initializeNetlifyIdentity() {
             try {
                 // Trigger Google login directly
                 console.log('[Google SSO DEBUG] Opening Netlify Identity modal...');
+                console.log('[Google SSO DEBUG] User modal overlay z-index:', getComputedStyle(userModalOverlay).zIndex);
                 netlifyIdentity.open('login');
                 console.log('[Google SSO DEBUG] Netlify Identity modal open() called');
+
+                // Log the z-index of the Netlify Identity modal once it opens
+                setTimeout(() => {
+                    const netlifyModal = document.querySelector('.ReactModal__Overlay');
+                    if (netlifyModal) {
+                        console.log('[Google SSO DEBUG] Netlify Identity modal found in DOM');
+                        console.log('[Google SSO DEBUG] Netlify modal z-index (computed):', getComputedStyle(netlifyModal).zIndex);
+                        console.log('[Google SSO DEBUG] Netlify modal position:', getComputedStyle(netlifyModal).position);
+                    } else {
+                        console.log('[Google SSO DEBUG] Netlify Identity modal not found in DOM after timeout');
+                    }
+                }, 500);
+
                 netlifyIdentity.on('open', () => {
                     console.log('[Google SSO DEBUG] Netlify Identity modal opened event received');
                     // Automatically select Google provider
