@@ -365,7 +365,7 @@ function createEmojiPickerHTML(recordId) {
         const emojisHTML = category.emojis.map(emoji => {
             const score = getReactionScore(emoji);
             const scoreClass = score > 0 ? 'positive' : score < 0 ? 'negative' : 'neutral';
-            return `<button class="emoji-picker-emoji ${scoreClass}" data-emoji="${emoji}" data-record-id="${recordId}" title="Score: ${score > 0 ? '+' : ''}${score}">${emoji}</button>`;
+            return `<button class="emoji-picker-emoji ${scoreClass}" data-emoji="${emoji}" data-record-id="${recordId}" title="Score: ${score > 0 ? '+' : ''}${score.toFixed(2)}">${emoji}</button>`;
         }).join('');
 
         categoriesHTML += `
@@ -529,7 +529,7 @@ function renderReactions(recordId, reactionContainer) {
     }
 
     // Score display
-    const scoreHTML = `<span class="item-reaction-score ${scoreClass}" title="Reaction score">${itemScore > 0 ? '+' : ''}${itemScore}</span>`;
+    const scoreHTML = `<span class="item-reaction-score ${scoreClass}" title="Reaction score">${itemScore > 0 ? '+' : ''}${itemScore.toFixed(2)}</span>`;
 
     reactionContainer.innerHTML = `
         <div class="reaction-bar-buttons">${buttonsHTML}${moreButtonHTML}</div>
@@ -732,7 +732,7 @@ function renderReactionsSummary() {
                     </div>
                     <div class="ranking-reactions">${emojiPills}</div>
                     <div class="ranking-score ${scoreClass}">
-                        <span class="score-value">${item.score > 0 ? '+' : ''}${item.score}</span>
+                        <span class="score-value">${item.score > 0 ? '+' : ''}${item.score.toFixed(2)}</span>
                         <span class="score-label">pts</span>
                     </div>
                 </div>
@@ -816,7 +816,7 @@ function renderReactionsSummary() {
                 <span class="stat"><strong>${totalReactions}</strong> reactions</span>
                 <span class="stat"><strong>${itemsWithReactions}</strong> items rated</span>
                 <span class="stat total-score ${totalScore > 0 ? 'positive' : totalScore < 0 ? 'negative' : 'neutral'}">
-                    <strong>${totalScore > 0 ? '+' : ''}${totalScore}</strong> total score
+                    <strong>${totalScore > 0 ? '+' : ''}${totalScore.toFixed(2)}</strong> total score
                 </span>
             </div>
         </div>
@@ -827,7 +827,7 @@ function renderReactionsSummary() {
         <div class="reactions-summary-footer">
             <p class="scoring-note">
                 <span class="note-icon">ℹ️</span>
-                Scores range from -4 to +4 per reaction. Click any ranking to scroll to that item.
+                Scores range from -4.82 to +4.92 per reaction based on sentiment analysis. Click any ranking to scroll to that item.
             </p>
         </div>
     `;
