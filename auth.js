@@ -731,57 +731,173 @@ export function setupAuthEventListeners() {
 
     // --- NETLIFY IDENTITY SSO SETUP ---
     // Wait for Netlify Identity to be ready before setting up SSO
-    if (typeof netlifyIdentity !== 'undefined') {
-        initializeNetlifyIdentity();
-    } else {
-        // Wait for the script to load
-        window.addEventListener('load', () => {
-            if (typeof netlifyIdentity !== 'undefined') {
-                initializeNetlifyIdentity();
-            } else {
-                console.error('Netlify Identity widget failed to load');
-            }
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP START ==========');
+    console.log('[Google SSO DEBUG] Checking if netlifyIdentity is already defined:', typeof netlifyIdentity !== 'undefined');
+
+    // Check if the Google SSO button exists
+    const googleSsoBtnCheck = document.getElementById('google-sso-btn');
+    console.log('[Google SSO DEBUG] google-sso-btn element found at setup time:', !!googleSsoBtnCheck);
+    if (googleSsoBtnCheck) {
+        console.log('[Google SSO DEBUG] google-sso-btn element details:', {
+            tagName: googleSsoBtnCheck.tagName,
+            id: googleSsoBtnCheck.id,
+            className: googleSsoBtnCheck.className,
+            disabled: googleSsoBtnCheck.disabled,
+            style: {
+                display: getComputedStyle(googleSsoBtnCheck).display,
+                visibility: getComputedStyle(googleSsoBtnCheck).visibility,
+                pointerEvents: getComputedStyle(googleSsoBtnCheck).pointerEvents,
+                opacity: getComputedStyle(googleSsoBtnCheck).opacity,
+                cursor: getComputedStyle(googleSsoBtnCheck).cursor
+            },
+            parentElement: googleSsoBtnCheck.parentElement?.id || googleSsoBtnCheck.parentElement?.className
         });
     }
+
+    if (typeof netlifyIdentity !== 'undefined') {
+        console.log('[Google SSO DEBUG] netlifyIdentity already available, initializing immediately');
+        initializeNetlifyIdentity();
+    } else {
+        console.log('[Google SSO DEBUG] netlifyIdentity not yet available, checking for loadNetlifyIdentity function...');
+
+        // Try to load Netlify Identity if the loader is available
+        if (typeof window.loadNetlifyIdentity === 'function') {
+            console.log('[Google SSO DEBUG] loadNetlifyIdentity function found! Loading Netlify Identity...');
+            window.loadNetlifyIdentity().then(() => {
+                console.log('[Google SSO DEBUG] Netlify Identity script loaded via loadNetlifyIdentity()');
+                if (typeof netlifyIdentity !== 'undefined') {
+                    console.log('[Google SSO DEBUG] netlifyIdentity is now defined, initializing...');
+                    initializeNetlifyIdentity();
+                } else {
+                    console.error('[Google SSO DEBUG] ERROR: netlifyIdentity still undefined after script load!');
+                }
+            }).catch(err => {
+                console.error('[Google SSO DEBUG] ERROR loading Netlify Identity:', err);
+            });
+        } else {
+            console.log('[Google SSO DEBUG] loadNetlifyIdentity function NOT found, falling back to window load event');
+            // Wait for the script to load
+            window.addEventListener('load', () => {
+                console.log('[Google SSO DEBUG] Window load event fired');
+                console.log('[Google SSO DEBUG] Checking netlifyIdentity after window load:', typeof netlifyIdentity !== 'undefined');
+                if (typeof netlifyIdentity !== 'undefined') {
+                    initializeNetlifyIdentity();
+                } else {
+                    console.error('[Google SSO DEBUG] ERROR: Netlify Identity widget failed to load after window load');
+                    // Try loading it explicitly
+                    if (typeof window.loadNetlifyIdentity === 'function') {
+                        console.log('[Google SSO DEBUG] Attempting late load via loadNetlifyIdentity...');
+                        window.loadNetlifyIdentity().then(() => {
+                            if (typeof netlifyIdentity !== 'undefined') {
+                                console.log('[Google SSO DEBUG] Late load successful, initializing...');
+                                initializeNetlifyIdentity();
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP END ==========');
 }
 
 function initializeNetlifyIdentity() {
-    console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
-    console.log('[Auth] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
-    console.log('[Auth] Initializing Netlify Identity');
-    
+    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
+    console.log('[Google SSO DEBUG] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
+    console.log('[Google SSO DEBUG] netlifyIdentity object:', netlifyIdentity);
+    console.log('[Google SSO DEBUG] Initializing Netlify Identity');
+
     // Initialize the widget
-    console.log('[Auth] Calling netlifyIdentity.init()');
-    netlifyIdentity.init({
-        locale: 'en'
-    });
-    console.log('[Auth] netlifyIdentity.init() completed');
+    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init()');
+    try {
+        netlifyIdentity.init({
+            locale: 'en'
+        });
+        console.log('[Google SSO DEBUG] netlifyIdentity.init() completed successfully');
+    } catch (initError) {
+        console.error('[Google SSO DEBUG] ERROR in netlifyIdentity.init():', initError);
+    }
 
     // Set up Google SSO button
     const googleSsoBtn = document.getElementById('google-sso-btn');
-    console.log('[Auth] Google SSO button element found:', !!googleSsoBtn);
+    console.log('[Google SSO DEBUG] Google SSO button element lookup result:', googleSsoBtn);
+    console.log('[Google SSO DEBUG] Google SSO button element found:', !!googleSsoBtn);
+
     if (googleSsoBtn) {
-        googleSsoBtn.addEventListener('click', () => {
-            console.log('[Auth] ========== GOOGLE SSO BUTTON CLICKED ==========');
-            console.log('[Auth] Timestamp:', new Date().toISOString());
+        console.log('[Google SSO DEBUG] Checking button state before attaching listener:', {
+            disabled: googleSsoBtn.disabled,
+            display: getComputedStyle(googleSsoBtn).display,
+            visibility: getComputedStyle(googleSsoBtn).visibility,
+            pointerEvents: getComputedStyle(googleSsoBtn).pointerEvents,
+            cursor: getComputedStyle(googleSsoBtn).cursor,
+            zIndex: getComputedStyle(googleSsoBtn).zIndex,
+            position: getComputedStyle(googleSsoBtn).position,
+            opacity: getComputedStyle(googleSsoBtn).opacity,
+            width: getComputedStyle(googleSsoBtn).width,
+            height: getComputedStyle(googleSsoBtn).height,
+            boundingRect: googleSsoBtn.getBoundingClientRect()
+        });
+
+        // Check if there are any existing event listeners (indirect check via onclick attribute)
+        console.log('[Google SSO DEBUG] Existing onclick attribute:', googleSsoBtn.onclick);
+
+        console.log('[Google SSO DEBUG] Attaching click event listener to google-sso-btn...');
+
+        googleSsoBtn.addEventListener('click', (event) => {
+            console.log('[Google SSO DEBUG] ========== GOOGLE SSO BUTTON CLICKED ==========');
+            console.log('[Google SSO DEBUG] Click event:', event);
+            console.log('[Google SSO DEBUG] Click event type:', event.type);
+            console.log('[Google SSO DEBUG] Event target:', event.target);
+            console.log('[Google SSO DEBUG] Event currentTarget:', event.currentTarget);
+            console.log('[Google SSO DEBUG] Event bubbles:', event.bubbles);
+            console.log('[Google SSO DEBUG] Event cancelable:', event.cancelable);
+            console.log('[Google SSO DEBUG] Event defaultPrevented:', event.defaultPrevented);
+            console.log('[Google SSO DEBUG] Event isTrusted:', event.isTrusted);
+            console.log('[Google SSO DEBUG] Timestamp:', new Date().toISOString());
+            console.log('[Google SSO DEBUG] netlifyIdentity available at click time:', typeof netlifyIdentity !== 'undefined');
+
             try {
                 // Trigger Google login directly
-                console.log('[Auth] Opening Netlify Identity modal...');
+                console.log('[Google SSO DEBUG] Opening Netlify Identity modal...');
                 netlifyIdentity.open('login');
-                console.log('[Auth] Netlify Identity modal opened');
+                console.log('[Google SSO DEBUG] Netlify Identity modal open() called');
                 netlifyIdentity.on('open', () => {
+                    console.log('[Google SSO DEBUG] Netlify Identity modal opened event received');
                     // Automatically select Google provider
                     const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
+                    console.log('[Google SSO DEBUG] Looking for Google provider button:', googleBtn);
                     if (googleBtn) {
+                        console.log('[Google SSO DEBUG] Auto-clicking Google provider button');
                         googleBtn.click();
+                    } else {
+                        console.log('[Google SSO DEBUG] Google provider button not found in modal');
                     }
                 });
             } catch (error) {
-                console.error('[Auth] Error opening Google SSO:', error);
+                console.error('[Google SSO DEBUG] Error opening Google SSO:', error);
+                console.error('[Google SSO DEBUG] Error stack:', error.stack);
                 signinMessage.textContent = "Error opening Google sign-in. Please try again.";
                 signinMessage.style.color = '#dc3545';
             }
         });
+
+        console.log('[Google SSO DEBUG] Click event listener attached to google-sso-btn');
+
+        // Add a direct onclick test to verify the button is clickable
+        googleSsoBtn.addEventListener('mousedown', () => {
+            console.log('[Google SSO DEBUG] mousedown event on google-sso-btn');
+        });
+        googleSsoBtn.addEventListener('mouseup', () => {
+            console.log('[Google SSO DEBUG] mouseup event on google-sso-btn');
+        });
+        googleSsoBtn.addEventListener('mouseenter', () => {
+            console.log('[Google SSO DEBUG] mouseenter event on google-sso-btn');
+        });
+
+    } else {
+        console.error('[Google SSO DEBUG] ERROR: google-sso-btn element NOT FOUND in DOM!');
+        console.log('[Google SSO DEBUG] DOM check - signin-view exists:', !!document.getElementById('signin-view'));
+        console.log('[Google SSO DEBUG] DOM check - user-modal-overlay exists:', !!document.getElementById('user-modal-overlay'));
     }
 
     // Handle successful login
