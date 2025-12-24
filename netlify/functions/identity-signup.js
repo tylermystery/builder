@@ -1,148 +1,119 @@
 // Netlify Identity signup webhook handler
-// This is triggered when a new user signs up via Netlify Identity (Google SSO)
+// This is triggered when a new user signs up via Netlify Identity (email+password only)
+// Note: For OAuth/external providers (Google, GitHub, etc.), use identity-validate instead.
+//
+// IMPORTANT: This function MUST return the FULL user object with metadata.
+// Reference: https://docs.netlify.com/build/functions/functions-and-identity/
 
-const fetch = require('node-fetch');
+// Use global fetch (Node.js 18+) or fall back to node-fetch
+let fetchFn;
+try {
+    fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
+} catch (e) {
+    // node-fetch not available, will handle in handler
+}
+
+// Helper to create response with user object
+const createResponse = (user, additionalAppMeta = {}) => {
+    const responseUser = {
+        ...user,
+        app_metadata: {
+            ...(user?.app_metadata || {}),
+            ...additionalAppMeta
+        },
+        user_metadata: {
+            ...(user?.user_metadata || {})
+        }
+    };
+    return {
+        statusCode: 200,
+        body: JSON.stringify(responseUser)
+    };
+};
 
 exports.handler = async (event, context) => {
-    console.log('[identity-signup] ========== WEBHOOK HANDLER START ==========');
-    console.log('[identity-signup] Event method:', event.httpMethod);
-    console.log('[identity-signup] Event body present:', !!event.body);
+    console.log('[identity-signup] ========== HANDLER START ==========');
 
-    // Check for required environment variables
-    const { AIRTABLE_PAT, BASE_ID } = process.env;
-
-    if (!AIRTABLE_PAT) {
-        console.error('[identity-signup] ERROR: AIRTABLE_PAT environment variable is not set');
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: Missing AIRTABLE_PAT' }) };
-    }
-
-    if (!BASE_ID) {
-        console.error('[identity-signup] ERROR: BASE_ID environment variable is not set');
-        return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: Missing BASE_ID' }) };
-    }
-
-    console.log('[identity-signup] Environment variables verified');
-
-    // Parse the event body
-    let userData;
-    try {
-        if (!event.body) {
-            console.error('[identity-signup] ERROR: Event body is empty or missing');
-            return { statusCode: 400, body: JSON.stringify({ error: 'Missing request body' }) };
-        }
-
-        const payload = JSON.parse(event.body);
-        console.log('[identity-signup] Parsed payload keys:', Object.keys(payload));
-
-        userData = payload.user;
-
-        if (!userData) {
-            console.error('[identity-signup] ERROR: No user data in payload');
-            console.log('[identity-signup] Full payload:', JSON.stringify(payload, null, 2));
-            return { statusCode: 400, body: JSON.stringify({ error: 'No user data in request' }) };
-        }
-
-        console.log('[identity-signup] User data extracted successfully');
-        console.log('[identity-signup] User email:', userData.email);
-        console.log('[identity-signup] User metadata:', JSON.stringify(userData.user_metadata || {}, null, 2));
-
-    } catch (parseError) {
-        console.error('[identity-signup] ERROR: Failed to parse event body:', parseError.message);
-        console.log('[identity-signup] Raw body (first 500 chars):', event.body?.substring(0, 500));
-        return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
-    }
-
-    const { email, user_metadata } = userData;
-
-    if (!email) {
-        console.error('[identity-signup] ERROR: No email found in user data');
-        return { statusCode: 400, body: JSON.stringify({ error: 'No email in user data' }) };
-    }
-
-    const name = user_metadata?.full_name || email.split('@')[0];
-    console.log('[identity-signup] Extracted name:', name);
+    // Default user object for fallback responses
+    let user = {};
 
     try {
-        // Check if user already exists - use encodeURIComponent for email to handle special chars
-        const filterFormula = encodeURIComponent(`{Email}="${email}"`);
-        const findUserUrl = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=${filterFormula}`;
-        console.log('[identity-signup] Checking for existing user with email:', email);
-
-        const findRes = await fetch(findUserUrl, {
-            headers: {
-                'Authorization': `Bearer ${AIRTABLE_PAT}`
-            }
-        });
-
-        console.log('[identity-signup] Find user response status:', findRes.status);
-
-        if (!findRes.ok) {
-            const errorText = await findRes.text();
-            console.error('[identity-signup] ERROR: Airtable find request failed');
-            console.error('[identity-signup] Status:', findRes.status);
-            console.error('[identity-signup] Response:', errorText);
-            // Return 200 to Netlify Identity even on error so signup can complete
-            // The user just won't be synced to Airtable
-            return { statusCode: 200, body: JSON.stringify({ warning: 'User created in Netlify Identity but Airtable sync failed' }) };
+        // Parse event body
+        if (event.body) {
+            const payload = JSON.parse(event.body);
+            console.log('[identity-signup] Event type:', payload.event);
+            user = payload.user || {};
+            console.log('[identity-signup] User email:', user.email);
+            console.log('[identity-signup] User provider:', user.app_metadata?.provider);
         }
 
-        const existing = await findRes.json();
-        console.log('[identity-signup] Find user result - records found:', existing.records?.length || 0);
-
-        if (existing.records && existing.records.length > 0) {
-            console.log(`[identity-signup] User ${email} already exists in Airtable. Record ID: ${existing.records[0].id}`);
-            return { statusCode: 200, body: JSON.stringify({ message: 'User already exists' }) };
+        // If no user data, just allow signup
+        if (!user.email) {
+            console.log('[identity-signup] No email in user data, allowing signup');
+            return createResponse(user, { roles: ["user"] });
         }
 
-        // Create user if they don't exist
-        console.log('[identity-signup] Creating new user in Airtable...');
-        const createUserUrl = `https://api.airtable.com/v0/${BASE_ID}/Users`;
-        const createPayload = {
-            records: [{
-                fields: {
-                    Email: email,
-                    Name: name
+        // Skip Airtable sync if env vars or fetch missing
+        const { AIRTABLE_PAT, BASE_ID } = process.env;
+        if (!AIRTABLE_PAT || !BASE_ID || !fetchFn) {
+            console.log('[identity-signup] Skipping Airtable sync (missing env/fetch)');
+            return createResponse(user, { roles: ["user"] });
+        }
+
+        // Try to sync with Airtable (non-blocking - errors don't fail signup)
+        try {
+            const filterFormula = encodeURIComponent(`{Email}="${user.email}"`);
+            const findUrl = `https://api.airtable.com/v0/${BASE_ID}/Users?filterByFormula=${filterFormula}`;
+
+            const findRes = await fetchFn(findUrl, {
+                headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }
+            });
+
+            if (findRes.ok) {
+                const existing = await findRes.json();
+
+                if (existing.records?.length > 0) {
+                    console.log('[identity-signup] User exists in Airtable:', existing.records[0].id);
+                    return createResponse(user, {
+                        airtable_user_id: existing.records[0].id,
+                        roles: ["user"]
+                    });
                 }
-            }]
-        };
 
-        console.log('[identity-signup] Create payload:', JSON.stringify(createPayload, null, 2));
+                // Create new user in Airtable
+                const name = user.user_metadata?.full_name || user.email.split('@')[0];
+                const createRes = await fetchFn(`https://api.airtable.com/v0/${BASE_ID}/Users`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${AIRTABLE_PAT}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        records: [{ fields: { Email: user.email, Name: name } }]
+                    })
+                });
 
-        const createRes = await fetch(createUserUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${AIRTABLE_PAT}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(createPayload)
-        });
-
-        console.log('[identity-signup] Create user response status:', createRes.status);
-
-        if (!createRes.ok) {
-            const errorText = await createRes.text();
-            console.error('[identity-signup] ERROR: Failed to create user in Airtable');
-            console.error('[identity-signup] Status:', createRes.status);
-            console.error('[identity-signup] Response:', errorText);
-            // Return 200 to Netlify Identity even on error so signup can complete
-            return { statusCode: 200, body: JSON.stringify({ warning: 'User created in Netlify Identity but Airtable sync failed' }) };
+                if (createRes.ok) {
+                    const result = await createRes.json();
+                    const newId = result.records?.[0]?.id;
+                    console.log('[identity-signup] Created user in Airtable:', newId);
+                    return createResponse(user, {
+                        airtable_user_id: newId,
+                        roles: ["user"]
+                    });
+                }
+            }
+        } catch (airtableErr) {
+            console.error('[identity-signup] Airtable error:', airtableErr.message);
         }
 
-        const createResult = await createRes.json();
-        console.log(`[identity-signup] Successfully created user ${email} in Airtable`);
-        console.log('[identity-signup] New record ID:', createResult.records?.[0]?.id);
+        // Always return success to allow signup
+        console.log('[identity-signup] ========== HANDLER SUCCESS ==========');
+        return createResponse(user, { roles: ["user"] });
 
-        console.log('[identity-signup] ========== WEBHOOK HANDLER SUCCESS ==========');
-        return { statusCode: 200, body: JSON.stringify({ message: 'User created', recordId: createResult.records?.[0]?.id }) };
-
-    } catch (error) {
-        console.error('[identity-signup] ========== UNEXPECTED ERROR ==========');
-        console.error('[identity-signup] Error name:', error.name);
-        console.error('[identity-signup] Error message:', error.message);
-        console.error('[identity-signup] Error stack:', error.stack);
-
-        // Return 200 to Netlify Identity even on error so signup can complete
-        // This prevents blocking the user from signing up even if Airtable sync fails
-        return { statusCode: 200, body: JSON.stringify({ warning: 'User signup completed but sync to database failed' }) };
+    } catch (err) {
+        console.error('[identity-signup] Error:', err.message);
+        // Return success with whatever user data we have
+        return createResponse(user, { roles: ["user"] });
     }
 };
