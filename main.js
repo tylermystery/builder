@@ -12,7 +12,7 @@ import { debounce, updateUrl, extractRecordIdFromPath } from './utils.js';
 import { initializeEventListeners, updateSaveShareButton, initializeChatEventListeners, openChatWidget } from './events.js';
 import { initializeSessionChat } from './chat.js';
 import { setupCalendarEventListeners } from './components/calendarView.js';
-import { setupAuthEventListeners, updateUserProfileIcon } from './auth.js';
+import { setupAuthEventListeners, updateUserProfileIcon, initializeBiometricAuth, showBiometricSetupPromptIfNeeded, updateBiometricManagementUI } from './auth.js';
 import * as backgroundEngine from './components/backgroundEngine.js';
 import fluidEffect from './components/effects/fluid.js';
 import { showReceiptModal } from './components/receipt.js';
@@ -115,6 +115,10 @@ async function initialize() {
             log('Main', 'User logged in, re-initializing session chat with new user info.');
             initializeSessionChat();
          }
+
+         // Show biometric setup prompt if user hasn't set it up yet
+         showBiometricSetupPromptIfNeeded();
+         updateBiometricManagementUI();
 
          // Fetch project hierarchy for the logged-in user
          if (state.session.user.isAuthenticated && state.session.user.id) {
@@ -544,6 +548,7 @@ async function initialize() {
         initializeChatEventListeners();
         setupAuthEventListeners();
         setupCalendarEventListeners();
+        initializeBiometricAuth(); // Initialize biometric/passkey authentication
         initializeProjectsDashboard(); // Initialize projects dashboard panel
         initializeWtfPlansPanel(); // Initialize WTF Plans panel
         updateUserProfileIcon();

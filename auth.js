@@ -845,6 +845,479 @@ function initializeNetlifyIdentity() {
     console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
 }
 
+// ============================================
+// WEBAUTHN / BIOMETRIC AUTHENTICATION
+// ============================================
+
+// Check if WebAuthn is available on this device
+function isWebAuthnAvailable() {
+    return window.PublicKeyCredential !== undefined &&
+           typeof window.PublicKeyCredential === 'function';
+}
+
+// Check if platform authenticator (Face ID, Touch ID, etc.) is available
+async function isPlatformAuthenticatorAvailable() {
+    if (!isWebAuthnAvailable()) return false;
+    try {
+        return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (e) {
+        console.warn('[WebAuthn] Platform authenticator check failed:', e);
+        return false;
+    }
+}
+
+// Check if this user has a passkey stored (by checking localStorage marker)
+function hasStoredPasskey(email) {
+    const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
+    return passkeys.includes(email);
+}
+
+// Mark that a user has set up a passkey
+function markPasskeySetup(email) {
+    const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
+    if (!passkeys.includes(email)) {
+        passkeys.push(email);
+        localStorage.setItem('passkeyEmails', JSON.stringify(passkeys));
+    }
+}
+
+// Convert base64url string to ArrayBuffer
+function base64urlToArrayBuffer(base64url) {
+    const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const binary = atob(base64 + padding);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
+// Convert ArrayBuffer to base64url string
+function arrayBufferToBase64url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// Register a new passkey (biometric credential)
+async function registerPasskey(email) {
+    console.log('[WebAuthn] ========== PASSKEY REGISTRATION START ==========');
+    console.log('[WebAuthn] Registering passkey for email:', email);
+
+    const biometricMessage = document.getElementById('biometric-message');
+    const signinMessage = document.getElementById('signin-message');
+    const messageEl = biometricMessage || signinMessage;
+
+    try {
+        // Get registration options from server
+        if (messageEl) {
+            messageEl.textContent = 'Setting up biometric login...';
+            messageEl.style.color = '#333';
+        }
+
+        const optionsRes = await fetch('/api/auth-webauthn-register-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        if (!optionsRes.ok) {
+            const errorData = await optionsRes.json();
+            throw new Error(errorData.error || 'Failed to get registration options');
+        }
+
+        const { options, userId } = await optionsRes.json();
+        console.log('[WebAuthn] Received registration options for user:', userId);
+
+        // Convert challenge and user.id from base64url to ArrayBuffer
+        options.challenge = base64urlToArrayBuffer(options.challenge);
+        options.user.id = base64urlToArrayBuffer(options.user.id);
+
+        // Convert excludeCredentials if present
+        if (options.excludeCredentials) {
+            options.excludeCredentials = options.excludeCredentials.map(cred => ({
+                ...cred,
+                id: base64urlToArrayBuffer(cred.id)
+            }));
+        }
+
+        if (messageEl) {
+            messageEl.textContent = 'Please authenticate with your device...';
+        }
+
+        // Create the credential
+        console.log('[WebAuthn] Creating credential...');
+        const credential = await navigator.credentials.create({
+            publicKey: options
+        });
+
+        console.log('[WebAuthn] Credential created:', credential.id);
+
+        // Prepare the credential for sending to server
+        const credentialForServer = {
+            id: credential.id,
+            rawId: arrayBufferToBase64url(credential.rawId),
+            type: credential.type,
+            response: {
+                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                attestationObject: arrayBufferToBase64url(credential.response.attestationObject)
+            },
+            transports: credential.response.getTransports ? credential.response.getTransports() : ['internal'],
+            deviceName: getDeviceName()
+        };
+
+        // Verify and store the credential
+        if (messageEl) {
+            messageEl.textContent = 'Verifying...';
+        }
+
+        const verifyRes = await fetch('/api/auth-webauthn-register-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: credentialForServer, userId })
+        });
+
+        if (!verifyRes.ok) {
+            const errorData = await verifyRes.json();
+            throw new Error(errorData.error || 'Failed to verify registration');
+        }
+
+        const result = await verifyRes.json();
+        console.log('[WebAuthn] Registration successful!');
+
+        // Mark that this email has a passkey
+        markPasskeySetup(email);
+
+        // Update UI
+        if (messageEl) {
+            messageEl.textContent = 'Biometric login enabled!';
+            messageEl.style.color = '#28a745';
+        }
+
+        // Log the user in with the returned credentials
+        await _handleSuccessfulLogin(result);
+
+        console.log('[WebAuthn] ========== PASSKEY REGISTRATION COMPLETE ==========');
+        return true;
+
+    } catch (error) {
+        console.error('[WebAuthn] Registration error:', error);
+
+        if (messageEl) {
+            if (error.name === 'NotAllowedError') {
+                messageEl.textContent = 'Biometric setup was cancelled. You can try again later.';
+            } else if (error.name === 'InvalidStateError') {
+                messageEl.textContent = 'A passkey is already registered on this device.';
+            } else {
+                messageEl.textContent = error.message || 'Failed to set up biometric login.';
+            }
+            messageEl.style.color = '#dc3545';
+        }
+
+        return false;
+    }
+}
+
+// Authenticate using a passkey
+async function authenticateWithPasskey(email = null) {
+    console.log('[WebAuthn] ========== PASSKEY AUTHENTICATION START ==========');
+    console.log('[WebAuthn] Authenticating' + (email ? ` for email: ${email}` : ' (discoverable)'));
+
+    const biometricMessage = document.getElementById('biometric-message');
+    const signinMessage = document.getElementById('signin-message');
+    const messageEl = biometricMessage || signinMessage;
+
+    try {
+        if (messageEl) {
+            messageEl.textContent = 'Preparing biometric login...';
+            messageEl.style.color = '#333';
+        }
+
+        // Get authentication options from server
+        const optionsRes = await fetch('/api/auth-webauthn-auth-options', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        if (!optionsRes.ok) {
+            const errorData = await optionsRes.json();
+            if (errorData.code === 'NO_PASSKEY') {
+                // User doesn't have a passkey set up
+                throw new Error('NO_PASSKEY');
+            }
+            throw new Error(errorData.error || 'Failed to get authentication options');
+        }
+
+        const { options, userId } = await optionsRes.json();
+        console.log('[WebAuthn] Received authentication options');
+
+        // Convert challenge from base64url to ArrayBuffer
+        options.challenge = base64urlToArrayBuffer(options.challenge);
+
+        // Convert allowCredentials if present
+        if (options.allowCredentials) {
+            options.allowCredentials = options.allowCredentials.map(cred => ({
+                ...cred,
+                id: base64urlToArrayBuffer(cred.id)
+            }));
+        }
+
+        if (messageEl) {
+            messageEl.textContent = 'Please authenticate with your device...';
+        }
+
+        // Get the credential
+        console.log('[WebAuthn] Requesting credential...');
+        const credential = await navigator.credentials.get({
+            publicKey: options
+        });
+
+        console.log('[WebAuthn] Got credential:', credential.id);
+
+        // Prepare the credential for sending to server
+        const credentialForServer = {
+            id: credential.id,
+            rawId: arrayBufferToBase64url(credential.rawId),
+            type: credential.type,
+            response: {
+                clientDataJSON: arrayBufferToBase64url(credential.response.clientDataJSON),
+                authenticatorData: arrayBufferToBase64url(credential.response.authenticatorData),
+                signature: arrayBufferToBase64url(credential.response.signature),
+                userHandle: credential.response.userHandle ? arrayBufferToBase64url(credential.response.userHandle) : null
+            }
+        };
+
+        // Verify the credential
+        if (messageEl) {
+            messageEl.textContent = 'Verifying...';
+        }
+
+        const verifyRes = await fetch('/api/auth-webauthn-auth-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: credentialForServer })
+        });
+
+        if (!verifyRes.ok) {
+            const errorData = await verifyRes.json();
+            throw new Error(errorData.error || 'Authentication failed');
+        }
+
+        const result = await verifyRes.json();
+        console.log('[WebAuthn] Authentication successful!');
+
+        if (messageEl) {
+            messageEl.textContent = 'Success! Signing you in...';
+            messageEl.style.color = '#28a745';
+        }
+
+        // Log the user in
+        await _handleSuccessfulLogin(result);
+
+        console.log('[WebAuthn] ========== PASSKEY AUTHENTICATION COMPLETE ==========');
+        return true;
+
+    } catch (error) {
+        console.error('[WebAuthn] Authentication error:', error);
+
+        if (messageEl) {
+            if (error.message === 'NO_PASSKEY') {
+                messageEl.textContent = 'No biometric login found. Please sign in with email first, then set up biometric login.';
+            } else if (error.name === 'NotAllowedError') {
+                messageEl.textContent = 'Biometric authentication was cancelled.';
+            } else {
+                messageEl.textContent = error.message || 'Biometric authentication failed.';
+            }
+            messageEl.style.color = '#dc3545';
+        }
+
+        return false;
+    }
+}
+
+// Get a friendly device name
+function getDeviceName() {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) return 'Android Device';
+    if (/Mac/.test(ua)) return 'Mac';
+    if (/Windows/.test(ua)) return 'Windows PC';
+    if (/Linux/.test(ua)) return 'Linux';
+    return 'Unknown Device';
+}
+
+// Initialize biometric UI elements
+async function initializeBiometricAuth() {
+    console.log('[WebAuthn] ========== BIOMETRIC UI INITIALIZATION ==========');
+
+    const biometricSection = document.getElementById('biometric-auth-section');
+    const biometricLoginBtn = document.getElementById('biometric-login-btn');
+    const biometricBtnText = document.getElementById('biometric-btn-text');
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    const setupBiometricBtn = document.getElementById('setup-biometric-btn');
+    const skipBiometricSetup = document.getElementById('skip-biometric-setup');
+    const biometricManagement = document.getElementById('biometric-management-section');
+    const addPasskeyBtn = document.getElementById('add-passkey-btn');
+
+    // Check if WebAuthn is available
+    const webauthnAvailable = isWebAuthnAvailable();
+    const platformAvailable = await isPlatformAuthenticatorAvailable();
+
+    console.log('[WebAuthn] WebAuthn available:', webauthnAvailable);
+    console.log('[WebAuthn] Platform authenticator available:', platformAvailable);
+
+    if (!webauthnAvailable || !platformAvailable) {
+        console.log('[WebAuthn] Biometric auth not available on this device');
+        // Keep biometric section hidden
+        return;
+    }
+
+    // Check if user has a stored passkey email (for returning users)
+    const lastEmail = localStorage.getItem('lastSignInEmail');
+    const hasPasskey = lastEmail && hasStoredPasskey(lastEmail);
+
+    // Set appropriate button text based on device
+    if (biometricBtnText) {
+        const ua = navigator.userAgent;
+        if (/iPhone|iPad/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Face ID / Touch ID';
+        } else if (/Android/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Fingerprint';
+        } else if (/Mac/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Touch ID';
+        } else if (/Windows/.test(ua)) {
+            biometricBtnText.textContent = 'Sign In with Windows Hello';
+        }
+    }
+
+    // Show biometric login button if user has a passkey
+    if (biometricSection && hasPasskey) {
+        biometricSection.style.display = 'block';
+        console.log('[WebAuthn] Showing biometric login option for:', lastEmail);
+    }
+
+    // Handle biometric login button click
+    if (biometricLoginBtn) {
+        biometricLoginBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Biometric login button clicked');
+            const email = localStorage.getItem('lastSignInEmail');
+            await authenticateWithPasskey(email);
+        });
+    }
+
+    // Handle setup biometric button click (after first login)
+    if (setupBiometricBtn) {
+        setupBiometricBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Setup biometric button clicked');
+            const email = state.session.user.email;
+            if (email) {
+                await registerPasskey(email);
+                if (biometricSetupPrompt) {
+                    biometricSetupPrompt.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    // Handle skip button
+    if (skipBiometricSetup) {
+        skipBiometricSetup.addEventListener('click', () => {
+            console.log('[WebAuthn] User skipped biometric setup');
+            if (biometricSetupPrompt) {
+                biometricSetupPrompt.style.display = 'none';
+            }
+            localStorage.setItem('biometricSetupSkipped', 'true');
+        });
+    }
+
+    // Handle add passkey button in profile
+    if (addPasskeyBtn) {
+        addPasskeyBtn.addEventListener('click', async () => {
+            console.log('[WebAuthn] Add passkey button clicked');
+            const email = state.session.user.email;
+            if (email) {
+                await registerPasskey(email);
+            }
+        });
+    }
+
+    // Show biometric management in profile if available
+    if (biometricManagement) {
+        biometricManagement.style.display = 'block';
+    }
+
+    console.log('[WebAuthn] ========== BIOMETRIC UI INITIALIZATION COMPLETE ==========');
+}
+
+// Show biometric setup prompt after successful login (if not already set up)
+function showBiometricSetupPromptIfNeeded() {
+    const biometricSetupPrompt = document.getElementById('biometric-setup-prompt');
+    const email = state.session.user.email;
+
+    if (!biometricSetupPrompt || !email) return;
+
+    // Check conditions
+    const hasPasskey = hasStoredPasskey(email);
+    const skipped = localStorage.getItem('biometricSetupSkipped') === 'true';
+
+    isPlatformAuthenticatorAvailable().then(available => {
+        if (available && !hasPasskey && !skipped) {
+            console.log('[WebAuthn] Showing biometric setup prompt');
+            biometricSetupPrompt.style.display = 'block';
+        }
+    });
+}
+
+// Update biometric management UI when user is authenticated
+function updateBiometricManagementUI() {
+    const biometricManagement = document.getElementById('biometric-management-section');
+    const biometricStatus = document.getElementById('biometric-status');
+    const biometricStatusText = document.getElementById('biometric-status-text');
+
+    if (!biometricManagement) return;
+
+    isPlatformAuthenticatorAvailable().then(available => {
+        if (!available) {
+            biometricManagement.style.display = 'none';
+            return;
+        }
+
+        biometricManagement.style.display = 'block';
+
+        const email = state.session.user.email;
+        const hasPasskey = email && hasStoredPasskey(email);
+
+        if (biometricStatus && biometricStatusText) {
+            if (hasPasskey) {
+                biometricStatus.style.background = '#e8f5e9';
+                biometricStatusText.style.color = '#2e7d32';
+                biometricStatusText.textContent = 'Biometric login is enabled';
+            } else {
+                biometricStatus.style.background = '#fff3e0';
+                biometricStatusText.style.color = '#e65100';
+                biometricStatusText.textContent = 'Biometric login not set up yet';
+            }
+        }
+    });
+}
+
+// Expose functions for external use
+export {
+    initializeBiometricAuth,
+    registerPasskey,
+    authenticateWithPasskey,
+    showBiometricSetupPromptIfNeeded,
+    updateBiometricManagementUI,
+    isPlatformAuthenticatorAvailable
+};
+
 // --- DEBUG ---
 console.log('[auth.js] 4. File execution finished. Exports are ready.');
 // --- DEBUG ---
