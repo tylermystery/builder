@@ -563,19 +563,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const menuLikesBtn = document.getElementById('menu-likes-btn');
     const menuSessionsBtn = document.getElementById('menu-sessions-btn');
 
-    // Toggle hamburger dropdown on button click
-    if (hamburgerMenuBtn && hamburgerMenuDropdown) {
+    // Hamburger button directly opens WTF Plans panel (simplified navigation)
+    if (hamburgerMenuBtn) {
         hamburgerMenuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const isVisible = hamburgerMenuDropdown.style.display === 'block';
-            hamburgerMenuDropdown.style.display = isVisible ? 'none' : 'block';
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!hamburgerMenuBtn.contains(e.target) && !hamburgerMenuDropdown.contains(e.target)) {
-                hamburgerMenuDropdown.style.display = 'none';
-            }
+            // Directly open WTF Plans panel instead of showing dropdown
+            showWtfPlansPanel();
         });
     }
 

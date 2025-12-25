@@ -2924,6 +2924,58 @@
     font-style: italic;
 }
 
+/* Presentation View Empty State with Recommendations */
+.presentation-empty-state {
+    text-align: center;
+    padding: 60px 30px;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.itinerary-empty-title {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+    font-style: normal;
+}
+
+.itinerary-empty-subtitle {
+    font-size: 1em;
+    color: #6c757d;
+    margin: 0 0 25px 0;
+    font-style: normal;
+}
+
+.presentation-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.presentation-suggestion-btn {
+    padding: 12px 18px;
+    font-size: 0.95em;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    font-weight: 500;
+}
+
+.presentation-suggestion-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+    background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
+}
+
+.presentation-suggestion-btn:active {
+    transform: translateY(0);
+}
+
 /* Mobile responsive for itinerary */
 @media (max-width: 768px) {
     .presentation-header .header-content {
@@ -3156,6 +3208,223 @@
     .itinerary-accordion-icon {
         width: 20px;
         height: 20px;
+    }
+}
+
+/* ============================================
+   Item-Level Accordion Styles
+   Each plan component/item can be collapsed
+   ============================================ */
+
+/* Reset the base itinerary-item styles for accordion mode */
+.itinerary-item.item-accordion {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    cursor: default;
+}
+
+/* Item Accordion Header - Always visible */
+.item-accordion-header {
+    cursor: pointer;
+    padding: 15px 20px;
+    user-select: none;
+    transition: background-color 0.2s ease, padding 0.3s ease;
+    background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.9) 100%);
+}
+
+.item-accordion-header:hover {
+    background: linear-gradient(135deg, rgba(248,249,250,1) 0%, rgba(240,242,244,1) 100%);
+}
+
+.item-accordion-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.item-accordion-title-row .itinerary-item-number {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.item-accordion-title {
+    flex: 1;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #212529;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-accordion-title-row .itinerary-item-type {
+    flex-shrink: 0;
+}
+
+/* Item Accordion Icon (plus/minus) */
+.item-accordion-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.item-accordion-icon::before,
+.item-accordion-icon::after {
+    content: '';
+    position: absolute;
+    background-color: #007bff;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.item-accordion-icon::before {
+    width: 2px;
+    height: 12px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.item-accordion-icon::after {
+    width: 12px;
+    height: 2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Expanded state - hide vertical line to show minus */
+.item-accordion.expanded .item-accordion-icon::before {
+    transform: translate(-50%, -50%) rotate(90deg);
+    opacity: 0;
+}
+
+/* Item Accordion Summary - Shown when collapsed */
+.item-accordion-summary {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin: 10px 0 0 0;
+    padding-left: 40px;
+    line-height: 1.4;
+    max-height: 50px;
+    overflow: hidden;
+    transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+/* Hide summary when expanded */
+.item-accordion.expanded .item-accordion-summary {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+}
+
+/* Item summary styling elements */
+.item-summary-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.item-summary-price {
+    font-weight: 600;
+    color: #007bff;
+}
+
+.item-summary-qty {
+    color: #6c757d;
+}
+
+.item-summary-type {
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.item-summary-type.idea {
+    color: #856404;
+}
+
+.item-summary-type.confirmed {
+    color: #155724;
+}
+
+.item-summary-category {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.item-summary-note {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Item Accordion Content - Hidden when collapsed */
+.item-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0 20px;
+}
+
+/* Expanded state shows content */
+.item-accordion.expanded .item-accordion-content {
+    max-height: 1500px;
+    padding: 0 20px 20px 20px;
+    overflow: visible;
+}
+
+/* Content layout adjustments */
+.item-accordion-content .itinerary-item-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Ensure clickable area works properly */
+.item-accordion-content.itinerary-item-clickable {
+    cursor: pointer;
+}
+
+/* Mobile responsive styles for item accordions */
+@media (max-width: 768px) {
+    .item-accordion-header {
+        padding: 12px 15px;
+    }
+
+    .item-accordion-title-row {
+        gap: 10px;
+    }
+
+    .item-accordion-title-row .itinerary-item-number {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8em;
+    }
+
+    .item-accordion-title {
+        font-size: 0.95em;
+    }
+
+    .item-accordion-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .item-accordion-summary {
+        font-size: 0.8em;
+        padding-left: 34px;
+    }
+
+    .item-accordion-content {
+        padding: 0 15px;
+    }
+
+    .item-accordion.expanded .item-accordion-content {
+        padding: 0 15px 15px 15px;
     }
 }
 

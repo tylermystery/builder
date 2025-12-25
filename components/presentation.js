@@ -7,6 +7,7 @@ import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, c
 import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 import { Shader } from '../utils/shader.js';
+import { showWtfPlansPanel } from './wtfPlansPanel.js';
 
 // Quick emoji reactions available for messages
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -564,6 +565,41 @@ function createMediaCarousel(images, recordId) {
     `;
 }
 
+// Generate summary text for an item when collapsed in accordion
+function generateItemSummary(record, itemInfo, type) {
+    const name = record.fields.Name || 'Untitled Item';
+    const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
+    const quantity = itemInfo?.quantity || 1;
+    const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
+    const note = itemInfo?.note || '';
+
+    // Get category/subcategory if available
+    const category = record.fields.Category || '';
+    const subcategory = record.fields.Subcategory || '';
+
+    let summary = `<span class="item-summary-name">${name}</span>`;
+    summary += ` &bull; <span class="item-summary-price">$${price.toFixed(2)}</span>`;
+
+    if (quantity > 1) {
+        summary += ` <span class="item-summary-qty">(×${quantity})</span>`;
+    }
+
+    summary += ` &bull; <span class="item-summary-type ${type === 'favorites' ? 'idea' : 'confirmed'}">${typeLabel}</span>`;
+
+    // Add category hint if available
+    if (category) {
+        summary += ` &bull; <span class="item-summary-category">${category}</span>`;
+    }
+
+    // Show truncated note if present
+    if (note) {
+        const truncatedNote = note.length > 30 ? note.substring(0, 30) + '...' : note;
+        summary += ` &bull; <span class="item-summary-note">"${truncatedNote}"</span>`;
+    }
+
+    return summary;
+}
+
 async function renderItineraryItem(item, index) {
     const { recordId, type } = item;
     const record = state.records.all.find(r => r.id === recordId);
@@ -590,26 +626,35 @@ async function renderItineraryItem(item, index) {
     const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
     const typeClass = type === 'favorites' ? 'item-type-idea' : 'item-type-confirmed';
 
+    // Generate summary for collapsed state
+    const itemSummary = generateItemSummary(record, itemInfo, type);
+
     return `
-        <article class="itinerary-item itinerary-item-clickable" data-record-id="${recordId}" data-index="${index}">
-            <div class="itinerary-item-number">${index + 1}</div>
-            <div class="itinerary-item-content">
-                ${mediaCarouselHTML}
-                <div class="itinerary-item-details">
-                    <div class="itinerary-item-header">
-                        <h3 class="itinerary-item-name">${name}</h3>
-                        <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
-                    </div>
-                    <div class="itinerary-item-price-qty">
-                        <span class="itinerary-item-price">$${price.toFixed(2)}</span>
-                        ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
-                    </div>
-                    ${note ? `
-                        <div class="itinerary-item-note">
-                            <strong>Note:</strong> ${note}
+        <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
+            <div class="item-accordion-header" data-record-id="${recordId}">
+                <div class="item-accordion-title-row">
+                    <div class="itinerary-item-number">${index + 1}</div>
+                    <h3 class="item-accordion-title">${name}</h3>
+                    <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
+                    <span class="item-accordion-icon"></span>
+                </div>
+                <p class="item-accordion-summary">${itemSummary}</p>
+            </div>
+            <div class="item-accordion-content itinerary-item-clickable">
+                <div class="itinerary-item-content">
+                    ${mediaCarouselHTML}
+                    <div class="itinerary-item-details">
+                        <div class="itinerary-item-price-qty">
+                            <span class="itinerary-item-price">$${price.toFixed(2)}</span>
+                            ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                         </div>
-                    ` : ''}
-                    <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                        ${note ? `
+                            <div class="itinerary-item-note">
+                                <strong>Note:</strong> ${note}
+                            </div>
+                        ` : ''}
+                        <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                    </div>
                 </div>
             </div>
         </article>
@@ -622,7 +667,31 @@ async function renderAllItems() {
     const combinedList = [...locked, ...favorites]; // Confirmed items first, then ideas
 
     if (combinedList.length === 0) {
-        itineraryItemsListEl.innerHTML = '<p class="itinerary-empty">No items in your event plan yet.</p>';
+        // Show recommendations when no items exist
+        // All 4 pillars are shown as suggestions since there are no items
+        const allCategories = ["Activities", "Food & Drink", "Venues", "Extras"];
+        let emptyStateHTML = `
+            <div class="presentation-empty-state">
+                <p class="itinerary-empty-title">Start Building Your Event Plan</p>
+                <p class="itinerary-empty-subtitle">Add items from these categories to create your perfect event:</p>
+                <div class="presentation-suggestions">
+        `;
+
+        allCategories.forEach(cat => {
+            const filterTag = cat.toLowerCase().replace(/\s+/g, ' ');
+            emptyStateHTML += `
+                <button class="filter-btn presentation-suggestion-btn" data-category-filter="${filterTag}">
+                    + Add ${cat}
+                </button>
+            `;
+        });
+
+        emptyStateHTML += `
+                </div>
+            </div>
+        `;
+
+        itineraryItemsListEl.innerHTML = emptyStateHTML;
         return;
     }
 
@@ -1890,6 +1959,39 @@ function toggleAccordion(section) {
     log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
 }
 
+// Toggle individual item accordion
+function toggleItemAccordion(itemElement) {
+    if (!itemElement) return;
+
+    const isExpanded = itemElement.classList.contains('expanded');
+
+    if (isExpanded) {
+        itemElement.classList.remove('expanded');
+    } else {
+        itemElement.classList.add('expanded');
+    }
+
+    log('Presentation', `Item accordion ${isExpanded ? 'collapsed' : 'expanded'} for record ${itemElement.dataset.recordId}`);
+}
+
+// Handle item accordion header clicks
+function handleItemAccordionClick(e) {
+    // Check if clicking on the item accordion header specifically
+    const itemAccordionHeader = e.target.closest('.item-accordion-header');
+    if (!itemAccordionHeader) return;
+
+    // Don't trigger accordion on interactive elements (buttons, links, etc.)
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.reaction-btn')) {
+        return;
+    }
+
+    const itemElement = itemAccordionHeader.closest('.item-accordion');
+    if (itemElement) {
+        e.stopPropagation(); // Prevent triggering parent click handlers
+        toggleItemAccordion(itemElement);
+    }
+}
+
 // Initialize accordion states and update UI
 function initializeAccordions() {
     console.log('[Accordion DEBUG] initializeAccordions called');
@@ -2006,6 +2108,32 @@ function handleItemClick(e) {
     showDetailModal(record);
 }
 
+// Handle clicks on suggestion buttons (empty state recommendations)
+function handleSuggestionClick(e) {
+    const suggestionBtn = e.target.closest('.presentation-suggestion-btn');
+    if (!suggestionBtn) return;
+
+    e.stopPropagation();
+    const categoryToFilter = suggestionBtn.dataset.categoryFilter;
+    if (!categoryToFilter) return;
+
+    const normalizedCategory = categoryToFilter.toLowerCase().replace(/\s+/g, ' ');
+
+    log('Presentation', `Suggestion clicked. Filtering for: ${categoryToFilter}`);
+
+    // Close the presentation view and navigate to the filtered catalog
+    hidePresentationView();
+    updateUrl({ category: normalizedCategory, subcategory: null, view: null });
+
+    // Trigger filter update via the global function
+    if (typeof window.applyFiltersAndSort === 'function') {
+        setTimeout(() => {
+            window.applyFiltersAndSort(window.imageCache);
+            document.getElementById('catalog-area')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    }
+}
+
 function handleKeyDown(e) {
     if (e.key === 'Escape') {
         updateUrl({ view: null });
@@ -2023,13 +2151,6 @@ export async function showPresentationView(listType, startRecordId = null) {
         return;
     }
     console.log('[Accordion DEBUG] ensureDOMElements succeeded');
-
-    // Check if there are any items
-    const hasItems = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
-    if (!hasItems) {
-        alert('There are no items in your lists to present.');
-        return;
-    }
 
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
@@ -2131,11 +2252,13 @@ export function setupPresentationEventListeners() {
         hidePresentationView();
     });
 
-    // Presentation header back button
+    // Presentation header hamburger button (opens WTF Plans panel)
     if (presentationBackBtn) {
         presentationBackBtn.addEventListener('click', () => {
             updateUrl({ view: null });
             hidePresentationView();
+            // Open WTF Plans panel after closing presentation view
+            showWtfPlansPanel();
         });
     }
 
@@ -2211,8 +2334,14 @@ export function setupPresentationEventListeners() {
     // Handle reaction clicks
     itineraryItemsListEl.addEventListener('click', handleReactionClick);
 
+    // Handle item accordion header clicks (for per-item collapse/expand)
+    itineraryItemsListEl.addEventListener('click', handleItemAccordionClick);
+
     // Handle item clicks to open detail modal
     itineraryItemsListEl.addEventListener('click', handleItemClick);
+
+    // Handle suggestion button clicks (for empty state recommendations)
+    itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
 
     // Share button
     shareBtn.addEventListener('click', (e) => {
