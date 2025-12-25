@@ -9,7 +9,6 @@ import { buildGoalBucket, calculateRecommendationScore } from '../availability.j
 import { CONSTANTS } from '../config.js';
 import { getRecordPrice, getTempLikes, getEffectiveMinQuantity, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { log } from '../utils/debug.js';
-import * as tileSizingDebug from '../utils/tileSizingDebug.js';
 
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
@@ -146,20 +145,6 @@ export function updateCardButtonText(recordId, isLocked) {
 export async function createInteractiveCard(record, allRecords, imageCache) {
     log('Card', `Creating card for "${record.fields.Name}"`);
 
-    // === TILE SIZING DEBUG: Card creation start ===
-    const cardCreationStart = performance.now();
-    const itemType = record.fields['Item Type'] || 'Unknown';
-
-    console.log('[TileSizing][Card] === CARD CREATION START ===');
-    console.log('[TileSizing][Card] Creating card:', {
-        recordId: record.id,
-        name: record.fields.Name,
-        itemType: itemType,
-        viewport: tileSizingDebug.getViewportInfo()
-    });
-    tileSizingDebug.logCardCreation(record.id, itemType, { name: record.fields.Name });
-
-    console.log('[createInteractiveCard] Creating card for record:', record.id, record.fields.Name);
     const eventCard = document.createElement('div');
     eventCard.dataset.recordId = record.id;
     const fields = record.fields;
@@ -205,13 +190,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
-        // === TILE SIZING DEBUG: Grouping card ===
-        console.log('[TileSizing][Card] Creating GROUPING card:', {
-            recordId: record.id,
-            name: fields.Name,
-            expectedClasses: 'event-card grouping-card'
-        });
-
         const groupingCard = eventCard;
         // Apply AI-sourced styling if this is an AI-generated grouping
         const aiGroupingClass = isAISourced ? ' ai-sourced-card ai-grouping-card' : '';
@@ -248,7 +226,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             imageContainerHTML += aiDiscoveryBadge;
         }
         imageContainerHTML += `</div>`;
-        console.log('[createInteractiveCard] Grouping card HTML includes availability-btn:', imageContainerHTML.includes('availability-btn'));
         groupingCard.innerHTML = `
             ${imageContainerHTML}
             <div class="event-card-content">
@@ -259,33 +236,11 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 <button class="card-action-btn view-options-btn">View Collection (${childItems.length})</button>
             </div>
         `;
-        console.log('[createInteractiveCard] Grouping card created, checking for availability-btn');
-        const availBtn = groupingCard.querySelector('.availability-btn');
-        console.log('[createInteractiveCard] Grouping card availability-btn found:', !!availBtn, availBtn);
-
-        // === TILE SIZING DEBUG: Grouping card complete ===
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] GROUPING card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: groupingCard.className,
-            childItemCount: childItems.length,
-            collageImageCount: collageImages.length,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
 
         return groupingCard;
     }
 
     if (fields['Item Type'] === 'Event') {
-        // === TILE SIZING DEBUG: Event card ===
-        console.log('[TileSizing][Card] Creating EVENT card:', {
-            recordId: record.id,
-            name: fields.Name,
-            date: fields.Date,
-            expectedClasses: 'event-card event-type-card'
-        });
-
         // Apply AI-sourced styling if this is an AI-generated event
         const aiEventClass = isAISourced ? ' ai-sourced-card' : '';
         eventCard.className = 'event-card event-type-card' + aiEventClass;
@@ -346,34 +301,12 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
                 ${footerButtonsHTML}
             </div>
         `;
-        console.log('[createInteractiveCard] Event card created, checking for availability-btn');
-        const eventAvailBtn = eventCard.querySelector('.availability-btn');
-        console.log('[createInteractiveCard] Event card availability-btn found:', !!eventAvailBtn, eventAvailBtn);
-
-        // === TILE SIZING DEBUG: Event card complete ===
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] EVENT card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: eventCard.className,
-            hasRsvpd: hasRsvpd,
-            hasLinkedSession: hasLinkedSession,
-            userHasPublishAccess: userHasPublishAccess,
-            eventDate: fields.Date,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
 
         return eventCard;
     }
 
     // === PACKAGE CARD - Special tile for package bundles ===
     if (fields['Item Type'] === 'Package') {
-        console.log('[TileSizing][Card] Creating PACKAGE card:', {
-            recordId: record.id,
-            name: fields.Name,
-            expectedClasses: 'event-card package-card'
-        });
-
         const packageCard = eventCard;
         packageCard.className = 'event-card package-card';
 
@@ -601,27 +534,8 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             });
         });
 
-        const cardCreationEnd = performance.now();
-        console.log('[TileSizing][Card] PACKAGE card created:', {
-            recordId: record.id,
-            name: fields.Name,
-            className: packageCard.className,
-            includedCount,
-            addOnCount,
-            dynamicPrice: dynamicPricing.totalPrice,
-            hasPerGuestItems: dynamicPricing.hasPerGuestItems,
-            creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-        });
-
         return packageCard;
     }
-
-    // === TILE SIZING DEBUG: BookableItem card ===
-    console.log('[TileSizing][Card] Creating BOOKABLE ITEM card:', {
-        recordId: record.id,
-        name: fields.Name,
-        expectedClasses: 'event-card'
-    });
 
     // Apply AI-sourced styling if this is an AI-generated bookable item
     const aiBookableClass = isAISourced ? ' ai-sourced-card' : '';
@@ -654,10 +568,7 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
             <div class="actions-wrapper">${quantitySelectorHTML}${addToPlanBtnHTML}</div>
         </div>
     `;
-    console.log('[createInteractiveCard] Standard card created, checking for availability-btn');
-    const stdAvailBtn = eventCard.querySelector('.availability-btn');
-    console.log('[createInteractiveCard] Standard card availability-btn found:', !!stdAvailBtn, stdAvailBtn);
-    
+
     const plusBtn = eventCard.querySelector('.quantity-btn.plus');
     const minusBtn = eventCard.querySelector('.quantity-btn.minus');
     const quantityInput = eventCard.querySelector('.quantity-input');
@@ -689,18 +600,6 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
         minusBtn.addEventListener('click', handleMinus);
         minusBtn.addEventListener('touchend', handleTouchEnd, { passive: false });
     }
-
-    // === TILE SIZING DEBUG: BookableItem card complete ===
-    const cardCreationEnd = performance.now();
-    console.log('[TileSizing][Card] BOOKABLE ITEM card created:', {
-        recordId: record.id,
-        name: fields.Name,
-        className: eventCard.className,
-        price: displayPrice,
-        isLocked: isLocked,
-        creationTime: (cardCreationEnd - cardCreationStart).toFixed(2) + 'ms'
-    });
-    console.log('[TileSizing][Card] === CARD CREATION COMPLETE ===');
 
     return eventCard;
 }
