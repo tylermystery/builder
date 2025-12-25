@@ -293,7 +293,115 @@ async function handlePaymentFormSubmit(event) {
     }
 }
 
-async function handleProactiveAISearch(searchTerm, imageCache) {
+/**
+ * Creates a carousel section for displaying items (catalog or AI-generated)
+ * @param {string} title - The section title
+ * @param {string} subtitle - Optional subtitle/description
+ * @param {Array} records - Array of record objects to display in the carousel
+ * @param {object} imageCache - Image cache reference
+ * @param {string} searchTerm - The original search term (for AI items)
+ * @param {boolean} isAISection - Whether this is an AI-sourced section
+ * @returns {HTMLElement} The carousel section element
+ */
+async function createSearchResultCarousel(title, subtitle, records, imageCache, searchTerm, isAISection = false) {
+    const section = document.createElement('div');
+    section.className = `search-result-carousel-section ${isAISection ? 'ai-results-section' : 'catalog-results-section'}`;
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'search-carousel-header';
+    header.innerHTML = `
+        <div class="search-carousel-title-row">
+            <h3 class="search-carousel-title">${title}</h3>
+            ${isAISection ? '<span class="ai-badge">AI Discovery</span>' : ''}
+            <span class="search-carousel-count">${records.length} items</span>
+        </div>
+        ${subtitle ? `<p class="search-carousel-subtitle">${subtitle}</p>` : ''}
+    `;
+    section.appendChild(header);
+
+    // Create carousel wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'search-carousel-wrapper';
+
+    // Create carousel container
+    const container = document.createElement('div');
+    container.className = 'search-carousel-container';
+
+    // Create cards for all items
+    for (const record of records) {
+        const card = await ui.createInteractiveCard(record, state.records.all, imageCache);
+        if (isAISection && searchTerm) {
+            attachAddToPlanHandler(card, record, searchTerm, imageCache);
+        }
+        container.appendChild(card);
+    }
+
+    wrapper.appendChild(container);
+
+    // Helper function to calculate scroll distance based on card width
+    const getScrollDistance = () => {
+        const card = container.querySelector('.event-card');
+        if (card) {
+            return card.offsetWidth + 20; // 20px gap
+        }
+        return container.clientWidth;
+    };
+
+    // Add navigation buttons
+    const leftNav = document.createElement('button');
+    leftNav.className = 'search-carousel-nav left';
+    leftNav.innerHTML = '◄';
+    leftNav.setAttribute('aria-label', 'Scroll left');
+    leftNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: -getScrollDistance(), behavior: 'smooth' });
+    });
+
+    const rightNav = document.createElement('button');
+    rightNav.className = 'search-carousel-nav right';
+    rightNav.innerHTML = '►';
+    rightNav.setAttribute('aria-label', 'Scroll right');
+    rightNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.scrollBy({ left: getScrollDistance(), behavior: 'smooth' });
+    });
+
+    wrapper.appendChild(leftNav);
+    wrapper.appendChild(rightNav);
+
+    // Update navigation button visibility based on scroll position
+    const updateNavVisibility = () => {
+        const hasOverflow = container.scrollWidth > container.clientWidth;
+
+        if (hasOverflow) {
+            wrapper.classList.add('has-overflow');
+            leftNav.style.opacity = container.scrollLeft <= 0 ? '0.3' : '';
+            leftNav.style.pointerEvents = container.scrollLeft <= 0 ? 'none' : '';
+            const atEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 5;
+            rightNav.style.opacity = atEnd ? '0.3' : '';
+            rightNav.style.pointerEvents = atEnd ? 'none' : '';
+        } else {
+            wrapper.classList.remove('has-overflow');
+        }
+    };
+
+    container.addEventListener('scroll', updateNavVisibility);
+    setTimeout(updateNavVisibility, 100);
+    setTimeout(updateNavVisibility, 500);
+
+    section.appendChild(wrapper);
+
+    return section;
+}
+
+/**
+ * Handles the hybrid search display - showing both catalog matches and AI suggestions
+ * @param {string} searchTerm - The search term
+ * @param {object} imageCache - Image cache reference
+ * @param {Array} catalogMatches - Matching catalog items (may be empty)
+ */
+async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches = []) {
     if (aiSearchController) {
         aiSearchController.abort();
     }
@@ -303,31 +411,40 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
 
-    // Show loading ghost card
-    const ghostRecord = {
-        id: `ai-search-${Date.now()}`,
-        fields: {
-            Name: `Searching for "${searchTerm}"...`,
-            Description: "Our AI is looking for this item in the Bay Area...",
-            Price: 0,
-            'Item Type': 'Bookable Item',
-            ServiceType: 'Partner Activity',
-            Status: 'Available'
-        }
-    };
-
-    const ghostCard = await ui.createInteractiveCard(ghostRecord, [], imageCache);
-    ghostCard.id = "ai-ghost-card";
-    ghostCard.style.opacity = "0.5";
-    ghostCard.style.pointerEvents = "none";
-
+    // Clear container and show loading state
     catalogContainer.innerHTML = '';
-    catalogContainer.appendChild(ghostCard);
+
+    // If we have catalog matches, show them first in a carousel
+    if (catalogMatches.length > 0) {
+        log('Events', `Showing ${catalogMatches.length} catalog matches for "${searchTerm}"`);
+
+        const catalogSection = await createSearchResultCarousel(
+            `Top Matches for "${searchTerm}"`,
+            'From our curated catalog',
+            catalogMatches,
+            imageCache,
+            searchTerm,
+            false
+        );
+        catalogContainer.appendChild(catalogSection);
+    }
+
+    // Show loading indicator for AI results
+    const loadingSection = document.createElement('div');
+    loadingSection.className = 'ai-loading-section';
+    loadingSection.innerHTML = `
+        <div class="ai-loading-header">
+            <span class="ai-badge">AI Discovery</span>
+            <span class="ai-loading-text">Finding more options for "${searchTerm}"...</span>
+        </div>
+        <div class="ai-loading-spinner"></div>
+    `;
+    catalogContainer.appendChild(loadingSection);
 
     try {
         log('Events', 'Starting Hybrid AI search for:', searchTerm);
 
-        // Call the actual AI function
+        // Call the AI function
         const response = await fetch('/.netlify/functions/process-weblink', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -344,85 +461,51 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
         const aiData = await response.json();
         log('Events', 'AI Search Response:', aiData);
 
-        // Clear catalog for new results
-        catalogContainer.innerHTML = '';
+        // Remove loading indicator
+        loadingSection.remove();
 
         // Handle relatedKeywords for refinement chips
         if (aiData.relatedKeywords && Array.isArray(aiData.relatedKeywords)) {
             renderRefinementChips(aiData.relatedKeywords, imageCache);
         }
 
-        // Handle GROUPING type - broad category with multiple recommendations
-        if (aiData.itemType === 'Grouping') {
-            const timestamp = Date.now();
-            const groupingId = `ai-group-${timestamp}`;
+        // Create AI records from the response
+        const aiRecords = [];
+        const timestamp = Date.now();
 
-            // Create the parent Grouping record
-            const groupingRecord = {
-                id: groupingId,
-                fields: {
-                    Name: aiData.name || `Top ${searchTerm} Options`,
-                    Description: aiData.Description || `AI-generated recommendations for ${searchTerm}`,
-                    'Item Type': 'Grouping',
-                    ServiceType: 'Partner Activity',
-                    Status: 'Available',
-                    Stores: [state.ui.activeShopId]
-                }
-            };
-
-            // Add grouping to state
-            state.records.all.push(groupingRecord);
-
-            // Create child records from the children array
-            const childRecords = [];
-            if (aiData.children && Array.isArray(aiData.children)) {
-                aiData.children.forEach((child, index) => {
-                    const childId = `ai-child-${timestamp}-${index}`;
-                    const childRecord = {
-                        id: childId,
-                        fields: {
-                            Name: child.Name,
-                            Description: child.Description,
-                            Price: child.Price || 0,
-                            ServiceType: child.ServiceType || 'Partner Activity',
-                            'Item Type': 'Bookable Item',
-                            'Parent Item': aiData.name || groupingRecord.fields.Name,
-                            Status: 'Available',
-                            'Pricing Type': 'per person',
-                            Stores: [state.ui.activeShopId],
-                            Rankings: JSON.stringify({
-                                "profileSource": "ai_hybrid_search",
-                                "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
-                            }),
-                            Options: null, 'Headcount min': null, 'Media Tags': null,
-                            'Curated Images': null, Subcategories: null, 'iCal URL': null,
-                            'Lead Time (days)': null, RSVPs: null, Date: null,
-                            'Chat Enabled': false, Duration: null, Capacity: null,
-                            'Location Details': null, 'Additional Information': null
-                        }
-                    };
-                    childRecords.push(childRecord);
-                    state.records.all.push(childRecord);
-                });
-            }
-
-            log('Events', `Created AI Grouping "${groupingRecord.fields.Name}" with ${childRecords.length} children`);
-
-            // Render the grouping card
-            const groupingCard = await ui.createInteractiveCard(groupingRecord, state.records.all, imageCache);
-            catalogContainer.appendChild(groupingCard);
-
-            // Render all child item cards
-            for (const childRecord of childRecords) {
-                const childCard = await ui.createInteractiveCard(childRecord, state.records.all, imageCache);
-                attachAddToPlanHandler(childCard, childRecord, searchTerm, imageCache);
-                catalogContainer.appendChild(childCard);
-            }
-
-        } else {
-            // Handle SPECIFIC type - single item result (or legacy format)
-            const customId = `ai-search-${Date.now()}`;
-
+        if (aiData.itemType === 'Grouping' && aiData.children && Array.isArray(aiData.children)) {
+            // Handle GROUPING type - multiple AI recommendations
+            aiData.children.forEach((child, index) => {
+                const childId = `ai-child-${timestamp}-${index}`;
+                const childRecord = {
+                    id: childId,
+                    fields: {
+                        Name: child.Name,
+                        Description: child.Description,
+                        Price: child.Price || 0,
+                        ServiceType: child.ServiceType || 'Partner Activity',
+                        'Item Type': 'Bookable Item',
+                        'Parent Item': aiData.name || `AI ${searchTerm} Options`,
+                        Status: 'Available',
+                        'Pricing Type': 'per person',
+                        Stores: [state.ui.activeShopId],
+                        Rankings: JSON.stringify({
+                            "profileSource": "ai_hybrid_search",
+                            "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+                        }),
+                        Options: null, 'Headcount min': null, 'Media Tags': null,
+                        'Curated Images': null, Subcategories: null, 'iCal URL': null,
+                        'Lead Time (days)': null, RSVPs: null, Date: null,
+                        'Chat Enabled': false, Duration: null, Capacity: null,
+                        'Location Details': null, 'Additional Information': null
+                    }
+                };
+                aiRecords.push(childRecord);
+                state.records.all.push(childRecord);
+            });
+        } else if (aiData.Name) {
+            // Handle SPECIFIC type - single AI result
+            const customId = `ai-search-${timestamp}`;
             const liveRecord = {
                 id: customId,
                 fields: {
@@ -445,13 +528,26 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
                     'Location Details': null, 'Additional Information': null
                 }
             };
-
+            aiRecords.push(liveRecord);
             state.records.all.push(liveRecord);
-            log('Events', 'Created AI Specific item:', liveRecord.fields.Name);
+        }
 
-            const finalCard = await ui.createInteractiveCard(liveRecord, state.records.all, imageCache);
-            attachAddToPlanHandler(finalCard, liveRecord, searchTerm, imageCache);
-            catalogContainer.appendChild(finalCard);
+        // Display AI results in their own carousel
+        if (aiRecords.length > 0) {
+            log('Events', `Created ${aiRecords.length} AI-generated items for "${searchTerm}"`);
+
+            const aiSection = await createSearchResultCarousel(
+                `AI Discoveries for "${searchTerm}"`,
+                'Additional options found by AI',
+                aiRecords,
+                imageCache,
+                searchTerm,
+                true
+            );
+            catalogContainer.appendChild(aiSection);
+        } else if (catalogMatches.length === 0) {
+            // No results at all - show empty state
+            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
         }
 
     } catch (err) {
@@ -460,10 +556,24 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             return;
         }
         log('Events', `Proactive AI parse error: ${err.message}`);
-        catalogContainer.innerHTML = `<p style='text-align: center;'>Could not find "${searchTerm}". Please try a different name or URL.</p>`;
+
+        // Remove loading indicator on error
+        loadingSection.remove();
+
+        // If no catalog matches either, show error
+        if (catalogMatches.length === 0) {
+            catalogContainer.innerHTML = `<p style='text-align: center; padding: 40px;'>Could not find "${searchTerm}". Please try a different name or search term.</p>`;
+        }
+        // If we have catalog matches, just silently fail on AI (user still sees catalog results)
     } finally {
         aiSearchController = null;
     }
+}
+
+// Keep the old function for backward compatibility, but redirect to new implementation
+async function handleProactiveAISearch(searchTerm, imageCache) {
+    // Use the new hybrid display with empty catalog matches
+    await handleHybridSearchDisplay(searchTerm, imageCache, []);
 }
 
 /**
@@ -1039,29 +1149,33 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     
     safeAddEventListener('name-filter', 'input', debounce((e) => {
         const searchTerm = e.target.value.trim();
-        
+
         if (aiSearchController) {
-            aiSearchController.abort(); 
+            aiSearchController.abort();
         }
-        
+
         applyFiltersAndSort(imageCache);
-        
-        if (state.records.filtered.length === 0 && searchTerm.length > 2) {
-            log('Events', 'No local results, triggering proactive AI search.');
-            
-            const hasOtherFilters = 
+
+        // Only trigger hybrid search if search term is substantive (> 2 chars)
+        if (searchTerm.length > 2) {
+            const hasOtherFilters =
                 document.getElementById('status-filter').value !== 'Available' ||
                 document.getElementById('headcount-filter').value !== 'any' ||
                 document.getElementById('location-filter').value !== 'any' ||
                 document.getElementById('budget-filter').value !== 'any' ||
                 (new URLSearchParams(window.location.search).get('category') !== null);
-            
+
+            // Don't trigger hybrid display if user has other filters active
             if (!hasOtherFilters) {
-                handleProactiveAISearch(searchTerm, imageCache);
+                // Get the current filtered results as "catalog matches"
+                const catalogMatches = state.records.filtered.slice(0, 10); // Limit to top 10
+
+                log('Events', `Triggering hybrid search for "${searchTerm}" with ${catalogMatches.length} catalog matches`);
+                handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches);
             }
         }
-    
-        
+
+
     }, 300)); 
     
     safeAddEventListener('clear-search-btn', 'click', () => {
