@@ -33,7 +33,6 @@ let summaryEventDateEl = null;
 let shareBtn = null;
 let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
-let chatMessagesEl = null;
 
 // Presentation header elements
 let presentationBackBtn = null;
@@ -42,23 +41,22 @@ let presentationShopTitle = null;
 let presentationEventLabel = null;
 let presentationHeaderShareBtn = null;
 
-// Embedded chat DOM elements
-let presentationChatContainer = null;
-let presentationMessageForm = null;
-let presentationMessageInput = null;
-let presentationUserNameInput = null;
-let presentationWhosHereCount = null;
-let presentationWhosHereList = null;
+// Collaborators carousel and modal elements
+let collaboratorsCarouselPrev = null;
+let collaboratorsCarouselNext = null;
+let collaboratorsExpandBtn = null;
+let collaboratorsModal = null;
+let collaboratorsModalClose = null;
+let collaboratorsModalList = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
-let hostsChatSummaryEl = null;
 
 // Accordion title element for header section
 let headerAccordionTitleEl = null;
 
-// Floating chat button
+// Floating chat button (no longer used but kept for cleanup)
 let floatingChatBtn = null;
 
 // Reactions summary DOM element
@@ -70,9 +68,12 @@ const itemImagesCache = new Map();
 // Track accordion state (all sections start expanded)
 const accordionState = {
     header: true,
-    items: true,
-    'hosts-chat': true
+    items: true
 };
+
+// Carousel state for collaborators
+let carouselCurrentIndex = 0;
+const CAROUSEL_VISIBLE_COUNT = 4; // Number of collaborators visible at once
 
 // Pusher instance for presentation chat
 let presentationPusher = null;
@@ -229,7 +230,6 @@ function ensureDOMElements() {
     shareBtn = document.getElementById('presentation-share-btn');
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
-    chatMessagesEl = document.getElementById('itinerary-chat-messages');
 
     // Presentation header elements
     presentationBackBtn = document.getElementById('presentation-back-btn');
@@ -238,21 +238,20 @@ function ensureDOMElements() {
     presentationEventLabel = document.getElementById('presentation-event-label');
     presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
 
-    // Embedded chat elements
-    presentationChatContainer = document.getElementById('presentation-chat-container');
-    presentationMessageForm = document.getElementById('presentation-message-form');
-    presentationMessageInput = document.getElementById('presentation-message-input');
-    presentationUserNameInput = document.getElementById('presentation-chat-user-name');
-    presentationWhosHereCount = document.getElementById('presentation-whos-here-count');
-    presentationWhosHereList = document.getElementById('presentation-whos-here-list');
+    // Collaborators carousel and modal elements
+    collaboratorsCarouselPrev = document.querySelector('.collaborators-carousel-btn.carousel-prev');
+    collaboratorsCarouselNext = document.querySelector('.collaborators-carousel-btn.carousel-next');
+    collaboratorsExpandBtn = document.getElementById('collaborators-expand-btn');
+    collaboratorsModal = document.getElementById('collaborators-modal');
+    collaboratorsModalClose = document.getElementById('collaborators-modal-close');
+    collaboratorsModalList = document.getElementById('collaborators-modal-list');
 
-    // Floating chat button
+    // Floating chat button (kept for cleanup but no longer used)
     floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
 
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
-    hostsChatSummaryEl = document.getElementById('hosts-chat-summary');
 
     // Accordion title element for the header section
     headerAccordionTitleEl = document.getElementById('header-accordion-title');
@@ -261,8 +260,7 @@ function ensureDOMElements() {
         modal: !!modal,
         closeBtn: !!closeBtn,
         headerSummaryEl: !!headerSummaryEl,
-        itemsSummaryEl: !!itemsSummaryEl,
-        hostsChatSummaryEl: !!hostsChatSummaryEl
+        itemsSummaryEl: !!itemsSummaryEl
     });
 
     if (!modal) {
@@ -325,11 +323,109 @@ function renderPresentationHeader() {
 
 function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
+    const collaboratorsContainer = document.getElementById('itinerary-collaborators');
+
+    // Reset carousel index
+    carouselCurrentIndex = 0;
 
     if (userProfiles.size === 0) {
-        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No collaborators yet</p>';
+        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No team members yet</p>';
+        // Hide carousel controls and expand button when no collaborators
+        if (collaboratorsCarouselPrev) collaboratorsCarouselPrev.style.display = 'none';
+        if (collaboratorsCarouselNext) collaboratorsCarouselNext.style.display = 'none';
+        if (collaboratorsExpandBtn) collaboratorsExpandBtn.style.display = 'none';
         return;
     }
+
+    // Build all collaborator items
+    const collaboratorsArray = [];
+    userProfiles.forEach((name, odId) => {
+        const isCurrentUser = state.session.user.id === odId;
+        collaboratorsArray.push({ name, odId, isCurrentUser });
+    });
+
+    // Render all items (CSS will handle the carousel display)
+    let html = '';
+    collaboratorsArray.forEach((collab, index) => {
+        const badge = collab.isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
+        html += `
+            <div class="collaborator-item" data-index="${index}">
+                <span class="collaborator-avatar">${collab.name.charAt(0).toUpperCase()}</span>
+                <span class="collaborator-name">${collab.name}${badge}</span>
+            </div>
+        `;
+    });
+
+    collaboratorsListEl.innerHTML = html;
+
+    // Update carousel visibility based on number of collaborators
+    const totalCount = collaboratorsArray.length;
+    const showCarouselControls = totalCount > CAROUSEL_VISIBLE_COUNT;
+
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.style.display = showCarouselControls ? 'flex' : 'none';
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.style.display = showCarouselControls ? 'flex' : 'none';
+    }
+    if (collaboratorsExpandBtn) {
+        collaboratorsExpandBtn.style.display = totalCount > CAROUSEL_VISIBLE_COUNT ? 'block' : 'none';
+        collaboratorsExpandBtn.textContent = `Show all (${totalCount})`;
+    }
+
+    // Apply initial carousel state
+    updateCarouselVisibility();
+}
+
+// Update which collaborators are visible in the carousel
+function updateCarouselVisibility() {
+    if (!collaboratorsListEl) return;
+
+    const items = collaboratorsListEl.querySelectorAll('.collaborator-item');
+    const totalCount = items.length;
+
+    items.forEach((item, index) => {
+        // Show items within the visible window
+        if (index >= carouselCurrentIndex && index < carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT) {
+            item.classList.add('visible');
+            item.classList.remove('hidden');
+        } else {
+            item.classList.remove('visible');
+            item.classList.add('hidden');
+        }
+    });
+
+    // Update prev/next button disabled states
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.disabled = carouselCurrentIndex === 0;
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.disabled = carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT >= totalCount;
+    }
+}
+
+// Navigate carousel to previous set of collaborators
+function carouselPrev() {
+    if (carouselCurrentIndex > 0) {
+        carouselCurrentIndex--;
+        updateCarouselVisibility();
+    }
+}
+
+// Navigate carousel to next set of collaborators
+function carouselNext() {
+    const totalCount = collaboratorsListEl ? collaboratorsListEl.querySelectorAll('.collaborator-item').length : 0;
+    if (carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT < totalCount) {
+        carouselCurrentIndex++;
+        updateCarouselVisibility();
+    }
+}
+
+// Show the expanded collaborators modal with full list
+function showCollaboratorsModal() {
+    if (!collaboratorsModal || !collaboratorsModalList) return;
+
+    const userProfiles = state.session.userProfiles;
 
     let html = '';
     userProfiles.forEach((name, odId) => {
@@ -343,7 +439,15 @@ function renderCollaborators() {
         `;
     });
 
-    collaboratorsListEl.innerHTML = html;
+    collaboratorsModalList.innerHTML = html;
+    collaboratorsModal.classList.add('active');
+}
+
+// Hide the expanded collaborators modal
+function hideCollaboratorsModal() {
+    if (collaboratorsModal) {
+        collaboratorsModal.classList.remove('active');
+    }
 }
 
 // Calculate score for a single reaction
@@ -2020,10 +2124,9 @@ function initializeAccordions() {
         }
     });
 
-    // Generate all summaries
+    // Generate all summaries (no longer includes hosts-chat summary)
     generateHeaderSummary();
     generateItemsSummary();
-    generateHostsChatSummary();
 
     console.log('[Accordion DEBUG] initializeAccordions completed');
 }
@@ -2176,9 +2279,8 @@ export async function showPresentationView(listType, startRecordId = null) {
     renderEventHeader();
     renderCollaborators();
     await renderAllItems();
-    renderChatMessages(); // Sets loading state
 
-    // Initialize accordions and generate summaries (chat summary will be updated after chat loads)
+    // Initialize accordions and generate summaries
     initializeAccordions();
 
     // Show modal
@@ -2189,15 +2291,6 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Start the background animation
     startPresentationBackgroundAnimation();
-
-    // Initialize the embedded chat (loads messages and sets up real-time connection)
-    await initializePresentationChat();
-
-    // Update chat summary after messages are loaded
-    generateHostsChatSummary();
-
-    // Initialize the floating chat button
-    initializeFloatingChatButton();
 
     // Scroll to specific item if provided
     if (startRecordId) {
@@ -2218,11 +2311,8 @@ export function hidePresentationView() {
     // Stop the background animation
     stopPresentationBackgroundAnimation();
 
-    // Clean up the presentation chat connection
-    cleanupPresentationChat();
-
-    // Clean up the floating chat button
-    cleanupFloatingChatButton();
+    // Hide collaborators modal if open
+    hideCollaboratorsModal();
 
     modal.classList.remove('active');
     modal.style.display = 'none';
@@ -2371,4 +2461,31 @@ export function setupPresentationEventListeners() {
             }, 1500);
         });
     });
+
+    // Collaborators carousel navigation
+    if (collaboratorsCarouselPrev) {
+        collaboratorsCarouselPrev.addEventListener('click', carouselPrev);
+    }
+    if (collaboratorsCarouselNext) {
+        collaboratorsCarouselNext.addEventListener('click', carouselNext);
+    }
+
+    // Collaborators expand button (show modal with full list)
+    if (collaboratorsExpandBtn) {
+        collaboratorsExpandBtn.addEventListener('click', showCollaboratorsModal);
+    }
+
+    // Collaborators modal close button
+    if (collaboratorsModalClose) {
+        collaboratorsModalClose.addEventListener('click', hideCollaboratorsModal);
+    }
+
+    // Close collaborators modal on backdrop click
+    if (collaboratorsModal) {
+        collaboratorsModal.addEventListener('click', (e) => {
+            if (e.target === collaboratorsModal) {
+                hideCollaboratorsModal();
+            }
+        });
+    }
 }

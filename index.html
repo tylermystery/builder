@@ -1981,46 +1981,25 @@ body.modal-open {
                         </div>
                         <p id="summary-event-notes" class="itinerary-notes"></p>
 
-                        <!-- Hosts, Collaborators & Plan Chat Sub-Accordion -->
-                        <div id="hosts-chat-accordion" class="hosts-chat-accordion sub-accordion" data-section="hosts-chat">
-                            <div class="sub-accordion-header" data-section="hosts-chat">
-                                <div class="sub-accordion-title-row">
-                                    <h3 class="sub-accordion-title">Team & Chat</h3>
-                                    <span class="sub-accordion-icon"></span>
-                                </div>
-                                <p class="sub-accordion-summary" id="hosts-chat-summary"></p>
+                        <!-- Hosts & Collaborators Carousel -->
+                        <div id="itinerary-collaborators" class="itinerary-collaborators">
+                            <h4 class="collaborators-title">Team</h4>
+                            <div class="collaborators-carousel-wrapper">
+                                <button class="collaborators-carousel-btn carousel-prev" aria-label="Previous collaborators">&#8249;</button>
+                                <div id="itinerary-collaborators-list" class="collaborators-list collaborators-carousel"></div>
+                                <button class="collaborators-carousel-btn carousel-next" aria-label="Next collaborators">&#8250;</button>
                             </div>
-                            <div class="sub-accordion-content">
-                                <!-- Hosts & Collaborators -->
-                                <div id="itinerary-collaborators" class="itinerary-collaborators">
-                                    <div id="itinerary-collaborators-list" class="collaborators-list"></div>
-                                </div>
+                            <button id="collaborators-expand-btn" class="collaborators-expand-btn">Show all</button>
+                        </div>
 
-                                <!-- Embedded Plan Chat Interface (moved from Event Discussion section) -->
-                                <div class="plan-chat-section">
-                                    <div id="presentation-chat-container" class="presentation-chat-container">
-                                        <div id="presentation-chat-header" class="presentation-chat-header">
-                                            <div class="presentation-chat-info">
-                                                <span class="presentation-chat-presence">(<span id="presentation-whos-here-count">0</span> online)</span>
-                                            </div>
-                                            <div class="presentation-user-identity">
-                                                <label for="presentation-chat-user-name">Your Name:</label>
-                                                <input type="text" id="presentation-chat-user-name" autocomplete="off">
-                                            </div>
-                                        </div>
-                                        <div id="presentation-whos-here-list" class="presentation-whos-here-list"></div>
-                                        <div id="presentation-messages-container" class="presentation-messages-container">
-                                            <div id="itinerary-chat-messages" class="itinerary-chat-messages">
-                                                <!-- Chat messages will be rendered here -->
-                                            </div>
-                                        </div>
-                                        <div id="presentation-typing-indicator" class="presentation-typing-indicator"></div>
-                                        <form id="presentation-message-form" class="presentation-message-form">
-                                            <input type="text" id="presentation-message-input" placeholder="Type a message..." autocomplete="off">
-                                            <button type="submit">Send</button>
-                                        </form>
-                                    </div>
+                        <!-- Expanded collaborators modal -->
+                        <div id="collaborators-modal" class="collaborators-modal">
+                            <div class="collaborators-modal-content">
+                                <div class="collaborators-modal-header">
+                                    <h3>Team Members</h3>
+                                    <button id="collaborators-modal-close" class="collaborators-modal-close">&times;</button>
                                 </div>
+                                <div id="collaborators-modal-list" class="collaborators-modal-list"></div>
                             </div>
                         </div>
 

@@ -2606,11 +2606,81 @@
     margin: 0 0 15px 0;
 }
 
+/* Collaborators Carousel Title */
+.collaborators-title {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+/* Collaborators Carousel Wrapper */
+.collaborators-carousel-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+}
+
+/* Collaborators Carousel (horizontal scrolling list) */
+.collaborators-carousel {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 10px;
+    overflow: hidden;
+    padding: 4px 0;
+    max-width: calc(100% - 80px);
+}
+
+/* Carousel navigation buttons */
+.collaborators-carousel-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    color: #333;
+    font-size: 1.2em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, opacity 0.2s;
+    flex-shrink: 0;
+}
+
+.collaborators-carousel-btn:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.collaborators-carousel-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
 .collaborators-list {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 15px;
+}
+
+/* Carousel-specific item visibility */
+.collaborators-carousel .collaborator-item {
+    flex-shrink: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.collaborators-carousel .collaborator-item.hidden {
+    display: none;
+}
+
+.collaborators-carousel .collaborator-item.visible {
+    display: flex;
 }
 
 .collaborator-item {
@@ -2648,6 +2718,107 @@
     padding: 2px 6px;
     border-radius: 10px;
     margin-left: 5px;
+}
+
+/* Expand button to show full list */
+.collaborators-expand-btn {
+    display: block;
+    margin: 12px auto 0;
+    padding: 6px 16px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background: transparent;
+    color: #007bff;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.collaborators-expand-btn:hover {
+    background: rgba(0, 123, 255, 0.1);
+    border-color: #007bff;
+}
+
+/* Collaborators Modal (expanded full list view) */
+.collaborators-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.collaborators-modal.active {
+    display: flex;
+}
+
+.collaborators-modal-content {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 400px;
+    width: 90%;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.collaborators-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.collaborators-modal-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.collaborators-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #6c757d;
+    font-size: 1.5em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.collaborators-modal-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+.collaborators-modal-list {
+    padding: 16px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.collaborators-modal-list .collaborator-item {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.no-collaborators {
+    color: #6c757d;
+    font-style: italic;
 }
 
 .itinerary-actions {
@@ -3037,6 +3208,32 @@
     .collaborators-list {
         flex-direction: column;
         align-items: center;
+    }
+
+    /* Collaborators Carousel mobile styles */
+    .collaborators-carousel-wrapper {
+        gap: 4px;
+    }
+
+    .collaborators-carousel {
+        max-width: calc(100% - 70px);
+        gap: 8px;
+    }
+
+    .collaborators-carousel-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 1em;
+    }
+
+    .collaborators-expand-btn {
+        font-size: 0.8em;
+        padding: 5px 14px;
+    }
+
+    .collaborators-modal-content {
+        width: 95%;
+        max-height: 80vh;
     }
 
     .itinerary-chat-messages {
