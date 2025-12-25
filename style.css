@@ -4649,12 +4649,9 @@ body.modal-open {
     margin-top: 0;
 }
 
-/* Hide item title when collapsed (show only when expanded) */
+/* Item title stays visible in both collapsed and expanded states */
 .item-accordion:not(.expanded) .item-accordion-title {
-    opacity: 0;
-    max-height: 0;
-    overflow: hidden;
-    margin: 0;
+    opacity: 1;
 }
 
 /* Item summary styling elements */
@@ -4889,11 +4886,9 @@ body.modal-open {
     transition: opacity 0.3s ease;
 }
 
-/* Hide accordion section title when collapsed */
+/* Accordion section title stays visible in both collapsed and expanded states */
 .itinerary-accordion:not(.expanded) .accordion-section-title {
-    opacity: 0;
-    max-height: 0;
-    overflow: hidden;
+    opacity: 1;
 }
 
 .itinerary-accordion-content {

@@ -578,7 +578,6 @@ function createMediaCarousel(images, recordId) {
 
 // Generate summary text for an item when collapsed in accordion
 function generateItemSummary(record, itemInfo, type) {
-    const name = record.fields.Name || 'Untitled Item';
     const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
     const quantity = itemInfo?.quantity || 1;
     const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
@@ -588,14 +587,11 @@ function generateItemSummary(record, itemInfo, type) {
     const category = record.fields.Category || '';
     const subcategory = record.fields.Subcategory || '';
 
-    let summary = `<span class="item-summary-name">${name}</span>`;
-    summary += ` &bull; <span class="item-summary-price">$${price.toFixed(2)}</span>`;
+    let summary = `<span class="item-summary-price">$${price.toFixed(2)}</span>`;
 
     if (quantity > 1) {
         summary += ` <span class="item-summary-qty">(×${quantity})</span>`;
     }
-
-    summary += ` &bull; <span class="item-summary-type ${type === 'favorites' ? 'idea' : 'confirmed'}">${typeLabel}</span>`;
 
     // Add category hint if available
     if (category) {
@@ -1825,7 +1821,6 @@ function renderChatMessages() {
 
 // Generate summary for the event header section
 function generateHeaderSummary() {
-    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Untitled Event';
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
     const collaboratorCount = state.session.userProfiles.size;
 
@@ -1835,14 +1830,16 @@ function generateHeaderSummary() {
         datePart = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    let summary = `<span class="summary-highlight">${eventName}</span>`;
+    let summaryParts = [];
     if (datePart) {
-        summary += ` on ${datePart}`;
+        summaryParts.push(datePart);
     }
     if (collaboratorCount > 0) {
         const hostWord = collaboratorCount === 1 ? 'host' : 'hosts';
-        summary += ` &bull; <span class="summary-count">${collaboratorCount}</span> ${hostWord}`;
+        summaryParts.push(`<span class="summary-count">${collaboratorCount}</span> ${hostWord}`);
     }
+
+    const summary = summaryParts.join(' &bull; ') || 'Event details';
 
     if (headerSummaryEl) {
         headerSummaryEl.innerHTML = summary;
