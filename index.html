@@ -1950,14 +1950,49 @@ body.modal-open {
                     <span id="presentation-event-label" class="presentation-event-label">Viewing Plan</span>
                 </div>
 
-                <!-- Right: Share Button -->
+                <!-- Right: Add and Share Buttons -->
                 <div id="presentation-header-right">
+                    <button id="presentation-add-btn" class="header-icon-btn presentation-add-btn" title="Add items to plan" aria-label="Add items to plan">
+                        <span class="add-icon">+</span>
+                    </button>
                     <button id="presentation-header-share-btn" class="header-icon-btn" title="Share this plan" aria-label="Share this plan">
                         <span class="share-icon">↗</span>
                     </button>
                 </div>
             </div>
         </header>
+
+        <!-- Search Modal for Presentation View -->
+        <div id="presentation-search-modal" class="presentation-search-modal">
+            <div class="presentation-search-content">
+                <!-- Search Header -->
+                <div class="presentation-search-header">
+                    <h3 class="presentation-search-title">Add to Plan</h3>
+                    <button id="presentation-search-close" class="presentation-search-close" title="Close search" aria-label="Close search">×</button>
+                </div>
+
+                <!-- Search Input Area -->
+                <div class="presentation-search-input-area">
+                    <div class="presentation-search-input-wrapper">
+                        <input type="text" id="presentation-search-input" placeholder="Search activities, venues, services..." autocomplete="off">
+                        <button id="presentation-search-clear" class="presentation-search-clear" title="Clear search" style="display: none;">×</button>
+                    </div>
+                    <!-- AI Refinement Chips -->
+                    <div id="presentation-refinement-chips" class="presentation-refinement-chips"></div>
+                </div>
+
+                <!-- Search Results Area -->
+                <div id="presentation-search-results" class="presentation-search-results">
+                    <!-- Initial state with browse options -->
+                    <div class="presentation-search-initial">
+                        <p class="presentation-search-hint">Search for something specific, or browse popular categories below</p>
+                        <div class="presentation-browse-categories" id="presentation-browse-categories">
+                            <!-- Categories will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="presentation-content presentation-itinerary">
             <button id="presentation-close-btn" class="modal-close-btn" title="Close" style="display: none;">×</button>

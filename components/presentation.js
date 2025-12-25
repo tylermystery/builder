@@ -79,6 +79,21 @@ const CAROUSEL_VISIBLE_COUNT = 4; // Number of collaborators visible at once
 let presentationPusher = null;
 let presentationChatChannel = null;
 
+// Search modal elements
+let presentationAddBtn = null;
+let presentationSearchModal = null;
+let presentationSearchClose = null;
+let presentationSearchInput = null;
+let presentationSearchClear = null;
+let presentationSearchResults = null;
+let presentationRefinementChips = null;
+let presentationBrowseCategories = null;
+
+// Search modal state
+let presentationSearchController = null;
+let presentationSearchDebounceTimer = null;
+const PRESENTATION_SEARCH_DEBOUNCE = 300;
+
 // --- Presentation Background Engine ---
 // WebGL Shader code for the fluid effect (same as catalog background)
 const vsSource = `
@@ -255,6 +270,16 @@ function ensureDOMElements() {
 
     // Accordion title element for the header section
     headerAccordionTitleEl = document.getElementById('header-accordion-title');
+
+    // Search modal elements
+    presentationAddBtn = document.getElementById('presentation-add-btn');
+    presentationSearchModal = document.getElementById('presentation-search-modal');
+    presentationSearchClose = document.getElementById('presentation-search-close');
+    presentationSearchInput = document.getElementById('presentation-search-input');
+    presentationSearchClear = document.getElementById('presentation-search-clear');
+    presentationSearchResults = document.getElementById('presentation-search-results');
+    presentationRefinementChips = document.getElementById('presentation-refinement-chips');
+    presentationBrowseCategories = document.getElementById('presentation-browse-categories');
 
     console.log('[Accordion DEBUG] DOM elements after init:', {
         modal: !!modal,
@@ -2488,4 +2513,572 @@ export function setupPresentationEventListeners() {
             }
         });
     }
+
+    // Search modal event listeners
+    setupSearchModalEventListeners();
 }
+
+// ============================================
+// PRESENTATION SEARCH MODAL FUNCTIONALITY
+// ============================================
+
+/**
+ * Sets up event listeners for the search modal
+ */
+function setupSearchModalEventListeners() {
+    // Add button opens search modal
+    if (presentationAddBtn) {
+        presentationAddBtn.addEventListener('click', openSearchModal);
+    }
+
+    // Close button
+    if (presentationSearchClose) {
+        presentationSearchClose.addEventListener('click', closeSearchModal);
+    }
+
+    // Close on backdrop click
+    if (presentationSearchModal) {
+        presentationSearchModal.addEventListener('click', (e) => {
+            if (e.target === presentationSearchModal) {
+                closeSearchModal();
+            }
+        });
+    }
+
+    // Search input handler
+    if (presentationSearchInput) {
+        presentationSearchInput.addEventListener('input', handleSearchInput);
+        presentationSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeSearchModal();
+            }
+        });
+    }
+
+    // Clear search button
+    if (presentationSearchClear) {
+        presentationSearchClear.addEventListener('click', () => {
+            presentationSearchInput.value = '';
+            presentationSearchClear.style.display = 'none';
+            showInitialSearchState();
+            clearPresentationRefinementChips();
+        });
+    }
+
+    // Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && presentationSearchModal?.classList.contains('active')) {
+            closeSearchModal();
+        }
+    });
+}
+
+/**
+ * Opens the search modal
+ */
+function openSearchModal() {
+    if (!presentationSearchModal) return;
+
+    presentationSearchModal.classList.add('active');
+    document.body.classList.add('search-modal-open');
+
+    // Focus search input
+    setTimeout(() => {
+        presentationSearchInput?.focus();
+    }, 100);
+
+    // Initialize with browse categories
+    showInitialSearchState();
+
+    log('Presentation', 'Search modal opened');
+}
+
+/**
+ * Closes the search modal
+ */
+function closeSearchModal() {
+    if (!presentationSearchModal) return;
+
+    presentationSearchModal.classList.remove('active');
+    document.body.classList.remove('search-modal-open');
+
+    // Cancel any pending search
+    if (presentationSearchController) {
+        presentationSearchController.abort();
+        presentationSearchController = null;
+    }
+
+    // Clear search state
+    if (presentationSearchInput) {
+        presentationSearchInput.value = '';
+    }
+    if (presentationSearchClear) {
+        presentationSearchClear.style.display = 'none';
+    }
+    clearPresentationRefinementChips();
+
+    log('Presentation', 'Search modal closed');
+}
+
+/**
+ * Shows the initial search state with browse categories
+ */
+function showInitialSearchState() {
+    if (!presentationSearchResults || !presentationBrowseCategories) return;
+
+    // Get unique categories from catalog
+    const categories = new Set();
+    state.records.all.forEach(record => {
+        if (record.fields.Category) {
+            categories.add(record.fields.Category);
+        }
+    });
+
+    // Build category buttons
+    presentationBrowseCategories.innerHTML = '';
+    categories.forEach(category => {
+        const btn = document.createElement('button');
+        btn.className = 'presentation-category-btn';
+        btn.textContent = category;
+        btn.addEventListener('click', () => {
+            presentationSearchInput.value = category;
+            handleSearchInput({ target: presentationSearchInput });
+        });
+        presentationBrowseCategories.appendChild(btn);
+    });
+
+    // Show initial state
+    presentationSearchResults.innerHTML = `
+        <div class="presentation-search-initial">
+            <p class="presentation-search-hint">Search for something specific, or browse popular categories below</p>
+            <div class="presentation-browse-categories" id="presentation-browse-categories-inner">
+                ${presentationBrowseCategories.innerHTML}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Handles search input changes with debouncing
+ */
+function handleSearchInput(e) {
+    const searchTerm = e.target.value.trim();
+
+    // Show/hide clear button
+    if (presentationSearchClear) {
+        presentationSearchClear.style.display = searchTerm ? 'flex' : 'none';
+    }
+
+    // Clear previous debounce timer
+    if (presentationSearchDebounceTimer) {
+        clearTimeout(presentationSearchDebounceTimer);
+    }
+
+    // If search is cleared, show initial state
+    if (!searchTerm) {
+        showInitialSearchState();
+        clearPresentationRefinementChips();
+        return;
+    }
+
+    // Debounce the search
+    presentationSearchDebounceTimer = setTimeout(() => {
+        performPresentationSearch(searchTerm);
+    }, PRESENTATION_SEARCH_DEBOUNCE);
+}
+
+/**
+ * Performs the hybrid search (catalog + AI)
+ */
+async function performPresentationSearch(searchTerm) {
+    if (!presentationSearchResults) return;
+
+    // Abort any existing search
+    if (presentationSearchController) {
+        presentationSearchController.abort();
+    }
+    presentationSearchController = new AbortController();
+    const signal = presentationSearchController.signal;
+
+    log('Presentation', `Performing search for: "${searchTerm}"`);
+
+    // Filter catalog items
+    const searchLower = searchTerm.toLowerCase();
+    const catalogMatches = state.records.all.filter(record => {
+        const name = (record.fields.Name || '').toLowerCase();
+        const description = (record.fields.Description || '').toLowerCase();
+        const category = (record.fields.Category || '').toLowerCase();
+        const tags = (record.fields.Tags || []).join(' ').toLowerCase();
+
+        return name.includes(searchLower) ||
+               description.includes(searchLower) ||
+               category.includes(searchLower) ||
+               tags.includes(searchLower);
+    }).slice(0, 15); // Limit to 15 catalog matches
+
+    // Clear results and show catalog results first
+    presentationSearchResults.innerHTML = '';
+
+    if (catalogMatches.length > 0) {
+        const catalogSection = await createPresentationResultSection(
+            `Catalog Matches`,
+            'From our curated catalog',
+            catalogMatches,
+            false
+        );
+        presentationSearchResults.appendChild(catalogSection);
+    }
+
+    // Show AI loading section
+    const aiLoadingSection = document.createElement('div');
+    aiLoadingSection.className = 'presentation-search-loading';
+    aiLoadingSection.innerHTML = `
+        <div class="presentation-search-spinner"></div>
+        <span class="presentation-search-loading-text">Finding more options with AI...</span>
+    `;
+    presentationSearchResults.appendChild(aiLoadingSection);
+
+    // Fetch AI results
+    try {
+        const response = await fetch('/.netlify/functions/process-weblink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchTerm }),
+            signal: signal
+        });
+
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+        }
+
+        if (signal.aborted) return;
+
+        const aiData = await response.json();
+        log('Presentation', 'AI Search Response:', aiData);
+
+        // Remove loading indicator
+        aiLoadingSection.remove();
+
+        // Handle relatedKeywords for refinement chips
+        if (aiData.relatedKeywords && Array.isArray(aiData.relatedKeywords)) {
+            renderPresentationRefinementChips(aiData.relatedKeywords);
+        }
+
+        // Create AI records from the response
+        const aiRecords = [];
+        const timestamp = Date.now();
+
+        if (aiData.itemType === 'Grouping' && aiData.children && Array.isArray(aiData.children)) {
+            aiData.children.forEach((child, index) => {
+                const childId = `ai-presentation-${timestamp}-${index}`;
+                aiRecords.push({
+                    id: childId,
+                    fields: {
+                        Name: child.Name || child.name || 'AI Suggestion',
+                        Description: child.Description || child.description || '',
+                        Price: child.Price || child.price || 0,
+                        Category: child.Category || child.category || searchTerm,
+                        'Image URL': child.imageUrl || child['Image URL'] || '',
+                        Location: child.Location || '',
+                        Availability: child.Availability || '',
+                        Website: child.Website || '',
+                        LeadTime: child.LeadTime || '',
+                        GoodToKnow: child.GoodToKnow || '',
+                        Rankings: child.Rankings || {}
+                    },
+                    isAI: true
+                });
+            });
+        } else if (aiData.Name || aiData.name) {
+            // Single AI result
+            aiRecords.push({
+                id: `ai-presentation-${timestamp}-0`,
+                fields: {
+                    Name: aiData.Name || aiData.name || 'AI Suggestion',
+                    Description: aiData.Description || aiData.description || '',
+                    Price: aiData.Price || aiData.price || 0,
+                    Category: aiData.Category || aiData.category || searchTerm,
+                    'Image URL': aiData.imageUrl || aiData['Image URL'] || '',
+                    Location: aiData.Location || '',
+                    Availability: aiData.Availability || '',
+                    Website: aiData.Website || '',
+                    LeadTime: aiData.LeadTime || '',
+                    GoodToKnow: aiData.GoodToKnow || '',
+                    Rankings: aiData.Rankings || {}
+                },
+                isAI: true
+            });
+        }
+
+        // Display AI results
+        if (aiRecords.length > 0) {
+            const aiSection = await createPresentationResultSection(
+                'AI Discoveries',
+                `Suggested options for "${searchTerm}"`,
+                aiRecords,
+                true
+            );
+            presentationSearchResults.appendChild(aiSection);
+        }
+
+        // Show no results message if nothing found
+        if (catalogMatches.length === 0 && aiRecords.length === 0) {
+            presentationSearchResults.innerHTML = `
+                <div class="presentation-no-results">
+                    <div class="presentation-no-results-icon">🔍</div>
+                    <p class="presentation-no-results-text">No results found for "${searchTerm}"</p>
+                    <p class="presentation-no-results-hint">Try a different search term or browse categories</p>
+                </div>
+            `;
+        }
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            log('Presentation', 'Search was aborted');
+            return;
+        }
+
+        log('Presentation', `AI search error: ${error.message}`);
+        aiLoadingSection.remove();
+
+        // Show error state if no catalog matches either
+        if (catalogMatches.length === 0) {
+            presentationSearchResults.innerHTML = `
+                <div class="presentation-no-results">
+                    <div class="presentation-no-results-icon">⚠️</div>
+                    <p class="presentation-no-results-text">Search encountered an issue</p>
+                    <p class="presentation-no-results-hint">Please try again or browse categories</p>
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Creates a result section with carousel
+ */
+async function createPresentationResultSection(title, subtitle, records, isAI = false) {
+    const section = document.createElement('div');
+    section.className = `presentation-result-section${isAI ? ' ai-section' : ''}`;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'presentation-result-header';
+    header.innerHTML = `
+        <h4 class="presentation-result-title">${title}</h4>
+        ${isAI ? '<span class="presentation-ai-badge">AI Discovery</span>' : ''}
+        <span class="presentation-result-count">${records.length} items</span>
+        ${subtitle ? `<p class="presentation-result-subtitle">${subtitle}</p>` : ''}
+    `;
+    section.appendChild(header);
+
+    // Carousel wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'presentation-results-carousel-wrapper';
+
+    // Carousel container
+    const carousel = document.createElement('div');
+    carousel.className = 'presentation-results-carousel';
+
+    // Create cards for each record
+    for (const record of records) {
+        const card = createPresentationResultCard(record, isAI);
+        carousel.appendChild(card);
+    }
+
+    wrapper.appendChild(carousel);
+
+    // Navigation buttons
+    const leftNav = document.createElement('button');
+    leftNav.className = 'presentation-carousel-nav left';
+    leftNav.innerHTML = '◄';
+    leftNav.setAttribute('aria-label', 'Scroll left');
+    leftNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cardWidth = carousel.querySelector('.presentation-result-card')?.offsetWidth || 240;
+        carousel.scrollBy({ left: -(cardWidth + 16), behavior: 'smooth' });
+    });
+
+    const rightNav = document.createElement('button');
+    rightNav.className = 'presentation-carousel-nav right';
+    rightNav.innerHTML = '►';
+    rightNav.setAttribute('aria-label', 'Scroll right');
+    rightNav.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cardWidth = carousel.querySelector('.presentation-result-card')?.offsetWidth || 240;
+        carousel.scrollBy({ left: cardWidth + 16, behavior: 'smooth' });
+    });
+
+    wrapper.appendChild(leftNav);
+    wrapper.appendChild(rightNav);
+
+    // Update nav visibility based on scroll
+    const updateNavVisibility = () => {
+        const hasOverflow = carousel.scrollWidth > carousel.clientWidth;
+        if (hasOverflow) {
+            wrapper.classList.add('has-overflow');
+            leftNav.style.opacity = carousel.scrollLeft <= 0 ? '0.3' : '';
+            leftNav.style.pointerEvents = carousel.scrollLeft <= 0 ? 'none' : '';
+            const atEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 5;
+            rightNav.style.opacity = atEnd ? '0.3' : '';
+            rightNav.style.pointerEvents = atEnd ? 'none' : '';
+        } else {
+            wrapper.classList.remove('has-overflow');
+        }
+    };
+
+    carousel.addEventListener('scroll', updateNavVisibility);
+    setTimeout(updateNavVisibility, 100);
+
+    section.appendChild(wrapper);
+    return section;
+}
+
+/**
+ * Creates a single result card
+ */
+function createPresentationResultCard(record, isAI = false) {
+    const card = document.createElement('div');
+    card.className = 'presentation-result-card';
+    card.dataset.recordId = record.id;
+    if (isAI) {
+        card.dataset.isAi = 'true';
+    }
+
+    const fields = record.fields;
+    const imageUrl = fields['Image URL'] || fields.imageUrl || '';
+    const name = fields.Name || 'Unnamed Item';
+    const price = fields.Price || 0;
+    const category = fields.Category || '';
+
+    // Check if already in plan
+    const isInPlan = state.cart.lockedItems.has(record.id) ||
+                     state.session.user.likedItemIds.has(record.id);
+
+    card.innerHTML = `
+        <div class="presentation-result-card-image${isAI ? ' ai-item' : ''}" style="${imageUrl ? `background-image: url('${imageUrl}')` : ''}"></div>
+        <div class="presentation-result-card-content">
+            <h5 class="presentation-result-card-name">${name}</h5>
+            <div class="presentation-result-card-meta">
+                <span class="presentation-result-card-price${isAI ? ' estimate' : ''}">
+                    ${price > 0 ? `$${price.toFixed(2)}${isAI ? ' (Est.)' : ''}` : 'Price varies'}
+                </span>
+                ${category ? `<span class="presentation-result-card-category">${category}</span>` : ''}
+            </div>
+            <button class="presentation-quick-add-btn${isInPlan ? ' added' : ''}" data-record-id="${record.id}">
+                ${isInPlan ? '✓ Added' : '+ Quick Add'}
+            </button>
+        </div>
+    `;
+
+    // Click on card (not button) opens detail modal
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.presentation-quick-add-btn')) return;
+        handleCardClick(record, isAI);
+    });
+
+    // Quick add button handler
+    const quickAddBtn = card.querySelector('.presentation-quick-add-btn');
+    quickAddBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleQuickAdd(record, quickAddBtn, isAI);
+    });
+
+    return card;
+}
+
+/**
+ * Handles clicking on a result card to show detail modal
+ */
+function handleCardClick(record, isAI) {
+    log('Presentation', `Card clicked: ${record.fields.Name}, isAI: ${isAI}`);
+
+    if (isAI) {
+        // For AI items, create a temporary record in state for the modal to use
+        const existingIndex = state.records.all.findIndex(r => r.id === record.id);
+        if (existingIndex === -1) {
+            state.records.all.push(record);
+        }
+    }
+
+    // Close search modal and show detail modal
+    closeSearchModal();
+    showDetailModal(record);
+}
+
+/**
+ * Handles quick add button click
+ */
+async function handleQuickAdd(record, button, isAI) {
+    if (button.classList.contains('added')) return;
+
+    log('Presentation', `Quick adding: ${record.fields.Name}`);
+
+    button.disabled = true;
+    button.textContent = 'Adding...';
+
+    try {
+        if (isAI) {
+            // For AI items, we need to create a proper record first
+            const existingIndex = state.records.all.findIndex(r => r.id === record.id);
+            if (existingIndex === -1) {
+                state.records.all.push(record);
+            }
+        }
+
+        // Add to liked items (ideas)
+        if (!state.session.user.likedItemIds.has(record.id)) {
+            state.session.user.likedItemIds.add(record.id);
+        }
+
+        // Trigger save
+        await triggerSave();
+
+        // Update button state
+        button.classList.add('added');
+        button.textContent = '✓ Added';
+        button.disabled = false;
+
+        log('Presentation', `Successfully added ${record.fields.Name} to plan`);
+
+    } catch (error) {
+        log('Presentation', `Error adding item: ${error.message}`);
+        button.disabled = false;
+        button.textContent = '+ Quick Add';
+    }
+}
+
+/**
+ * Renders refinement chips for AI suggestions
+ */
+function renderPresentationRefinementChips(keywords) {
+    if (!presentationRefinementChips || !keywords || keywords.length === 0) return;
+
+    presentationRefinementChips.innerHTML = '';
+
+    keywords.slice(0, 6).forEach(keyword => {
+        const chip = document.createElement('button');
+        chip.className = 'presentation-refinement-chip';
+        chip.textContent = keyword;
+        chip.title = `Search for "${keyword}"`;
+
+        chip.addEventListener('click', () => {
+            presentationSearchInput.value = keyword;
+            handleSearchInput({ target: presentationSearchInput });
+        });
+
+        presentationRefinementChips.appendChild(chip);
+    });
+}
+
+/**
+ * Clears refinement chips
+ */
+function clearPresentationRefinementChips() {
+    if (presentationRefinementChips) {
+        presentationRefinementChips.innerHTML = '';
+    }
+}
+
+// Export the search modal functions for external use if needed
+export { openSearchModal as openPresentationSearchModal, closeSearchModal as closePresentationSearchModal };
