@@ -975,7 +975,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
 
         // Fetch all images for this component
         let imageUrls = [];
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
             try {
                 const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
                 imageUrls = fetchedUrls || [];
@@ -1333,7 +1333,7 @@ async function initializePlanCarousel(componentRecords) {
         const record = componentData.record;
         let imageUrl = ui.getPlaceholderImage([]);
 
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
             try {
                 const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
                 if (fetchedUrls && fetchedUrls.length > 0) {
@@ -1628,7 +1628,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     }
 
     let imageUrls = [];
-    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-')) {
+    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
         const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         imageUrls = fetchedUrls;
     }
@@ -2107,7 +2107,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalAdditionalDetails.appendChild(fragment);
     }
 
-    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && record.fields['Item Type'] === 'Grouping';
+    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && record.fields['Item Type'] === 'Grouping';
     const isPackage = record.fields['Item Type'] === 'Package';
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
@@ -2194,7 +2194,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     } else {
         const price = getRecordPrice(record, itemState.selectedOptionIndex);
         let priceText = (typeof price === 'number' ? (price === 0 ? 'Free' : `$${price.toFixed(2)}`) : 'N/A');
-        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) && price > 0) {
+        if ((record.id.startsWith('custom-') || record.id.startsWith('ai-search-') || record.id.startsWith('ai-child-')) && price > 0) {
             priceText += ' (Est.)';
         }
         modalItemPrice.innerHTML = priceText + pricingTypeHTML;

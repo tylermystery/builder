@@ -43,6 +43,7 @@ exports.handler = async (event) => {
     console.log(`[process-weblink] Parsing query: ${query}`);
 
     // Enhanced AI prompt for hybrid search - handles both specific items and broad categories
+    // Now includes comprehensive business info: website, location, availability, lead time, rankings
     const aiPrompt = `
 You are an expert event planner for the San Francisco Bay Area. A user has provided a search query that could be:
 1. A SPECIFIC ITEM: A URL, a specific restaurant/venue name, or a clearly defined activity (e.g., "https://exploratorium.edu", "Chez Panisse", "Alcatraz tour")
@@ -50,9 +51,23 @@ You are an expert event planner for the San Francisco Bay Area. A user has provi
 
 Your task is to:
 1. First, analyze whether the query is a SPECIFIC ITEM or a BROAD CATEGORY
-2. Return a JSON response based on the query type
+2. Return a JSON response based on the query type WITH COMPREHENSIVE BUSINESS INFORMATION
 
 RESPOND ONLY WITH A VALID JSON OBJECT. Do not include markdown code blocks or any text before/after the JSON.
+
+=== COMPREHENSIVE BUSINESS INFO FIELDS (include in ALL items) ===
+- "Website": The official website URL (use actual known URLs, or null if unknown)
+- "Location": Full address or neighborhood/area (e.g., "123 Main St, San Francisco, CA" or "Mission District, San Francisco")
+- "Availability": General availability info (e.g., "Open daily 10am-6pm", "Reservations required", "Weekends only", "By appointment")
+- "LeadTime": Approximate booking lead time (e.g., "Book 1-2 weeks ahead", "Same-day available", "2-4 weeks for groups", "Walk-ins welcome")
+- "GoodToKnow": Any helpful additional info (e.g., "Free parking available", "21+ only", "Vegetarian options available", "Wheelchair accessible")
+- "Rankings": An object with activity profile scores from 0-10:
+  - "Fun": How entertaining/enjoyable (0=boring, 10=extremely fun)
+  - "Social": How much social interaction (0=solo, 10=highly social)
+  - "Active": Physical activity level (0=sedentary, 10=very active)
+  - "Creative": Creativity involved (0=none, 10=highly creative)
+  - "Learning": Educational value (0=none, 10=very educational)
+  - "Relaxing": How relaxing/calming (0=stressful, 10=very relaxing)
 
 === IF SPECIFIC ITEM ===
 Return this structure:
@@ -62,11 +77,24 @@ Return this structure:
   "Description": "A 1-2 sentence compelling description for an event plan.",
   "Price": <number - estimated price per person, use 0 if free or unknown>,
   "ServiceType": "Partner Activity",
+  "Website": "https://example.com",
+  "Location": "Full address or area, City, CA",
+  "Availability": "Operating hours or booking info",
+  "LeadTime": "How far ahead to book",
+  "GoodToKnow": "Any helpful additional details",
+  "Rankings": {
+    "Fun": <0-10>,
+    "Social": <0-10>,
+    "Active": <0-10>,
+    "Creative": <0-10>,
+    "Learning": <0-10>,
+    "Relaxing": <0-10>
+  },
   "relatedKeywords": ["keyword1", "keyword2", "keyword3"]
 }
 
 === IF BROAD CATEGORY ===
-Return this structure with 3-5 top recommendations:
+Return this structure with 3-5 top recommendations, EACH with comprehensive info:
 {
   "itemType": "Grouping",
   "name": "Top [Category] Options",
@@ -76,19 +104,25 @@ Return this structure with 3-5 top recommendations:
       "Name": "Specific Place 1",
       "Description": "1-2 sentence description",
       "Price": <number>,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://example1.com",
+      "Location": "Address or area",
+      "Availability": "Hours/booking info",
+      "LeadTime": "Booking lead time",
+      "GoodToKnow": "Additional helpful info",
+      "Rankings": { "Fun": 8, "Social": 7, "Active": 3, "Creative": 5, "Learning": 6, "Relaxing": 4 }
     },
     {
       "Name": "Specific Place 2",
       "Description": "1-2 sentence description",
       "Price": <number>,
-      "ServiceType": "Partner Activity"
-    },
-    {
-      "Name": "Specific Place 3",
-      "Description": "1-2 sentence description",
-      "Price": <number>,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://example2.com",
+      "Location": "Address or area",
+      "Availability": "Hours/booking info",
+      "LeadTime": "Booking lead time",
+      "GoodToKnow": "Additional helpful info",
+      "Rankings": { "Fun": 7, "Social": 8, "Active": 5, "Creative": 6, "Learning": 4, "Relaxing": 5 }
     }
   ],
   "relatedKeywords": ["related1", "related2", "related3", "related4", "related5"]
@@ -104,6 +138,19 @@ Example Response (Specific):
   "Description": "A renowned hands-on museum of science and art, open for adults-only (18+) evenings with a cash bar and music.",
   "Price": 40,
   "ServiceType": "Partner Activity",
+  "Website": "https://www.exploratorium.edu/visit/after-dark",
+  "Location": "Pier 15, Embarcadero, San Francisco, CA 94111",
+  "Availability": "Thursday evenings 6-10pm (18+ only)",
+  "LeadTime": "Book 1 week ahead for guaranteed entry, walk-ins if not sold out",
+  "GoodToKnow": "Cash bar available, no outside food/drinks, coat check available",
+  "Rankings": {
+    "Fun": 9,
+    "Social": 8,
+    "Active": 4,
+    "Creative": 7,
+    "Learning": 9,
+    "Relaxing": 5
+  },
   "relatedKeywords": ["museums", "nightlife", "interactive", "science", "date night"]
 }
 
@@ -118,19 +165,37 @@ Example Response (Grouping):
       "Name": "Flour + Water",
       "Description": "Award-winning Mission district spot known for fresh pasta and wood-fired Neapolitan pizza.",
       "Price": 65,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.flourandwater.com",
+      "Location": "2401 Harrison St, San Francisco, CA 94110",
+      "Availability": "Dinner nightly 5:30-10pm, limited walk-in bar seating",
+      "LeadTime": "Reservations recommended 2-3 weeks ahead for dinner",
+      "GoodToKnow": "Street parking only, counter seating available for walk-ins, excellent wine list",
+      "Rankings": { "Fun": 7, "Social": 8, "Active": 1, "Creative": 6, "Learning": 3, "Relaxing": 7 }
     },
     {
       "Name": "Delfina",
       "Description": "Neighborhood Italian favorite serving seasonal Californian-Italian cuisine in a warm atmosphere.",
       "Price": 55,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.delfinasf.com",
+      "Location": "3621 18th St, San Francisco, CA 94110",
+      "Availability": "Dinner Tue-Sun 5:30-10pm, closed Mondays",
+      "LeadTime": "Book 1-2 weeks ahead, easier on weeknights",
+      "GoodToKnow": "Connected to Pizzeria Delfina next door, cozy intimate space",
+      "Rankings": { "Fun": 6, "Social": 7, "Active": 1, "Creative": 5, "Learning": 3, "Relaxing": 8 }
     },
     {
       "Name": "Cotogna",
       "Description": "Michael Tusk's rustic Italian kitchen featuring house-made pastas and wood-fired dishes.",
       "Price": 75,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.cotognasf.com",
+      "Location": "490 Pacific Ave, San Francisco, CA 94133",
+      "Availability": "Lunch Mon-Fri, Dinner nightly, Sunday brunch",
+      "LeadTime": "Reservations 1-2 weeks ahead, lunch easier to book",
+      "GoodToKnow": "Adjacent to sister restaurant Quince, valet parking available",
+      "Rankings": { "Fun": 7, "Social": 7, "Active": 1, "Creative": 6, "Learning": 4, "Relaxing": 7 }
     }
   ],
   "relatedKeywords": ["pasta", "pizza", "fine dining", "trattorias", "wine bars"]
@@ -147,19 +212,37 @@ Example Response (Grouping):
       "Name": "Escape Room SF",
       "Description": "Challenging themed escape rooms that require teamwork and communication to solve puzzles.",
       "Price": 35,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.escapesf.com",
+      "Location": "Multiple locations in San Francisco",
+      "Availability": "Daily 10am-10pm, groups of 4-8 per room",
+      "LeadTime": "Book 1-2 weeks ahead for weekends, shorter for weekdays",
+      "GoodToKnow": "Private rooms available for corporate events, difficulty levels vary by room",
+      "Rankings": { "Fun": 9, "Social": 9, "Active": 3, "Creative": 8, "Learning": 5, "Relaxing": 2 }
     },
     {
       "Name": "Urban Putt",
       "Description": "Indoor miniature golf in a creative, art-filled space perfect for casual team outings.",
       "Price": 15,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.urbanputt.com",
+      "Location": "1096 South Van Ness Ave, San Francisco, CA 94110",
+      "Availability": "Mon-Thu 4pm-12am, Fri-Sun 11am-12am, 21+ after 8pm",
+      "LeadTime": "Walk-ins welcome, groups 8+ should reserve",
+      "GoodToKnow": "Full bar and restaurant on-site, artist-designed holes, private event space available",
+      "Rankings": { "Fun": 9, "Social": 8, "Active": 2, "Creative": 7, "Learning": 2, "Relaxing": 6 }
     },
     {
       "Name": "The Winery SF",
       "Description": "Wine blending workshops where teams create their own custom blend in an urban winery.",
       "Price": 75,
-      "ServiceType": "Partner Activity"
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.winery-sf.com",
+      "Location": "200 California St, San Francisco, CA 94111",
+      "Availability": "Classes Wed-Sun, private events available any day",
+      "LeadTime": "Book 2-3 weeks ahead for group workshops",
+      "GoodToKnow": "Take home your custom-labeled bottle, food pairings available, 21+ only",
+      "Rankings": { "Fun": 8, "Social": 8, "Active": 2, "Creative": 9, "Learning": 7, "Relaxing": 7 }
     }
   ],
   "relatedKeywords": ["corporate events", "group activities", "workshops", "games", "bonding"]

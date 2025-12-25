@@ -477,6 +477,42 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
             // Handle GROUPING type - multiple AI recommendations
             aiData.children.forEach((child, index) => {
                 const childId = `ai-child-${timestamp}-${index}`;
+
+                // Build comprehensive Rankings JSON with AI profile scores
+                const rankingsData = {
+                    "profileSource": "ai_hybrid_search",
+                    "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+                };
+                // Add activity profile scores if provided by AI
+                if (child.Rankings && typeof child.Rankings === 'object') {
+                    rankingsData.Fun = child.Rankings.Fun || 0;
+                    rankingsData.Social = child.Rankings.Social || 0;
+                    rankingsData.Active = child.Rankings.Active || 0;
+                    rankingsData.Creative = child.Rankings.Creative || 0;
+                    rankingsData.Learning = child.Rankings.Learning || 0;
+                    rankingsData.Relaxing = child.Rankings.Relaxing || 0;
+                }
+
+                // Build location details with availability and address
+                let locationDetails = '';
+                if (child.Location) locationDetails += child.Location;
+                if (child.Availability) {
+                    locationDetails += locationDetails ? '\n\n' : '';
+                    locationDetails += `Hours: ${child.Availability}`;
+                }
+
+                // Build "Good to Know" / Additional Information with lead time and extra info
+                let additionalInfo = '';
+                if (child.LeadTime) additionalInfo += `Booking: ${child.LeadTime}`;
+                if (child.GoodToKnow) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += child.GoodToKnow;
+                }
+                if (child.Website) {
+                    additionalInfo += additionalInfo ? '\n\n' : '';
+                    additionalInfo += `Website: ${child.Website}`;
+                }
+
                 const childRecord = {
                     id: childId,
                     fields: {
@@ -489,15 +525,13 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                         Status: 'Available',
                         'Pricing Type': 'per person',
                         Stores: [state.ui.activeShopId],
-                        Rankings: JSON.stringify({
-                            "profileSource": "ai_hybrid_search",
-                            "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
-                        }),
+                        Rankings: JSON.stringify(rankingsData),
+                        'Location Details': locationDetails || null,
+                        'Additional Information': additionalInfo || null,
                         Options: null, 'Headcount min': null, 'Media Tags': null,
                         'Curated Images': null, Subcategories: null, 'iCal URL': null,
                         'Lead Time (days)': null, RSVPs: null, Date: null,
-                        'Chat Enabled': false, Duration: null, Capacity: null,
-                        'Location Details': null, 'Additional Information': null
+                        'Chat Enabled': false, Duration: null, Capacity: null
                     }
                 };
                 aiRecords.push(childRecord);
@@ -506,6 +540,42 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
         } else if (aiData.Name) {
             // Handle SPECIFIC type - single AI result
             const customId = `ai-search-${timestamp}`;
+
+            // Build comprehensive Rankings JSON with AI profile scores
+            const rankingsData = {
+                "profileSource": "ai_hybrid_search",
+                "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+            };
+            // Add activity profile scores if provided by AI
+            if (aiData.Rankings && typeof aiData.Rankings === 'object') {
+                rankingsData.Fun = aiData.Rankings.Fun || 0;
+                rankingsData.Social = aiData.Rankings.Social || 0;
+                rankingsData.Active = aiData.Rankings.Active || 0;
+                rankingsData.Creative = aiData.Rankings.Creative || 0;
+                rankingsData.Learning = aiData.Rankings.Learning || 0;
+                rankingsData.Relaxing = aiData.Rankings.Relaxing || 0;
+            }
+
+            // Build location details with availability and address
+            let locationDetails = '';
+            if (aiData.Location) locationDetails += aiData.Location;
+            if (aiData.Availability) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Hours: ${aiData.Availability}`;
+            }
+
+            // Build "Good to Know" / Additional Information with lead time and extra info
+            let additionalInfo = '';
+            if (aiData.LeadTime) additionalInfo += `Booking: ${aiData.LeadTime}`;
+            if (aiData.GoodToKnow) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += aiData.GoodToKnow;
+            }
+            if (aiData.Website) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Website: ${aiData.Website}`;
+            }
+
             const liveRecord = {
                 id: customId,
                 fields: {
@@ -517,15 +587,13 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     Status: 'Available',
                     'Pricing Type': 'per person',
                     Stores: [state.ui.activeShopId],
-                    Rankings: JSON.stringify({
-                        "profileSource": "ai_hybrid_search",
-                        "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
-                    }),
+                    Rankings: JSON.stringify(rankingsData),
+                    'Location Details': locationDetails || null,
+                    'Additional Information': additionalInfo || null,
                     Options: null, 'Parent Item': null, 'Headcount min': null,
                     'Media Tags': null, 'Curated Images': null, Subcategories: null,
                     'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
-                    'Chat Enabled': false, Duration: null, Capacity: null,
-                    'Location Details': null, 'Additional Information': null
+                    'Chat Enabled': false, Duration: null, Capacity: null
                 }
             };
             aiRecords.push(liveRecord);
