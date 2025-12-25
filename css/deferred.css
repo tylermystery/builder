@@ -3211,6 +3211,154 @@
     }
 }
 
+/* Sub-Accordion Styles (for nested accordions like Hosts, Collaborators & Plan Chat) */
+.sub-accordion {
+    overflow: hidden;
+    margin-top: 20px;
+    border: 1px solid rgba(0, 123, 255, 0.15);
+    border-radius: 12px;
+    background: rgba(248, 249, 250, 0.5);
+}
+
+.sub-accordion-header {
+    cursor: pointer;
+    padding: 15px 18px;
+    user-select: none;
+    transition: background 0.2s ease, padding 0.3s ease;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.sub-accordion-header:hover {
+    background: rgba(0, 123, 255, 0.05);
+}
+
+.sub-accordion-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+
+.sub-accordion-title {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+}
+
+.sub-accordion-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    position: relative;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.sub-accordion-icon::before,
+.sub-accordion-icon::after {
+    content: '';
+    position: absolute;
+    background-color: #667eea;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.sub-accordion-icon::before {
+    width: 2px;
+    height: 12px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.sub-accordion-icon::after {
+    width: 12px;
+    height: 2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Expanded state - hide the vertical line to show minus */
+.sub-accordion.expanded .sub-accordion-icon::before {
+    transform: translate(-50%, -50%) rotate(90deg);
+    opacity: 0;
+}
+
+.sub-accordion-summary {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin: 10px 0 0 0;
+    line-height: 1.4;
+    max-height: 50px;
+    overflow: hidden;
+    transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+/* Hide summary when expanded */
+.sub-accordion.expanded .sub-accordion-summary {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+}
+
+.sub-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease, padding 0.3s ease;
+    padding: 0 18px;
+}
+
+/* Expanded state */
+.sub-accordion.expanded .sub-accordion-content {
+    max-height: 3000px;
+    padding: 15px 18px;
+    overflow: visible;
+}
+
+/* Plan Chat Section inside sub-accordion */
+.plan-chat-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 123, 255, 0.1);
+}
+
+.plan-chat-section h4,
+.itinerary-collaborators h4 {
+    font-size: 1em;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 12px 0;
+}
+
+/* Mobile responsive styles for sub-accordion */
+@media (max-width: 768px) {
+    .sub-accordion-header {
+        padding: 12px 15px;
+    }
+
+    .sub-accordion-title {
+        font-size: 1em;
+    }
+
+    .sub-accordion-summary {
+        font-size: 0.8em;
+    }
+
+    .sub-accordion-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .sub-accordion-content {
+        padding: 0 15px;
+    }
+
+    .sub-accordion.expanded .sub-accordion-content {
+        padding: 12px 15px;
+    }
+}
+
 /* ============================================
    Item-Level Accordion Styles
    Each plan component/item can be collapsed

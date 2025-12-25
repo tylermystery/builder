@@ -53,7 +53,7 @@ let presentationWhosHereList = null;
 // Accordion summary elements
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
-let chatSummaryEl = null;
+let hostsChatSummaryEl = null;
 
 // Floating chat button
 let floatingChatBtn = null;
@@ -68,7 +68,7 @@ const itemImagesCache = new Map();
 const accordionState = {
     header: true,
     items: true,
-    chat: true
+    'hosts-chat': true
 };
 
 // Pusher instance for presentation chat
@@ -249,14 +249,14 @@ function ensureDOMElements() {
     // Accordion summary elements
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
-    chatSummaryEl = document.getElementById('chat-summary');
+    hostsChatSummaryEl = document.getElementById('hosts-chat-summary');
 
     console.log('[Accordion DEBUG] DOM elements after init:', {
         modal: !!modal,
         closeBtn: !!closeBtn,
         headerSummaryEl: !!headerSummaryEl,
         itemsSummaryEl: !!itemsSummaryEl,
-        chatSummaryEl: !!chatSummaryEl
+        hostsChatSummaryEl: !!hostsChatSummaryEl
     });
 
     if (!modal) {
@@ -1708,13 +1708,13 @@ function initializeFloatingChatButton() {
     if (!floatingChatBtn || !modal) return;
 
     const presentationContent = modal.querySelector('.presentation-content');
-    const chatSection = modal.querySelector('.itinerary-chat');
+    const chatContainer = modal.querySelector('#presentation-chat-container');
 
-    if (!presentationContent || !chatSection) return;
+    if (!presentationContent || !chatContainer) return;
 
     // Function to check if chat section is visible in viewport
     const isChatInView = () => {
-        const chatRect = chatSection.getBoundingClientRect();
+        const chatRect = chatContainer.getBoundingClientRect();
         const modalRect = modal.getBoundingClientRect();
         // Chat is "in view" if its top is visible within the modal
         return chatRect.top < modalRect.bottom - 100 && chatRect.bottom > modalRect.top;
@@ -1752,12 +1752,13 @@ function initializeFloatingChatButton() {
         } else {
             // Save current position and scroll to chat
             savedScrollPosition = presentationContent.scrollTop;
-            chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            chatContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // Also expand the chat accordion if it's collapsed
-            if (!accordionState.chat) {
-                const chatHeader = chatSection.querySelector('.itinerary-accordion-header');
-                if (chatHeader) chatHeader.click();
+            // Also expand the hosts-chat sub-accordion if it's collapsed
+            if (!accordionState['hosts-chat']) {
+                const hostsChatAccordion = modal.querySelector('.sub-accordion[data-section="hosts-chat"]');
+                const hostsChatHeader = hostsChatAccordion?.querySelector('.sub-accordion-header');
+                if (hostsChatHeader) hostsChatHeader.click();
             }
 
             // Focus the input after scrolling
@@ -1879,54 +1880,48 @@ function generateItemsSummary() {
     }
 }
 
-// Generate summary for the chat section
-function generateChatSummary() {
-    // Use the embedded presentation chat messages, not the sidebar chat
-    if (!chatMessagesEl) {
-        if (chatSummaryEl) {
-            chatSummaryEl.textContent = 'No discussion yet';
-        }
-        return;
+// Generate summary for the hosts-chat section (Hosts, Collaborators & Plan Chat)
+function generateHostsChatSummary() {
+    const collaboratorCount = state.session.userProfiles.size;
+
+    // Count messages from the chat
+    let messageCount = 0;
+    if (chatMessagesEl) {
+        const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
+        messageCount = messages.length;
     }
 
-    const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
-    const messageCount = messages.length;
+    let summary = '';
 
-    if (messageCount === 0) {
-        if (chatSummaryEl) {
-            chatSummaryEl.textContent = 'No messages yet';
-        }
-        return;
+    // Show host/collaborator count
+    if (collaboratorCount > 0) {
+        const hostWord = collaboratorCount === 1 ? 'host' : 'hosts';
+        summary = `<span class="summary-count">${collaboratorCount}</span> ${hostWord}`;
+    } else {
+        summary = 'No hosts yet';
     }
 
-    // Get unique participants
-    const participants = new Set();
-    messages.forEach(msg => {
-        const authorEl = msg.querySelector('.message-author');
-        if (authorEl) {
-            participants.add(authorEl.textContent.trim());
+    // Show message count
+    if (messageCount > 0) {
+        summary += ` &bull; <span class="summary-count">${messageCount}</span> message${messageCount !== 1 ? 's' : ''}`;
+
+        // Get preview of latest message
+        const messages = chatMessagesEl.querySelectorAll('.message-wrapper');
+        const lastMessage = messages[messages.length - 1];
+        const lastContent = lastMessage?.querySelector('.message-content');
+        if (lastContent) {
+            const text = lastContent.textContent.trim();
+            if (text) {
+                const truncated = text.length > 40 ? text.substring(0, 40) + '...' : text;
+                summary += ` &bull; "${truncated}"`;
+            }
         }
-    });
-
-    let summary = `<span class="summary-count">${messageCount}</span> message${messageCount !== 1 ? 's' : ''}`;
-
-    if (participants.size > 0) {
-        summary += ` from <span class="summary-count">${participants.size}</span> participant${participants.size !== 1 ? 's' : ''}`;
+    } else {
+        summary += ' &bull; No messages yet';
     }
 
-    // Get preview of latest message
-    const lastMessage = messages[messages.length - 1];
-    const lastContent = lastMessage?.querySelector('.message-content');
-    if (lastContent) {
-        const text = lastContent.textContent.trim();
-        if (text) {
-            const truncated = text.length > 50 ? text.substring(0, 50) + '...' : text;
-            summary += ` &bull; "${truncated}"`;
-        }
-    }
-
-    if (chatSummaryEl) {
-        chatSummaryEl.innerHTML = summary;
+    if (hostsChatSummaryEl) {
+        hostsChatSummaryEl.innerHTML = summary;
     }
 }
 
@@ -1935,7 +1930,11 @@ function toggleAccordion(section) {
     console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
     console.log('[Accordion DEBUG] modal element:', modal);
 
-    const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+    // Check both main accordions and sub-accordions
+    let sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+    if (!sectionEl) {
+        sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
+    }
     console.log('[Accordion DEBUG] Found section element:', sectionEl);
 
     if (!sectionEl) {
@@ -2000,7 +1999,11 @@ function initializeAccordions() {
     // Set all sections to expanded state initially
     Object.keys(accordionState).forEach(section => {
         accordionState[section] = true;
-        const sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        // Check for main accordions first, then sub-accordions
+        let sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
+        if (!sectionEl) {
+            sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
+        }
         console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
         if (sectionEl) {
             sectionEl.classList.add('expanded');
@@ -2013,7 +2016,7 @@ function initializeAccordions() {
     // Generate all summaries
     generateHeaderSummary();
     generateItemsSummary();
-    generateChatSummary();
+    generateHostsChatSummary();
 
     console.log('[Accordion DEBUG] initializeAccordions completed');
 }
@@ -2184,7 +2187,7 @@ export async function showPresentationView(listType, startRecordId = null) {
     await initializePresentationChat();
 
     // Update chat summary after messages are loaded
-    generateChatSummary();
+    generateHostsChatSummary();
 
     // Initialize the floating chat button
     initializeFloatingChatButton();
@@ -2286,8 +2289,8 @@ export function setupPresentationEventListeners() {
     console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
 
     if (scrollContainer) {
-        // Debug: Log all accordion headers found
-        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header');
+        // Debug: Log all accordion headers found (both main and sub)
+        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header, .sub-accordion-header');
         console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
         accordionHeaders.forEach((header, index) => {
             console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
@@ -2299,8 +2302,12 @@ export function setupPresentationEventListeners() {
             console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
             console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
 
-            const accordionHeader = e.target.closest('.itinerary-accordion-header');
-            console.log('[Accordion DEBUG] Closest .itinerary-accordion-header:', accordionHeader);
+            // Check for both main and sub accordion headers
+            let accordionHeader = e.target.closest('.itinerary-accordion-header');
+            if (!accordionHeader) {
+                accordionHeader = e.target.closest('.sub-accordion-header');
+            }
+            console.log('[Accordion DEBUG] Closest accordion header:', accordionHeader);
 
             if (!accordionHeader) {
                 console.log('[Accordion DEBUG] No accordion header found - ignoring click');
@@ -2308,8 +2315,8 @@ export function setupPresentationEventListeners() {
             }
 
             // Don't trigger accordion on interactive elements inside
-            if (e.target.closest('button') || e.target.closest('a')) {
-                console.log('[Accordion DEBUG] Clicked on button/link inside header - ignoring');
+            if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) {
+                console.log('[Accordion DEBUG] Clicked on button/link/input inside header - ignoring');
                 return;
             }
 

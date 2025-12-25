@@ -1981,10 +1981,50 @@ body.modal-open {
                         </div>
                         <p id="summary-event-notes" class="itinerary-notes"></p>
 
-                        <!-- Hosts & Collaborators -->
-                        <div id="itinerary-collaborators" class="itinerary-collaborators">
-                            <h3>Hosts & Collaborators</h3>
-                            <div id="itinerary-collaborators-list" class="collaborators-list"></div>
+                        <!-- Hosts, Collaborators & Plan Chat Sub-Accordion -->
+                        <div id="hosts-chat-accordion" class="hosts-chat-accordion sub-accordion" data-section="hosts-chat">
+                            <div class="sub-accordion-header" data-section="hosts-chat">
+                                <div class="sub-accordion-title-row">
+                                    <h3 class="sub-accordion-title">Hosts, Collaborators & Plan Chat</h3>
+                                    <span class="sub-accordion-icon"></span>
+                                </div>
+                                <p class="sub-accordion-summary" id="hosts-chat-summary"></p>
+                            </div>
+                            <div class="sub-accordion-content">
+                                <!-- Hosts & Collaborators -->
+                                <div id="itinerary-collaborators" class="itinerary-collaborators">
+                                    <h4>Hosts & Collaborators</h4>
+                                    <div id="itinerary-collaborators-list" class="collaborators-list"></div>
+                                </div>
+
+                                <!-- Embedded Plan Chat Interface (moved from Event Discussion section) -->
+                                <div class="plan-chat-section">
+                                    <h4>Plan Chat</h4>
+                                    <div id="presentation-chat-container" class="presentation-chat-container">
+                                        <div id="presentation-chat-header" class="presentation-chat-header">
+                                            <div class="presentation-chat-info">
+                                                <span class="presentation-chat-title">Chat</span>
+                                                <span class="presentation-chat-presence">(<span id="presentation-whos-here-count">0</span> online)</span>
+                                            </div>
+                                            <div class="presentation-user-identity">
+                                                <label for="presentation-chat-user-name">Your Name:</label>
+                                                <input type="text" id="presentation-chat-user-name" autocomplete="off">
+                                            </div>
+                                        </div>
+                                        <div id="presentation-whos-here-list" class="presentation-whos-here-list"></div>
+                                        <div id="presentation-messages-container" class="presentation-messages-container">
+                                            <div id="itinerary-chat-messages" class="itinerary-chat-messages">
+                                                <!-- Chat messages will be rendered here -->
+                                            </div>
+                                        </div>
+                                        <div id="presentation-typing-indicator" class="presentation-typing-indicator"></div>
+                                        <form id="presentation-message-form" class="presentation-message-form">
+                                            <input type="text" id="presentation-message-input" placeholder="Type a message..." autocomplete="off">
+                                            <button type="submit">Send</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="itinerary-actions">
@@ -2009,43 +2049,6 @@ body.modal-open {
                         <!-- Reactions Summary Section -->
                         <div id="reactions-summary-container" class="reactions-summary-container">
                             <!-- Reactions summary and rankings will be rendered here by JavaScript -->
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Event Chat Section - Fully Embedded Interactive Chat -->
-                <section class="itinerary-section itinerary-chat itinerary-accordion" data-section="chat">
-                    <div class="itinerary-accordion-header" data-section="chat">
-                        <div class="itinerary-accordion-title-row">
-                            <h2 class="itinerary-accordion-title">Event Discussion</h2>
-                            <span class="itinerary-accordion-icon"></span>
-                        </div>
-                        <p class="itinerary-accordion-summary" id="chat-summary"></p>
-                    </div>
-                    <div class="itinerary-accordion-content">
-                        <!-- Embedded Chat Interface -->
-                        <div id="presentation-chat-container" class="presentation-chat-container">
-                            <div id="presentation-chat-header" class="presentation-chat-header">
-                                <div class="presentation-chat-info">
-                                    <span class="presentation-chat-title">Chat</span>
-                                    <span class="presentation-chat-presence">(<span id="presentation-whos-here-count">0</span> online)</span>
-                                </div>
-                                <div class="presentation-user-identity">
-                                    <label for="presentation-chat-user-name">Your Name:</label>
-                                    <input type="text" id="presentation-chat-user-name" autocomplete="off">
-                                </div>
-                            </div>
-                            <div id="presentation-whos-here-list" class="presentation-whos-here-list"></div>
-                            <div id="presentation-messages-container" class="presentation-messages-container">
-                                <div id="itinerary-chat-messages" class="itinerary-chat-messages">
-                                    <!-- Chat messages will be rendered here -->
-                                </div>
-                            </div>
-                            <div id="presentation-typing-indicator" class="presentation-typing-indicator"></div>
-                            <form id="presentation-message-form" class="presentation-message-form">
-                                <input type="text" id="presentation-message-input" placeholder="Type a message..." autocomplete="off">
-                                <button type="submit">Send</button>
-                            </form>
                         </div>
                     </div>
                 </section>
