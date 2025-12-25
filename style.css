@@ -4649,6 +4649,14 @@ body.modal-open {
     margin-top: 0;
 }
 
+/* Hide item title when collapsed (show only when expanded) */
+.item-accordion:not(.expanded) .item-accordion-title {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    margin: 0;
+}
+
 /* Item summary styling elements */
 .item-summary-name {
     font-weight: 500;
@@ -4865,6 +4873,27 @@ body.modal-open {
     opacity: 0;
     max-height: 0;
     margin-top: 0;
+}
+
+/* Accordion section title (e.g., plan name in header) */
+.accordion-section-title {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+/* Hide accordion section title when collapsed */
+.itinerary-accordion:not(.expanded) .accordion-section-title {
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
 }
 
 .itinerary-accordion-content {

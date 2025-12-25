@@ -55,6 +55,9 @@ let headerSummaryEl = null;
 let itemsSummaryEl = null;
 let hostsChatSummaryEl = null;
 
+// Accordion title element for header section
+let headerAccordionTitleEl = null;
+
 // Floating chat button
 let floatingChatBtn = null;
 
@@ -251,6 +254,9 @@ function ensureDOMElements() {
     itemsSummaryEl = document.getElementById('items-summary');
     hostsChatSummaryEl = document.getElementById('hosts-chat-summary');
 
+    // Accordion title element for the header section
+    headerAccordionTitleEl = document.getElementById('header-accordion-title');
+
     console.log('[Accordion DEBUG] DOM elements after init:', {
         modal: !!modal,
         closeBtn: !!closeBtn,
@@ -275,6 +281,11 @@ function renderEventHeader() {
 
     summaryEventNameEl.textContent = eventName;
     summaryEventNotesEl.textContent = goals;
+
+    // Set the accordion title to the plan name
+    if (headerAccordionTitleEl) {
+        headerAccordionTitleEl.textContent = eventName;
+    }
 
     if (dateValue) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
@@ -633,7 +644,7 @@ async function renderItineraryItem(item, index) {
         <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
-                    <div class="itinerary-item-number">${index + 1}</div>
+                    <h3 class="item-accordion-title">${name}</h3>
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                     <span class="item-accordion-icon"></span>
                 </div>
