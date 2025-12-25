@@ -634,7 +634,6 @@ async function renderItineraryItem(item, index) {
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
                     <div class="itinerary-item-number">${index + 1}</div>
-                    <h3 class="item-accordion-title">${name}</h3>
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                     <span class="item-accordion-icon"></span>
                 </div>
