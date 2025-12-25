@@ -9117,3 +9117,158 @@ hr.total-divider {
 .ReactModal__Content--after-open {
     z-index: 100001 !important;
 }
+
+/* === AI-SOURCED CARD STYLES === */
+/* Visual styling for AI-generated/discovered catalog items */
+
+.ai-sourced-card {
+    border: 2px solid #3498db !important;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.05) 0%, rgba(52, 152, 219, 0.1) 100%);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.ai-sourced-card:hover {
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.35);
+    border-color: #2980b9 !important;
+}
+
+/* AI Discovery Badge */
+.ai-discovery-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(52, 152, 219, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-discovery-badge::before {
+    content: '✨';
+    font-size: 0.9em;
+}
+
+/* AI Grouping Card (parent container for AI-generated category results) */
+.ai-sourced-card.ai-grouping-card {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.08) 0%, rgba(155, 89, 182, 0.08) 100%);
+    border: 2px solid #9b59b6 !important;
+}
+
+.ai-sourced-card.ai-grouping-card:hover {
+    box-shadow: 0 4px 16px rgba(155, 89, 182, 0.35);
+    border-color: #8e44ad !important;
+}
+
+.ai-grouping-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 6px rgba(155, 89, 182, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ai-grouping-badge::before {
+    content: '🤖';
+    font-size: 0.9em;
+}
+
+/* === SMART REFINEMENT CHIPS === */
+/* Clickable suggestion chips below the search bar */
+
+#ai-refinement-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 0;
+    margin-top: 8px;
+}
+
+#ai-refinement-chips-container:empty {
+    display: none;
+}
+
+.ai-refinement-chip {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.2));
+    border: 1px solid #3498db;
+    color: #2980b9;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ai-refinement-chip::before {
+    content: '🔍';
+    font-size: 0.85em;
+}
+
+.ai-refinement-chip:hover {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+.ai-refinement-chip:active {
+    transform: translateY(0);
+}
+
+/* AI Child Items Container (for grouping results) */
+.ai-children-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+    padding: 15px;
+    margin-top: 10px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 8px;
+}
+
+/* Responsive adjustments for AI cards */
+@media (max-width: 768px) {
+    #ai-refinement-chips-container {
+        padding: 8px 0;
+        gap: 6px;
+    }
+
+    .ai-refinement-chip {
+        padding: 5px 12px;
+        font-size: 0.8em;
+    }
+
+    .ai-discovery-badge,
+    .ai-grouping-badge {
+        padding: 3px 8px;
+        font-size: 0.7em;
+    }
+
+    .ai-children-container {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+}

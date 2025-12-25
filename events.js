@@ -303,6 +303,7 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
     const catalogContainer = document.getElementById('catalog-container');
     if (!catalogContainer) return;
 
+    // Show loading ghost card
     const ghostRecord = {
         id: `ai-search-${Date.now()}`,
         fields: {
@@ -314,92 +315,144 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
             Status: 'Available'
         }
     };
-    
+
     const ghostCard = await ui.createInteractiveCard(ghostRecord, [], imageCache);
     ghostCard.id = "ai-ghost-card";
     ghostCard.style.opacity = "0.5";
     ghostCard.style.pointerEvents = "none";
-    
+
     catalogContainer.innerHTML = '';
     catalogContainer.appendChild(ghostCard);
 
     try {
-        log('Events', 'WORKAROUND: Simulating Proactive AI search for:', searchTerm);
-        await new Promise(res => setTimeout(res, 1500)); 
-        if (signal.aborted) return;
+        log('Events', 'Starting Hybrid AI search for:', searchTerm);
 
-        const webData = {
-            Name: `[DUMMY] ${searchTerm}`,
-            Description: "This is a dummy item. The real AI-parsed description will go here.",
-            Price: Math.floor(Math.random() * 100) + 10,
-            ServiceType: "Partner Activity"
-        };
-        
-        log('Events', 'Proactive AI Parse Success:', webData);
-        
-        const customId = `custom-${Date.now()}`;
-        
-        const liveRecord = {
-            id: customId,
-            fields: {
-                Name: webData.Name,
-                Description: webData.Description,
-                Price: webData.Price,
-                ServiceType: webData.ServiceType,
-                'Item Type': 'Bookable Item',
-                Status: 'Available',
-                Rankings: JSON.stringify({
-                    "profileSource": "ai_v1_dummy_profile",
-                    "Pillars": { "Activities": 10, "Food/Drink": 0, "Venue": 0, "Extras": 0 },
-                    "Vibe": { "Energy": 8, "Relaxation": 2, "Formality": 3, "Novelty": 9 },
-                    "Intellect": { "Creative": 5, "Analytical": 5 },
-                    "Physicality": { "Intensity": 5, "Accessibility": 5 },
-                    "Tags": [searchTerm.toLowerCase(), "dummy", "partner activity"]
-                }),
-                Options: null, 'Parent Item': null, 'Pricing Type': 'per person', 
-                'Headcount min': null, 'Media Tags': null, 'Curated Images': null, 
-                Subcategories: null, 'iCal URL': null, 'Lead Time (days)': null, 
-                RSVPs: null, Date: null, 'Chat Enabled': false, Duration: null, 
-                Capacity: null, 'Location Details': null, 'Additional Information': null
-            }
-        };
-        
-        state.records.all.push(liveRecord);
+        // Call the actual AI function
+        const response = await fetch('/.netlify/functions/process-weblink', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchTerm }),
+            signal: signal
+        });
 
-        const finalCard = await ui.createInteractiveCard(liveRecord, [], imageCache);
-        
-        const addToPlanBtn = finalCard.querySelector('.add-to-plan-btn');
-        if (addToPlanBtn) {
-            addToPlanBtn.textContent = 'Add to Plan';
-            addToPlanBtn.disabled = false;
-            
-            const newBtn = addToPlanBtn.cloneNode(true);
-            addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
-
-            newBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                log('Events', `Adding AI-parsed item: ${customId}`);
-                
-                state.cart.lockedItems.set(customId, {
-                    quantity: 1,
-                    selectedOptionIndex: 0,
-                    note: `Added via AI search for: "${searchTerm}"`
-                });
-
-                // Add progress for AI-sourced item
-                updateProgress(0.0002);
-
-                ui.updateEventPlanSection();
-                ui.updateTotalCost();
-                triggerSave();
-                
-                newBtn.textContent = 'Update Plan';
-                newBtn.disabled = true;
-            });
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
         }
 
+        if (signal.aborted) return;
+
+        const aiData = await response.json();
+        log('Events', 'AI Search Response:', aiData);
+
+        // Clear catalog for new results
         catalogContainer.innerHTML = '';
-        catalogContainer.appendChild(finalCard);
+
+        // Handle relatedKeywords for refinement chips
+        if (aiData.relatedKeywords && Array.isArray(aiData.relatedKeywords)) {
+            renderRefinementChips(aiData.relatedKeywords, imageCache);
+        }
+
+        // Handle GROUPING type - broad category with multiple recommendations
+        if (aiData.itemType === 'Grouping') {
+            const timestamp = Date.now();
+            const groupingId = `ai-group-${timestamp}`;
+
+            // Create the parent Grouping record
+            const groupingRecord = {
+                id: groupingId,
+                fields: {
+                    Name: aiData.name || `Top ${searchTerm} Options`,
+                    Description: aiData.Description || `AI-generated recommendations for ${searchTerm}`,
+                    'Item Type': 'Grouping',
+                    ServiceType: 'Partner Activity',
+                    Status: 'Available',
+                    Stores: [state.ui.activeShopId]
+                }
+            };
+
+            // Add grouping to state
+            state.records.all.push(groupingRecord);
+
+            // Create child records from the children array
+            const childRecords = [];
+            if (aiData.children && Array.isArray(aiData.children)) {
+                aiData.children.forEach((child, index) => {
+                    const childId = `ai-child-${timestamp}-${index}`;
+                    const childRecord = {
+                        id: childId,
+                        fields: {
+                            Name: child.Name,
+                            Description: child.Description,
+                            Price: child.Price || 0,
+                            ServiceType: child.ServiceType || 'Partner Activity',
+                            'Item Type': 'Bookable Item',
+                            'Parent Item': aiData.name || groupingRecord.fields.Name,
+                            Status: 'Available',
+                            'Pricing Type': 'per person',
+                            Stores: [state.ui.activeShopId],
+                            Rankings: JSON.stringify({
+                                "profileSource": "ai_hybrid_search",
+                                "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+                            }),
+                            Options: null, 'Headcount min': null, 'Media Tags': null,
+                            'Curated Images': null, Subcategories: null, 'iCal URL': null,
+                            'Lead Time (days)': null, RSVPs: null, Date: null,
+                            'Chat Enabled': false, Duration: null, Capacity: null,
+                            'Location Details': null, 'Additional Information': null
+                        }
+                    };
+                    childRecords.push(childRecord);
+                    state.records.all.push(childRecord);
+                });
+            }
+
+            log('Events', `Created AI Grouping "${groupingRecord.fields.Name}" with ${childRecords.length} children`);
+
+            // Render the grouping card
+            const groupingCard = await ui.createInteractiveCard(groupingRecord, state.records.all, imageCache);
+            catalogContainer.appendChild(groupingCard);
+
+            // Render all child item cards
+            for (const childRecord of childRecords) {
+                const childCard = await ui.createInteractiveCard(childRecord, state.records.all, imageCache);
+                attachAddToPlanHandler(childCard, childRecord, searchTerm, imageCache);
+                catalogContainer.appendChild(childCard);
+            }
+
+        } else {
+            // Handle SPECIFIC type - single item result (or legacy format)
+            const customId = `ai-search-${Date.now()}`;
+
+            const liveRecord = {
+                id: customId,
+                fields: {
+                    Name: aiData.Name,
+                    Description: aiData.Description,
+                    Price: aiData.Price || 0,
+                    ServiceType: aiData.ServiceType || 'Partner Activity',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': 'per person',
+                    Stores: [state.ui.activeShopId],
+                    Rankings: JSON.stringify({
+                        "profileSource": "ai_hybrid_search",
+                        "Tags": [searchTerm.toLowerCase(), "ai-generated", "partner activity"]
+                    }),
+                    Options: null, 'Parent Item': null, 'Headcount min': null,
+                    'Media Tags': null, 'Curated Images': null, Subcategories: null,
+                    'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
+                    'Chat Enabled': false, Duration: null, Capacity: null,
+                    'Location Details': null, 'Additional Information': null
+                }
+            };
+
+            state.records.all.push(liveRecord);
+            log('Events', 'Created AI Specific item:', liveRecord.fields.Name);
+
+            const finalCard = await ui.createInteractiveCard(liveRecord, state.records.all, imageCache);
+            attachAddToPlanHandler(finalCard, liveRecord, searchTerm, imageCache);
+            catalogContainer.appendChild(finalCard);
+        }
 
     } catch (err) {
         if (err.name === 'AbortError') {
@@ -410,6 +463,104 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
         catalogContainer.innerHTML = `<p style='text-align: center;'>Could not find "${searchTerm}". Please try a different name or URL.</p>`;
     } finally {
         aiSearchController = null;
+    }
+}
+
+/**
+ * Attaches the "Add to Plan" click handler to an AI-generated card
+ * @param {HTMLElement} card - The card element
+ * @param {object} record - The record data
+ * @param {string} searchTerm - The original search term
+ * @param {object} imageCache - Image cache reference
+ */
+function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
+    const addToPlanBtn = card.querySelector('.add-to-plan-btn');
+    if (addToPlanBtn) {
+        addToPlanBtn.textContent = 'Add to Plan';
+        addToPlanBtn.disabled = false;
+
+        const newBtn = addToPlanBtn.cloneNode(true);
+        addToPlanBtn.parentNode.replaceChild(newBtn, addToPlanBtn);
+
+        newBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            log('Events', `Adding AI-parsed item: ${record.id}`);
+
+            state.cart.lockedItems.set(record.id, {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                note: `Added via AI search for: "${searchTerm}"`
+            });
+
+            // Add progress for AI-sourced item
+            updateProgress(0.0002);
+
+            // Broadcast item addition for real-time updates
+            broadcastItemAdded(record.id, { quantity: 1, note: `AI search: "${searchTerm}"` });
+
+            ui.updateEventPlanSection();
+            ui.updateTotalCost();
+            triggerSave();
+
+            newBtn.textContent = 'Update Plan';
+            newBtn.disabled = true;
+        });
+    }
+}
+
+/**
+ * Renders AI-suggested refinement chips below the search bar
+ * @param {string[]} keywords - Array of related keywords
+ * @param {object} imageCache - Image cache reference
+ */
+function renderRefinementChips(keywords, imageCache) {
+    // Find or create the refinement chips container
+    let chipsContainer = document.getElementById('ai-refinement-chips-container');
+    const searchBarContainer = document.getElementById('search-bar-container');
+
+    if (!chipsContainer && searchBarContainer) {
+        chipsContainer = document.createElement('div');
+        chipsContainer.id = 'ai-refinement-chips-container';
+        searchBarContainer.appendChild(chipsContainer);
+    }
+
+    if (!chipsContainer) return;
+
+    // Clear existing chips
+    chipsContainer.innerHTML = '';
+
+    // Create chips for each keyword
+    keywords.slice(0, 5).forEach(keyword => {
+        const chip = document.createElement('button');
+        chip.className = 'ai-refinement-chip';
+        chip.textContent = keyword;
+        chip.title = `Search for "${keyword}"`;
+
+        chip.addEventListener('click', () => {
+            // Update search input and trigger new search
+            const nameFilterInput = document.getElementById('name-filter');
+            if (nameFilterInput) {
+                nameFilterInput.value = keyword;
+                nameFilterInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+                // Trigger the search with a slight delay to allow debounce
+                setTimeout(() => {
+                    handleProactiveAISearch(keyword, imageCache);
+                }, 100);
+            }
+        });
+
+        chipsContainer.appendChild(chip);
+    });
+}
+
+/**
+ * Clears the AI refinement chips container
+ */
+function clearRefinementChips() {
+    const chipsContainer = document.getElementById('ai-refinement-chips-container');
+    if (chipsContainer) {
+        chipsContainer.innerHTML = '';
     }
 }
 
@@ -914,10 +1065,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     }, 300)); 
     
     safeAddEventListener('clear-search-btn', 'click', () => {
-        handleFilterChipClear({ 
-            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button') 
+        handleFilterChipClear({
+            target: document.querySelector('#filter-chip-container .filter-chip[data-filter-type="name-filter"] button')
         });
-        document.getElementById('name-filter').blur(); 
+        document.getElementById('name-filter').blur();
+        // Clear AI refinement chips when search is cleared
+        clearRefinementChips();
     });
     safeAddEventListener('headcount-custom', 'input', debounce(() => applyFiltersAndSort(imageCache), 300));
     safeAddEventListener('headcount-filter', 'change', (e) => {
