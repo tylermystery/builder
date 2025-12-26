@@ -2103,6 +2103,149 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             `;
             fragment.appendChild(rankingContainer);
         }
+
+        // Add Variations Parsing Tool for authorized users (publish permission)
+        const userHasPublishPermission = api.userHasPublishPermission();
+        const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
+
+        if (userHasPublishPermission && isRealRecord) {
+            const variationsToolContainer = document.createElement('div');
+            variationsToolContainer.className = 'variations-tool-container detail-item';
+            variationsToolContainer.style.gridColumn = '1 / -1';
+
+            const currentOptionsString = record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] || '';
+            const parsedGroups = parseOptions(currentOptionsString);
+            const hasExistingOptions = parsedGroups.length > 0 && parsedGroups.some(g => g.options.length > 0);
+
+            variationsToolContainer.innerHTML = `
+                <div class="variations-tool-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <span class="detail-label" style="margin-bottom: 0;">Variations & Options</span>
+                    <button class="variations-toggle-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #007bff;">
+                        ${hasExistingOptions ? '▼' : '+ Add'}
+                    </button>
+                </div>
+                <div class="variations-tool-content" style="display: none; margin-top: 10px;">
+                    <div class="variations-help-text" style="font-size: 0.85em; color: #666; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px;">
+                        <strong>Format:</strong> Use <code>[Group Name]</code> for groups, then add options below.<br>
+                        <strong>Modifiers:</strong> <code>[price: +10]</code> <code>[price: 25]</code> (override) <code>[img: tag]</code> <code>[desc: text]</code> <code>[time: +30]</code>
+                    </div>
+                    <textarea class="variations-editor" placeholder="[Size] (required)
+Small [price: -5]
+Medium
+Large [price: +5]
+
+[Add-ons]
+Extra cheese [price: +2]
+Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;">${currentOptionsString}</textarea>
+                    <div class="variations-preview" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; display: none;">
+                        <strong style="font-size: 0.85em; color: #333;">Preview:</strong>
+                        <div class="variations-preview-content" style="margin-top: 8px;"></div>
+                    </div>
+                    <div class="variations-actions" style="margin-top: 10px; display: flex; gap: 10px;">
+                        <button class="variations-preview-btn" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Preview</button>
+                        <button class="variations-save-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Variations</button>
+                        <span class="variations-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+                    </div>
+                </div>
+            `;
+
+            // Toggle show/hide variations tool
+            const header = variationsToolContainer.querySelector('.variations-tool-header');
+            const content = variationsToolContainer.querySelector('.variations-tool-content');
+            const toggleBtn = variationsToolContainer.querySelector('.variations-toggle-btn');
+
+            header.addEventListener('click', () => {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                toggleBtn.textContent = isVisible ? (hasExistingOptions ? '▼' : '+ Add') : '▲';
+            });
+
+            // Preview functionality
+            const textarea = variationsToolContainer.querySelector('.variations-editor');
+            const previewContainer = variationsToolContainer.querySelector('.variations-preview');
+            const previewContent = variationsToolContainer.querySelector('.variations-preview-content');
+            const previewBtn = variationsToolContainer.querySelector('.variations-preview-btn');
+            const saveBtn = variationsToolContainer.querySelector('.variations-save-btn');
+            const statusSpan = variationsToolContainer.querySelector('.variations-status');
+
+            previewBtn.addEventListener('click', () => {
+                const optionsText = textarea.value;
+                const groups = parseOptions(optionsText);
+
+                if (groups.length === 0 || !groups.some(g => g.options.length > 0)) {
+                    previewContent.innerHTML = '<em style="color: #666;">No valid options found. Add options using the format above.</em>';
+                } else {
+                    let previewHtml = '';
+                    groups.forEach(group => {
+                        if (group.options.length > 0) {
+                            previewHtml += `<div style="margin-bottom: 10px;">
+                                <strong style="color: #333;">${group.name}</strong>${group.modifier ? ` <span style="color: #666; font-size: 0.85em;">(${group.modifier})</span>` : ''}
+                                <ul style="margin: 5px 0 0 15px; padding: 0;">`;
+                            group.options.forEach(opt => {
+                                let priceText = '';
+                                if (opt.priceOverride !== null) {
+                                    priceText = ` <span style="color: #28a745;">$${opt.priceOverride.toFixed(2)}</span>`;
+                                } else if (opt.priceModifier !== null) {
+                                    priceText = ` <span style="color: ${opt.priceModifier >= 0 ? '#28a745' : '#dc3545'}">${opt.priceModifier >= 0 ? '+' : ''}$${opt.priceModifier.toFixed(2)}</span>`;
+                                }
+                                let extras = [];
+                                if (opt.imageTag) extras.push(`img: ${opt.imageTag}`);
+                                if (opt.descriptionAppend) extras.push(`desc: "${opt.descriptionAppend.substring(0, 20)}${opt.descriptionAppend.length > 20 ? '...' : ''}"`);
+                                if (opt.durationChange !== null) extras.push(`time: ${opt.durationChange >= 0 ? '+' : ''}${opt.durationChange}min`);
+                                const extrasText = extras.length > 0 ? ` <span style="color: #888; font-size: 0.85em;">[${extras.join(', ')}]</span>` : '';
+                                previewHtml += `<li style="margin: 3px 0;">${opt.name}${priceText}${extrasText}</li>`;
+                            });
+                            previewHtml += '</ul></div>';
+                        }
+                    });
+                    previewContent.innerHTML = previewHtml;
+                }
+                previewContainer.style.display = 'block';
+            });
+
+            // Save functionality
+            saveBtn.addEventListener('click', async () => {
+                const optionsText = textarea.value;
+                statusSpan.textContent = 'Saving...';
+                statusSpan.style.color = '#666';
+                saveBtn.disabled = true;
+
+                try {
+                    const result = await api.updateItemOptions(record.id, optionsText);
+                    if (result) {
+                        statusSpan.textContent = 'Saved successfully!';
+                        statusSpan.style.color = '#28a745';
+
+                        // Update the record's options field locally
+                        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+
+                        // Refresh the options display in the modal
+                        const newGroups = parseOptions(optionsText);
+                        const hasNewOptions = newGroups.length > 0 && newGroups.some(g => g.options.length > 0);
+                        toggleBtn.textContent = hasNewOptions ? '▲' : '+ Add';
+
+                        // Trigger re-render of the options buttons
+                        setTimeout(() => {
+                            showDetailModal(record);
+                        }, 1000);
+                    } else {
+                        throw new Error('Failed to save');
+                    }
+                } catch (error) {
+                    statusSpan.textContent = 'Error saving. Please try again.';
+                    statusSpan.style.color = '#dc3545';
+                    console.error('Error saving variations:', error);
+                } finally {
+                    saveBtn.disabled = false;
+                    setTimeout(() => {
+                        statusSpan.textContent = '';
+                    }, 3000);
+                }
+            });
+
+            fragment.appendChild(variationsToolContainer);
+        }
+
         modalAdditionalDetails.appendChild(fragment);
     }
 

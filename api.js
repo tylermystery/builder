@@ -3872,3 +3872,55 @@ export async function createNewSession(storeId, userId, name = 'New Plan') {
     }
 }
 
+/**
+ * Update item options/variations in Airtable
+ * @param {string} itemId - The item record ID to update
+ * @param {string} optionsString - The new Options field value (multi-line string format)
+ * @returns {Promise<Object|null>} - The updated item record or null if failed
+ */
+export async function updateItemOptions(itemId, optionsString) {
+    if (!itemId) {
+        console.error('updateItemOptions called without itemId');
+        return null;
+    }
+
+    log('API', `Updating options for item: ${itemId}`);
+
+    const url = `https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${itemId}`;
+
+    const fields = {
+        [CONSTANTS.FIELD_NAMES.OPTIONS]: optionsString
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Airtable Error updating item options:', errorText);
+            throw new Error(`Failed to update item options: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully updated options for item ${itemId}`);
+
+        // Update the record in local state if present
+        const localRecord = state.records.all.find(r => r.id === itemId);
+        if (localRecord) {
+            localRecord.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsString;
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Error updating item options:', error);
+        return null;
+    }
+}
+

@@ -7158,6 +7158,57 @@ hr.total-divider {
     font-size: 1.1em;
 }
 
+/* --- Variations Tool Styles --- */
+.variations-tool-container {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.variations-tool-header {
+    user-select: none;
+}
+
+.variations-tool-header:hover {
+    opacity: 0.8;
+}
+
+.variations-toggle-btn:hover {
+    color: #0056b3 !important;
+}
+
+.variations-editor {
+    transition: border-color 0.2s ease;
+}
+
+.variations-editor:focus {
+    border-color: #007bff !important;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+}
+
+.variations-preview-btn:hover {
+    background: #5a6268 !important;
+}
+
+.variations-save-btn:hover {
+    background: #0056b3 !important;
+}
+
+.variations-save-btn:disabled {
+    background: #ccc !important;
+    cursor: not-allowed;
+}
+
+.variations-help-text code {
+    background: #e9ecef;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
 /* --- 9. SLIDER STYLES (Kept for now) --- */
 /* We are removing the UI, but the styles can stay just in case */
 /* Style for the 'Fun Tweaks' <select> dropdown */
