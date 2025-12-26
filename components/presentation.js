@@ -790,6 +790,10 @@ async function renderItineraryItem(item, index) {
                             </div>
                         ` : ''}
                         <div class="itinerary-item-reactions" data-record-id="${recordId}"></div>
+                        <button class="itinerary-item-expand-btn" data-record-id="${recordId}" title="View full details">
+                            <span class="expand-btn-icon">↗</span>
+                            <span class="expand-btn-text">More Details</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2224,10 +2228,11 @@ function handleReactionClick(e) {
 }
 
 function handleItemClick(e) {
-    // Don't trigger if clicking on reactions, thumbnails, or other interactive elements
+    // Don't trigger if clicking on reactions, thumbnails, expand button, or other interactive elements
     if (e.target.closest('.reaction-btn') ||
         e.target.closest('.itinerary-thumbnail') ||
-        e.target.closest('.itinerary-item-reactions')) {
+        e.target.closest('.itinerary-item-reactions') ||
+        e.target.closest('.itinerary-item-expand-btn')) {
         return;
     }
 
@@ -2244,6 +2249,27 @@ function handleItemClick(e) {
     }
 
     log('Presentation', `Opening detail modal for: ${record.fields.Name}`);
+    showDetailModal(record);
+}
+
+// Handle clicks on expand button to show full item details
+function handleExpandButtonClick(e) {
+    const expandBtn = e.target.closest('.itinerary-item-expand-btn');
+    if (!expandBtn) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+
+    const recordId = expandBtn.dataset.recordId;
+    if (!recordId) return;
+
+    const record = state.records.all.find(r => r.id === recordId);
+    if (!record) {
+        log('Presentation', `Record not found for ID: ${recordId}`);
+        return;
+    }
+
+    log('Presentation', `Expand button clicked - opening detail modal for: ${record.fields.Name}`);
     showDetailModal(record);
 }
 
@@ -2469,6 +2495,9 @@ export function setupPresentationEventListeners() {
 
     // Handle item clicks to open detail modal
     itineraryItemsListEl.addEventListener('click', handleItemClick);
+
+    // Handle expand button clicks to show full item details
+    itineraryItemsListEl.addEventListener('click', handleExpandButtonClick);
 
     // Handle suggestion button clicks (for empty state recommendations)
     itineraryItemsListEl.addEventListener('click', handleSuggestionClick);

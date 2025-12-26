@@ -3067,6 +3067,49 @@
     color: #6c757d;
 }
 
+/* Expand/More Details Button for itinerary items */
+.itinerary-item-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px 14px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.itinerary-item-expand-btn:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #ced4da;
+    color: #212529;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.itinerary-item-expand-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.itinerary-item-expand-btn .expand-btn-icon {
+    font-size: 1em;
+    transition: transform 0.2s ease;
+}
+
+.itinerary-item-expand-btn:hover .expand-btn-icon {
+    transform: translate(1px, -1px);
+}
+
+.itinerary-item-expand-btn .expand-btn-text {
+    white-space: nowrap;
+}
+
 .itinerary-chat {
     background: transparent;
     border-top: none;
@@ -3794,6 +3837,15 @@
 
     .item-accordion.expanded .item-accordion-content {
         padding: 0 15px 15px 15px;
+    }
+
+    /* Mobile styles for expand button */
+    .itinerary-item-expand-btn {
+        margin-top: 10px;
+        padding: 10px 16px;
+        font-size: 0.9em;
+        width: 100%;
+        justify-content: center;
     }
 }
 
