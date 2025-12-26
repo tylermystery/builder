@@ -1,27 +1,12 @@
-// FILE: auth.js (REPLACE ENTIRE FILE)
-
-// --- DEBUG ---
-console.log('[auth.js] 0. File execution started.');
-// --- DEBUG ---
+// FILE: auth.js
 
 import { state, setState } from './state.js';
 import { log } from './utils/debug.js';
-import * as api from './api.js'; // Import api module
+import * as api from './api.js';
 import * as backgroundEngine from './components/backgroundEngine.js';
 
-// --- DEBUG ---
-console.log('[auth.js] 1. Importing effect plugins...');
-// --- FIX: Removed imports for kaleidoscope, wind, water, psychedelic, and vortex ---
-console.log('[auth.js] 1a. Importing fractalEffect.js...');
-// --- DEBUG ---
 import fractalEffect from './components/effects/fractal.js';
-// --- DEBUG ---
-console.log('[auth.js] 1b. Importing fluidEffect.js...');
-// --- DEBUG ---
 import fluidEffect from './components/effects/fluid.js';
-// --- DEBUG ---
-console.log('[auth.js] 2. All effect plugins imported.');
-// --- DEBUG ---
 
 
 // --- DOM Elements ---
@@ -42,42 +27,23 @@ const profileNotificationsSelect = document.getElementById('profile-notification
 const prefsMessage = document.getElementById('prefs-message');
 
 // --- List of available background effects ---
-// --- FIX: This array now only contains the effects that actually exist ---
 const effects = [
     { name: "Fluid Energy", plugin: fluidEffect },
     { name: "Fractal (Simple)", plugin: fractalEffect },
 ];
-// --- END FIX ---
-
-// --- DEBUG ---
-console.log(`[auth.js] 3. 'effects' array created. Length: ${effects.length}`);
-// --- DEBUG ---
 
 // Refactored function to handle a successful login from any method
 async function _handleSuccessfulLogin(payload) {
-    console.log(`[Auth] ========== _handleSuccessfulLogin CALLED ==========`);
-    console.log(`[Auth] Timestamp:`, new Date().toISOString());
-    console.log(`[Auth] Full payload:`, JSON.stringify(payload, null, 2));
-    console.log(`[Auth] Payload received:`, payload);
-    console.log(`[Auth] User from payload:`, payload.user);
-    console.log(`[Auth] Liked items from payload:`, payload.user.likedItemIds);
-    console.log(`[Auth] Token from payload:`, payload.token ? 'Present' : 'Missing');
-    
+    log('Auth', `Login successful for user: ${payload.user?.email}`);
+
     if (state.session.id) {
-        await api.associateSessionWithUser(state.session.id, payload.user.id); // Use imported api
+        await api.associateSessionWithUser(state.session.id, payload.user.id);
     }
 
-    console.log('[Auth] Storing JWT in localStorage...');
     localStorage.setItem('jwt', payload.token);
-    console.log('[Auth] JWT stored. Verifying storage...');
-    const storedJwt = localStorage.getItem('jwt');
-    console.log('[Auth] JWT successfully stored:', !!storedJwt);
-    console.log('[Auth] Stored JWT (first 20 chars):', storedJwt ? storedJwt.substring(0, 20) + '...' : 'null');
 
-    // --- MOVED STATE UPDATE HERE ---
+    // Set user state
     const initialLikedItemIdsFromPayload = payload.user.likedItemIds || [];
-    console.log(`[Auth] Setting user state. Liked items from payload: ${initialLikedItemIdsFromPayload.length}`);
-    console.log(`[Auth] Full liked items array:`, initialLikedItemIdsFromPayload);
     setState({
         session: {
             ...state.session,
@@ -92,85 +58,51 @@ async function _handleSuccessfulLogin(payload) {
             }
         }
     });
-    console.log("[Auth] User state set immediately after login. Liked items count:", state.session.user.likedItemIds.size);
-    console.log("[Auth] Full user state:", state.session.user);
-    console.log("[Auth] Full likedItemIds Set:", Array.from(state.session.user.likedItemIds));
-    // --- END MOVED STATE UPDATE ---
 
-    // --- START LIKES SYNC (Now runs *after* state is updated) ---
+    // Sync temporary likes from localStorage
     const currentLikedItemIds = state.session.user.likedItemIds;
     let syncPromises = [];
     const tempLikesString = localStorage.getItem('tempLikes');
-    console.log(`[Auth] ========== TEMP LIKES MERGE DEBUG START ==========`);
-    console.log(`[Auth] TempLikes from localStorage:`, tempLikesString);
-    
+
     if (tempLikesString) {
         try {
             const tempLikes = JSON.parse(tempLikesString);
-            console.log(`[Auth] Parsed temp likes:`, tempLikes);
             if (Array.isArray(tempLikes) && tempLikes.length > 0) {
-                console.log(`[Auth] Found ${tempLikes.length} temporary likes to sync.`);
-                console.log(`[Auth] Current authenticated liked items:`, Array.from(currentLikedItemIds));
+                log('Auth', `Syncing ${tempLikes.length} temporary likes`);
                 tempLikes.forEach(itemId => {
                     if (!currentLikedItemIds.has(itemId)) {
-                        console.log(`[Auth] Syncing temporary like for item: ${itemId}`);
                         syncPromises.push(
-                            api.toggleUserLike(itemId) // Use imported api
+                            api.toggleUserLike(itemId)
                                 .then(result => {
-                                    console.log(`[Auth] Sync result for ${itemId}:`, result);
                                     if (result.success && result.liked) {
                                         state.session.user.likedItemIds.add(itemId);
-                                        console.log(`[Auth] Added ${itemId} to user liked items`);
                                     }
                                 })
                                 .catch(err => console.error(`[Auth] Error syncing like for item ${itemId}:`, err.message))
                         );
-                    } else {
-                        console.log(`[Auth] Item ${itemId} already in user's liked items, skipping`);
                     }
                 });
             }
         } catch (e) {
-            console.error('[Auth] Error parsing/processing temporary likes from localStorage:', e);
+            console.error('[Auth] Error parsing temporary likes:', e);
         } finally {
              localStorage.removeItem('tempLikes');
-             console.log('[Auth] Cleared temporary likes from localStorage.');
         }
-    } else {
-        console.log('[Auth] No temporary likes found in localStorage');
     }
-    console.log(`[Auth] ========== TEMP LIKES MERGE DEBUG END ==========`);
-    // --- END LIKES SYNC ---
 
     await Promise.allSettled(syncPromises);
-    console.log('[Auth] Like sync process finished.');
-    console.log('[Auth] Final liked items count:', state.session.user.likedItemIds.size);
-    console.log('[Auth] Final liked items:', Array.from(state.session.user.likedItemIds));
-    
-    console.log("[Auth] Final user state after sync:", state.session.user);
-    console.log(`[Auth] ========== LOGIN DEBUG END ==========`);
 
     // Trigger events and update UI
-    console.log('[Auth] Dispatching userLoggedIn event...');
     document.dispatchEvent(new CustomEvent('userLoggedIn'));
-    console.log('[Auth] userLoggedIn event dispatched');
-    // populateUserPlans and applyFiltersAndSort are removed from here
-    // They are handled by the 'userLoggedIn' listener in main.js
-    console.log('[Auth] Updating user profile icon...');
     updateUserProfileIcon();
-    console.log('[Auth] Hiding user modal...');
     hideUserModal();
-    console.log('[Auth] ========== _handleSuccessfulLogin COMPLETE ==========');
 }
 
 export function showUserModal() {
-    // --- DEBUG ---
-    console.log('[auth.js] showUserModal() called.');
-    // --- DEBUG ---
     const user = state.session.user;
     const ownerDashboardLink = document.getElementById('owner-dashboard-link');
-    
-    // --- NEW: Get Effect UI Elements ---
+
+    // Get Effect UI Elements
     const effectSelect = document.getElementById('effect-select');
     const effectControlsContainer = document.getElementById('effect-controls-container');
 
@@ -179,10 +111,10 @@ export function showUserModal() {
         profileEmailEl.textContent = user.email;
         profilePhoneInput.value = user.phoneNumber || '';
         profileNotificationsSelect.value = user.notificationFrequency || 'None';
-        prefsMessage.textContent = ''; 
+        prefsMessage.textContent = '';
         signinView.style.display = 'none';
         profileView.style.display = 'block';
-        const adminProfileBtn = document.getElementById('admin-bulk-profile-btn'); // <-- ADD THIS
+        const adminProfileBtn = document.getElementById('admin-bulk-profile-btn');
         if (user.isOwner && user.ownerDashboardId) {
             ownerDashboardLink.href = `/store-dashboard.html?id=${user.ownerDashboardId}`;
             ownerDashboardLink.style.display = 'block';
@@ -195,35 +127,17 @@ export function showUserModal() {
         profileView.style.display = 'none';
         ownerDashboardLink.style.display = 'none';
     }
-    
-    // --- MOVED: Populate Background Effects ---
-    // --- DEBUG ---
-    console.log(`[auth.js] Populating effects dropdown. Found ${effects.length} effects.`);
-    console.log(`[auth.js] Checking IF condition...`);
-    console.log(`[auth.js]   - effectSelect exists: ${!!effectSelect}`);
-    console.log(`[auth.js]   - effectControlsContainer exists: ${!!effectControlsContainer}`);
-    if (effectSelect) {
-        // --- FIX: Use childElementCount to correctly check if empty ---
-        console.log(`[auth.js]   - effectSelect.childElementCount: ${effectSelect.childElementCount}`);
-    }
-    // --- DEBUG ---
 
-    // --- FIX: Check childElementCount (handles whitespace) instead of innerHTML ---
+    // Populate Background Effects dropdown (only once)
     if (effectSelect && effectControlsContainer && effectSelect.childElementCount === 0) {
-        // --- DEBUG ---
-        console.log('[auth.js] IF condition PASSED. Populating dropdown.');
-        // --- DEBUG ---
         log('Auth', 'Populating background effect tweaks for the first time.');
         effects.forEach((effect, index) => {
-            // --- DEBUG ---
-            console.log(`[auth.js] Adding effect to dropdown: ${effect.name}`);
-            // --- DEBUG ---
             const option = document.createElement('option');
             option.value = index;
             option.textContent = effect.name;
             effectSelect.appendChild(option);
         });
-        
+
         // Add listener to the dropdown
         effectSelect.addEventListener('change', (e) => {
             const selectedEffect = effects[e.target.value];
@@ -232,22 +146,12 @@ export function showUserModal() {
                 backgroundEngine.loadEffect(selectedEffect.plugin, effectControlsContainer);
             }
         });
-        
-        // Load the default effect (the first one in the 'effects' array)
-        // --- DEBUG ---
+
+        // Load the default effect
         if (effects.length > 0 && effects[0].plugin) {
-            console.log(`[auth.js] Loading default effect: ${effects[0].name}`);
             backgroundEngine.loadEffect(effects[0].plugin, effectControlsContainer);
-        } else {
-            console.log('[auth.js] No effects found in array to load as default.');
         }
-        // --- DEBUG ---
-    } else {
-        // --- DEBUG ---
-        console.log('[auth.js] IF condition FAILED. Dropdown will not be populated.');
-        // --- DEBUG ---
     }
-    // --- END: Moved Background Effects Logic ---
 
     userModalOverlay.classList.add('active');
     userModalOverlay.style.display = 'flex';
@@ -314,143 +218,91 @@ async function handleSignIn(e) {
 let currentSmsPhoneNumber = null;
 
 async function handleSmsSignIn(e) {
-    console.log('[SMS-DEBUG] ========== handleSmsSignIn CALLED ==========');
-    console.log('[SMS-DEBUG] Event object:', e);
-    console.log('[SMS-DEBUG] Event type:', e?.type);
-
     e.preventDefault();
-    console.log('[SMS-DEBUG] preventDefault() called successfully');
 
     const phoneInput = document.getElementById('signin-phone');
     const smsMessage = document.getElementById('sms-message');
     const consentCheckbox = document.getElementById('sms-consent-checkbox');
-    console.log('[SMS-DEBUG] Phone input element:', phoneInput);
-    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
-    console.log('[SMS-DEBUG] Consent checkbox element:', consentCheckbox);
 
     const phoneNumber = phoneInput.value.trim();
-    console.log('[SMS-DEBUG] Phone number value:', phoneNumber);
-    console.log('[SMS-DEBUG] Consent checkbox checked:', consentCheckbox?.checked);
 
     if (!phoneNumber) {
-        console.log('[SMS-DEBUG] Phone number validation failed - empty');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Please enter a phone number.';
         return;
     }
 
     if (!consentCheckbox || !consentCheckbox.checked) {
-        console.log('[SMS-DEBUG] Consent validation failed - not checked');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Please agree to receive SMS messages by checking the consent box.';
         return;
     }
 
     log('Auth', `SMS sign-in initiated for: ${phoneNumber}`);
-    console.log('[SMS-DEBUG] Storing phone number to currentSmsPhoneNumber');
     currentSmsPhoneNumber = phoneNumber;
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Sending SMS code...';
-    console.log('[SMS-DEBUG] UI updated - showing "Sending SMS code..." message');
 
     try {
-        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-start');
-        console.log('[SMS-DEBUG] Request payload:', { phoneNumber: phoneNumber });
-
         const response = await fetch('/api/auth-sms-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phoneNumber: phoneNumber }),
         });
 
-        console.log('[SMS-DEBUG] Fetch completed');
-        console.log('[SMS-DEBUG] Response status:', response.status);
-        console.log('[SMS-DEBUG] Response ok:', response.ok);
-        console.log('[SMS-DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
-
         const data = await response.json();
-        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
-            console.log('[SMS-DEBUG] Response not OK, throwing error');
-            const errorMessage = data.error || 'Failed to send SMS code.';
-            console.log('[SMS-DEBUG] Error message from server:', errorMessage);
-            throw new Error(errorMessage);
+            throw new Error(data.error || 'Failed to send SMS code.');
         }
 
-        console.log('[SMS-DEBUG] Success! Updating UI to show verification section');
         smsMessage.style.color = '#28a745';
         smsMessage.textContent = `A 6-digit code has been sent to ${phoneNumber}. Check your messages!`;
 
         // Hide phone form, show OTP verification form
         const smsForm = document.getElementById('sms-signin-form');
         const verifySection = document.getElementById('sms-verify-section');
-        console.log('[SMS-DEBUG] SMS form element:', smsForm);
-        console.log('[SMS-DEBUG] Verify section element:', verifySection);
 
         smsForm.style.display = 'none';
         verifySection.style.display = 'block';
-        console.log('[SMS-DEBUG] UI visibility updated - form hidden, verify section shown');
 
         // Focus on OTP input
         const otpInput = document.getElementById('signin-otp');
-        console.log('[SMS-DEBUG] OTP input element:', otpInput);
         otpInput.focus();
-        console.log('[SMS-DEBUG] Focus set on OTP input');
 
         log('Auth', 'SMS code sent successfully');
-        console.log('[SMS-DEBUG] ========== handleSmsSignIn COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
-        console.error('[SMS-DEBUG] ========== ERROR IN handleSmsSignIn ==========');
-        console.error('[SMS-DEBUG] Error object:', error);
-        console.error('[SMS-DEBUG] Error message:', error.message);
-        console.error('[SMS-DEBUG] Error stack:', error.stack);
-
+        console.error('[Auth] SMS sign-in error:', error.message);
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
-        log('Auth', `SMS error: ${error.message}`);
-        console.log('[SMS-DEBUG] ========== handleSmsSignIn FAILED ==========');
     }
 }
 
 async function handleSmsVerify() {
-    console.log('[SMS-DEBUG] ========== handleSmsVerify CALLED ==========');
-
     const otpInput = document.getElementById('signin-otp');
     const smsMessage = document.getElementById('sms-message');
-    console.log('[SMS-DEBUG] OTP input element:', otpInput);
-    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
 
     const otpCode = otpInput.value.trim();
-    console.log('[SMS-DEBUG] OTP code value:', otpCode);
-    console.log('[SMS-DEBUG] OTP code length:', otpCode.length);
 
     if (!otpCode || otpCode.length !== 6) {
-        console.log('[SMS-DEBUG] OTP validation failed - invalid length or empty');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Please enter a valid 6-digit code.';
         return;
     }
 
     if (!currentSmsPhoneNumber) {
-        console.log('[SMS-DEBUG] ERROR: currentSmsPhoneNumber is null or undefined');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Phone number not found. Please start over.';
         return;
     }
 
-    console.log('[SMS-DEBUG] Current phone number:', currentSmsPhoneNumber);
     log('Auth', `Verifying SMS code for: ${currentSmsPhoneNumber}`);
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Verifying code...';
-    console.log('[SMS-DEBUG] UI updated - showing "Verifying code..." message');
 
     try {
-        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-verify');
-        console.log('[SMS-DEBUG] Request payload:', { code: otpCode, phoneNumber: currentSmsPhoneNumber });
-
         const response = await fetch('/api/auth-sms-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -460,29 +312,19 @@ async function handleSmsVerify() {
             }),
         });
 
-        console.log('[SMS-DEBUG] Fetch completed');
-        console.log('[SMS-DEBUG] Response status:', response.status);
-        console.log('[SMS-DEBUG] Response ok:', response.ok);
-
         const data = await response.json();
-        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
-            console.log('[SMS-DEBUG] Response not OK, throwing error');
             throw new Error(data.error || 'Invalid code. Please try again.');
         }
 
-        console.log('[SMS-DEBUG] Verification successful!');
         smsMessage.style.color = '#28a745';
         smsMessage.textContent = 'Success! Signing you in...';
 
         // Handle successful login
-        console.log('[SMS-DEBUG] Calling _handleSuccessfulLogin with data');
         await _handleSuccessfulLogin(data);
-        console.log('[SMS-DEBUG] _handleSuccessfulLogin completed');
 
         // Reset SMS form
-        console.log('[SMS-DEBUG] Resetting SMS form UI');
         otpInput.value = '';
         currentSmsPhoneNumber = null;
         document.getElementById('sms-signin-form').style.display = 'block';
@@ -490,59 +332,37 @@ async function handleSmsVerify() {
         document.getElementById('signin-phone').value = '';
 
         log('Auth', 'SMS authentication successful');
-        console.log('[SMS-DEBUG] ========== handleSmsVerify COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
-        console.error('[SMS-DEBUG] ========== ERROR IN handleSmsVerify ==========');
-        console.error('[SMS-DEBUG] Error object:', error);
-        console.error('[SMS-DEBUG] Error message:', error.message);
-        console.error('[SMS-DEBUG] Error stack:', error.stack);
-
+        console.error('[Auth] SMS verification error:', error.message);
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
-        log('Auth', `SMS verification error: ${error.message}`);
-        console.log('[SMS-DEBUG] ========== handleSmsVerify FAILED ==========');
     }
 }
 
 async function handleResendSms() {
-    console.log('[SMS-DEBUG] ========== handleResendSms CALLED ==========');
-
     const smsMessage = document.getElementById('sms-message');
-    console.log('[SMS-DEBUG] SMS message element:', smsMessage);
 
     if (!currentSmsPhoneNumber) {
-        console.log('[SMS-DEBUG] ERROR: currentSmsPhoneNumber is null or undefined');
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = 'Phone number not found. Please start over.';
         return;
     }
 
-    console.log('[SMS-DEBUG] Current phone number:', currentSmsPhoneNumber);
     log('Auth', `Resending SMS code to: ${currentSmsPhoneNumber}`);
 
     smsMessage.style.color = '#333';
     smsMessage.textContent = 'Resending code...';
-    console.log('[SMS-DEBUG] UI updated - showing "Resending code..." message');
 
     try {
-        console.log('[SMS-DEBUG] Starting fetch request to /api/auth-sms-start');
-        console.log('[SMS-DEBUG] Request payload:', { phoneNumber: currentSmsPhoneNumber });
-
         const response = await fetch('/api/auth-sms-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phoneNumber: currentSmsPhoneNumber }),
         });
 
-        console.log('[SMS-DEBUG] Fetch completed');
-        console.log('[SMS-DEBUG] Response status:', response.status);
-        console.log('[SMS-DEBUG] Response ok:', response.ok);
-
         const data = await response.json();
-        console.log('[SMS-DEBUG] Response data:', data);
 
         if (!response.ok) {
-            console.log('[SMS-DEBUG] Response not OK, throwing error');
             throw new Error(data.error || 'Failed to resend SMS code.');
         }
 
@@ -550,17 +370,10 @@ async function handleResendSms() {
         smsMessage.textContent = `New code sent to ${currentSmsPhoneNumber}!`;
 
         log('Auth', 'SMS code resent successfully');
-        console.log('[SMS-DEBUG] ========== handleResendSms COMPLETED SUCCESSFULLY ==========');
     } catch (error) {
-        console.error('[SMS-DEBUG] ========== ERROR IN handleResendSms ==========');
-        console.error('[SMS-DEBUG] Error object:', error);
-        console.error('[SMS-DEBUG] Error message:', error.message);
-        console.error('[SMS-DEBUG] Error stack:', error.stack);
-
+        console.error('[Auth] Resend SMS error:', error.message);
         smsMessage.style.color = '#dc3545';
         smsMessage.textContent = error.message;
-        log('Auth', `Resend SMS error: ${error.message}`);
-        console.log('[SMS-DEBUG] ========== handleResendSms FAILED ==========');
     }
 }
 
@@ -673,184 +486,95 @@ export function setupAuthEventListeners() {
         }
     });
 
-    // --- SMS AUTHENTICATION EVENT LISTENERS ---
-    console.log('[SMS-DEBUG] ========== Setting up SMS event listeners ==========');
-
+    // SMS Authentication Event Listeners
     const smsSigninForm = document.getElementById('sms-signin-form');
     const verifyOtpBtn = document.getElementById('verify-otp-btn');
     const resendSmsBtn = document.getElementById('resend-sms-btn');
 
-    console.log('[SMS-DEBUG] sms-signin-form element:', smsSigninForm);
-    console.log('[SMS-DEBUG] verify-otp-btn element:', verifyOtpBtn);
-    console.log('[SMS-DEBUG] resend-sms-btn element:', resendSmsBtn);
-
     if (smsSigninForm) {
-        console.log('[SMS-DEBUG] Attaching submit listener to sms-signin-form');
         smsSigninForm.addEventListener('submit', handleSmsSignIn);
-        console.log('[SMS-DEBUG] Submit listener attached successfully');
-    } else {
-        console.warn('[SMS-DEBUG] WARNING: sms-signin-form element not found!');
     }
 
     if (verifyOtpBtn) {
-        console.log('[SMS-DEBUG] Attaching click listener to verify-otp-btn');
         verifyOtpBtn.addEventListener('click', handleSmsVerify);
-        console.log('[SMS-DEBUG] Click listener attached successfully');
-    } else {
-        console.warn('[SMS-DEBUG] WARNING: verify-otp-btn element not found!');
     }
 
     if (resendSmsBtn) {
-        console.log('[SMS-DEBUG] Attaching click listener to resend-sms-btn');
         resendSmsBtn.addEventListener('click', handleResendSms);
-        console.log('[SMS-DEBUG] Click listener attached successfully');
-    } else {
-        console.warn('[SMS-DEBUG] WARNING: resend-sms-btn element not found!');
     }
 
     // Allow Enter key to submit OTP
     const otpInput = document.getElementById('signin-otp');
-    console.log('[SMS-DEBUG] signin-otp element:', otpInput);
-
     if (otpInput) {
-        console.log('[SMS-DEBUG] Attaching keypress listener to signin-otp');
         otpInput.addEventListener('keypress', (e) => {
-            console.log('[SMS-DEBUG] Keypress event in OTP input:', e.key);
             if (e.key === 'Enter') {
-                console.log('[SMS-DEBUG] Enter key detected - calling handleSmsVerify');
                 e.preventDefault();
                 handleSmsVerify();
             }
         });
-        console.log('[SMS-DEBUG] Keypress listener attached successfully');
-    } else {
-        console.warn('[SMS-DEBUG] WARNING: signin-otp element not found!');
     }
 
-    console.log('[SMS-DEBUG] ========== SMS event listeners setup complete ==========');
-
-    // --- NETLIFY IDENTITY SSO SETUP ---
-    // Wait for Netlify Identity to be ready before setting up SSO
-    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP START ==========');
-    console.log('[Google SSO DEBUG] Checking if netlifyIdentity is already defined:', typeof netlifyIdentity !== 'undefined');
-
-    // Check if the Google SSO button exists
-    const googleSsoBtnCheck = document.getElementById('google-sso-btn');
-    console.log('[Google SSO DEBUG] google-sso-btn element found at setup time:', !!googleSsoBtnCheck);
-    if (googleSsoBtnCheck) {
-        console.log('[Google SSO DEBUG] google-sso-btn element details:', {
-            tagName: googleSsoBtnCheck.tagName,
-            id: googleSsoBtnCheck.id,
-            className: googleSsoBtnCheck.className,
-            disabled: googleSsoBtnCheck.disabled,
-            style: {
-                display: getComputedStyle(googleSsoBtnCheck).display,
-                visibility: getComputedStyle(googleSsoBtnCheck).visibility,
-                pointerEvents: getComputedStyle(googleSsoBtnCheck).pointerEvents,
-                opacity: getComputedStyle(googleSsoBtnCheck).opacity,
-                cursor: getComputedStyle(googleSsoBtnCheck).cursor
-            },
-            parentElement: googleSsoBtnCheck.parentElement?.id || googleSsoBtnCheck.parentElement?.className
-        });
-    }
-
+    // Netlify Identity SSO Setup
     if (typeof netlifyIdentity !== 'undefined') {
-        console.log('[Google SSO DEBUG] netlifyIdentity already available, initializing immediately');
         initializeNetlifyIdentity();
     } else {
-        console.log('[Google SSO DEBUG] netlifyIdentity not yet available, checking for loadNetlifyIdentity function...');
-
         // Try to load Netlify Identity if the loader is available
         if (typeof window.loadNetlifyIdentity === 'function') {
-            console.log('[Google SSO DEBUG] loadNetlifyIdentity function found! Loading Netlify Identity...');
             window.loadNetlifyIdentity().then(() => {
-                console.log('[Google SSO DEBUG] Netlify Identity script loaded via loadNetlifyIdentity()');
                 if (typeof netlifyIdentity !== 'undefined') {
-                    console.log('[Google SSO DEBUG] netlifyIdentity is now defined, initializing...');
                     initializeNetlifyIdentity();
                 } else {
-                    console.error('[Google SSO DEBUG] ERROR: netlifyIdentity still undefined after script load!');
+                    console.error('[Auth] Netlify Identity failed to load');
                 }
             }).catch(err => {
-                console.error('[Google SSO DEBUG] ERROR loading Netlify Identity:', err);
+                console.error('[Auth] Error loading Netlify Identity:', err);
             });
         } else {
-            console.log('[Google SSO DEBUG] loadNetlifyIdentity function NOT found, falling back to window load event');
             // Wait for the script to load
             window.addEventListener('load', () => {
-                console.log('[Google SSO DEBUG] Window load event fired');
-                console.log('[Google SSO DEBUG] Checking netlifyIdentity after window load:', typeof netlifyIdentity !== 'undefined');
                 if (typeof netlifyIdentity !== 'undefined') {
                     initializeNetlifyIdentity();
-                } else {
-                    console.error('[Google SSO DEBUG] ERROR: Netlify Identity widget failed to load after window load');
-                    // Try loading it explicitly
-                    if (typeof window.loadNetlifyIdentity === 'function') {
-                        console.log('[Google SSO DEBUG] Attempting late load via loadNetlifyIdentity...');
-                        window.loadNetlifyIdentity().then(() => {
-                            if (typeof netlifyIdentity !== 'undefined') {
-                                console.log('[Google SSO DEBUG] Late load successful, initializing...');
-                                initializeNetlifyIdentity();
-                            }
-                        });
-                    }
+                } else if (typeof window.loadNetlifyIdentity === 'function') {
+                    window.loadNetlifyIdentity().then(() => {
+                        if (typeof netlifyIdentity !== 'undefined') {
+                            initializeNetlifyIdentity();
+                        }
+                    });
                 }
             });
         }
     }
-    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY SSO SETUP END ==========');
 }
 
 function initializeNetlifyIdentity() {
-    console.log('[Google SSO DEBUG] ========== NETLIFY IDENTITY INITIALIZATION START ==========');
-    console.log('[Google SSO DEBUG] Window.netlifyIdentity exists:', typeof netlifyIdentity !== 'undefined');
-    console.log('[Google SSO DEBUG] netlifyIdentity object:', netlifyIdentity);
-    console.log('[Google SSO DEBUG] Initializing Netlify Identity');
+    log('Auth', 'Initializing Netlify Identity');
 
     // Determine the correct API URL - always use production for OAuth redirects
-    // This prevents deploy previews from causing incorrect OAuth redirect URLs
     const PRODUCTION_SITE_URL = 'https://whatthefunfinder.netlify.app';
     const CUSTOM_DOMAIN = 'whatthefun.wtf';
     const currentHost = window.location.hostname;
     const isDeployPreview = currentHost.includes('--whatthefunfinder.netlify.app') ||
                             currentHost.includes('deploy-preview') ||
                             currentHost.includes('agent-');
-    // Include both the Netlify subdomain and custom domain as production
     const isProduction = currentHost === 'whatthefunfinder.netlify.app' ||
                          currentHost === CUSTOM_DOMAIN ||
                          currentHost === `www.${CUSTOM_DOMAIN}`;
     const isCustomDomain = currentHost === CUSTOM_DOMAIN || currentHost === `www.${CUSTOM_DOMAIN}`;
 
-    console.log('[Google SSO DEBUG] Current host:', currentHost);
-    console.log('[Google SSO DEBUG] Is deploy preview:', isDeployPreview);
-    console.log('[Google SSO DEBUG] Is production:', isProduction);
-    console.log('[Google SSO DEBUG] Is custom domain:', isCustomDomain);
-
     // Clear any stale netlifySiteURL from localStorage on production site
-    // This prevents OAuth from redirecting to a cached deploy preview URL
     if (isProduction) {
         const storedSiteURL = localStorage.getItem('netlifySiteURL');
-        console.log('[Google SSO DEBUG] Checking localStorage netlifySiteURL:', storedSiteURL);
         if (storedSiteURL && !storedSiteURL.includes(CUSTOM_DOMAIN) && storedSiteURL !== PRODUCTION_SITE_URL) {
-            console.log('[Google SSO DEBUG] Clearing stale netlifySiteURL from localStorage:', storedSiteURL);
             localStorage.removeItem('netlifySiteURL');
         }
 
-        // Also check for any stale goTrueUrl setting that might redirect incorrectly
         const goTrueUrl = localStorage.getItem('goTrueUrl');
-        if (goTrueUrl) {
-            console.log('[Google SSO DEBUG] Found goTrueUrl in localStorage:', goTrueUrl);
-            if (!goTrueUrl.includes(CUSTOM_DOMAIN) && !goTrueUrl.includes('whatthefunfinder.netlify.app')) {
-                console.log('[Google SSO DEBUG] Clearing stale goTrueUrl from localStorage');
-                localStorage.removeItem('goTrueUrl');
-            }
+        if (goTrueUrl && !goTrueUrl.includes(CUSTOM_DOMAIN) && !goTrueUrl.includes('whatthefunfinder.netlify.app')) {
+            localStorage.removeItem('goTrueUrl');
         }
     }
 
     // Build init options
-    // IMPORTANT: For custom domains AND deploy previews, we must explicitly set the APIUrl
-    // because the Netlify Identity API is hosted on the Netlify subdomain, not the custom domain.
-    // OAuth callbacks are configured in Google to redirect to the Netlify subdomain.
     const initOptions = {
         locale: 'en'
     };
@@ -858,141 +582,50 @@ function initializeNetlifyIdentity() {
     if (isDeployPreview || isCustomDomain) {
         // Force API calls to use the Netlify subdomain's identity endpoint
         initOptions.APIUrl = `${PRODUCTION_SITE_URL}/.netlify/identity`;
-        if (isDeployPreview) {
-            console.log('[Google SSO DEBUG] Deploy preview detected - using production APIUrl:', initOptions.APIUrl);
-        } else {
-            console.log('[Google SSO DEBUG] Custom domain detected - using Netlify subdomain APIUrl:', initOptions.APIUrl);
-        }
-    } else {
-        console.log('[Google SSO DEBUG] Netlify subdomain - using default APIUrl');
     }
 
     // Force store the correct site URL for OAuth redirects
-    // This is critical for custom domains - we want OAuth to redirect back to the custom domain
-    // after authentication completes, NOT to a deploy preview or cached URL
     const currentSiteUrl = window.location.origin;
     if (isProduction) {
-        // Store the current site URL to ensure OAuth redirects come back here
         localStorage.setItem('netlifySiteURL', currentSiteUrl);
-        console.log('[Google SSO DEBUG] Set netlifySiteURL to current origin:', currentSiteUrl);
     }
 
     // Initialize the widget
-    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init() with options:', initOptions);
     try {
         netlifyIdentity.init(initOptions);
-        console.log('[Google SSO DEBUG] netlifyIdentity.init() completed successfully');
     } catch (initError) {
-        console.error('[Google SSO DEBUG] ERROR in netlifyIdentity.init():', initError);
+        console.error('[Auth] Error initializing Netlify Identity:', initError);
     }
 
     // Set up Google SSO button
     const googleSsoBtn = document.getElementById('google-sso-btn');
-    console.log('[Google SSO DEBUG] Google SSO button element lookup result:', googleSsoBtn);
-    console.log('[Google SSO DEBUG] Google SSO button element found:', !!googleSsoBtn);
 
     if (googleSsoBtn) {
-        console.log('[Google SSO DEBUG] Checking button state before attaching listener:', {
-            disabled: googleSsoBtn.disabled,
-            display: getComputedStyle(googleSsoBtn).display,
-            visibility: getComputedStyle(googleSsoBtn).visibility,
-            pointerEvents: getComputedStyle(googleSsoBtn).pointerEvents,
-            cursor: getComputedStyle(googleSsoBtn).cursor,
-            zIndex: getComputedStyle(googleSsoBtn).zIndex,
-            position: getComputedStyle(googleSsoBtn).position,
-            opacity: getComputedStyle(googleSsoBtn).opacity,
-            width: getComputedStyle(googleSsoBtn).width,
-            height: getComputedStyle(googleSsoBtn).height,
-            boundingRect: googleSsoBtn.getBoundingClientRect()
-        });
-
-        // Check if there are any existing event listeners (indirect check via onclick attribute)
-        console.log('[Google SSO DEBUG] Existing onclick attribute:', googleSsoBtn.onclick);
-
-        console.log('[Google SSO DEBUG] Attaching click event listener to google-sso-btn...');
-
         googleSsoBtn.addEventListener('click', (event) => {
-            console.log('[Google SSO DEBUG] ========== GOOGLE SSO BUTTON CLICKED ==========');
-            console.log('[Google SSO DEBUG] Click event:', event);
-            console.log('[Google SSO DEBUG] Click event type:', event.type);
-            console.log('[Google SSO DEBUG] Event target:', event.target);
-            console.log('[Google SSO DEBUG] Event currentTarget:', event.currentTarget);
-            console.log('[Google SSO DEBUG] Event bubbles:', event.bubbles);
-            console.log('[Google SSO DEBUG] Event cancelable:', event.cancelable);
-            console.log('[Google SSO DEBUG] Event defaultPrevented:', event.defaultPrevented);
-            console.log('[Google SSO DEBUG] Event isTrusted:', event.isTrusted);
-            console.log('[Google SSO DEBUG] Timestamp:', new Date().toISOString());
-            console.log('[Google SSO DEBUG] netlifyIdentity available at click time:', typeof netlifyIdentity !== 'undefined');
-
+            log('Auth', 'Google SSO button clicked');
             try {
-                // Trigger Google login directly
-                console.log('[Google SSO DEBUG] Opening Netlify Identity modal...');
-                console.log('[Google SSO DEBUG] User modal overlay z-index:', getComputedStyle(userModalOverlay).zIndex);
                 netlifyIdentity.open('login');
-                console.log('[Google SSO DEBUG] Netlify Identity modal open() called');
-
-                // Log the z-index of the Netlify Identity modal once it opens
-                setTimeout(() => {
-                    const netlifyModal = document.querySelector('.ReactModal__Overlay');
-                    if (netlifyModal) {
-                        console.log('[Google SSO DEBUG] Netlify Identity modal found in DOM');
-                        console.log('[Google SSO DEBUG] Netlify modal z-index (computed):', getComputedStyle(netlifyModal).zIndex);
-                        console.log('[Google SSO DEBUG] Netlify modal position:', getComputedStyle(netlifyModal).position);
-                    } else {
-                        console.log('[Google SSO DEBUG] Netlify Identity modal not found in DOM after timeout');
-                    }
-                }, 500);
 
                 netlifyIdentity.on('open', () => {
-                    console.log('[Google SSO DEBUG] Netlify Identity modal opened event received');
                     // Automatically select Google provider
                     const googleBtn = document.querySelector('.btnProvider[data-provider="google"]');
-                    console.log('[Google SSO DEBUG] Looking for Google provider button:', googleBtn);
                     if (googleBtn) {
-                        console.log('[Google SSO DEBUG] Auto-clicking Google provider button');
                         googleBtn.click();
-                    } else {
-                        console.log('[Google SSO DEBUG] Google provider button not found in modal');
                     }
                 });
             } catch (error) {
-                console.error('[Google SSO DEBUG] Error opening Google SSO:', error);
-                console.error('[Google SSO DEBUG] Error stack:', error.stack);
+                console.error('[Auth] Error opening Google SSO:', error);
                 signinMessage.textContent = "Error opening Google sign-in. Please try again.";
                 signinMessage.style.color = '#dc3545';
             }
         });
-
-        console.log('[Google SSO DEBUG] Click event listener attached to google-sso-btn');
-
-        // Add a direct onclick test to verify the button is clickable
-        googleSsoBtn.addEventListener('mousedown', () => {
-            console.log('[Google SSO DEBUG] mousedown event on google-sso-btn');
-        });
-        googleSsoBtn.addEventListener('mouseup', () => {
-            console.log('[Google SSO DEBUG] mouseup event on google-sso-btn');
-        });
-        googleSsoBtn.addEventListener('mouseenter', () => {
-            console.log('[Google SSO DEBUG] mouseenter event on google-sso-btn');
-        });
-
-    } else {
-        console.error('[Google SSO DEBUG] ERROR: google-sso-btn element NOT FOUND in DOM!');
-        console.log('[Google SSO DEBUG] DOM check - signin-view exists:', !!document.getElementById('signin-view'));
-        console.log('[Google SSO DEBUG] DOM check - user-modal-overlay exists:', !!document.getElementById('user-modal-overlay'));
     }
 
     // Handle successful login
     netlifyIdentity.on('login', async (user) => {
-        console.log('[Auth] ========== NETLIFY IDENTITY LOGIN EVENT ==========');
-        console.log('[Auth] Timestamp:', new Date().toISOString());
-        console.log('[Auth] User object:', user);
-        console.log('[Auth] User email:', user?.email);
-        console.log('[Auth] User token:', user?.token?.access_token ? 'Present' : 'Missing');
+        log('Auth', `Netlify Identity login event for: ${user?.email}`);
         try {
             const netlifyJwt = user.token.access_token;
-            console.log('[Auth] Calling /api/auth-social with Netlify JWT...');
-            console.log('[Auth] JWT (first 20 chars):', netlifyJwt.substring(0, 20) + '...');
             // Call serverless function to get app-specific JWT
             const response = await fetch('/api/auth-social', {
                 method: 'POST',
@@ -1001,46 +634,31 @@ function initializeNetlifyIdentity() {
                     'Authorization': `Bearer ${netlifyJwt}`
                 }
             });
-            console.log('[Auth] /api/auth-social response status:', response.status);
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to sync social login.");
             }
 
             const appPayload = await response.json();
-            console.log('[Auth] Received app payload from /api/auth-social:', appPayload);
-            console.log('[Auth] App token present:', !!appPayload.token);
-            console.log('[Auth] User data present:', !!appPayload.user);
-            console.log('[Auth] Liked items count:', appPayload.user?.likedItemIds?.length || 0);
-            console.log('[Auth] Calling _handleSuccessfulLogin...');
             await _handleSuccessfulLogin(appPayload);
-            console.log('[Auth] _handleSuccessfulLogin completed');
-            console.log('[Auth] Closing Netlify Identity modal...');
             netlifyIdentity.close();
-            console.log('[Auth] Modal closed');
-            console.log('[Auth] ========== GOOGLE SSO LOGIN COMPLETE ==========');
+            log('Auth', 'Google SSO login complete');
 
         } catch (error) {
-            console.error('[Auth] ========== SSO LOGIN ERROR ==========');
-            console.error("[Auth] Error details:", error);
-            console.error("[Auth] Error message:", error.message);
-            console.error("[Auth] Error stack:", error.stack);
+            console.error("[Auth] SSO login error:", error.message);
             signinMessage.textContent = "Error logging in with Google. Please try again.";
             signinMessage.style.color = '#dc3545';
-            console.error('[Auth] ========== SSO LOGIN ERROR END ==========');
         }
     });
 
     // Handle errors
     netlifyIdentity.on('error', (error) => {
-        console.error('[Auth] ========== NETLIFY IDENTITY ERROR ==========');
-        console.error('[Auth] Error:', error);
+        console.error('[Auth] Netlify Identity error:', error);
         signinMessage.textContent = "Authentication error. Please try again.";
         signinMessage.style.color = '#dc3545';
-        console.error('[Auth] ========== NETLIFY IDENTITY ERROR END ==========');
     });
-    
-    console.log('[Auth] ========== NETLIFY IDENTITY INITIALIZATION COMPLETE ==========');
+
+    log('Auth', 'Netlify Identity initialization complete');
 }
 
 // ============================================
@@ -1068,6 +686,12 @@ async function isPlatformAuthenticatorAvailable() {
 function hasStoredPasskey(email) {
     const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
     return passkeys.includes(email);
+}
+
+// Check if ANY passkey is stored locally (for showing biometric option at app load)
+function hasAnyStoredPasskey() {
+    const passkeys = JSON.parse(localStorage.getItem('passkeyEmails') || '[]');
+    return passkeys.length > 0;
 }
 
 // Mark that a user has set up a passkey
@@ -1106,6 +730,7 @@ function arrayBufferToBase64url(buffer) {
 async function registerPasskey(email) {
     console.log('[WebAuthn] ========== PASSKEY REGISTRATION START ==========');
     console.log('[WebAuthn] Registering passkey for email:', email);
+    console.log('[WebAuthn] Browser/Platform:', navigator.userAgent);
 
     const biometricMessage = document.getElementById('biometric-message');
     const signinMessage = document.getElementById('signin-message');
@@ -1118,19 +743,25 @@ async function registerPasskey(email) {
             messageEl.style.color = '#333';
         }
 
+        console.log('[WebAuthn] Requesting registration options from server...');
         const optionsRes = await fetch('/api/auth-webauthn-register-options', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
 
+        console.log('[WebAuthn] Server response status:', optionsRes.status);
+
         if (!optionsRes.ok) {
             const errorData = await optionsRes.json();
+            console.error('[WebAuthn] Server error response:', errorData);
             throw new Error(errorData.error || 'Failed to get registration options');
         }
 
         const { options, userId } = await optionsRes.json();
         console.log('[WebAuthn] Received registration options for user:', userId);
+        console.log('[WebAuthn] RP ID:', options.rp?.id);
+        console.log('[WebAuthn] Challenge received:', options.challenge ? 'Yes' : 'No');
 
         // Convert challenge and user.id from base64url to ArrayBuffer
         options.challenge = base64urlToArrayBuffer(options.challenge);
@@ -1142,6 +773,7 @@ async function registerPasskey(email) {
                 ...cred,
                 id: base64urlToArrayBuffer(cred.id)
             }));
+            console.log('[WebAuthn] Excluding', options.excludeCredentials.length, 'existing credentials');
         }
 
         if (messageEl) {
@@ -1149,12 +781,14 @@ async function registerPasskey(email) {
         }
 
         // Create the credential
-        console.log('[WebAuthn] Creating credential...');
+        console.log('[WebAuthn] Invoking navigator.credentials.create()...');
         const credential = await navigator.credentials.create({
             publicKey: options
         });
 
-        console.log('[WebAuthn] Credential created:', credential.id);
+        console.log('[WebAuthn] Credential created successfully');
+        console.log('[WebAuthn] Credential ID:', credential.id);
+        console.log('[WebAuthn] Credential type:', credential.type);
 
         // Prepare the credential for sending to server
         const credentialForServer = {
@@ -1169,24 +803,31 @@ async function registerPasskey(email) {
             deviceName: getDeviceName()
         };
 
+        console.log('[WebAuthn] Transports:', credentialForServer.transports);
+        console.log('[WebAuthn] Device name:', credentialForServer.deviceName);
+
         // Verify and store the credential
         if (messageEl) {
             messageEl.textContent = 'Verifying...';
         }
 
+        console.log('[WebAuthn] Sending credential to server for verification...');
         const verifyRes = await fetch('/api/auth-webauthn-register-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ credential: credentialForServer, userId })
         });
 
+        console.log('[WebAuthn] Verify response status:', verifyRes.status);
+
         if (!verifyRes.ok) {
             const errorData = await verifyRes.json();
+            console.error('[WebAuthn] Verification error response:', errorData);
             throw new Error(errorData.error || 'Failed to verify registration');
         }
 
         const result = await verifyRes.json();
-        console.log('[WebAuthn] Registration successful!');
+        console.log('[WebAuthn] Registration verified successfully!');
 
         // Mark that this email has a passkey
         markPasskeySetup(email);
@@ -1204,7 +845,10 @@ async function registerPasskey(email) {
         return true;
 
     } catch (error) {
-        console.error('[WebAuthn] Registration error:', error);
+        console.error('[WebAuthn] ========== REGISTRATION ERROR ==========');
+        console.error('[WebAuthn] Error name:', error.name);
+        console.error('[WebAuthn] Error message:', error.message);
+        console.error('[WebAuthn] Error stack:', error.stack);
 
         if (messageEl) {
             if (error.name === 'NotAllowedError') {
@@ -1225,6 +869,7 @@ async function registerPasskey(email) {
 async function authenticateWithPasskey(email = null) {
     console.log('[WebAuthn] ========== PASSKEY AUTHENTICATION START ==========');
     console.log('[WebAuthn] Authenticating' + (email ? ` for email: ${email}` : ' (discoverable)'));
+    console.log('[WebAuthn] Browser/Platform:', navigator.userAgent);
 
     const biometricMessage = document.getElementById('biometric-message');
     const signinMessage = document.getElementById('signin-message');
@@ -1237,14 +882,18 @@ async function authenticateWithPasskey(email = null) {
         }
 
         // Get authentication options from server
+        console.log('[WebAuthn] Requesting authentication options from server...');
         const optionsRes = await fetch('/api/auth-webauthn-auth-options', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
 
+        console.log('[WebAuthn] Server response status:', optionsRes.status);
+
         if (!optionsRes.ok) {
             const errorData = await optionsRes.json();
+            console.error('[WebAuthn] Server error response:', errorData);
             if (errorData.code === 'NO_PASSKEY') {
                 // User doesn't have a passkey set up
                 throw new Error('NO_PASSKEY');
@@ -1254,6 +903,8 @@ async function authenticateWithPasskey(email = null) {
 
         const { options, userId } = await optionsRes.json();
         console.log('[WebAuthn] Received authentication options');
+        console.log('[WebAuthn] RP ID:', options.rpId);
+        console.log('[WebAuthn] Allow credentials count:', options.allowCredentials?.length || 0);
 
         // Convert challenge from base64url to ArrayBuffer
         options.challenge = base64urlToArrayBuffer(options.challenge);
@@ -1271,12 +922,13 @@ async function authenticateWithPasskey(email = null) {
         }
 
         // Get the credential
-        console.log('[WebAuthn] Requesting credential...');
+        console.log('[WebAuthn] Invoking navigator.credentials.get()...');
         const credential = await navigator.credentials.get({
             publicKey: options
         });
 
-        console.log('[WebAuthn] Got credential:', credential.id);
+        console.log('[WebAuthn] Credential retrieved successfully');
+        console.log('[WebAuthn] Credential ID:', credential.id);
 
         // Prepare the credential for sending to server
         const credentialForServer = {
@@ -1296,19 +948,23 @@ async function authenticateWithPasskey(email = null) {
             messageEl.textContent = 'Verifying...';
         }
 
+        console.log('[WebAuthn] Sending credential to server for verification...');
         const verifyRes = await fetch('/api/auth-webauthn-auth-verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ credential: credentialForServer })
         });
 
+        console.log('[WebAuthn] Verify response status:', verifyRes.status);
+
         if (!verifyRes.ok) {
             const errorData = await verifyRes.json();
+            console.error('[WebAuthn] Verification error response:', errorData);
             throw new Error(errorData.error || 'Authentication failed');
         }
 
         const result = await verifyRes.json();
-        console.log('[WebAuthn] Authentication successful!');
+        console.log('[WebAuthn] Authentication verified successfully!');
 
         if (messageEl) {
             messageEl.textContent = 'Success! Signing you in...';
@@ -1322,7 +978,10 @@ async function authenticateWithPasskey(email = null) {
         return true;
 
     } catch (error) {
-        console.error('[WebAuthn] Authentication error:', error);
+        console.error('[WebAuthn] ========== AUTHENTICATION ERROR ==========');
+        console.error('[WebAuthn] Error name:', error.name);
+        console.error('[WebAuthn] Error message:', error.message);
+        console.error('[WebAuthn] Error stack:', error.stack);
 
         if (messageEl) {
             if (error.message === 'NO_PASSKEY') {
@@ -1377,9 +1036,14 @@ async function initializeBiometricAuth() {
         return;
     }
 
-    // Check if user has a stored passkey email (for returning users)
+    // Check if ANY passkey is stored (for returning users who should see biometric option at app load)
+    const anyPasskeyStored = hasAnyStoredPasskey();
     const lastEmail = localStorage.getItem('lastSignInEmail');
-    const hasPasskey = lastEmail && hasStoredPasskey(lastEmail);
+    const hasPasskeyForLastEmail = lastEmail && hasStoredPasskey(lastEmail);
+
+    console.log('[WebAuthn] Any passkey stored:', anyPasskeyStored);
+    console.log('[WebAuthn] Last email:', lastEmail || '(none)');
+    console.log('[WebAuthn] Has passkey for last email:', hasPasskeyForLastEmail);
 
     // Set appropriate button text based on device
     if (biometricBtnText) {
@@ -1395,18 +1059,22 @@ async function initializeBiometricAuth() {
         }
     }
 
-    // Show biometric login button if user has a passkey
-    if (biometricSection && hasPasskey) {
+    // Show biometric login button if ANY passkey is stored (enables biometric at app load)
+    // This allows returning users to immediately use passkey login
+    if (biometricSection && anyPasskeyStored) {
         biometricSection.style.display = 'block';
-        console.log('[WebAuthn] Showing biometric login option for:', lastEmail);
+        console.log('[WebAuthn] Showing biometric login option for returning user');
     }
 
     // Handle biometric login button click
     if (biometricLoginBtn) {
         biometricLoginBtn.addEventListener('click', async () => {
             console.log('[WebAuthn] Biometric login button clicked');
+            // Use email if available, otherwise use discoverable credentials (null email)
             const email = localStorage.getItem('lastSignInEmail');
-            await authenticateWithPasskey(email);
+            const emailHasPasskey = email && hasStoredPasskey(email);
+            // If the last email has a passkey, use it; otherwise use discoverable credentials
+            await authenticateWithPasskey(emailHasPasskey ? email : null);
         });
     }
 
@@ -1515,7 +1183,3 @@ export {
     updateBiometricManagementUI,
     isPlatformAuthenticatorAvailable
 };
-
-// --- DEBUG ---
-console.log('[auth.js] 4. File execution finished. Exports are ready.');
-// --- DEBUG ---

@@ -74,8 +74,9 @@ exports.handler = async (event) => {
         const challengeRecord = challengeData.records[0];
         const expectedChallenge = challengeRecord.fields.Challenge;
 
-        // Check if challenge is expired
-        if (new Date() > new Date(challengeRecord.fields.ExpiresAt)) {
+        // Check if challenge is expired (ExpiresAt is stored as Unix timestamp in seconds)
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        if (currentTimestamp > challengeRecord.fields.ExpiresAt) {
             await fetch(`https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges/${challengeRecord.id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${AIRTABLE_PAT}` }

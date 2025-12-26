@@ -75,10 +75,14 @@ exports.handler = async (event) => {
         const challenge = crypto.randomBytes(32).toString('base64url');
 
         // Store the challenge temporarily (expires in 5 minutes)
-        const challengeExpiry = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        // Use Unix timestamp (seconds) for ExpiresAt to ensure compatibility with Airtable Number field
+        // Explicitly convert to Number to ensure it's not accidentally a string
+        const nowMs = Date.now();
+        const expiresAtMs = nowMs + (5 * 60 * 1000);
+        const challengeExpiryTimestamp = Number(Math.floor(expiresAtMs / 1000));
         const createChallengeUrl = `https://api.airtable.com/v0/${BASE_ID}/WebAuthnChallenges`;
 
-        console.log(`[webauthn-register-options] Storing challenge for user ${userRecord.id}...`);
+        console.log(`[WebAuthn Register] ExpiresAt calculation: nowMs=${nowMs}, expiresAtMs=${expiresAtMs}, timestamp=${challengeExpiryTimestamp}, typeof=${typeof challengeExpiryTimestamp}`);
 
         const challengeStoreRes = await fetch(createChallengeUrl, {
             method: 'POST',
@@ -90,7 +94,7 @@ exports.handler = async (event) => {
                         UserId: userRecord.id,
                         Email: email,
                         Type: 'registration',
-                        ExpiresAt: challengeExpiry,
+                        ExpiresAt: challengeExpiryTimestamp,
                         RpId: rpId
                     }
                 }]
