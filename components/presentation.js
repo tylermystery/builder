@@ -2798,62 +2798,128 @@ async function performPresentationSearch(searchTerm) {
         const aiRecords = [];
         const timestamp = Date.now();
 
+        /**
+         * Helper function to build a comprehensive AI record with all business details
+         * Matches the format used in events.js for catalog search AI results
+         */
+        const buildAIRecord = (source, recordId, searchTermForTags) => {
+            // Build comprehensive Rankings JSON with AI profile scores
+            const rankingsData = {
+                "profileSource": "ai_presentation_search",
+                "Tags": [searchTermForTags.toLowerCase(), "ai-generated", "partner activity"]
+            };
+            // Add activity profile scores if provided by AI
+            const sourceRankings = source.Rankings || source.rankings;
+            if (sourceRankings && typeof sourceRankings === 'object') {
+                rankingsData.Fun = sourceRankings.Fun || 0;
+                rankingsData.Social = sourceRankings.Social || 0;
+                rankingsData.Active = sourceRankings.Active || 0;
+                rankingsData.Creative = sourceRankings.Creative || 0;
+                rankingsData.Learning = sourceRankings.Learning || 0;
+                rankingsData.Relaxing = sourceRankings.Relaxing || 0;
+            }
+
+            // Build location details with availability and address
+            let locationDetails = '';
+            const location = source.Location || source.location || source.Address || source.address || '';
+            const availability = source.Availability || source.availability || source.Hours || source.hours || source.OperatingHours || '';
+            const phone = source.Phone || source.phone || '';
+            const email = source.Email || source.email || '';
+
+            if (location) locationDetails += location;
+            if (availability) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Hours: ${availability}`;
+            }
+            if (phone) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Phone: ${phone}`;
+            }
+            if (email) {
+                locationDetails += locationDetails ? '\n\n' : '';
+                locationDetails += `Email: ${email}`;
+            }
+
+            // Build "Good to Know" / Additional Information with lead time, website, and extra info
+            let additionalInfo = '';
+            const leadTime = source.LeadTime || source.leadTime || '';
+            const goodToKnow = source.GoodToKnow || source.goodToKnow || '';
+            const website = source.Website || source.website || '';
+            const duration = source.Duration || source.duration || '';
+            const capacity = source.Capacity || source.capacity || '';
+
+            if (leadTime) additionalInfo += `Booking: ${leadTime}`;
+            if (duration) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Duration: ${duration}`;
+            }
+            if (capacity) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Capacity: ${capacity}`;
+            }
+            if (goodToKnow) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += goodToKnow;
+            }
+            if (website) {
+                additionalInfo += additionalInfo ? '\n\n' : '';
+                additionalInfo += `Website: ${website}`;
+            }
+
+            // Ensure price is a number
+            let price = source.Price || source.price || 0;
+            if (typeof price === 'string') {
+                price = parseFloat(price.replace(/[^0-9.-]/g, '')) || 0;
+            }
+
+            return {
+                id: recordId,
+                fields: {
+                    Name: source.Name || source.name || 'AI Suggestion',
+                    Description: source.Description || source.description || '',
+                    Price: price,
+                    Category: source.Category || source.category || searchTermForTags,
+                    'Image URL': source.imageUrl || source['Image URL'] || '',
+                    ServiceType: source.ServiceType || 'Partner Activity',
+                    'Item Type': 'Bookable Item',
+                    Status: 'Available',
+                    'Pricing Type': 'per person',
+                    // Business details for modal display
+                    Duration: duration || null,
+                    Capacity: capacity || null,
+                    'Location Details': locationDetails || null,
+                    'Additional Information': additionalInfo || null,
+                    // Rankings as JSON string (required by modal.js parsing)
+                    Rankings: JSON.stringify(rankingsData),
+                    // Keep raw fields for backwards compatibility
+                    Location: location,
+                    Availability: availability,
+                    Website: website,
+                    LeadTime: leadTime,
+                    GoodToKnow: goodToKnow,
+                    Phone: phone,
+                    Email: email,
+                    Hours: availability,
+                    // Null fields to match events.js structure
+                    Options: null, 'Parent Item': null, 'Headcount min': null,
+                    'Media Tags': null, 'Curated Images': null, Subcategories: null,
+                    'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
+                    'Chat Enabled': false
+                },
+                isAI: true
+            };
+        };
+
         if (aiData.itemType === 'Grouping' && aiData.children && Array.isArray(aiData.children)) {
             aiData.children.forEach((child, index) => {
                 const childId = `ai-presentation-${timestamp}-${index}`;
-                aiRecords.push({
-                    id: childId,
-                    fields: {
-                        Name: child.Name || child.name || 'AI Suggestion',
-                        Description: child.Description || child.description || '',
-                        Price: child.Price || child.price || 0,
-                        Category: child.Category || child.category || searchTerm,
-                        'Image URL': child.imageUrl || child['Image URL'] || '',
-                        Location: child.Location || child.location || '',
-                        Availability: child.Availability || child.availability || '',
-                        Website: child.Website || child.website || '',
-                        LeadTime: child.LeadTime || child.leadTime || '',
-                        GoodToKnow: child.GoodToKnow || child.goodToKnow || '',
-                        // Additional business details for modal display
-                        Duration: child.Duration || child.duration || '',
-                        Capacity: child.Capacity || child.capacity || '',
-                        'Location Details': child['Location Details'] || child.locationDetails || child.Address || child.address || '',
-                        'Additional Information': child['Additional Information'] || child.additionalInfo || child.GoodToKnow || child.goodToKnow || '',
-                        Phone: child.Phone || child.phone || '',
-                        Email: child.Email || child.email || '',
-                        Hours: child.Hours || child.hours || child.OperatingHours || '',
-                        Rankings: child.Rankings || child.rankings || {}
-                    },
-                    isAI: true
-                });
+                const record = buildAIRecord(child, childId, searchTerm);
+                aiRecords.push(record);
             });
         } else if (aiData.Name || aiData.name) {
             // Single AI result
-            aiRecords.push({
-                id: `ai-presentation-${timestamp}-0`,
-                fields: {
-                    Name: aiData.Name || aiData.name || 'AI Suggestion',
-                    Description: aiData.Description || aiData.description || '',
-                    Price: aiData.Price || aiData.price || 0,
-                    Category: aiData.Category || aiData.category || searchTerm,
-                    'Image URL': aiData.imageUrl || aiData['Image URL'] || '',
-                    Location: aiData.Location || aiData.location || '',
-                    Availability: aiData.Availability || aiData.availability || '',
-                    Website: aiData.Website || aiData.website || '',
-                    LeadTime: aiData.LeadTime || aiData.leadTime || '',
-                    GoodToKnow: aiData.GoodToKnow || aiData.goodToKnow || '',
-                    // Additional business details for modal display
-                    Duration: aiData.Duration || aiData.duration || '',
-                    Capacity: aiData.Capacity || aiData.capacity || '',
-                    'Location Details': aiData['Location Details'] || aiData.locationDetails || aiData.Address || aiData.address || '',
-                    'Additional Information': aiData['Additional Information'] || aiData.additionalInfo || aiData.GoodToKnow || aiData.goodToKnow || '',
-                    Phone: aiData.Phone || aiData.phone || '',
-                    Email: aiData.Email || aiData.email || '',
-                    Hours: aiData.Hours || aiData.hours || aiData.OperatingHours || '',
-                    Rankings: aiData.Rankings || aiData.rankings || {}
-                },
-                isAI: true
-            });
+            const record = buildAIRecord(aiData, `ai-presentation-${timestamp}-0`, searchTerm);
+            aiRecords.push(record);
         }
 
         // Display AI results

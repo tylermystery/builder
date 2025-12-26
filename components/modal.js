@@ -2106,7 +2106,7 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         modalAdditionalDetails.appendChild(fragment);
     }
 
-    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && record.fields['Item Type'] === 'Grouping';
+    const isGrouping = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-') && record.fields['Item Type'] === 'Grouping';
     const isPackage = record.fields['Item Type'] === 'Package';
 
     const pricingType = record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE];
