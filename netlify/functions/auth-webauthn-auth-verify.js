@@ -115,8 +115,17 @@ exports.handler = async (event) => {
         // Counter is 4 bytes starting at byte 33 (after rpIdHash[32] and flags[1])
         const counter = authenticatorData.readUInt32BE(33);
 
-        // Verify counter is greater than stored counter (replay protection)
-        if (counter <= storedCounter) {
+        console.log(`[webauthn-auth-verify] Counter check: stored=${storedCounter}, received=${counter}`);
+
+        // Verify counter is greater than or equal to stored counter (replay protection)
+        // Note: Some authenticators (especially platform authenticators like Windows Hello, Touch ID)
+        // may not properly implement counter incrementing, or may always return 0.
+        // Per WebAuthn spec, counters are optional and a counter of 0 is valid.
+        // We allow:
+        // 1. Counter >= storedCounter (normal case, allows first use and same-counter authenticators)
+        // 2. Counter == 0 is always accepted if storedCounter is 0 (first use)
+        // For maximum security, you could require strictly greater, but this breaks many authenticators.
+        if (counter < storedCounter) {
             console.error(`[webauthn-auth-verify] Counter replay detected: stored=${storedCounter}, received=${counter}`);
             return { statusCode: 400, body: JSON.stringify({ error: 'Potential replay attack detected' }) };
         }
