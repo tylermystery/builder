@@ -68,8 +68,8 @@ Generate options now:`;
         }
     };
 
-    const modelId = "gemini-1.5-flash";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
+    const modelId = "gemini-2.0-flash";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
 
     console.log(`[Debug] generateTopOptionsWithAI: Sending request to Gemini...`);
     const response = await fetch(apiUrl, {

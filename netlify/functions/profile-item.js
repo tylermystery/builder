@@ -76,7 +76,7 @@ async function getProfileFromGemini(itemName, itemDescription) {
         ],
     };
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
     
     console.log(`[Debug] getProfileFromGemini: Sending request to Gemini...`);
     const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
