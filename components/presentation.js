@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import * as api from '../api.js';
 import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
-import { updateUrl, getRecordPrice } from '../utils.js';
+import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
@@ -706,6 +706,77 @@ function createMediaCarousel(images, recordId) {
     `;
 }
 
+/**
+ * Get the selected options text for display.
+ * Returns an array of objects with group name and selected option name.
+ * @param {Object} record - The Airtable record
+ * @param {Object} itemInfo - The item info containing selections
+ * @returns {Array<{groupName: string, optionName: string}>} Array of selected options
+ */
+function getSelectedOptionsDisplay(record, itemInfo) {
+    const rawOptions = record.fields.Options;
+    if (!rawOptions) return [];
+
+    const groups = parseOptions(rawOptions);
+    if (!groups || groups.length === 0) return [];
+
+    const results = [];
+
+    // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
+    if (itemInfo?.selections && typeof itemInfo.selections === 'object' && Object.keys(itemInfo.selections).length > 0) {
+        for (const [groupKey, optionIndex] of Object.entries(itemInfo.selections)) {
+            const groupIndexMatch = groupKey.match(/^group(\d+)$/);
+            if (!groupIndexMatch) continue;
+
+            const groupIndex = parseInt(groupIndexMatch[1], 10);
+            const group = groups[groupIndex];
+            if (!group || !group.options) continue;
+
+            const option = group.options[optionIndex];
+            if (option) {
+                results.push({
+                    groupName: group.name || 'Options',
+                    optionName: option.name
+                });
+            }
+        }
+        return results;
+    }
+
+    // Handle legacy single index format
+    if (typeof itemInfo?.selectedOptionIndex === 'number' && itemInfo.selectedOptionIndex >= 0) {
+        const flatOptions = flattenOptionGroups(groups);
+        const option = flatOptions[itemInfo.selectedOptionIndex];
+        if (option) {
+            // Find which group this option belongs to
+            let groupName = 'Options';
+            for (const group of groups) {
+                if (group.options && group.options.includes(option)) {
+                    groupName = group.name || 'Options';
+                    break;
+                }
+            }
+            results.push({
+                groupName: groupName,
+                optionName: option.name
+            });
+        }
+        return results;
+    }
+
+    // No selections - show default (first option of each group)
+    for (const group of groups) {
+        if (group.options && group.options.length > 0) {
+            results.push({
+                groupName: group.name || 'Options',
+                optionName: group.options[0].name
+            });
+        }
+    }
+
+    return results;
+}
+
 // Generate summary text for an item when collapsed in accordion
 function generateItemSummary(record, itemInfo, type) {
     const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
@@ -717,14 +788,23 @@ function generateItemSummary(record, itemInfo, type) {
     const category = record.fields.Category || '';
     const subcategory = record.fields.Subcategory || '';
 
+    // Get selected options for display
+    const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
+
     let summary = `<span class="item-summary-price">$${price.toFixed(2)}</span>`;
 
     if (quantity > 1) {
         summary += ` <span class="item-summary-qty">(×${quantity})</span>`;
     }
 
-    // Add category hint if available
-    if (category) {
+    // Show selected options if any
+    if (selectedOptions.length > 0) {
+        const optionNames = selectedOptions.map(opt => opt.optionName).join(', ');
+        summary += ` &bull; <span class="item-summary-options">${optionNames}</span>`;
+    }
+
+    // Add category hint if available (only if no options shown)
+    if (category && selectedOptions.length === 0) {
         summary += ` &bull; <span class="item-summary-category">${category}</span>`;
     }
 
@@ -751,6 +831,9 @@ async function renderItineraryItem(item, index) {
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
 
+    // Get selected options for expanded view
+    const selectedOptions = getSelectedOptionsDisplay(record, itemInfo);
+
     // Fetch images if not cached
     if (!itemImagesCache.has(recordId)) {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
@@ -765,6 +848,20 @@ async function renderItineraryItem(item, index) {
 
     // Generate summary for collapsed state
     const itemSummary = generateItemSummary(record, itemInfo, type);
+
+    // Generate selected options HTML for expanded view
+    let selectedOptionsHTML = '';
+    if (selectedOptions.length > 0) {
+        selectedOptionsHTML = `
+            <div class="itinerary-item-options">
+                ${selectedOptions.map(opt => `
+                    <span class="itinerary-item-option-tag">
+                        <span class="option-group-label">${opt.groupName}:</span> ${opt.optionName}
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    }
 
     return `
         <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
@@ -784,6 +881,7 @@ async function renderItineraryItem(item, index) {
                             <span class="itinerary-item-price">$${price.toFixed(2)}</span>
                             ${quantity > 1 ? `<span class="itinerary-item-qty">× ${quantity}</span>` : ''}
                         </div>
+                        ${selectedOptionsHTML}
                         ${note ? `
                             <div class="itinerary-item-note">
                                 <strong>Note:</strong> ${note}

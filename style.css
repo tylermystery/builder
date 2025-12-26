@@ -4906,6 +4906,37 @@ body.modal-open {
     font-style: italic;
 }
 
+/* Item summary options (collapsed view) */
+.item-summary-options {
+    color: #495057;
+    font-weight: 500;
+}
+
+/* Item options display (expanded view) */
+.itinerary-item-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.itinerary-item-option-tag {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, #e8f4fd 0%, #f0f7ff 100%);
+    border: 1px solid #c8e1fc;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.85em;
+    color: #0056b3;
+}
+
+.itinerary-item-option-tag .option-group-label {
+    color: #6c757d;
+    margin-right: 4px;
+    font-weight: 400;
+}
+
 /* Item Accordion Content - Hidden when collapsed */
 .item-accordion-content {
     max-height: 0;
