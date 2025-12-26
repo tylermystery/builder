@@ -807,12 +807,47 @@ function initializeNetlifyIdentity() {
     console.log('[Google SSO DEBUG] netlifyIdentity object:', netlifyIdentity);
     console.log('[Google SSO DEBUG] Initializing Netlify Identity');
 
+    // Determine the correct API URL - always use production for OAuth redirects
+    // This prevents deploy previews from causing incorrect OAuth redirect URLs
+    const PRODUCTION_SITE_URL = 'https://whatthefunfinder.netlify.app';
+    const currentHost = window.location.hostname;
+    const isDeployPreview = currentHost.includes('--whatthefunfinder.netlify.app') ||
+                            currentHost.includes('deploy-preview') ||
+                            currentHost.includes('agent-');
+    const isProduction = currentHost === 'whatthefunfinder.netlify.app';
+
+    console.log('[Google SSO DEBUG] Current host:', currentHost);
+    console.log('[Google SSO DEBUG] Is deploy preview:', isDeployPreview);
+    console.log('[Google SSO DEBUG] Is production:', isProduction);
+
+    // Clear any stale netlifySiteURL from localStorage on production site
+    // This prevents OAuth from redirecting to a cached deploy preview URL
+    if (isProduction) {
+        const storedSiteURL = localStorage.getItem('netlifySiteURL');
+        if (storedSiteURL && storedSiteURL !== PRODUCTION_SITE_URL) {
+            console.log('[Google SSO DEBUG] Clearing stale netlifySiteURL from localStorage:', storedSiteURL);
+            localStorage.removeItem('netlifySiteURL');
+        }
+    }
+
+    // Build init options - only set APIUrl for deploy previews
+    // For production, let it use the default (current origin)
+    const initOptions = {
+        locale: 'en'
+    };
+
+    if (isDeployPreview) {
+        // Force OAuth redirects to go to production site
+        initOptions.APIUrl = `${PRODUCTION_SITE_URL}/.netlify/identity`;
+        console.log('[Google SSO DEBUG] Deploy preview detected - using production APIUrl:', initOptions.APIUrl);
+    } else {
+        console.log('[Google SSO DEBUG] Production site - using default APIUrl');
+    }
+
     // Initialize the widget
-    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init()');
+    console.log('[Google SSO DEBUG] Calling netlifyIdentity.init() with options:', initOptions);
     try {
-        netlifyIdentity.init({
-            locale: 'en'
-        });
+        netlifyIdentity.init(initOptions);
         console.log('[Google SSO DEBUG] netlifyIdentity.init() completed successfully');
     } catch (initError) {
         console.error('[Google SSO DEBUG] ERROR in netlifyIdentity.init():', initError);
