@@ -3009,7 +3009,8 @@ async function performPresentationSearch(searchTerm) {
                     Hours: availability,
                     // Null fields to match events.js structure
                     Options: null, 'Parent Item': null, 'Headcount min': null,
-                    'Media Tags': null, 'Curated Images': null, Subcategories: null,
+                    'Media Tags': source.ImageKeywords || source.imageKeywords || null,
+                    'Curated Images': null, Subcategories: null,
                     'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
                     'Chat Enabled': false
                 },

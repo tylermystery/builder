@@ -539,7 +539,8 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                         Rankings: JSON.stringify(rankingsData),
                         'Location Details': locationDetails || null,
                         'Additional Information': additionalInfo || null,
-                        Options: null, 'Headcount min': null, 'Media Tags': null,
+                        Options: null, 'Headcount min': null,
+                        'Media Tags': child.ImageKeywords || null,
                         'Curated Images': null, Subcategories: null, 'iCal URL': null,
                         'Lead Time (days)': null, RSVPs: null, Date: null,
                         'Chat Enabled': false, Duration: null, Capacity: null
@@ -613,7 +614,8 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     'Location Details': locationDetails || null,
                     'Additional Information': additionalInfo || null,
                     Options: null, 'Parent Item': null, 'Headcount min': null,
-                    'Media Tags': null, 'Curated Images': null, Subcategories: null,
+                    'Media Tags': aiData.ImageKeywords || null,
+                    'Curated Images': null, Subcategories: null,
                     'iCal URL': null, 'Lead Time (days)': null, RSVPs: null, Date: null,
                     'Chat Enabled': false, Duration: null, Capacity: null
                 }
