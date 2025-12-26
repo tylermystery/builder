@@ -682,9 +682,10 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
     }
 
     // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
+    // Also supports multi-select arrays: { group0: [0, 2], group1: 1 }
     if (typeof selectionsOrIndex === 'object' && selectionsOrIndex !== null) {
         // Iterate through each group selection
-        for (const [groupKey, optionIndex] of Object.entries(selectionsOrIndex)) {
+        for (const [groupKey, optionValue] of Object.entries(selectionsOrIndex)) {
             // Extract group index from key like "group0", "group1", etc.
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
@@ -693,14 +694,19 @@ export function getRecordPrice(record, selectionsOrIndex = null) {
             const group = groups[groupIndex];
             if (!group || !group.options) continue;
 
-            const option = group.options[optionIndex];
-            if (!option) continue;
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
 
-            // Apply price modifications - override takes precedence
-            if (option.priceOverride !== null && !isNaN(option.priceOverride)) {
-                price = option.priceOverride;
-            } else if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
-                price += option.priceModifier;
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (!option) continue;
+
+                // Apply price modifications - override takes precedence
+                if (option.priceOverride !== null && !isNaN(option.priceOverride)) {
+                    price = option.priceOverride;
+                } else if (option.priceModifier !== null && !isNaN(option.priceModifier)) {
+                    price += option.priceModifier;
+                }
             }
         }
     }
@@ -734,7 +740,7 @@ export function getActiveImageTag(record, selectionsOrIndex = null) {
         return null;
     }
 
-    // Handle new selections object format
+    // Handle new selections object format (supports multi-select arrays)
     if (typeof selectionsOrIndex === 'object') {
         // Iterate through selections in order, last one with imageTag wins
         const sortedKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
@@ -744,7 +750,7 @@ export function getActiveImageTag(record, selectionsOrIndex = null) {
         });
 
         for (const groupKey of sortedKeys) {
-            const optionIndex = selectionsOrIndex[groupKey];
+            const optionValue = selectionsOrIndex[groupKey];
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
 
@@ -752,9 +758,14 @@ export function getActiveImageTag(record, selectionsOrIndex = null) {
             const group = groups[groupIndex];
             if (!group || !group.options) continue;
 
-            const option = group.options[optionIndex];
-            if (option && option.imageTag) {
-                imageTag = option.imageTag;
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (option && option.imageTag) {
+                    imageTag = option.imageTag;
+                }
             }
         }
     }
@@ -789,7 +800,7 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
         }
     }
 
-    // Handle new selections object format
+    // Handle new selections object format (supports multi-select arrays)
     if (typeof selectionsOrIndex === 'object') {
         const sortedKeys = Object.keys(selectionsOrIndex).sort((a, b) => {
             const indexA = parseInt(a.replace('group', ''), 10) || 0;
@@ -798,7 +809,7 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
         });
 
         for (const groupKey of sortedKeys) {
-            const optionIndex = selectionsOrIndex[groupKey];
+            const optionValue = selectionsOrIndex[groupKey];
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
 
@@ -806,9 +817,14 @@ export function getRecordDescription(record, selectionsOrIndex = null) {
             const group = groups[groupIndex];
             if (!group || !group.options) continue;
 
-            const option = group.options[optionIndex];
-            if (option && option.descriptionAppend) {
-                appendedParts.push(option.descriptionAppend);
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (option && option.descriptionAppend) {
+                    appendedParts.push(option.descriptionAppend);
+                }
             }
         }
     }

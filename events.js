@@ -1969,14 +1969,24 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 const note = document.getElementById('modal-item-note')?.value || '';
 
                 // Extract selections from option groups
+                // Supports both single-select (returns number) and multi-select (returns array)
                 const selections = {};
                 const optionGroups = document.querySelectorAll('#modal-options-container .option-group');
                 if (optionGroups.length > 0) {
                     optionGroups.forEach((group) => {
                         const groupIndex = group.dataset.groupIndex;
-                        const selectedBtn = group.querySelector('.option-btn.selected');
-                        if (selectedBtn && groupIndex !== undefined) {
-                            selections[`group${groupIndex}`] = parseInt(selectedBtn.dataset.optionIndex, 10) || 0;
+                        const selectedBtns = group.querySelectorAll('.option-btn.selected');
+                        if (selectedBtns.length > 0 && groupIndex !== undefined) {
+                            if (selectedBtns.length === 1) {
+                                // Single selection - store as number
+                                selections[`group${groupIndex}`] = parseInt(selectedBtns[0].dataset.optionIndex, 10) || 0;
+                            } else {
+                                // Multi-selection - store as sorted array
+                                const indices = Array.from(selectedBtns)
+                                    .map(btn => parseInt(btn.dataset.optionIndex, 10) || 0)
+                                    .sort((a, b) => a - b);
+                                selections[`group${groupIndex}`] = indices;
+                            }
                         }
                     });
                 } else {
@@ -1992,7 +2002,10 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 let selectedOptionIndex = 0;
                 if (Object.keys(selections).length > 0) {
                     // For now, use the first group's selection as the legacy index
-                    selectedOptionIndex = selections['group0'] || 0;
+                    const group0Selection = selections['group0'];
+                    selectedOptionIndex = Array.isArray(group0Selection)
+                        ? (group0Selection[0] || 0)
+                        : (group0Selection || 0);
                 }
 
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
@@ -2222,11 +2235,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         } else if (target.matches('#modal-item-note')) {
             updates.note = target.value;
         } else if (e.detail?.selections !== undefined) {
-            // New: Handle selections object from option groups
+            // New: Handle selections object from option groups (supports multi-select arrays)
             updates.selections = e.detail.selections;
             // Also update legacy selectedOptionIndex for backward compatibility
             if (Object.keys(e.detail.selections).length > 0) {
-                updates.selectedOptionIndex = e.detail.selections['group0'] || 0;
+                const group0Selection = e.detail.selections['group0'];
+                updates.selectedOptionIndex = Array.isArray(group0Selection)
+                    ? (group0Selection[0] || 0)
+                    : (group0Selection || 0);
             }
         } else if (e.detail?.selectedOptionIndex !== undefined) {
             // Legacy: Handle single selectedOptionIndex

@@ -94,6 +94,7 @@ async function createLockedInItemElement(record, itemInfo) {
 
     if (itemInfo.selections && Object.keys(itemInfo.selections).length > 0) {
         // New format: selections object with groupIndex -> optionIndex mapping
+        // Supports both single-select (number) and multi-select (array) formats
         const sortedKeys = Object.keys(itemInfo.selections).sort((a, b) => {
             const indexA = parseInt(a.replace('group', ''), 10) || 0;
             const indexB = parseInt(b.replace('group', ''), 10) || 0;
@@ -101,7 +102,7 @@ async function createLockedInItemElement(record, itemInfo) {
         });
 
         for (const groupKey of sortedKeys) {
-            const optionIndex = itemInfo.selections[groupKey];
+            const optionValue = itemInfo.selections[groupKey];
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
 
@@ -109,9 +110,14 @@ async function createLockedInItemElement(record, itemInfo) {
             const group = optionGroups[groupIndex];
             if (!group || !group.options) continue;
 
-            const option = group.options[optionIndex];
-            if (option && option.name) {
-                optionNames.push(option.name);
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (option && option.name) {
+                    optionNames.push(option.name);
+                }
             }
         }
     } else if (itemInfo.selectedOptionIndex != null) {

@@ -2549,6 +2549,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             const optionsWrapper = document.createElement('div');
             optionsWrapper.className = 'option-group-options';
 
+            // Determine if this group is required or optional (multi-select allowed for optional)
+            const isRequired = group.modifier && group.modifier.toLowerCase() === 'required';
+            const isMultiSelect = !isRequired; // Optional groups allow multi-select
+
             group.options.forEach((opt, optionIndex) => {
                 const optionButton = document.createElement('button');
                 optionButton.className = 'option-btn';
@@ -2556,8 +2560,13 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 optionButton.dataset.optionIndex = optionIndex;
 
                 // Check if this option is currently selected
+                // Support both single selection (number) and multi-select (array) formats
                 const groupKey = `group${groupIndex}`;
-                if (currentSelections[groupKey] === optionIndex) {
+                const groupSelection = currentSelections[groupKey];
+                const isSelected = Array.isArray(groupSelection)
+                    ? groupSelection.includes(optionIndex)
+                    : groupSelection === optionIndex;
+                if (isSelected) {
                     optionButton.classList.add('selected');
                 }
 
@@ -2595,22 +2604,57 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         }
                     });
                 } else {
-                    // Regular option selection
+                    // Regular option selection - supports toggle and multi-select for optional groups
                     optionButton.addEventListener('click', (e) => {
                         e.stopPropagation();
 
-                        // Deselect other options in the same group
-                        optionsWrapper.querySelectorAll('.option-btn').forEach(btn => {
-                            btn.classList.remove('selected');
-                        });
-
-                        // Select this option
-                        e.currentTarget.classList.add('selected');
-
-                        // Update selections
                         const gIdx = parseInt(e.currentTarget.dataset.groupIndex, 10);
                         const oIdx = parseInt(e.currentTarget.dataset.optionIndex, 10);
-                        currentSelections[`group${gIdx}`] = oIdx;
+                        const groupKey = `group${gIdx}`;
+                        const currentGroup = optionGroups[gIdx];
+                        const groupIsRequired = currentGroup.modifier && currentGroup.modifier.toLowerCase() === 'required';
+                        const groupIsMultiSelect = !groupIsRequired;
+
+                        const currentlySelected = e.currentTarget.classList.contains('selected');
+
+                        if (groupIsMultiSelect) {
+                            // Multi-select: toggle individual options
+                            let currentArray = Array.isArray(currentSelections[groupKey])
+                                ? [...currentSelections[groupKey]]
+                                : (typeof currentSelections[groupKey] === 'number' ? [currentSelections[groupKey]] : []);
+
+                            if (currentlySelected) {
+                                // Remove from selection
+                                currentArray = currentArray.filter(idx => idx !== oIdx);
+                                e.currentTarget.classList.remove('selected');
+                            } else {
+                                // Add to selection
+                                currentArray.push(oIdx);
+                                currentArray.sort((a, b) => a - b); // Keep sorted
+                                e.currentTarget.classList.add('selected');
+                            }
+
+                            // Store as array for multi-select (or remove key if empty)
+                            if (currentArray.length === 0) {
+                                delete currentSelections[groupKey];
+                            } else {
+                                currentSelections[groupKey] = currentArray;
+                            }
+                        } else {
+                            // Single-select with toggle: deselect all others first
+                            optionsWrapper.querySelectorAll('.option-btn').forEach(btn => {
+                                btn.classList.remove('selected');
+                            });
+
+                            if (currentlySelected) {
+                                // Toggle off - remove selection
+                                delete currentSelections[groupKey];
+                            } else {
+                                // Select this option
+                                e.currentTarget.classList.add('selected');
+                                currentSelections[groupKey] = oIdx;
+                            }
+                        }
 
                         // Update UI reactively
                         updateOptionsUI();

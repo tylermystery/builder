@@ -709,6 +709,7 @@ function createMediaCarousel(images, recordId) {
 /**
  * Get the selected options text for display.
  * Returns an array of objects with group name and selected option name.
+ * Supports both single-select (number) and multi-select (array) formats.
  * @param {Object} record - The Airtable record
  * @param {Object} itemInfo - The item info containing selections
  * @returns {Array<{groupName: string, optionName: string}>} Array of selected options
@@ -723,8 +724,9 @@ function getSelectedOptionsDisplay(record, itemInfo) {
     const results = [];
 
     // Handle new selections object format: { group0: optionIndex, group1: optionIndex, ... }
+    // Also supports multi-select arrays: { group0: [0, 2], group1: 1 }
     if (itemInfo?.selections && typeof itemInfo.selections === 'object' && Object.keys(itemInfo.selections).length > 0) {
-        for (const [groupKey, optionIndex] of Object.entries(itemInfo.selections)) {
+        for (const [groupKey, optionValue] of Object.entries(itemInfo.selections)) {
             const groupIndexMatch = groupKey.match(/^group(\d+)$/);
             if (!groupIndexMatch) continue;
 
@@ -732,12 +734,17 @@ function getSelectedOptionsDisplay(record, itemInfo) {
             const group = groups[groupIndex];
             if (!group || !group.options) continue;
 
-            const option = group.options[optionIndex];
-            if (option) {
-                results.push({
-                    groupName: group.name || 'Options',
-                    optionName: option.name
-                });
+            // Handle both single index and array of indices (multi-select)
+            const optionIndices = Array.isArray(optionValue) ? optionValue : [optionValue];
+
+            for (const optionIndex of optionIndices) {
+                const option = group.options[optionIndex];
+                if (option) {
+                    results.push({
+                        groupName: group.name || 'Options',
+                        optionName: option.name
+                    });
+                }
             }
         }
         return results;
@@ -764,22 +771,15 @@ function getSelectedOptionsDisplay(record, itemInfo) {
         return results;
     }
 
-    // No selections - show default (first option of each group)
-    for (const group of groups) {
-        if (group.options && group.options.length > 0) {
-            results.push({
-                groupName: group.name || 'Options',
-                optionName: group.options[0].name
-            });
-        }
-    }
-
+    // No selections - return empty (don't show defaults since they weren't explicitly selected)
     return results;
 }
 
 // Generate summary text for an item when collapsed in accordion
 function generateItemSummary(record, itemInfo, type) {
-    const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
+    // Use selections if available, fall back to selectedOptionIndex for legacy
+    const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
+    const price = getRecordPrice(record, selectionsOrIndex);
     const quantity = itemInfo?.quantity || 1;
     const typeLabel = type === 'favorites' ? 'Idea' : 'Confirmed';
     const note = itemInfo?.note || '';
@@ -827,7 +827,9 @@ async function renderItineraryItem(item, index) {
 
     const itemInfo = type === 'favorites' ? state.cart.items.get(recordId) : state.cart.lockedItems.get(recordId);
     const name = record.fields.Name || 'Untitled Item';
-    const price = getRecordPrice(record, itemInfo?.selectedOptionIndex);
+    // Use selections if available, fall back to selectedOptionIndex for legacy
+    const selectionsOrIndex = itemInfo?.selections || itemInfo?.selectedOptionIndex;
+    const price = getRecordPrice(record, selectionsOrIndex);
     const quantity = itemInfo?.quantity || 1;
     const note = itemInfo?.note || '';
 
