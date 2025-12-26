@@ -449,17 +449,13 @@ function updatePresenceUI(members) {
 function addEventToUI(messagesList, record) {
     const { Content, Timestamp, EventType } = record.fields;
 
-    console.log(`[CHAT-EVENT] Adding event to UI: type=${EventType}, recordId=${record.id}`);
-
     // Parse the event content JSON
     let eventData = {};
     try {
         const parsed = JSON.parse(Content);
         eventData = parsed.data || parsed;
-        console.log(`[CHAT-EVENT] Event data parsed successfully:`, Object.keys(eventData));
     } catch (e) {
-        console.error(`[CHAT-EVENT] ❌ Failed to parse event content:`, e.message);
-        console.error(`[CHAT-EVENT] Raw content was:`, Content);
+        // Failed to parse event content - skip rendering this event
         return;
     }
 
@@ -632,26 +628,22 @@ function showNewMessageNotification(sender, message) {
 }
 
 // --- NEW DEBUG FUNCTION ---
+// displayDebugMessage is available for showing critical errors in the UI
 function displayDebugMessage(message) {
-    if (console.log) { // Check if debug is theoretically possible
-        const messagesList = document.getElementById('messages-list');
-        if (messagesList) {
-            const debugEl = document.createElement('div');
-            debugEl.className = 'chat-message received'; // Use a standard message style
-            debugEl.style.color = '#dc3545';
-            debugEl.style.fontSize = '0.7em';
-            debugEl.innerHTML = `<strong>[DEBUG]</strong> ${message}`;
-            messagesList.appendChild(debugEl);
-            debugEl.scrollIntoView({ behavior: 'smooth' });
-        }
+    const messagesList = document.getElementById('messages-list');
+    if (messagesList) {
+        const debugEl = document.createElement('div');
+        debugEl.className = 'chat-message received';
+        debugEl.style.color = '#dc3545';
+        debugEl.style.fontSize = '0.7em';
+        debugEl.innerHTML = `<strong>[Error]</strong> ${message}`;
+        messagesList.appendChild(debugEl);
+        debugEl.scrollIntoView({ behavior: 'smooth' });
     }
 }
 // --- END NEW DEBUG FUNCTION ---
 
 export async function initializeSessionChat() {
-    console.log('[CHAT-INIT] ========== initializeSessionChat START ==========');
-    console.log('[CHAT-INIT] Session ID:', state.session.id);
-
     // Reset session history items for new session
     sessionHistoryItems = [];
 
@@ -668,27 +660,23 @@ export async function initializeSessionChat() {
     if (typeof window.waitForPusher === 'function') {
         try {
             await window.waitForPusher();
-            console.log('[CHAT-INIT] Pusher library loaded');
         } catch (err) {
-            console.error('[CHAT-INIT] ❌ Failed to load Pusher:', err);
             if (messageInput) {
                 messageInput.placeholder = 'Chat unavailable - please refresh';
             }
-            displayDebugMessage('Error: Could not load real-time chat library. Please refresh the page.');
+            displayDebugMessage('Could not load real-time chat library. Please refresh the page.');
             return;
         }
     } else if (typeof Pusher === 'undefined') {
-        console.error('[CHAT-INIT] ❌ Pusher not defined and waitForPusher not available');
         if (messageInput) {
             messageInput.placeholder = 'Chat unavailable - please refresh';
         }
-        displayDebugMessage('Error: Real-time chat library not loaded. Please refresh the page.');
+        displayDebugMessage('Real-time chat library not loaded. Please refresh the page.');
         return;
     }
 
     if (pusher) {
         pusher.disconnect();
-        console.log('[CHAT-INIT] Disconnected previous Pusher instance');
     }
 
     // Update the chat header to show the current plan name
@@ -702,7 +690,6 @@ export async function initializeSessionChat() {
         state.session.userProfiles.set(currentUser.id, currentUser.name);
     }
     const sessionId = state.session.id || 'default-session';
-    console.log('[CHAT-INIT] Using session ID:', sessionId);
 
     const chatUserNameInput = document.getElementById('chat-user-name');
     if (chatUserNameInput) {
@@ -727,10 +714,8 @@ export async function initializeSessionChat() {
     const messagesList = document.getElementById('messages-list');
     if (messagesList) {
         messagesList.innerHTML = '';
-        console.log('[CHAT-INIT] Fetching chat messages for session:', sessionId);
 
         const records = await api.fetchChatMessages(sessionId);
-        console.log(`[CHAT-INIT] Fetched ${records.length} message records`);
 
         if (records.length > 0) {
             let eventCount = 0;
@@ -741,7 +726,6 @@ export async function initializeSessionChat() {
 
                 // Check if this is a system event (plan history)
                 if (SenderID === 'system' && EventType) {
-                    console.log(`[CHAT-INIT] Found system event: type=${EventType}, id=${record.id}`);
                     // Store in sessionHistoryItems for filtering
                     sessionHistoryItems.push({
                         type: 'planEvent',
@@ -767,16 +751,12 @@ export async function initializeSessionChat() {
                 }
             });
 
-            console.log(`[CHAT-INIT] ✅ Loaded ${eventCount} events and ${messageCount} messages into history`);
-        } else {
-            console.log('[CHAT-INIT] No messages found for this session');
+            log('Chat', `Loaded ${eventCount} plan events and ${messageCount} messages into session history`);
         }
 
         // Render the filtered history
         renderFilteredHistory();
     }
-
-    console.log('[CHAT-INIT] Connecting to Pusher...');
 
     pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
@@ -790,7 +770,6 @@ export async function initializeSessionChat() {
         }
     });
     const channelName = `presence-session-${sessionId}`;
-    console.log(`[CHAT-INIT] Subscribing to channel: ${channelName}`);
     sessionChatChannel = pusher.subscribe(channelName);
     bindPresenceEvents();
     sessionChatChannel.bind('client-new-message', (data) => {
@@ -821,8 +800,6 @@ export async function initializeSessionChat() {
             }
         }
     });
-
-    console.log('[CHAT-INIT] ========== initializeSessionChat END ==========');
 }
 
 export async function sendMessage(message, recordId = null) {

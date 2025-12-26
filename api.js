@@ -321,33 +321,6 @@ export async function fetchSessionsWithDatesForStore(storeId) {
     }
 }
 
-// Debug helper function - can be called manually from console to verify a specific session
-window.debugFetchSession = async function(sessionId) {
-    console.log('[DEBUG] Manually fetching session:', sessionId);
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
-    try {
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
-        });
-        if (!response.ok) {
-            console.error('[DEBUG] Failed to fetch session:', response.status, response.statusText);
-            return null;
-        }
-        const data = await response.json();
-        console.log('[DEBUG] Session data from Airtable:', data);
-        console.log('[DEBUG] Session Name:', data.fields?.Name);
-        console.log('[DEBUG] Session Date:', data.fields?.Date);
-        console.log('[DEBUG] Session Stores:', data.fields?.Stores);
-        console.log('[DEBUG] Stores type:', typeof data.fields?.Stores);
-        console.log('[DEBUG] Stores is array?', Array.isArray(data.fields?.Stores));
-        console.log('[DEBUG] Stores value:', JSON.stringify(data.fields?.Stores));
-        return data;
-    } catch (error) {
-        console.error('[DEBUG] Error fetching session:', error);
-        return null;
-    }
-};
-
 
 export async function associateSessionWithUser(sessionId, userId) {
     if (!sessionId || !userId) return;
@@ -533,7 +506,6 @@ export async function loadSessionFromAirtable(sessionId) {
                 }
 
                 state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
-                console.log(`[SESSION-LOAD] Event details loaded - Name: "${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME)}", Date: "${state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE)}"`);
 
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
@@ -629,23 +601,13 @@ export async function updatePaymentHistory(sessionId, paymentHistory) {
 
 
 export async function saveSessionToAirtable() {
-    console.log('[SAVE DEBUG] ========== saveSessionToAirtable START ==========');
-    console.log('[SAVE DEBUG] state.ui.activeShopId:', state.ui.activeShopId);
-    console.log('[SAVE DEBUG] state.session.id:', state.session.id);
-
     const hasPlanData = state.cart.items.size > 0 || state.cart.lockedItems.size > 0;
     const hasDetails = state.eventDetails.combined.size > 0;
     const hasReactions = state.session.reactions.size > 0;
     const needsInitialSave = !state.session.id;
 
-    console.log('[SAVE DEBUG] hasPlanData:', hasPlanData);
-    console.log('[SAVE DEBUG] hasDetails:', hasDetails);
-    console.log('[SAVE DEBUG] hasReactions:', hasReactions);
-    console.log('[SAVE DEBUG] needsInitialSave:', needsInitialSave);
-
     if (!hasPlanData && !hasDetails && !hasReactions && !needsInitialSave) {
         log('API', 'saveSessionToAirtable: No changes or data to save, skipping.');
-        console.log('[SAVE DEBUG] Skipping save - no data');
         state.ui.saveState = 'SAVED';
         // Check if ui.updateSaveShareButton exists before calling
         if (typeof ui !== 'undefined' && ui.updateSaveShareButton) {
@@ -656,7 +618,6 @@ export async function saveSessionToAirtable() {
 
     const sessionStatus = state.session.id ? `UPDATE (id: ${state.session.id})` : 'CREATE (new session)';
     log('API', `saveSessionToAirtable: Triggered for ${sessionStatus}`);
-    console.log('[SAVE DEBUG] Proceeding with save:', sessionStatus);
     state.ui.saveState = 'SAVING';
     if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
 
@@ -676,21 +637,13 @@ export async function saveSessionToAirtable() {
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
-    console.log('[DEBUG] saveSessionToAirtable - Raw dateValue from state:', dateValue);
-    console.log('[DEBUG] saveSessionToAirtable - Is dateValue an array?', Array.isArray(dateValue));
     let formattedDate = null;
     if (dateValue) {
         const dateToFormat = Array.isArray(dateValue) ? dateValue[0] : dateValue;
-        console.log('[DEBUG] saveSessionToAirtable - dateToFormat:', dateToFormat);
         const dateObj = new Date(dateToFormat);
-        console.log('[DEBUG] saveSessionToAirtable - dateObj:', dateObj);
-        console.log('[DEBUG] saveSessionToAirtable - Is valid date?', !isNaN(dateObj.getTime()));
         if (!isNaN(dateObj.getTime())) {
              formattedDate = dateObj.toISOString().split('T')[0];
-             console.log('[DEBUG] saveSessionToAirtable - formattedDate for Airtable:', formattedDate);
         }
-    } else {
-        console.log('[DEBUG] saveSessionToAirtable - No date value found in state');
     }
 
     const allUserIds = Array.from(state.session.userProfiles.keys());
@@ -700,21 +653,6 @@ export async function saveSessionToAirtable() {
      }
 
     const storesValue = state.ui.activeShopId ? [state.ui.activeShopId] : null;
-    console.log('[SAVE DEBUG] ========== STORES FIELD CONFIGURATION ==========');
-    console.log('[SAVE DEBUG] state.ui.activeShopId:', state.ui.activeShopId);
-    console.log('[SAVE DEBUG] storesValue being sent to Airtable:', storesValue);
-    console.log('[SAVE DEBUG] storesValue type:', typeof storesValue);
-    console.log('[SAVE DEBUG] storesValue is array?', Array.isArray(storesValue));
-    console.log('[SAVE DEBUG] storesValue is null?', storesValue === null);
-    if (storesValue && Array.isArray(storesValue)) {
-        console.log('[SAVE DEBUG] storesValue array length:', storesValue.length);
-        console.log('[SAVE DEBUG] storesValue array contents:', JSON.stringify(storesValue));
-    }
-    console.log('[SAVE DEBUG] ====================================================');
-
-    // Note: History field removed - data is already in "Items with Variations"
-    // The locked items information is stored in sessionData.lockedInItems
-    console.log('[SAVE DEBUG] Locked items count:', state.cart.lockedItems.size);
 
     const fields = {
         "Name": sessionName,
@@ -722,23 +660,14 @@ export async function saveSessionToAirtable() {
         "Collaborators": validCollaboratorIds,
         "Guest Count": parseInt(state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GUEST_COUNT), 10) || null,
         "Goals": state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || null,
-        // --- THIS IS THE FIX for "Shop Link" ---
-        // Change "Shop Link" to the exact name from your Airtable Sessions table
         "Stores": storesValue
     };
     if (formattedDate) {
         fields["Date"] = formattedDate;
-        console.log('[DEBUG] saveSessionToAirtable - Adding Date field to payload:', formattedDate);
-    } else {
-        console.log('[DEBUG] saveSessionToAirtable - NOT adding Date field to payload (no formatted date)');
     }
 
-    console.log('[DEBUG] saveSessionToAirtable - Complete fields object being sent:', JSON.stringify(fields, null, 2));
-
-    console.log('[DEBUG] saveSessionToAirtable - sessionData.eventDetails:', sessionData.eventDetails);
     const payload = { fields };
     const isUpdate = state.session.id !== null;
-    console.log('[DEBUG] saveSessionToAirtable - isUpdate:', isUpdate, 'session.id:', state.session.id);
     const url = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}` + (isUpdate ? `/${state.session.id}` : '');
     const method = isUpdate ? 'PATCH' : 'POST';
 
@@ -755,27 +684,9 @@ export async function saveSessionToAirtable() {
         }
 
         const result = await response.json();
-        console.log('[SAVE DEBUG] ========== AIRTABLE RESPONSE ==========');
-        console.log('[SAVE DEBUG] Full response:', isUpdate ? result : result.records[0]);
 
         if (!isUpdate && result.records && result.records.length > 0) {
             const newSessionId = result.records[0].id;
-            const savedFields = result.records[0].fields;
-            console.log('[SAVE DEBUG] ***** NEW SESSION CREATED *****');
-            console.log('[SAVE DEBUG] Session ID:', newSessionId);
-            console.log('[SAVE DEBUG] Saved Name:', savedFields?.Name);
-            console.log('[SAVE DEBUG] Saved Date:', savedFields?.Date);
-            console.log('[SAVE DEBUG] Saved Stores:', savedFields?.Stores);
-            console.log('[SAVE DEBUG] Stores type:', typeof savedFields?.Stores);
-            console.log('[SAVE DEBUG] Stores is array?', Array.isArray(savedFields?.Stores));
-            console.log('[SAVE DEBUG] Stores is null?', savedFields?.Stores === null);
-            console.log('[SAVE DEBUG] Stores is undefined?', savedFields?.Stores === undefined);
-            if (savedFields?.Stores) {
-                console.log('[SAVE DEBUG] Stores value:', JSON.stringify(savedFields.Stores));
-            } else {
-                console.log('[SAVE DEBUG] ⚠️ WARNING: Stores field is NOT set in Airtable response!');
-            }
-            console.log('[SAVE DEBUG] ==========================================');
 
             state.session.id = newSessionId;
             state.session.isOwned = true;
@@ -787,22 +698,6 @@ export async function saveSessionToAirtable() {
             document.dispatchEvent(new CustomEvent('sessionReady'));
             document.dispatchEvent(new CustomEvent('planCreated'));
         } else if (isUpdate) {
-             const savedFields = result.fields;
-             console.log('[SAVE DEBUG] ***** SESSION UPDATED *****');
-             console.log('[SAVE DEBUG] Session ID:', state.session.id);
-             console.log('[SAVE DEBUG] Saved Name:', savedFields?.Name);
-             console.log('[SAVE DEBUG] Saved Date:', savedFields?.Date);
-             console.log('[SAVE DEBUG] Saved Stores:', savedFields?.Stores);
-             console.log('[SAVE DEBUG] Stores type:', typeof savedFields?.Stores);
-             console.log('[SAVE DEBUG] Stores is array?', Array.isArray(savedFields?.Stores));
-             console.log('[SAVE DEBUG] Stores is null?', savedFields?.Stores === null);
-             console.log('[SAVE DEBUG] Stores is undefined?', savedFields?.Stores === undefined);
-             if (savedFields?.Stores) {
-                 console.log('[SAVE DEBUG] Stores value:', JSON.stringify(savedFields.Stores));
-             } else {
-                 console.log('[SAVE DEBUG] ⚠️ WARNING: Stores field is NOT set in Airtable response!');
-             }
-             console.log('[SAVE DEBUG] ==========================================');
              log('API', `Successfully updated session ${state.session.id}`);
         }
 
@@ -811,7 +706,6 @@ export async function saveSessionToAirtable() {
         return true;
 
     } catch (error) {
-        console.error("Failed to save session:", error);
         log('API', `Failed to save session: ${error.message}`);
         state.ui.saveState = 'ERROR';
         if (typeof ui !== 'undefined' && ui.updateSaveShareButton) ui.updateSaveShareButton();
@@ -1333,52 +1227,31 @@ export async function fetchImagesForRecord(record, allRecords, imageCache) {
 }
 
 export async function fetchChatMessages(sessionId) {
-    console.log(`[CHAT-FETCH] ========== START ==========`);
-    console.log(`[CHAT-FETCH] Fetching messages for session: ${sessionId}`);
-
     if (!sessionId || !sessionId.startsWith('rec')) {
-         console.error(`[CHAT-FETCH] ❌ Invalid sessionId: ${sessionId}`);
          log('API', 'fetchChatMessages: Invalid or missing sessionId.');
          return [];
     }
     // Fetch messages linked specifically to this Session record
-    // --- REPAIR: Use the correct linked-record ID search formula ---
-    const formula = `FIND('${sessionId}', {SessionID_Rollup})`; // The correct formula is simply matching the ID against the linked field string/array representation.
-    // --- END REPAIR ---
+    const formula = `FIND('${sessionId}', {SessionID_Rollup})`;
     const encodedFormula = encodeURIComponent(formula);
     // Sort by timestamp ascending (oldest first)
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}?filterByFormula=${encodedFormula}&sort%5B0%5D%5Bfield%5D=Timestamp&sort%5B0%5D%5Bdirection%5D=asc`;
-
-    console.log(`[CHAT-FETCH] Query formula: ${formula}`);
 
     try {
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}` }
         });
-        console.log(`[CHAT-FETCH] Airtable response: ${response.status}`);
 
         if (!response.ok) {
             const errorData = await response.json();
-            console.error(`[CHAT-FETCH] ❌ Airtable error:`, errorData);
             throw new Error(`Failed to fetch chat messages for session ${sessionId}: ${errorData?.error?.message || response.statusText}`);
         }
         const data = await response.json();
 
-        // Count events vs regular messages
-        const events = data.records.filter(r => r.fields.SenderID === 'system' && r.fields.EventType);
-        const messages = data.records.filter(r => r.fields.SenderID !== 'system' || !r.fields.EventType);
-        console.log(`[CHAT-FETCH] ✅ Found ${data.records.length} records: ${events.length} events, ${messages.length} messages`);
-
-        if (events.length > 0) {
-            console.log(`[CHAT-FETCH] Event types found: ${events.map(e => e.fields.EventType).join(', ')}`);
-        }
-
         log('API', `Fetched ${data.records.length} chat messages for session ${sessionId}.`);
-        console.log(`[CHAT-FETCH] ========== END ==========`);
         return data.records;
     } catch (error) {
-        console.error(`[CHAT-FETCH] ❌ Error: ${error.message}`);
-        console.log(`[CHAT-FETCH] ========== END (error) ==========`);
+        log('API', `Error fetching chat messages: ${error.message}`);
         return [];
     }
 }
@@ -1406,7 +1279,7 @@ export const PLAN_EVENT_TYPES = {
  */
 export async function postPlanEvent(sessionId, eventType, eventData = {}) {
     if (!sessionId || !sessionId.startsWith('rec')) {
-        console.error(`[API] postPlanEvent Error: Invalid sessionId provided: "${sessionId}".`);
+        log('API', `postPlanEvent: Invalid sessionId provided: "${sessionId}"`);
         return null;
     }
 
@@ -1445,7 +1318,7 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
         if (!response.ok) {
             const errorData = await response.json();
             // Don't throw - event logging is non-critical
-            console.error(`[API] Failed to post plan event: ${errorData?.error?.message || response.statusText}`);
+            log('API', `Failed to post plan event: ${errorData?.error?.message || response.statusText}`);
             return null;
         }
 
@@ -1453,14 +1326,14 @@ export async function postPlanEvent(sessionId, eventType, eventData = {}) {
         log('API', `Plan event saved: ${eventType} with record ID: ${result.records[0].id}`);
         return result.records[0];
     } catch (error) {
-        console.error('[API] Error posting plan event:', error);
+        log('API', `Error posting plan event: ${error.message}`);
         return null;
     }
 }
 
 export async function postChatMessage(sessionId, senderId, senderName, content) {
     if (!sessionId || !sessionId.startsWith('rec')) {
-        console.error(`[API] postChatMessage Error: Invalid sessionId provided: \"${sessionId}\". Cannot save message.`);
+        log('API', `postChatMessage: Invalid sessionId provided: "${sessionId}". Cannot save message.`);
         return;
     }
      if (!content || !content.trim()) {

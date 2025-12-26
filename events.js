@@ -8,7 +8,7 @@ import { applyFiltersAndSort } from './filtering.js';
 import { log, setDebugMode } from './utils/debug.js';
 import { AVAILABILITY_STATUS, getDayStatus, checkAvailability, getRangeStatus } from './availability.js';
 import { debounce, updateUrl, loadFlatpickr, getTempLikes, setTempLikes, getEffectiveMinQuantity } from './utils.js';
-import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats } from './chat.js';
+import { sendMessage, initializeSessionChat, initializeRecentChatsListeners, updateCurrentSessionName, toggleRecentChats, addPlanEventToHistory } from './chat.js';
 import { showItineraryModal, setupItineraryEventListeners } from './components/itinerary.js';
 import { updateMobileBarAvailability } from './ui.js';
 import { showUserModal } from './auth.js';
@@ -144,39 +144,29 @@ export function triggerSave() {
 }
 
 export async function updateAllCardAvailabilityIcons() {
-    console.log('[updateAllCardAvailabilityIcons] Called');
-    console.log('[updateAllCardAvailabilityIcons] mainDatePicker:', mainDatePicker);
-    console.log('[updateAllCardAvailabilityIcons] mainDatePicker?.selectedDates:', mainDatePicker?.selectedDates);
-    
     const allAvailabilityBtns = document.querySelectorAll('.availability-btn');
-    console.log('[updateAllCardAvailabilityIcons] Found .availability-btn elements:', allAvailabilityBtns.length);
-    
+
     if (!mainDatePicker || mainDatePicker.selectedDates.length < 2) {
-        console.log('[updateAllCardAvailabilityIcons] No date range selected, setting all icons to calendar emoji');
         document.querySelectorAll('.availability-btn').forEach(icon => {
             if (icon._tippy) icon._tippy.destroy();
             icon.title = 'Select a date range to check availability';
             icon.textContent = '📅';
-            console.log('[updateAllCardAvailabilityIcons] Set icon to 📅:', icon);
         });
         return;
     }
     const startDate = mainDatePicker.selectedDates[0];
     const requestedEnd = mainDatePicker.selectedDates[1];
-    console.log('[updateAllCardAvailabilityIcons] Date range selected:', startDate, 'to', requestedEnd);
-    
+
     const cards = document.querySelectorAll('.event-card');
-    console.log('[updateAllCardAvailabilityIcons] Found event cards:', cards.length);
-    
+
     for (const card of cards) {
         const recordId = card.dataset.recordId;
         const record = state.records.all.find(r => r.id === recordId);
         if (!record) continue;
-        
+
         const busyTimes = await api.fetchCalendarForRecord(record);
         const rangeStatus = getRangeStatus(startDate, requestedEnd, record, busyTimes);
         const icon = card.querySelector('.availability-btn');
-        console.log('[updateAllCardAvailabilityIcons] Card recordId:', recordId, 'icon found:', !!icon, 'status:', rangeStatus.status);
         if (icon) {
             if (icon._tippy) icon._tippy.destroy();
             let statusIcon;
@@ -424,11 +414,6 @@ async function handleProactiveAISearch(searchTerm, imageCache) {
 
 
 export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
-    // DEBUG: Initial layout state on page load
-    console.group('[DEBUG] Initial Layout State - Page Load');
-    console.log('Window width:', window.innerWidth);
-    console.log('Window height:', window.innerHeight);
-
     const mainContent = document.querySelector('.main-content');
     const searchBarContainer = document.getElementById('search-bar-container');
     const leftSidebar = document.getElementById('left-sidebar');
@@ -436,96 +421,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const catalogArea = document.getElementById('catalog-area');
     const filterControls = document.getElementById('filter-controls');
 
-    console.log('\n=== DOM Element Order (in .main-content) ===');
-    if (mainContent) {
-        Array.from(mainContent.children).forEach((child, index) => {
-            console.log(`  ${index}: #${child.id || 'no-id'} (tag: ${child.tagName})`);
-        });
-    }
-
-    console.log('\n=== CSS Grid Layout ===');
-    if (mainContent) {
-        const mainStyles = getComputedStyle(mainContent);
-        console.log('Main Content computed styles:', {
-            display: mainStyles.display,
-            gridTemplateColumns: mainStyles.gridTemplateColumns,
-            gridTemplateRows: mainStyles.gridTemplateRows,
-            gap: mainStyles.gap
-        });
-    }
-
-    console.log('\n=== Search Bar Container ===');
-    if (searchBarContainer) {
-        const searchStyles = getComputedStyle(searchBarContainer);
-        console.log('Search Bar Container:', {
-            display: searchStyles.display,
-            position: searchStyles.position,
-            gridColumn: searchStyles.gridColumn,
-            gridRow: searchStyles.gridRow,
-            order: searchStyles.order,
-            top: searchStyles.top,
-            zIndex: searchStyles.zIndex
-        });
-    } else {
-        console.warn('#search-bar-container NOT FOUND in DOM');
-    }
-
-    console.log('\n=== Left Sidebar (#left-sidebar) ===');
-    if (leftSidebar) {
-        const leftStyles = getComputedStyle(leftSidebar);
-        console.log('Left Sidebar:', {
-            display: leftStyles.display,
-            position: leftStyles.position,
-            gridColumn: leftStyles.gridColumn,
-            gridRow: leftStyles.gridRow,
-            order: leftStyles.order,
-            maxHeight: leftStyles.maxHeight,
-            opacity: leftStyles.opacity,
-            classes: leftSidebar.className
-        });
-    }
-
-    console.log('\n=== Right Sidebar (#right-sidebar) ===');
-    if (rightSidebar) {
-        const rightStyles = getComputedStyle(rightSidebar);
-        console.log('Right Sidebar:', {
-            display: rightStyles.display,
-            position: rightStyles.position,
-            gridColumn: rightStyles.gridColumn,
-            gridRow: rightStyles.gridRow,
-            order: rightStyles.order
-        });
-    }
-
-    console.log('\n=== Catalog Area (#catalog-area) ===');
-    if (catalogArea) {
-        const catalogStyles = getComputedStyle(catalogArea);
-        console.log('Catalog Area:', {
-            display: catalogStyles.display,
-            position: catalogStyles.position,
-            gridColumn: catalogStyles.gridColumn,
-            gridRow: catalogStyles.gridRow,
-            order: catalogStyles.order
-        });
-    }
-
-    console.log('\n=== Filter Controls (#filter-controls) ===');
-    if (filterControls) {
-        const filterStyles = getComputedStyle(filterControls);
-        console.log('Filter Controls:', {
-            display: filterStyles.display,
-            position: filterStyles.position,
-            width: filterStyles.width,
-            height: filterStyles.height,
-            parentElement: filterControls.parentElement?.id || 'no-parent-id'
-        });
-    }
-    console.groupEnd();
-
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
         if (element) element.addEventListener(event, handler);
-        else console.warn(`Element with ID "${selector}" not found.`);
     };
 
     if (window.innerWidth < 1000) {
@@ -540,78 +438,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const isExpanded = filterToggleBtn.getAttribute('aria-expanded') === 'true';
             filterToggleBtn.setAttribute('aria-expanded', !isExpanded);
             leftSidebar?.classList.toggle('collapsed');
-
-            // DEBUG: Log layout information when filter toggle is clicked
-            console.group('[DEBUG] Filter Toggle Layout Info');
-            console.log('Window width:', window.innerWidth);
-            console.log('Filter toggle aria-expanded:', !isExpanded);
-            console.log('Left sidebar collapsed:', leftSidebar?.classList.contains('collapsed'));
-
-            // Log computed styles for key elements
-            const mainContent = document.querySelector('.main-content');
-            const searchBarContainer = document.getElementById('search-bar-container');
-            const filterControls = document.getElementById('filter-controls');
-            const catalogArea = document.getElementById('catalog-area');
-
-            if (mainContent) {
-                const mainStyles = getComputedStyle(mainContent);
-                console.log('Main Content:', {
-                    display: mainStyles.display,
-                    gridTemplateColumns: mainStyles.gridTemplateColumns,
-                    gridTemplateRows: mainStyles.gridTemplateRows,
-                    gap: mainStyles.gap
-                });
-            }
-
-            if (searchBarContainer) {
-                const searchStyles = getComputedStyle(searchBarContainer);
-                console.log('Search Bar Container:', {
-                    position: searchStyles.position,
-                    top: searchStyles.top,
-                    gridColumn: searchStyles.gridColumn,
-                    order: searchStyles.order,
-                    display: searchStyles.display
-                });
-            }
-
-            if (leftSidebar) {
-                const leftStyles = getComputedStyle(leftSidebar);
-                console.log('Left Sidebar:', {
-                    display: leftStyles.display,
-                    maxHeight: leftStyles.maxHeight,
-                    opacity: leftStyles.opacity,
-                    order: leftStyles.order,
-                    gridColumn: leftStyles.gridColumn
-                });
-            }
-
-            if (filterControls) {
-                const filterStyles = getComputedStyle(filterControls);
-                console.log('Filter Controls:', {
-                    display: filterStyles.display,
-                    position: filterStyles.position,
-                    width: filterStyles.width,
-                    height: filterStyles.height
-                });
-            }
-
-            if (catalogArea) {
-                const catalogStyles = getComputedStyle(catalogArea);
-                console.log('Catalog Area:', {
-                    order: catalogStyles.order,
-                    gridColumn: catalogStyles.gridColumn,
-                    width: catalogStyles.width
-                });
-            }
-
-            // Log DOM order
-            console.log('DOM Order of children in .main-content:');
-            mainContent?.childNodes.forEach((child, index) => {
-                if (child.nodeType === 1) { // Element nodes only
-                    console.log(`  ${index}: #${child.id || 'no-id'} (${child.className})`);
-                }
-            });
-            console.groupEnd();
         });
     }
 
@@ -1246,17 +1072,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     });
 
     safeAddEventListener('header-event-name', 'change', (e) => {
-        console.log('[Events] ========== EVENT NAME CHANGE ==========');
-        console.log('[Events] isInitializing:', state.ui.isInitializing);
         if (state.ui.isInitializing) return;
         const hadValue = state.eventDetails.combined.has(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
         const newValue = e.target.value.trim();
-        console.log('[Events] hadValue:', hadValue, 'newValue:', newValue);
         if (newValue && !hadValue) {
-            console.log('[Events] Adding event name, calling updateProgress(0.0001)');
             updateProgress(0.0001); // Adding event name progresses
         } else if (!newValue && hadValue) {
-            console.log('[Events] Removing event name, calling updateProgress(-0.0001)');
             updateProgress(-0.0001); // Removing event name regresses
         }
         state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.EVENT_NAME, e.target.value);
@@ -1265,7 +1086,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
         updateCurrentSessionName(e.target.value);
 
         triggerSave();
-        console.log('[Events] ========== EVENT NAME CHANGE COMPLETE ==========');
     });
     
     safeAddEventListener('header-goals', 'change', (e) => {
@@ -1634,89 +1454,65 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             addEnergy(); 
             const recordId = heartIcon.closest('[data-record-id]')?.dataset.recordId;
             if (!recordId) return;
-    
-            console.log(`[Events] Heart icon clicked for record: ${recordId}`); 
-    
+
             if (state.session.user.isAuthenticated) {
-                console.log(`[Events] User is authenticated (ID: ${state.session.user.id}). Current liked IDs:`, new Set(state.session.user.likedItemIds));
                 try {
                     heartIcon.style.pointerEvents = 'none';
                     heartIcon.style.opacity = '0.6';
                     heartIcon.style.transform = 'scale(0.9)';
-                    
-                    console.log(`[Events] Calling api.toggleUserLike for ${recordId}...`);
+
                     const result = await api.toggleUserLike(recordId);
-                    console.log(`[Events] api.toggleUserLike response for ${recordId}:`, result);
-    
+
                     if (result.success) {
-                        let actionTaken = '';
                         if (result.liked) {
                             state.session.user.likedItemIds.add(recordId);
-                            actionTaken = 'liked';
                             log('Events', `User liked item ${recordId}.`);
                         } else {
                             state.session.user.likedItemIds.delete(recordId);
-                            actionTaken = 'unliked';
                             log('Events', `User unliked item ${recordId}.`);
                         }
-                        console.log(`[Events] State updated. Action: ${actionTaken}. New liked IDs:`, new Set(state.session.user.likedItemIds));
-                        console.log(`[Events] Calling ui.updateCardIcon for ${recordId}...`);
                         ui.updateCardIcon(recordId);
-                        console.log(`[Events] ui.updateCardIcon finished for ${recordId}.`);
-    
+
                         if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                            console.log('[Events] \"My Likes\" filter active, reapplying filters...');
                             applyFiltersAndSort(imageCache);
                         }
                     } else {
-                         console.error(`[Events] API toggle failed but returned success=false for ${recordId}. Response:`, result);
                          ui.showToast('Could not update like status. Please try again.');
                     }
                 } catch (error) {
-                    console.error(`[Events] Error during api.toggleUserLike for ${recordId}:`, error);
                     log('Events', `Error toggling like: ${error.message}`);
                     ui.showToast(`Error: ${error.message}`);
                 } finally {
                     heartIcon.style.pointerEvents = 'auto';
                     heartIcon.style.opacity = '';
                     heartIcon.style.transform = '';
-                    console.log(`[Events] Re-enabled pointer events for heart icon ${recordId}.`);
                 }
             } else {
-                 console.log('[Events] User is logged out. Handling temporary like.');
                 log('Events', `Guest toggling temporary like for item ${recordId}.`);
                 const tempLikesSet = getTempLikes();
                 let currentlyLiked = false;
                 if (tempLikesSet.has(recordId)) {
-                    tempLikesSet.delete(recordId); 
+                    tempLikesSet.delete(recordId);
                     currentlyLiked = false;
-                     console.log(`[Events] Removed ${recordId} from temporary likes.`);
                 } else {
-                    tempLikesSet.add(recordId); 
+                    tempLikesSet.add(recordId);
                     currentlyLiked = true;
-                     console.log(`[Events] Added ${recordId} to temporary likes.`);
                 }
                 setTempLikes(tempLikesSet);
                 log('Events', `Temporary likes updated: ${Array.from(tempLikesSet).join(', ')}`);
-                 console.log(`[Events] Calling ui.updateCardIcon for ${recordId} (logged out)...`);
                 ui.updateCardIcon(recordId);
-                 console.log(`[Events] ui.updateCardIcon finished for ${recordId} (logged out).`);
                 if (currentlyLiked) {
-                     console.log(`[Events] Showing login prompt because item ${recordId} was liked.`);
                      ui.showLoginPromptForLikes();
                 }
                 if (document.getElementById('liked-items-filter-btn')?.classList.contains('active')) {
-                      console.log('[Events] \"My Likes\" filter active, reapplying filters (logged out)...');
                       applyFiltersAndSort(imageCache);
                  }
             }
         }
         
         else if (addToPlanBtn) {
-            console.log('[Events] ========== ADD TO PLAN CLICKED ==========');
             e.stopPropagation();
             const recordId = addToPlanBtn.closest('[data-record-id]')?.dataset.recordId;
-            console.log('[Events] recordId:', recordId);
             if (!recordId) return;
 
             addEnergy();
@@ -1734,7 +1530,6 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             });
 
             if (state.cart.lockedItems.has(recordId)) {
-                console.log('[Events] Item already in plan, skipping');
                 if (document.getElementById('detail-modal-overlay')?.classList.contains('active')) {
                     updateUrl({ openItem: null });
                     ui.hideDetailModal();
@@ -1808,15 +1603,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Update itemInfo with enforced quantity
             itemInfo.quantity = quantityToSave;
 
-            console.log('[Events] itemInfo:', itemInfo);
             state.cart.lockedItems.set(recordId, itemInfo);
             state.cart.items.delete(recordId);
 
             // Add progress for adding item to plan (scaled by quantity)
             const progressDelta = 0.0002 * (itemInfo.quantity || 1);
-            console.log('[Events] Calling updateProgress with delta:', progressDelta);
             updateProgress(progressDelta);
-            console.log('[Events] updateProgress called');
 
             ui.updateCardIcon(recordId);
             ui.updateCardButtonText(recordId, true);
@@ -1835,12 +1627,26 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Phase 5: Broadcast the item addition to collaborators
             broadcastItemAdded(recordId, record.fields?.Name || 'Item');
 
+            // Post plan event to session history
+            const sessionId = state.session.id;
+            if (sessionId && sessionId.startsWith('rec')) {
+                api.postPlanEvent(sessionId, api.PLAN_EVENT_TYPES.ITEM_ADDED, {
+                    itemName: record.fields?.Name || 'Item',
+                    itemId: recordId,
+                    quantity: itemInfo.quantity || 1
+                }).then(eventRecord => {
+                    if (eventRecord) {
+                        addPlanEventToHistory(eventRecord);
+                    }
+                }).catch(err => {
+                    log('Events', `Failed to post item_added event: ${err.message}`);
+                });
+            }
+
             triggerSave();
         } else if (demoteBtn) {
-            console.log('[Events] ========== DEMOTE CLICKED ==========');
             e.stopPropagation();
             const recordId = demoteBtn.closest('[data-record-id]')?.dataset.recordId;
-            console.log('[Events] recordId:', recordId);
             if (!recordId || !state.cart.lockedItems.has(recordId)) return;
 
             // Check if this is Union Machine Works being removed
@@ -1848,15 +1654,12 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             const isUmwBeingRemoved = record && record.fields.Name && record.fields.Name.includes("Union Machine Works");
 
             const itemInfo = state.cart.lockedItems.get(recordId);
-            console.log('[Events] itemInfo:', itemInfo);
             state.cart.lockedItems.delete(recordId);
             state.cart.items.set(recordId, itemInfo);
 
             // Regress progress when demoting item from plan
             const progressDelta = -0.0002 * (itemInfo.quantity || 1);
-            console.log('[Events] Calling updateProgress with delta:', progressDelta);
             updateProgress(progressDelta);
-            console.log('[Events] updateProgress called');
 
             ui.updateCardIcon(recordId);
             ui.updateCardButtonText(recordId, false);
@@ -1907,84 +1710,40 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
             }, 300);
         } else if (card && !e.target.closest('.quantity-selector, .heart-icon, .add-to-plan-btn, .availability-btn')) {
-            console.log('[DEBUG CARD CLICK] ========== CARD CLICKED ==========');
-            console.log('[DEBUG CARD CLICK] Card element:', card);
-            console.log('[DEBUG CARD CLICK] Card dataset:', card.dataset);
             const recordId = card.dataset.recordId;
-            console.log('[DEBUG CARD CLICK] recordId from card.dataset:', recordId);
 
             // First try to find in state.records.all
             let record = state.records.all.find(r => r.id === recordId);
-            console.log('[DEBUG CARD CLICK] record found in state.records.all:', !!record);
 
             // If not found in all, check state.records.filtered (for session tiles, etc.)
             if (!record) {
-                console.log('[DEBUG CARD CLICK] ⚠️ Record not found in state.records.all, checking state.records.filtered...');
                 record = state.records.filtered.find(r => r.id === recordId);
-                console.log('[DEBUG CARD CLICK] record found in state.records.filtered:', !!record);
-                if (record) {
-                    console.log('[DEBUG CARD CLICK] ✅ Found record in state.records.filtered');
-                    console.log('[DEBUG CARD CLICK] record.isSession:', record.isSession);
-                    console.log('[DEBUG CARD CLICK] record.sessionData:', record.sessionData);
-                }
             }
 
-            console.log('[DEBUG CARD CLICK] Final record:', record);
             if (!record) {
-                console.log('[DEBUG CARD CLICK] ❌ Record not found in any state, returning early');
                 return;
             }
-            
+
             if (record.id.startsWith('ai-search-')) {
                 return;
             }
-            
+
             // Handle session tile clicks - load session into event plan panel and chat
-            console.log('[DEBUG SESSION CLICK] ========== SESSION TILE CLICKED ==========');
-            console.log('[DEBUG SESSION CLICK] record:', record);
-            console.log('[DEBUG SESSION CLICK] record.id:', record.id);
-            console.log('[DEBUG SESSION CLICK] record.isSession:', record.isSession);
-            console.log('[DEBUG SESSION CLICK] record.sessionData:', record.sessionData);
-            console.log('[DEBUG SESSION CLICK] record.fields:', record.fields);
-
             if (record.isSession && record.sessionData) {
-                console.log('[DEBUG SESSION CLICK] ✅ Condition passed: record.isSession && record.sessionData');
                 log('Events', `Loading session from My Sessions view: ${record.id}`);
-
-                console.log('[DEBUG SESSION CLICK] Step 1: Updating URL with session parameter...');
-                console.log('[DEBUG SESSION CLICK] URL before:', window.location.href);
 
                 // Update URL with session parameter and clear the my-sessions view
                 updateUrl({ session: record.id, view: null, category: null, subcategory: null });
 
-                console.log('[DEBUG SESSION CLICK] URL after:', window.location.href);
-
-                console.log('[DEBUG SESSION CLICK] Step 2: Calling api.loadSessionFromAirtable...');
-                console.log('[DEBUG SESSION CLICK] Session ID being loaded:', record.id);
-                console.log('[DEBUG SESSION CLICK] Current state.session.id BEFORE load:', state.session.id);
-
                 // Load the session data (this will fire sessionReady event when complete)
-                api.loadSessionFromAirtable(record.id).then(() => {
-                    console.log('[DEBUG SESSION CLICK] ✅ api.loadSessionFromAirtable completed (promise resolved)');
-                    console.log('[DEBUG SESSION CLICK] state.session.id AFTER load:', state.session.id);
-                    console.log('[DEBUG SESSION CLICK] state.cart.lockedItems.size:', state.cart.lockedItems.size);
-                    console.log('[DEBUG SESSION CLICK] state.eventDetails.combined:', Object.fromEntries(state.eventDetails.combined));
-                }).catch(err => {
-                    console.error('[DEBUG SESSION CLICK] ❌ api.loadSessionFromAirtable FAILED:', err);
+                api.loadSessionFromAirtable(record.id).catch(err => {
+                    log('Events', `Failed to load session: ${err.message}`);
                 });
-
-                console.log('[DEBUG SESSION CLICK] Step 3: Calling applyFiltersAndSort to refresh catalog view...');
 
                 // Refresh the catalog view to show items instead of sessions list
                 applyFiltersAndSort(imageCache);
 
-                console.log('[DEBUG SESSION CLICK] Step 4: Returning from handler');
-                console.log('[DEBUG SESSION CLICK] ========== SESSION TILE CLICK COMPLETE ==========');
                 return;
-            } else {
-                console.log('[DEBUG SESSION CLICK] ❌ Condition NOT passed');
-                console.log('[DEBUG SESSION CLICK] record.isSession:', record.isSession, '(expected: true)');
-                console.log('[DEBUG SESSION CLICK] record.sessionData:', record.sessionData, '(expected: truthy object)');
             }
 
             if (record.fields['Item Type'] === 'Grouping') {
@@ -2098,25 +1857,18 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                     eventPlanDatePicker = window.flatpickr(eventDateInput, {
                         dateFormat: "M j, Y",
                         onChange: async (selectedDates) => {
-                            console.log('[DEBUG] Date picker onChange triggered');
-                            console.log('[DEBUG] selectedDates:', selectedDates);
-                            console.log('[DEBUG] state.ui.isInitializing:', state.ui.isInitializing);
                             if (state.ui.isInitializing) return;
                             if (selectedDates.length > 0) {
                                 const isoDate = selectedDates[0].toISOString();
-                                console.log('[DEBUG] Setting date in state to:', isoDate);
                                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, isoDate);
-                                console.log('[DEBUG] Date now in state:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
                                 updateProgress(0.00015);
                             } else {
-                                console.log('[DEBUG] No date selected, deleting from state');
                                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                                 updateProgress(-0.00015);
                             }
                             await ui.updateEventPlanDateDisplay();
                             await ui.updateLockedItemStatusIcons();
                             await updateMobileBarAvailability();
-                            console.log('[DEBUG] About to trigger save...');
                             triggerSave();
                         }
                     });

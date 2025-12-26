@@ -220,10 +220,6 @@ export function debugLog(action, data = null, type = 'info') {
 
     // Auto-scroll to bottom
     debugPanel.scrollTop = debugPanel.scrollHeight;
-
-    // Also log to console for traditional debugging
-    const consoleMethod = type === 'error' ? 'error' : type === 'success' ? 'info' : 'log';
-    console[consoleMethod](`[Debug] ${action}`, data || '');
 }
 
 /**

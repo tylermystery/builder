@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#007bff">
     <title>WTFun</title>
     <link rel="icon" href="data:;" />
+
     <!-- Preconnect to critical third-party origins for faster resource loading -->
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
     <link rel="preconnect" href="https://api.airtable.com" crossorigin>
@@ -15,12 +16,16 @@
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="dns-prefetch" href="https://js.pusher.com">
     <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://js.stripe.com">
 
     <!-- Preload critical JavaScript bundle for faster execution -->
     <link rel="modulepreload" href="/dist/main.bundle.js" fetchpriority="high">
 
     <!-- Preload critical CSS -->
     <link rel="preload" href="/css/critical.css" as="style" fetchpriority="high">
+
+    <!-- Preload deferred CSS with lower priority -->
+    <link rel="preload" href="/css/deferred.css" as="style" fetchpriority="low">
 
     <!-- Flatpickr CSS will be loaded on-demand when date picker is used -->
     
