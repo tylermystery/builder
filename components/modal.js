@@ -2105,10 +2105,11 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
 
         // Add Variations Parsing Tool for authorized users (publish permission)
+        // Now available for all item types: real catalog items, AI-parsed items, and custom items
         const userHasPublishPermission = api.userHasPublishPermission();
         const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
 
-        if (userHasPublishPermission && isRealRecord) {
+        if (userHasPublishPermission) {
             const variationsToolContainer = document.createElement('div');
             variationsToolContainer.className = 'variations-tool-container detail-item';
             variationsToolContainer.style.gridColumn = '1 / -1';
@@ -2211,14 +2212,31 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 saveBtn.disabled = true;
 
                 try {
-                    const result = await api.updateItemOptions(record.id, optionsText);
-                    if (result) {
-                        statusSpan.textContent = 'Saved successfully!';
-                        statusSpan.style.color = '#28a745';
+                    let saveSuccess = false;
 
-                        // Update the record's options field locally
+                    // For AI-parsed and custom items, save locally only (no API call)
+                    if (!isRealRecord) {
+                        // Store options directly on the record object
                         record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        saveSuccess = true;
+                        statusSpan.textContent = 'Saved locally!';
+                        statusSpan.style.color = '#28a745';
+                    } else {
+                        // For real catalog items, persist to Airtable
+                        const result = await api.updateItemOptions(record.id, optionsText);
+                        if (result) {
+                            saveSuccess = true;
+                            statusSpan.textContent = 'Saved successfully!';
+                            statusSpan.style.color = '#28a745';
 
+                            // Update the record's options field locally
+                            record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                        } else {
+                            throw new Error('Failed to save');
+                        }
+                    }
+
+                    if (saveSuccess) {
                         // Refresh the options display in the modal
                         const newGroups = parseOptions(optionsText);
                         const hasNewOptions = newGroups.length > 0 && newGroups.some(g => g.options.length > 0);
@@ -2228,8 +2246,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                         setTimeout(() => {
                             showDetailModal(record);
                         }, 1000);
-                    } else {
-                        throw new Error('Failed to save');
                     }
                 } catch (error) {
                     statusSpan.textContent = 'Error saving. Please try again.';
