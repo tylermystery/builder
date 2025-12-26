@@ -67,21 +67,18 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 // It also fixes the 404 error for the partner icon
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
-    let isCustomItem = record.id.startsWith('custom-') || record.id.startsWith('ai-search-') || record.id.startsWith('ai-child-') || record.id.startsWith('ai-presentation-');
 
-    // --- THIS IS THE FIX for the 404 error ---\
-    // Default to your main placeholder, which we know exists
+    // Fetch images for all items (including AI-parsed and custom items)
+    // The fetchImagesForRecord function now handles multi-tier image sourcing
     let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
-    // --- END THE FIX ---\
-
-    if (!isCustomItem) {
-        // --- EXISTING LOGIC for real items ---\
+    try {
         const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
         if (imageUrls && imageUrls.length > 0) {
             imageUrl = imageUrls[0].replace('/upload/', '/upload/c_fill,g_auto,w_60,h_60/');
         }
+    } catch (e) {
+        console.warn('Failed to fetch image for locked item:', record.id, e);
     }
-    // If it *is* a custom item, we just use the default `imageUrl` from above
 
     const itemElement = document.createElement('div');
     itemElement.className = 'locked-item-card';

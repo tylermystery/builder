@@ -3100,9 +3100,9 @@ async function createPresentationResultSection(title, subtitle, records, isAI = 
     const carousel = document.createElement('div');
     carousel.className = 'presentation-results-carousel';
 
-    // Create cards for each record
+    // Create cards for each record (await since image fetching is async)
     for (const record of records) {
-        const card = createPresentationResultCard(record, isAI);
+        const card = await createPresentationResultCard(record, isAI);
         carousel.appendChild(card);
     }
 
@@ -3157,7 +3157,7 @@ async function createPresentationResultSection(title, subtitle, records, isAI = 
 /**
  * Creates a single result card
  */
-function createPresentationResultCard(record, isAI = false) {
+async function createPresentationResultCard(record, isAI = false) {
     const card = document.createElement('div');
     card.className = 'presentation-result-card';
     card.dataset.recordId = record.id;
@@ -3166,7 +3166,18 @@ function createPresentationResultCard(record, isAI = false) {
     }
 
     const fields = record.fields;
-    const imageUrl = fields['Image URL'] || fields.imageUrl || '';
+
+    // Fetch image using the multi-tier approach (website scraping, logo, etc.)
+    let imageUrl = '';
+    try {
+        const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+        if (imageUrls && imageUrls.length > 0) {
+            imageUrl = imageUrls[0];
+        }
+    } catch (e) {
+        console.warn('Failed to fetch image for presentation card:', record.id, e);
+    }
+
     const name = fields.Name || 'Unnamed Item';
     // Use centralized getRecordPrice for consistent price handling across all views
     const price = getRecordPrice(record);

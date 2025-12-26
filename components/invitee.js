@@ -645,9 +645,14 @@ async function initializeInviteeView() {
             console.log('[Invitee DEBUG] All session fields:', Object.keys(sessionData.fields || {}));
         }
 
-        // Fetch item details for locked items
-        const itemIds = Array.from(inviteeState.lockedItems.keys()).filter(id => !id.startsWith('custom-'));
-        console.log('[Invitee DEBUG] Item IDs to fetch (excluding custom):', itemIds);
+        // Fetch item details for locked items (excluding custom and AI items which aren't in Airtable)
+        const itemIds = Array.from(inviteeState.lockedItems.keys()).filter(id =>
+            !id.startsWith('custom-') &&
+            !id.startsWith('ai-child-') &&
+            !id.startsWith('ai-search-') &&
+            !id.startsWith('ai-presentation-')
+        );
+        console.log('[Invitee DEBUG] Item IDs to fetch (excluding custom/AI):', itemIds);
 
         if (itemIds.length > 0) {
             console.log('[Invitee DEBUG] Fetching item records for', itemIds.length, 'items');

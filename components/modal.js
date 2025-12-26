@@ -973,15 +973,13 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
         const type = componentData.type;
         const history = componentData.history;
 
-        // Fetch all images for this component
+        // Fetch all images for this component (including AI-sourced items)
         let imageUrls = [];
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
-            try {
-                const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-                imageUrls = fetchedUrls || [];
-            } catch (e) {
-                console.warn('Failed to fetch images for component:', record.id, e);
-            }
+        try {
+            const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+            imageUrls = fetchedUrls || [];
+        } catch (e) {
+            console.warn('Failed to fetch images for component:', record.id, e);
         }
         if (imageUrls.length === 0) {
             imageUrls = [ui.getPlaceholderImage([])];
@@ -1327,21 +1325,19 @@ async function initializePlanCarousel(componentRecords) {
         return;
     }
 
-    // Fetch images for all component records
+    // Fetch images for all component records (including AI-sourced items)
     const componentImages = [];
     for (const componentData of componentRecords) {
         const record = componentData.record;
         let imageUrl = ui.getPlaceholderImage([]);
 
-        if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
-            try {
-                const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-                if (fetchedUrls && fetchedUrls.length > 0) {
-                    imageUrl = fetchedUrls[0];
-                }
-            } catch (e) {
-                console.warn('Failed to fetch image for component:', record.id, e);
+        try {
+            const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
+            if (fetchedUrls && fetchedUrls.length > 0) {
+                imageUrl = fetchedUrls[0];
             }
+        } catch (e) {
+            console.warn('Failed to fetch image for component:', record.id, e);
         }
 
         componentImages.push({
@@ -1627,10 +1623,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         }
     }
 
+    // Fetch images for all items (including AI-sourced items)
     let imageUrls = [];
-    if (!record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-')) {
+    try {
         const { imageUrls: fetchedUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-        imageUrls = fetchedUrls;
+        imageUrls = fetchedUrls || [];
+    } catch (e) {
+        console.warn('Failed to fetch images for record:', record.id, e);
     }
     if (imageUrls.length === 0) {
         imageUrls = [ui.getPlaceholderImage([])];
