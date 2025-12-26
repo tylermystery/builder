@@ -365,6 +365,17 @@ Example Response (Grouping):
     console.log(`[process-weblink] Success. Response type: ${extractedData.itemType}`);
     console.log('[process-weblink] Parsed data:', JSON.stringify(extractedData, null, 2));
 
+    // === IMAGE DEBUG: Log ImageKeywords specifically ===
+    console.log('[IMAGE DEBUG] ========== PROCESS-WEBLINK IMAGE DATA ==========');
+    if (extractedData.itemType === 'Grouping' && extractedData.children) {
+      extractedData.children.forEach((child, idx) => {
+        console.log(`[IMAGE DEBUG] Child ${idx} "${child.Name}" - ImageKeywords: "${child.ImageKeywords}"`);
+      });
+    } else if (extractedData.Name) {
+      console.log(`[IMAGE DEBUG] Single item "${extractedData.Name}" - ImageKeywords: "${extractedData.ImageKeywords}"`);
+    }
+    console.log('[IMAGE DEBUG] ====================================================');
+
     // Return the JSON data - frontend will handle both Specific and Grouping types
     return {
       statusCode: 200,

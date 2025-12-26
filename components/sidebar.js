@@ -22,7 +22,7 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, imageCache);
 
     // Optimize background image with proper Cloudinary transformations
-    const defaultPlaceholder = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
+    const defaultPlaceholder = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_600,h_520,f_auto,q_auto/ww71meppejsewxsxr4x7.jpg`;
     const bgImageUrl = imageUrls[0] || defaultPlaceholder;
     itemCard.dataset.bgImage = bgImageUrl.includes('cloudinary') && !bgImageUrl.includes('/upload/c_fill')
         ? bgImageUrl.replace('/upload/', '/upload/c_fill,w_600,h_520,f_auto,q_auto/')
@@ -71,7 +71,7 @@ async function createLockedInItemElement(record, itemInfo) {
 
     // --- THIS IS THE FIX for the 404 error ---\
     // Default to your main placeholder, which we know exists
-    let imageUrl = `https://res.cloudinary.com/${CONSTANTS.CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
+    let imageUrl = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/c_fill,g_auto,w_60,h_60/ww71meppejsewxsxr4x7.jpg`;
     // --- END THE FIX ---\
 
     if (!isCustomItem) {

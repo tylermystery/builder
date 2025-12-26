@@ -179,14 +179,22 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const scoreBanner = '';
     // --- ^^^ END SCORE LOGIC REMOVAL ^^^
 
-    // --- This block handles custom items (from your previous step) ---
+    // --- This block handles image loading for all items ---
+    // AI-sourced items now go through the multi-tier fallback (website scrape -> catalog -> placeholder)
     let imageUrlToLoad;
-    if (record.id.startsWith('custom-') || record.id.startsWith('ai-search-')) {
-        imageUrlToLoad = getPlaceholderImage([]);
-    } else {
-        const { imageUrls } = await api.fetchImagesForRecord(record, allRecords, imageCache);
-        imageUrlToLoad = getPlaceholderImage(imageUrls);
+    let imageLoadingStatusOverlay = '';
+
+    if (isAISourced) {
+        // For AI items, show loading status indicator while fetching
+        imageLoadingStatusOverlay = `<div class="image-loading-status" data-record-id="${record.id}">
+            <div class="loading-spinner"></div>
+            <span class="status-text">Loading image...</span>
+        </div>`;
     }
+
+    // Fetch images for all items (AI items will now go through website scraping)
+    const { imageUrls, status } = await api.fetchImagesForRecord(record, allRecords, imageCache);
+    imageUrlToLoad = getPlaceholderImage(imageUrls);
     // --- END BLOCK ---
 
     if (fields['Item Type'] === 'Grouping') {
@@ -551,12 +559,32 @@ export async function createInteractiveCard(record, allRecords, imageCache) {
     const addToPlanBtnHTML = `<button class="card-action-btn add-to-plan-btn" ${isLocked ? 'disabled' : ''}>${isLocked ? 'Update Plan' : 'Add to Plan'}</button>`;
     const placeholder = getLowQualityPlaceholder(imageUrlToLoad);
 
+    // Build image source indicator for AI items
+    let imageSourceIndicator = '';
+    if (isAISourced && status) {
+        const sourceLabels = {
+            'og:image': 'Website',
+            'twitter:image': 'Website',
+            'link:image_src': 'Website',
+            'website': 'Website',
+            'clearbit_logo': 'Logo',
+            'google_favicon': 'Favicon',
+            'curated': 'Curated',
+            'media_tags': 'Catalog',
+            'placeholder': 'AI'
+        };
+        const sourceLabel = sourceLabels[status] || status;
+        const sourceClass = status === 'placeholder' ? 'source-placeholder' : 'source-found';
+        imageSourceIndicator = `<span class="image-source-indicator ${sourceClass}">${sourceLabel}</span>`;
+    }
+
     eventCard.innerHTML = `
         <div class="event-card-image-container lazy-load" style="background-image: url('${placeholder}')" data-bg-image="${imageUrlToLoad}">
             <div class="heart-icon" data-record-id="${record.id}"></div>
             <button class="availability-btn" title="Select a date range to check availability">📅</button>
             ${partnerBadge}
             ${aiDiscoveryBadge}
+            ${imageSourceIndicator}
             ${scoreBanner}
             </div>
         <div class="event-card-content">

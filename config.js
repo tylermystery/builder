@@ -83,6 +83,7 @@ export const REACTION_SCORES = {
     '🎹': 1.46, '📸': 1.51, '🎥': 1.44, '🎬': 1.49, '🏊': 1.38, '🚴': 1.41, '🧘': 1.53, '🏋️': 1.46
 };
 export const CONSTANTS = {
+    CLOUDINARY_CLOUD_NAME: 'daedqizre',
     FIELD_NAMES: {
         NAME: 'Name',
         PRICE: 'Price',

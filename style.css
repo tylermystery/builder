@@ -9281,6 +9281,77 @@ hr.total-divider {
     font-size: 0.9em;
 }
 
+/* Image Source Indicator - shows where AI item images came from */
+.image-source-indicator {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7em;
+    font-weight: 600;
+    z-index: 10;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease;
+}
+
+.image-source-indicator.source-found {
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.9), rgba(30, 132, 73, 0.9));
+    color: white;
+    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.4);
+}
+
+.image-source-indicator.source-placeholder {
+    background: linear-gradient(135deg, rgba(149, 165, 166, 0.9), rgba(127, 140, 141, 0.9));
+    color: white;
+    box-shadow: 0 2px 6px rgba(149, 165, 166, 0.4);
+}
+
+/* Image loading status overlay */
+.image-loading-status {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 15;
+    transition: opacity 0.3s ease;
+}
+
+.image-loading-status .loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 8px;
+}
+
+.image-loading-status .status-text {
+    color: white;
+    font-size: 0.75em;
+    text-align: center;
+    padding: 0 10px;
+    max-width: 90%;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.image-loading-status.loaded {
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* AI Grouping Card (parent container for AI-generated category results) */
 .ai-sourced-card.ai-grouping-card {
     background: linear-gradient(135deg, rgba(52, 152, 219, 0.08) 0%, rgba(155, 89, 182, 0.08) 100%);
