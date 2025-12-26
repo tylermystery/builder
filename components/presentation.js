@@ -2809,12 +2809,20 @@ async function performPresentationSearch(searchTerm) {
                         Price: child.Price || child.price || 0,
                         Category: child.Category || child.category || searchTerm,
                         'Image URL': child.imageUrl || child['Image URL'] || '',
-                        Location: child.Location || '',
-                        Availability: child.Availability || '',
-                        Website: child.Website || '',
-                        LeadTime: child.LeadTime || '',
-                        GoodToKnow: child.GoodToKnow || '',
-                        Rankings: child.Rankings || {}
+                        Location: child.Location || child.location || '',
+                        Availability: child.Availability || child.availability || '',
+                        Website: child.Website || child.website || '',
+                        LeadTime: child.LeadTime || child.leadTime || '',
+                        GoodToKnow: child.GoodToKnow || child.goodToKnow || '',
+                        // Additional business details for modal display
+                        Duration: child.Duration || child.duration || '',
+                        Capacity: child.Capacity || child.capacity || '',
+                        'Location Details': child['Location Details'] || child.locationDetails || child.Address || child.address || '',
+                        'Additional Information': child['Additional Information'] || child.additionalInfo || child.GoodToKnow || child.goodToKnow || '',
+                        Phone: child.Phone || child.phone || '',
+                        Email: child.Email || child.email || '',
+                        Hours: child.Hours || child.hours || child.OperatingHours || '',
+                        Rankings: child.Rankings || child.rankings || {}
                     },
                     isAI: true
                 });
@@ -2829,12 +2837,20 @@ async function performPresentationSearch(searchTerm) {
                     Price: aiData.Price || aiData.price || 0,
                     Category: aiData.Category || aiData.category || searchTerm,
                     'Image URL': aiData.imageUrl || aiData['Image URL'] || '',
-                    Location: aiData.Location || '',
-                    Availability: aiData.Availability || '',
-                    Website: aiData.Website || '',
-                    LeadTime: aiData.LeadTime || '',
-                    GoodToKnow: aiData.GoodToKnow || '',
-                    Rankings: aiData.Rankings || {}
+                    Location: aiData.Location || aiData.location || '',
+                    Availability: aiData.Availability || aiData.availability || '',
+                    Website: aiData.Website || aiData.website || '',
+                    LeadTime: aiData.LeadTime || aiData.leadTime || '',
+                    GoodToKnow: aiData.GoodToKnow || aiData.goodToKnow || '',
+                    // Additional business details for modal display
+                    Duration: aiData.Duration || aiData.duration || '',
+                    Capacity: aiData.Capacity || aiData.capacity || '',
+                    'Location Details': aiData['Location Details'] || aiData.locationDetails || aiData.Address || aiData.address || '',
+                    'Additional Information': aiData['Additional Information'] || aiData.additionalInfo || aiData.GoodToKnow || aiData.goodToKnow || '',
+                    Phone: aiData.Phone || aiData.phone || '',
+                    Email: aiData.Email || aiData.email || '',
+                    Hours: aiData.Hours || aiData.hours || aiData.OperatingHours || '',
+                    Rankings: aiData.Rankings || aiData.rankings || {}
                 },
                 isAI: true
             });

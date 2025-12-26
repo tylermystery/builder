@@ -2052,14 +2052,13 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             }
         });
 
-        // --- THIS IS THE CHANGE ---\
-        const rankingsJsonString = record.fields['AI_Profile'] || record.fields['Rankings'];
-        // --- END CHANGE ---\
-        
-        if (rankingsJsonString) {
+        // Get rankings data - could be a JSON string (from Airtable) or an object (from AI-generated items)
+        const rankingsData = record.fields['AI_Profile'] || record.fields['Rankings'];
+
+        if (rankingsData) {
             try {
-                // --- V2.1: Check for new profile structure ---\
-                const rankingsObject = JSON.parse(rankingsJsonString);
+                // Handle both JSON strings and objects (AI-generated items pass objects directly)
+                const rankingsObject = typeof rankingsData === 'string' ? JSON.parse(rankingsData) : rankingsData;
 
                 let displayRankings = {};
                 // Check if it's the new v2.1 profile
