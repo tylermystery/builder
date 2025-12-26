@@ -3924,3 +3924,48 @@ export async function updateItemOptions(itemId, optionsString) {
     }
 }
 
+/**
+ * Generate top recommended options/variations for an item using AI
+ * @param {Object} record - The item record to generate options for
+ * @returns {Promise<Object>} - Object with success flag and generated options string
+ */
+export async function generateTopOptions(record) {
+    if (!record || !record.fields) {
+        console.error('generateTopOptions called without valid record');
+        return { success: false, error: 'Invalid record' };
+    }
+
+    const itemData = {
+        name: record.fields.Name || record.fields['Display Name'] || 'Unknown Item',
+        description: record.fields.Description || '',
+        category: record.fields.Category || record.fields['Item Type'] || '',
+        price: record.fields.Price || record.fields['Base Price'] || null,
+        pricingType: record.fields[CONSTANTS.FIELD_NAMES.PRICING_TYPE] || ''
+    };
+
+    log('API', `Generating top options for item: ${itemData.name}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/generate-top-options', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(itemData)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error from generate-top-options function:', errorText);
+            throw new Error(`Failed to generate options: ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('API', `Successfully generated options for ${itemData.name}`);
+        return result;
+    } catch (error) {
+        console.error('Error generating top options:', error);
+        return { success: false, error: error.message };
+    }
+}
+

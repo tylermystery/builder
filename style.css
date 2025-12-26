@@ -2196,7 +2196,49 @@ body.modal-open {
     font-size: 0.85em;
     opacity: 0.7;
 }
-#modal-quantity-selector { 
+
+/* AI Top Options Button Styles */
+.ai-top-options-container {
+    margin-top: 10px;
+}
+.ai-top-options-btn {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+.ai-top-options-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+.ai-top-options-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+.ai-options-result {
+    margin-top: 12px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+.ai-options-editor {
+    background: white;
+}
+.ai-options-apply-btn:hover {
+    background: #218838;
+}
+.ai-options-save-catalog-btn:hover {
+    background: #0056b3;
+}
+
+#modal-quantity-selector {
     margin: 20px 0;
 }
 #modal-quantity-selector .quantity-selector {

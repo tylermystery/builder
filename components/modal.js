@@ -2636,6 +2636,142 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         }
     }
 
+    // Add AI Top Options button for ALL users (sparkles button)
+    // This allows any user to generate AI-recommended options for the item
+    const hasExistingOptions = optionGroups.length > 0 && optionGroups.some(g => g.options.length > 0);
+    const isRealRecord = !record.id.startsWith('custom-') && !record.id.startsWith('ai-search-') && !record.id.startsWith('ai-child-') && !record.id.startsWith('ai-presentation-');
+    const userHasPublishPermissionForOptions = api.userHasPublishPermission();
+    const userIsAuthenticated = state.session.user.isAuthenticated;
+
+    // Create the AI top options button container
+    const aiOptionsContainer = document.createElement('div');
+    aiOptionsContainer.className = 'ai-top-options-container';
+    aiOptionsContainer.style.marginTop = hasExistingOptions ? '15px' : '0';
+
+    // Button text changes based on whether options exist
+    const buttonText = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+
+    aiOptionsContainer.innerHTML = `
+        <button class="ai-top-options-btn" title="Use AI to generate recommended options/variations">
+            ${buttonText}
+        </button>
+        <div class="ai-options-result" style="display: none;">
+            <div class="ai-options-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-weight: 600; color: #333;">AI Generated Options</span>
+                <button class="ai-options-close-btn" style="background: none; border: none; cursor: pointer; font-size: 1.2em; color: #666;">×</button>
+            </div>
+            <textarea class="ai-options-editor" placeholder="Loading..." style="width: 100%; min-height: 120px; font-family: monospace; font-size: 0.9em; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"></textarea>
+            <div class="ai-options-actions" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="ai-options-apply-btn" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Apply to Item</button>
+                ${userIsAuthenticated && (isRealRecord && userHasPublishPermissionForOptions) ? '<button class="ai-options-save-catalog-btn" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save to Catalog</button>' : ''}
+                <span class="ai-options-status" style="align-self: center; font-size: 0.85em; color: #666;"></span>
+            </div>
+            ${!userIsAuthenticated ? '<p class="ai-options-auth-note" style="font-size: 0.8em; color: #888; margin-top: 8px;">Sign in to save options to catalog permanently.</p>' : ''}
+        </div>
+    `;
+
+    // Add event listeners for the AI options button
+    const aiOptionsBtn = aiOptionsContainer.querySelector('.ai-top-options-btn');
+    const aiOptionsResult = aiOptionsContainer.querySelector('.ai-options-result');
+    const aiOptionsEditor = aiOptionsContainer.querySelector('.ai-options-editor');
+    const aiOptionsCloseBtn = aiOptionsContainer.querySelector('.ai-options-close-btn');
+    const aiOptionsApplyBtn = aiOptionsContainer.querySelector('.ai-options-apply-btn');
+    const aiOptionsSaveCatalogBtn = aiOptionsContainer.querySelector('.ai-options-save-catalog-btn');
+    const aiOptionsStatus = aiOptionsContainer.querySelector('.ai-options-status');
+
+    // Generate AI options on click
+    aiOptionsBtn.addEventListener('click', async () => {
+        aiOptionsBtn.disabled = true;
+        aiOptionsBtn.textContent = '✨ Generating...';
+        aiOptionsResult.style.display = 'block';
+        aiOptionsEditor.value = 'Generating AI recommendations...';
+        aiOptionsStatus.textContent = '';
+
+        try {
+            const result = await api.generateTopOptions(record);
+            if (result.success && result.options) {
+                aiOptionsEditor.value = result.options;
+                aiOptionsStatus.textContent = 'Options generated!';
+                aiOptionsStatus.style.color = '#28a745';
+            } else {
+                throw new Error(result.error || 'Failed to generate options');
+            }
+        } catch (error) {
+            aiOptionsEditor.value = '';
+            aiOptionsStatus.textContent = `Error: ${error.message}`;
+            aiOptionsStatus.style.color = '#dc3545';
+            console.error('AI options generation failed:', error);
+        } finally {
+            aiOptionsBtn.disabled = false;
+            aiOptionsBtn.textContent = hasExistingOptions ? '✨ Regenerate Options' : '✨ Add Top Options';
+        }
+    });
+
+    // Close button
+    aiOptionsCloseBtn.addEventListener('click', () => {
+        aiOptionsResult.style.display = 'none';
+    });
+
+    // Apply to item (works for all users - updates locally for this session)
+    aiOptionsApplyBtn.addEventListener('click', () => {
+        const optionsText = aiOptionsEditor.value;
+        if (!optionsText.trim()) {
+            aiOptionsStatus.textContent = 'No options to apply';
+            aiOptionsStatus.style.color = '#dc3545';
+            return;
+        }
+
+        // Store options on the record object locally
+        record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+        aiOptionsStatus.textContent = 'Applied! Refreshing...';
+        aiOptionsStatus.style.color = '#28a745';
+
+        // Refresh the modal to show the new options
+        setTimeout(() => {
+            showDetailModal(record);
+        }, 500);
+    });
+
+    // Save to Catalog (only for authenticated users with publish permission on real records)
+    if (aiOptionsSaveCatalogBtn) {
+        aiOptionsSaveCatalogBtn.addEventListener('click', async () => {
+            const optionsText = aiOptionsEditor.value;
+            if (!optionsText.trim()) {
+                aiOptionsStatus.textContent = 'No options to save';
+                aiOptionsStatus.style.color = '#dc3545';
+                return;
+            }
+
+            aiOptionsSaveCatalogBtn.disabled = true;
+            aiOptionsStatus.textContent = 'Saving to catalog...';
+            aiOptionsStatus.style.color = '#666';
+
+            try {
+                const result = await api.updateItemOptions(record.id, optionsText);
+                if (result) {
+                    record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+                    aiOptionsStatus.textContent = 'Saved to catalog!';
+                    aiOptionsStatus.style.color = '#28a745';
+
+                    // Refresh the modal
+                    setTimeout(() => {
+                        showDetailModal(record);
+                    }, 1000);
+                } else {
+                    throw new Error('Failed to save');
+                }
+            } catch (error) {
+                aiOptionsStatus.textContent = 'Error saving. Try again.';
+                aiOptionsStatus.style.color = '#dc3545';
+                console.error('Error saving options to catalog:', error);
+            } finally {
+                aiOptionsSaveCatalogBtn.disabled = false;
+            }
+        });
+    }
+
+    modalOptionsContainer.appendChild(aiOptionsContainer);
+
     // --- THIS IS THE FIX ---\
     // The listeners are now MOVED INSIDE this `if` block
     // Also hide notes for published events - they use the description field for goals/notes instead
