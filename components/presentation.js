@@ -2866,11 +2866,18 @@ async function performPresentationSearch(searchTerm) {
                 additionalInfo += `Website: ${website}`;
             }
 
-            // Ensure price is a number
+            // Ensure price is a number - handle all edge cases including objects/arrays
             let price = source.Price || source.price || 0;
-            if (typeof price === 'string') {
+            if (typeof price === 'object') {
+                // Handle cases where price might be an object or array
+                price = 0;
+            } else if (typeof price === 'string') {
                 price = parseFloat(price.replace(/[^0-9.-]/g, '')) || 0;
+            } else if (typeof price !== 'number') {
+                price = 0;
             }
+            // Ensure we have a valid number
+            price = isNaN(price) ? 0 : price;
 
             return {
                 id: recordId,
@@ -3060,11 +3067,8 @@ function createPresentationResultCard(record, isAI = false) {
     const fields = record.fields;
     const imageUrl = fields['Image URL'] || fields.imageUrl || '';
     const name = fields.Name || 'Unnamed Item';
-    // Ensure price is a number (handle string prices like "$50" or undefined)
-    let price = fields.Price || 0;
-    if (typeof price === 'string') {
-        price = parseFloat(price.replace(/[^0-9.-]/g, '')) || 0;
-    }
+    // Use centralized getRecordPrice for consistent price handling across all views
+    const price = getRecordPrice(record);
     const category = fields.Category || '';
 
     // Check if already in plan (check cart.items, cart.lockedItems, and likedItemIds)

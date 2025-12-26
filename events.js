@@ -513,12 +513,23 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                     additionalInfo += `Website: ${child.Website}`;
                 }
 
+                // Ensure price is a number - handle all edge cases
+                let childPrice = child.Price || 0;
+                if (typeof childPrice === 'object') {
+                    childPrice = 0;
+                } else if (typeof childPrice === 'string') {
+                    childPrice = parseFloat(childPrice.replace(/[^0-9.-]/g, '')) || 0;
+                } else if (typeof childPrice !== 'number') {
+                    childPrice = 0;
+                }
+                childPrice = isNaN(childPrice) ? 0 : childPrice;
+
                 const childRecord = {
                     id: childId,
                     fields: {
                         Name: child.Name,
                         Description: child.Description,
-                        Price: child.Price || 0,
+                        Price: childPrice,
                         ServiceType: child.ServiceType || 'Partner Activity',
                         'Item Type': 'Bookable Item',
                         'Parent Item': aiData.name || `AI ${searchTerm} Options`,
@@ -576,12 +587,23 @@ async function handleHybridSearchDisplay(searchTerm, imageCache, catalogMatches 
                 additionalInfo += `Website: ${aiData.Website}`;
             }
 
+            // Ensure price is a number - handle all edge cases
+            let aiPrice = aiData.Price || 0;
+            if (typeof aiPrice === 'object') {
+                aiPrice = 0;
+            } else if (typeof aiPrice === 'string') {
+                aiPrice = parseFloat(aiPrice.replace(/[^0-9.-]/g, '')) || 0;
+            } else if (typeof aiPrice !== 'number') {
+                aiPrice = 0;
+            }
+            aiPrice = isNaN(aiPrice) ? 0 : aiPrice;
+
             const liveRecord = {
                 id: customId,
                 fields: {
                     Name: aiData.Name,
                     Description: aiData.Description,
-                    Price: aiData.Price || 0,
+                    Price: aiPrice,
                     ServiceType: aiData.ServiceType || 'Partner Activity',
                     'Item Type': 'Bookable Item',
                     Status: 'Available',
