@@ -61,6 +61,14 @@ RESPOND ONLY WITH A VALID JSON OBJECT. Do not include markdown code blocks or an
 - "Availability": General availability info (e.g., "Open daily 10am-6pm", "Reservations required", "Weekends only", "By appointment")
 - "LeadTime": Approximate booking lead time (e.g., "Book 1-2 weeks ahead", "Same-day available", "2-4 weeks for groups", "Walk-ins welcome")
 - "GoodToKnow": Any helpful additional info (e.g., "Free parking available", "21+ only", "Vegetarian options available", "Wheelchair accessible")
+- "PricingType": How the service is priced. IMPORTANT - select the most appropriate type:
+  - "per person" - Most common. Use for restaurants, individual tickets, per-person experiences (e.g., escape rooms, museum admission, cooking classes, wine tastings, individual tours)
+  - "per charter" or "per bus" - For charter bus services, coach rentals, party buses. Price is for the whole vehicle, not per seat.
+  - "per vehicle" - For limo services, car rentals, boat charters. Price is for the entire vehicle.
+  - "per hour" - For services charged hourly (e.g., private chef, DJ, photographer, venue rentals by the hour)
+  - "per group" - For activities priced per group regardless of size (e.g., private event packages, group workshops with fixed pricing)
+  - "flat rate" - For services with a single fixed price (e.g., venue rental for the day, private event space)
+  Default to "per person" if unclear, but be intelligent about transportation and vehicle services.
 - "Rankings": An object with activity profile scores from 0-10:
   - "Fun": How entertaining/enjoyable (0=boring, 10=extremely fun)
   - "Social": How much social interaction (0=solo, 10=highly social)
@@ -75,7 +83,8 @@ Return this structure:
   "itemType": "Specific",
   "Name": "The official name",
   "Description": "A 1-2 sentence compelling description for an event plan.",
-  "Price": <number - estimated price per person, use 0 if free or unknown>,
+  "Price": <number - estimated price, use 0 if free or unknown>,
+  "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
   "ServiceType": "Partner Activity",
   "Website": "https://example.com",
   "Location": "Full address or area, City, CA",
@@ -104,6 +113,7 @@ Return this structure with 3-5 top recommendations, EACH with comprehensive info
       "Name": "Specific Place 1",
       "Description": "1-2 sentence description",
       "Price": <number>,
+      "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
       "ServiceType": "Partner Activity",
       "Website": "https://example1.com",
       "Location": "Address or area",
@@ -116,6 +126,7 @@ Return this structure with 3-5 top recommendations, EACH with comprehensive info
       "Name": "Specific Place 2",
       "Description": "1-2 sentence description",
       "Price": <number>,
+      "PricingType": "<per person|per charter|per bus|per vehicle|per hour|per group|flat rate>",
       "ServiceType": "Partner Activity",
       "Website": "https://example2.com",
       "Location": "Address or area",
@@ -137,6 +148,7 @@ Example Response (Specific):
   "Name": "Exploratorium After Dark",
   "Description": "A renowned hands-on museum of science and art, open for adults-only (18+) evenings with a cash bar and music.",
   "Price": 40,
+  "PricingType": "per person",
   "ServiceType": "Partner Activity",
   "Website": "https://www.exploratorium.edu/visit/after-dark",
   "Location": "Pier 15, Embarcadero, San Francisco, CA 94111",
@@ -165,6 +177,7 @@ Example Response (Grouping):
       "Name": "Flour + Water",
       "Description": "Award-winning Mission district spot known for fresh pasta and wood-fired Neapolitan pizza.",
       "Price": 65,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.flourandwater.com",
       "Location": "2401 Harrison St, San Francisco, CA 94110",
@@ -177,6 +190,7 @@ Example Response (Grouping):
       "Name": "Delfina",
       "Description": "Neighborhood Italian favorite serving seasonal Californian-Italian cuisine in a warm atmosphere.",
       "Price": 55,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.delfinasf.com",
       "Location": "3621 18th St, San Francisco, CA 94110",
@@ -189,6 +203,7 @@ Example Response (Grouping):
       "Name": "Cotogna",
       "Description": "Michael Tusk's rustic Italian kitchen featuring house-made pastas and wood-fired dishes.",
       "Price": 75,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.cotognasf.com",
       "Location": "490 Pacific Ave, San Francisco, CA 94133",
@@ -212,6 +227,7 @@ Example Response (Grouping):
       "Name": "Escape Room SF",
       "Description": "Challenging themed escape rooms that require teamwork and communication to solve puzzles.",
       "Price": 35,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.escapesf.com",
       "Location": "Multiple locations in San Francisco",
@@ -224,6 +240,7 @@ Example Response (Grouping):
       "Name": "Urban Putt",
       "Description": "Indoor miniature golf in a creative, art-filled space perfect for casual team outings.",
       "Price": 15,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.urbanputt.com",
       "Location": "1096 South Van Ness Ave, San Francisco, CA 94110",
@@ -236,6 +253,7 @@ Example Response (Grouping):
       "Name": "The Winery SF",
       "Description": "Wine blending workshops where teams create their own custom blend in an urban winery.",
       "Price": 75,
+      "PricingType": "per person",
       "ServiceType": "Partner Activity",
       "Website": "https://www.winery-sf.com",
       "Location": "200 California St, San Francisco, CA 94111",
@@ -246,6 +264,56 @@ Example Response (Grouping):
     }
   ],
   "relatedKeywords": ["corporate events", "group activities", "workshops", "games", "bonding"]
+}
+
+Example Query: "charter bus rental"
+Example Response (Grouping):
+{
+  "itemType": "Grouping",
+  "name": "Top Charter Bus Options",
+  "Description": "Charter bus and coach rental services in the Bay Area for group transportation needs.",
+  "children": [
+    {
+      "Name": "SF Charter Bus Company",
+      "Description": "Full-service charter bus rental with professional drivers for corporate events, weddings, and group outings.",
+      "Price": 1200,
+      "PricingType": "per charter",
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.sfcharterbus.com",
+      "Location": "San Francisco Bay Area - pickup anywhere",
+      "Availability": "24/7 availability, advance booking recommended",
+      "LeadTime": "Book 2-4 weeks ahead for best availability",
+      "GoodToKnow": "Buses seat 30-56 passengers, ADA accessible options available, WiFi on most buses",
+      "Rankings": { "Fun": 5, "Social": 8, "Active": 1, "Creative": 1, "Learning": 1, "Relaxing": 6 }
+    },
+    {
+      "Name": "Bay Area Party Bus",
+      "Description": "Luxury party buses with premium sound systems, lighting, and bar setups for celebrations.",
+      "Price": 800,
+      "PricingType": "per bus",
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.bayareapartybus.com",
+      "Location": "Serves entire Bay Area",
+      "Availability": "Evenings and weekends most popular, weekday availability",
+      "LeadTime": "Book 1-3 weeks ahead, longer for peak season",
+      "GoodToKnow": "BYOB allowed, fits 20-40 passengers, 4-hour minimum rental",
+      "Rankings": { "Fun": 9, "Social": 9, "Active": 2, "Creative": 3, "Learning": 1, "Relaxing": 4 }
+    },
+    {
+      "Name": "Wine Country Tour Coaches",
+      "Description": "Comfortable coach buses perfect for wine country tours and corporate retreats.",
+      "Price": 950,
+      "PricingType": "per charter",
+      "ServiceType": "Partner Activity",
+      "Website": "https://www.winecountrytours.com",
+      "Location": "San Francisco, Napa, Sonoma",
+      "Availability": "Daily tours and private charters available",
+      "LeadTime": "Book 1-2 weeks ahead for private charters",
+      "GoodToKnow": "Includes experienced driver familiar with wine country routes, cooler for wine purchases",
+      "Rankings": { "Fun": 8, "Social": 8, "Active": 1, "Creative": 2, "Learning": 5, "Relaxing": 7 }
+    }
+  ],
+  "relatedKeywords": ["transportation", "group travel", "coach rental", "party bus", "shuttle service"]
 }
 `;
 

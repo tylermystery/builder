@@ -2990,7 +2990,7 @@ async function performPresentationSearch(searchTerm) {
                     ServiceType: source.ServiceType || 'Partner Activity',
                     'Item Type': 'Bookable Item',
                     Status: 'Available',
-                    'Pricing Type': 'per person',
+                    'Pricing Type': source.PricingType || source.pricingType || 'per person',
                     // Business details for modal display
                     Duration: duration || null,
                     Capacity: capacity || null,
