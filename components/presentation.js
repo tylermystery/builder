@@ -8,6 +8,7 @@ import { triggerSave } from '../events.js';
 import { showDetailModal } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
+import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 
 // Quick emoji reactions available for messages
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -2948,11 +2949,16 @@ function createPresentationResultCard(record, isAI = false) {
     const fields = record.fields;
     const imageUrl = fields['Image URL'] || fields.imageUrl || '';
     const name = fields.Name || 'Unnamed Item';
-    const price = fields.Price || 0;
+    // Ensure price is a number (handle string prices like "$50" or undefined)
+    let price = fields.Price || 0;
+    if (typeof price === 'string') {
+        price = parseFloat(price.replace(/[^0-9.-]/g, '')) || 0;
+    }
     const category = fields.Category || '';
 
-    // Check if already in plan
+    // Check if already in plan (check cart.items, cart.lockedItems, and likedItemIds)
     const isInPlan = state.cart.lockedItems.has(record.id) ||
+                     state.cart.items.has(record.id) ||
                      state.session.user.likedItemIds.has(record.id);
 
     card.innerHTML = `
@@ -3026,13 +3032,32 @@ async function handleQuickAdd(record, button, isAI) {
             }
         }
 
-        // Add to liked items (ideas)
-        if (!state.session.user.likedItemIds.has(record.id)) {
+        // Add to cart.items (ideas list) so it appears in presentation view and catalog event plan panel
+        if (!state.cart.items.has(record.id) && !state.cart.lockedItems.has(record.id)) {
+            const itemInfo = {
+                quantity: 1,
+                selectedOptionIndex: 0,
+                selections: {},
+                note: ''
+            };
+            state.cart.items.set(record.id, itemInfo);
+            log('Presentation', `Added ${record.fields.Name} to cart.items (ideas)`);
+        }
+
+        // Also add to liked items for authenticated users (persists across sessions)
+        if (state.session.user.isAuthenticated && !state.session.user.likedItemIds.has(record.id)) {
             state.session.user.likedItemIds.add(record.id);
         }
 
-        // Trigger save
+        // Trigger save to persist changes
         await triggerSave();
+
+        // Update the presentation view items list in real-time
+        await renderAllItems();
+
+        // Update the catalog view's event plan panel and ideas carousel
+        await updateEventPlanSection();
+        await updateIdeasCarousel();
 
         // Update button state
         button.classList.add('added');
