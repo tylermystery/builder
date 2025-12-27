@@ -1364,29 +1364,19 @@ body.modal-open {
                         <span class="hamburger-icon">☰</span>
                     </button>
                     <div id="hamburger-menu-dropdown" class="hamburger-dropdown" style="display: none;">
-                        <!-- DORMANT FEATURE: Start a Plan and Quick Plan - hidden until fully functional
-                             TODO: Re-enable these features when the start-a-plan flow is complete
-                        <a href="/start-a-plan.html" class="hamburger-dropdown-item start-plan-link" style="text-decoration: none; background-color: #e7f3ff; font-weight: 600;">
-                            <span class="menu-item-icon">✨</span> Start a Plan
-                        </a>
-                        <button id="quick-plan-btn" class="hamburger-dropdown-item" style="background-color: #f0fff4; font-weight: 600;">
-                            <span class="menu-item-icon">⚡</span> Quick Plan
+                        <!-- Browse Section -->
+                        <div class="hamburger-section-label">Browse</div>
+                        <button id="menu-catalog-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">📂</span> Browse by Categories
                         </button>
-                        <hr class="hamburger-dropdown-divider">
-                        END DORMANT FEATURE -->
                         <button id="calendar-view-btn" class="hamburger-dropdown-item">
-                            <span class="menu-item-icon">📅</span> Upcoming Events
+                            <span class="menu-item-icon">📅</span> Calendar View
                         </button>
+
+                        <!-- WTF Section -->
+                        <div class="hamburger-section-label">My WTF</div>
                         <button id="menu-wtf-plans-btn" class="hamburger-dropdown-item" style="background-color: #f0f7ff; font-weight: 500;">
                             <span class="menu-item-icon">🎯</span> WTF Plans
-                        </button>
-                        <hr class="hamburger-dropdown-divider">
-                        <button id="menu-wtf-btn" class="hamburger-dropdown-item">
-                            <span class="menu-item-icon">🎉</span> What The Fun Collective
-                        </button>
-                        <hr class="hamburger-dropdown-divider">
-                        <button id="menu-catalog-btn" class="hamburger-dropdown-item">
-                            <span class="menu-item-icon">📂</span> All Categories
                         </button>
                         <button id="menu-plan-btn" class="hamburger-dropdown-item">
                             <span class="menu-item-icon">⭐</span> My Plan
@@ -1400,14 +1390,21 @@ body.modal-open {
                         <button id="menu-projects-btn" class="hamburger-dropdown-item" style="display: none;">
                             <span class="menu-item-icon">📁</span> My Projects
                         </button>
-                        <hr class="hamburger-dropdown-divider">
                         <button id="menu-recent-chats-btn" class="hamburger-dropdown-item">
                             <span class="menu-item-icon">💬</span> Recent Chats
                         </button>
-                        <hr id="menu-website-divider" class="hamburger-dropdown-divider" style="display: none;">
+
+                        <!-- Account Section -->
+                        <div class="hamburger-section-label">Account</div>
                         <a id="menu-website-link" class="hamburger-dropdown-item" href="#" target="_blank" rel="noopener noreferrer" style="display: none; text-decoration: none;">
                             <span class="menu-item-icon">🌐</span> Store Website
                         </a>
+                        <button id="menu-settings-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">⚙️</span> Account / Settings
+                        </button>
+                        <button id="menu-wtf-btn" class="hamburger-dropdown-item">
+                            <span class="menu-item-icon">🤝</span> WTF Platform Collaborative
+                        </button>
                     </div>
                 </div>
                 <div id="shop-logo-container"></div>

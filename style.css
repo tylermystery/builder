@@ -401,6 +401,56 @@ body.modal-open {
     margin: 0;
 }
 
+/* Section labels for hamburger menu */
+.hamburger-section-label {
+    padding: 12px 18px 6px;
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.hamburger-section-label:first-child {
+    border-top: none;
+    border-radius: 12px 12px 0 0;
+}
+
+/* Active state for current view/section in hamburger menu */
+.hamburger-dropdown-item.active {
+    background-color: #e7f3ff;
+    color: #0066cc;
+    font-weight: 500;
+    position: relative;
+}
+
+.hamburger-dropdown-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: #0066cc;
+}
+
+.hamburger-dropdown-item.active:hover {
+    background-color: #d0e8ff;
+}
+
+/* Mobile hamburger menu width refinement */
+@media (max-width: 768px) {
+    .hamburger-dropdown {
+        width: 80%;
+        max-width: 300px;
+        min-width: 240px;
+        right: auto;
+        left: 0;
+    }
+}
+
 #main-shop-title {
     margin: 0;
     line-height: 1.2;
