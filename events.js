@@ -1266,6 +1266,75 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             }, 100);
         });
     }
+
+    // Account/Settings button handler - opens the user profile modal
+    const menuSettingsBtn = document.getElementById('menu-settings-btn');
+    if (menuSettingsBtn) {
+        menuSettingsBtn.addEventListener('click', () => {
+            hamburgerMenuDropdown.style.display = 'none';
+            showUserModal();
+        });
+    }
+
+    /**
+     * Updates the active state of hamburger menu items based on current view
+     */
+    function updateHamburgerMenuActiveState() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentView = urlParams.get('view');
+        const currentCategory = urlParams.get('category');
+
+        // Get all menu buttons that can have active states
+        const menuButtons = {
+            'menu-catalog-btn': !currentView && !currentCategory,
+            'calendar-view-btn': currentView === 'calendar',
+            'menu-plan-btn': currentView === 'plan',
+            'menu-likes-btn': currentView === 'likes',
+            'menu-sessions-btn': currentView === 'my-sessions',
+            'menu-projects-btn': false // Projects panel doesn't use URL view
+        };
+
+        // Update active states
+        Object.entries(menuButtons).forEach(([btnId, isActive]) => {
+            const btn = document.getElementById(btnId);
+            if (btn) {
+                btn.classList.toggle('active', isActive);
+            }
+        });
+    }
+
+    // Update active state on URL changes
+    window.addEventListener('popstate', updateHamburgerMenuActiveState);
+
+    // Initial active state update
+    updateHamburgerMenuActiveState();
+
+    // Also update when menu is opened (in case state changed)
+    if (hamburgerMenuBtn) {
+        const originalClickHandler = hamburgerMenuBtn.onclick;
+        hamburgerMenuBtn.addEventListener('click', () => {
+            updateHamburgerMenuActiveState();
+        });
+    }
+
+    /**
+     * Close hamburger menu on scroll
+     */
+    let lastScrollY = window.scrollY;
+    let scrollThreshold = 50; // Minimum scroll distance to trigger close
+
+    window.addEventListener('scroll', () => {
+        if (hamburgerMenuDropdown && hamburgerMenuDropdown.style.display !== 'none') {
+            const scrollDelta = Math.abs(window.scrollY - lastScrollY);
+            if (scrollDelta > scrollThreshold) {
+                hamburgerMenuDropdown.style.display = 'none';
+                lastScrollY = window.scrollY;
+            }
+        } else {
+            lastScrollY = window.scrollY;
+        }
+    }, { passive: true });
+
     // --- END HAMBURGER MENU NAVIGATION BUTTONS ---
 
     const toggleFilter = (elementId, settingName) => {

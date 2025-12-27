@@ -101,10 +101,9 @@ function generateFooterHTML(storeDetails) {
  */
 function updateHamburgerMenuWebsiteLink(storeDetails) {
     const websiteLink = document.getElementById('menu-website-link');
-    const websiteDivider = document.getElementById('menu-website-divider');
 
-    if (!websiteLink || !websiteDivider) {
-        log('Footer', 'Hamburger menu website elements not found');
+    if (!websiteLink) {
+        log('Footer', 'Hamburger menu website element not found');
         return;
     }
 
@@ -113,11 +112,9 @@ function updateHamburgerMenuWebsiteLink(storeDetails) {
     if (websiteUrl) {
         websiteLink.href = websiteUrl;
         websiteLink.style.display = 'flex';
-        websiteDivider.style.display = 'block';
         log('Footer', `Hamburger menu website link updated: ${websiteUrl}`);
     } else {
         websiteLink.style.display = 'none';
-        websiteDivider.style.display = 'none';
         log('Footer', 'No website URL found, hiding hamburger menu link');
     }
 }
