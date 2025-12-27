@@ -10,6 +10,7 @@ import { parseOptions, getRecordPrice, getEffectiveMinQuantity, flattenOptionGro
 import { log } from '../utils/debug.js';
 import * as backgroundEngine from './backgroundEngine.js';
 import { showReceiptModal } from './receipt.js';
+import { syncPlanState, registerSyncCallback, updateMobileSummaryBar } from '../utils/planStateSync.js';
 
 
 async function createFavoriteCardElement(record, itemInfo, imageCache) {
@@ -67,6 +68,12 @@ async function createFavoriteCardElement(record, itemInfo, imageCache) {
 // It also fixes the 404 error for the partner icon
 async function createLockedInItemElement(record, itemInfo) {
     const fields = record.fields;
+
+    // Determine if this is a custom/AI-generated item (affects price display and image sourcing)
+    const isCustomItem = record.id.startsWith('custom-') ||
+                         record.id.startsWith('ai-search-') ||
+                         record.id.startsWith('ai-child-') ||
+                         record.id.startsWith('ai-presentation-');
 
     // Fetch images for all items (including AI-parsed and custom items)
     // The fetchImagesForRecord function now handles multi-tier image sourcing
@@ -328,6 +335,55 @@ function positionDropdownWithinViewport(dropdown, button) {
         dropdown.style.position = 'absolute';
         dropdown.style.top = '';
     }
+}
+
+/**
+ * Handle sync updates from other views (e.g., presentation, modal)
+ * @param {string} changeType - Type of change
+ * @param {Object} summary - Current plan summary
+ * @param {Object} changeData - Details about the change
+ */
+async function handleSidebarSyncUpdate(changeType, summary, changeData) {
+    console.log('[Sidebar DEBUG] Received sync update:', changeType, changeData);
+
+    switch (changeType) {
+        case 'itemAdded':
+        case 'itemRemoved':
+        case 'itemUpdated':
+            // Re-render the event plan section and ideas carousel
+            await updateEventPlanSection();
+            await updateIdeasCarousel();
+            updateTotalCost();
+            break;
+        case 'dateChanged':
+            // Update date display in sidebar
+            await ui.updateEventPlanDateDisplay();
+            await ui.updateLockedItemStatusIcons();
+            break;
+        case 'detailsChanged':
+            // Update header with new event details
+            updateHeader();
+            break;
+        case 'sessionLoaded':
+        case 'fullRefresh':
+            // Full refresh
+            updateHeader();
+            await updateEventPlanSection();
+            await updateIdeasCarousel();
+            updateTotalCost();
+            await ui.updateEventPlanDateDisplay();
+            break;
+        default:
+            console.log('[Sidebar DEBUG] Unknown sync change type:', changeType);
+    }
+}
+
+/**
+ * Initialize sidebar sync with the plan state synchronization system
+ */
+export function initializeSidebarSync() {
+    registerSyncCallback('sidebar', handleSidebarSyncUpdate);
+    console.log('[Sidebar DEBUG] Registered sidebar sync callback');
 }
 
 /**
@@ -2168,6 +2224,9 @@ export function updateTotalCost() {
 
     updateEventHealthScore(); // --- ADDED THIS LINE ---
     updateTotalPlanScoreDisplay(calculateTotalPlanScore()); // V3.3: Call to display total score
+
+    // Sync mobile summary bar with current plan state
+    updateMobileSummaryBar();
 }
 
 
