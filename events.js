@@ -18,6 +18,7 @@ import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashb
 import { initializeProjectSelector, wasLongPress, resetLongPress } from './components/projectSelector.js';
 import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
 import { showWtfPlansPanel, initializeWtfPlansPanel } from './components/wtfPlansPanel.js';
+import { syncPlanState, initializePlanStateSync } from './utils/planStateSync.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -736,6 +737,9 @@ function attachAddToPlanHandler(card, record, searchTerm, imageCache) {
             // Broadcast item addition for real-time updates
             broadcastItemAdded(record.id, { quantity: 1, note: `AI search: "${searchTerm}"` });
 
+            // Sync plan state across all views
+            syncPlanState('aiSearch', 'itemAdded', { recordId: record.id, itemName: record.fields?.Name || 'AI Item' });
+
             ui.updateEventPlanSection();
             ui.updateTotalCost();
             triggerSave();
@@ -810,6 +814,14 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     const rightSidebar = document.getElementById('right-sidebar');
     const catalogArea = document.getElementById('catalog-area');
     const filterControls = document.getElementById('filter-controls');
+
+    // Initialize plan state synchronization system
+    initializePlanStateSync();
+    console.log('[Events DEBUG] Plan state sync system initialized');
+
+    // Initialize sidebar sync callback for receiving updates from other views
+    ui.initializeSidebarSync();
+    console.log('[Events DEBUG] Sidebar sync initialized');
 
     const safeAddEventListener = (selector, event, handler) => {
         const element = document.getElementById(selector);
@@ -2103,6 +2115,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             // Phase 5: Broadcast the item addition to collaborators
             broadcastItemAdded(recordId, record.fields?.Name || 'Item');
 
+            // Sync plan state across all views
+            syncPlanState('catalog', 'itemAdded', { recordId, itemName: record.fields?.Name || 'Item' });
+
             // Post plan event to session history
             const sessionId = state.session.id;
             if (sessionId && sessionId.startsWith('rec')) {
@@ -2153,6 +2168,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
 
             // Phase 5: Broadcast the item removal to collaborators
             broadcastItemRemoved(recordId, record?.fields?.Name || 'Item');
+
+            // Sync plan state across all views
+            syncPlanState('catalog', 'itemRemoved', { recordId, itemName: record?.fields?.Name || 'Item' });
 
             triggerSave();
         } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
@@ -2300,6 +2318,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 ui.updateLockedItemState(recordId, updates);
                 ui.updateEventPlanSection();
                 ui.updateTotalCost();
+
+                // Sync item update across all views
+                syncPlanState('eventPlanPanel', 'itemUpdated', { recordId, updates });
             } else {
                 ui.updateItemState(recordId, updates);
                 if (!isInIdeas && target.matches('.quantity-input')) {
@@ -2341,13 +2362,21 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                                 const isoDate = selectedDates[0].toISOString();
                                 state.eventDetails.combined.set(CONSTANTS.DETAIL_TYPES.DATE, isoDate);
                                 updateProgress(0.00015);
+                                console.log('[Events DEBUG] Date set to:', isoDate);
                             } else {
                                 state.eventDetails.combined.delete(CONSTANTS.DETAIL_TYPES.DATE);
                                 updateProgress(-0.00015);
+                                console.log('[Events DEBUG] Date cleared');
                             }
                             await ui.updateEventPlanDateDisplay();
                             await ui.updateLockedItemStatusIcons();
                             await updateMobileBarAvailability();
+
+                            // Sync date change across all views
+                            syncPlanState('eventDatePicker', 'dateChanged', {
+                                date: selectedDates.length > 0 ? selectedDates[0].toISOString() : null
+                            });
+
                             triggerSave();
                         }
                     });

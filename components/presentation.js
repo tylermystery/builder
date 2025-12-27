@@ -9,6 +9,7 @@ import { showDetailModal } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
+import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 
 // Quick emoji reactions available for messages
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -24,6 +25,41 @@ let savedScrollPosition = null;
 
 // Flag to track if catalog needs rendering when exiting presentation view
 let catalogNeedsRender = false;
+
+/**
+ * Handle sync updates from other views (e.g., catalog, event plan panel)
+ * @param {string} changeType - Type of change ('itemAdded', 'itemRemoved', 'dateChanged', etc.)
+ * @param {Object} summary - Current plan summary
+ * @param {Object} changeData - Details about the change
+ */
+async function handlePlanSyncUpdate(changeType, summary, changeData) {
+    console.log('[Presentation DEBUG] Received sync update:', changeType, changeData);
+
+    switch (changeType) {
+        case 'itemAdded':
+        case 'itemRemoved':
+        case 'itemUpdated':
+            // Re-render the items list
+            await renderAllItems();
+            generateItemsSummary();
+            break;
+        case 'dateChanged':
+            // Update the date display
+            renderEventHeader();
+            generateHeaderSummary();
+            break;
+        case 'detailsChanged':
+        case 'fullRefresh':
+        case 'sessionLoaded':
+            // Full refresh of all presentation elements
+            renderEventHeader();
+            await renderAllItems();
+            initializeAccordions();
+            break;
+        default:
+            console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
+    }
+}
 
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
@@ -2417,6 +2453,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     }
     console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
+    // Register sync callback to handle updates from other views
+    registerSyncCallback('presentation', handlePlanSyncUpdate);
+    console.log('[Presentation DEBUG] Registered plan sync callback');
+
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
     catalogNeedsRender = true;
@@ -2459,6 +2499,10 @@ export async function showPresentationView(listType, startRecordId = null) {
 
 export function hidePresentationView() {
     if (!modal) return;
+
+    // Unregister sync callback when closing presentation view
+    unregisterSyncCallback('presentation');
+    console.log('[Presentation DEBUG] Unregistered plan sync callback');
 
     // Stop the background animation
     stopPresentationBackgroundAnimation();
@@ -3285,6 +3329,9 @@ async function handleQuickAdd(record, button, isAI) {
         // Update the catalog view's event plan panel and ideas carousel
         await updateEventPlanSection();
         await updateIdeasCarousel();
+
+        // Sync plan state across all views
+        syncPlanState('presentation', 'itemAdded', { recordId: record.id, itemName: record.fields.Name });
 
         // Update button state
         button.classList.add('added');

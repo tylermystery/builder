@@ -126,6 +126,10 @@ export function showUserModal() {
         signinView.style.display = 'block';
         profileView.style.display = 'none';
         ownerDashboardLink.style.display = 'none';
+
+        // Refresh biometric section visibility when showing signin view
+        // This ensures passkey login option appears if user has created one
+        refreshBiometricSectionVisibility();
     }
 
     // Populate Background Effects dropdown (only once)
@@ -1008,6 +1012,49 @@ function getDeviceName() {
     if (/Windows/.test(ua)) return 'Windows PC';
     if (/Linux/.test(ua)) return 'Linux';
     return 'Unknown Device';
+}
+
+// Refresh biometric section visibility - called when opening the signin modal
+// This ensures the passkey login option appears after a user has created a passkey
+async function refreshBiometricSectionVisibility() {
+    const biometricSection = document.getElementById('biometric-auth-section');
+    const biometricBtnText = document.getElementById('biometric-btn-text');
+
+    if (!biometricSection) return;
+
+    // Check if WebAuthn is available
+    const webauthnAvailable = isWebAuthnAvailable();
+    const platformAvailable = await isPlatformAuthenticatorAvailable();
+
+    if (!webauthnAvailable || !platformAvailable) {
+        biometricSection.style.display = 'none';
+        return;
+    }
+
+    // Check if any passkey is stored
+    const anyPasskeyStored = hasAnyStoredPasskey();
+
+    console.log('[WebAuthn] Refreshing biometric section - passkey stored:', anyPasskeyStored);
+
+    if (anyPasskeyStored) {
+        biometricSection.style.display = 'block';
+
+        // Update button text based on device if not already set
+        if (biometricBtnText && biometricBtnText.textContent === 'Sign In with Biometrics') {
+            const ua = navigator.userAgent;
+            if (/iPhone|iPad/.test(ua)) {
+                biometricBtnText.textContent = 'Sign In with Face ID / Touch ID';
+            } else if (/Android/.test(ua)) {
+                biometricBtnText.textContent = 'Sign In with Fingerprint';
+            } else if (/Mac/.test(ua)) {
+                biometricBtnText.textContent = 'Sign In with Touch ID';
+            } else if (/Windows/.test(ua)) {
+                biometricBtnText.textContent = 'Sign In with Windows Hello';
+            }
+        }
+    } else {
+        biometricSection.style.display = 'none';
+    }
 }
 
 // Initialize biometric UI elements

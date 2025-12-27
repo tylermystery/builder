@@ -456,6 +456,16 @@ export async function loadSessionFromAirtable(sessionId) {
             const isOwnerOfPlanStore = isStoreOwner && ownedStoreId && planStoreId === ownedStoreId;
             state.session.isOwned = isCollaborator || isOwnerOfPlanStore;
             log('API', `Authenticated user. Access level (isOwned): ${state.session.isOwned}`);
+
+            // Auto-associate authenticated user as collaborator when opening a plan
+            // This ensures the plan appears in their plans list immediately
+            if (!isCollaborator) {
+                console.log(`[SESSION-LOAD] User ${state.session.user.id} not yet collaborator on session ${sessionId}, adding...`);
+                // Fire async - don't block session load, just log errors
+                associateSessionWithUser(sessionId, state.session.user.id).catch(err => {
+                    console.error('[SESSION-LOAD] Failed to auto-associate user with session:', err.message);
+                });
+            }
         } else {
             state.session.isOwned = false;
             log('API', `Unauthenticated user. Access level (isOwned): false`);
@@ -511,6 +521,8 @@ export async function loadSessionFromAirtable(sessionId) {
                 }
 
                 state.eventDetails.combined = new Map(Object.entries(normalizedEventDetails));
+                console.log('[SESSION-LOAD DEBUG] Event details loaded:', Object.fromEntries(state.eventDetails.combined));
+                console.log('[SESSION-LOAD DEBUG] Date value:', state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE));
 
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
@@ -2915,6 +2927,13 @@ export async function createSessionFromEvent(eventId, eventRecord, storeId, user
         log('API', `Updated event ${eventId} with LinkedSession ${newSession.id}`);
         console.log('[DEBUG createSessionFromEvent] ========== END (SUCCESS) ==========');
 
+        // Also update the user's associated sessions (async, don't block return)
+        if (userId) {
+            associateSessionWithUser(newSession.id, userId).catch(err => {
+                console.error('[API] Failed to update user sessions list for event session:', err.message);
+            });
+        }
+
         return newSession;
     } catch (error) {
         console.error('[DEBUG createSessionFromEvent] Error creating session from event:', error);
@@ -4082,6 +4101,14 @@ export async function createNewSession(storeId, userId, name = 'New Plan') {
         const newSessionId = result.records[0].id;
 
         log('API', `Created new session ${newSessionId}`);
+
+        // Also update the user's associated sessions (async, don't block return)
+        if (userId) {
+            associateSessionWithUser(newSessionId, userId).catch(err => {
+                console.error('[API] Failed to update user sessions list for new session:', err.message);
+            });
+        }
+
         return newSessionId;
     } catch (error) {
         console.error('Error creating new session:', error);
