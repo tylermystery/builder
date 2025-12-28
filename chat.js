@@ -18,10 +18,12 @@ let originalTitle = document.title;
 let isTabActive = true;
 
 // Session history filter state - track which message types are visible
+// DORMANT FEATURE: Plan and Debug toggles hidden - chat is always shown
+// TODO: Re-enable toggles when plan history tracking and debug features are fully functional
 let historyFilters = {
-    chat: true,
-    planEvents: true,
-    debug: false // Debug off by default, user can toggle on
+    chat: true,       // Always true since toggles are hidden
+    planEvents: false, // Disabled - plan history not showing properly
+    debug: false      // Disabled - debug toggle hidden
 };
 
 // Store all session history items for re-rendering when filters change
@@ -47,7 +49,8 @@ window.addEventListener('blur', () => {
 
 /**
  * Creates the history filter toggle buttons UI in the chat header.
- * Allows users to show/hide chat messages, plan events, and debug logs.
+ * DORMANT FEATURE: Toggle buttons are hidden - chat is always displayed.
+ * TODO: Re-enable toggles when plan history and debug features are fully functional.
  */
 function createHistoryFilterToggles() {
     const chatHeader = document.getElementById('chat-header');
@@ -59,6 +62,9 @@ function createHistoryFilterToggles() {
         existingFilters.remove();
     }
 
+    // DORMANT FEATURE: History filter toggle buttons hidden
+    // Chat messages are always shown, plan and debug toggles removed until functional
+    /*
     const filterControls = document.createElement('div');
     filterControls.className = 'history-filter-controls';
 
@@ -92,6 +98,8 @@ function createHistoryFilterToggles() {
     } else {
         chatHeader.appendChild(filterControls);
     }
+    */
+    // END DORMANT FEATURE
 }
 
 /**
