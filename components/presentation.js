@@ -11,8 +11,11 @@ import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 
-// Quick emoji reactions available for messages
+// Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// Cache for component comments - keyed by componentType:componentId
+const componentCommentsCache = new Map();
 
 // Track message being replied to in presentation view
 let presentationReplyingToMessage = null;
@@ -33,7 +36,7 @@ let catalogNeedsRender = false;
  * @param {Object} changeData - Details about the change
  */
 async function handlePlanSyncUpdate(changeType, summary, changeData) {
-    console.log('[Presentation DEBUG] Received sync update:', changeType, changeData);
+    // console.log('[Presentation DEBUG] Received sync update:', changeType, changeData);
 
     switch (changeType) {
         case 'itemAdded':
@@ -57,7 +60,7 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             initializeAccordions();
             break;
         default:
-            console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
+            // console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
     }
 }
 
@@ -271,7 +274,7 @@ function resizePresentationBackground() {
 }
 
 function ensureDOMElements() {
-    console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
+    // console.log('[Accordion DEBUG] ensureDOMElements called, modal already set:', !!modal);
     if (modal) return true; // Already initialized
 
     modal = document.getElementById('presentation-modal-overlay');
@@ -318,12 +321,14 @@ function ensureDOMElements() {
     presentationRefinementChips = document.getElementById('presentation-refinement-chips');
     presentationBrowseCategories = document.getElementById('presentation-browse-categories');
 
+    /* DEBUG: DOM elements after init
     console.log('[Accordion DEBUG] DOM elements after init:', {
         modal: !!modal,
         closeBtn: !!closeBtn,
         headerSummaryEl: !!headerSummaryEl,
         itemsSummaryEl: !!itemsSummaryEl
     });
+    */
 
     if (!modal) {
         console.error('[Presentation] Modal element #presentation-modal-overlay not found in DOM');
@@ -932,6 +937,28 @@ async function renderItineraryItem(item, index) {
                         </button>
                     </div>
                 </div>
+                <!-- Component Comments Section -->
+                <div class="component-comments-section" data-component-type="item" data-component-id="${recordId}">
+                    <div class="component-comments-header">
+                        <button class="component-comments-toggle" data-component-id="${recordId}" title="Show comments">
+                            <span class="comments-icon">💬</span>
+                            <span class="comments-count" data-component-id="${recordId}">0</span>
+                            <span class="comments-label">Comments</span>
+                            <span class="comments-toggle-icon">▼</span>
+                        </button>
+                    </div>
+                    <div class="component-comments-body" data-component-id="${recordId}" style="display: none;">
+                        <div class="component-comments-list" data-component-id="${recordId}">
+                            <!-- Comments will be rendered here -->
+                        </div>
+                        <div class="component-comment-input-wrapper">
+                            <input type="text" class="component-comment-input" data-component-id="${recordId}" placeholder="Add a comment..." />
+                            <button class="component-comment-submit" data-component-id="${recordId}" title="Post comment">
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </article>
     `;
@@ -1201,7 +1228,7 @@ function escapeHtml(text) {
 function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId, options = {}) {
     if (!chatMessagesEl) return;
 
-    const { messageId = null, reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false } = options;
+    const { messageId = null, reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false, componentInfo = null } = options;
     const currentUser = getCurrentUser();
 
     // Skip deleted messages
@@ -1214,8 +1241,9 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     }
 
     const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}`;
+    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}${componentInfo ? ' component-comment-msg' : ''}`;
     if (messageId) wrapper.dataset.messageId = messageId;
+    if (componentInfo) wrapper.dataset.componentId = componentInfo.id;
 
     const messageElement = document.createElement('div');
     const isFlagged = state.session.flaggedUsers.has(senderId);
@@ -1225,6 +1253,15 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     messageElement.className = 'chat-message';
     if (isBanned) messageElement.classList.add('banned');
     if (isFlagged) messageElement.classList.add('flagged');
+
+    // Component tag (shown before sender for component comments)
+    if (componentInfo) {
+        const componentTag = document.createElement('div');
+        componentTag.className = 'component-tag';
+        componentTag.innerHTML = `<span class="component-tag-icon">📍</span><span class="component-tag-name">@${escapeHtml(componentInfo.name)}</span>`;
+        componentTag.title = `Comment on: ${componentInfo.name}`;
+        messageElement.appendChild(componentTag);
+    }
 
     // Sender name
     const senderElement = document.createElement('div');
@@ -1722,6 +1759,7 @@ async function initializePresentationChat() {
         if (records.length > 0) {
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp, EventType, Reactions, IsEdited, IsDeleted, ParentMessageID } = record.fields;
+                const itemLink = record.fields['Item Link']; // Array of linked item IDs (for component comments)
 
                 // Skip reply messages (they're shown in threads) and system events
                 if (ParentMessageID) return;
@@ -1733,12 +1771,24 @@ async function initializePresentationChat() {
                     try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
                 }
 
+                // Get component name if this is a component comment (has Item Link)
+                let componentInfo = null;
+                if (itemLink && itemLink.length > 0) {
+                    const componentId = itemLink[0];
+                    const componentRecord = state.records.all.find(r => r.id === componentId);
+                    componentInfo = {
+                        id: componentId,
+                        name: componentRecord?.fields?.Name || 'Unknown Item'
+                    };
+                }
+
                 addPresentationMessageToUI(SenderName, Content, isSent, Timestamp, SenderID, {
                     messageId: record.id,
                     reactions: parsedReactions,
                     isEdited: IsEdited || false,
                     isDeleted: IsDeleted || false,
-                    replyCount: replyCountMap[record.id] || 0
+                    replyCount: replyCountMap[record.id] || 0,
+                    componentInfo // Include component info for @component tags
                 });
             });
         } else {
@@ -1877,6 +1927,61 @@ async function initializePresentationChat() {
                     });
                     parentWrapper.querySelector('.chat-message')?.appendChild(threadIndicator);
                 }
+            }
+        }
+    });
+
+    // Handle real-time component comments from other users
+    presentationChatChannel.bind('client-component-comment', (data) => {
+        if (data.senderId !== currentUser.id) {
+            const componentId = data.componentId;
+            // Update count
+            const countEl = document.querySelector(`.comments-count[data-component-id="${componentId}"]`);
+            if (countEl) {
+                const currentCount = parseInt(countEl.textContent) || 0;
+                countEl.textContent = currentCount + 1;
+            }
+            // Reload comments if section is open
+            const body = document.querySelector(`.component-comments-body[data-component-id="${componentId}"]`);
+            if (body && body.style.display !== 'none') {
+                loadComponentComments(componentId);
+            }
+
+            // Also add the comment to the chat area with @component tag
+            if (chatMessagesEl && data.comment) {
+                const componentRecord = state.records.all.find(r => r.id === componentId);
+                const componentInfo = {
+                    id: componentId,
+                    name: componentRecord?.fields?.Name || 'Unknown Item'
+                };
+
+                // Remove empty state if present
+                const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
+                if (emptyMsg) emptyMsg.remove();
+
+                addPresentationMessageToUI(
+                    data.comment.fields?.SenderName || 'Unknown',
+                    data.comment.fields?.Content || '',
+                    false,
+                    data.comment.fields?.Timestamp || new Date().toISOString(),
+                    data.senderId,
+                    {
+                        messageId: data.comment.id,
+                        componentInfo
+                    }
+                );
+            }
+
+            log('Presentation', `Received component comment from ${data.senderId} on ${componentId}`);
+        }
+    });
+
+    // Handle real-time component comment reactions from other users
+    presentationChatChannel.bind('client-component-comment-reaction', (data) => {
+        if (data.senderId !== currentUser.id) {
+            const commentEl = document.querySelector(`.component-comment[data-comment-id="${data.commentId}"]`);
+            if (commentEl) {
+                updateCommentReactionsDisplay(commentEl, data.reactions);
             }
         }
     });
@@ -2204,33 +2309,33 @@ function generateHostsChatSummary() {
 
 // Toggle accordion section
 function toggleAccordion(section) {
-    console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
-    console.log('[Accordion DEBUG] modal element:', modal);
+    // console.log('[Accordion DEBUG] toggleAccordion called with section:', section);
+    // console.log('[Accordion DEBUG] modal element:', modal);
 
     // Check both main accordions and sub-accordions
     let sectionEl = modal.querySelector(`.itinerary-accordion[data-section="${section}"]`);
     if (!sectionEl) {
         sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
     }
-    console.log('[Accordion DEBUG] Found section element:', sectionEl);
+    // console.log('[Accordion DEBUG] Found section element:', sectionEl);
 
     if (!sectionEl) {
-        console.warn('[Accordion DEBUG] Section element not found for:', section);
+        // console.warn('[Accordion DEBUG] Section element not found for:', section);
         return;
     }
 
     accordionState[section] = !accordionState[section];
-    console.log('[Accordion DEBUG] New state for', section, ':', accordionState[section]);
+    // console.log('[Accordion DEBUG] New state for', section, ':', accordionState[section]);
 
     if (accordionState[section]) {
         sectionEl.classList.add('expanded');
-        console.log('[Accordion DEBUG] Added expanded class to', section);
+        // console.log('[Accordion DEBUG] Added expanded class to', section);
     } else {
         sectionEl.classList.remove('expanded');
-        console.log('[Accordion DEBUG] Removed expanded class from', section);
+        // console.log('[Accordion DEBUG] Removed expanded class from', section);
     }
 
-    console.log('[Accordion DEBUG] Section classList after toggle:', sectionEl.classList.toString());
+    // console.log('[Accordion DEBUG] Section classList after toggle:', sectionEl.classList.toString());
 
     log('Presentation', `Accordion ${section} ${accordionState[section] ? 'expanded' : 'collapsed'}`);
 }
@@ -2270,8 +2375,8 @@ function handleItemAccordionClick(e) {
 
 // Initialize accordion states and update UI
 function initializeAccordions() {
-    console.log('[Accordion DEBUG] initializeAccordions called');
-    console.log('[Accordion DEBUG] modal element:', modal);
+    // console.log('[Accordion DEBUG] initializeAccordions called');
+    // console.log('[Accordion DEBUG] modal element:', modal);
 
     // Set all sections to expanded state initially
     Object.keys(accordionState).forEach(section => {
@@ -2281,12 +2386,12 @@ function initializeAccordions() {
         if (!sectionEl) {
             sectionEl = modal.querySelector(`.sub-accordion[data-section="${section}"]`);
         }
-        console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
+        // console.log(`[Accordion DEBUG] Initializing section "${section}":`, sectionEl);
         if (sectionEl) {
             sectionEl.classList.add('expanded');
-            console.log(`[Accordion DEBUG] Section "${section}" classList after init:`, sectionEl.classList.toString());
+            // console.log(`[Accordion DEBUG] Section "${section}" classList after init:`, sectionEl.classList.toString());
         } else {
-            console.warn(`[Accordion DEBUG] Section element not found for "${section}" during init`);
+            // console.warn(`[Accordion DEBUG] Section element not found for "${section}" during init`);
         }
     });
 
@@ -2294,7 +2399,7 @@ function initializeAccordions() {
     generateHeaderSummary();
     generateItemsSummary();
 
-    console.log('[Accordion DEBUG] initializeAccordions completed');
+    // console.log('[Accordion DEBUG] initializeAccordions completed');
 }
 
 function handleThumbnailClick(e) {
@@ -2364,11 +2469,12 @@ function handleReactionClick(e) {
 }
 
 function handleItemClick(e) {
-    // Don't trigger if clicking on reactions, thumbnails, expand button, or other interactive elements
+    // Don't trigger if clicking on reactions, thumbnails, expand button, comments, or other interactive elements
     if (e.target.closest('.reaction-btn') ||
         e.target.closest('.itinerary-thumbnail') ||
         e.target.closest('.itinerary-item-reactions') ||
-        e.target.closest('.itinerary-item-expand-btn')) {
+        e.target.closest('.itinerary-item-expand-btn') ||
+        e.target.closest('.component-comments-section')) {
         return;
     }
 
@@ -2435,6 +2541,622 @@ function handleSuggestionClick(e) {
     }
 }
 
+// ============================================
+// COMPONENT COMMENTS FEATURE
+// ============================================
+
+/**
+ * Handle click events for component comments
+ */
+function handleComponentCommentsClick(e) {
+    // Handle toggle button clicks
+    const toggleBtn = e.target.closest('.component-comments-toggle');
+    if (toggleBtn) {
+        e.stopPropagation();
+        const componentId = toggleBtn.dataset.componentId;
+        toggleComponentComments(componentId);
+        return;
+    }
+
+    // Handle submit button clicks
+    const submitBtn = e.target.closest('.component-comment-submit');
+    if (submitBtn) {
+        e.stopPropagation();
+        const componentId = submitBtn.dataset.componentId;
+        submitComponentComment(componentId);
+        return;
+    }
+
+    // Handle comment action buttons (edit, delete, react)
+    const actionBtn = e.target.closest('.comment-action-btn');
+    if (actionBtn) {
+        e.stopPropagation();
+        const action = actionBtn.dataset.action;
+        const commentId = actionBtn.closest('.component-comment').dataset.commentId;
+        handleCommentAction(action, commentId);
+        return;
+    }
+
+    // Handle reaction badge clicks on comments
+    const reactionBadge = e.target.closest('.comment-reaction-badge');
+    if (reactionBadge) {
+        e.stopPropagation();
+        const commentId = reactionBadge.closest('.component-comment').dataset.commentId;
+        const emoji = reactionBadge.dataset.emoji;
+        toggleCommentReaction(commentId, emoji);
+        return;
+    }
+}
+
+/**
+ * Handle keydown events for component comment inputs
+ */
+function handleComponentCommentsKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        const input = e.target.closest('.component-comment-input');
+        if (input) {
+            e.preventDefault();
+            const componentId = input.dataset.componentId;
+            submitComponentComment(componentId);
+        }
+    }
+}
+
+/**
+ * Toggle the visibility of comments for a component
+ */
+async function toggleComponentComments(componentId) {
+    const body = document.querySelector(`.component-comments-body[data-component-id="${componentId}"]`);
+    const toggle = document.querySelector(`.component-comments-toggle[data-component-id="${componentId}"]`);
+    const icon = toggle?.querySelector('.comments-toggle-icon');
+
+    if (!body || !toggle) return;
+
+    const isHidden = body.style.display === 'none';
+
+    if (isHidden) {
+        // Show comments
+        body.style.display = 'block';
+        if (icon) icon.textContent = '▲';
+        toggle.classList.add('expanded');
+
+        // Load comments if not cached
+        await loadComponentComments(componentId);
+    } else {
+        // Hide comments
+        body.style.display = 'none';
+        if (icon) icon.textContent = '▼';
+        toggle.classList.remove('expanded');
+    }
+}
+
+/**
+ * Load and render comments for a component
+ */
+async function loadComponentComments(componentId) {
+    console.log('[ComponentComment DEBUG] loadComponentComments called for:', componentId);
+    const sessionId = state.session.id;
+    console.log('[ComponentComment DEBUG] sessionId:', sessionId);
+
+    if (!sessionId) {
+        console.log('[ComponentComment DEBUG] ❌ No sessionId - aborting');
+        return;
+    }
+
+    const cacheKey = `item:${componentId}`;
+    const commentsList = document.querySelector(`.component-comments-list[data-component-id="${componentId}"]`);
+    console.log('[ComponentComment DEBUG] commentsList element found:', !!commentsList);
+
+    if (!commentsList) {
+        console.log('[ComponentComment DEBUG] ❌ No commentsList element - aborting');
+        return;
+    }
+
+    // Show loading state
+    commentsList.innerHTML = '<div class="comments-loading">Loading comments...</div>';
+
+    try {
+        console.log('[ComponentComment DEBUG] Calling api.fetchComponentComments with:', {
+            sessionId,
+            componentType: api.COMPONENT_TYPES.ITEM,
+            componentId
+        });
+        // Fetch comments from API
+        const comments = await api.fetchComponentComments(sessionId, api.COMPONENT_TYPES.ITEM, componentId);
+        console.log('[ComponentComment DEBUG] fetchComponentComments returned:', comments?.length, 'comments');
+
+        // Cache comments
+        componentCommentsCache.set(cacheKey, comments);
+
+        // Render comments
+        renderComponentComments(componentId, comments);
+
+        // Update count
+        updateCommentCount(componentId, comments.length);
+
+        log('Presentation', `Loaded ${comments.length} comments for component ${componentId}`);
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Error loading comments:', error);
+        log('Presentation', `Error loading comments: ${error.message}`);
+        commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+    }
+}
+
+/**
+ * Render comments for a component
+ */
+function renderComponentComments(componentId, comments) {
+    const commentsList = document.querySelector(`.component-comments-list[data-component-id="${componentId}"]`);
+    if (!commentsList) return;
+
+    const currentUser = getCurrentUser();
+
+    if (comments.length === 0) {
+        commentsList.innerHTML = '<div class="comments-empty">No comments yet. Be the first to comment!</div>';
+        return;
+    }
+
+    const commentsHTML = comments.map(comment => {
+        const fields = comment.fields;
+        const isOwn = fields.SenderID === currentUser?.id;
+        const isDeleted = fields.IsDeleted;
+        const isEdited = fields.IsEdited;
+        const reactions = fields.Reactions ? JSON.parse(fields.Reactions) : {};
+        const timestamp = new Date(fields.Timestamp);
+        const timeAgo = getTimeAgo(timestamp);
+
+        if (isDeleted) {
+            return `
+                <div class="component-comment deleted" data-comment-id="${comment.id}">
+                    <em class="deleted-comment-text">This comment was deleted</em>
+                </div>
+            `;
+        }
+
+        // Build reactions HTML
+        let reactionsHTML = '';
+        if (Object.keys(reactions).length > 0) {
+            reactionsHTML = '<div class="comment-reactions">';
+            for (const [emoji, users] of Object.entries(reactions)) {
+                if (users.length > 0) {
+                    const hasReacted = users.includes(currentUser?.id);
+                    reactionsHTML += `
+                        <button class="comment-reaction-badge ${hasReacted ? 'user-reacted' : ''}" data-emoji="${emoji}">
+                            ${emoji} <span class="reaction-count">${users.length}</span>
+                        </button>
+                    `;
+                }
+            }
+            reactionsHTML += '</div>';
+        }
+
+        return `
+            <div class="component-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}">
+                <div class="comment-header">
+                    <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
+                    <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
+                    ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
+                </div>
+                <div class="comment-content">${escapeHtml(fields.Content)}</div>
+                ${reactionsHTML}
+                <div class="comment-actions">
+                    <button class="comment-action-btn" data-action="react" title="Add reaction">😊</button>
+                    ${isOwn ? `
+                        <button class="comment-action-btn" data-action="edit" title="Edit comment">✏️</button>
+                        <button class="comment-action-btn" data-action="delete" title="Delete comment">🗑️</button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    commentsList.innerHTML = commentsHTML;
+}
+
+/**
+ * Submit a new comment for a component
+ */
+async function submitComponentComment(componentId) {
+    console.log('[ComponentComment DEBUG] submitComponentComment called for:', componentId);
+
+    const input = document.querySelector(`.component-comment-input[data-component-id="${componentId}"]`);
+    if (!input) {
+        console.log('[ComponentComment DEBUG] ❌ No input element found');
+        return;
+    }
+
+    const content = input.value.trim();
+    console.log('[ComponentComment DEBUG] Content:', content?.substring(0, 50) + (content?.length > 50 ? '...' : ''));
+
+    if (!content) {
+        console.log('[ComponentComment DEBUG] ❌ Empty content - aborting');
+        return;
+    }
+
+    const sessionId = state.session.id;
+    const currentUser = getCurrentUser();
+    console.log('[ComponentComment DEBUG] sessionId:', sessionId);
+    console.log('[ComponentComment DEBUG] currentUser:', currentUser ? { id: currentUser.id, name: currentUser.name } : null);
+
+    if (!sessionId || !currentUser) {
+        console.log('[ComponentComment DEBUG] ❌ No session or user - aborting');
+        log('Presentation', 'Cannot submit comment - no session or user');
+        return;
+    }
+
+    // Disable input while submitting
+    input.disabled = true;
+    const submitBtn = document.querySelector(`.component-comment-submit[data-component-id="${componentId}"]`);
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        console.log('[ComponentComment DEBUG] Calling api.postComponentComment...');
+        // Post comment via API
+        const newComment = await api.postComponentComment(
+            sessionId,
+            api.COMPONENT_TYPES.ITEM,
+            componentId,
+            currentUser.id,
+            currentUser.name,
+            content
+        );
+        console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
+
+        if (newComment) {
+            // Clear input
+            input.value = '';
+
+            // Reload comments to show the new one in the component's comment section
+            console.log('[ComponentComment DEBUG] Reloading comments...');
+            await loadComponentComments(componentId);
+
+            // Also add to the chat area with @component tag
+            if (chatMessagesEl) {
+                const componentRecord = state.records.all.find(r => r.id === componentId);
+                const componentInfo = {
+                    id: componentId,
+                    name: componentRecord?.fields?.Name || 'Unknown Item'
+                };
+
+                // Remove empty state if present
+                const emptyMsg = chatMessagesEl.querySelector('.chat-empty');
+                if (emptyMsg) emptyMsg.remove();
+
+                addPresentationMessageToUI(
+                    currentUser.name,
+                    content,
+                    true,
+                    new Date().toISOString(),
+                    currentUser.id,
+                    {
+                        messageId: newComment.id,
+                        componentInfo
+                    }
+                );
+            }
+
+            // Broadcast via Pusher if available
+            if (presentationChatChannel) {
+                console.log('[ComponentComment DEBUG] Broadcasting via Pusher...');
+                presentationChatChannel.trigger('client-component-comment', {
+                    componentType: api.COMPONENT_TYPES.ITEM,
+                    componentId,
+                    comment: newComment,
+                    senderId: currentUser.id
+                });
+            }
+
+            console.log('[ComponentComment DEBUG] ✅ Comment posted successfully');
+            log('Presentation', `Comment posted to component ${componentId}`);
+        } else {
+            console.log('[ComponentComment DEBUG] ❌ postComponentComment returned null/false');
+        }
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Exception:', error);
+        log('Presentation', `Error posting comment: ${error.message}`);
+    } finally {
+        // Re-enable input
+        input.disabled = false;
+        if (submitBtn) submitBtn.disabled = false;
+        input.focus();
+    }
+}
+
+/**
+ * Handle comment actions (edit, delete, react)
+ */
+async function handleCommentAction(action, commentId) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+
+    switch (action) {
+        case 'edit':
+            startCommentEdit(commentId);
+            break;
+        case 'delete':
+            await deleteComment(commentId);
+            break;
+        case 'react':
+            showCommentReactionPicker(commentId);
+            break;
+    }
+}
+
+/**
+ * Start editing a comment
+ */
+function startCommentEdit(commentId) {
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) return;
+
+    const contentEl = commentEl.querySelector('.comment-content');
+    if (!contentEl) return;
+
+    const currentContent = contentEl.textContent;
+
+    // Replace content with edit input
+    contentEl.innerHTML = `
+        <input type="text" class="comment-edit-input" value="${escapeHtml(currentContent)}">
+        <div class="comment-edit-actions">
+            <button class="comment-edit-save" data-comment-id="${commentId}">Save</button>
+            <button class="comment-edit-cancel" data-comment-id="${commentId}">Cancel</button>
+        </div>
+    `;
+
+    const input = contentEl.querySelector('.comment-edit-input');
+    const saveBtn = contentEl.querySelector('.comment-edit-save');
+    const cancelBtn = contentEl.querySelector('.comment-edit-cancel');
+
+    input.focus();
+    input.select();
+
+    const saveEdit = async () => {
+        const newContent = input.value.trim();
+        if (newContent && newContent !== currentContent) {
+            const currentUser = getCurrentUser();
+            const result = await api.updateComponentComment(commentId, newContent, currentUser.id);
+            if (result) {
+                contentEl.textContent = newContent;
+
+                // Add edited indicator
+                const header = commentEl.querySelector('.comment-header');
+                if (header && !header.querySelector('.comment-edited')) {
+                    const editedSpan = document.createElement('span');
+                    editedSpan.className = 'comment-edited';
+                    editedSpan.textContent = '(edited)';
+                    header.appendChild(editedSpan);
+                }
+            } else {
+                contentEl.textContent = currentContent;
+            }
+        } else {
+            contentEl.textContent = currentContent;
+        }
+    };
+
+    const cancelEdit = () => {
+        contentEl.textContent = currentContent;
+    };
+
+    saveBtn.addEventListener('click', saveEdit);
+    cancelBtn.addEventListener('click', cancelEdit);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveEdit();
+        if (e.key === 'Escape') cancelEdit();
+    });
+}
+
+/**
+ * Delete a comment
+ */
+async function deleteComment(commentId) {
+    if (!confirm('Delete this comment?')) return;
+
+    const currentUser = getCurrentUser();
+    const result = await api.deleteComponentComment(commentId, currentUser.id);
+
+    if (result) {
+        const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+        if (commentEl) {
+            commentEl.classList.add('deleted');
+            commentEl.innerHTML = '<em class="deleted-comment-text">This comment was deleted</em>';
+        }
+
+        // Update count
+        const componentSection = commentEl?.closest('.component-comments-section');
+        if (componentSection) {
+            const componentId = componentSection.dataset.componentId;
+            const countEl = document.querySelector(`.comments-count[data-component-id="${componentId}"]`);
+            if (countEl) {
+                const currentCount = parseInt(countEl.textContent) || 0;
+                countEl.textContent = Math.max(0, currentCount - 1);
+            }
+        }
+    }
+}
+
+/**
+ * Show reaction picker for a comment
+ */
+function showCommentReactionPicker(commentId) {
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) return;
+
+    // Remove existing picker
+    const existingPicker = document.querySelector('.comment-reaction-picker');
+    if (existingPicker) existingPicker.remove();
+
+    const picker = document.createElement('div');
+    picker.className = 'comment-reaction-picker';
+
+    QUICK_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'reaction-picker-btn';
+        btn.textContent = emoji;
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            picker.remove();
+            await toggleCommentReaction(commentId, emoji);
+        });
+        picker.appendChild(btn);
+    });
+
+    commentEl.appendChild(picker);
+
+    // Close picker on outside click
+    const closePicker = (e) => {
+        if (!picker.contains(e.target)) {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePicker), 0);
+}
+
+/**
+ * Toggle a reaction on a comment
+ */
+async function toggleCommentReaction(commentId, emoji) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) return;
+
+    // Check if user already reacted
+    const existingBadge = commentEl.querySelector(`.comment-reaction-badge[data-emoji="${emoji}"]`);
+    const hasReacted = existingBadge?.classList.contains('user-reacted');
+
+    const result = await api.toggleComponentCommentReaction(commentId, currentUser.id, emoji, !hasReacted);
+
+    if (result) {
+        // Update the reactions display
+        updateCommentReactionsDisplay(commentEl, result);
+
+        // Broadcast via Pusher if available
+        if (presentationChatChannel) {
+            presentationChatChannel.trigger('client-component-comment-reaction', {
+                commentId,
+                reactions: result,
+                senderId: currentUser.id
+            });
+        }
+    }
+}
+
+/**
+ * Update the reactions display on a comment
+ */
+function updateCommentReactionsDisplay(commentEl, reactions) {
+    const currentUser = getCurrentUser();
+
+    // Remove existing reactions container
+    let reactionsContainer = commentEl.querySelector('.comment-reactions');
+    if (reactionsContainer) reactionsContainer.remove();
+
+    // Create new reactions container if there are any
+    if (reactions && Object.keys(reactions).length > 0) {
+        reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'comment-reactions';
+
+        for (const [emoji, users] of Object.entries(reactions)) {
+            if (users.length > 0) {
+                const hasReacted = users.includes(currentUser?.id);
+                const badge = document.createElement('button');
+                badge.className = `comment-reaction-badge ${hasReacted ? 'user-reacted' : ''}`;
+                badge.dataset.emoji = emoji;
+                badge.innerHTML = `${emoji} <span class="reaction-count">${users.length}</span>`;
+                reactionsContainer.appendChild(badge);
+            }
+        }
+
+        // Insert before actions
+        const actions = commentEl.querySelector('.comment-actions');
+        if (actions) {
+            commentEl.insertBefore(reactionsContainer, actions);
+        } else {
+            commentEl.appendChild(reactionsContainer);
+        }
+    }
+}
+
+/**
+ * Update the comment count badge for a component
+ */
+function updateCommentCount(componentId, count) {
+    const countEl = document.querySelector(`.comments-count[data-component-id="${componentId}"]`);
+    if (countEl) {
+        countEl.textContent = count;
+    }
+}
+
+/**
+ * Get time ago string from a date
+ */
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
+/**
+ * Load initial comment counts for all items (lightweight)
+ */
+async function loadAllCommentCounts() {
+    console.log('[ComponentComment DEBUG] loadAllCommentCounts called');
+    const sessionId = state.session.id;
+    console.log('[ComponentComment DEBUG] sessionId for counts:', sessionId);
+
+    if (!sessionId) {
+        console.log('[ComponentComment DEBUG] ❌ No sessionId - skipping comment counts');
+        return;
+    }
+
+    try {
+        console.log('[ComponentComment DEBUG] Calling api.fetchAllComponentComments...');
+        // Fetch all component comments for the session in one call
+        const allComments = await api.fetchAllComponentComments(sessionId);
+        console.log('[ComponentComment DEBUG] fetchAllComponentComments returned:', allComments?.length, 'comments');
+
+        // Group by componentId (from Item Link field) and count
+        const countsByComponent = new Map();
+        allComments.forEach(comment => {
+            // Item Link is an array of record IDs
+            const itemLinks = comment.fields['Item Link'];
+            if (itemLinks && itemLinks.length > 0) {
+                const componentId = itemLinks[0]; // Get the first linked item ID
+                const current = countsByComponent.get(componentId) || 0;
+                countsByComponent.set(componentId, current + 1);
+            }
+        });
+
+        console.log('[ComponentComment DEBUG] Comment counts by component:', Object.fromEntries(countsByComponent));
+
+        // Update all count badges
+        countsByComponent.forEach((count, componentId) => {
+            updateCommentCount(componentId, count);
+        });
+
+        console.log('[ComponentComment DEBUG] ✅ Updated badges for', countsByComponent.size, 'components');
+        log('Presentation', `Loaded comment counts for ${countsByComponent.size} components`);
+    } catch (error) {
+        console.log('[ComponentComment DEBUG] ❌ Error loading comment counts:', error);
+        log('Presentation', `Error loading comment counts: ${error.message}`);
+    }
+}
+
+// ============================================
+// END COMPONENT COMMENTS FEATURE
+// ============================================
+
 function handleKeyDown(e) {
     if (e.key === 'Escape') {
         updateUrl({ view: null });
@@ -2444,25 +3166,26 @@ function handleKeyDown(e) {
 
 export async function showPresentationView(listType, startRecordId = null) {
     log('Presentation', `Showing itinerary presentation`);
-    console.log('[Accordion DEBUG] showPresentationView called');
+    // console.log('[Accordion DEBUG] showPresentationView called');
 
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot show presentation view - DOM elements not available');
-        console.error('[Accordion DEBUG] ensureDOMElements failed');
+        // console.error('[Accordion DEBUG] ensureDOMElements failed');
         return;
     }
-    console.log('[Accordion DEBUG] ensureDOMElements succeeded');
+    // console.log('[Accordion DEBUG] ensureDOMElements succeeded');
 
     // Register sync callback to handle updates from other views
     registerSyncCallback('presentation', handlePlanSyncUpdate);
-    console.log('[Presentation DEBUG] Registered plan sync callback');
+    // console.log('[Presentation DEBUG] Registered plan sync callback');
 
     // Mark that catalog will need rendering when exiting presentation view
     // (since we skip catalog rendering while in presentation view)
     catalogNeedsRender = true;
 
-    // Clear image cache for fresh load
+    // Clear image cache and comments cache for fresh load
     itemImagesCache.clear();
+    componentCommentsCache.clear();
 
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
@@ -2484,6 +3207,9 @@ export async function showPresentationView(listType, startRecordId = null) {
     // Start the background animation
     startPresentationBackgroundAnimation();
 
+    // Load comment counts in background (non-blocking)
+    loadAllCommentCounts();
+
     // Scroll to specific item if provided
     if (startRecordId) {
         const targetItem = document.querySelector(`.itinerary-item[data-record-id="${startRecordId}"]`);
@@ -2502,7 +3228,7 @@ export function hidePresentationView() {
 
     // Unregister sync callback when closing presentation view
     unregisterSyncCallback('presentation');
-    console.log('[Presentation DEBUG] Unregistered plan sync callback');
+    // console.log('[Presentation DEBUG] Unregistered plan sync callback');
 
     // Stop the background animation
     stopPresentationBackgroundAnimation();
@@ -2528,13 +3254,13 @@ export function hidePresentationView() {
 }
 
 export function setupPresentationEventListeners() {
-    console.log('[Accordion DEBUG] setupPresentationEventListeners called');
+    // console.log('[Accordion DEBUG] setupPresentationEventListeners called');
     if (!ensureDOMElements()) {
         console.error('[Presentation] Cannot setup event listeners - DOM elements not available');
-        console.error('[Accordion DEBUG] ensureDOMElements failed in setupPresentationEventListeners');
+        // console.error('[Accordion DEBUG] ensureDOMElements failed in setupPresentationEventListeners');
         return;
     }
-    console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
+    // console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
     // Handle window resize for background canvas
     window.addEventListener('resize', () => {
@@ -2579,51 +3305,51 @@ export function setupPresentationEventListeners() {
 
     // Handle accordion header clicks
     const scrollContainer = modal.querySelector('.presentation-itinerary-scroll');
-    console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
+    // console.log('[Accordion DEBUG] setupPresentationEventListeners - scrollContainer:', scrollContainer);
 
     if (scrollContainer) {
         // Debug: Log all accordion headers found (both main and sub)
-        const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header, .sub-accordion-header');
-        console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
-        accordionHeaders.forEach((header, index) => {
-            console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
-        });
+        // const accordionHeaders = scrollContainer.querySelectorAll('.itinerary-accordion-header, .sub-accordion-header');
+        // console.log('[Accordion DEBUG] Found accordion headers:', accordionHeaders.length);
+        // accordionHeaders.forEach((header, index) => {
+        //     console.log(`[Accordion DEBUG] Header ${index}:`, header, 'data-section:', header.dataset.section);
+        // });
 
         scrollContainer.addEventListener('click', (e) => {
-            console.log('[Accordion DEBUG] Click event on scrollContainer');
-            console.log('[Accordion DEBUG] Click target:', e.target);
-            console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
-            console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
+            // console.log('[Accordion DEBUG] Click event on scrollContainer');
+            // console.log('[Accordion DEBUG] Click target:', e.target);
+            // console.log('[Accordion DEBUG] Target tagName:', e.target.tagName);
+            // console.log('[Accordion DEBUG] Target classList:', e.target.classList.toString());
 
             // Check for both main and sub accordion headers
             let accordionHeader = e.target.closest('.itinerary-accordion-header');
             if (!accordionHeader) {
                 accordionHeader = e.target.closest('.sub-accordion-header');
             }
-            console.log('[Accordion DEBUG] Closest accordion header:', accordionHeader);
+            // console.log('[Accordion DEBUG] Closest accordion header:', accordionHeader);
 
             if (!accordionHeader) {
-                console.log('[Accordion DEBUG] No accordion header found - ignoring click');
+                // console.log('[Accordion DEBUG] No accordion header found - ignoring click');
                 return;
             }
 
             // Don't trigger accordion on interactive elements inside
             if (e.target.closest('button') || e.target.closest('a') || e.target.closest('input')) {
-                console.log('[Accordion DEBUG] Clicked on button/link/input inside header - ignoring');
+                // console.log('[Accordion DEBUG] Clicked on button/link/input inside header - ignoring');
                 return;
             }
 
             const section = accordionHeader.dataset.section;
-            console.log('[Accordion DEBUG] Section from data-section attribute:', section);
+            // console.log('[Accordion DEBUG] Section from data-section attribute:', section);
 
             if (section) {
-                console.log('[Accordion DEBUG] Calling toggleAccordion for section:', section);
+                // console.log('[Accordion DEBUG] Calling toggleAccordion for section:', section);
                 toggleAccordion(section);
             } else {
-                console.warn('[Accordion DEBUG] No section data attribute found on header');
+                // console.warn('[Accordion DEBUG] No section data attribute found on header');
             }
         });
-        console.log('[Accordion DEBUG] Click listener added to scrollContainer');
+        // console.log('[Accordion DEBUG] Click listener added to scrollContainer');
     } else {
         console.error('[Accordion DEBUG] scrollContainer not found!');
     }
@@ -2645,6 +3371,10 @@ export function setupPresentationEventListeners() {
 
     // Handle suggestion button clicks (for empty state recommendations)
     itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
+
+    // Handle component comments interactions
+    itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
+    itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
 
     // Share button
     shareBtn.addEventListener('click', (e) => {

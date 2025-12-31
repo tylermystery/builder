@@ -194,13 +194,14 @@ function getDebugLogsForHistory() {
  */
 function renderHistoryItem(messagesList, item) {
     if (item.type === 'chat') {
-        const { sender, message, isSent, timestamp, senderId, messageId, reactions, isEdited, isDeleted, replyCount, parentMessageId } = item.data;
+        const { sender, message, isSent, timestamp, senderId, messageId, reactions, isEdited, isDeleted, replyCount, parentMessageId, componentInfo } = item.data;
         addMessageToUI(messagesList, sender, message, isSent, timestamp, false, messageId, senderId, {
             reactions: reactions || {},
             isEdited: isEdited || false,
             isDeleted: isDeleted || false,
             replyCount: replyCount || 0,
-            parentMessageId: parentMessageId || null
+            parentMessageId: parentMessageId || null,
+            componentInfo: componentInfo || null // Pass component info for @component tags
         });
     } else if (item.type === 'planEvent') {
         addEventToUI(messagesList, item.data);
@@ -412,22 +413,22 @@ function generateFunName() {
 function getSimpleUserIdentity() {
     // Always check authentication status first - user may have logged in since last call
     const authenticatedUser = state.session.user;
-    console.log('[ItemChat DEBUG] getSimpleUserIdentity called');
-    console.log('[ItemChat DEBUG] authenticatedUser:', JSON.stringify(authenticatedUser));
-    console.log('[ItemChat DEBUG] authenticatedUser.isAuthenticated:', authenticatedUser?.isAuthenticated);
+    // console.log('[ItemChat DEBUG] getSimpleUserIdentity called');
+    // console.log('[ItemChat DEBUG] authenticatedUser:', JSON.stringify(authenticatedUser));
+    // console.log('[ItemChat DEBUG] authenticatedUser.isAuthenticated:', authenticatedUser?.isAuthenticated);
     if (authenticatedUser && authenticatedUser.isAuthenticated) {
         // User is authenticated - always use their real ID and name
         // Update cached user if it doesn't match (e.g., user logged in after initial load)
         if (!currentUser || currentUser.id !== authenticatedUser.id) {
             currentUser = { id: authenticatedUser.id, name: authenticatedUser.name };
             log('Chat', `Updated currentUser to authenticated user: ${authenticatedUser.id}`);
-            console.log('[ItemChat DEBUG] Returning authenticated user:', JSON.stringify(currentUser));
+            // console.log('[ItemChat DEBUG] Returning authenticated user:', JSON.stringify(currentUser));
         }
         return currentUser;
     }
 
     // User is not authenticated - use localStorage-based identity
-    console.log('[ItemChat DEBUG] User not authenticated, using localStorage identity');
+    // console.log('[ItemChat DEBUG] User not authenticated, using localStorage identity');
     if (currentUser && !currentUser.id.startsWith('rec')) {
         // Already have an anonymous user cached
         return currentUser;
@@ -584,10 +585,10 @@ let replyingToMessage = null;
 let editingMessage = null;
 
 /**
- * Enhanced addMessageToUI with reactions, edit/delete, and thread support
+ * Enhanced addMessageToUI with reactions, edit/delete, thread support, and component tags
  */
 function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmin, messageId, senderId, options = {}) {
-    const { reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false } = options;
+    const { reactions = {}, isEdited = false, isDeleted = false, replyCount = 0, parentMessageId = null, isReply = false, componentInfo = null } = options;
 
     // Skip deleted messages
     if (isDeleted) {
@@ -599,8 +600,9 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     }
 
     const wrapper = document.createElement('div');
-    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}`;
+    wrapper.className = `message-wrapper ${isSent ? 'sent' : 'received'}${isReply ? ' is-reply' : ''}${componentInfo ? ' component-comment-msg' : ''}`;
     if (messageId) wrapper.dataset.messageId = messageId;
+    if (componentInfo) wrapper.dataset.componentId = componentInfo.id;
 
     const messageElement = document.createElement('div');
     const isFlagged = state.session.flaggedUsers.has(senderId);
@@ -609,6 +611,15 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
     messageElement.className = 'chat-message';
     if (isBanned) messageElement.classList.add('banned');
     if (isFlagged) messageElement.classList.add('flagged');
+
+    // Component tag (shown before sender for component comments)
+    if (componentInfo) {
+        const componentTag = document.createElement('div');
+        componentTag.className = 'component-tag';
+        componentTag.innerHTML = `<span class="component-tag-icon">📍</span><span class="component-tag-name">@${escapeHtml(componentInfo.name)}</span>`;
+        componentTag.title = `Comment on: ${componentInfo.name}`;
+        messageElement.appendChild(componentTag);
+    }
 
     // Sender name
     const senderElement = document.createElement('div');
@@ -1184,6 +1195,7 @@ export async function initializeSessionChat() {
 
             records.forEach(record => {
                 const { SenderID, SenderName, Content, Timestamp, EventType, Reactions, IsEdited, IsDeleted, ParentMessageID } = record.fields;
+                const itemLink = record.fields['Item Link']; // Array of linked item IDs (for component comments)
 
                 // Skip reply messages (they're shown in threads)
                 if (ParentMessageID) return;
@@ -1204,6 +1216,18 @@ export async function initializeSessionChat() {
                     if (Reactions) {
                         try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
                     }
+
+                    // Get component name if this is a component comment (has Item Link)
+                    let componentInfo = null;
+                    if (itemLink && itemLink.length > 0) {
+                        const componentId = itemLink[0];
+                        const componentRecord = state.records.all.find(r => r.id === componentId);
+                        componentInfo = {
+                            id: componentId,
+                            name: componentRecord?.fields?.Name || 'Unknown Item'
+                        };
+                    }
+
                     sessionHistoryItems.push({
                         type: 'chat',
                         timestamp: Timestamp || new Date().toISOString(),
@@ -1218,7 +1242,8 @@ export async function initializeSessionChat() {
                             isEdited: IsEdited || false,
                             isDeleted: IsDeleted || false,
                             replyCount: replyCountMap[record.id] || 0,
-                            parentMessageId: null
+                            parentMessageId: null,
+                            componentInfo // Include component info for @component tags
                         }
                     });
                     messageCount++;
@@ -1342,17 +1367,75 @@ export async function initializeSessionChat() {
             }
         }
     });
+
+    // Handle real-time component comments from other users
+    sessionChatChannel.bind('client-component-comment', (data) => {
+        if (data.senderId !== currentUser.id && data.comment) {
+            const componentId = data.componentId;
+            const componentRecord = state.records.all.find(r => r.id === componentId);
+            const componentInfo = {
+                id: componentId,
+                name: componentRecord?.fields?.Name || 'Unknown Item'
+            };
+
+            const timestamp = data.comment.fields?.Timestamp || new Date().toISOString();
+
+            // Add to session history items
+            sessionHistoryItems.push({
+                type: 'chat',
+                timestamp: timestamp,
+                data: {
+                    sender: data.comment.fields?.SenderName || 'Unknown',
+                    message: data.comment.fields?.Content || '',
+                    isSent: false,
+                    timestamp: timestamp,
+                    senderId: data.senderId,
+                    messageId: data.comment.id,
+                    reactions: {},
+                    isEdited: false,
+                    isDeleted: false,
+                    replyCount: 0,
+                    componentInfo
+                }
+            });
+
+            // Add to UI if chat filter is on
+            if (historyFilters.chat) {
+                const messagesList = document.getElementById('messages-list');
+                if (messagesList) {
+                    addMessageToUI(
+                        messagesList,
+                        data.comment.fields?.SenderName || 'Unknown',
+                        data.comment.fields?.Content || '',
+                        false,
+                        timestamp,
+                        false,
+                        data.comment.id,
+                        data.senderId,
+                        { componentInfo }
+                    );
+                }
+            }
+
+            showNewMessageNotification(data.comment.fields?.SenderName || 'Unknown', `@${componentInfo.name}: ${data.comment.fields?.Content || ''}`);
+            if (!isTabActive) {
+                document.title = 'New Comment! - ' + originalTitle;
+            }
+
+            log('Chat', `Received component comment from ${data.senderId} on ${componentId}`);
+        }
+    });
 }
 
 export async function sendMessage(message, recordId = null) {
     if (recordId) {
-        console.log('[ItemChat DEBUG] sendMessage START for item chat');
-        console.log('[ItemChat DEBUG] recordId:', recordId);
-        console.log('[ItemChat DEBUG] currentUser at send time:', JSON.stringify(currentUser));
+        // console.log('[ItemChat DEBUG] sendMessage START for item chat');
+        // console.log('[ItemChat DEBUG] recordId:', recordId);
+        // console.log('[ItemChat DEBUG] currentUser at send time:', JSON.stringify(currentUser));
         const channel = itemChatChannels.get(recordId);
-        console.log('[ItemChat DEBUG] channel exists:', !!channel);
+        // console.log('[ItemChat DEBUG] channel exists:', !!channel);
         if (!channel || !currentUser) {
-            console.log('[ItemChat DEBUG] sendMessage ABORTED: channel or currentUser missing');
+            // console.log('[ItemChat DEBUG] sendMessage ABORTED: channel or currentUser missing');
             return;
         }
         const timestamp = new Date().toISOString();
@@ -1381,7 +1464,7 @@ export async function sendMessage(message, recordId = null) {
             await api.postItemChatMessage(recordId, currentUser.id, currentUser.name, message);
         }
 
-        console.log('[ItemChat DEBUG] api.postItemChatMessage completed');
+        // console.log('[ItemChat DEBUG] api.postItemChatMessage completed');
         channel.trigger('client-new-message-item', {
             content: message,
             senderId: currentUser.id,
@@ -1466,10 +1549,10 @@ export async function sendMessage(message, recordId = null) {
 }
 
 export async function initializeItemChat(recordId) {
-    console.log('[ItemChat DEBUG] ========== initializeItemChat START ==========');
-    console.log('[ItemChat DEBUG] recordId:', recordId);
-    console.log('[ItemChat DEBUG] recordId type:', typeof recordId);
-    console.log('[ItemChat DEBUG] recordId starts with "rec":', recordId?.startsWith?.('rec'));
+    // console.log('[ItemChat DEBUG] ========== initializeItemChat START ==========');
+    // console.log('[ItemChat DEBUG] recordId:', recordId);
+    // console.log('[ItemChat DEBUG] recordId type:', typeof recordId);
+    // console.log('[ItemChat DEBUG] recordId starts with "rec":', recordId?.startsWith?.('rec'));
     log('Chat', `Initializing item chat for recordId: ${recordId}`);
 
     // Wait for Pusher library to be loaded
@@ -1490,10 +1573,10 @@ export async function initializeItemChat(recordId) {
     if (chatContainer) chatContainer.style.display = 'block';
 
     currentUser = getCurrentUser();
-    console.log('[ItemChat DEBUG] currentUser:', JSON.stringify(currentUser));
-    console.log('[ItemChat DEBUG] currentUser.id:', currentUser?.id);
-    console.log('[ItemChat DEBUG] currentUser.name:', currentUser?.name);
-    console.log('[ItemChat DEBUG] state.session.user:', JSON.stringify(state.session?.user));
+    // console.log('[ItemChat DEBUG] currentUser:', JSON.stringify(currentUser));
+    // console.log('[ItemChat DEBUG] currentUser.id:', currentUser?.id);
+    // console.log('[ItemChat DEBUG] currentUser.name:', currentUser?.name);
+    // console.log('[ItemChat DEBUG] state.session.user:', JSON.stringify(state.session?.user));
     const messagesList = document.getElementById('messages-list-item');
     const messageForm = document.getElementById('message-form-item');
     const messageInput = document.getElementById('message-input-item');
@@ -1511,10 +1594,10 @@ export async function initializeItemChat(recordId) {
     messagesList.innerHTML = '';
     itemChatChannels.forEach((channel) => channel.unsubscribe());
     itemChatChannels.clear();
-    console.log('[ItemChat DEBUG] About to call api.fetchItemChatMessages for recordId:', recordId);
+    // console.log('[ItemChat DEBUG] About to call api.fetchItemChatMessages for recordId:', recordId);
     const records = await api.fetchItemChatMessages(recordId);
-    console.log('[ItemChat DEBUG] api.fetchItemChatMessages returned records count:', records?.length);
-    console.log('[ItemChat DEBUG] api.fetchItemChatMessages records:', JSON.stringify(records, null, 2));
+    // console.log('[ItemChat DEBUG] api.fetchItemChatMessages returned records count:', records?.length);
+    // console.log('[ItemChat DEBUG] api.fetchItemChatMessages records:', JSON.stringify(records, null, 2));
     if (records.length === 0) {
         // Show empty state placeholder
         const emptyState = document.createElement('div');
@@ -1522,21 +1605,21 @@ export async function initializeItemChat(recordId) {
         emptyState.innerHTML = '<p>No messages yet. Start the conversation!</p>';
         messagesList.appendChild(emptyState);
     } else {
-        console.log('[ItemChat DEBUG] Processing', records.length, 'messages for display');
+        // console.log('[ItemChat DEBUG] Processing', records.length, 'messages for display');
         records.forEach((record, index) => {
             const { SenderID, SenderName, Content, Timestamp } = record.fields;
             const isSent = SenderID === currentUser.id;
-            console.log(`[ItemChat DEBUG] Message ${index + 1}:`, {
-                SenderID,
-                SenderName,
-                Content: Content?.substring(0, 50) + (Content?.length > 50 ? '...' : ''),
-                Timestamp,
-                isSent,
-                currentUserId: currentUser.id
-            });
+            // console.log(`[ItemChat DEBUG] Message ${index + 1}:`, {
+            //     SenderID,
+            //     SenderName,
+            //     Content: Content?.substring(0, 50) + (Content?.length > 50 ? '...' : ''),
+            //     Timestamp,
+            //     isSent,
+            //     currentUserId: currentUser.id
+            // });
             addMessageToUI(messagesList, SenderName, Content, isSent, Timestamp, false, null, SenderID);
         });
-        console.log('[ItemChat DEBUG] Finished rendering all messages to UI');
+        // console.log('[ItemChat DEBUG] Finished rendering all messages to UI');
     }
     const pusher = new Pusher('236f480714e5001590b5', {
         cluster: 'us3',
@@ -1569,12 +1652,12 @@ export async function initializeItemChat(recordId) {
         e.preventDefault();
         const message = newMessageInput.value;
         if (message.trim() === '') return;
-        console.log('[ItemChat DEBUG] Sending message for recordId:', recordId);
-        console.log('[ItemChat DEBUG] Message content:', message);
+        // console.log('[ItemChat DEBUG] Sending message for recordId:', recordId);
+        // console.log('[ItemChat DEBUG] Message content:', message);
         sendMessage(message, recordId);
         newMessageInput.value = '';
     });
-    console.log('[ItemChat DEBUG] ========== initializeItemChat END ==========');
+    // console.log('[ItemChat DEBUG] ========== initializeItemChat END ==========');
 }
 export async function banUser(userId) {
     if (!state.session.user.isOwner) {
