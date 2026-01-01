@@ -1672,6 +1672,8 @@ async function togglePresentationThreadView(messageId, wrapper) {
         if (Reactions) {
             try { parsedReactions = JSON.parse(Reactions); } catch (e) {}
         }
+        // Use createdTime from record level, fall back to fields.Timestamp
+        const replyTime = new Date(reply.createdTime || Timestamp || Date.now());
 
         const replyWrapper = document.createElement('div');
         replyWrapper.className = `reply-message ${isSent ? 'sent' : 'received'}`;
@@ -1683,7 +1685,7 @@ async function togglePresentationThreadView(messageId, wrapper) {
             replyWrapper.innerHTML = `
                 <span class="reply-sender">${isSent ? 'You' : escapeHtml(SenderName)}</span>
                 <span class="reply-content">${escapeHtml(Content)}${IsEdited ? ' <em class="edited-indicator">(edited)</em>' : ''}</span>
-                <span class="reply-time">${new Date(Timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                <span class="reply-time">${replyTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
             `;
         }
 
@@ -1782,7 +1784,10 @@ async function initializePresentationChat() {
                     };
                 }
 
-                addPresentationMessageToUI(SenderName, Content, isSent, Timestamp, SenderID, {
+                // Use createdTime from record level, fall back to fields.Timestamp
+                const messageTime = record.createdTime || Timestamp;
+
+                addPresentationMessageToUI(SenderName, Content, isSent, messageTime, SenderID, {
                     messageId: record.id,
                     reactions: parsedReactions,
                     isEdited: IsEdited || false,
@@ -2702,7 +2707,9 @@ function renderComponentComments(componentId, comments) {
         const isDeleted = fields.IsDeleted;
         const isEdited = fields.IsEdited;
         const reactions = fields.Reactions ? JSON.parse(fields.Reactions) : {};
-        const timestamp = new Date(fields.Timestamp);
+        // Use createdTime from Airtable record (at record level, not in fields)
+        // Fall back to fields.Timestamp or current time if neither exists
+        const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
         const timeAgo = getTimeAgo(timestamp);
 
         if (isDeleted) {

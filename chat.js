@@ -1197,6 +1197,9 @@ export async function initializeSessionChat() {
                 const { SenderID, SenderName, Content, Timestamp, EventType, Reactions, IsEdited, IsDeleted, ParentMessageID } = record.fields;
                 const itemLink = record.fields['Item Link']; // Array of linked item IDs (for component comments)
 
+                // Use createdTime from record level, fall back to fields.Timestamp
+                const recordTimestamp = record.createdTime || Timestamp || new Date().toISOString();
+
                 // Skip reply messages (they're shown in threads)
                 if (ParentMessageID) return;
 
@@ -1205,7 +1208,7 @@ export async function initializeSessionChat() {
                     // Store in sessionHistoryItems for filtering
                     sessionHistoryItems.push({
                         type: 'planEvent',
-                        timestamp: Timestamp || new Date().toISOString(),
+                        timestamp: recordTimestamp,
                         data: record
                     });
                     eventCount++;
@@ -1230,12 +1233,12 @@ export async function initializeSessionChat() {
 
                     sessionHistoryItems.push({
                         type: 'chat',
-                        timestamp: Timestamp || new Date().toISOString(),
+                        timestamp: recordTimestamp,
                         data: {
                             sender: SenderName,
                             message: Content,
                             isSent,
-                            timestamp: Timestamp,
+                            timestamp: recordTimestamp,
                             senderId: SenderID,
                             messageId: record.id,
                             reactions: parsedReactions,
@@ -1378,7 +1381,8 @@ export async function initializeSessionChat() {
                 name: componentRecord?.fields?.Name || 'Unknown Item'
             };
 
-            const timestamp = data.comment.fields?.Timestamp || new Date().toISOString();
+            // Use createdTime from record level, fall back to fields.Timestamp
+            const timestamp = data.comment.createdTime || data.comment.fields?.Timestamp || new Date().toISOString();
 
             // Add to session history items
             sessionHistoryItems.push({
@@ -1905,7 +1909,8 @@ export function refreshDebugLogs() {
  * @param {Object} record - The plan event record from the API
  */
 export function addPlanEventToHistory(record) {
-    const timestamp = record.fields?.Timestamp || new Date().toISOString();
+    // Use createdTime from record level, fall back to fields.Timestamp
+    const timestamp = record.createdTime || record.fields?.Timestamp || new Date().toISOString();
     sessionHistoryItems.push({
         type: 'planEvent',
         timestamp: timestamp,
