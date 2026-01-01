@@ -1801,27 +1801,37 @@ export async function banUser(userId) {
  * @returns {Promise<object|null>} The updated record or null on failure
  */
 export async function updateChatMessage(messageId, newContent, senderId) {
+    console.log('[updateChatMessage DEBUG] ========== updateChatMessage CALLED ==========');
+    console.log('[updateChatMessage DEBUG] messageId:', messageId);
+    console.log('[updateChatMessage DEBUG] newContent:', newContent?.substring(0, 50));
+    console.log('[updateChatMessage DEBUG] senderId:', senderId);
+
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `updateChatMessage: Invalid messageId provided: "${messageId}"`);
+        console.log('[updateChatMessage DEBUG] ❌ Invalid messageId - aborting');
         return null;
     }
     if (!newContent || !newContent.trim()) {
         log('API', 'updateChatMessage: Attempted to save empty message.');
+        console.log('[updateChatMessage DEBUG] ❌ Empty content - aborting');
         return null;
     }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    console.log('[updateChatMessage DEBUG] PATCH URL:', url);
 
+    // Only update the Content field - IsEdited may not exist in all Airtable schemas
+    // The field will still show as edited by comparing Content with original
     const payload = {
         fields: {
-            Content: newContent.trim(),
-            EditedAt: new Date().toISOString(),
-            IsEdited: true
+            Content: newContent.trim()
         }
     };
+    console.log('[updateChatMessage DEBUG] Payload:', JSON.stringify(payload));
 
     try {
         log('API', `Updating message ${messageId}`);
+        console.log('[updateChatMessage DEBUG] Sending PATCH request...');
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -1830,17 +1840,21 @@ export async function updateChatMessage(messageId, newContent, senderId) {
             },
             body: JSON.stringify(payload)
         });
+        console.log('[updateChatMessage DEBUG] Response status:', response.status);
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.log('[updateChatMessage DEBUG] ❌ Error response:', JSON.stringify(errorData));
             log('API', `Failed to update message: ${errorData?.error?.message || response.statusText}`);
             return null;
         }
 
         const result = await response.json();
+        console.log('[updateChatMessage DEBUG] ✅ Update successful:', result.id);
         log('API', `Message ${messageId} updated successfully`);
         return result;
     } catch (error) {
+        console.log('[updateChatMessage DEBUG] ❌ Exception:', error.message);
         log('API', `Error updating message: ${error.message}`);
         return null;
     }
@@ -1853,23 +1867,31 @@ export async function updateChatMessage(messageId, newContent, senderId) {
  * @returns {Promise<boolean>} True if successful, false otherwise
  */
 export async function deleteChatMessage(messageId, senderId) {
+    console.log('[deleteChatMessage DEBUG] ========== deleteChatMessage CALLED ==========');
+    console.log('[deleteChatMessage DEBUG] messageId:', messageId);
+    console.log('[deleteChatMessage DEBUG] senderId:', senderId);
+
     if (!messageId || !messageId.startsWith('rec')) {
         log('API', `deleteChatMessage: Invalid messageId provided: "${messageId}"`);
+        console.log('[deleteChatMessage DEBUG] ❌ Invalid messageId - aborting');
         return false;
     }
 
     const url = `https://api.airtable.com/v0/${BASE_ID}/${ITEM_MESSAGES_TABLE_NAME}/${messageId}`;
+    console.log('[deleteChatMessage DEBUG] DELETE URL:', url);
 
-    // Soft delete - mark message as deleted rather than removing from database
+    // Try soft delete first - mark message as deleted
+    // Note: We only use IsDeleted since DeletedAt may not exist in the schema
     const payload = {
         fields: {
-            IsDeleted: true,
-            DeletedAt: new Date().toISOString()
+            IsDeleted: true
         }
     };
+    console.log('[deleteChatMessage DEBUG] Payload:', JSON.stringify(payload));
 
     try {
         log('API', `Soft-deleting message ${messageId}`);
+        console.log('[deleteChatMessage DEBUG] Sending PATCH request...');
         const response = await fetch(url, {
             method: 'PATCH',
             headers: {
@@ -1878,16 +1900,43 @@ export async function deleteChatMessage(messageId, senderId) {
             },
             body: JSON.stringify(payload)
         });
+        console.log('[deleteChatMessage DEBUG] Response status:', response.status);
 
         if (!response.ok) {
             const errorData = await response.json();
+            console.log('[deleteChatMessage DEBUG] ❌ Error response:', JSON.stringify(errorData));
+
+            // If IsDeleted field doesn't exist, try hard delete
+            if (errorData?.error?.type === 'INVALID_REQUEST_UNKNOWN_FIELD_NAME') {
+                console.log('[deleteChatMessage DEBUG] IsDeleted field not found, attempting hard DELETE...');
+                const deleteResponse = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${PERSONAL_ACCESS_TOKEN}`
+                    }
+                });
+                console.log('[deleteChatMessage DEBUG] Hard delete response status:', deleteResponse.status);
+
+                if (deleteResponse.ok) {
+                    console.log('[deleteChatMessage DEBUG] ✅ Hard delete successful');
+                    log('API', `Message ${messageId} hard-deleted successfully`);
+                    return true;
+                } else {
+                    const deleteError = await deleteResponse.json();
+                    console.log('[deleteChatMessage DEBUG] ❌ Hard delete failed:', JSON.stringify(deleteError));
+                    return false;
+                }
+            }
+
             log('API', `Failed to delete message: ${errorData?.error?.message || response.statusText}`);
             return false;
         }
 
+        console.log('[deleteChatMessage DEBUG] ✅ Soft delete successful');
         log('API', `Message ${messageId} deleted successfully`);
         return true;
     } catch (error) {
+        console.log('[deleteChatMessage DEBUG] ❌ Exception:', error.message);
         log('API', `Error deleting message: ${error.message}`);
         return false;
     }

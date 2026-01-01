@@ -23,6 +23,9 @@ let presentationReplyingToMessage = null;
 // Track message being edited in presentation view
 let presentationEditingMessage = null;
 
+// Track component comment reply state (separate from chat reply)
+let componentCommentReplyingTo = null;
+
 // Track scroll position before scrolling to chat
 let savedScrollPosition = null;
 
@@ -2738,7 +2741,7 @@ function renderComponentComments(componentId, comments) {
         }
 
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
@@ -2747,6 +2750,7 @@ function renderComponentComments(componentId, comments) {
                 <div class="comment-content">${escapeHtml(fields.Content)}</div>
                 ${reactionsHTML}
                 <div class="comment-actions">
+                    <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
                     <button class="comment-action-btn" data-action="react" title="Add reaction">😊</button>
                     ${isOwn ? `
                         <button class="comment-action-btn" data-action="edit" title="Edit comment">✏️</button>
@@ -2772,7 +2776,7 @@ async function submitComponentComment(componentId) {
         return;
     }
 
-    const content = input.value.trim();
+    let content = input.value.trim();
     console.log('[ComponentComment DEBUG] Content:', content?.substring(0, 50) + (content?.length > 50 ? '...' : ''));
 
     if (!content) {
@@ -2789,6 +2793,14 @@ async function submitComponentComment(componentId) {
         console.log('[ComponentComment DEBUG] ❌ No session or user - aborting');
         log('Presentation', 'Cannot submit comment - no session or user');
         return;
+    }
+
+    // Check if this is a reply - prepend @mention if so
+    const isReply = componentCommentReplyingTo && componentCommentReplyingTo.componentId === componentId;
+    if (isReply) {
+        console.log('[ComponentComment DEBUG] This is a reply to:', componentCommentReplyingTo.senderName);
+        // Prepend @mention to the content for display
+        content = `@${componentCommentReplyingTo.senderName}: ${content}`;
     }
 
     // Disable input while submitting
@@ -2810,8 +2822,14 @@ async function submitComponentComment(componentId) {
         console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
 
         if (newComment) {
-            // Clear input
+            // Clear input and reply state
             input.value = '';
+            input.placeholder = 'Add a comment...';
+
+            // Clear reply state if this was a reply
+            if (isReply) {
+                cancelCommentReply(componentId);
+            }
 
             // Reload comments to show the new one in the component's comment section
             console.log('[ComponentComment DEBUG] Reloading comments...');
@@ -2870,13 +2888,20 @@ async function submitComponentComment(componentId) {
 }
 
 /**
- * Handle comment actions (edit, delete, react)
+ * Handle comment actions (edit, delete, react, reply)
  */
 async function handleCommentAction(action, commentId) {
+    console.log('[ComponentComment DEBUG] handleCommentAction called:', action, commentId);
     const currentUser = getCurrentUser();
-    if (!currentUser) return;
+    if (!currentUser) {
+        console.log('[ComponentComment DEBUG] ❌ No current user for action');
+        return;
+    }
 
     switch (action) {
+        case 'reply':
+            startCommentReply(commentId);
+            break;
         case 'edit':
             startCommentEdit(commentId);
             break;
@@ -2890,16 +2915,112 @@ async function handleCommentAction(action, commentId) {
 }
 
 /**
+ * Start replying to a comment
+ */
+function startCommentReply(commentId) {
+    console.log('[ComponentComment DEBUG] startCommentReply called for:', commentId);
+    const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+    if (!commentEl) {
+        console.log('[ComponentComment DEBUG] ❌ Comment element not found');
+        return;
+    }
+
+    const senderName = commentEl.dataset.senderName || 'Unknown';
+    const commentContent = commentEl.dataset.content || '';
+    const componentSection = commentEl.closest('.component-comments-section');
+    const componentId = componentSection?.dataset.componentId;
+
+    if (!componentId) {
+        console.log('[ComponentComment DEBUG] ❌ No componentId found');
+        return;
+    }
+
+    console.log('[ComponentComment DEBUG] Replying to:', { commentId, senderName, componentId, preview: commentContent.substring(0, 30) });
+
+    // Set the reply state
+    componentCommentReplyingTo = {
+        commentId,
+        senderName,
+        preview: commentContent,
+        componentId
+    };
+
+    // Find the comment input for this component
+    const inputContainer = document.querySelector(`.component-comment-form[data-component-id="${componentId}"]`) ||
+                          document.querySelector(`.component-comments-body[data-component-id="${componentId}"]`);
+    const input = document.querySelector(`.component-comment-input[data-component-id="${componentId}"]`);
+
+    if (!inputContainer || !input) {
+        console.log('[ComponentComment DEBUG] ❌ Input elements not found');
+        return;
+    }
+
+    // Remove existing reply indicator if any
+    const existingIndicator = inputContainer.querySelector('.comment-reply-indicator');
+    if (existingIndicator) existingIndicator.remove();
+
+    // Create and insert the reply indicator
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'comment-reply-indicator';
+    const truncatedPreview = commentContent.length > 40 ? commentContent.substring(0, 40) + '...' : commentContent;
+    replyIndicator.innerHTML = `
+        <span class="reply-indicator-text">↩ Replying to <strong>${escapeHtml(senderName)}</strong>: ${escapeHtml(truncatedPreview)}</span>
+        <button class="cancel-reply-btn" type="button" title="Cancel reply">✕</button>
+    `;
+
+    // Add cancel handler
+    replyIndicator.querySelector('.cancel-reply-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelCommentReply(componentId);
+    });
+
+    // Insert the indicator before the input
+    input.parentElement.insertBefore(replyIndicator, input);
+
+    // Update placeholder and focus
+    input.placeholder = `Reply to ${senderName}...`;
+    input.focus();
+
+    console.log('[ComponentComment DEBUG] ✅ Reply indicator added');
+}
+
+/**
+ * Cancel the current comment reply
+ */
+function cancelCommentReply(componentId) {
+    console.log('[ComponentComment DEBUG] cancelCommentReply called for:', componentId);
+    componentCommentReplyingTo = null;
+
+    // Remove reply indicator
+    const indicator = document.querySelector(`.component-comments-body[data-component-id="${componentId}"] .comment-reply-indicator`);
+    if (indicator) indicator.remove();
+
+    // Reset placeholder
+    const input = document.querySelector(`.component-comment-input[data-component-id="${componentId}"]`);
+    if (input) {
+        input.placeholder = 'Add a comment...';
+    }
+}
+
+/**
  * Start editing a comment
  */
 function startCommentEdit(commentId) {
+    console.log('[ComponentComment DEBUG] startCommentEdit called for:', commentId);
     const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
-    if (!commentEl) return;
+    if (!commentEl) {
+        console.log('[ComponentComment DEBUG] ❌ Comment element not found');
+        return;
+    }
 
     const contentEl = commentEl.querySelector('.comment-content');
-    if (!contentEl) return;
+    if (!contentEl) {
+        console.log('[ComponentComment DEBUG] ❌ Content element not found');
+        return;
+    }
 
     const currentContent = contentEl.textContent;
+    console.log('[ComponentComment DEBUG] Current content:', currentContent?.substring(0, 30));
 
     // Replace content with edit input
     contentEl.innerHTML = `
@@ -2919,9 +3040,12 @@ function startCommentEdit(commentId) {
 
     const saveEdit = async () => {
         const newContent = input.value.trim();
+        console.log('[ComponentComment DEBUG] Saving edit - new content:', newContent?.substring(0, 30));
         if (newContent && newContent !== currentContent) {
             const currentUser = getCurrentUser();
+            console.log('[ComponentComment DEBUG] Calling api.updateComponentComment...');
             const result = await api.updateComponentComment(commentId, newContent, currentUser.id);
+            console.log('[ComponentComment DEBUG] Update result:', result ? 'SUCCESS' : 'FAILED');
             if (result) {
                 contentEl.textContent = newContent;
 
@@ -2933,15 +3057,22 @@ function startCommentEdit(commentId) {
                     editedSpan.textContent = '(edited)';
                     header.appendChild(editedSpan);
                 }
+
+                // Also update the data attribute for future replies
+                commentEl.dataset.content = newContent;
+                console.log('[ComponentComment DEBUG] ✅ Edit saved successfully');
             } else {
+                console.log('[ComponentComment DEBUG] ❌ Edit failed - reverting');
                 contentEl.textContent = currentContent;
             }
         } else {
+            console.log('[ComponentComment DEBUG] No changes or empty - canceling');
             contentEl.textContent = currentContent;
         }
     };
 
     const cancelEdit = () => {
+        console.log('[ComponentComment DEBUG] Edit canceled');
         contentEl.textContent = currentContent;
     };
 
@@ -2957,16 +3088,23 @@ function startCommentEdit(commentId) {
  * Delete a comment
  */
 async function deleteComment(commentId) {
-    if (!confirm('Delete this comment?')) return;
+    console.log('[ComponentComment DEBUG] deleteComment called for:', commentId);
+    if (!confirm('Delete this comment?')) {
+        console.log('[ComponentComment DEBUG] Delete canceled by user');
+        return;
+    }
 
     const currentUser = getCurrentUser();
+    console.log('[ComponentComment DEBUG] Calling api.deleteComponentComment...');
     const result = await api.deleteComponentComment(commentId, currentUser.id);
+    console.log('[ComponentComment DEBUG] Delete result:', result ? 'SUCCESS' : 'FAILED');
 
     if (result) {
         const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
         if (commentEl) {
             commentEl.classList.add('deleted');
             commentEl.innerHTML = '<em class="deleted-comment-text">This comment was deleted</em>';
+            console.log('[ComponentComment DEBUG] ✅ Comment marked as deleted in UI');
         }
 
         // Update count
@@ -2977,8 +3115,11 @@ async function deleteComment(commentId) {
             if (countEl) {
                 const currentCount = parseInt(countEl.textContent) || 0;
                 countEl.textContent = Math.max(0, currentCount - 1);
+                console.log('[ComponentComment DEBUG] Updated count from', currentCount, 'to', Math.max(0, currentCount - 1));
             }
         }
+    } else {
+        console.log('[ComponentComment DEBUG] ❌ Delete failed - no UI changes made');
     }
 }
 
