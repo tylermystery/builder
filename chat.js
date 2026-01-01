@@ -621,10 +621,24 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
         messageElement.appendChild(componentTag);
     }
 
-    // Sender name
-    const senderElement = document.createElement('div');
+    // Create inline header with sender name and timestamp
+    const headerRow = document.createElement('div');
+    headerRow.className = 'message-header';
+
+    // Sender name (inline)
+    const senderElement = document.createElement('span');
     senderElement.className = 'sender';
     senderElement.innerText = isSent ? 'You' : sender;
+    headerRow.appendChild(senderElement);
+
+    // Timestamp (inline with sender)
+    const timestampElement = document.createElement('span');
+    timestampElement.className = 'timestamp';
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    headerRow.appendChild(timestampElement);
+
+    messageElement.appendChild(headerRow);
 
     // Message content container
     const contentElement = document.createElement('div');
@@ -639,8 +653,6 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
         contentElement.appendChild(editedIndicator);
     }
 
-    // Build message element
-    messageElement.appendChild(senderElement);
     messageElement.appendChild(contentElement);
 
     // --- Message Actions (hover menu) ---
@@ -765,14 +777,7 @@ function addMessageToUI(messagesList, sender, message, isSent, timestamp, isAdmi
         messageElement.appendChild(threadIndicator);
     }
 
-    // Timestamp
-    const timestampElement = document.createElement('div');
-    timestampElement.className = 'timestamp';
-    const date = timestamp ? new Date(timestamp) : new Date();
-    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
     wrapper.appendChild(messageElement);
-    wrapper.appendChild(timestampElement);
     messagesList.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
 
@@ -1279,7 +1284,7 @@ export async function initializeSessionChat() {
             requestNotificationPermissionIfNeeded();
             // Add to session history items
             const timestamp = data.timestamp || new Date().toISOString();
-            sessionHistoryItems.push({
+            const messageData = {
                 type: 'chat',
                 timestamp: timestamp,
                 data: {
@@ -1294,16 +1299,18 @@ export async function initializeSessionChat() {
                     isDeleted: false,
                     replyCount: 0
                 }
-            });
-            // Re-render to include the new message (only if chat filter is on)
+            };
+            sessionHistoryItems.push(messageData);
+            // Append to UI directly (without re-rendering entire list to avoid duplicates)
             if (historyFilters.chat) {
                 const messagesList = document.getElementById('messages-list');
-                addMessageToUI(messagesList, data.senderName, data.content, false, data.timestamp, false, data.messageId, data.senderId);
+                if (messagesList) {
+                    renderHistoryItem(messagesList, messageData);
+                }
             }
             showNewMessageNotification(data.senderName, data.content);
             if (!isTabActive) {
                 document.title = 'New Message! - ' + originalTitle;
-
             }
         }
     });
@@ -1385,7 +1392,7 @@ export async function initializeSessionChat() {
             const timestamp = data.comment.createdTime || data.comment.fields?.Timestamp || new Date().toISOString();
 
             // Add to session history items
-            sessionHistoryItems.push({
+            const commentData = {
                 type: 'chat',
                 timestamp: timestamp,
                 data: {
@@ -1401,23 +1408,14 @@ export async function initializeSessionChat() {
                     replyCount: 0,
                     componentInfo
                 }
-            });
+            };
+            sessionHistoryItems.push(commentData);
 
-            // Add to UI if chat filter is on
+            // Append to UI directly (without re-rendering entire list to avoid duplicates)
             if (historyFilters.chat) {
                 const messagesList = document.getElementById('messages-list');
                 if (messagesList) {
-                    addMessageToUI(
-                        messagesList,
-                        data.comment.fields?.SenderName || 'Unknown',
-                        data.comment.fields?.Content || '',
-                        false,
-                        timestamp,
-                        false,
-                        data.comment.id,
-                        data.senderId,
-                        { componentInfo }
-                    );
+                    renderHistoryItem(messagesList, commentData);
                 }
             }
 
@@ -1518,7 +1516,7 @@ export async function sendMessage(message, recordId = null) {
         } else {
             // Regular message (not a reply)
             // Add to session history items
-            sessionHistoryItems.push({
+            const messageData = {
                 type: 'chat',
                 timestamp: timestamp,
                 data: {
@@ -1533,12 +1531,15 @@ export async function sendMessage(message, recordId = null) {
                     isDeleted: false,
                     replyCount: 0
                 }
-            });
+            };
+            sessionHistoryItems.push(messageData);
 
-            // Only add to UI if chat filter is on
+            // Append to UI directly (without re-rendering entire list to avoid duplicates)
             if (historyFilters.chat) {
                 const messagesList = document.getElementById('messages-list');
-                addMessageToUI(messagesList, currentUser.name, message, true, timestamp, false, null, currentUser.id);
+                if (messagesList) {
+                    renderHistoryItem(messagesList, messageData);
+                }
             }
 
             await api.postChatMessage(sessionId, currentUser.id, currentUser.name, message);

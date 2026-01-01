@@ -1266,11 +1266,24 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
         messageElement.appendChild(componentTag);
     }
 
-    // Sender name
-    const senderElement = document.createElement('div');
+    // Create inline header with sender name and timestamp
+    const headerRow = document.createElement('div');
+    headerRow.className = 'message-header';
+
+    // Sender name (inline)
+    const senderElement = document.createElement('span');
     senderElement.className = 'message-author';
     senderElement.innerText = isSent ? 'You' : sender;
-    messageElement.appendChild(senderElement);
+    headerRow.appendChild(senderElement);
+
+    // Timestamp (inline with sender)
+    const timestampElement = document.createElement('span');
+    timestampElement.className = 'timestamp';
+    const date = timestamp ? new Date(timestamp) : new Date();
+    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    headerRow.appendChild(timestampElement);
+
+    messageElement.appendChild(headerRow);
 
     // Message content container
     const contentElement = document.createElement('div');
@@ -1407,14 +1420,7 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
         messageElement.appendChild(threadIndicator);
     }
 
-    // Timestamp
-    const timestampElement = document.createElement('div');
-    timestampElement.className = 'timestamp';
-    const date = timestamp ? new Date(timestamp) : new Date();
-    timestampElement.innerText = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
     wrapper.appendChild(messageElement);
-    wrapper.appendChild(timestampElement);
     chatMessagesEl.appendChild(wrapper);
     wrapper.scrollIntoView({ behavior: 'smooth' });
 
