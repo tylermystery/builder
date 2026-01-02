@@ -9,7 +9,6 @@ import { getDayStatus, getCombinedPlanStatus, AVAILABILITY_STATUS, checkAvailabi
 import { updateAllCardAvailabilityIcons } from './events.js';
 import * as api from './api.js';
 import { showPresentationView, hidePresentationView, setupPresentationEventListeners } from './components/presentation.js';
-import { initializeItemChat } from './chat.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { shouldUseNetlifyImageCDN, optimizeImageUrl } from './utils/imageOptimizer.js';
 
@@ -22,7 +21,6 @@ export * from './utils.js';
 // --- THIS LINE IS MODIFIED (renderItineraryHeader and renderItinerary removed) ---
 export { setupItineraryEventListeners, showItineraryModal, hideItineraryModal, checkAvailability };
 export { showPresentationView, hidePresentationView, setupPresentationEventListeners };
-export { initializeItemChat };
 export { updateFooter, initializeFooter } from './components/footer.js';
 // Phase 3a: Task Manager exports
 export { initTaskManager, getCurrentProjectId, getCurrentTasks } from './components/taskManager.js';

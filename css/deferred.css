@@ -2198,18 +2198,6 @@
     border-left: 3px solid #6366f1;
     padding-left: 8px;
 }
-#modal-chat-container {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-}
-
-#modal-chat-container h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
 
 .messages-list {
   display: flex;
@@ -2222,39 +2210,6 @@
   border-radius: 8px;
   background-color: #f8f9fa;
   flex-grow: 1;
-}
-
-.item-chat-empty-state {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 20px 10px;
-}
-
-.item-chat-empty-state p {
-  margin: 0;
-}
-
-#message-form-item {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-#message-input-item {
-  flex-grow: 1;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  padding: 10px;
-}
-
-#message-form-item button {
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 10px 15px;
-  cursor: pointer;
 }
 
 .message-wrapper .moderation-actions {

@@ -7,7 +7,6 @@ import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
-import { initializeItemChat } from '../chat.js';
 import { showReceiptModal } from './receipt.js';
 
 /**
@@ -355,7 +354,6 @@ let currentProcessingFee = 0; // To store the current fee
 
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
-let currentItemChatRecordId = null;
 
 // Quick Pay Modal Functions
 const quickPayModalOverlay = document.getElementById('quick-pay-modal-overlay');
@@ -1501,7 +1499,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
         linkedSessionId = record.fields.LinkedSession[0];
         linkedSession = await api.fetchSessionById(linkedSessionId);
         log('Modal', `Item linked to session ${linkedSessionId}, using session chat context`);
-        currentItemChatRecordId = linkedSessionId;
     } else {
         // FALLBACK: For Events that were published before LinkedSession was added,
         // try to find the session by searching for which session has this event in its LinkedItem field
@@ -1509,22 +1506,16 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
             linkedSession = await api.fetchSessionByLinkedItem(record.id);
             if (linkedSession) {
                 linkedSessionId = linkedSession.id;
-                currentItemChatRecordId = linkedSessionId;
             } else {
                 // NEW: Check if this event item is contained as a component in another plan
                 // This handles the case where an event item was added to a plan via "Add to Plan"
                 linkedSession = await api.fetchSessionContainingItem(record.id, state.ui.activeShopId);
                 if (linkedSession) {
                     linkedSessionId = linkedSession.id;
-                    currentItemChatRecordId = linkedSessionId;
                     itemIsContainedInSession = true; // This item is a component, not the parent event
                     log('Modal', `Event item found as component in session ${linkedSessionId}`);
-                } else {
-                    currentItemChatRecordId = record.id;
                 }
             }
-        } else {
-            currentItemChatRecordId = record.id;
         }
     }
 
@@ -3228,48 +3219,6 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
     modalOverlay.classList.add('active');
     modalOverlay.style.display = 'flex';
     document.body.classList.add('modal-open');
-    setTimeout(() => {
-        const chatContainer = document.getElementById('modal-chat-container');
-        const isChatEnabledOnItem = record.fields['Chat Enabled'] || false;
-        const isEvent = record.fields['Item Type'] === 'Event';
-        const userRsvped = isEvent && (record.fields.RSVPs || []).includes(state.session.user.id);
-
-        console.log('[ItemChat Modal DEBUG] ========== Modal Chat Init ==========');
-        console.log('[ItemChat Modal DEBUG] record.id:', record.id);
-        console.log('[ItemChat Modal DEBUG] isAuthenticated:', state.session.user.isAuthenticated);
-        console.log('[ItemChat Modal DEBUG] isChatEnabledOnItem:', isChatEnabledOnItem);
-        console.log('[ItemChat Modal DEBUG] isEvent:', isEvent);
-        console.log('[ItemChat Modal DEBUG] userRsvped:', userRsvped);
-        console.log('[ItemChat Modal DEBUG] chatContainerExists:', !!chatContainer);
-        console.log('[ItemChat Modal DEBUG] Full user object:', JSON.stringify(state.session.user));
-        log('Modal Chat Init', {
-            isAuthenticated: state.session.user.isAuthenticated,
-            isChatEnabledOnItem: isChatEnabledOnItem,
-            isEvent,
-            userRsvped,
-            chatContainerExists: !!chatContainer,
-            user: state.session.user
-        });
-        // Show item chat to all authenticated users for persistent item-level discussions
-        // Chat is visible when: user is logged in AND chat container exists
-        // (Previously required Chat Enabled on item or user RSVP)
-        if (state.session.user.isAuthenticated && chatContainer) {
-            console.log('[ItemChat Modal DEBUG] Condition MET - initializing item chat');
-            log('Modal', 'User authenticated. Initializing item chat.');
-            chatContainer.style.display = 'flex';
-            initializeItemChat(record.id);
-        } else {
-            console.log('[ItemChat Modal DEBUG] Condition NOT MET - hiding chat');
-            console.log('[ItemChat Modal DEBUG] Reason: isAuthenticated=' + state.session.user.isAuthenticated + ', chatContainerExists=' + !!chatContainer);
-            log('Modal', 'Hiding chat. Reason:', {
-                isAuthenticated: state.session.user.isAuthenticated,
-                chatContainerExists: !!chatContainer
-            });
-            if (chatContainer) {
-                chatContainer.style.display = 'none';
-            }
-        }
-    }, 0);
 
     // Reset the rendering guard after modal is fully displayed
     isModalRendering = false;
@@ -3286,10 +3235,6 @@ export function hideDetailModal() {
     }
     modalOverlay.removeEventListener('click', handleOverlayClick);
     document.removeEventListener('keydown', handleEscapeKey);
-    if (currentItemChatRecordId) {
-        log('Chat', `Closing item chat for recordId: ${currentItemChatRecordId}`);
-        currentItemChatRecordId = null;
-    }
 
     // --- SEO: Reset all SEO meta tags and schema markup ---
     resetSeoMetadata();
