@@ -3894,6 +3894,32 @@ body.modal-open {
     width: 100%;
 }
 
+/* Collaborator remove button (for authenticated users removing unauthenticated collaborators) */
+.collaborator-remove-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.collaborator-remove-btn:hover {
+    background-color: #fee;
+    color: #dc3545;
+}
+
+/* Visual indicator for unauthenticated collaborators */
+.collaborator-item.unauthenticated .collaborator-avatar {
+    background: linear-gradient(135deg, #adb5bd, #6c757d);
+}
+
 .no-collaborators {
     color: #6c757d;
     font-style: italic;

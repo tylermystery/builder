@@ -496,21 +496,75 @@ function showCollaboratorsModal() {
     if (!collaboratorsModal || !collaboratorsModalList) return;
 
     const userProfiles = state.session.userProfiles;
+    const currentUserIsAuthenticated = state.session.user.isAuthenticated;
 
     let html = '';
     userProfiles.forEach((name, odId) => {
         const isCurrentUser = state.session.user.id === odId;
         const badge = isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
+        // Unauthenticated collaborators don't have IDs starting with 'rec' (Airtable record IDs)
+        const isUnauthenticatedCollaborator = !odId.startsWith('rec');
+        // Only show remove button if current user is authenticated and the collaborator is unauthenticated
+        const showRemoveBtn = currentUserIsAuthenticated && isUnauthenticatedCollaborator && !isCurrentUser;
+        const removeBtn = showRemoveBtn
+            ? `<button class="collaborator-remove-btn" data-collaborator-id="${odId}" title="Remove this collaborator">&#10005;</button>`
+            : '';
         html += `
-            <div class="collaborator-item">
+            <div class="collaborator-item${isUnauthenticatedCollaborator ? ' unauthenticated' : ''}">
                 <span class="collaborator-avatar">${name.charAt(0).toUpperCase()}</span>
                 <span class="collaborator-name">${name}${badge}</span>
+                ${removeBtn}
             </div>
         `;
     });
 
     collaboratorsModalList.innerHTML = html;
+
+    // Add event listeners for remove buttons
+    collaboratorsModalList.querySelectorAll('.collaborator-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const collaboratorId = btn.dataset.collaboratorId;
+            await removeUnauthenticatedCollaborator(collaboratorId);
+        });
+    });
+
     collaboratorsModal.classList.add('active');
+}
+
+/**
+ * Remove an unauthenticated collaborator from the plan
+ * @param {string} collaboratorId - The collaborator ID to remove
+ */
+async function removeUnauthenticatedCollaborator(collaboratorId) {
+    if (!collaboratorId) return;
+
+    // Safety check - don't allow removing authenticated users (with 'rec' IDs)
+    if (collaboratorId.startsWith('rec')) {
+        console.warn('Cannot remove authenticated collaborators via this function');
+        return;
+    }
+
+    const collaboratorName = state.session.userProfiles.get(collaboratorId) || 'Unknown';
+
+    // Confirm removal
+    if (!confirm(`Remove "${collaboratorName}" from this plan? Their reactions will remain but they won't appear in the team list.`)) {
+        return;
+    }
+
+    // Remove from userProfiles
+    state.session.userProfiles.delete(collaboratorId);
+
+    // Trigger save to persist the change
+    await triggerSave();
+
+    // Refresh the modal to reflect the change
+    showCollaboratorsModal();
+
+    // Also refresh the main collaborators list
+    renderCollaborators();
+
+    log('Presentation', `Removed unauthenticated collaborator: ${collaboratorName} (${collaboratorId})`);
 }
 
 // Hide the expanded collaborators modal
