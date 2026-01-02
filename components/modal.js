@@ -296,54 +296,6 @@ function resetSchema() {
     }
 }
 
-/**
- * [V3.7] Generates the "Intelligent Blurb" by calling the central recommendation engine.
- * @param {object} record - The item record being displayed.
- * @returns {string | null} The HTML string for the blurb, or null.
- */
-function generateRecommendationBlurb(record) {
-    // Get the current sort value from the DOM
-    const sortBy = document.getElementById('sort-by')?.value || 'recommended';
-    
-    // 1. Get the current goal bucket, passing the sortBy value
-    const goalBucket = buildGoalBucket(sortBy); // This import already exists
-    
-    if (goalBucket.length === 0) {
-        // "Tip" blurb
-        return "<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #5a6268;'>Tip:</strong> Add goals to your 'Goals/Notes' or search to get personalized recommendations.";
-    }
-
-    // 2. Call the ONE, TRUE scoring function from availability.js
-    const score = calculateRecommendationScore(record, goalBucket);
-
-    // 3. Check if the item scored well
-    if (score > 0) {
-        // Create a simple, robust blurb
-        let goalString = "goals"; // Default
-        
-        // Filter out pillar names (like "Food & Drink") from the blurb for cleaner text
-        const displayGoals = goalBucket.filter(g => 
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Activity"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Food & Drink"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Venues"].includes(g.toLowerCase()) &&
-            !ATTRIBUTE_TO_KEYWORDS_MAP["Pillars.Extras"].includes(g.toLowerCase())
-        );
-
-        if (displayGoals.length > 2) {
-            goalString = `'${displayGoals.slice(0, -1).join("', '")}', and '${displayGoals.slice(-1)}'`;
-        } else if (displayGoals.length > 0) {
-            goalString = `'${displayGoals.join("' and '")}'`;
-        }
-
-        // --- THIS IS THE CHANGE ---\
-        // Adds the score directly into the recommendation blurb
-        return `<span class='beta-tag-subtle' style='float: right; margin-left: 5px;'>Beta</span><strong style='color: #0056b3;'>Recommended for you (Score: ${score.toFixed(0)})</strong> This item is a good match for your ${goalString} goals.`;
-        // --- END THE CHANGE ---\
-    }
-
-    return null; // No match
-}
-
 let stripe;
 let elements; // To hold the Stripe elements instance
 let paymentElement; // To hold the payment element
@@ -934,17 +886,12 @@ function resetModalState() {
         modalItemNote: document.getElementById('modal-item-note'),
         modalCalendarContainer: document.getElementById('modal-calendar-container'),
         modalBreadcrumbs: document.getElementById('modal-breadcrumbs'),
-        modalAdditionalDetails: document.getElementById('modal-additional-details'),
-        modalRecommendationBlurb: document.getElementById('modal-recommendation-blurb')
+        modalAdditionalDetails: document.getElementById('modal-additional-details')
     };
     for (const key in elements) {
         if (elements[key]) {
             if (key === 'modalItemNote') elements[key].value = '';
             else if (key === 'modalMainImage') elements[key].style.backgroundImage = '';
-            else if (key === 'modalRecommendationBlurb') {
-                elements[key].innerHTML = '';
-                elements[key].style.display = 'none';
-            }
             else elements[key].innerHTML = '';
         }
     }
@@ -1481,7 +1428,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
     const modalBreadcrumbs = document.getElementById('modal-breadcrumbs');
     const modalAdditionalDetails = document.getElementById('modal-additional-details');
     const addToPlanBtn = document.getElementById('modal-add-to-plan-btn');
-    const modalRecBlurb = document.getElementById('modal-recommendation-blurb');
 
     const closeBtn = document.getElementById('modal-close-btn');
     closeBtn.onclick = closeDetailModal;
@@ -2011,16 +1957,6 @@ export async function showDetailModal(record, startPhotoIndex = 0) {
                 modalItemDescription.parentElement.insertBefore(editPlanSection, modalItemDescription);
             }
         }
-    }
-
-    try {
-        const blurbHtml = generateRecommendationBlurb(record);
-        if (blurbHtml && modalRecBlurb) {
-            modalRecBlurb.innerHTML = blurbHtml;
-            modalRecBlurb.style.display = 'block';
-        }
-    } catch (e) {
-        console.warn('Failed to generate recommendation blurb:', e);
     }
 
     if (modalAdditionalDetails) {
