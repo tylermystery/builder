@@ -546,10 +546,10 @@ function getItemReactionCount(recordId) {
 
 /**
  * Get a summary emoji that represents the overall sentiment/activity for an item
- * based on reactions and comments. Returns the most frequent emoji if there are reactions,
- * or a sentiment-based emoji summary.
+ * based on the average score of all reactions. Returns the emoji whose score is
+ * closest to the calculated average score from all collaborators' reactions.
  * @param {string} recordId - The item record ID
- * @returns {string} A single emoji summarizing the reactions, or empty string if none
+ * @returns {string} A single emoji closest to the average reaction score, or empty string if none
  */
 function getItemSummaryEmoji(recordId) {
     const reactions = state.session.reactions.get(recordId);
@@ -557,35 +557,33 @@ function getItemSummaryEmoji(recordId) {
         return '';
     }
 
-    // Count emoji occurrences
-    const emojiCounts = new Map();
+    // Calculate the average score from all reactions
+    let totalScore = 0;
+    let reactionCount = 0;
     reactions.forEach((emoji) => {
-        emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + 1);
+        totalScore += getReactionScore(emoji);
+        reactionCount++;
     });
 
-    // Find the most frequent emoji
-    let maxCount = 0;
-    let dominantEmoji = '';
-    emojiCounts.forEach((count, emoji) => {
-        if (count > maxCount) {
-            maxCount = count;
-            dominantEmoji = emoji;
+    if (reactionCount === 0) {
+        return '';
+    }
+
+    const averageScore = totalScore / reactionCount;
+
+    // Find the emoji with the score closest to the average
+    let closestEmoji = '';
+    let closestDifference = Infinity;
+
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const difference = Math.abs(score - averageScore);
+        if (difference < closestDifference) {
+            closestDifference = difference;
+            closestEmoji = emoji;
         }
     });
 
-    // If there are multiple reactions with different emojis, show the dominant one
-    // If there's only one reaction, show that emoji
-    if (dominantEmoji) {
-        return dominantEmoji;
-    }
-
-    // Fallback: determine sentiment from score
-    const score = getItemReactionScore(recordId);
-    if (score > 5) return '🔥';
-    if (score > 2) return '👍';
-    if (score < -5) return '😕';
-    if (score < -2) return '👎';
-    return '💬';
+    return closestEmoji || '💬';
 }
 
 /**
