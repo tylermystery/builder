@@ -152,16 +152,7 @@ function renderFilteredHistory() {
         visibleCount++;
     });
 
-    // Show empty state if no items visible
-    if (visibleCount === 0) {
-        const emptyState = document.createElement('div');
-        emptyState.className = 'history-empty-state';
-        emptyState.innerHTML = `
-            <p>No history items to display.</p>
-            <p class="empty-hint">Toggle the filters above to show chat messages, plan events, or debug logs.</p>
-        `;
-        messagesList.appendChild(emptyState);
-    }
+    // Empty state removed - chat window starts clean without placeholder text
 
     // Scroll to bottom
     if (messagesList.lastElementChild) {
