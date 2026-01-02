@@ -527,6 +527,20 @@ export async function loadSessionFromAirtable(sessionId) {
                 state.session.itemPositions = new Map(Object.entries(savedState.itemPositions || {}));
                 log('API', `Parsed session data: ${state.cart.items.size} ideas, ${state.cart.lockedItems.size} locked items, ${state.eventDetails.combined.size} details.`);
 
+                // Restore AI-generated records from saved session data
+                // These are items that were created via AI parsing and don't exist in Airtable
+                if (savedState.aiRecords && Object.keys(savedState.aiRecords).length > 0) {
+                    const aiRecordsToRestore = Object.values(savedState.aiRecords);
+                    for (const aiRecord of aiRecordsToRestore) {
+                        // Only add if not already in state.records.all
+                        if (!state.records.all.some(r => r.id === aiRecord.id)) {
+                            state.records.all.push(aiRecord);
+                        }
+                    }
+                    log('API', `Restored ${aiRecordsToRestore.length} AI-generated items from session data`);
+                    console.log(`[SESSION-LOAD] Restored ${aiRecordsToRestore.length} AI-generated items`);
+                }
+
                 // Fetch ghost items (archived/deleted items in the plan)
                 const allItemIds = [
                     ...Array.from(state.cart.lockedItems.keys()),
@@ -643,13 +657,36 @@ export async function saveSessionToAirtable() {
         reactionsForSaving[recordId] = Object.fromEntries(userReactionsMap);
     }
 
+    // Collect AI-generated item records that are in the cart (ideas or locked)
+    // These need to be persisted since they don't exist in Airtable
+    const allCartItemIds = [
+        ...Array.from(state.cart.items.keys()),
+        ...Array.from(state.cart.lockedItems.keys())
+    ];
+    const aiRecordsToSave = {};
+    for (const itemId of allCartItemIds) {
+        // AI-generated items have IDs like 'ai-child-*', 'ai-search-*', or 'ai-presentation-*'
+        if (itemId.startsWith('ai-')) {
+            const aiRecord = state.records.all.find(r => r.id === itemId);
+            if (aiRecord) {
+                aiRecordsToSave[itemId] = {
+                    id: aiRecord.id,
+                    fields: aiRecord.fields,
+                    isAI: true
+                };
+            }
+        }
+    }
+
     const sessionData = {
         ideasItems: Object.fromEntries(state.cart.items),
         lockedInItems: Object.fromEntries(state.cart.lockedItems),
         itemReactions: reactionsForSaving,
         userProfiles: Object.fromEntries(state.session.userProfiles),
         eventDetails: Object.fromEntries(state.eventDetails.combined),
-        itemPositions: Object.fromEntries(state.session.itemPositions)
+        itemPositions: Object.fromEntries(state.session.itemPositions),
+        // Store full AI record data for persistence across refreshes
+        aiRecords: aiRecordsToSave
     };
 
     const sessionName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || `New Plan - ${new Date().toLocaleDateString()}`;
@@ -795,6 +832,23 @@ export async function addItemToSession(sessionId, itemId, itemInfo = {}) {
             selections: itemInfo.selections || {},
             note: itemInfo.note || ''
         };
+
+        // If this is an AI-generated item, also save its full record data
+        // so it persists in the target session
+        if (itemId.startsWith('ai-')) {
+            const aiRecord = state.records.all.find(r => r.id === itemId);
+            if (aiRecord) {
+                if (!sessionData.aiRecords) {
+                    sessionData.aiRecords = {};
+                }
+                sessionData.aiRecords[itemId] = {
+                    id: aiRecord.id,
+                    fields: aiRecord.fields,
+                    isAI: true
+                };
+                log('API', `Also saving AI record data for ${itemId} to session ${sessionId}`);
+            }
+        }
 
         // Update the session in Airtable
         const updateUrl = `https://api.airtable.com/v0/${BASE_ID}/${SESSIONS_TABLE_NAME}/${sessionId}`;
