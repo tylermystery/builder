@@ -1151,6 +1151,38 @@ body.modal-open {
     flex-shrink: 0;
 }
 
+/* Current session styling in WTF Plans list */
+.wtf-plans-item.current-session {
+    background-color: #e8f4fd;
+    border-left: 3px solid #007bff;
+}
+
+.wtf-plans-item.current-session:hover {
+    background-color: #dceefb;
+}
+
+.wtf-plans-item.current-session .wtf-plans-item-icon {
+    background-color: #007bff;
+    color: white;
+}
+
+.wtf-plans-current-badge {
+    display: inline-block;
+    background-color: #007bff;
+    color: white;
+    font-size: 0.65em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.wtf-plans-item.current-session .wtf-plans-item-time {
+    color: #007bff;
+    font-weight: 500;
+}
+
 /* WTF Plans panel overlay */
 .wtf-plans-panel-overlay {
     position: fixed;

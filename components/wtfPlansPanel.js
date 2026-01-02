@@ -7,6 +7,8 @@ import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { getTempLikes } from '../utils.js';
 import { showDetailModal } from './modal.js';
+import { CONSTANTS } from '../config.js';
+import { registerSyncCallback, getPlanSummary } from '../utils/planStateSync.js';
 
 // Filter types for the WTF Plans panel
 export const WTF_PLAN_TYPES = {
@@ -26,6 +28,47 @@ let wtfPlansData = {
 };
 let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
+
+/**
+ * Build a plan item from the current live session state
+ * @returns {Object|null} Plan item representing current session, or null if no session active
+ */
+function buildCurrentSessionItem() {
+    const currentSessionId = state.session.id;
+    if (!currentSessionId) return null;
+
+    // Get live plan summary from state
+    const summary = getPlanSummary();
+
+    // Calculate total items in the locked plan
+    const lockedItemsCount = state.cart.lockedItems.size;
+
+    // Get event details from live state
+    const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+    const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+
+    return {
+        type: 'plan',
+        id: currentSessionId,
+        name: eventName || 'Current Plan',
+        date: eventDate,
+        createdTime: new Date().toISOString(), // Use now to sort to top
+        itemCount: lockedItemsCount,
+        totalCost: summary.subtotal || 0,
+        icon: '📋',
+        isCurrentSession: true, // Flag to identify this as the live session
+        data: {
+            id: currentSessionId,
+            fields: {
+                Name: eventName || 'Current Plan',
+                Date: eventDate,
+                Items: Array(lockedItemsCount).fill(null), // Placeholder for count
+                TotalCost: summary.subtotal
+            },
+            createdTime: new Date().toISOString()
+        }
+    };
+}
 
 /**
  * Initialize the WTF Plans panel
@@ -68,7 +111,29 @@ export function initializeWtfPlansPanel() {
         }
     });
 
+    // Register for plan state sync to update the current session in the list in real-time
+    registerSyncCallback('wtfPlansPanel', handlePlanStateSync);
+
     log('WtfPlansPanel', 'WTF Plans panel initialized.');
+}
+
+/**
+ * Handle plan state sync events to update the current session in the list
+ * @param {string} changeType - Type of change
+ * @param {Object} summary - Plan summary data
+ * @param {Object} changeData - Additional change data
+ */
+function handlePlanStateSync(changeType, summary, changeData) {
+    // Only re-render if the panel is open
+    const panel = document.getElementById('wtf-plans-panel');
+    if (!panel || !panel.classList.contains('open')) {
+        return;
+    }
+
+    log('WtfPlansPanel', `Received sync event: ${changeType}`, summary);
+
+    // Re-render the list to show updated current session data
+    renderWtfPlansList();
 }
 
 /**
@@ -272,10 +337,16 @@ export async function refreshWtfPlansData() {
  */
 function getCombinedItems() {
     let items = [];
+    const currentSessionId = state.session.id;
+    const currentSessionItem = buildCurrentSessionItem();
 
     // Add plans
     if (currentFilter === WTF_PLAN_TYPES.ALL || currentFilter === WTF_PLAN_TYPES.PLANS) {
         wtfPlansData.plans.forEach(plan => {
+            // Skip the current session from fetched plans - we'll add the live version instead
+            if (currentSessionId && plan.id === currentSessionId) {
+                return;
+            }
             items.push({
                 type: 'plan',
                 id: plan.id,
@@ -288,6 +359,11 @@ function getCombinedItems() {
                 data: plan
             });
         });
+
+        // Add the current session with live data if user has an active session
+        if (currentSessionItem) {
+            items.push(currentSessionItem);
+        }
     }
 
     // Add RSVPs
@@ -335,6 +411,8 @@ function getCombinedItems() {
         wtfPlansData.projects.forEach(project => {
             // Skip if already in plans
             if (planIds.has(project.id)) return;
+            // Also skip current session if it's the same
+            if (currentSessionId && project.id === currentSessionId) return;
 
             items.push({
                 type: 'project',
@@ -349,7 +427,11 @@ function getCombinedItems() {
     }
 
     // Sort by most recent (createdTime or date)
+    // Current session items get priority by having a recent createdTime
     items.sort((a, b) => {
+        // Current session always goes first
+        if (a.isCurrentSession) return -1;
+        if (b.isCurrentSession) return 1;
         const dateA = new Date(a.createdTime || a.date || 0);
         const dateB = new Date(b.createdTime || b.date || 0);
         return dateB - dateA; // Most recent first
@@ -422,6 +504,9 @@ function getEmptyMessage() {
 function createWtfPlanItem(item) {
     const itemEl = document.createElement('div');
     itemEl.className = 'wtf-plans-item';
+    if (item.isCurrentSession) {
+        itemEl.classList.add('current-session');
+    }
     itemEl.dataset.itemId = item.id;
     itemEl.dataset.itemType = item.type;
 
@@ -446,13 +531,16 @@ function createWtfPlanItem(item) {
             break;
     }
 
-    // Format time ago
-    const timeAgo = formatTimeAgo(item.createdTime);
+    // Format time ago - show "Now" for current session
+    const timeAgo = item.isCurrentSession ? 'Now' : formatTimeAgo(item.createdTime);
+
+    // Show "Editing" indicator for current session
+    const currentBadge = item.isCurrentSession ? '<span class="wtf-plans-current-badge">Editing</span>' : '';
 
     itemEl.innerHTML = `
         <div class="wtf-plans-item-icon">${item.icon}</div>
         <div class="wtf-plans-item-content">
-            <div class="wtf-plans-item-name">${escapeHtml(item.name)}</div>
+            <div class="wtf-plans-item-name">${escapeHtml(item.name)}${currentBadge}</div>
             <div class="wtf-plans-item-preview">${escapeHtml(preview)}</div>
         </div>
         <div class="wtf-plans-item-time">${timeAgo}</div>
