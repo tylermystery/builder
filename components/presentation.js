@@ -544,6 +544,72 @@ function getItemReactionCount(recordId) {
     return reactions.size;
 }
 
+/**
+ * Get a summary emoji that represents the overall sentiment/activity for an item
+ * based on reactions and comments. Returns the most frequent emoji if there are reactions,
+ * or a sentiment-based emoji summary.
+ * @param {string} recordId - The item record ID
+ * @returns {string} A single emoji summarizing the reactions, or empty string if none
+ */
+function getItemSummaryEmoji(recordId) {
+    const reactions = state.session.reactions.get(recordId);
+    if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+        return '';
+    }
+
+    // Count emoji occurrences
+    const emojiCounts = new Map();
+    reactions.forEach((emoji) => {
+        emojiCounts.set(emoji, (emojiCounts.get(emoji) || 0) + 1);
+    });
+
+    // Find the most frequent emoji
+    let maxCount = 0;
+    let dominantEmoji = '';
+    emojiCounts.forEach((count, emoji) => {
+        if (count > maxCount) {
+            maxCount = count;
+            dominantEmoji = emoji;
+        }
+    });
+
+    // If there are multiple reactions with different emojis, show the dominant one
+    // If there's only one reaction, show that emoji
+    if (dominantEmoji) {
+        return dominantEmoji;
+    }
+
+    // Fallback: determine sentiment from score
+    const score = getItemReactionScore(recordId);
+    if (score > 5) return '🔥';
+    if (score > 2) return '👍';
+    if (score < -5) return '😕';
+    if (score < -2) return '👎';
+    return '💬';
+}
+
+/**
+ * Update the emoji indicator next to an item's name
+ * @param {string} recordId - The item record ID
+ */
+function updateItemEmojiIndicator(recordId) {
+    const emojiIndicator = document.querySelector(`.item-emoji-indicator[data-record-id="${recordId}"]`);
+    if (!emojiIndicator) return;
+
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+
+    if (summaryEmoji && reactionCount > 0) {
+        emojiIndicator.innerHTML = `<span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}`;
+        emojiIndicator.style.display = 'inline-flex';
+        emojiIndicator.classList.add('has-reactions');
+    } else {
+        emojiIndicator.innerHTML = '';
+        emojiIndicator.style.display = 'none';
+        emojiIndicator.classList.remove('has-reactions');
+    }
+}
+
 // Generate the expanded emoji picker HTML
 function createEmojiPickerHTML(recordId) {
     let categoriesHTML = '';
@@ -679,8 +745,25 @@ function selectEmoji(recordId, emoji) {
         renderReactions(recordId, reactionContainer);
     }
 
+    // Update the emoji indicator next to item name
+    updateItemEmojiIndicator(recordId);
+
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Broadcast item reaction update via Pusher for real-time sync
+    if (presentationChatChannel) {
+        // Convert Map to object for Pusher transmission
+        const reactionsObj = {};
+        itemReactions.forEach((userEmoji, odUserId) => {
+            reactionsObj[odUserId] = userEmoji;
+        });
+        presentationChatChannel.trigger('client-item-reaction-update', {
+            recordId,
+            reactions: reactionsObj,
+            userId: currentUser.id
+        });
+    }
 
     triggerSave();
 }
@@ -693,10 +776,6 @@ function renderReactions(recordId, reactionContainer) {
     }
     const currentUserReaction = allReactions.get(currentUser.id);
 
-    // Calculate score for this item
-    const itemScore = getItemReactionScore(recordId);
-    const scoreClass = itemScore > 0 ? 'positive' : itemScore < 0 ? 'negative' : 'neutral';
-
     // Quick reaction buttons (8 most common)
     const buttonsHTML = EMOJI_REACTIONS.map(emoji =>
         `<button class="reaction-btn ${currentUserReaction === emoji ? 'selected' : ''}" data-emoji="${emoji}" data-record-id="${recordId}">${emoji}</button>`
@@ -705,7 +784,7 @@ function renderReactions(recordId, reactionContainer) {
     // More button to open full picker
     const moreButtonHTML = `<button class="reaction-btn reaction-more-btn" data-record-id="${recordId}" title="More reactions">+</button>`;
 
-    // Summary showing who reacted
+    // Summary showing who reacted (simplified - just names and emojis)
     let summaryHTML = '';
     if (allReactions.size > 0) {
         summaryHTML = Array.from(allReactions.entries()).map(([userId, reaction]) => {
@@ -714,14 +793,10 @@ function renderReactions(recordId, reactionContainer) {
         }).join('');
     }
 
-    // Score display
-    const scoreHTML = `<span class="item-reaction-score ${scoreClass}" title="Reaction score">${itemScore > 0 ? '+' : ''}${itemScore.toFixed(2)}</span>`;
-
     reactionContainer.innerHTML = `
         <div class="reaction-bar-buttons">${buttonsHTML}${moreButtonHTML}</div>
         <div class="reaction-info-row">
             <div class="reaction-summary-display">${summaryHTML || 'No reactions yet'}</div>
-            ${allReactions.size > 0 ? scoreHTML : ''}
         </div>
     `;
 }
@@ -909,11 +984,19 @@ async function renderItineraryItem(item, index) {
         `;
     }
 
+    // Get the initial emoji indicator for this item
+    const summaryEmoji = getItemSummaryEmoji(recordId);
+    const reactionCount = getItemReactionCount(recordId);
+    const emojiIndicatorHTML = summaryEmoji && reactionCount > 0
+        ? `<span class="item-emoji-indicator has-reactions" data-record-id="${recordId}" style="display: inline-flex;"><span class="emoji-indicator-emoji">${summaryEmoji}</span>${reactionCount > 1 ? `<span class="emoji-indicator-count">${reactionCount}</span>` : ''}</span>`
+        : `<span class="item-emoji-indicator" data-record-id="${recordId}" style="display: none;"></span>`;
+
     return `
         <article class="itinerary-item item-accordion expanded" data-record-id="${recordId}" data-index="${index}">
             <div class="item-accordion-header" data-record-id="${recordId}">
                 <div class="item-accordion-title-row">
                     <h3 class="item-accordion-title">${name}</h3>
+                    ${emojiIndicatorHTML}
                     <span class="itinerary-item-type ${typeClass}">${typeLabel}</span>
                     <span class="item-accordion-icon"></span>
                 </div>
@@ -1081,7 +1164,6 @@ function renderReactionsSummary() {
             if (item.reactionCount === 0) return ''; // Skip items with no reactions
 
             const rank = index + 1;
-            const scoreClass = item.score > 0 ? 'positive' : item.score < 0 ? 'negative' : 'neutral';
             const typeClass = item.type === 'favorites' ? 'idea' : 'confirmed';
 
             // Create emoji pills showing the breakdown
@@ -1095,8 +1177,11 @@ function renderReactionsSummary() {
             else if (rank === 2) medalHTML = '<span class="rank-medal silver">🥈</span>';
             else if (rank === 3) medalHTML = '<span class="rank-medal bronze">🥉</span>';
 
+            // Get summary emoji for this item
+            const summaryEmoji = getItemSummaryEmoji(item.recordId);
+
             return `
-                <div class="ranking-item ${scoreClass}" data-record-id="${item.recordId}">
+                <div class="ranking-item" data-record-id="${item.recordId}">
                     <div class="ranking-position">
                         ${medalHTML}
                         <span class="ranking-number">#${rank}</span>
@@ -1106,9 +1191,9 @@ function renderReactionsSummary() {
                         <div class="ranking-type ${typeClass}">${item.type === 'favorites' ? 'Idea' : 'Confirmed'}</div>
                     </div>
                     <div class="ranking-reactions">${emojiPills}</div>
-                    <div class="ranking-score ${scoreClass}">
-                        <span class="score-value">${item.score > 0 ? '+' : ''}${item.score.toFixed(2)}</span>
-                        <span class="score-label">pts</span>
+                    <div class="ranking-summary-emoji">
+                        <span class="summary-emoji">${summaryEmoji}</span>
+                        <span class="reaction-count">${item.reactionCount}</span>
                     </div>
                 </div>
             `;
@@ -1177,7 +1262,7 @@ function renderReactionsSummary() {
             <div class="reactions-summary-empty">
                 <span class="empty-icon">✨</span>
                 <p>No reactions yet! React to items above to see how they rank.</p>
-                <p class="empty-hint">Use emojis to express your preferences - positive reactions boost scores, negative ones lower them.</p>
+                <p class="empty-hint">Use emojis to express your preferences and see real-time feedback.</p>
             </div>
         `;
         return;
@@ -1190,9 +1275,6 @@ function renderReactionsSummary() {
             <div class="reactions-summary-stats">
                 <span class="stat"><strong>${totalReactions}</strong> reactions</span>
                 <span class="stat"><strong>${itemsWithReactions}</strong> items rated</span>
-                <span class="stat total-score ${totalScore > 0 ? 'positive' : totalScore < 0 ? 'negative' : 'neutral'}">
-                    <strong>${totalScore > 0 ? '+' : ''}${totalScore.toFixed(2)}</strong> total score
-                </span>
             </div>
         </div>
         ${sentimentHTML}
@@ -1202,7 +1284,7 @@ function renderReactionsSummary() {
         <div class="reactions-summary-footer">
             <p class="scoring-note">
                 <span class="note-icon">ℹ️</span>
-                Scores range from -4.82 to +4.92 per reaction based on sentiment analysis. Click any ranking to scroll to that item.
+                Click any ranking to scroll to that item. Emojis update in real-time as people react.
             </p>
         </div>
     `;
@@ -2000,6 +2082,39 @@ async function initializePresentationChat() {
         }
     });
 
+    // Handle real-time item reaction updates from other users
+    presentationChatChannel.bind('client-item-reaction-update', (data) => {
+        if (data.userId !== currentUser.id) {
+            const { recordId, reactions } = data;
+
+            // Update local state from received reactions object
+            if (!state.session.reactions.has(recordId)) {
+                state.session.reactions.set(recordId, new Map());
+            }
+            const itemReactions = state.session.reactions.get(recordId);
+
+            // Clear existing and rebuild from received data
+            itemReactions.clear();
+            if (reactions && typeof reactions === 'object') {
+                Object.entries(reactions).forEach(([odUserId, userEmoji]) => {
+                    itemReactions.set(odUserId, userEmoji);
+                });
+            }
+
+            // Re-render reactions for this item
+            const reactionContainer = document.querySelector(`.itinerary-item-reactions[data-record-id="${recordId}"]`);
+            if (reactionContainer) {
+                renderReactions(recordId, reactionContainer);
+            }
+
+            // Update the emoji indicator next to item name
+            updateItemEmojiIndicator(recordId);
+
+            // Update the reactions summary
+            renderReactionsSummary();
+        }
+    });
+
     // Set up message form submission
     if (presentationMessageForm) {
         const newForm = presentationMessageForm.cloneNode(true);
@@ -2476,8 +2591,25 @@ function handleReactionClick(e) {
         renderReactions(recordId, reactionContainer);
     }
 
+    // Update the emoji indicator next to item name
+    updateItemEmojiIndicator(recordId);
+
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Broadcast item reaction update via Pusher for real-time sync
+    if (presentationChatChannel) {
+        // Convert Map to object for Pusher transmission
+        const reactionsObj = {};
+        itemReactions.forEach((userEmoji, odUserId) => {
+            reactionsObj[odUserId] = userEmoji;
+        });
+        presentationChatChannel.trigger('client-item-reaction-update', {
+            recordId,
+            reactions: reactionsObj,
+            userId: currentUser.id
+        });
+    }
 
     triggerSave();
 }
