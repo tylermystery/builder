@@ -3904,6 +3904,10 @@ export async function showPresentationView(listType, startRecordId = null) {
     modal.classList.add('active');
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
+    document.body.classList.add('presentation-active');
+    // Remove early-loading optimization class now that presentation is properly initialized
+    document.body.classList.remove('presentation-loading');
+    document.documentElement.classList.remove('presentation-loading');
     document.addEventListener('keydown', handleKeyDown);
 
     // Start the background animation
@@ -3941,6 +3945,7 @@ export function hidePresentationView() {
     modal.classList.remove('active');
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
+    document.body.classList.remove('presentation-active');
     document.removeEventListener('keydown', handleKeyDown);
 
     // If catalog rendering was skipped when entering presentation view,

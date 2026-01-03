@@ -1205,8 +1205,40 @@ body.modal-open {
         max-width: 100%;
     }
 }
+
+/* Presentation mode optimizations - hide catalog elements when URL has view=present */
+/* This will be activated by early JS detection before DOM loads */
+body.presentation-loading #main-header,
+body.presentation-loading #left-sidebar,
+body.presentation-loading #right-sidebar,
+body.presentation-loading #catalog-area,
+body.presentation-loading #kaleidoscope-bg,
+body.presentation-loading .marquee-banner,
+body.presentation-loading footer {
+    display: none !important;
+}
+
+body.presentation-loading #loading-overlay {
+    display: none !important;
+}
+
+body.presentation-loading #presentation-modal-overlay {
+    display: flex !important;
+}
     </style>
-    
+
+    <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->
+    <script>
+    (function() {
+        if (window.location.search.indexOf('view=present') !== -1) {
+            document.documentElement.classList.add('presentation-loading');
+            document.addEventListener('DOMContentLoaded', function() {
+                document.body.classList.add('presentation-loading');
+            });
+        }
+    })();
+    </script>
+
     <!-- Load Deferred CSS Asynchronously -->
     <link rel="preload" href="css/deferred.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="css/deferred.css"></noscript>
