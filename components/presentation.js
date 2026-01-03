@@ -80,10 +80,10 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
 // DOM element references - lazily initialized to ensure DOM is ready
 let modal = null;
 let closeBtn = null;
-let summaryEventNameEl = null;
+// summaryEventNameEl removed - event name now only shown in header
 let summaryEventNotesEl = null;
 let summaryEventDateEl = null;
-let shareBtn = null;
+// shareBtn removed - share functionality merged into collaborators add/share button
 let collaboratorsListEl = null;
 let itineraryItemsListEl = null;
 
@@ -92,16 +92,14 @@ let presentationBackBtn = null;
 let presentationLogoContainer = null;
 let presentationShopTitle = null;
 let presentationEventLabel = null;
-let presentationHeaderShareBtn = null;
+// Note: presentationHeaderShareBtn removed - share merged into collaborators add/share button
 
-// Collaborators carousel and modal elements
-let collaboratorsCarouselPrev = null;
-let collaboratorsCarouselNext = null;
-let collaboratorsExpandBtn = null;
+// Collaborators modal elements (carousel removed, using inline list instead)
 let collaboratorsModal = null;
 let collaboratorsModalClose = null;
 let collaboratorsModalList = null;
 let presentationAccountBtn = null;
+let collaboratorsAddShareBtn = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
@@ -124,10 +122,6 @@ const accordionState = {
     header: true,
     items: true
 };
-
-// Carousel state for collaborators
-let carouselCurrentIndex = 0;
-const CAROUSEL_VISIBLE_COUNT = 4; // Number of collaborators visible at once
 
 // Pusher instance for presentation chat
 let presentationPusher = null;
@@ -293,10 +287,10 @@ function ensureDOMElements() {
 
     modal = document.getElementById('presentation-modal-overlay');
     closeBtn = document.getElementById('presentation-close-btn');
-    summaryEventNameEl = document.getElementById('summary-event-name');
+    // summaryEventNameEl removed - event name is now only in header
     summaryEventNotesEl = document.getElementById('summary-event-notes');
     summaryEventDateEl = document.getElementById('summary-event-date');
-    shareBtn = document.getElementById('presentation-share-btn');
+    // shareBtn removed - share functionality merged into collaborators add/share button
     collaboratorsListEl = document.getElementById('itinerary-collaborators-list');
     itineraryItemsListEl = document.getElementById('itinerary-items-list');
 
@@ -305,16 +299,14 @@ function ensureDOMElements() {
     presentationLogoContainer = document.getElementById('presentation-logo-container');
     presentationShopTitle = document.getElementById('presentation-shop-title');
     presentationEventLabel = document.getElementById('presentation-event-label');
-    presentationHeaderShareBtn = document.getElementById('presentation-header-share-btn');
+    // presentationHeaderShareBtn removed - share merged into collaborators add/share button
 
-    // Collaborators carousel and modal elements
-    collaboratorsCarouselPrev = document.querySelector('.collaborators-carousel-btn.carousel-prev');
-    collaboratorsCarouselNext = document.querySelector('.collaborators-carousel-btn.carousel-next');
-    collaboratorsExpandBtn = document.getElementById('collaborators-expand-btn');
+    // Collaborators modal elements (carousel removed, using inline list instead)
     collaboratorsModal = document.getElementById('collaborators-modal');
     collaboratorsModalClose = document.getElementById('collaborators-modal-close');
     collaboratorsModalList = document.getElementById('collaborators-modal-list');
     presentationAccountBtn = document.getElementById('presentation-account-btn');
+    collaboratorsAddShareBtn = document.getElementById('collaborators-add-share-btn');
 
     // Floating chat button (kept for cleanup but no longer used)
     floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
@@ -359,15 +351,19 @@ function renderEventHeader() {
     const goals = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.GOALS) || '';
     const dateValue = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
 
-    summaryEventNameEl.textContent = eventName;
-    summaryEventNotesEl.textContent = goals;
+    // Event name is now shown only in the presentation header (presentationEventLabel)
+    // No longer set in summaryEventNameEl since that element was removed
+
+    if (summaryEventNotesEl) {
+        summaryEventNotesEl.textContent = goals;
+    }
 
     // Set the accordion title to the plan name
     if (headerAccordionTitleEl) {
         headerAccordionTitleEl.textContent = eventName;
     }
 
-    if (dateValue) {
+    if (dateValue && summaryEventDateEl) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);
         summaryEventDateEl.textContent = date.toLocaleDateString('en-US', {
             weekday: 'long',
@@ -375,7 +371,7 @@ function renderEventHeader() {
             day: 'numeric',
             year: 'numeric'
         });
-    } else {
+    } else if (summaryEventDateEl) {
         summaryEventDateEl.textContent = '';
     }
 }
@@ -476,104 +472,43 @@ function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
     const collaboratorsContainer = document.getElementById('itinerary-collaborators');
 
-    // Reset carousel index
-    carouselCurrentIndex = 0;
-
     // Update the account button with current user info
     updatePresentationAccountButton();
 
     if (userProfiles.size === 0) {
-        collaboratorsListEl.innerHTML = '<p class="no-collaborators">No team members yet</p>';
-        // Hide carousel controls and expand button when no collaborators
-        if (collaboratorsCarouselPrev) collaboratorsCarouselPrev.style.display = 'none';
-        if (collaboratorsCarouselNext) collaboratorsCarouselNext.style.display = 'none';
-        if (collaboratorsExpandBtn) collaboratorsExpandBtn.style.display = 'none';
+        // Empty state - just show the add/share button is enough
+        if (collaboratorsListEl) {
+            collaboratorsListEl.innerHTML = '';
+        }
         return;
     }
 
-    // Build all collaborator items
+    // Build all collaborator items (excluding current user since they have their own button)
     const collaboratorsArray = [];
     userProfiles.forEach((name, odId) => {
         const isCurrentUser = state.session.user.id === odId;
-        collaboratorsArray.push({ name, odId, isCurrentUser });
-    });
-
-    // Render all items (CSS will handle the carousel display)
-    let html = '';
-    collaboratorsArray.forEach((collab, index) => {
-        const badge = collab.isCurrentUser ? '<span class="collaborator-badge">You</span>' : '';
-        html += `
-            <div class="collaborator-item" data-index="${index}">
-                <span class="collaborator-avatar">${collab.name.charAt(0).toUpperCase()}</span>
-                <span class="collaborator-name">${collab.name}${badge}</span>
-            </div>
-        `;
-    });
-
-    collaboratorsListEl.innerHTML = html;
-
-    // Update carousel visibility based on number of collaborators
-    const totalCount = collaboratorsArray.length;
-    const showCarouselControls = totalCount > CAROUSEL_VISIBLE_COUNT;
-
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.style.display = showCarouselControls ? 'flex' : 'none';
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.style.display = showCarouselControls ? 'flex' : 'none';
-    }
-    if (collaboratorsExpandBtn) {
-        collaboratorsExpandBtn.style.display = totalCount > CAROUSEL_VISIBLE_COUNT ? 'block' : 'none';
-        collaboratorsExpandBtn.textContent = `Show all (${totalCount})`;
-    }
-
-    // Apply initial carousel state
-    updateCarouselVisibility();
-}
-
-// Update which collaborators are visible in the carousel
-function updateCarouselVisibility() {
-    if (!collaboratorsListEl) return;
-
-    const items = collaboratorsListEl.querySelectorAll('.collaborator-item');
-    const totalCount = items.length;
-
-    items.forEach((item, index) => {
-        // Show items within the visible window
-        if (index >= carouselCurrentIndex && index < carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT) {
-            item.classList.add('visible');
-            item.classList.remove('hidden');
-        } else {
-            item.classList.remove('visible');
-            item.classList.add('hidden');
+        if (!isCurrentUser) {
+            collaboratorsArray.push({ name, odId });
         }
     });
 
-    // Update prev/next button disabled states
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.disabled = carouselCurrentIndex === 0;
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.disabled = carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT >= totalCount;
+    // Render as a simple inline list of names (no carousel needed)
+    let html = '';
+    collaboratorsArray.forEach((collab) => {
+        html += `
+            <button class="collaborator-name-btn" data-collaborator-id="${collab.odId}" title="${collab.name}">
+                ${collab.name}
+            </button>
+        `;
+    });
+
+    if (collaboratorsListEl) {
+        collaboratorsListEl.innerHTML = html;
     }
 }
 
-// Navigate carousel to previous set of collaborators
-function carouselPrev() {
-    if (carouselCurrentIndex > 0) {
-        carouselCurrentIndex--;
-        updateCarouselVisibility();
-    }
-}
-
-// Navigate carousel to next set of collaborators
-function carouselNext() {
-    const totalCount = collaboratorsListEl ? collaboratorsListEl.querySelectorAll('.collaborator-item').length : 0;
-    if (carouselCurrentIndex + CAROUSEL_VISIBLE_COUNT < totalCount) {
-        carouselCurrentIndex++;
-        updateCarouselVisibility();
-    }
-}
+// Note: Carousel functions (updateCarouselVisibility, carouselPrev, carouselNext) removed
+// Collaborators are now displayed as a simple inline list instead of a carousel
 
 // Show the expanded collaborators modal with full list
 function showCollaboratorsModal() {
@@ -3995,24 +3930,7 @@ export function setupPresentationEventListeners() {
         });
     }
 
-    // Presentation header share button
-    if (presentationHeaderShareBtn) {
-        presentationHeaderShareBtn.addEventListener('click', () => {
-            const baseURL = window.location.origin + window.location.pathname;
-            const sessionID = state.session.id;
-            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
-
-            navigator.clipboard.writeText(shareURL).then(() => {
-                const originalHTML = presentationHeaderShareBtn.innerHTML;
-                presentationHeaderShareBtn.innerHTML = '<span class="share-icon">✓</span>';
-                presentationHeaderShareBtn.title = 'Link Copied!';
-                setTimeout(() => {
-                    presentationHeaderShareBtn.innerHTML = originalHTML;
-                    presentationHeaderShareBtn.title = 'Share this plan';
-                }, 1500);
-            });
-        });
-    }
+    // Note: presentationHeaderShareBtn removed - share functionality now in collaborators add/share button
 
     // Presentation header total button (opens checkout modal)
     const presentationHeaderTotalBtn = document.getElementById('presentation-header-total');
@@ -4101,32 +4019,25 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
 
-    // Share button
-    shareBtn.addEventListener('click', (e) => {
-        const baseURL = window.location.origin + window.location.pathname;
-        const sessionID = state.session.id;
-        const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+    // Note: shareBtn removed - share functionality now in collaborators add/share button
 
-        navigator.clipboard.writeText(shareURL).then(() => {
-            const originalText = e.target.textContent;
-            e.target.textContent = 'Link Copied!';
-            setTimeout(() => {
-               e.target.textContent = originalText;
-            }, 1500);
+    // Collaborators add/share button - copies shareable link
+    if (collaboratorsAddShareBtn) {
+        collaboratorsAddShareBtn.addEventListener('click', () => {
+            const baseURL = window.location.origin + window.location.pathname;
+            const sessionID = state.session.id;
+            const shareURL = `${baseURL}?session=${sessionID}&view=present`;
+
+            navigator.clipboard.writeText(shareURL).then(() => {
+                const originalHTML = collaboratorsAddShareBtn.innerHTML;
+                collaboratorsAddShareBtn.innerHTML = '<span class="add-share-icon">✓</span><span class="add-share-text">Copied!</span>';
+                collaboratorsAddShareBtn.title = 'Link Copied!';
+                setTimeout(() => {
+                    collaboratorsAddShareBtn.innerHTML = originalHTML;
+                    collaboratorsAddShareBtn.title = 'Add people or share this plan';
+                }, 1500);
+            });
         });
-    });
-
-    // Collaborators carousel navigation
-    if (collaboratorsCarouselPrev) {
-        collaboratorsCarouselPrev.addEventListener('click', carouselPrev);
-    }
-    if (collaboratorsCarouselNext) {
-        collaboratorsCarouselNext.addEventListener('click', carouselNext);
-    }
-
-    // Collaborators expand button (show modal with full list)
-    if (collaboratorsExpandBtn) {
-        collaboratorsExpandBtn.addEventListener('click', showCollaboratorsModal);
     }
 
     // Account button in team section header - opens user profile modal

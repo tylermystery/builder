@@ -2001,15 +2001,9 @@ body.presentation-loading #presentation-modal-overlay {
                     <span id="event-emoji-indicator" class="event-emoji-indicator"></span>
                 </div>
 
-                <!-- Right: Total Cost, Add and Share Buttons -->
+                <!-- Right: Total Cost only (Add button moved to items, Share merged with people) -->
                 <div id="presentation-header-right">
                     <button id="presentation-header-total" class="presentation-header-total" title="View checkout" aria-label="View checkout summary"></button>
-                    <button id="presentation-add-btn" class="header-icon-btn presentation-add-btn" title="Add items to plan" aria-label="Add items to plan">
-                        <span class="add-icon">+</span>
-                    </button>
-                    <button id="presentation-header-share-btn" class="header-icon-btn" title="Share this plan" aria-label="Share this plan">
-                        <span class="share-icon">↗</span>
-                    </button>
                 </div>
             </div>
         </header>
@@ -2062,24 +2056,22 @@ body.presentation-loading #presentation-modal-overlay {
                         <p class="itinerary-accordion-summary" id="header-summary"></p>
                     </div>
                     <div class="itinerary-accordion-content">
-                        <h1 id="summary-event-name" class="itinerary-event-title"></h1>
+                        <!-- Event title is now in the header, removed from here -->
                         <div class="itinerary-event-meta">
                             <span id="summary-event-date" class="itinerary-date"></span>
                         </div>
                         <p id="summary-event-notes" class="itinerary-notes"></p>
 
-                        <!-- Hosts & Collaborators Carousel -->
+                        <!-- People List: Current user button, team members, then add/share button -->
                         <div id="itinerary-collaborators" class="itinerary-collaborators">
-                            <div class="collaborators-title-row">
-                                <h4 class="collaborators-title">Team</h4>
-                                <button id="presentation-account-btn" class="presentation-account-btn" title="Account settings"></button>
+                            <div class="collaborators-inline-list">
+                                <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
+                                <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
+                                <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
+                                    <span class="add-share-icon">+</span>
+                                    <span class="add-share-text">Share</span>
+                                </button>
                             </div>
-                            <div class="collaborators-carousel-wrapper">
-                                <button class="collaborators-carousel-btn carousel-prev" aria-label="Previous collaborators">&#8249;</button>
-                                <div id="itinerary-collaborators-list" class="collaborators-list collaborators-carousel"></div>
-                                <button class="collaborators-carousel-btn carousel-next" aria-label="Next collaborators">&#8250;</button>
-                            </div>
-                            <button id="collaborators-expand-btn" class="collaborators-expand-btn">Show all</button>
                         </div>
 
                         <!-- Expanded collaborators modal -->
@@ -2092,10 +2084,6 @@ body.presentation-loading #presentation-modal-overlay {
                                 <div id="collaborators-modal-list" class="collaborators-modal-list"></div>
                             </div>
                         </div>
-
-                        <div class="itinerary-actions">
-                            <button id="presentation-share-btn" class="itinerary-share-btn" title="Copy link to share this itinerary">Share Itinerary</button>
-                        </div>
                     </div>
                 </section>
 
@@ -2103,7 +2091,11 @@ body.presentation-loading #presentation-modal-overlay {
                 <section class="itinerary-section itinerary-items itinerary-accordion" data-section="items">
                     <div class="itinerary-accordion-header" data-section="items">
                         <div class="itinerary-accordion-title-row">
-                            <h3 id="items-accordion-title" class="accordion-section-title">Planned Items</h3>
+                            <!-- Add button at the beginning of items, title removed -->
+                            <button id="presentation-add-btn" class="presentation-add-item-btn" title="Add items to plan" aria-label="Add items to plan">
+                                <span class="add-icon">+</span>
+                                <span class="add-text">Add</span>
+                            </button>
                             <span class="itinerary-accordion-icon"></span>
                         </div>
                         <p class="itinerary-accordion-summary" id="items-summary"></p>

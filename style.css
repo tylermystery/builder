@@ -3688,9 +3688,100 @@ body.presentation-active .modal-overlay.active {
 
 /* Collaborators */
 .itinerary-collaborators {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #dee2e6;
+    margin-top: 15px;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Inline Collaborators List - horizontal row of buttons */
+.collaborators-inline-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Inline collaborators container */
+.collaborators-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Collaborator button - shared style for current user and other collaborators */
+.collaborator-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    font-size: 0.9em;
+    color: #333;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.collaborator-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 123, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Current user's account button styling */
+.presentation-account-btn.collaborator-btn {
+    background: rgba(0, 123, 255, 0.1);
+    border-color: rgba(0, 123, 255, 0.3);
+    color: #007bff;
+    font-weight: 500;
+}
+
+.presentation-account-btn.collaborator-btn:hover {
+    background: rgba(0, 123, 255, 0.2);
+}
+
+/* Other collaborator name buttons */
+.collaborator-name-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 20px;
+    font-size: 0.9em;
+    color: #495057;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+
+.collaborator-name-btn:hover {
+    background: rgba(255, 255, 255, 1);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Add/Share button at the end of the collaborators list */
+.add-share-btn {
+    background: rgba(40, 167, 69, 0.1);
+    border-color: rgba(40, 167, 69, 0.3);
+    color: #28a745;
+}
+
+.add-share-btn:hover {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: rgba(40, 167, 69, 0.5);
+}
+
+.add-share-icon {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.add-share-text {
+    font-weight: 500;
 }
 
 .itinerary-collaborators h3 {
@@ -5201,6 +5292,37 @@ body.presentation-active .modal-overlay.active {
     justify-content: space-between;
     align-items: center;
     gap: 15px;
+}
+
+/* Add button at the beginning of items section */
+.presentation-add-item-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(0, 123, 255, 0.1);
+    border: 1px solid rgba(0, 123, 255, 0.3);
+    border-radius: 20px;
+    font-size: 0.95em;
+    color: #007bff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    white-space: nowrap;
+}
+
+.presentation-add-item-btn:hover {
+    background: rgba(0, 123, 255, 0.2);
+    border-color: rgba(0, 123, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.presentation-add-item-btn .add-icon {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.presentation-add-item-btn .add-text {
+    font-weight: 500;
 }
 
 .itinerary-accordion-title {
