@@ -10,6 +10,7 @@ import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
+import { showUserModal } from '../auth.js';
 
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -91,6 +92,7 @@ let collaboratorsExpandBtn = null;
 let collaboratorsModal = null;
 let collaboratorsModalClose = null;
 let collaboratorsModalList = null;
+let presentationAccountBtn = null;
 
 // Accordion summary elements
 let headerSummaryEl = null;
@@ -303,6 +305,7 @@ function ensureDOMElements() {
     collaboratorsModal = document.getElementById('collaborators-modal');
     collaboratorsModalClose = document.getElementById('collaborators-modal-close');
     collaboratorsModalList = document.getElementById('collaborators-modal-list');
+    presentationAccountBtn = document.getElementById('presentation-account-btn');
 
     // Floating chat button (kept for cleanup but no longer used)
     floatingChatBtn = document.getElementById('presentation-floating-chat-btn');
@@ -391,12 +394,35 @@ function renderPresentationHeader() {
     }
 }
 
+/**
+ * Update the presentation account button with current user info
+ */
+function updatePresentationAccountButton() {
+    if (!presentationAccountBtn) return;
+
+    const currentUser = getCurrentUser();
+
+    if (currentUser && currentUser.name) {
+        // Show user's name in the button
+        presentationAccountBtn.textContent = currentUser.name;
+        presentationAccountBtn.title = state.session.user.isAuthenticated
+            ? 'Account settings'
+            : 'Sign in to save your plan';
+    } else {
+        // Hide button if no user
+        presentationAccountBtn.textContent = '';
+    }
+}
+
 function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
     const collaboratorsContainer = document.getElementById('itinerary-collaborators');
 
     // Reset carousel index
     carouselCurrentIndex = 0;
+
+    // Update the account button with current user info
+    updatePresentationAccountButton();
 
     if (userProfiles.size === 0) {
         collaboratorsListEl.innerHTML = '<p class="no-collaborators">No team members yet</p>';
@@ -3600,6 +3626,10 @@ export function setupPresentationEventListeners() {
     }
     // console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
+    // Listen for user login/logout events to update the account button
+    document.addEventListener('userLoggedIn', updatePresentationAccountButton);
+    document.addEventListener('userLoggedOut', updatePresentationAccountButton);
+
     // Handle window resize for background canvas
     window.addEventListener('resize', () => {
         if (modal && modal.classList.contains('active')) {
@@ -3740,6 +3770,11 @@ export function setupPresentationEventListeners() {
     // Collaborators expand button (show modal with full list)
     if (collaboratorsExpandBtn) {
         collaboratorsExpandBtn.addEventListener('click', showCollaboratorsModal);
+    }
+
+    // Account button in team section header - opens user profile modal
+    if (presentationAccountBtn) {
+        presentationAccountBtn.addEventListener('click', showUserModal);
     }
 
     // Collaborators modal close button
