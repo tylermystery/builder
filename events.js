@@ -2128,10 +2128,28 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 }
 
                 itemInfo = { quantity, selectedOptionIndex, selections, note };
+
+                // Preserve any locally-generated options
+                // These are AI-generated options that were applied but not saved to catalog
+                const existingItemInfo = state.cart.items.get(recordId);
+                if (existingItemInfo?.generatedOptions) {
+                    // Carry over from Ideas
+                    itemInfo.generatedOptions = existingItemInfo.generatedOptions;
+                } else if (record._locallyGeneratedOptions) {
+                    // Capture newly generated options from this modal session
+                    itemInfo.generatedOptions = record._locallyGeneratedOptions;
+                    delete record._locallyGeneratedOptions; // Clean up the temporary marker
+                }
+
                 updateUrl({ openItem: null });
                 ui.hideDetailModal();
             } else {
                 itemInfo = ui.getItemState(recordId);
+                // Also capture locally generated options if not already present
+                if (!itemInfo.generatedOptions && record._locallyGeneratedOptions) {
+                    itemInfo.generatedOptions = record._locallyGeneratedOptions;
+                    delete record._locallyGeneratedOptions;
+                }
             }
 
             // Store the last attempted quantity

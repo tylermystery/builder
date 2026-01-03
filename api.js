@@ -558,6 +558,27 @@ export async function loadSessionFromAirtable(sessionId) {
                     log('API', `Stored ${ghostItems.length} ghost items in state.records.archive`);
                 }
 
+                // Restore generated options to record objects from itemInfo
+                // This allows AI-generated options to persist across page reloads
+                const restoreGeneratedOptions = (itemsMap) => {
+                    for (const [recordId, itemInfo] of itemsMap.entries()) {
+                        if (itemInfo.generatedOptions) {
+                            // Find the record in state.records.all or state.records.archive
+                            let record = state.records.all.find(r => r.id === recordId);
+                            if (!record) {
+                                record = state.records.archive?.find(r => r.id === recordId);
+                            }
+                            if (record) {
+                                record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = itemInfo.generatedOptions;
+                                log('API', `Restored generated options for item ${recordId}`);
+                            }
+                        }
+                    }
+                };
+
+                restoreGeneratedOptions(state.cart.lockedItems);
+                restoreGeneratedOptions(state.cart.items);
+
             } catch (jsonError) {
                 log('API', `Failed to parse session JSON for ${sessionId}: ${jsonError.message}`);
                 console.error("Session Data String:", sessionDataString);

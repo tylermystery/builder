@@ -9,6 +9,7 @@ import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMi
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
 import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
+import { triggerSave } from '../events.js';
 
 /**
  * Helper to create or update a meta tag
@@ -2694,6 +2695,28 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
         // Store options on the record object locally
         record.fields[CONSTANTS.FIELD_NAMES.OPTIONS] = optionsText;
+        // Mark that these options were locally generated (for persistence when adding to plan)
+        record._locallyGeneratedOptions = optionsText;
+
+        // Also persist the generated options in the plan item info
+        // This ensures options survive page reload
+        const isLocked = state.cart.lockedItems.has(record.id);
+        const isIdea = state.cart.items.has(record.id);
+
+        if (isLocked) {
+            const itemInfo = state.cart.lockedItems.get(record.id);
+            itemInfo.generatedOptions = optionsText;
+            state.cart.lockedItems.set(record.id, itemInfo);
+            triggerSave(); // Persist to session
+            log('Modal', `Saved generated options for locked item ${record.id}`);
+        } else if (isIdea) {
+            const itemInfo = state.cart.items.get(record.id);
+            itemInfo.generatedOptions = optionsText;
+            state.cart.items.set(record.id, itemInfo);
+            triggerSave(); // Persist to session
+            log('Modal', `Saved generated options for idea item ${record.id}`);
+        }
+
         aiOptionsStatus.textContent = 'Applied! Refreshing...';
         aiOptionsStatus.style.color = '#28a745';
 
