@@ -12,6 +12,11 @@ import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
 import { syncPlanState, registerSyncCallback, unregisterSyncCallback } from '../utils/planStateSync.js';
 import { showUserModal } from '../auth.js';
 
+console.log('[Presentation DEBUG] presentation.js module loaded');
+console.log('[Presentation DEBUG] QUICK_REACTIONS available:', ['👍', '❤️', '😂', '😮', '😢', '🎉']);
+console.log('[Presentation DEBUG] EMOJI_CATEGORIES imported:', EMOJI_CATEGORIES ? 'yes' : 'no');
+console.log('[Presentation DEBUG] EMOJI_REACTIONS imported:', EMOJI_REACTIONS);
+
 // Quick emoji reactions available for messages and comments
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -726,21 +731,30 @@ function createEmojiPickerHTML(recordId) {
 
 // Show the expanded emoji picker
 function showExpandedEmojiPicker(recordId, anchorElement) {
+    console.log('[ExpandedEmojiPicker DEBUG] showExpandedEmojiPicker called');
+    console.log('[ExpandedEmojiPicker DEBUG] recordId:', recordId);
+    console.log('[ExpandedEmojiPicker DEBUG] anchorElement:', anchorElement);
+
     // Close any existing picker
     closeExpandedEmojiPicker();
 
     const pickerHTML = createEmojiPickerHTML(recordId);
+    console.log('[ExpandedEmojiPicker DEBUG] pickerHTML length:', pickerHTML.length);
+
     const pickerContainer = document.createElement('div');
     pickerContainer.className = 'emoji-picker-overlay';
     pickerContainer.innerHTML = pickerHTML;
+    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created');
 
     // Add to DOM
     document.body.appendChild(pickerContainer);
+    console.log('[ExpandedEmojiPicker DEBUG] ✅ pickerContainer appended to document.body');
 
     // Position near the anchor
     const picker = pickerContainer.querySelector('.emoji-picker-modal');
     const rect = anchorElement.getBoundingClientRect();
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
+    console.log('[ExpandedEmojiPicker DEBUG] anchor rect:', rect);
 
     // Center the picker on screen for mobile, near anchor for desktop
     if (window.innerWidth <= 768) {
@@ -748,11 +762,34 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
         picker.style.top = '50%';
         picker.style.left = '50%';
         picker.style.transform = 'translate(-50%, -50%)';
+        console.log('[ExpandedEmojiPicker DEBUG] Mobile positioning: centered');
     } else {
         picker.style.position = 'absolute';
         picker.style.top = `${rect.bottom + scrollTop + 10}px`;
         picker.style.left = `${Math.max(10, rect.left - 100)}px`;
+        console.log('[ExpandedEmojiPicker DEBUG] Desktop positioning:', picker.style.top, picker.style.left);
     }
+
+    // Verify picker visibility
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.emoji-picker-overlay');
+        console.log('[ExpandedEmojiPicker DEBUG] Verify picker in DOM:', verifyPicker);
+        if (verifyPicker) {
+            const modal = verifyPicker.querySelector('.emoji-picker-modal');
+            if (modal) {
+                const computedStyle = window.getComputedStyle(modal);
+                console.log('[ExpandedEmojiPicker DEBUG] Modal computed styles:', {
+                    display: computedStyle.display,
+                    visibility: computedStyle.visibility,
+                    opacity: computedStyle.opacity,
+                    position: computedStyle.position,
+                    zIndex: computedStyle.zIndex,
+                    width: computedStyle.width,
+                    height: computedStyle.height
+                });
+            }
+        }
+    }, 10);
 
     // Add event listeners
     pickerContainer.addEventListener('click', handleEmojiPickerClick);
@@ -2706,13 +2743,17 @@ function handleThumbnailClick(e) {
 }
 
 function handleReactionClick(e) {
+    console.log('[ReactionClick DEBUG] handleReactionClick called, target:', e.target);
     const button = e.target.closest('.reaction-btn');
+    console.log('[ReactionClick DEBUG] button found:', button);
     if (!button) return;
 
     const recordId = button.dataset.recordId;
+    console.log('[ReactionClick DEBUG] recordId:', recordId);
 
     // Check if this is the "more" button to open expanded picker
     if (button.classList.contains('reaction-more-btn')) {
+        console.log('[ReactionClick DEBUG] More button clicked, calling showExpandedEmojiPicker');
         showExpandedEmojiPicker(recordId, button);
         return;
     }
@@ -3867,6 +3908,7 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('click', handleThumbnailClick);
 
     // Handle reaction clicks
+    console.log('[Events DEBUG] Adding handleReactionClick listener to itineraryItemsListEl:', itineraryItemsListEl);
     itineraryItemsListEl.addEventListener('click', handleReactionClick);
 
     // Handle item accordion header clicks (for per-item collapse/expand)
@@ -3882,6 +3924,7 @@ export function setupPresentationEventListeners() {
     itineraryItemsListEl.addEventListener('click', handleSuggestionClick);
 
     // Handle component comments interactions
+    console.log('[Events DEBUG] Adding handleComponentCommentsClick listener to itineraryItemsListEl');
     itineraryItemsListEl.addEventListener('click', handleComponentCommentsClick);
     itineraryItemsListEl.addEventListener('keydown', handleComponentCommentsKeydown);
 

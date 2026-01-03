@@ -4214,6 +4214,8 @@ body.modal-open {
     padding: 4px 10px;
     cursor: pointer;
     transition: all 0.2s ease;
+    /* Ensure emoji font support across all platforms */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .itinerary-item-reactions .reaction-btn:hover {
@@ -4385,6 +4387,8 @@ body.modal-open {
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Ensure emoji font support across all platforms */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .emoji-picker-emoji:hover {
