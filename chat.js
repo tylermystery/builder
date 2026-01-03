@@ -777,6 +777,10 @@ function showReactionPicker(wrapper, messageId, senderId) {
     // Remove any existing picker
     document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
 
+    // Find the reaction button to position near it
+    const reactionBtn = wrapper.querySelector('.msg-action-btn.reaction-btn');
+    if (!reactionBtn) return;
+
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
 
@@ -791,7 +795,22 @@ function showReactionPicker(wrapper, messageId, senderId) {
         picker.appendChild(btn);
     });
 
-    wrapper.appendChild(picker);
+    // Append to body to avoid overflow clipping issues
+    document.body.appendChild(picker);
+
+    // Position the picker near the reaction button
+    const rect = reactionBtn.getBoundingClientRect();
+    picker.style.position = 'fixed';
+    picker.style.zIndex = '10001';
+
+    // Position above the button if there's room, otherwise below
+    const pickerHeight = 50; // Approximate height
+    if (rect.top > pickerHeight + 10) {
+        picker.style.top = `${rect.top - pickerHeight - 8}px`;
+    } else {
+        picker.style.top = `${rect.bottom + 8}px`;
+    }
+    picker.style.left = `${Math.max(10, rect.left - 50)}px`;
 
     // Close picker when clicking elsewhere
     const closePicker = (e) => {

@@ -2996,12 +2996,8 @@ body.modal-open {
     color: #1877f2;
 }
 
-/* Reaction Picker */
+/* Reaction Picker - positioned via JS to avoid overflow clipping in presentation view */
 .reaction-picker {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 24px;
@@ -3009,8 +3005,6 @@ body.modal-open {
     display: flex;
     gap: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
-    margin-bottom: 8px;
 }
 
 .reaction-picker-btn {
@@ -10211,19 +10205,14 @@ hr.total-divider {
     color: #333;
 }
 
-/* Comment reaction picker */
+/* Comment reaction picker - positioned via JS to avoid overflow clipping */
 .comment-reaction-picker {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     padding: 8px;
     display: flex;
     gap: 4px;
-    z-index: 100;
-    margin-bottom: 8px;
 }
 
 .comment-reaction-picker .reaction-picker-btn {
