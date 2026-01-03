@@ -30,6 +30,38 @@ let currentFilter = WTF_PLAN_TYPES.ALL;
 let isLoading = false;
 
 /**
+ * Normalize a date value to YYYY-MM-DD format for consistent display
+ * @param {*} dateValue - Date in various formats (string, Date, array)
+ * @returns {string|null} - Date in YYYY-MM-DD format or null if invalid
+ */
+function normalizeDateToYYYYMMDD(dateValue) {
+    if (!dateValue) return null;
+
+    try {
+        // Handle arrays (eventDetails sometimes stores dates as arrays)
+        const rawDate = Array.isArray(dateValue) ? dateValue[0] : dateValue;
+        if (!rawDate) return null;
+
+        // If it's already in YYYY-MM-DD format, return as-is
+        if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+            return rawDate;
+        }
+
+        // Parse the date and extract YYYY-MM-DD
+        const dateObj = new Date(rawDate);
+        if (isNaN(dateObj.getTime())) {
+            return null;
+        }
+
+        // Format as YYYY-MM-DD
+        return dateObj.toISOString().split('T')[0];
+    } catch (e) {
+        console.warn('Could not normalize date:', dateValue, e);
+        return null;
+    }
+}
+
+/**
  * Build a plan item from the current live session state
  * @returns {Object|null} Plan item representing current session, or null if no session active
  */
@@ -45,7 +77,10 @@ function buildCurrentSessionItem() {
 
     // Get event details from live state
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
-    const eventDate = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+    const eventDateRaw = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.DATE);
+
+    // Normalize the date to YYYY-MM-DD format for consistent display
+    const eventDate = normalizeDateToYYYYMMDD(eventDateRaw);
 
     return {
         type: 'plan',
@@ -332,6 +367,46 @@ export async function refreshWtfPlansData() {
 }
 
 /**
+ * Parse Items with Variations JSON to extract item count and total cost
+ * @param {Object} plan - The plan record from Airtable
+ * @returns {Object} - { itemCount, totalCost }
+ */
+function parsePlanItemsData(plan) {
+    let itemCount = 0;
+    let totalCost = 0;
+
+    try {
+        const itemsWithVariations = plan.fields?.['Items with Variations'];
+        if (itemsWithVariations) {
+            const parsed = JSON.parse(itemsWithVariations);
+            const lockedInItems = parsed.lockedInItems || {};
+
+            // Count locked items
+            itemCount = Object.keys(lockedInItems).length;
+
+            // Calculate total cost from locked items
+            Object.entries(lockedInItems).forEach(([recordId, itemInfo]) => {
+                const record = state.records.all.find(r => r.id === recordId);
+                if (!record) return;
+
+                // Get price - use override price if available, otherwise record price
+                let unitPrice = itemInfo.overridePrice;
+                if (unitPrice == null) {
+                    unitPrice = parseFloat(record.fields?.Price) || 0;
+                }
+
+                const quantity = parseInt(itemInfo.quantity) || 1;
+                totalCost += unitPrice * quantity;
+            });
+        }
+    } catch (e) {
+        console.warn('Could not parse Items with Variations for plan:', plan.id, e);
+    }
+
+    return { itemCount, totalCost };
+}
+
+/**
  * Get all items combined and sorted by most recent
  * @returns {Array} - Combined and sorted items
  */
@@ -347,14 +422,18 @@ function getCombinedItems() {
             if (currentSessionId && plan.id === currentSessionId) {
                 return;
             }
+
+            // Parse Items with Variations to get accurate item count and total cost
+            const { itemCount, totalCost } = parsePlanItemsData(plan);
+
             items.push({
                 type: 'plan',
                 id: plan.id,
                 name: plan.fields?.Name || 'Untitled Plan',
                 date: plan.fields?.Date,
                 createdTime: plan.createdTime,
-                itemCount: (plan.fields?.Items || []).length,
-                totalCost: plan.fields?.TotalCost || 0,
+                itemCount,
+                totalCost,
                 icon: '📋',
                 data: plan
             });
