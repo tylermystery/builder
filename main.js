@@ -19,6 +19,7 @@ import { showReceiptModal } from './components/receipt.js';
 import { updateFooter } from './components/footer.js';
 import { initializeProjectsDashboard, updateProjectsData, showProjectsLoading } from './components/projectsDashboard.js';
 import { initializeWtfPlansPanel, syncWtfPlansPanelWithUrl } from './components/wtfPlansPanel.js';
+import { applyCloudinaryTransform } from './utils/imageOptimizer.js';
 
 
 const imageCache = new Map();
@@ -385,17 +386,17 @@ async function initialize() {
                 const logoUrl = imageUrls[0];
                 const favicon = document.createElement('link');
                 favicon.rel = 'icon';
-                favicon.href = logoUrl.replace('/upload/', '/upload/c_scale,w_32/');
+                favicon.href = applyCloudinaryTransform(logoUrl, 'c_scale,w_32');
                 document.head.appendChild(favicon);
                 const headerLogo = document.createElement('img');
-                headerLogo.src = logoUrl.replace('/upload/', '/upload/h_50,c_scale,f_auto,q_auto/');
+                headerLogo.src = applyCloudinaryTransform(logoUrl, 'h_50,c_scale,f_auto,q_auto');
                 headerLogo.alt = `${activeShop.fields.Name} Logo`;
                 headerLogo.loading = 'eager'; // Logo should load immediately
                 headerLogo.fetchPriority = 'high'; // Prioritize logo loading
-                
+
                 const logoContainer = document.getElementById('shop-logo-container');
                 if (logoContainer) {
-                    logoContainer.innerHTML = ''; 
+                    logoContainer.innerHTML = '';
                     logoContainer.appendChild(headerLogo);
                 } else {
                     const headerLeft = document.getElementById('header-left');

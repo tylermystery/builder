@@ -8,6 +8,7 @@ import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveI
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
 import { showReceiptModal } from './receipt.js';
+import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 
 /**
  * Helper to create or update a meta tag
@@ -943,7 +944,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
         if (imageUrls.length === 1) {
             // Single image display
             const optimizedUrl = imageUrls[0].includes('cloudinary')
-                ? imageUrls[0].replace('/upload/', '/upload/w_400,h_400,c_fill,f_auto,q_auto/')
+                ? applyCloudinaryTransform(imageUrls[0], 'w_400,h_400,c_fill,f_auto,q_auto')
                 : imageUrls[0];
             mediaContainer.innerHTML = `<img class="single-image" src="${optimizedUrl}" alt="${record.fields.Name || 'Component'}" loading="lazy">`;
         } else {
@@ -954,7 +955,7 @@ async function buildPlanComponentCards(container, componentRecords, sessionId) {
 
             imageUrls.slice(0, 4).forEach((url, idx) => {
                 const optimizedUrl = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/w_200,h_200,c_fill,f_auto,q_auto/')
+                    ? applyCloudinaryTransform(url, 'w_200,h_200,c_fill,f_auto,q_auto')
                     : url;
                 const img = document.createElement('img');
                 img.className = 'collage-img';
@@ -1076,7 +1077,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     galleryDiv.className = 'component-detail-gallery';
 
     const mainImageUrl = imageUrls[0].includes('cloudinary')
-        ? imageUrls[0].replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+        ? applyCloudinaryTransform(imageUrls[0], 'w_800,h_500,c_fill,f_auto,q_auto')
         : imageUrls[0];
 
     galleryDiv.innerHTML = `
@@ -1091,7 +1092,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
     if (imageUrls.length > 1) {
         imageUrls.forEach((url, idx) => {
             const thumbUrl = url.includes('cloudinary')
-                ? url.replace('/upload/', '/upload/w_120,h_120,c_fill,f_auto,q_auto/')
+                ? applyCloudinaryTransform(url, 'w_120,h_120,c_fill,f_auto,q_auto')
                 : url;
             const thumb = document.createElement('div');
             thumb.className = `component-detail-thumb ${idx === 0 ? 'active' : ''}`;
@@ -1099,7 +1100,7 @@ async function showComponentDetailModal(record, imageUrls, history, componentTyp
             thumb.addEventListener('click', () => {
                 currentImageIndex = idx;
                 const fullUrl = url.includes('cloudinary')
-                    ? url.replace('/upload/', '/upload/w_800,h_500,c_fill,f_auto,q_auto/')
+                    ? applyCloudinaryTransform(url, 'w_800,h_500,c_fill,f_auto,q_auto')
                     : url;
                 mainImageEl.style.backgroundImage = `url('${fullUrl}')`;
                 thumbsContainer.querySelectorAll('.component-detail-thumb').forEach(t => t.classList.remove('active'));
@@ -1300,7 +1301,7 @@ async function initializePlanCarousel(componentRecords) {
 
         // Update image with optimization
         const optimizedImage = current.imageUrl.includes('cloudinary')
-            ? current.imageUrl.replace('/upload/', '/upload/w_800,h_600,c_fill,f_auto,q_auto/')
+            ? applyCloudinaryTransform(current.imageUrl, 'w_800,h_600,c_fill,f_auto,q_auto')
             : current.imageUrl;
         carouselImage.src = optimizedImage;
 
@@ -2286,8 +2287,8 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     let currentPhotoIndex = startPhotoIndex;
     // Optimize main image with proper size and format
-    const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary') 
-        ? imageUrls[currentPhotoIndex].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+    const optimizedMainImage = imageUrls[currentPhotoIndex].includes('cloudinary')
+        ? applyCloudinaryTransform(imageUrls[currentPhotoIndex], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
         : imageUrls[currentPhotoIndex];
     modalMainImage.style.backgroundImage = `url('${optimizedMainImage}')`;
     modalThumbnailStrip.innerHTML = '';
@@ -2296,14 +2297,14 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         thumb.className = 'thumbnail-img';
         // Optimize thumbnails with smaller size
         const optimizedThumb = url.includes('cloudinary')
-            ? url.replace('/upload/', '/upload/w_150,h_150,c_fill,f_auto,q_auto/')
+            ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
             : url;
         thumb.style.backgroundImage = `url('${optimizedThumb}')`;
         if (index === currentPhotoIndex) thumb.classList.add('active');
         thumb.addEventListener('click', () => {
             currentPhotoIndex = index;
             const optimizedClickImage = imageUrls[index].includes('cloudinary')
-                ? imageUrls[index].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                ? applyCloudinaryTransform(imageUrls[index], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                 : imageUrls[index];
             modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
             modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
@@ -2433,7 +2434,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             api.fetchImagesByTags(record, [imageTag], state.records.all).then(taggedImages => {
                 if (taggedImages && taggedImages.length > 0) {
                     const optimizedImage = taggedImages[0].includes('cloudinary')
-                        ? taggedImages[0].replace('/upload/', '/upload/w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive/')
+                        ? applyCloudinaryTransform(taggedImages[0], 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
                         : taggedImages[0];
                     modalMainImage.style.backgroundImage = `url('${optimizedImage}')`;
                 }

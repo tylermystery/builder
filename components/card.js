@@ -13,11 +13,21 @@ import { log } from '../utils/debug.js';
 // Helper to generate optimized Cloudinary URLs with responsive sizing
 function getOptimizedImageUrl(url, width = 600, quality = 'auto') {
     if (!url || !url.includes('cloudinary')) return url;
-    
+
     // Extract the upload segment and insert transformations
     const uploadIndex = url.indexOf('/upload/');
     if (uploadIndex === -1) return url;
-    
+
+    // Check if transformations already exist after /upload/
+    // Cloudinary URLs with transformations have patterns like: /upload/c_fill,w_600,.../
+    const afterUpload = url.slice(uploadIndex + 8);
+    const hasExistingTransformations = /^[a-z]_[^/]+/.test(afterUpload);
+
+    if (hasExistingTransformations) {
+        // URL already has transformations, return as-is to avoid double-transforming
+        return url;
+    }
+
     // Add progressive loading and auto format for better compression
     const transformations = `c_fill,w_${width},q_${quality},f_auto,fl_progressive`;
     return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
@@ -43,10 +53,20 @@ function generateSrcSet(url, baseWidth = 600) {
 // Generate low-quality placeholder for blur-up effect
 function getLowQualityPlaceholder(url) {
     if (!url || !url.includes('cloudinary')) return url;
-    
+
     const uploadIndex = url.indexOf('/upload/');
     if (uploadIndex === -1) return url;
-    
+
+    // Check if transformations already exist after /upload/
+    const afterUpload = url.slice(uploadIndex + 8);
+    const hasExistingTransformations = /^[a-z]_[^/]+/.test(afterUpload);
+
+    if (hasExistingTransformations) {
+        // URL already has transformations - prepend blur transformations before existing ones
+        const transformations = 'c_fill,w_50,q_30,f_auto,e_blur:300';
+        return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
+    }
+
     const transformations = 'c_fill,w_50,q_30,f_auto,e_blur:300';
     return url.slice(0, uploadIndex + 8) + transformations + '/' + url.slice(uploadIndex + 8);
 }

@@ -7,6 +7,7 @@ import * as ui from '../ui.js';
 import * as api from '../api.js';
 import { log } from '../utils/debug.js';
 import { triggerSave } from '../events.js';
+import { applyCloudinaryTransform } from '../utils/imageOptimizer.js';
 
 // Get DOM elements
 const itineraryModal = document.getElementById('itinerary-modal-overlay');
@@ -329,7 +330,7 @@ async function renderScene() {
             imageUrls.forEach(url => {
                 const thumb = document.createElement('div');
                 thumb.className = 'background-thumb';
-                const thumbUrl = url.replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+                const thumbUrl = applyCloudinaryTransform(url, 'c_fill,g_auto,w_50,h_50');
                 thumb.innerHTML = `<img src=\"${thumbUrl}\" alt=\"Venue option\" loading=\"lazy\"> <span>${venueRecord.fields.Name}</span>`;
                 thumb.addEventListener('click', () => {
                     sceneCanvas.style.backgroundImage = `url('${url}')`;
@@ -367,9 +368,9 @@ async function renderScene() {
             if (!record) continue;
             const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
             const itemEl = document.createElement('div');
-            itemEl.className = `palette-item ${type}`; 
+            itemEl.className = `palette-item ${type}`;
             itemEl.setAttribute('draggable', true);
-            const thumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+            const thumbUrl = applyCloudinaryTransform(imageUrls[0] || ui.getPlaceholderImage([]), 'c_fill,g_auto,w_50,h_50');
             itemEl.innerHTML = `<img src=\"${thumbUrl}\" alt=\"${record.fields.Name}\" loading=\"lazy\"> <span>${record.fields.Name}</span>`;
             itemEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', recordId);
@@ -402,9 +403,9 @@ async function showCutoutPicker(record, x, y) {
     cutoutPromptContainer.style.display = 'none';
     
     const { imageUrls } = await api.fetchImagesForRecord(record, state.records.all, new Map());
-    
+
     // --- NEW: Set Context Thumbnail ---
-    const contextThumbUrl = (imageUrls[0] || ui.getPlaceholderImage([])).replace('/upload/', '/upload/c_fill,g_auto,w_50,h_50/');
+    const contextThumbUrl = applyCloudinaryTransform(imageUrls[0] || ui.getPlaceholderImage([]), 'c_fill,g_auto,w_50,h_50');
     if (cutoutContextThumb) cutoutContextThumb.style.backgroundImage = `url('${contextThumbUrl}')`;
     // --- END NEW ---
 
@@ -418,12 +419,12 @@ async function showCutoutPicker(record, x, y) {
     imageUrls.forEach(url => {
         const thumb = document.createElement('div');
         thumb.className = 'thumbnail-img';
-        thumb.style.backgroundImage = `url('${url.replace('/upload/', '/upload/c_fill,g_auto,w_100,h_80/')}')`;
-        
+        thumb.style.backgroundImage = `url('${applyCloudinaryTransform(url, 'c_fill,g_auto,w_100,h_80')}')`;
+
         thumb.addEventListener('click', () => {
             cutoutPickerThumbnails.querySelectorAll('.thumbnail-img').forEach(t => t.classList.remove('selected'));
             thumb.classList.add('selected');
-            
+
             pendingCutout.selectedUrl = url;
             cutoutPromptContainer.style.display = 'block';
             cutoutAiPrompt.focus();
