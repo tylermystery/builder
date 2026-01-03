@@ -5,7 +5,7 @@ import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '..
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
 import { triggerSave } from '../events.js';
-import { showDetailModal } from './modal.js';
+import { showDetailModal, showCheckoutModal, getShopSettings } from './modal.js';
 import { Shader } from '../utils/shader.js';
 import { showWtfPlansPanel } from './wtfPlansPanel.js';
 import { updateEventPlanSection, updateIdeasCarousel } from './sidebar.js';
@@ -4006,6 +4006,18 @@ export function setupPresentationEventListeners() {
                     presentationHeaderShareBtn.title = 'Share this plan';
                 }, 1500);
             });
+        });
+    }
+
+    // Presentation header total button (opens checkout modal)
+    const presentationHeaderTotalBtn = document.getElementById('presentation-header-total');
+    if (presentationHeaderTotalBtn) {
+        presentationHeaderTotalBtn.addEventListener('click', () => {
+            // Only show checkout if there's a total (button is visible)
+            if (presentationHeaderTotalBtn.textContent.trim()) {
+                const shopSettings = getShopSettings();
+                showCheckoutModal(shopSettings);
+            }
         });
     }
 

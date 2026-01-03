@@ -309,6 +309,40 @@ let currentProcessingFee = 0; // To store the current fee
 let currentShopSettings = {};
 const modalOverlay = document.getElementById('detail-modal-overlay');
 
+/**
+ * Get shop settings from the current active shop
+ * Mirrors the logic in main.js for constructing shopSettings
+ * @returns {Object} Shop settings object
+ */
+export function getShopSettings() {
+    const activeShop = state.stores.all.find(s => s.id === state.ui.activeShopId);
+    if (!activeShop || !activeShop.fields) {
+        return {
+            shopType: 'Events',
+            enabledFilters: ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+            paymentOptions: 'DepositOnly',
+            terms: 'Default terms and conditions text.',
+            cartLabels: {}
+        };
+    }
+
+    const settings = {
+        shopType: activeShop.fields.ShopType || 'Events',
+        enabledFilters: activeShop.fields.EnabledFilters || ['Date & Time', 'Headcount', 'Location', 'Subcategories'],
+        paymentOptions: activeShop.fields.PaymentOptions || 'DepositOnly',
+        terms: activeShop.fields.TermsAndConditions || 'Default terms and conditions text.',
+        cartLabels: {}
+    };
+
+    try {
+        settings.cartLabels = JSON.parse(activeShop.fields.CartLabels || '{}');
+    } catch (e) {
+        console.warn('Could not parse CartLabels JSON, using defaults.');
+    }
+
+    return settings;
+}
+
 // Quick Pay Modal Functions
 const quickPayModalOverlay = document.getElementById('quick-pay-modal-overlay');
 

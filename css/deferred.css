@@ -2560,7 +2560,7 @@
     flex-shrink: 0;
 }
 
-/* Presentation header total cost display */
+/* Presentation header total cost display - now a button */
 .presentation-header-total {
     font-size: 1.1em;
     font-weight: 600;
@@ -2569,6 +2569,19 @@
     padding: 4px 12px;
     border-radius: 20px;
     white-space: nowrap;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.presentation-header-total:hover {
+    background: rgba(40, 167, 69, 0.2);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.presentation-header-total:active {
+    transform: scale(0.97);
+    background: rgba(40, 167, 69, 0.25);
 }
 
 .presentation-header-total:empty {
