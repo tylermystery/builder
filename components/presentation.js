@@ -54,6 +54,8 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             // Re-render the items list
             await renderAllItems();
             generateItemsSummary();
+            // Update running total in header
+            updatePresentationHeaderTotal();
             break;
         case 'dateChanged':
             // Update the date display
@@ -67,6 +69,8 @@ async function handlePlanSyncUpdate(changeType, summary, changeData) {
             renderEventHeader();
             await renderAllItems();
             initializeAccordions();
+            // Update running total in header
+            updatePresentationHeaderTotal();
             break;
         default:
             // console.log('[Presentation DEBUG] Unknown sync change type:', changeType);
@@ -396,6 +400,55 @@ function renderPresentationHeader() {
     const eventName = state.eventDetails.combined.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME) || 'Event Plan';
     if (presentationEventLabel) {
         presentationEventLabel.textContent = eventName;
+    }
+}
+
+/**
+ * Update the running total cost displayed in the presentation header
+ */
+function updatePresentationHeaderTotal() {
+    const totalEl = document.getElementById('presentation-header-total');
+    if (!totalEl) return;
+
+    let subtotal = 0;
+    state.cart.lockedItems.forEach((itemInfo, recordId) => {
+        const record = state.records.all.find(r => r.id === recordId);
+        if (!record) return;
+
+        // Use selections for price if available, otherwise fall back to selectedOptionIndex
+        const priceParam = (itemInfo.selections && Object.keys(itemInfo.selections).length > 0)
+            ? itemInfo.selections
+            : itemInfo.selectedOptionIndex;
+
+        let unitPrice = itemInfo.overridePrice ?? getRecordPrice(record, priceParam);
+        if (isNaN(unitPrice)) return;
+
+        // Apply package discount if this item came from a package
+        if (itemInfo.packageId && state.session.activePackages) {
+            const packageInfo = state.session.activePackages.get(itemInfo.packageId);
+            if (packageInfo && packageInfo.discount > 0) {
+                unitPrice = unitPrice * (1 - packageInfo.discount / 100);
+            }
+        }
+
+        // Use itemInfo.quantity for all items
+        const effectiveQuantity = Math.max(parseInt(itemInfo.quantity) || 1, 1);
+        subtotal += unitPrice * effectiveQuantity;
+    });
+
+    // Calculate total due (subtotal minus any payments received)
+    const amountReceived = state.session.user.amountReceived || 0;
+    const totalDue = subtotal - amountReceived;
+
+    // Display the total - show subtotal if no payments, otherwise show total due
+    if (subtotal > 0) {
+        if (amountReceived > 0) {
+            totalEl.textContent = `$${totalDue.toFixed(2)} due`;
+        } else {
+            totalEl.textContent = `$${subtotal.toFixed(2)}`;
+        }
+    } else {
+        totalEl.textContent = '';
     }
 }
 
@@ -3735,6 +3788,9 @@ export async function showPresentationView(listType, startRecordId = null) {
 
     // Render presentation header (copies logo and title from main header)
     renderPresentationHeader();
+
+    // Update the running total cost in the header
+    updatePresentationHeaderTotal();
 
     // Render all sections
     renderEventHeader();
