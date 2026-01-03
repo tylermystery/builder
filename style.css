@@ -3005,6 +3005,9 @@ body.modal-open {
     display: flex;
     gap: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* Debug: ensure visibility */
+    min-width: 200px;
+    min-height: 40px;
 }
 
 .reaction-picker-btn {
@@ -3015,6 +3018,11 @@ body.modal-open {
     cursor: pointer;
     border-radius: 8px;
     transition: all 0.15s ease;
+    /* Debug: ensure button is visible */
+    min-width: 30px;
+    min-height: 30px;
+    /* Ensure emoji font support */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .reaction-picker-btn:hover {
@@ -3635,7 +3643,7 @@ body.modal-open {
 /* Event Header Section */
 .itinerary-header {
     text-align: center;
-    background: transparent;
+    /* Removed background: transparent to allow .itinerary-section background to show */
     border-bottom: none;
 }
 
@@ -3941,7 +3949,7 @@ body.modal-open {
 
 /* Items Section */
 .itinerary-items {
-    background: transparent;
+    /* Removed background: transparent to allow .itinerary-section background to show */
 }
 
 .itinerary-items-list {
@@ -10213,6 +10221,9 @@ hr.total-divider {
     padding: 8px;
     display: flex;
     gap: 4px;
+    /* Debug: ensure visibility */
+    min-width: 200px;
+    min-height: 40px;
 }
 
 .comment-reaction-picker .reaction-picker-btn {
@@ -10227,6 +10238,8 @@ hr.total-divider {
     cursor: pointer;
     font-size: 1.2em;
     transition: background 0.2s, transform 0.2s;
+    /* Ensure emoji font support */
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
 }
 
 .comment-reaction-picker .reaction-picker-btn:hover {

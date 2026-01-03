@@ -1470,7 +1470,9 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
     reactionBtn.innerHTML = '😀';
     reactionBtn.title = 'Add reaction';
     reactionBtn.addEventListener('click', (e) => {
+        console.log('[Presentation DEBUG] Reaction button clicked!');
         e.stopPropagation();
+        e.preventDefault();
         showPresentationReactionPicker(wrapper, messageId, senderId);
     });
     actionsContainer.appendChild(reactionBtn);
@@ -1591,32 +1593,53 @@ function addPresentationMessageToUI(sender, message, isSent, timestamp, senderId
  * Shows the emoji reaction picker near a message in presentation view
  */
 function showPresentationReactionPicker(wrapper, messageId, senderId) {
+    console.log('[ReactionPicker DEBUG] showPresentationReactionPicker called');
+    console.log('[ReactionPicker DEBUG] wrapper:', wrapper);
+    console.log('[ReactionPicker DEBUG] messageId:', messageId);
+    console.log('[ReactionPicker DEBUG] QUICK_REACTIONS:', QUICK_REACTIONS);
+
     // Remove any existing picker
-    document.querySelectorAll('.reaction-picker').forEach(p => p.remove());
+    const existingPickers = document.querySelectorAll('.reaction-picker');
+    console.log('[ReactionPicker DEBUG] Existing pickers found:', existingPickers.length);
+    existingPickers.forEach(p => p.remove());
 
     // Find the reaction button to position near it
     const reactionBtn = wrapper.querySelector('.msg-action-btn.reaction-btn');
-    if (!reactionBtn) return;
+    console.log('[ReactionPicker DEBUG] reactionBtn found:', reactionBtn);
+    if (!reactionBtn) {
+        console.log('[ReactionPicker DEBUG] ❌ No reaction button found, returning early');
+        return;
+    }
 
     const picker = document.createElement('div');
     picker.className = 'reaction-picker';
+    console.log('[ReactionPicker DEBUG] Created picker element:', picker);
 
-    QUICK_REACTIONS.forEach(emoji => {
+    QUICK_REACTIONS.forEach((emoji, index) => {
+        console.log(`[ReactionPicker DEBUG] Adding emoji ${index}:`, emoji, 'type:', typeof emoji);
         const btn = document.createElement('button');
         btn.className = 'reaction-picker-btn';
         btn.textContent = emoji;
+        console.log(`[ReactionPicker DEBUG] Button ${index} textContent set to:`, btn.textContent);
         btn.addEventListener('click', async () => {
+            console.log('[ReactionPicker DEBUG] Emoji button clicked:', emoji);
             picker.remove();
             await togglePresentationReaction(messageId, emoji, true, wrapper);
         });
         picker.appendChild(btn);
     });
 
+    console.log('[ReactionPicker DEBUG] Picker innerHTML:', picker.innerHTML);
+    console.log('[ReactionPicker DEBUG] Picker children count:', picker.children.length);
+
     // Append to body to avoid overflow clipping issues in presentation view
     document.body.appendChild(picker);
+    console.log('[ReactionPicker DEBUG] ✅ Picker appended to document.body');
 
     // Position the picker near the reaction button
     const rect = reactionBtn.getBoundingClientRect();
+    console.log('[ReactionPicker DEBUG] Button rect:', rect);
+
     picker.style.position = 'fixed';
     picker.style.zIndex = '10001'; // Higher than presentation modal (z-index: 1000)
 
@@ -1629,9 +1652,36 @@ function showPresentationReactionPicker(wrapper, messageId, senderId) {
     }
     picker.style.left = `${Math.max(10, rect.left - 50)}px`;
 
+    console.log('[ReactionPicker DEBUG] Final picker styles:', {
+        position: picker.style.position,
+        top: picker.style.top,
+        left: picker.style.left,
+        zIndex: picker.style.zIndex
+    });
+
+    // Verify picker is in DOM
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.reaction-picker');
+        console.log('[ReactionPicker DEBUG] Verify picker in DOM after append:', verifyPicker);
+        if (verifyPicker) {
+            const computedStyle = window.getComputedStyle(verifyPicker);
+            console.log('[ReactionPicker DEBUG] Picker computed styles:', {
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                position: computedStyle.position,
+                zIndex: computedStyle.zIndex,
+                width: computedStyle.width,
+                height: computedStyle.height
+            });
+        }
+    }, 10);
+
     // Close picker when clicking elsewhere
     const closePicker = (e) => {
+        console.log('[ReactionPicker DEBUG] closePicker triggered, target:', e.target);
         if (!picker.contains(e.target)) {
+            console.log('[ReactionPicker DEBUG] Click outside picker, removing');
             picker.remove();
             document.removeEventListener('click', closePicker);
         }
@@ -2814,8 +2864,10 @@ function handleComponentCommentsClick(e) {
     const actionBtn = e.target.closest('.comment-action-btn');
     if (actionBtn) {
         e.stopPropagation();
+        e.preventDefault();
         const action = actionBtn.dataset.action;
         const commentId = actionBtn.closest('.component-comment').dataset.commentId;
+        console.log('[ComponentComment DEBUG] Comment action button clicked:', action, commentId);
         handleCommentAction(action, commentId);
         return;
     }
@@ -3144,6 +3196,7 @@ async function handleCommentAction(action, commentId) {
             await deleteComment(commentId);
             break;
         case 'react':
+            console.log('[ComponentComment DEBUG] About to call showCommentReactionPicker');
             showCommentReactionPicker(commentId);
             break;
     }
@@ -3362,37 +3415,60 @@ async function deleteComment(commentId) {
  * Show reaction picker for a comment
  */
 function showCommentReactionPicker(commentId) {
+    console.log('[CommentReactionPicker DEBUG] showCommentReactionPicker called');
+    console.log('[CommentReactionPicker DEBUG] commentId:', commentId);
+    console.log('[CommentReactionPicker DEBUG] QUICK_REACTIONS:', QUICK_REACTIONS);
+
     const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
-    if (!commentEl) return;
+    console.log('[CommentReactionPicker DEBUG] commentEl found:', commentEl);
+    if (!commentEl) {
+        console.log('[CommentReactionPicker DEBUG] ❌ No comment element found, returning early');
+        return;
+    }
 
     // Find the react button to position near it
     const reactBtn = commentEl.querySelector('.comment-action-btn[data-action="react"]');
-    if (!reactBtn) return;
+    console.log('[CommentReactionPicker DEBUG] reactBtn found:', reactBtn);
+    if (!reactBtn) {
+        console.log('[CommentReactionPicker DEBUG] ❌ No react button found, returning early');
+        return;
+    }
 
     // Remove existing picker
     const existingPicker = document.querySelector('.comment-reaction-picker');
+    console.log('[CommentReactionPicker DEBUG] Existing picker found:', existingPicker);
     if (existingPicker) existingPicker.remove();
 
     const picker = document.createElement('div');
     picker.className = 'comment-reaction-picker';
+    console.log('[CommentReactionPicker DEBUG] Created picker element:', picker);
 
-    QUICK_REACTIONS.forEach(emoji => {
+    QUICK_REACTIONS.forEach((emoji, index) => {
+        console.log(`[CommentReactionPicker DEBUG] Adding emoji ${index}:`, emoji, 'type:', typeof emoji);
         const btn = document.createElement('button');
         btn.className = 'reaction-picker-btn';
         btn.textContent = emoji;
+        console.log(`[CommentReactionPicker DEBUG] Button ${index} textContent:`, btn.textContent);
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
+            console.log('[CommentReactionPicker DEBUG] Emoji button clicked:', emoji);
             picker.remove();
             await toggleCommentReaction(commentId, emoji);
         });
         picker.appendChild(btn);
     });
 
+    console.log('[CommentReactionPicker DEBUG] Picker innerHTML:', picker.innerHTML);
+    console.log('[CommentReactionPicker DEBUG] Picker children count:', picker.children.length);
+
     // Append to body to avoid overflow clipping issues in presentation view
     document.body.appendChild(picker);
+    console.log('[CommentReactionPicker DEBUG] ✅ Picker appended to document.body');
 
     // Position the picker near the react button
     const rect = reactBtn.getBoundingClientRect();
+    console.log('[CommentReactionPicker DEBUG] Button rect:', rect);
+
     picker.style.position = 'fixed';
     picker.style.zIndex = '10001'; // Higher than presentation modal (z-index: 1000)
 
@@ -3405,9 +3481,36 @@ function showCommentReactionPicker(commentId) {
     }
     picker.style.left = `${Math.max(10, rect.left - 50)}px`;
 
+    console.log('[CommentReactionPicker DEBUG] Final picker styles:', {
+        position: picker.style.position,
+        top: picker.style.top,
+        left: picker.style.left,
+        zIndex: picker.style.zIndex
+    });
+
+    // Verify picker is in DOM
+    setTimeout(() => {
+        const verifyPicker = document.querySelector('.comment-reaction-picker');
+        console.log('[CommentReactionPicker DEBUG] Verify picker in DOM after append:', verifyPicker);
+        if (verifyPicker) {
+            const computedStyle = window.getComputedStyle(verifyPicker);
+            console.log('[CommentReactionPicker DEBUG] Picker computed styles:', {
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                position: computedStyle.position,
+                zIndex: computedStyle.zIndex,
+                width: computedStyle.width,
+                height: computedStyle.height
+            });
+        }
+    }, 10);
+
     // Close picker on outside click
     const closePicker = (e) => {
+        console.log('[CommentReactionPicker DEBUG] closePicker triggered, target:', e.target);
         if (!picker.contains(e.target)) {
+            console.log('[CommentReactionPicker DEBUG] Click outside picker, removing');
             picker.remove();
             document.removeEventListener('click', closePicker);
         }
