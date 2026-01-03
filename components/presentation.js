@@ -746,6 +746,94 @@ function updateItemEmojiIndicator(recordId) {
     }
 }
 
+/**
+ * Calculate the event-level emoji by averaging all component summary emojis.
+ * Uses the same averaging logic as individual components, but aggregates
+ * the averaged scores from each component that has reactions.
+ * @returns {{emoji: string, count: number, totalReactions: number}} Event emoji, component count, and total reactions
+ */
+function getEventSummaryEmoji() {
+    // Get all items in the plan (locked and favorites/ideas)
+    const favorites = Array.from(state.cart.items.keys());
+    const locked = Array.from(state.cart.lockedItems.keys());
+    const allItemIds = [...new Set([...locked, ...favorites])];
+
+    // Collect average scores from each component that has reactions
+    const componentAverages = [];
+    let totalReactionCount = 0;
+
+    allItemIds.forEach(recordId => {
+        const reactions = state.session.reactions.get(recordId);
+        if (!reactions || !(reactions instanceof Map) || reactions.size === 0) {
+            return;
+        }
+
+        // Calculate this component's average score (same as getItemSummaryEmoji)
+        let totalScore = 0;
+        let reactionCount = 0;
+        reactions.forEach((emoji) => {
+            totalScore += getReactionScore(emoji);
+            reactionCount++;
+        });
+
+        if (reactionCount > 0) {
+            const averageScore = totalScore / reactionCount;
+            componentAverages.push(averageScore);
+            totalReactionCount += reactionCount;
+        }
+    });
+
+    // No components with reactions
+    if (componentAverages.length === 0) {
+        return { emoji: '', count: 0, totalReactions: 0 };
+    }
+
+    // Calculate the average of all component averages (event-level average)
+    const eventAverageScore = componentAverages.reduce((sum, avg) => sum + avg, 0) / componentAverages.length;
+
+    // Find the emoji with the score closest to the event average
+    let closestEmoji = '';
+    let closestDifference = Infinity;
+
+    Object.entries(REACTION_SCORES).forEach(([emoji, score]) => {
+        const difference = Math.abs(score - eventAverageScore);
+        if (difference < closestDifference) {
+            closestDifference = difference;
+            closestEmoji = emoji;
+        }
+    });
+
+    return {
+        emoji: closestEmoji || '💬',
+        count: componentAverages.length,
+        totalReactions: totalReactionCount
+    };
+}
+
+/**
+ * Update the event-level emoji indicator in the presentation header.
+ * This shows a real-time averaged emoji representing overall sentiment
+ * across all components in the plan.
+ */
+function updateEventEmojiIndicator() {
+    const eventEmojiEl = document.getElementById('event-emoji-indicator');
+    if (!eventEmojiEl) return;
+
+    const { emoji, count, totalReactions } = getEventSummaryEmoji();
+
+    if (emoji && count > 0) {
+        // Show count of components with reactions if more than 1
+        const countDisplay = count > 1 ? `<span class="event-emoji-count">${count}</span>` : '';
+        eventEmojiEl.innerHTML = `<span class="event-emoji-icon">${emoji}</span>${countDisplay}`;
+        eventEmojiEl.classList.add('visible');
+        eventEmojiEl.title = `Event sentiment: ${emoji} (${totalReactions} reaction${totalReactions !== 1 ? 's' : ''} across ${count} component${count !== 1 ? 's' : ''})`;
+    } else {
+        eventEmojiEl.innerHTML = '';
+        eventEmojiEl.classList.remove('visible');
+        eventEmojiEl.title = '';
+    }
+}
+
 // Generate the expanded emoji picker HTML
 function createEmojiPickerHTML(recordId) {
     let categoriesHTML = '';
@@ -918,6 +1006,9 @@ function selectEmoji(recordId, emoji) {
 
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
@@ -1275,6 +1366,9 @@ async function renderAllItems() {
 
     // Render the reactions summary after items
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
 }
 
 // Render the reactions summary section showing component rankings
@@ -2349,6 +2443,9 @@ async function initializePresentationChat() {
 
             // Update the reactions summary
             renderReactionsSummary();
+
+            // Update the event-level emoji indicator
+            updateEventEmojiIndicator();
         }
     });
 
@@ -2837,6 +2934,9 @@ function handleReactionClick(e) {
 
     // Update the reactions summary
     renderReactionsSummary();
+
+    // Update the event-level emoji indicator
+    updateEventEmojiIndicator();
 
     // Broadcast item reaction update via Pusher for real-time sync
     if (presentationChatChannel) {
