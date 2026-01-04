@@ -15,6 +15,8 @@ import { showUserModal } from './auth.js';
 import { addEnergy, updateProgress } from './components/backgroundEngine.js';
 import { showReceiptModal } from './components/receipt.js';
 import { showProjectsPanel, hideProjectsPanel } from './components/projectsDashboard.js';
+import { initializeProjectSelector, wasLongPress, resetLongPress } from './components/projectSelector.js';
+import { broadcastItemAdded, broadcastItemRemoved } from './utils/realtimeUpdates.js';
 
 let mainDatePicker = null;
 let saveTimeout = null;
@@ -1611,6 +1613,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
                 handleUmwAddition();
             }
 
+            // Phase 5: Broadcast the item addition to collaborators
+            broadcastItemAdded(recordId, record.fields?.Name || 'Item');
+
             triggerSave();
         } else if (demoteBtn) {
             console.log('[Events] ========== DEMOTE CLICKED ==========');
@@ -1647,6 +1652,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
             if (isUmwBeingRemoved) {
                 handleUmwRemoval();
             }
+
+            // Phase 5: Broadcast the item removal to collaborators
+            broadcastItemRemoved(recordId, record?.fields?.Name || 'Item');
 
             triggerSave();
         } else if (removeIdeaBtn && e.target === removeIdeaBtn) {
@@ -1923,6 +1931,9 @@ export function initializeEventListeners(imageCache, flatpickr, shopSettings) {
     safeAddEventListener('payment-form', 'submit', handlePaymentFormSubmit);
 
     setupItineraryEventListeners();
+
+    // Phase 5: Initialize project selector for "Add to Project" functionality
+    initializeProjectSelector();
 
     return { mainDatePicker, eventPlanDatePicker };
 }

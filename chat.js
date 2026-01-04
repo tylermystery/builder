@@ -35,6 +35,107 @@ function updateChatHeaderTitle() {
         chatTitleEl.textContent = planName || 'Session Chat';
         log('Chat', `Updated chat header title to: ${planName || 'Session Chat'}`);
     }
+
+    // Phase 5: Update project indicator if present
+    updateProjectIndicator();
+}
+
+/**
+ * Phase 5: Updates the project indicator in the chat panel header.
+ * Shows which project the chat is currently associated with.
+ */
+function updateProjectIndicator() {
+    const chatHeader = document.querySelector('.chat-header, #chat-header');
+    if (!chatHeader) return;
+
+    // Remove existing indicator if present
+    const existingIndicator = chatHeader.querySelector('.chat-project-indicator');
+    if (existingIndicator) {
+        existingIndicator.remove();
+    }
+
+    // Get current project/session info
+    const sessionId = state.session.id;
+    if (!sessionId) return;
+
+    // Get project name from eventDetails or recent chats
+    let projectName = state.eventDetails?.combined?.get(CONSTANTS.DETAIL_TYPES.EVENT_NAME);
+
+    if (!projectName) {
+        // Try to find from recent chats
+        const currentChat = state.session.recentChats?.find(
+            c => c.id === sessionId && c.type === 'session'
+        );
+        projectName = currentChat?.name;
+    }
+
+    if (projectName && projectName !== 'Session Chat') {
+        const indicator = document.createElement('div');
+        indicator.className = 'chat-project-indicator';
+        indicator.innerHTML = `
+            <span class="project-icon">📋</span>
+            <span class="project-name">${escapeHtml(projectName)}</span>
+        `;
+
+        // Insert at the top of the chat header
+        const firstChild = chatHeader.firstChild;
+        if (firstChild) {
+            chatHeader.insertBefore(indicator, firstChild);
+        } else {
+            chatHeader.appendChild(indicator);
+        }
+    }
+}
+
+/**
+ * Phase 5: Switch chat context to a different project.
+ * Call this when the user selects a different project in the Dashboard.
+ * @param {string} projectId - The new project ID to switch to
+ * @param {string} projectName - The name of the project (optional)
+ */
+export async function switchChatContext(projectId, projectName = null) {
+    if (!projectId) {
+        log('Chat', 'Cannot switch chat context - no project ID provided');
+        return;
+    }
+
+    const currentSessionId = state.session.id;
+
+    // If switching to the same project, just update the header
+    if (projectId === currentSessionId) {
+        updateChatHeaderTitle();
+        return;
+    }
+
+    log('Chat', `Switching chat context from ${currentSessionId} to ${projectId}`);
+
+    // Disconnect from current session channel if exists
+    if (sessionChatChannel) {
+        sessionChatChannel.unbind_all();
+        if (pusher) {
+            pusher.unsubscribe(`presence-session-${currentSessionId}`);
+        }
+        sessionChatChannel = null;
+    }
+
+    // Update the chat title
+    const chatTitleEl = document.getElementById('chat-session-title');
+    if (chatTitleEl) {
+        chatTitleEl.textContent = projectName || 'Project Chat';
+    }
+
+    // Clear messages list
+    const messagesList = document.getElementById('messages-list');
+    if (messagesList) {
+        messagesList.innerHTML = '<div class="chat-loading">Loading messages...</div>';
+    }
+
+    // Update project indicator
+    updateProjectIndicator();
+
+    // The full reinitialization will happen when the session is loaded
+    // via initializeSessionChat() called from the session loading flow
+    log('Chat', 'Chat context updated - awaiting full session reload');
 }
 
 function requestNotificationPermissionIfNeeded() {

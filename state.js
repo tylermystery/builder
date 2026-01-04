@@ -82,6 +82,12 @@ export let state = {
         all: new Map(),           // taskId -> task record
         byProject: new Map(),     // projectId -> [task records]
     },
+    // Phase 4: Permissions & Security
+    permissions: {
+        currentRole: null,        // 'owner' | 'editor' | 'viewer' | null (loading/unknown)
+        isLoading: true,          // True while permissions are being fetched
+        permissionRecord: null,   // The Collaborator_Permissions record if exists
+    },
 };
 
 export function setState(newState) {

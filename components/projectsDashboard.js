@@ -1,10 +1,12 @@
 // FILE: components/projectsDashboard.js
 // Phase 2: Project Navigation & Dashboard Component
+// Phase 4: Permissions & Security - UI Guarding for read-only views
 // Provides hierarchical project tree display and filtering capabilities
 
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import { initTaskManager } from './taskManager.js';
+import * as api from '../api.js';
 
 // Project type constants for filtering
 export const PROJECT_TYPES = {
@@ -418,9 +420,18 @@ function handleProjectSelect(project) {
 
 /**
  * Handle create new project button click
+ * Phase 4: Check permissions before allowing project creation
  */
 function handleCreateNewProject() {
     log('ProjectsDashboard', 'Create new project clicked.');
+
+    // Phase 4: Check if user has permission to create projects
+    // For now, any authenticated user can create new projects
+    // This creates a new top-level project, not a sub-project
+    if (!state.session.user?.isAuthenticated) {
+        log('ProjectsDashboard', 'User not authenticated - cannot create project');
+        return;
+    }
 
     // Close the panel
     hideProjectsPanel();
@@ -466,6 +477,7 @@ export function showProjectsError(message) {
 /**
  * Show the task manager view for the current project
  * Hides the catalog and shows the task manager
+ * Phase 4: Fetches user permissions before rendering
  */
 export async function showTasksView() {
     const projectId = state.session.id;
@@ -495,7 +507,51 @@ export async function showTasksView() {
     }
     taskContainer.style.display = 'block';
 
-    // Initialize the task manager
+    // Phase 4: Fetch user permissions before initializing task manager
+    // Default to loading state (read-only) until permissions are fetched
+    setState({
+        permissions: {
+            ...state.permissions,
+            isLoading: true,
+            currentRole: null
+        }
+    });
+
+    // Fetch permissions if user is authenticated
+    if (state.session.user?.isAuthenticated && state.session.user?.id) {
+        try {
+            const { role, permissionRecord } = await api.fetchUserRole(projectId, state.session.user.id);
+            setState({
+                permissions: {
+                    currentRole: role,
+                    isLoading: false,
+                    permissionRecord: permissionRecord
+                }
+            });
+            log('ProjectsDashboard', `User role for project ${projectId}: ${role}`);
+        } catch (error) {
+            console.error('Error fetching user permissions:', error);
+            // On error, keep read-only mode for safety
+            setState({
+                permissions: {
+                    currentRole: null,
+                    isLoading: false,
+                    permissionRecord: null
+                }
+            });
+        }
+    } else {
+        // Not authenticated - default to viewer/guest mode
+        setState({
+            permissions: {
+                currentRole: api.PERMISSION_ROLES.VIEWER,
+                isLoading: false,
+                permissionRecord: null
+            }
+        });
+    }
+
+    // Initialize the task manager (will use updated permission state)
     await initTaskManager('task-manager-container', projectId);
 
     tasksViewActive = true;

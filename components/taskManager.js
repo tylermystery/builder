@@ -1,16 +1,29 @@
 // FILE: components/taskManager.js
-// Phase 3a: Basic Task Operations & UI
+// Phase 3b: Advanced Interactions - Drag-and-Drop Reordering & Item Linking
+// Phase 4: Permissions & Security - UI Guarding for read-only views
+// Phase 5: Real-time updates integration
 // Provides task management interface for a selected project
 
 import { state, setState } from '../state.js';
 import { log } from '../utils/debug.js';
 import * as api from '../api.js';
 import { showToast } from '../ui.js';
+import { showDetailModal } from './modal.js';
+import {
+    initializeRealtimeUpdates,
+    cleanupRealtimeUpdates,
+    registerTaskManagerCallback,
+    broadcastTaskCreated,
+    broadcastTaskUpdated,
+    broadcastTaskDeleted,
+    broadcastTaskReordered
+} from '../utils/realtimeUpdates.js';
 
 // Local component state
 let currentProjectId = null;
 let currentTasks = [];
 let editingTaskId = null;
+let sortableInstances = []; // Track SortableJS instances for cleanup
 
 /**
  * Initialize the Task Manager for a specific project
@@ -48,6 +61,14 @@ export async function initTaskManager(containerId, projectId) {
 
         // Render the task UI
         renderTaskManager(container, tasks);
+
+        // Phase 5: Initialize real-time updates for this project
+        initializeRealtimeUpdates(projectId, {
+            onTaskUpdate: handleRealtimeTaskUpdate
+        });
+
+        // Register callback for real-time updates
+        registerTaskManagerCallback(handleRealtimeTaskUpdate);
 
         log('TaskManager', `Loaded ${tasks.length} tasks for project ${projectId}`);
     } catch (error) {
@@ -117,11 +138,24 @@ function renderEmptyState(container, message) {
  * @param {Array} tasks - Array of task records
  */
 function renderTaskManager(container, tasks) {
+    // Cleanup existing Sortable instances before re-rendering
+    cleanupSortables();
+
+    // Phase 4: Check user permissions - default to read-only while loading
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+    const isUserViewer = !isLoading && api.isViewer(currentRole);
+
+    // Add a class to the container for permission-based styling
+    const permissionClass = isLoading ? 'permissions-loading' : (canUserEdit ? 'can-edit' : 'read-only');
+
     container.innerHTML = `
-        <div class="task-manager">
+        <div class="task-manager ${permissionClass}">
             <div class="task-manager-header">
                 <h3>Tasks</h3>
-                <button class="task-add-btn" id="task-add-btn">+ New Task</button>
+                ${canUserEdit ? '<button class="task-add-btn" id="task-add-btn">+ New Task</button>' : ''}
+                ${isUserViewer ? '<span class="task-viewer-badge">View Only</span>' : ''}
             </div>
             <div id="task-list-container" class="task-list-container">
                 ${renderTaskList(tasks)}
@@ -131,6 +165,11 @@ function renderTaskManager(container, tasks) {
 
     // Attach event listeners
     attachEventListeners(container);
+
+    // Initialize drag-and-drop only if user can edit
+    if (canUserEdit) {
+        initializeSortable();
+    }
 }
 
 /**
@@ -147,35 +186,59 @@ function renderTaskList(tasks) {
         `;
     }
 
-    // Group tasks by status
-    const pendingTasks = tasks.filter(t =>
-        t.fields.Status === api.TASK_STATUS.PENDING ||
-        t.fields.Status === api.TASK_STATUS.IN_PROGRESS ||
-        t.fields.Status === api.TASK_STATUS.BLOCKED ||
-        !t.fields.Status
-    );
-    const completedTasks = tasks.filter(t => t.fields.Status === api.TASK_STATUS.COMPLETED);
+    // Sort tasks by Order field if available, otherwise by creation time
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const orderA = a.fields.Order ?? Infinity;
+        const orderB = b.fields.Order ?? Infinity;
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(a.createdTime) - new Date(b.createdTime);
+    });
+
+    // Group tasks by status for Kanban-style display
+    const statusGroups = {
+        [api.TASK_STATUS.PENDING]: [],
+        [api.TASK_STATUS.IN_PROGRESS]: [],
+        [api.TASK_STATUS.BLOCKED]: [],
+        [api.TASK_STATUS.COMPLETED]: []
+    };
+
+    sortedTasks.forEach(task => {
+        const status = task.fields.Status || api.TASK_STATUS.PENDING;
+        if (statusGroups[status]) {
+            statusGroups[status].push(task);
+        } else {
+            statusGroups[api.TASK_STATUS.PENDING].push(task);
+        }
+    });
+
+    // Combine active statuses (pending, in_progress, blocked) for drag-drop
+    const activeTasks = [
+        ...statusGroups[api.TASK_STATUS.PENDING],
+        ...statusGroups[api.TASK_STATUS.IN_PROGRESS],
+        ...statusGroups[api.TASK_STATUS.BLOCKED]
+    ];
+    const completedTasks = statusGroups[api.TASK_STATUS.COMPLETED];
 
     let html = '';
 
-    // Pending/Active Tasks Section
-    if (pendingTasks.length > 0) {
+    // Active Tasks Section (sortable)
+    if (activeTasks.length > 0 || completedTasks.length === 0) {
         html += `
-            <div class="task-group">
-                <h4 class="task-group-header">Active Tasks (${pendingTasks.length})</h4>
-                <div class="task-group-list">
-                    ${pendingTasks.map(task => renderTaskCard(task)).join('')}
+            <div class="task-group" data-status-group="active">
+                <h4 class="task-group-header">Active Tasks (${activeTasks.length})</h4>
+                <div class="task-group-list task-sortable" data-status="active">
+                    ${activeTasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
         `;
     }
 
-    // Completed Tasks Section
+    // Completed Tasks Section (sortable)
     if (completedTasks.length > 0) {
         html += `
-            <div class="task-group completed-group">
+            <div class="task-group completed-group" data-status-group="completed">
                 <h4 class="task-group-header">Completed (${completedTasks.length})</h4>
-                <div class="task-group-list">
+                <div class="task-group-list task-sortable" data-status="completed">
                     ${completedTasks.map(task => renderTaskCard(task)).join('')}
                 </div>
             </div>
@@ -197,19 +260,46 @@ function renderTaskCard(task) {
     const dueDate = fields.DueDate ? formatDate(fields.DueDate) : '';
     const assignee = fields.Assignee || '';
     const isCompleted = status === api.TASK_STATUS.COMPLETED;
+    const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : null;
+
+    // Phase 4: Check user permissions for task actions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
 
     // Status badge styling
     const statusBadgeClass = getStatusBadgeClass(status);
     const statusLabel = getStatusLabel(status);
 
+    // Get linked item info
+    const linkedItemHtml = linkedItemId ? renderLinkedItemSnippet(linkedItemId) : '';
+
+    // Only show drag handle and actions if user can edit
+    const dragHandleHtml = canUserEdit ? `
+            <div class="task-card-drag-handle">
+                <span class="drag-icon">⋮⋮</span>
+            </div>` : '';
+
+    const actionsHtml = canUserEdit ? `
+            <div class="task-card-actions">
+                <button class="task-edit-btn" data-task-id="${task.id}" title="Edit task">
+                    <span>Edit</span>
+                </button>
+                <button class="task-delete-btn" data-task-id="${task.id}" title="Delete task">
+                    <span>&times;</span>
+                </button>
+            </div>` : '';
+
     return `
-        <div class="task-card ${isCompleted ? 'task-completed' : ''}" data-task-id="${task.id}">
+        <div class="task-card ${isCompleted ? 'task-completed' : ''} ${canUserEdit ? '' : 'task-card-readonly'}" data-task-id="${task.id}" data-status="${status}">
+            ${dragHandleHtml}
             <div class="task-card-main">
                 <div class="task-checkbox">
                     <input type="checkbox"
                            class="task-complete-checkbox"
                            data-task-id="${task.id}"
-                           ${isCompleted ? 'checked' : ''}>
+                           ${isCompleted ? 'checked' : ''}
+                           ${canUserEdit ? '' : 'disabled'}>
                 </div>
                 <div class="task-card-content">
                     <span class="task-name ${isCompleted ? 'task-name-completed' : ''}">${escapeHtml(name)}</span>
@@ -218,16 +308,42 @@ function renderTaskCard(task) {
                         ${dueDate ? `<span class="task-due-date">${dueDate}</span>` : ''}
                         ${assignee ? `<span class="task-assignee">${escapeHtml(assignee)}</span>` : ''}
                     </div>
+                    ${linkedItemHtml}
                 </div>
             </div>
-            <div class="task-card-actions">
-                <button class="task-edit-btn" data-task-id="${task.id}" title="Edit task">
-                    <span>Edit</span>
-                </button>
-                <button class="task-delete-btn" data-task-id="${task.id}" title="Delete task">
-                    <span>&times;</span>
-                </button>
+            ${actionsHtml}
+        </div>
+    `;
+}
+
+/**
+ * Render linked item snippet for task card
+ * @param {string} itemId - The catalog item ID
+ * @returns {string} - HTML string for linked item display
+ */
+function renderLinkedItemSnippet(itemId) {
+    // Try to get item from state.records.all
+    const item = state.records.all.find(r => r.id === itemId);
+
+    if (!item) {
+        return `
+            <div class="task-linked-item task-linked-item-missing" data-item-id="${itemId}">
+                <span class="linked-item-icon">📦</span>
+                <span class="linked-item-name">Linked Item</span>
             </div>
+        `;
+    }
+
+    const itemName = item.fields?.Name || 'Unnamed Item';
+    const thumbnail = item.fields?.Attachments?.[0]?.thumbnails?.small?.url || '';
+
+    return `
+        <div class="task-linked-item" data-item-id="${itemId}" title="Click to view item details">
+            ${thumbnail
+                ? `<img src="${thumbnail}" alt="${escapeHtml(itemName)}" class="linked-item-thumb" loading="lazy">`
+                : `<span class="linked-item-icon">📦</span>`
+            }
+            <span class="linked-item-name">${escapeHtml(itemName)}</span>
         </div>
     `;
 }
@@ -310,7 +426,7 @@ function attachEventListeners(container) {
         addBtn.addEventListener('click', () => showTaskModal());
     }
 
-    // Task card clicks (edit)
+    // Task card clicks (edit, linked item)
     container.addEventListener('click', handleTaskClick);
 
     // Checkbox changes (complete/uncomplete)
@@ -322,9 +438,50 @@ function attachEventListeners(container) {
  * @param {Event} e - Click event
  */
 function handleTaskClick(e) {
+    // Phase 4: Check user permissions before allowing edit actions
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
     const editBtn = e.target.closest('.task-edit-btn');
     const deleteBtn = e.target.closest('.task-delete-btn');
+    const linkedItem = e.target.closest('.task-linked-item');
+    const dragHandle = e.target.closest('.task-card-drag-handle');
     const taskCard = e.target.closest('.task-card');
+
+    // Handle linked item click - open item detail (always allowed)
+    if (linkedItem) {
+        e.stopPropagation();
+        const itemId = linkedItem.dataset.itemId;
+        if (itemId) {
+            // Find the item record and open the detail modal
+            const record = state.records.all.find(r => r.id === itemId);
+            if (record) {
+                showDetailModal(record);
+                log('TaskManager', `Opening item detail for: ${record.fields?.Name}`);
+            } else {
+                log('TaskManager', `Item not found in records: ${itemId}`);
+                showToast('Item not found in catalog', 3000);
+            }
+        }
+        return;
+    }
+
+    // Ignore clicks on drag handle
+    if (dragHandle) {
+        return;
+    }
+
+    // Block edit/delete actions for viewers
+    if (!canUserEdit) {
+        if (editBtn || deleteBtn) {
+            e.stopPropagation();
+            showToast('You have view-only access to this project', 3000);
+            return;
+        }
+        // Still allow clicking on task card to view details but not edit
+        return;
+    }
 
     if (editBtn) {
         e.stopPropagation();
@@ -338,7 +495,7 @@ function handleTaskClick(e) {
         const taskId = deleteBtn.dataset.taskId;
         handleDeleteTask(taskId);
     } else if (taskCard && !e.target.closest('.task-checkbox')) {
-        // Clicking on task card opens edit modal
+        // Clicking on task card opens edit modal (if user can edit)
         const taskId = taskCard.dataset.taskId;
         const task = state.tasks.all.get(taskId);
         if (task) {
@@ -353,6 +510,18 @@ function handleTaskClick(e) {
  */
 async function handleCheckboxChange(e) {
     if (!e.target.classList.contains('task-complete-checkbox')) return;
+
+    // Phase 4: Check user permissions before allowing status change
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canUserEdit = !isLoading && api.canEdit(currentRole);
+
+    if (!canUserEdit) {
+        e.preventDefault();
+        e.target.checked = !e.target.checked; // Revert the checkbox
+        showToast('You have view-only access to this project', 3000);
+        return;
+    }
 
     const taskId = e.target.dataset.taskId;
     const isChecked = e.target.checked;
@@ -385,6 +554,10 @@ function showTaskModal(task = null) {
     editingTaskId = task ? task.id : null;
     const isEditing = !!task;
     const fields = task?.fields || {};
+    const linkedItemId = fields.LinkedItem ? fields.LinkedItem[0] : '';
+
+    // Build catalog items dropdown options
+    const catalogItemsOptions = buildCatalogItemsOptions(linkedItemId);
 
     // Create modal HTML
     const modalHtml = `
@@ -429,6 +602,19 @@ function showTaskModal(task = null) {
                                value="${escapeHtml(fields.Assignee || '')}"
                                placeholder="Assign to someone (optional)">
                     </div>
+                    <div class="task-form-group">
+                        <label for="task-linked-item">Link Catalog Item</label>
+                        <div class="task-linked-item-select-wrapper">
+                            <select id="task-linked-item" name="linkedItem">
+                                <option value="">-- No linked item --</option>
+                                ${catalogItemsOptions}
+                            </select>
+                            <input type="text" id="task-linked-item-search"
+                                   placeholder="Search items..."
+                                   class="task-linked-item-search">
+                        </div>
+                        <small class="task-form-hint">Associate a catalog item/product with this task</small>
+                    </div>
                     <div class="task-form-actions">
                         <button type="button" class="task-cancel-btn" id="task-cancel-btn">Cancel</button>
                         <button type="submit" class="task-save-btn">${isEditing ? 'Save Changes' : 'Create Task'}</button>
@@ -446,6 +632,11 @@ function showTaskModal(task = null) {
     const closeBtn = document.getElementById('task-modal-close');
     const cancelBtn = document.getElementById('task-cancel-btn');
     const form = document.getElementById('task-form');
+    const linkedItemSelect = document.getElementById('task-linked-item');
+    const linkedItemSearch = document.getElementById('task-linked-item-search');
+
+    // Setup linked item search/filter
+    setupLinkedItemSearch(linkedItemSelect, linkedItemSearch);
 
     // Close modal handlers
     const closeModal = () => {
@@ -476,18 +667,93 @@ function showTaskModal(task = null) {
 }
 
 /**
+ * Build catalog items dropdown options HTML
+ * @param {string} selectedItemId - Currently selected item ID
+ * @returns {string} - HTML string for dropdown options
+ */
+function buildCatalogItemsOptions(selectedItemId = '') {
+    const items = state.records.all || [];
+
+    if (items.length === 0) {
+        return '<option value="" disabled>No catalog items available</option>';
+    }
+
+    // Sort items alphabetically by name
+    const sortedItems = [...items].sort((a, b) => {
+        const nameA = (a.fields?.Name || '').toLowerCase();
+        const nameB = (b.fields?.Name || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    return sortedItems.map(item => {
+        const itemId = item.id;
+        const itemName = item.fields?.Name || 'Unnamed Item';
+        const itemType = item.fields?.['Item Type'] || '';
+        const isSelected = itemId === selectedItemId ? 'selected' : '';
+        const displayName = itemType ? `${itemName} (${itemType})` : itemName;
+
+        return `<option value="${itemId}" ${isSelected}>${escapeHtml(displayName)}</option>`;
+    }).join('');
+}
+
+/**
+ * Setup linked item search filtering
+ * @param {HTMLSelectElement} selectEl - The select element
+ * @param {HTMLInputElement} searchEl - The search input element
+ */
+function setupLinkedItemSearch(selectEl, searchEl) {
+    if (!selectEl || !searchEl) return;
+
+    // Store original options
+    const originalOptions = Array.from(selectEl.options).map(opt => ({
+        value: opt.value,
+        text: opt.text,
+        selected: opt.selected
+    }));
+
+    searchEl.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+
+        // Clear and repopulate select
+        selectEl.innerHTML = '';
+
+        // Always add the "no linked item" option
+        const noItemOption = document.createElement('option');
+        noItemOption.value = '';
+        noItemOption.textContent = '-- No linked item --';
+        selectEl.appendChild(noItemOption);
+
+        // Filter and add matching options
+        originalOptions.forEach(opt => {
+            if (opt.value === '') return; // Skip the empty option we already added
+
+            if (!searchTerm || opt.text.toLowerCase().includes(searchTerm)) {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                option.selected = opt.selected;
+                selectEl.appendChild(option);
+            }
+        });
+    });
+}
+
+/**
  * Handle task form submission
  * @param {HTMLFormElement} form - The form element
  * @param {Function} closeModal - Function to close the modal
  */
 async function handleTaskSubmit(form, closeModal) {
     const formData = new FormData(form);
+    const linkedItemValue = formData.get('linkedItem');
+
     const taskData = {
         Name: formData.get('name')?.trim(),
         Description: formData.get('description')?.trim(),
         Status: formData.get('status'),
         DueDate: formData.get('dueDate') || null,
-        Assignee: formData.get('assignee')?.trim() || null
+        Assignee: formData.get('assignee')?.trim() || null,
+        LinkedItem: linkedItemValue || null
     };
 
     if (!taskData.Name) {
@@ -506,7 +772,12 @@ async function handleTaskSubmit(form, closeModal) {
             // Update existing task
             result = await api.updateTask(editingTaskId, taskData);
         } else {
-            // Create new task
+            // Create new task - assign order at end of list
+            const maxOrder = currentTasks.reduce((max, t) => {
+                const order = t.fields.Order ?? 0;
+                return Math.max(max, order);
+            }, 0);
+            taskData.Order = maxOrder + 1;
             result = await api.createTask(currentProjectId, taskData);
         }
 
@@ -516,6 +787,13 @@ async function handleTaskSubmit(form, closeModal) {
 
             // Refresh the task list
             await refreshTaskList();
+
+            // Phase 5: Broadcast the change to other collaborators
+            if (editingTaskId) {
+                broadcastTaskUpdated(result, taskData);
+            } else {
+                broadcastTaskCreated(result);
+            }
 
             closeModal();
             showToast(editingTaskId ? 'Task updated!' : 'Task created!', 2000);
@@ -548,6 +826,9 @@ async function handleDeleteTask(taskId) {
             // Remove from local state
             state.tasks.all.delete(taskId);
 
+            // Phase 5: Broadcast the deletion to other collaborators
+            broadcastTaskDeleted(taskId, taskName);
+
             // Refresh the task list
             await refreshTaskList();
 
@@ -567,6 +848,9 @@ async function handleDeleteTask(taskId) {
 async function refreshTaskList() {
     if (!currentProjectId) return;
 
+    // Cleanup existing Sortable instances before re-rendering
+    cleanupSortables();
+
     try {
         const tasks = await api.fetchTasks(currentProjectId);
         currentTasks = tasks;
@@ -576,6 +860,8 @@ async function refreshTaskList() {
         const listContainer = document.getElementById('task-list-container');
         if (listContainer) {
             listContainer.innerHTML = renderTaskList(tasks);
+            // Reinitialize drag-and-drop
+            initializeSortable();
         }
     } catch (error) {
         console.error('Error refreshing task list:', error);
@@ -607,6 +893,360 @@ export function getCurrentProjectId() {
 export function getCurrentTasks() {
     return currentTasks;
 }
+
+// =============================================================================
+// DRAG-AND-DROP FUNCTIONALITY (SortableJS)
+// =============================================================================
+
+/**
+ * Initialize SortableJS on task list groups
+ * Enables drag-and-drop reordering within and between groups
+ */
+function initializeSortable() {
+    // Check if Sortable is available (loaded globally via CDN)
+    if (typeof Sortable === 'undefined') {
+        log('TaskManager', 'SortableJS not available - drag-and-drop disabled');
+        return;
+    }
+
+    const sortableLists = document.querySelectorAll('.task-sortable');
+
+    sortableLists.forEach(list => {
+        const statusGroup = list.dataset.status; // 'active' or 'completed'
+
+        const instance = new Sortable(list, {
+            group: 'tasks', // Enable cross-group dragging
+            animation: 150,
+            ghostClass: 'task-sortable-ghost',
+            chosenClass: 'task-sortable-chosen',
+            dragClass: 'task-sortable-drag',
+            handle: '.task-card-drag-handle', // Only drag via handle
+            forceFallback: false,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+
+            // Called when dragging ends
+            onEnd: async (evt) => {
+                await handleDragEnd(evt, statusGroup);
+            }
+        });
+
+        sortableInstances.push(instance);
+    });
+
+    log('TaskManager', `Initialized ${sortableInstances.length} Sortable instances`);
+}
+
+/**
+ * Cleanup SortableJS instances
+ */
+function cleanupSortables() {
+    sortableInstances.forEach(instance => {
+        if (instance && typeof instance.destroy === 'function') {
+            instance.destroy();
+        }
+    });
+    sortableInstances = [];
+}
+
+/**
+ * Handle drag end event - update order and status in API
+ * @param {Object} evt - SortableJS event object
+ * @param {string} originalStatusGroup - The original status group ('active' or 'completed')
+ */
+async function handleDragEnd(evt, originalStatusGroup) {
+    const taskId = evt.item.dataset.taskId;
+    const newIndex = evt.newIndex;
+    const fromList = evt.from;
+    const toList = evt.to;
+    const targetStatusGroup = toList.dataset.status;
+
+    log('TaskManager', `Task ${taskId} moved to index ${newIndex} in ${targetStatusGroup} group`);
+
+    // Store the original DOM state for potential revert
+    const originalHTML = evt.from.innerHTML;
+    const toOriginalHTML = evt.to.innerHTML;
+
+    // Determine if status needs to change
+    const movedToCompleted = targetStatusGroup === 'completed' && originalStatusGroup !== 'completed';
+    const movedFromCompleted = targetStatusGroup === 'active' && originalStatusGroup === 'completed';
+
+    try {
+        // Prepare task orders for all tasks in the target list
+        const taskCards = toList.querySelectorAll('.task-card');
+        const taskOrders = [];
+
+        taskCards.forEach((card, index) => {
+            taskOrders.push({
+                taskId: card.dataset.taskId,
+                order: index + 1
+            });
+        });
+
+        // If task moved between groups, also update orders in the source list
+        if (fromList !== toList) {
+            const fromTaskCards = fromList.querySelectorAll('.task-card');
+            fromTaskCards.forEach((card, index) => {
+                // Only add if not already in taskOrders
+                if (!taskOrders.find(t => t.taskId === card.dataset.taskId)) {
+                    taskOrders.push({
+                        taskId: card.dataset.taskId,
+                        order: index + 1
+                    });
+                }
+            });
+        }
+
+        // Determine new status based on target group
+        let newStatus = null;
+        if (movedToCompleted) {
+            newStatus = api.TASK_STATUS.COMPLETED;
+        } else if (movedFromCompleted) {
+            newStatus = api.TASK_STATUS.PENDING;
+        }
+
+        // If status changed, update it first
+        if (newStatus) {
+            const updatedTask = await api.updateTask(taskId, { Status: newStatus });
+            if (updatedTask) {
+                state.tasks.all.set(taskId, updatedTask);
+                showToast(newStatus === api.TASK_STATUS.COMPLETED ? 'Task completed!' : 'Task reopened', 2000);
+            }
+        }
+
+        // Update orders in background (non-blocking for UI responsiveness)
+        api.updateTaskOrder(taskOrders).then(success => {
+            if (success) {
+                log('TaskManager', 'Task orders updated successfully');
+                // Update local state with new orders
+                taskOrders.forEach(({ taskId: tid, order }) => {
+                    const task = state.tasks.all.get(tid);
+                    if (task) {
+                        task.fields.Order = order;
+                    }
+                });
+
+                // Phase 5: Broadcast the reorder to other collaborators
+                broadcastTaskReordered(taskOrders);
+            } else {
+                console.error('Failed to update task orders');
+                showToast('Failed to save task order', 3000);
+                // Revert DOM on failure
+                revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+            }
+        }).catch(error => {
+            console.error('Error updating task orders:', error);
+            showToast('Failed to save task order', 3000);
+            revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+        });
+
+    } catch (error) {
+        console.error('Error handling drag end:', error);
+        showToast('Failed to update task', 3000);
+        // Revert DOM on error
+        revertDragDOM(fromList, toList, originalHTML, toOriginalHTML);
+    }
+}
+
+/**
+ * Revert DOM to original state after failed drag operation
+ * @param {HTMLElement} fromList - Original source list
+ * @param {HTMLElement} toList - Original target list
+ * @param {string} fromHTML - Original source list HTML
+ * @param {string} toHTML - Original target list HTML
+ */
+function revertDragDOM(fromList, toList, fromHTML, toHTML) {
+    if (fromList === toList) {
+        fromList.innerHTML = fromHTML;
+    } else {
+        fromList.innerHTML = fromHTML;
+        toList.innerHTML = toHTML;
+    }
+    // Reinitialize Sortable after revert
+    cleanupSortables();
+    initializeSortable();
+}
+
+// =============================================================================
+// END DRAG-AND-DROP FUNCTIONALITY
+// =============================================================================
+
+// =============================================================================
+// PHASE 5: REAL-TIME UPDATE HANDLERS
+// =============================================================================
+
+/**
+ * Handle real-time task updates from other collaborators
+ * @param {string} action - The action type (created, updated, deleted, reordered)
+ * @param {Object} data - The event data
+ */
+function handleRealtimeTaskUpdate(action, data) {
+    log('TaskManager', `Real-time update received: ${action}`, data);
+
+    // Check if we're currently viewing this project
+    if (!currentProjectId) return;
+
+    const listContainer = document.getElementById('task-list-container');
+    if (!listContainer) return;
+
+    switch (action) {
+        case 'created':
+            // A new task was created by another user
+            if (data && data.id) {
+                // Check if task already exists (avoid duplicates)
+                if (!currentTasks.find(t => t.id === data.id)) {
+                    currentTasks.push(data);
+                    // Smooth re-render without full page refresh
+                    rerenderTaskListSmooth(listContainer);
+                }
+            }
+            break;
+
+        case 'updated':
+            // A task was updated by another user
+            if (data && data.id) {
+                const taskIndex = currentTasks.findIndex(t => t.id === data.id);
+                if (taskIndex >= 0) {
+                    currentTasks[taskIndex] = data;
+                    // Update just the specific task card if possible
+                    updateTaskCardInPlace(data.id, data);
+                }
+            }
+            break;
+
+        case 'deleted':
+            // A task was deleted by another user
+            if (data && data.id) {
+                const taskIndex = currentTasks.findIndex(t => t.id === data.id);
+                if (taskIndex >= 0) {
+                    currentTasks.splice(taskIndex, 1);
+                    // Remove the task card with animation
+                    removeTaskCardWithAnimation(data.id);
+                }
+            }
+            break;
+
+        case 'reordered':
+            // Tasks were reordered by another user
+            if (data && Array.isArray(data)) {
+                // Update local orders
+                data.forEach(({ taskId, order }) => {
+                    const task = currentTasks.find(t => t.id === taskId);
+                    if (task) {
+                        task.fields.Order = order;
+                    }
+                });
+                // Re-render to reflect new order
+                rerenderTaskListSmooth(listContainer);
+            }
+            break;
+
+        default:
+            log('TaskManager', `Unknown real-time action: ${action}`);
+    }
+}
+
+/**
+ * Smoothly re-render the task list without jarring layout shifts
+ * @param {HTMLElement} container - The task list container
+ */
+function rerenderTaskListSmooth(container) {
+    // Cleanup existing Sortable instances
+    cleanupSortables();
+
+    // Add a transition class for smooth update
+    container.classList.add('updating');
+
+    // Re-render after a brief delay for animation
+    setTimeout(() => {
+        container.innerHTML = renderTaskList(currentTasks);
+        container.classList.remove('updating');
+
+        // Reinitialize drag-and-drop if user can edit
+        const currentRole = state.permissions?.currentRole;
+        const isLoading = state.permissions?.isLoading !== false;
+        const canUserEdit = !isLoading && api.canEdit(currentRole);
+        if (canUserEdit) {
+            initializeSortable();
+        }
+    }, 150);
+}
+
+/**
+ * Update a single task card in place without full re-render
+ * @param {string} taskId - The task ID to update
+ * @param {Object} task - The updated task data
+ */
+function updateTaskCardInPlace(taskId, task) {
+    const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+    if (!taskCard) {
+        // Card not found, do a full re-render
+        const listContainer = document.getElementById('task-list-container');
+        if (listContainer) {
+            rerenderTaskListSmooth(listContainer);
+        }
+        return;
+    }
+
+    // Update task name
+    const nameEl = taskCard.querySelector('.task-name');
+    if (nameEl) {
+        nameEl.textContent = task.fields?.Name || 'Untitled Task';
+        nameEl.classList.toggle('task-name-completed', task.fields?.Status === api.TASK_STATUS.COMPLETED);
+    }
+
+    // Update status badge
+    const statusBadge = taskCard.querySelector('.task-status-badge');
+    if (statusBadge) {
+        statusBadge.className = `task-status-badge ${getStatusBadgeClass(task.fields?.Status)}`;
+        statusBadge.textContent = getStatusLabel(task.fields?.Status);
+    }
+
+    // Update checkbox
+    const checkbox = taskCard.querySelector('.task-complete-checkbox');
+    if (checkbox) {
+        checkbox.checked = task.fields?.Status === api.TASK_STATUS.COMPLETED;
+    }
+
+    // Update completed state on card
+    taskCard.classList.toggle('task-completed', task.fields?.Status === api.TASK_STATUS.COMPLETED);
+
+    // Add a brief highlight animation
+    taskCard.classList.add('realtime-updated');
+    setTimeout(() => {
+        taskCard.classList.remove('realtime-updated');
+    }, 2000);
+}
+
+/**
+ * Remove a task card with a fade-out animation
+ * @param {string} taskId - The task ID to remove
+ */
+function removeTaskCardWithAnimation(taskId) {
+    const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+    if (taskCard) {
+        taskCard.classList.add('removing');
+        setTimeout(() => {
+            taskCard.remove();
+
+            // Check if the group is now empty
+            const groups = document.querySelectorAll('.task-group-list');
+            groups.forEach(group => {
+                if (group.children.length === 0) {
+                    // Re-render to show empty state if needed
+                    const listContainer = document.getElementById('task-list-container');
+                    if (listContainer && currentTasks.length === 0) {
+                        listContainer.innerHTML = renderTaskList([]);
+                    }
+                }
+            });
+        }, 300);
+    }
+}
+
+// =============================================================================
+// END REAL-TIME UPDATE HANDLERS
+// =============================================================================
 
 // Expose retry function globally for error state button
 window.taskManager = { retry };
