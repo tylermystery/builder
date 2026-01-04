@@ -460,6 +460,39 @@ function updatePresentationAccountButton() {
     }
 }
 
+/**
+ * Handles user login in presentation view.
+ * Removes the old temporary user identity from the collaborators list and
+ * re-initializes the presence channel with the authenticated user.
+ */
+async function handlePresentationUserLogin() {
+    log('Presentation', 'User logged in - updating collaborators and presence');
+
+    // Get the old temporary user ID from localStorage (if it exists)
+    // This was the ID used before the user authenticated
+    const oldTempUserId = localStorage.getItem('chatUserId');
+
+    // If there was a temporary user ID, remove it from userProfiles
+    // The authenticated user now has a new ID (starting with 'rec')
+    if (oldTempUserId && state.session.userProfiles.has(oldTempUserId)) {
+        log('Presentation', `Removing old temporary user from collaborators: ${oldTempUserId}`);
+        state.session.userProfiles.delete(oldTempUserId);
+        triggerSave();
+    }
+
+    // Update the account button with the authenticated user's name
+    updatePresentationAccountButton();
+
+    // Re-render the collaborators list (without the old temp user)
+    renderCollaborators();
+
+    // Re-initialize the presentation chat with the new authenticated identity
+    // This reconnects to Pusher with the real user ID and name
+    if (presentationPusher) {
+        await initializePresentationChat();
+    }
+}
+
 function renderCollaborators() {
     const userProfiles = state.session.userProfiles;
     const collaboratorsContainer = document.getElementById('itinerary-collaborators');
@@ -3896,8 +3929,8 @@ export function setupPresentationEventListeners() {
     }
     // console.log('[Accordion DEBUG] ensureDOMElements succeeded in setupPresentationEventListeners');
 
-    // Listen for user login/logout events to update the account button
-    document.addEventListener('userLoggedIn', updatePresentationAccountButton);
+    // Listen for user login/logout events to update the account button and collaborators
+    document.addEventListener('userLoggedIn', handlePresentationUserLogin);
     document.addEventListener('userLoggedOut', updatePresentationAccountButton);
 
     // Handle window resize for background canvas
