@@ -4524,3 +4524,200 @@ export async function generateTopOptions(record) {
     }
 }
 
+/**
+ * Fetch Cloudinary image resources by tags with full metadata including public_id
+ * This returns the full resource objects, not just URLs, enabling AI processing
+ * @param {string|Array} tags - Single tag string or array of tags to search for
+ * @param {number} retries - Number of retries on rate limit (default: 2)
+ * @returns {Promise<Array>} - Array of image resource objects with public_id, secure_url, etc.
+ */
+export async function fetchImageResourcesByTags(tags, retries = 2) {
+    console.log('[IMAGE DEBUG] fetchImageResourcesByTags CALLED with:', {
+        tags: tags,
+        tagsType: typeof tags,
+        isArray: Array.isArray(tags),
+        retriesRemaining: retries
+    });
+
+    if (!tags || (Array.isArray(tags) && tags.length === 0) || (typeof tags === 'string' && !tags.trim())) {
+        log('API', 'fetchImageResourcesByTags: No valid tags provided.');
+        return [];
+    }
+
+    try {
+        let payload;
+        if (Array.isArray(tags)) {
+            const validTags = tags.map(t => String(t).trim()).filter(Boolean);
+            if (validTags.length === 0) return [];
+            payload = { expression: validTags.map(tag => `tags:"${tag}"`).join(' AND ') };
+            log('API', `Fetching image resources by expression: ${payload.expression}`);
+        } else {
+            const tagName = String(tags).trim();
+            if (!tagName) return [];
+
+            const tagParts = tagName.split(/\s+/).filter(Boolean);
+            if (tagParts.length > 1) {
+                payload = { expression: tagParts.map(tag => `tags:"${tag}"`).join(' OR ') };
+                log('API', `Fetching image resources by multi-keyword expression: ${payload.expression}`);
+            } else {
+                payload = { tag: tagName };
+                log('API', `Fetching image resources by single tag: ${tagName}`);
+            }
+        }
+
+        const response = await fetch('/.netlify/functions/cloudinary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.status === 429 && retries > 0) {
+            log('API', `Cloudinary rate limit hit, retrying in 1000ms... (${retries} retries left)`);
+            await new Promise(res => setTimeout(res, 1000));
+            return fetchImageResourcesByTags(tags, retries - 1);
+        }
+
+        if (!response.ok) {
+            console.warn(`Cloudinary proxy function error: ${response.status} ${response.statusText}`);
+            return [];
+        }
+
+        const data = await response.json();
+        console.log('[IMAGE DEBUG] fetchImageResourcesByTags response:', {
+            hasResources: !!data.resources,
+            resourceCount: data.resources ? data.resources.length : 0
+        });
+
+        if (!data.resources || data.resources.length === 0) {
+            log('API', 'No Cloudinary resources found for the given tags/expression.');
+            return [];
+        }
+
+        // Return full resource objects with public_id, secure_url, format, etc.
+        log('API', `Found ${data.resources.length} image resources from Cloudinary.`);
+        return data.resources;
+
+    } catch (error) {
+        console.error('Failed to fetch image resources from Cloudinary via proxy:', error);
+        return [];
+    }
+}
+
+/**
+ * Process a single image through the AI parsing function
+ * Uses the same Gemini-based analysis as the AI Discovery parsing tool
+ * @param {string} publicId - The Cloudinary public ID of the image to process
+ * @returns {Promise<Object>} - Object with success flag and processing result
+ */
+export async function processImageWithAI(publicId) {
+    if (!publicId || typeof publicId !== 'string') {
+        console.error('processImageWithAI: Invalid publicId provided');
+        return { success: false, error: 'Invalid publicId' };
+    }
+
+    log('API', `Processing image with AI: ${publicId}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/process-image-ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicId })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            log('API', `Successfully processed image with AI: ${publicId}`);
+            return { success: true, data };
+        } else {
+            console.warn(`AI processing failed for ${publicId}:`, data.error);
+            return { success: false, error: data.error || 'Unknown error' };
+        }
+    } catch (error) {
+        console.error(`Error processing image ${publicId} with AI:`, error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Process multiple images through AI parsing in sequence
+ * Processes images one at a time to avoid overwhelming the AI service
+ * @param {Array<string>} publicIds - Array of Cloudinary public IDs to process
+ * @param {Function} onProgress - Optional callback for progress updates (index, total, result)
+ * @returns {Promise<Object>} - Object with processed count, failed count, and results array
+ */
+export async function processImagesWithAI(publicIds, onProgress = null) {
+    if (!Array.isArray(publicIds) || publicIds.length === 0) {
+        return { processed: 0, failed: 0, results: [] };
+    }
+
+    log('API', `Processing ${publicIds.length} images with AI`);
+
+    const results = [];
+    let processed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < publicIds.length; i++) {
+        const publicId = publicIds[i];
+        const result = await processImageWithAI(publicId);
+
+        if (result.success) {
+            processed++;
+        } else {
+            failed++;
+        }
+
+        results.push({ publicId, ...result });
+
+        if (onProgress) {
+            onProgress(i + 1, publicIds.length, result);
+        }
+
+        // Small delay between requests to avoid rate limiting
+        if (i < publicIds.length - 1) {
+            await new Promise(res => setTimeout(res, 500));
+        }
+    }
+
+    log('API', `AI processing complete: ${processed} processed, ${failed} failed`);
+    return { processed, failed, results };
+}
+
+/**
+ * Scrape website and social media for photos
+ * Extracts og:image, gallery images, structured data images, and other photos from the web
+ * Used for AI-parsed items that don't have Cloudinary photos yet
+ * @param {string} websiteUrl - The URL to scrape for photos
+ * @param {string} businessName - The business name for fallback searches
+ * @param {number} maxImages - Maximum number of images to return (default: 10)
+ * @returns {Promise<Object>} - Object with success flag and array of image objects
+ */
+export async function scrapeWebsitePhotos(websiteUrl, businessName, maxImages = 10) {
+    if (!websiteUrl) {
+        console.log('[API] scrapeWebsitePhotos: No website URL provided');
+        return { success: false, images: [], error: 'No website URL provided' };
+    }
+
+    log('API', `Scraping website for photos: ${websiteUrl}`);
+
+    try {
+        const response = await fetch('/.netlify/functions/scrape-website-photos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ websiteUrl, businessName, maxImages })
+        });
+
+        if (!response.ok) {
+            console.warn(`[API] scrapeWebsitePhotos error: ${response.status} ${response.statusText}`);
+            return { success: false, images: [], error: `HTTP ${response.status}` };
+        }
+
+        const result = await response.json();
+        log('API', `Scraped ${result.images?.length || 0} photos from website`);
+        return result;
+    } catch (error) {
+        console.error('[API] scrapeWebsitePhotos error:', error);
+        return { success: false, images: [], error: error.message };
+    }
+}
+

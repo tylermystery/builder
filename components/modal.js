@@ -2366,69 +2366,78 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
                 newSearchBtn.classList.add('loading');
                 newSearchBtn.disabled = true;
                 const originalText = newSearchBtn.textContent;
-                newSearchBtn.textContent = 'Searching...';
+                newSearchBtn.textContent = 'Searching website...';
 
                 try {
-                    // Build search keywords from record data
-                    const searchTerms = [];
-                    const name = record.fields?.Name || '';
-                    const mediaTags = record.fields?.['Media Tags'] || '';
-                    const category = record.fields?.Category || '';
+                    // For AI-parsed items, scrape the item's website for photos
+                    // These items are not in the catalog yet, so Cloudinary won't have relevant photos
+                    const websiteUrl = record.fields?.['_aiWebsite'];
+                    const businessName = record.fields?.Name || '';
 
-                    if (name) searchTerms.push(name);
-                    if (mediaTags) searchTerms.push(mediaTags);
-                    if (category && !searchTerms.includes(category)) searchTerms.push(category);
+                    log('Modal', `Searching for more photos from website: ${websiteUrl || 'none'}`);
 
-                    const searchQuery = searchTerms.join(' ').trim() || 'activity';
+                    // Build set of existing image URLs to filter duplicates
+                    const existingUrls = new Set(imageUrls.map(url => url.toLowerCase()));
 
-                    log('Modal', `Searching for more photos with: "${searchQuery}"`);
+                    let newImageUrls = [];
 
-                    // Use fetchImagesByTags to search for more images
-                    const additionalImages = await api.fetchImagesByTags(searchQuery);
+                    // Step 1: Try scraping the website for photos
+                    if (websiteUrl) {
+                        newSearchBtn.textContent = 'Scanning website...';
+                        const scrapeResult = await api.scrapeWebsitePhotos(websiteUrl, businessName, 10);
 
-                    if (additionalImages && additionalImages.length > 0) {
-                        // Filter out duplicates
-                        const existingUrls = new Set(imageUrls);
-                        const newImages = additionalImages.filter(url => !existingUrls.has(url));
+                        if (scrapeResult.success && scrapeResult.images && scrapeResult.images.length > 0) {
+                            log('Modal', `Website scrape found ${scrapeResult.images.length} images from sources:`, scrapeResult.sources);
 
-                        if (newImages.length > 0) {
-                            // Add new images to the array
-                            imageUrls.push(...newImages);
+                            // Filter out duplicates
+                            for (const img of scrapeResult.images) {
+                                if (!existingUrls.has(img.url.toLowerCase())) {
+                                    newImageUrls.push(img.url);
+                                    existingUrls.add(img.url.toLowerCase());
+                                }
+                            }
 
-                            // Rebuild thumbnail strip with all images
-                            modalThumbnailStrip.innerHTML = '';
-                            imageUrls.forEach((url, index) => {
-                                const thumb = document.createElement('div');
-                                thumb.className = 'thumbnail-img';
-                                const optimizedThumb = url.includes('cloudinary')
-                                    ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
-                                    : url;
-                                thumb.style.backgroundImage = `url('${optimizedThumb}')`;
-                                if (index === currentPhotoIndex) thumb.classList.add('active');
-                                thumb.addEventListener('click', () => {
-                                    currentPhotoIndex = index;
-                                    const optimizedClickImage = url.includes('cloudinary')
-                                        ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
-                                        : url;
-                                    modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
-                                    modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
-                                    thumb.classList.add('active');
-                                });
-                                modalThumbnailStrip.appendChild(thumb);
-                            });
-
-                            newSearchBtn.textContent = `Found ${newImages.length} more!`;
-                            setTimeout(() => {
-                                newSearchBtn.textContent = originalText;
-                            }, 2000);
+                            log('Modal', `After deduplication: ${newImageUrls.length} new images`);
                         } else {
-                            newSearchBtn.textContent = 'No new photos found';
-                            setTimeout(() => {
-                                newSearchBtn.textContent = originalText;
-                            }, 2000);
+                            log('Modal', 'Website scrape returned no images');
                         }
                     } else {
-                        newSearchBtn.textContent = 'No photos found';
+                        log('Modal', 'No website URL available for scraping');
+                    }
+
+                    if (newImageUrls.length > 0) {
+                        // Add new images to the array
+                        imageUrls.push(...newImageUrls);
+
+                        // Rebuild thumbnail strip with all images
+                        modalThumbnailStrip.innerHTML = '';
+                        imageUrls.forEach((url, index) => {
+                            const thumb = document.createElement('div');
+                            thumb.className = 'thumbnail-img';
+                            const optimizedThumb = url.includes('cloudinary')
+                                ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                : url;
+                            thumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                            if (index === currentPhotoIndex) thumb.classList.add('active');
+                            thumb.addEventListener('click', () => {
+                                currentPhotoIndex = index;
+                                const optimizedClickImage = url.includes('cloudinary')
+                                    ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                    : url;
+                                modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+                                modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                thumb.classList.add('active');
+                            });
+                            modalThumbnailStrip.appendChild(thumb);
+                        });
+
+                        newSearchBtn.textContent = `Found ${newImageUrls.length} from website!`;
+                        setTimeout(() => {
+                            newSearchBtn.textContent = originalText;
+                        }, 3000);
+                    } else {
+                        // No images found from website
+                        newSearchBtn.textContent = websiteUrl ? 'No website photos found' : 'No website available';
                         setTimeout(() => {
                             newSearchBtn.textContent = originalText;
                         }, 2000);
