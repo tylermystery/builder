@@ -2348,6 +2348,107 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         modalThumbnailStrip.appendChild(thumb);
     });
 
+    // Setup "Search More Photos" button for AI-sourced items
+    const searchPhotosContainer = document.getElementById('modal-search-photos-container');
+    const searchPhotosBtn = document.getElementById('modal-search-photos-btn');
+    const isAIRecord = record?.id?.startsWith('ai-child-') || record?.id?.startsWith('ai-search-') || record?.id?.startsWith('ai-presentation-') || record?.isAI === true;
+
+    if (searchPhotosContainer && searchPhotosBtn) {
+        // Show button for AI records that might benefit from additional photo searches
+        if (isAIRecord) {
+            searchPhotosContainer.style.display = 'block';
+
+            // Remove previous listener if any (to avoid duplicates)
+            const newSearchBtn = searchPhotosBtn.cloneNode(true);
+            searchPhotosBtn.parentNode.replaceChild(newSearchBtn, searchPhotosBtn);
+
+            newSearchBtn.addEventListener('click', async () => {
+                newSearchBtn.classList.add('loading');
+                newSearchBtn.disabled = true;
+                const originalText = newSearchBtn.textContent;
+                newSearchBtn.textContent = 'Searching...';
+
+                try {
+                    // Build search keywords from record data
+                    const searchTerms = [];
+                    const name = record.fields?.Name || '';
+                    const mediaTags = record.fields?.['Media Tags'] || '';
+                    const category = record.fields?.Category || '';
+
+                    if (name) searchTerms.push(name);
+                    if (mediaTags) searchTerms.push(mediaTags);
+                    if (category && !searchTerms.includes(category)) searchTerms.push(category);
+
+                    const searchQuery = searchTerms.join(' ').trim() || 'activity';
+
+                    log('Modal', `Searching for more photos with: "${searchQuery}"`);
+
+                    // Use fetchImagesByTags to search for more images
+                    const additionalImages = await api.fetchImagesByTags(searchQuery);
+
+                    if (additionalImages && additionalImages.length > 0) {
+                        // Filter out duplicates
+                        const existingUrls = new Set(imageUrls);
+                        const newImages = additionalImages.filter(url => !existingUrls.has(url));
+
+                        if (newImages.length > 0) {
+                            // Add new images to the array
+                            imageUrls.push(...newImages);
+
+                            // Rebuild thumbnail strip with all images
+                            modalThumbnailStrip.innerHTML = '';
+                            imageUrls.forEach((url, index) => {
+                                const thumb = document.createElement('div');
+                                thumb.className = 'thumbnail-img';
+                                const optimizedThumb = url.includes('cloudinary')
+                                    ? applyCloudinaryTransform(url, 'w_150,h_150,c_fill,f_auto,q_auto')
+                                    : url;
+                                thumb.style.backgroundImage = `url('${optimizedThumb}')`;
+                                if (index === currentPhotoIndex) thumb.classList.add('active');
+                                thumb.addEventListener('click', () => {
+                                    currentPhotoIndex = index;
+                                    const optimizedClickImage = url.includes('cloudinary')
+                                        ? applyCloudinaryTransform(url, 'w_1200,h_1000,c_fill,f_auto,q_auto,fl_progressive')
+                                        : url;
+                                    modalMainImage.style.backgroundImage = `url('${optimizedClickImage}')`;
+                                    modalThumbnailStrip.querySelector('.active')?.classList.remove('active');
+                                    thumb.classList.add('active');
+                                });
+                                modalThumbnailStrip.appendChild(thumb);
+                            });
+
+                            newSearchBtn.textContent = `Found ${newImages.length} more!`;
+                            setTimeout(() => {
+                                newSearchBtn.textContent = originalText;
+                            }, 2000);
+                        } else {
+                            newSearchBtn.textContent = 'No new photos found';
+                            setTimeout(() => {
+                                newSearchBtn.textContent = originalText;
+                            }, 2000);
+                        }
+                    } else {
+                        newSearchBtn.textContent = 'No photos found';
+                        setTimeout(() => {
+                            newSearchBtn.textContent = originalText;
+                        }, 2000);
+                    }
+                } catch (error) {
+                    console.error('Error searching for more photos:', error);
+                    newSearchBtn.textContent = 'Search failed';
+                    setTimeout(() => {
+                        newSearchBtn.textContent = originalText;
+                    }, 2000);
+                } finally {
+                    newSearchBtn.classList.remove('loading');
+                    newSearchBtn.disabled = false;
+                }
+            });
+        } else {
+            searchPhotosContainer.style.display = 'none';
+        }
+    }
+
     modalHeaderActions.innerHTML = '';
     const breadcrumbs = getBreadcrumbs(record);
     if (breadcrumbs.length > 0) {

@@ -4447,6 +4447,8 @@ async function performPresentationSearch(searchTerm) {
                     Phone: phone,
                     Email: email,
                     Hours: availability,
+                    // Store website URL for image scraping (to match events.js structure)
+                    '_aiWebsite': website || null,
                     // Null fields to match events.js structure
                     Options: null, 'Parent Item': null, 'Headcount min': null,
                     'Media Tags': source.ImageKeywords || source.imageKeywords || null,

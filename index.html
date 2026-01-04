@@ -1225,6 +1225,52 @@ body.presentation-loading #loading-overlay {
 body.presentation-loading #presentation-modal-overlay {
     display: flex !important;
 }
+
+/* Search More Photos button styles */
+#modal-search-photos-container {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.search-photos-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.search-photos-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.search-photos-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.search-photos-btn.loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 8px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
     </style>
 
     <!-- Early presentation mode detection - runs before DOM loads to prevent catalog flash -->
@@ -1760,6 +1806,11 @@ body.presentation-loading #presentation-modal-overlay {
             <div class="modal-main-column">
                 <div id="modal-main-image"></div>
                 <div id="modal-thumbnail-strip"></div>
+                <div id="modal-search-photos-container" style="display: none;">
+                    <button id="modal-search-photos-btn" class="search-photos-btn" title="Search for more photos">
+                        🔍 Search More Photos
+                    </button>
+                </div>
             </div>
 <div class="modal-sidebar-column">
                 <div id="modal-header-actions"></div>
