@@ -105,9 +105,6 @@ let collaboratorsAddShareBtn = null;
 let headerSummaryEl = null;
 let itemsSummaryEl = null;
 
-// Accordion title element for header section
-let headerAccordionTitleEl = null;
-
 // Floating chat button (no longer used but kept for cleanup)
 let floatingChatBtn = null;
 
@@ -315,9 +312,6 @@ function ensureDOMElements() {
     headerSummaryEl = document.getElementById('header-summary');
     itemsSummaryEl = document.getElementById('items-summary');
 
-    // Accordion title element for the header section
-    headerAccordionTitleEl = document.getElementById('header-accordion-title');
-
     // Search modal elements
     presentationAddBtn = document.getElementById('presentation-add-btn');
     presentationSearchModal = document.getElementById('presentation-search-modal');
@@ -358,10 +352,8 @@ function renderEventHeader() {
         summaryEventNotesEl.textContent = goals;
     }
 
-    // Set the accordion title to the plan name
-    if (headerAccordionTitleEl) {
-        headerAccordionTitleEl.textContent = eventName;
-    }
+    // Plan name removed from accordion title per design request
+    // The first accordion panel now simply shows the list of users
 
     if (dateValue && summaryEventDateEl) {
         const date = Array.isArray(dateValue) ? new Date(dateValue[0]) : new Date(dateValue);

@@ -2050,7 +2050,17 @@ body.presentation-loading #presentation-modal-overlay {
                 <section class="itinerary-section itinerary-header itinerary-accordion" data-section="header">
                     <div class="itinerary-accordion-header" data-section="header">
                         <div class="itinerary-accordion-title-row">
-                            <h3 id="header-accordion-title" class="accordion-section-title"></h3>
+                            <!-- People List: Current user button, team members, then add/share button -->
+                            <div id="itinerary-collaborators" class="itinerary-collaborators">
+                                <div class="collaborators-inline-list">
+                                    <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
+                                    <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
+                                    <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
+                                        <span class="add-share-icon">+</span>
+                                        <span class="add-share-text">Share</span>
+                                    </button>
+                                </div>
+                            </div>
                             <span class="itinerary-accordion-icon"></span>
                         </div>
                         <p class="itinerary-accordion-summary" id="header-summary"></p>
@@ -2061,18 +2071,6 @@ body.presentation-loading #presentation-modal-overlay {
                             <span id="summary-event-date" class="itinerary-date"></span>
                         </div>
                         <p id="summary-event-notes" class="itinerary-notes"></p>
-
-                        <!-- People List: Current user button, team members, then add/share button -->
-                        <div id="itinerary-collaborators" class="itinerary-collaborators">
-                            <div class="collaborators-inline-list">
-                                <button id="presentation-account-btn" class="presentation-account-btn collaborator-btn" title="Account settings"></button>
-                                <div id="itinerary-collaborators-list" class="collaborators-list collaborators-inline"></div>
-                                <button id="collaborators-add-share-btn" class="collaborator-btn add-share-btn" title="Add people or share this plan">
-                                    <span class="add-share-icon">+</span>
-                                    <span class="add-share-text">Share</span>
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- Expanded collaborators modal -->
                         <div id="collaborators-modal" class="collaborators-modal">
