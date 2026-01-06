@@ -10430,6 +10430,89 @@ hr.total-divider {
     }
 }
 
+/* Nested replies container */
+.comment-replies-container {
+    margin-left: 24px;
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid rgba(0, 123, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Reply comment styling */
+.component-comment.comment-reply {
+    background: rgba(0, 0, 0, 0.02);
+    font-size: 0.95em;
+    padding: 10px;
+}
+
+.component-comment.comment-reply.own-comment {
+    background: linear-gradient(135deg, rgba(0, 123, 255, 0.03) 0%, rgba(0, 123, 255, 0.01) 100%);
+    border-left: 2px solid #007bff;
+}
+
+/* Reply count badge in comment header */
+.comment-reply-count {
+    font-size: 0.8em;
+    color: #007bff;
+    background: rgba(0, 123, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* Task button with linked task indicator */
+.comment-task-btn.has-task {
+    color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    border-radius: 4px;
+}
+
+.comment-task-btn.has-task:hover {
+    background: rgba(40, 167, 69, 0.2);
+}
+
+/* Linked task popup styles */
+.linked-task-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #fff;
+    padding: 8px 0;
+}
+
+.linked-task-description {
+    color: rgba(255, 255, 255, 0.8);
+    padding: 8px 0;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.linked-task-info {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.linked-task-info .info-label {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+/* Mobile responsive for replies */
+@media (max-width: 768px) {
+    .comment-replies-container {
+        margin-left: 16px;
+        padding-left: 8px;
+    }
+
+    .component-comment.comment-reply {
+        padding: 8px;
+    }
+}
+
 /* ============================================
    END COMPONENT COMMENTS FEATURE
    ============================================ */

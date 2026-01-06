@@ -3774,7 +3774,7 @@ async function loadComponentComments(componentId) {
 }
 
 /**
- * Render comments for a component
+ * Render comments for a component with nested replies
  */
 function renderComponentComments(componentId, comments) {
     const commentsList = document.querySelector(`.component-comments-list[data-component-id="${componentId}"]`);
@@ -3787,24 +3787,60 @@ function renderComponentComments(componentId, comments) {
         return;
     }
 
-    const commentsHTML = comments.map(comment => {
+    // Get project tasks to check for linked tasks
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+
+    // Separate parent comments from replies and build a map
+    const parentComments = [];
+    const repliesByParent = new Map();
+
+    comments.forEach(comment => {
+        const parentId = comment.fields?.ParentMessageID;
+        if (parentId) {
+            // This is a reply
+            if (!repliesByParent.has(parentId)) {
+                repliesByParent.set(parentId, []);
+            }
+            repliesByParent.get(parentId).push(comment);
+        } else {
+            // This is a parent comment
+            parentComments.push(comment);
+        }
+    });
+
+    console.log('[ComponentComment DEBUG] Rendering nested comments:', {
+        total: comments.length,
+        parents: parentComments.length,
+        repliesMap: repliesByParent.size
+    });
+
+    /**
+     * Render a single comment HTML
+     */
+    const renderSingleComment = (comment, isReply = false) => {
         const fields = comment.fields;
         const isOwn = fields.SenderID === currentUser?.id;
         const isDeleted = fields.IsDeleted;
         const isEdited = fields.IsEdited;
         const reactions = fields.Reactions ? JSON.parse(fields.Reactions) : {};
-        // Use createdTime from Airtable record (at record level, not in fields)
-        // Fall back to fields.Timestamp or current time if neither exists
         const timestamp = new Date(comment.createdTime || fields.Timestamp || Date.now());
         const timeAgo = getTimeAgo(timestamp);
 
         if (isDeleted) {
             return `
-                <div class="component-comment deleted" data-comment-id="${comment.id}">
+                <div class="component-comment deleted ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}">
                     <em class="deleted-comment-text">This comment was deleted</em>
                 </div>
             `;
         }
+
+        // Check if this comment has a linked task
+        const linkedTask = projectTasks.find(t => t.fields?.SourceCommentId === comment.id);
+        const hasLinkedTask = !!linkedTask;
+        const taskBtnHtml = hasLinkedTask
+            ? `<button class="comment-action-btn comment-task-btn has-task" data-action="task" data-linked-task-id="${linkedTask.id}" title="View affiliated task">📋✓</button>`
+            : `<button class="comment-action-btn comment-task-btn" data-action="task" title="Create task from comment">📋</button>`;
 
         // Build reactions HTML
         let reactionsHTML = '';
@@ -3823,19 +3859,26 @@ function renderComponentComments(componentId, comments) {
             reactionsHTML += '</div>';
         }
 
+        // Get reply count for parent comments
+        const replies = repliesByParent.get(comment.id) || [];
+        const replyCountHtml = !isReply && replies.length > 0
+            ? `<span class="comment-reply-count">${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</span>`
+            : '';
+
         return `
-            <div class="component-comment ${isOwn ? 'own-comment' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
+            <div class="component-comment ${isOwn ? 'own-comment' : ''} ${isReply ? 'comment-reply' : ''}" data-comment-id="${comment.id}" data-sender-name="${escapeHtml(fields.SenderName)}" data-content="${escapeHtml(fields.Content)}">
                 <div class="comment-header">
                     <span class="comment-author">${escapeHtml(fields.SenderName)}${isOwn ? ' (You)' : ''}</span>
                     <span class="comment-time" title="${timestamp.toLocaleString()}">${timeAgo}</span>
                     ${isEdited ? '<span class="comment-edited">(edited)</span>' : ''}
+                    ${replyCountHtml}
                 </div>
                 <div class="comment-content">${escapeHtml(fields.Content)}</div>
                 ${reactionsHTML}
                 <div class="comment-actions">
                     <button class="comment-action-btn" data-action="reply" title="Reply to this comment">↩</button>
                     <button class="comment-action-btn" data-action="react" title="Add reaction">😊</button>
-                    <button class="comment-action-btn comment-task-btn" data-action="task" title="Create task from comment">📋</button>
+                    ${taskBtnHtml}
                     ${isOwn ? `
                         <button class="comment-action-btn" data-action="edit" title="Edit comment">✏️</button>
                         <button class="comment-action-btn" data-action="delete" title="Delete comment">🗑️</button>
@@ -3843,7 +3886,37 @@ function renderComponentComments(componentId, comments) {
                 </div>
             </div>
         `;
-    }).join('');
+    };
+
+    // Build the full HTML with nested structure
+    let commentsHTML = '';
+
+    parentComments.forEach(parentComment => {
+        // Render the parent comment
+        commentsHTML += renderSingleComment(parentComment, false);
+
+        // Render nested replies
+        const replies = repliesByParent.get(parentComment.id) || [];
+        if (replies.length > 0) {
+            commentsHTML += '<div class="comment-replies-container">';
+            replies.forEach(reply => {
+                commentsHTML += renderSingleComment(reply, true);
+            });
+            commentsHTML += '</div>';
+        }
+    });
+
+    // Also render any orphan replies (replies without visible parent - rare edge case)
+    // These would be replies to deleted comments or comments not in current view
+    const renderedParentIds = new Set(parentComments.map(c => c.id));
+    repliesByParent.forEach((replies, parentId) => {
+        if (!renderedParentIds.has(parentId)) {
+            // These are orphan replies - render them at top level
+            replies.forEach(reply => {
+                commentsHTML += renderSingleComment(reply, false);
+            });
+        }
+    });
 
     commentsList.innerHTML = commentsHTML;
 }
@@ -3881,8 +3954,9 @@ async function submitComponentComment(componentId) {
 
     // Check if this is a reply - prepend @mention if so
     const isReply = componentCommentReplyingTo && componentCommentReplyingTo.componentId === componentId;
+    const parentCommentId = isReply ? componentCommentReplyingTo.commentId : null;
     if (isReply) {
-        console.log('[ComponentComment DEBUG] This is a reply to:', componentCommentReplyingTo.senderName);
+        console.log('[ComponentComment DEBUG] This is a reply to:', componentCommentReplyingTo.senderName, 'parentId:', parentCommentId);
         // Prepend @mention to the content for display
         content = `@${componentCommentReplyingTo.senderName}: ${content}`;
     }
@@ -3894,14 +3968,15 @@ async function submitComponentComment(componentId) {
 
     try {
         console.log('[ComponentComment DEBUG] Calling api.postComponentComment...');
-        // Post comment via API
+        // Post comment via API with parent comment ID if this is a reply
         const newComment = await api.postComponentComment(
             sessionId,
             api.COMPONENT_TYPES.ITEM,
             componentId,
             currentUser.id,
             currentUser.name,
-            content
+            content,
+            parentCommentId
         );
         console.log('[ComponentComment DEBUG] postComponentComment result:', newComment ? 'SUCCESS (id: ' + newComment.id + ')' : 'FAILED');
 
@@ -4004,7 +4079,7 @@ async function handleCommentAction(action, commentId) {
 }
 
 /**
- * Handle creating a task from a comment
+ * Handle creating a task from a comment or opening existing linked task
  * @param {string} commentId - The comment record ID
  */
 async function handleCreateTaskFromComment(commentId) {
@@ -4013,6 +4088,40 @@ async function handleCreateTaskFromComment(commentId) {
     const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
     if (!commentEl) {
         console.log('[CreateTaskFromComment DEBUG] ❌ Comment element not found for task creation');
+        return;
+    }
+
+    // Check if this comment already has a linked task (from data attribute or from state)
+    const taskBtn = commentEl.querySelector('.comment-task-btn');
+    const linkedTaskId = taskBtn?.dataset.linkedTaskId;
+
+    if (linkedTaskId) {
+        console.log('[CreateTaskFromComment DEBUG] Comment already has linked task:', linkedTaskId);
+        // Open the existing task
+        const task = state.tasks.all.get(linkedTaskId);
+        if (task) {
+            showLinkedTaskPopup(task, commentId);
+            return;
+        } else {
+            console.log('[CreateTaskFromComment DEBUG] Linked task not found in state, allowing new task creation');
+        }
+    }
+
+    // Check if any existing task has this comment as its source
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+    const existingTask = projectTasks.find(t => t.fields?.SourceCommentId === commentId);
+
+    if (existingTask) {
+        console.log('[CreateTaskFromComment DEBUG] Found existing task for this comment:', existingTask.id);
+        // Update the button and show the task
+        if (taskBtn) {
+            taskBtn.dataset.linkedTaskId = existingTask.id;
+            taskBtn.innerHTML = '📋✓';
+            taskBtn.title = 'View affiliated task';
+            taskBtn.classList.add('has-task');
+        }
+        showLinkedTaskPopup(existingTask, commentId);
         return;
     }
 
@@ -4048,6 +4157,135 @@ async function handleCreateTaskFromComment(commentId) {
 
     // Show the task creation popup instead of directly creating the task
     showCreateTaskFromCommentPopup(commentId, commentContent, componentId, componentType, elementName);
+}
+
+/**
+ * Show popup for viewing a linked task from a comment
+ * @param {Object} task - The task object
+ * @param {string} sourceCommentId - The source comment ID
+ */
+function showLinkedTaskPopup(task, sourceCommentId) {
+    console.log('[LinkedTaskPopup DEBUG] showLinkedTaskPopup called:', { taskId: task.id, taskName: task.fields?.Name, sourceCommentId });
+
+    // Check if user can edit
+    const currentRole = state.permissions?.currentRole;
+    const isLoading = state.permissions?.isLoading !== false;
+    const canEditByRole = api.canEdit(currentRole);
+    const canEditByOwnership = state.session.isOwned === true;
+    const canUserEdit = (!isLoading && canEditByRole) || canEditByOwnership;
+
+    const taskName = task.fields?.Name || 'Unnamed Task';
+    const taskDescription = task.fields?.Description || '';
+    const taskStatus = task.fields?.Status || 'pending';
+    const statusConfig = TASK_STATUS_CONFIG[taskStatus] || TASK_STATUS_CONFIG.pending;
+
+    // Create modal HTML
+    const modalHTML = `
+        <div id="linked-task-modal-overlay" class="task-detail-modal-overlay">
+            <div class="task-detail-modal">
+                <div class="task-detail-modal-header">
+                    <h3>📋 Linked Task</h3>
+                    <button class="task-detail-modal-close" id="linked-task-modal-close">&times;</button>
+                </div>
+                <div class="task-detail-modal-body">
+                    <div class="task-detail-section">
+                        <label>Task Name</label>
+                        <div class="linked-task-name">${escapeHtml(taskName)}</div>
+                    </div>
+
+                    ${taskDescription ? `
+                        <div class="task-detail-section">
+                            <label>Description</label>
+                            <div class="linked-task-description">${escapeHtml(taskDescription)}</div>
+                        </div>
+                    ` : ''}
+
+                    <div class="task-detail-section">
+                        <label>Status</label>
+                        <div class="task-status-options">
+                            ${Object.entries(TASK_STATUS_CONFIG).map(([statusValue, cfg]) => `
+                                <button class="task-status-option-btn ${cfg.className} ${statusValue === taskStatus ? 'active' : ''}"
+                                        data-status="${statusValue}"
+                                        ${!canUserEdit ? 'disabled' : ''}>
+                                    <span class="option-icon">${cfg.icon}</span>
+                                    <span class="option-label">${cfg.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="linked-task-info">
+                        <span class="info-label">Task ID:</span> ${task.id}
+                    </div>
+                </div>
+                <div class="task-detail-modal-footer">
+                    <button class="task-detail-done-btn" id="linked-task-done-btn">Done</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    console.log('[LinkedTaskPopup DEBUG] Inserting modal HTML');
+
+    // Insert modal
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const overlay = document.getElementById('linked-task-modal-overlay');
+    const closeBtn = document.getElementById('linked-task-modal-close');
+    const doneBtn = document.getElementById('linked-task-done-btn');
+
+    const closeModal = () => {
+        console.log('[LinkedTaskPopup DEBUG] Closing modal');
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 200);
+    };
+
+    // Attach event listeners
+    closeBtn.addEventListener('click', closeModal);
+    doneBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Handle status option clicks
+    if (canUserEdit) {
+        overlay.querySelectorAll('.task-status-option-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const newStatus = btn.dataset.status;
+                console.log('[LinkedTaskPopup DEBUG] Status change requested:', newStatus);
+
+                // Update the task status
+                const updatedTask = await api.updateTask(task.id, { Status: newStatus });
+
+                if (updatedTask) {
+                    console.log('[LinkedTaskPopup DEBUG] Task status updated successfully');
+                    // Update local state
+                    state.tasks.all.set(task.id, updatedTask);
+                    const projectId = state.session.id;
+                    const projectTasks = state.tasks.byProject.get(projectId) || [];
+                    const taskIndex = projectTasks.findIndex(t => t.id === task.id);
+                    if (taskIndex >= 0) {
+                        projectTasks[taskIndex] = updatedTask;
+                        state.tasks.byProject.set(projectId, [...projectTasks]);
+                    }
+
+                    // Update active state in modal
+                    overlay.querySelectorAll('.task-status-option-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    showToast('Task status updated', 2000);
+                } else {
+                    showToast('Failed to update task status', 3000);
+                }
+            });
+        });
+    }
+
+    // Show modal with animation
+    console.log('[LinkedTaskPopup DEBUG] Showing modal with animation');
+    requestAnimationFrame(() => {
+        overlay.classList.add('active');
+    });
 }
 
 /**
@@ -4264,6 +4502,9 @@ function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, 
                 }
             }
 
+            // Store the source comment ID so we can track which tasks came from comments
+            taskData.SourceCommentId = commentId;
+
             console.log('[CreateTaskFromComment DEBUG] Creating task with data:', taskData);
 
             const newTask = await api.createTask(projectId, taskData);
@@ -4275,6 +4516,19 @@ function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, 
                 state.tasks.all.set(newTask.id, newTask);
                 const existingTasks = state.tasks.byProject.get(projectId) || [];
                 state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+                // Update the task button to show "View Task" instead of "Create Task"
+                const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
+                if (commentEl) {
+                    const taskBtn = commentEl.querySelector('.comment-task-btn');
+                    if (taskBtn) {
+                        taskBtn.dataset.linkedTaskId = newTask.id;
+                        taskBtn.innerHTML = '📋✓';
+                        taskBtn.title = 'View affiliated task';
+                        taskBtn.classList.add('has-task');
+                        console.log('[CreateTaskFromComment DEBUG] Updated task button to show linked task');
+                    }
+                }
 
                 showToast('Task created successfully!', 2000);
                 closeModal();

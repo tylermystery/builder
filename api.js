@@ -2123,11 +2123,12 @@ export const COMPONENT_TYPES = {
  * @param {string} senderId - The user ID posting the comment
  * @param {string} senderName - Display name of the sender
  * @param {string} content - The comment content
+ * @param {string} [parentCommentId] - Optional parent comment ID for replies
  * @returns {Promise<object|null>} The created record or null on failure
  */
-export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content) {
+export async function postComponentComment(sessionId, componentType, componentId, senderId, senderName, content, parentCommentId = null) {
     console.log('[ComponentComment DEBUG] ========== postComponentComment CALLED ==========');
-    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length });
+    console.log('[ComponentComment DEBUG] Params:', { sessionId, componentType, componentId, senderId, senderName, contentLength: content?.length, parentCommentId });
 
     if (!sessionId || !sessionId.startsWith('rec')) {
         console.log('[ComponentComment DEBUG] ❌ Invalid sessionId:', sessionId);
@@ -2150,6 +2151,12 @@ export async function postComponentComment(sessionId, componentType, componentId
         SenderID: senderId,
         SenderName: senderName
     };
+
+    // Add parent comment ID if this is a reply
+    if (parentCommentId && parentCommentId.startsWith('rec')) {
+        fields.ParentMessageID = parentCommentId;
+        console.log('[ComponentComment DEBUG] Adding ParentMessageID for reply:', parentCommentId);
+    }
 
     if (componentType === COMPONENT_TYPES.ITEM && componentId && componentId.startsWith('rec')) {
         // Item comment: link to both session AND item
@@ -3532,6 +3539,10 @@ export async function createTask(projectId, taskData) {
     // This prevents temporary AI-generated IDs from causing Airtable API errors
     if (taskData.LinkedItem && taskData.LinkedItem.startsWith('rec')) {
         fields.LinkedItem = [taskData.LinkedItem]; // Link to catalog item
+    }
+    // Track source comment if task was created from a comment
+    if (taskData.SourceCommentId && taskData.SourceCommentId.startsWith('rec')) {
+        fields.SourceCommentId = taskData.SourceCommentId;
     }
 
     try {
