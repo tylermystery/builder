@@ -1710,6 +1710,78 @@ function loadElementTaskStatuses() {
     log('Presentation', `Loaded ${elementTaskStatuses.size} element task statuses`);
 }
 
+// ========== COMMENT-TO-TASK LINK PERSISTENCE ==========
+// Stores mapping of commentId -> taskId for tasks created from comments
+// This is persisted to session data since Airtable Tasks table doesn't have a SourceCommentId field
+
+/**
+ * Save a comment-to-task link to session storage
+ * @param {string} commentId - The comment record ID
+ * @param {string} taskId - The task record ID
+ */
+function saveCommentTaskLink(commentId, taskId) {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    linksObj[commentId] = taskId;
+    state.eventDetails.combined.set('_commentTaskLinks', linksObj);
+
+    console.log('[TASK PERSISTENCE DEBUG] Saved comment-task link:', { commentId, taskId });
+    console.log('[TASK PERSISTENCE DEBUG] All comment-task links:', linksObj);
+
+    // Trigger save to persist to Airtable
+    triggerSave();
+}
+
+/**
+ * Load comment-to-task links from session storage and apply to in-memory tasks
+ * This restores SourceCommentId on task objects so the UI can show linked tasks correctly
+ */
+function loadCommentTaskLinks() {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks');
+
+    console.log('[TASK PERSISTENCE DEBUG] ========== LOADING COMMENT-TASK LINKS ==========');
+    console.log('[TASK PERSISTENCE DEBUG] Raw links from session:', linksObj);
+
+    if (!linksObj || typeof linksObj !== 'object') {
+        console.log('[TASK PERSISTENCE DEBUG] No comment-task links found in session');
+        return;
+    }
+
+    const projectId = state.session.id;
+    const projectTasks = state.tasks.byProject.get(projectId) || [];
+
+    console.log('[TASK PERSISTENCE DEBUG] Project ID:', projectId);
+    console.log('[TASK PERSISTENCE DEBUG] Project tasks count:', projectTasks.length);
+
+    let appliedCount = 0;
+    Object.entries(linksObj).forEach(([commentId, taskId]) => {
+        // Find the task and apply the SourceCommentId to its fields
+        const task = projectTasks.find(t => t.id === taskId);
+        if (task) {
+            if (!task.fields) {
+                task.fields = {};
+            }
+            task.fields.SourceCommentId = commentId;
+            appliedCount++;
+            console.log('[TASK PERSISTENCE DEBUG] Applied SourceCommentId to task:', { taskId, commentId, taskName: task.fields?.Name });
+        } else {
+            console.log('[TASK PERSISTENCE DEBUG] Task not found for link:', { commentId, taskId });
+        }
+    });
+
+    console.log('[TASK PERSISTENCE DEBUG] Applied', appliedCount, 'comment-task links');
+    console.log('[TASK PERSISTENCE DEBUG] ==================================================');
+}
+
+/**
+ * Get the task ID linked to a comment, if any
+ * @param {string} commentId - The comment record ID
+ * @returns {string|null} - The linked task ID or null
+ */
+function getLinkedTaskId(commentId) {
+    const linksObj = state.eventDetails.combined.get('_commentTaskLinks') || {};
+    return linksObj[commentId] || null;
+}
+
 /**
  * Update the UI for a specific element's task status
  * @param {string} elementType - 'item' or 'detail'
@@ -2174,6 +2246,17 @@ async function createTaskFromComment(commentId, commentContent, componentId = nu
             state.tasks.all.set(newTask.id, newTask);
             const existingTasks = state.tasks.byProject.get(projectId) || [];
             state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
+
+            // IMPORTANT: Persist the comment-to-task link if commentId is provided
+            if (commentId) {
+                saveCommentTaskLink(commentId, newTask.id);
+
+                // Also apply the SourceCommentId to the in-memory task object
+                if (!newTask.fields) {
+                    newTask.fields = {};
+                }
+                newTask.fields.SourceCommentId = commentId;
+            }
 
             showToast('Task created from comment!', 2000);
             log('Presentation', `Created task from comment: ${newTask.id}`);
@@ -4589,6 +4672,16 @@ function showCreateTaskFromCommentPopup(commentId, commentContent, componentId, 
                 const existingTasks = state.tasks.byProject.get(projectId) || [];
                 state.tasks.byProject.set(projectId, [...existingTasks, newTask]);
 
+                // IMPORTANT: Persist the comment-to-task link so it survives page refresh
+                // Since Airtable Tasks table doesn't have SourceCommentId field, we store this mapping in session data
+                saveCommentTaskLink(commentId, newTask.id);
+
+                // Also apply the SourceCommentId to the in-memory task object
+                if (!newTask.fields) {
+                    newTask.fields = {};
+                }
+                newTask.fields.SourceCommentId = commentId;
+
                 // Update the task button to show "View Task" instead of "Create Task"
                 const commentEl = document.querySelector(`.component-comment[data-comment-id="${commentId}"]`);
                 if (commentEl) {
@@ -5154,6 +5247,10 @@ export async function showPresentationView(listType, startRecordId = null) {
                 // Update tasks.byProject map
                 state.tasks.byProject.set(projectId, tasks);
                 console.log(`[Presentation DEBUG] Loaded ${tasks.length} tasks for project ${projectId}`);
+
+                // IMPORTANT: After tasks are loaded, restore comment-to-task links from session storage
+                // This applies SourceCommentId to task objects so the UI shows linked tasks correctly
+                loadCommentTaskLinks();
             }
         } catch (error) {
             console.error('[Presentation DEBUG] Error fetching tasks:', error);
@@ -5161,6 +5258,8 @@ export async function showPresentationView(listType, startRecordId = null) {
         }
     } else {
         console.log('[Presentation DEBUG] Tasks already loaded for project:', projectId);
+        // Even if tasks were already loaded, restore comment-to-task links
+        loadCommentTaskLinks();
     }
 
     // Mark that catalog will need rendering when exiting presentation view

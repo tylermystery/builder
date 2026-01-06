@@ -3429,6 +3429,9 @@ export async function fetchTasks(projectId) {
     const encodedFormula = encodeURIComponent(formula);
 
     // Request fields needed for task display
+    // Note: Only request fields that exist in the Airtable Tasks table
+    // SourceType, SourceCommentId, LinkedPlanItemId, AffiliatedTaskId are NOT stored in Airtable
+    // Comment-to-task linking is tracked client-side via _commentTaskLinks in session data
     const fieldsQuery = [
         'Name',
         'Description',
@@ -3440,12 +3443,10 @@ export async function fetchTasks(projectId) {
         'Priority',
         'Order',
         'LinkedItem',
-        'CreatedTime',
-        'SourceType',
-        'SourceCommentId',
-        'LinkedPlanItemId',
-        'AffiliatedTaskId'
+        'CreatedTime'
     ].map(field => `fields%5B%5D=${encodeURIComponent(field)}`).join('&');
+
+    console.log('[TASK PERSISTENCE DEBUG] fetchTasks fields requested:', ['Name', 'Description', 'Status', 'DueDate', 'Assignee', 'ProjectId', 'ParentTask', 'Priority', 'Order', 'LinkedItem', 'CreatedTime']);
 
     // Sort by Order field first, then by DueDate
     const url = `https://api.airtable.com/v0/${BASE_ID}/${TASKS_TABLE_NAME}?filterByFormula=${encodedFormula}&${fieldsQuery}&sort%5B0%5D%5Bfield%5D=Order&sort%5B0%5D%5Bdirection%5D=asc&sort%5B1%5D%5Bfield%5D=DueDate&sort%5B1%5D%5Bdirection%5D=asc`;
@@ -3478,6 +3479,17 @@ export async function fetchTasks(projectId) {
             recordCount: data.records?.length ?? 0,
             offset: data.offset
         });
+
+        // Enhanced persistence debugging
+        console.log('[TASK PERSISTENCE DEBUG] ========== TASKS FETCHED FROM AIRTABLE ==========');
+        console.log('[TASK PERSISTENCE DEBUG] Project ID:', projectId);
+        console.log('[TASK PERSISTENCE DEBUG] Total tasks found:', data.records.length);
+        if (data.records.length > 0) {
+            console.log('[TASK PERSISTENCE DEBUG] Task IDs:', data.records.map(t => t.id));
+            console.log('[TASK PERSISTENCE DEBUG] Task names:', data.records.map(t => t.fields?.Name));
+        }
+        console.log('[TASK PERSISTENCE DEBUG] ================================================');
+
         log('API', `Fetched ${data.records.length} tasks for project ${projectId}`);
         return data.records;
     } catch (error) {
