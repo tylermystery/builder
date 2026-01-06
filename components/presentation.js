@@ -1001,8 +1001,10 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     // Add event listeners
     pickerContainer.addEventListener('click', handleEmojiPickerClick);
 
-    // Close on outside click
+    // Close on outside click (clicking the overlay background)
     pickerContainer.addEventListener('click', (e) => {
+        // Stop propagation to prevent any parent handlers from firing
+        e.stopPropagation();
         if (e.target === pickerContainer) {
             closeExpandedEmojiPicker();
         }
@@ -1028,6 +1030,9 @@ function closeExpandedEmojiPicker() {
 
 // Handle clicks within the emoji picker
 function handleEmojiPickerClick(e) {
+    // Stop propagation to prevent any parent handlers from firing
+    e.stopPropagation();
+
     // Close button
     if (e.target.classList.contains('emoji-picker-close')) {
         closeExpandedEmojiPicker();
@@ -3561,6 +3566,11 @@ function handleReactionClick(e) {
     const button = e.target.closest('.reaction-btn');
     console.log('[ReactionClick DEBUG] button found:', button);
     if (!button) return;
+
+    // Stop propagation to prevent click from bubbling up and triggering
+    // parent handlers (like accordion collapse or presentation view close)
+    e.stopPropagation();
+    e.preventDefault();
 
     const recordId = button.dataset.recordId;
     console.log('[ReactionClick DEBUG] recordId:', recordId);
