@@ -1,6 +1,6 @@
 import { state, setState } from '../state.js';
 import * as api from '../api.js';
-import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES } from '../config.js';
+import { CONSTANTS, EMOJI_REACTIONS, EMOJI_CATEGORIES, REACTION_SCORES, getModalZIndex } from '../config.js';
 import { updateUrl, getRecordPrice, parseOptions, flattenOptionGroups } from '../utils.js';
 import { log } from '../utils/debug.js';
 import { getCurrentUser, sendMessage as sendChatMessage, getReplyingToMessage, clearReplyState } from '../chat.js';
@@ -894,10 +894,31 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     const pickerHTML = createEmojiPickerHTML(recordId);
     console.log('[ExpandedEmojiPicker DEBUG] pickerHTML length:', pickerHTML.length);
 
+    // Get the appropriate z-index for the picker (very high to ensure visibility above presentation view)
+    const pickerZIndex = getModalZIndex('picker');
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+    console.log('[ExpandedEmojiPicker DEBUG] z-index:', pickerZIndex, 'presentation active:', isPresentationActive);
+
     const pickerContainer = document.createElement('div');
     pickerContainer.className = 'emoji-picker-overlay';
     pickerContainer.innerHTML = pickerHTML;
-    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created');
+
+    // Apply inline styles to ensure the overlay is always visible above presentation view
+    // This prevents CSS load timing issues from hiding the picker
+    pickerContainer.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: ${pickerZIndex};
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        pointer-events: auto;
+    `;
+    console.log('[ExpandedEmojiPicker DEBUG] pickerContainer created with z-index:', pickerZIndex);
 
     // Add to DOM
     document.body.appendChild(pickerContainer);
@@ -906,20 +927,42 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
     // Position near the anchor
     const picker = pickerContainer.querySelector('.emoji-picker-modal');
     const rect = anchorElement.getBoundingClientRect();
-    const scrollTop = window.scrollY || document.documentElement.scrollTop;
     console.log('[ExpandedEmojiPicker DEBUG] anchor rect:', rect);
 
     // Center the picker on screen for mobile, near anchor for desktop
+    // Use fixed positioning to keep the modal within the viewport
     if (window.innerWidth <= 768) {
         picker.style.position = 'fixed';
         picker.style.top = '50%';
         picker.style.left = '50%';
         picker.style.transform = 'translate(-50%, -50%)';
+        picker.style.zIndex = String(pickerZIndex + 1);
         console.log('[ExpandedEmojiPicker DEBUG] Mobile positioning: centered');
     } else {
-        picker.style.position = 'absolute';
-        picker.style.top = `${rect.bottom + scrollTop + 10}px`;
-        picker.style.left = `${Math.max(10, rect.left - 100)}px`;
+        // Use fixed positioning for desktop too, but offset from center based on anchor
+        picker.style.position = 'fixed';
+        // Position the modal near the anchor button, but ensure it's visible
+        const modalWidth = 400; // max-width from CSS
+        const modalHeight = Math.min(window.innerHeight * 0.8, 500); // approximate height
+
+        // Calculate position - try to position below and slightly left of the anchor
+        let top = rect.bottom + 10;
+        let left = rect.left - 100;
+
+        // Ensure modal stays within viewport
+        if (top + modalHeight > window.innerHeight) {
+            top = Math.max(10, rect.top - modalHeight - 10);
+        }
+        if (left < 10) {
+            left = 10;
+        }
+        if (left + modalWidth > window.innerWidth) {
+            left = window.innerWidth - modalWidth - 10;
+        }
+
+        picker.style.top = `${top}px`;
+        picker.style.left = `${left}px`;
+        picker.style.zIndex = String(pickerZIndex + 1);
         console.log('[ExpandedEmojiPicker DEBUG] Desktop positioning:', picker.style.top, picker.style.left);
     }
 
@@ -940,6 +983,17 @@ function showExpandedEmojiPicker(recordId, anchorElement) {
                     width: computedStyle.width,
                     height: computedStyle.height
                 });
+                // Check if it's correctly layered above presentation
+                const presentationView = document.getElementById('itinerary-fullpage-view');
+                if (presentationView) {
+                    const presentationZIndex = window.getComputedStyle(presentationView).zIndex;
+                    console.log('[ExpandedEmojiPicker DEBUG] Presentation z-index:', presentationZIndex);
+                    if (parseInt(computedStyle.zIndex) > parseInt(presentationZIndex)) {
+                        console.log('[ExpandedEmojiPicker DEBUG] ✓ Picker is correctly above presentation view');
+                    } else {
+                        console.warn('[ExpandedEmojiPicker DEBUG] ⚠ Picker may be below presentation view');
+                    }
+                }
             }
         }
     }, 10);
