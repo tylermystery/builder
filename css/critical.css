@@ -47,6 +47,18 @@ body.modal-open {
     opacity: 1;
     pointer-events: auto;
 }
+
+/* Ensure modals appear above presentation view when presentation is active */
+body.presentation-active .modal-overlay.active {
+    z-index: 1100;
+}
+
+/* Specific modal z-index rules */
+#detail-modal-overlay.active,
+#checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
 .modal-content {
     background: #fff;
     border-radius: 12px;

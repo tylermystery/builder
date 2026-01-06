@@ -1,5 +1,33 @@
 /* ---\nCORE STYLES, LAYOUT, & NEW KALEIDOSCOPE FEATURES\n--- */
 
+/*
+ * Z-INDEX HIERARCHY REFERENCE (from lowest to highest):
+ * =====================================================
+ * -1    : Kaleidoscope background canvas
+ *  0    : Presentation background canvas (relative to parent)
+ *  1    : Presentation content (relative to parent), base content
+ * 10    : Card overlays, badges, internal component layering
+ * 998   : Mobile sidebars (collapsed state)
+ * 999   : Mobile sidebars (expanded state)
+ * 1000  : Header, hamburger dropdown, presentation view, base modals
+ * 1001  : Chat toggle button
+ * 1010  : Modal close buttons
+ * 1050  : Chat widget container
+ * 1100  : Modals when presentation is active (elevated above presentation)
+ * 2000  : Presentation search content
+ * 3000  : Presentation search modal
+ * 10000 : Debug panel
+ * 10001 : Reaction pickers (always visible above everything)
+ * 10002 : Task detail modal (admin)
+ * 100000: Netlify identity widget
+ *
+ * IMPORTANT: When presentation view is active (body.presentation-active),
+ * all modals are elevated to z-index: 1100 to appear above the presentation.
+ * This is handled both in CSS and via JavaScript inline styles.
+ *
+ * Debug: Call window.debugZIndex() in console to see current z-index values.
+ */
+
 /* --- Global Improvements --- */
 * {
     box-sizing: border-box;
@@ -2060,6 +2088,18 @@ body.modal-open {
 .presentation-fullpage.active ~ .modal-overlay.active,
 body.presentation-active .modal-overlay.active {
     z-index: 1100;
+}
+
+/* Specific modal z-index rules for when active */
+#detail-modal-overlay.active,
+#checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
+/* Reaction pickers must always appear above modals and presentation */
+.reaction-picker,
+.comment-reaction-picker {
+    z-index: 10001 !important;
 }
 
 /* --- Presentation Full Page View --- */

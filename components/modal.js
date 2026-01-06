@@ -3,7 +3,7 @@
 import { state } from '../state.js';
 import * as ui from '../ui.js';
 import * as api from '../api.js';
-import { CONSTANTS, STRIPE_PUBLISHABLE_KEY } from '../config.js';
+import { CONSTANTS, STRIPE_PUBLISHABLE_KEY, getModalZIndex } from '../config.js';
 import { parseOptions, updateUrl, getGroupPriceRange, getRecordPrice, getActiveImageTag, getRecordDescription, flattenOptionGroups, debounce, loadStripe, loadFlatpickr, getEffectiveMinQuantity, generateSlug, calculateDynamicPackagePrice, getPackageDefaultHeadcount } from '../utils.js';
 import { getDayStatus, getAvailableSlotsForDay, AVAILABILITY_STATUS, calculateMissingCategories, buildGoalBucket, calculateRecommendationScore, ATTRIBUTE_TO_KEYWORDS_MAP } from '../availability.js';
 import { log } from '../utils/debug.js';
@@ -3320,6 +3320,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     ui.updateCardIcon(record.id);
 
+    // Get the appropriate z-index based on presentation state
+    const isPresentationActive = document.body.classList.contains('presentation-active');
+    const modalZIndex = getModalZIndex('detail');
+
     // DEBUG: Log modal overlay state before activation
     console.log('[Modal DEBUG] Before activation:', {
         overlayId: modalOverlay.id,
@@ -3330,14 +3334,16 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         computedPosition: window.getComputedStyle(modalOverlay).position,
         computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
         deferredCssLoaded: !!document.querySelector('link[href*="deferred.css"][rel="stylesheet"]'),
-        criticalCssExists: !!document.querySelector('style')
+        criticalCssExists: !!document.querySelector('style'),
+        isPresentationActive,
+        calculatedZIndex: modalZIndex
     });
 
     modalOverlay.classList.add('active');
 
     // CRITICAL FIX: Apply essential overlay styles inline to ensure they work
     // even if CSS hasn't fully loaded (direct URL access scenario)
-    // These styles must match what's defined in critical.css for consistency
+    // Use dynamic z-index based on presentation state (1100 when presentation active, 1000 otherwise)
     modalOverlay.style.cssText = `
         display: flex;
         position: fixed;
@@ -3346,7 +3352,7 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         width: 100%;
         height: 100%;
         background-color: rgba(0, 0, 0, 0.6);
-        z-index: 1000;
+        z-index: ${modalZIndex};
         justify-content: center;
         align-items: center;
         opacity: 1;
@@ -3446,6 +3452,9 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
 
     // DEBUG: Log modal overlay state after activation
     requestAnimationFrame(() => {
+        const presentationEl = document.getElementById('presentation-modal-overlay');
+        const presentationZIndex = presentationEl ? window.getComputedStyle(presentationEl).zIndex : 'N/A';
+
         console.log('[Modal DEBUG] After activation (next frame):', {
             overlayClasses: modalOverlay.className,
             computedDisplay: window.getComputedStyle(modalOverlay).display,
@@ -3455,7 +3464,10 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
             computedZIndex: window.getComputedStyle(modalOverlay).zIndex,
             computedWidth: window.getComputedStyle(modalOverlay).width,
             computedHeight: window.getComputedStyle(modalOverlay).height,
-            inlineStyles: modalOverlay.style.cssText
+            inlineStyles: modalOverlay.style.cssText,
+            isPresentationActive: document.body.classList.contains('presentation-active'),
+            presentationZIndex,
+            isModalAbovePresentation: parseInt(window.getComputedStyle(modalOverlay).zIndex) > parseInt(presentationZIndex)
         });
 
         // Check if modal-content is rendered correctly
@@ -3472,6 +3484,20 @@ Bacon [price: +3] [img: bacon_option]" style="width: 100%; min-height: 150px; fo
         const overlayBgColor = window.getComputedStyle(modalOverlay).backgroundColor;
         if (overlayBgColor === 'rgba(0, 0, 0, 0)' || overlayBgColor === 'transparent') {
             console.error('[Modal DEBUG] WARNING: Overlay background is transparent! This should not happen.');
+        }
+
+        // Z-index layering check
+        if (document.body.classList.contains('presentation-active')) {
+            const modalZ = parseInt(window.getComputedStyle(modalOverlay).zIndex);
+            const presZ = parseInt(presentationZIndex);
+            if (modalZ <= presZ) {
+                console.error('[Modal DEBUG] WARNING: Modal z-index is NOT above presentation view!', {
+                    modalZIndex: modalZ,
+                    presentationZIndex: presZ
+                });
+            } else {
+                console.log('[Modal DEBUG] ✓ Modal is correctly above presentation view');
+            }
         }
     });
 
@@ -3718,12 +3744,47 @@ export async function showCheckoutModal(shopSettings) {
         
         checkoutModalOverlay.cardElement = null; // Clear old reference
 
+        // Get the appropriate z-index based on presentation state
+        const isPresentationActive = document.body.classList.contains('presentation-active');
+        const checkoutZIndex = getModalZIndex('checkout');
+
+        console.log('[Checkout Modal DEBUG] Before activation:', {
+            isPresentationActive,
+            calculatedZIndex: checkoutZIndex
+        });
+
         // --- 8. Show Modal ---\
         checkoutModalOverlay.classList.add('active');
         setTimeout(() => {
-            checkoutModalOverlay.style.display = 'flex';
+            // Apply inline styles with proper z-index for presentation mode
+            checkoutModalOverlay.style.cssText = `
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.6);
+                z-index: ${checkoutZIndex};
+                justify-content: center;
+                align-items: center;
+                opacity: 1;
+                pointer-events: auto;
+            `;
             if(checkoutCloseBtn) checkoutCloseBtn.focus();
-        }, 0); // <-- FIX: Removed stray \
+
+            // DEBUG: Log z-index after showing
+            requestAnimationFrame(() => {
+                const presentationEl = document.getElementById('presentation-modal-overlay');
+                const presentationZIndex = presentationEl ? window.getComputedStyle(presentationEl).zIndex : 'N/A';
+                console.log('[Checkout Modal DEBUG] After activation:', {
+                    computedZIndex: window.getComputedStyle(checkoutModalOverlay).zIndex,
+                    isPresentationActive: document.body.classList.contains('presentation-active'),
+                    presentationZIndex,
+                    isModalAbovePresentation: parseInt(window.getComputedStyle(checkoutModalOverlay).zIndex) > parseInt(presentationZIndex)
+                });
+            });
+        }, 0);
         document.body.classList.add('modal-open');
 
     } catch (err) {
@@ -3763,9 +3824,11 @@ export function hideCheckoutModal() {
             if (checkoutCloseBtn) {
                 checkoutCloseBtn.removeEventListener('click', hideCheckoutModal);
             }
+            // Clear inline styles that were set for presentation mode z-index fix
+            checkoutModalOverlay.style.cssText = '';
             checkoutModalOverlay.style.display = 'none';
             log('Modal', 'Checkout modal hidden.');
-        }, 300); // <-- FIX: Removed stray \
+        }, 300);
         document.body.classList.remove('modal-open');
     }
 }

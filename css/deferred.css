@@ -2602,6 +2602,29 @@
 #detail-modal-overlay.active {
     z-index: 1100;
 }
+
+/* Ensure checkout modal appears above presentation view */
+body.presentation-active #checkout-modal-overlay.active,
+.presentation-fullpage.active ~ #checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
+#checkout-modal-overlay.active {
+    z-index: 1100;
+}
+
+/* Reaction pickers must always appear above everything */
+.reaction-picker,
+.comment-reaction-picker {
+    z-index: 10001 !important;
+    position: fixed;
+}
+
+/* Ensure all modals appear above presentation when presentation is active */
+body.presentation-active .modal-overlay.active {
+    z-index: 1100;
+}
+
 .presentation-fullpage.active {
     display: flex;
 }
